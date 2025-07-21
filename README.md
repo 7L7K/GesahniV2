@@ -32,11 +32,12 @@ Clone the repo and install dependencies:
 git clone <your-repo-url>
 cd your-project
 pip install -r requirements.txt
+cp .env.example .env
 ```
 
 ### 🔑 3. Configure Environment
 
-Set up your `.env`:
+Update the copied `.env` with your credentials:
 
 ```env
 OPENAI_API_KEY=your_openai_key
