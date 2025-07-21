@@ -1,6 +1,7 @@
 import logging
 from .llama_client import ask_llama
 from .gpt_client import ask_gpt
+from .home_assistant import handle_command
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,10 @@ def _should_use_gpt(prompt: str) -> bool:
 
 async def route_prompt(prompt: str) -> str:
     """Decide which backend to use and return the response."""
+    ha_resp = await handle_command(prompt)
+    if ha_resp is not None:
+        return ha_resp
+
     if _should_use_gpt(prompt):
         try:
             return await ask_gpt(prompt)
