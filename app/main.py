@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
+from .router import route_prompt
 
 load_dotenv()
 
@@ -17,8 +18,12 @@ class AskRequest(BaseModel):
 @app.post("/ask")
 async def ask(req: AskRequest):
     logger.info("Received prompt: %s", req.prompt)
-    # Placeholder response logic
-    return {"response": f"You asked: {req.prompt}"}
+    try:
+        answer = await route_prompt(req.prompt)
+        return {"response": answer}
+    except Exception as e:
+        logger.exception("Error processing prompt: %s", e)
+        raise HTTPException(status_code=500, detail="Error processing prompt")
 
 @app.get("/health")
 async def health():
