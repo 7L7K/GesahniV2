@@ -1,0 +1,20 @@
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import json
+import os
+import pytest
+import asyncio
+from app.history import append_history, HISTORY_FILE
+from app.logging_config import req_id_var
+
+
+def test_history_appends_entry(tmp_path, monkeypatch):
+    hist = tmp_path / "history.json"
+    monkeypatch.setattr("app.history.HISTORY_FILE", str(hist))
+    token = req_id_var.set("testid")
+    asyncio.run(append_history("prompt", "llama", "resp"))
+    req_id_var.reset(token)
+    with open(hist) as f:
+        data = json.load(f)
+    assert data[-1]["req_id"] == "testid"
+    assert data[-1]["engine_used"] == "llama"
