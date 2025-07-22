@@ -39,6 +39,7 @@ async def get_status() -> dict[str, Any]:
 async def ask_llama(prompt: str, model: str | None = None, timeout: float = 30.0) -> Any:
     model = model or OLLAMA_MODEL
     attempt = 0
+    error: dict[str, Any] | None = None
     while attempt < 2:
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -51,16 +52,20 @@ async def ask_llama(prompt: str, model: str | None = None, timeout: float = 30.0
                 return data.get("response", "").strip()
         except httpx.TimeoutException as e:
             logger.exception("Ollama timeout", extra={"meta": {"attempt": attempt, "req_id": req_id_var.get()}})
-            if attempt == 1:
-                return {"error": "timeout", "llm_used": model}
+            error = {"error": "timeout", "llm_used": model}
+            attempt += 1
+            await asyncio.sleep(0.2 * (attempt + 1))
+            continue
         except httpx.HTTPError as e:
             logger.exception("Ollama HTTP error", extra={"meta": {"attempt": attempt, "req_id": req_id_var.get()}})
-            if attempt == 1:
-                return {"error": "http_error", "llm_used": model}
+            error = {"error": "http_error", "llm_used": model}
+            attempt += 1
+            await asyncio.sleep(0.2 * (attempt + 1))
+            continue
         except Exception:
             logger.exception("Ollama JSON error", extra={"meta": {"attempt": attempt, "req_id": req_id_var.get()}})
-            if attempt == 1:
-                return {"error": "json_error", "llm_used": model}
-        attempt += 1
-        await asyncio.sleep(0.2 * (attempt + 1))
-    return {"error": "http_error", "llm_used": model}
+            error = {"error": "json_error", "llm_used": model}
+            attempt += 1
+            await asyncio.sleep(0.2 * (attempt + 1))
+            continue
+    return error if error is not None else {"error": "http_error", "llm_used": model}
