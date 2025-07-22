@@ -24,7 +24,7 @@ Welcome to the cast of GesahniV2—your personal AI ensemble that handles everyt
 ---
 
 ## LLaMAAgent
-**Location:** `app/llama_client.py`  
+**Location:** `app/llama_integration.py`
 **Entrypoint:** `async def ask_llama(prompt: str, model: str | None = None) -> str`
 
 - **Purpose:**  
