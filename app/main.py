@@ -1,10 +1,14 @@
+from dotenv import load_dotenv; load_dotenv()   #  ←  NEW TOP LINE
+
 import logging
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from dotenv import load_dotenv
 import os
-from .router import route_prompt
-from .home_assistant import get_states, call_service, resolve_entity, startup_check as ha_startup
+
+from .router import route_prompt          # these come *after* load_dotenv
+from .home_assistant import (
+    get_states, call_service, resolve_entity, startup_check as ha_startup
+)
 from .llama_integration import startup_check as llama_startup
 from .middleware import RequestIDMiddleware
 from .logging_config import configure_logging
