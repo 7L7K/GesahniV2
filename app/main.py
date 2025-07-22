@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import os
 from .router import route_prompt
 from .home_assistant import get_states, call_service, resolve_entity, startup_check as ha_startup
-from .llama_client import startup_check as llama_startup
+from .llama_integration import startup_check as llama_startup
 from .middleware import RequestIDMiddleware
 from .logging_config import configure_logging
 from .status import router as status_router
