@@ -104,4 +104,3 @@ Welcome to the cast of GesahniV2—your personal AI ensemble that handles everyt
 - **GET `/ha/resolve?name=<foo>`** → `{ "entity_id": "<domain.foo>" }`
 
 ---
-
