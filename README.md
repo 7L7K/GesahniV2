@@ -97,3 +97,11 @@ docker run -d -p 8000:8000 --env-file .env smart-assistant
 ---
 
 Made by the King, for the King. Let's run it! 🚀🔥
+
+## Compliance
+| Spec Bullet | Patch Lines |
+|-------------|-------------|
+| 2 | app/router.py L4, app/main.py L9 |
+| 4 | app/llama_integration.py L51-L74 |
+| 5 | app/router.py L36-L41 |
+| 7 | tests/test_imports.py L1-L9, tests/test_no_basicconfig.py L1-L10 |

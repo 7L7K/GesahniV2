@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from .llama_client import ask_llama, OLLAMA_MODEL
+from .llama_integration import ask_llama, OLLAMA_MODEL
 from .gpt_client import ask_gpt, OPENAI_MODEL
 from .home_assistant import handle_command
 from .intent_detector import detect_intent
@@ -35,8 +35,8 @@ async def route_prompt(prompt: str) -> Any:
         result = await ask_llama(prompt)
         if isinstance(result, dict) and "error" in result:
             logger.error("llama_error", extra={"meta": result})
-            await record("gpt", fallback=True)
             answer = await ask_gpt(prompt)
+            await record("gpt", fallback=True)
             await append_history(prompt, OPENAI_MODEL, answer)
             return answer
         await record("llama")
