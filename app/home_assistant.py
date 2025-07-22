@@ -2,10 +2,15 @@ import os
 import logging
 import httpx
 import re
-from typing import Any, Optional
+from typing import Any, Optional, List
+from .logging_config import configure_logging
+
+configure_logging()
 
 HOME_ASSISTANT_URL = os.getenv("HOME_ASSISTANT_URL")
 HOME_ASSISTANT_TOKEN = os.getenv("HOME_ASSISTANT_TOKEN")
+if not HOME_ASSISTANT_URL or not HOME_ASSISTANT_TOKEN:
+    raise RuntimeError("Home Assistant credentials not configured")
 
 logger = logging.getLogger(__name__)
 
@@ -14,26 +19,33 @@ HEADERS = {
     "Content-Type": "application/json",
 }
 
+ROOM_SYNONYMS = {
+    "living room": ["lounge", "family room"],
+    "kitchen": ["cooking area"],
+}
+
 
 async def _request(
     method: str, path: str, json: dict | None = None, timeout: float = 10.0
 ) -> Any:
     """Internal helper to talk to the Home Assistant API."""
-    if not HOME_ASSISTANT_URL or not HOME_ASSISTANT_TOKEN:
-        raise RuntimeError("Home Assistant credentials not configured")
+    logger.info("ha_request", extra={"meta": {"method": method, "path": path, "json": json}})
     url = f"{HOME_ASSISTANT_URL.rstrip('/')}/api{path}"
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.request(method, url, headers=HEADERS, json=json)
         resp.raise_for_status()
-        if resp.content:
-            return resp.json()
-        return None
+        data = resp.json() if resp.content else None
+        logger.info("ha_response", extra={"meta": {"status": resp.status_code, "data": data}})
+        return data
 
 
 async def get_states() -> list[dict]:
     """Return all entity states."""
     data = await _request("GET", "/states")
     return data if isinstance(data, list) else []
+
+async def verify_connection() -> None:
+    await get_states()
 
 
 async def call_service(domain: str, service: str, data: dict) -> Any:
@@ -54,38 +66,43 @@ async def turn_off(entity_id: str) -> Any:
 # ---------------------------------------------------------------------------
 # Dynamic entity resolution (line 78)
 # ---------------------------------------------------------------------------
-async def resolve_entity(name: str) -> Optional[str]:
-    """Match a user-provided name to an actual Home Assistant entity ID."""
+def _normalize_name(name: str) -> str:
+    lower = name.lower()
+    for room, syns in ROOM_SYNONYMS.items():
+        if lower == room or lower in syns:
+            return room
+    return name
+
+async def resolve_entities(name: str) -> List[str]:
     states = await get_states()
-    name_lower = name.lower()
-    # exact id or friendly name
+    name_lower = _normalize_name(name).lower()
+    matches = []
     for st in states:
-        if st.get("entity_id", "").lower() == name_lower:
-            return st["entity_id"]
+        eid = st.get("entity_id", "")
         friendly = st.get("attributes", {}).get("friendly_name", "")
-        if friendly and friendly.lower() == name_lower:
-            return st["entity_id"]
-    # partial match as fallback
+        if eid.lower() == name_lower or friendly.lower() == name_lower:
+            matches.append(eid)
     for st in states:
-        if name_lower in st.get("entity_id", "").lower():
-            return st["entity_id"]
-        friendly = st.get("attributes", {}).get("friendly_name", "").lower()
-        if name_lower in friendly:
-            return st["entity_id"]
-    return None
+        eid = st.get("entity_id", "")
+        friendly = st.get("attributes", {}).get("friendly_name", "")
+        if name_lower in eid.lower() or name_lower in friendly.lower():
+            matches.append(eid)
+    return list(dict.fromkeys(matches))
 
 
-async def handle_command(prompt: str) -> Optional[str]:
-    """Simple intent parser to toggle entities."""
+async def handle_command(prompt: str) -> Optional[str | dict]:
     m = re.match(
         r"^(?:ha[:]?)?\s*(?:turn|switch)\s+(on|off)\s+(.+)$", prompt.strip(), re.I
     )
     if not m:
         return None
     action, name = m.group(1).lower(), m.group(2).strip()
-    entity_id = await resolve_entity(name)
-    if not entity_id:
-        return f"Entity '{name}' not found"
+    entities = await resolve_entities(name)
+    if not entities:
+        return {"error": "entity_not_found", "name": name}
+    if len(entities) > 1:
+        return {"confirm_required": True, "entities": entities}
+    entity_id = entities[0]
     try:
         if action == "on":
             await turn_on(entity_id)

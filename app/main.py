@@ -1,17 +1,28 @@
 import logging
+import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
-import os
 from .router import route_prompt
-from .home_assistant import get_states, call_service, resolve_entity
+from .home_assistant import get_states, call_service, resolve_entities, verify_connection
+from .logging_config import configure_logging
+from .middleware import RequestIDMiddleware
+from .status import router as status_router
+from .llama_integration import router as llama_router, verify_model
 
 load_dotenv()
-
-logging.basicConfig(level=logging.INFO)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="GesahniV2")
+app.add_middleware(RequestIDMiddleware)
+app.include_router(status_router)
+app.include_router(llama_router)
+
+@app.on_event("startup")
+async def startup_checks():
+    await verify_connection()
+    await verify_model()
 
 
 class AskRequest(BaseModel):
@@ -76,9 +87,9 @@ async def ha_service(req: ServiceRequest):
 @app.get("/ha/resolve")
 async def ha_resolve(name: str):
     try:
-        entity = await resolve_entity(name)
-        if entity:
-            return {"entity_id": entity}
+        entities = await resolve_entities(name)
+        if entities:
+            return {"entity_id": entities[0]}
         raise HTTPException(status_code=404, detail="Entity not found")
     except HTTPException:
         raise
