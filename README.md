@@ -60,6 +60,14 @@ docker build -t smart-assistant .
 docker run -d -p 8000:8000 --env-file .env smart-assistant
 ```
 
+### 🎥 Record a Session
+
+Record interaction sessions for later review:
+
+```bash
+python record_session.py --duration 5 --output ./sessions
+```
+
 ## 🎯 Endpoints
 
 * `/ask`: Send your prompt here.
