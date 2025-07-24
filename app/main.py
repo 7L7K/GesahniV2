@@ -7,6 +7,8 @@ from pydantic import BaseModel
 import os
 
 from .router import route_prompt
+from .skills.base import check_builtin_skills
+import app.skills  # populate SKILLS
 from .home_assistant import get_states, call_service, resolve_entity, startup_check as ha_startup
 from .llama_integration import startup_check as llama_startup
 from .middleware import RequestIDMiddleware
@@ -44,6 +46,9 @@ class ServiceRequest(BaseModel):
 async def ask(req: AskRequest):
     logger.info("Received prompt: %s", req.prompt)
     try:
+        skill_resp = await check_builtin_skills(req.prompt)
+        if skill_resp is not None:
+            return {"response": skill_resp}
         answer = await route_prompt(req.prompt)
         return {"response": answer}
     except Exception as e:
@@ -53,7 +58,8 @@ async def ask(req: AskRequest):
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
     session_id = uuid.uuid4().hex
-    session_dir = SESSIONS_DIR / session_id
+    session_base = Path(SESSIONS_DIR)
+    session_dir = session_base / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
     dest = session_dir / "source.wav"
     content = await file.read()

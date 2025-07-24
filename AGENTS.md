@@ -104,3 +104,9 @@ Welcome to the cast of GesahniV2—your personal AI ensemble that handles everyt
 - **GET `/ha/resolve?name=<foo>`** → `{ "entity_id": "<domain.foo>" }`
 
 ---
+
+### Skills Package
+
+- **Location:** `app/skills/`
+- **Ordering:** Skills are checked in order defined in
+  `app/skills/__init__.py`. The first matching skill responds.
