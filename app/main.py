@@ -1,7 +1,8 @@
 from dotenv import load_dotenv; load_dotenv()   #  ←  NEW TOP LINE
 
 import logging
-from fastapi import FastAPI, HTTPException
+import uuid
+from fastapi import FastAPI, HTTPException, File, UploadFile
 from pydantic import BaseModel
 import os
 
@@ -17,6 +18,8 @@ from .status import router as status_router
 load_dotenv()
 configure_logging()
 logger = logging.getLogger(__name__)
+
+SESSIONS_DIR = os.path.join(os.path.dirname(__file__), "..", "sessions")
 
 app = FastAPI(title="GesahniV2")
 app.add_middleware(RequestIDMiddleware)
@@ -48,6 +51,18 @@ async def ask(req: AskRequest):
     except Exception as e:
         logger.exception("Error processing prompt: %s", e)
         raise HTTPException(status_code=500, detail="Error processing prompt")
+
+
+@app.post("/upload")
+async def upload(file: UploadFile = File(...)):
+    session_id = uuid.uuid4().hex
+    session_dir = os.path.join(SESSIONS_DIR, session_id)
+    os.makedirs(session_dir, exist_ok=True)
+    dest = os.path.join(session_dir, "source.wav")
+    content = await file.read()
+    with open(dest, "wb") as f:
+        f.write(content)
+    return {"session_id": session_id}
 
 
 
