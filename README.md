@@ -60,6 +60,30 @@ docker build -t smart-assistant .
 docker run -d -p 8000:8000 --env-file .env smart-assistant
 ```
 
+### 🎤 Recording Sessions
+
+Use `record_session.py` to capture short voice clips from your microphone. The
+script saves a `.wav` file locally and returns a `session_id` for later
+transcription.
+
+```bash
+python record_session.py --duration 5
+```
+
+### 📤 Upload & Transcribe
+
+* **POST `/upload`** – Send a recorded `.wav` file and receive the associated
+  `session_id`.
+* **GET `/transcribe/{session_id}`** – Retrieve a text transcription for a
+  previously uploaded session.
+
+### 🐳 Docker Compose Workflow
+
+1. `docker compose build` – Build the FastAPI service and dependencies.
+2. `docker compose up` – Launch Ollama, the API server and any supporting
+   services.
+3. Access the API at `http://localhost:8000`.
+
 ## 🎯 Endpoints
 
 * `/ask`: Send your prompt here.
