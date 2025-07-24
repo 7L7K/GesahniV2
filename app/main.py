@@ -1,7 +1,7 @@
 from dotenv import load_dotenv; load_dotenv()   #  ←  NEW TOP LINE
 
 import logging
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 import os
 
@@ -13,6 +13,9 @@ from .llama_integration import startup_check as llama_startup
 from .middleware import RequestIDMiddleware
 from .logging_config import configure_logging
 from .status import router as status_router
+from .capture import capture_audio
+from .upload import upload_file
+from .transcribe import transcribe_file
 
 load_dotenv()
 configure_logging()
@@ -57,6 +60,23 @@ async def intent_test(req: AskRequest):
     logger.info("Intent test for: %s", req.prompt)
     # Placeholder: simply echo the prompt
     return {"intent": "test", "prompt": req.prompt}
+
+
+@app.post("/capture")
+async def capture(duration: int = 3):
+    capture_audio("output.wav", duration)
+    return {"status": "recorded"}
+
+
+@app.post("/upload")
+async def upload(file: UploadFile = File(...)):
+    return await upload_file(file)
+
+
+@app.post("/transcribe")
+async def transcribe(file: UploadFile = File(...)):
+    text = await transcribe_file(file)
+    return {"text": text}
 
 
 @app.get("/ha/entities")

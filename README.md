@@ -94,6 +94,14 @@ docker run -d -p 8000:8000 --env-file .env smart-assistant
 * Check logs at `/config` endpoint.
 * Detailed error logs saved locally.
 
+### 🧪 Running Tests
+
+Run the complete suite locally with:
+
+```bash
+pytest
+```
+
 ---
 
 Made by the King, for the King. Let's run it! 🚀🔥
