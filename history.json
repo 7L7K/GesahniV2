@@ -1,16 +1,1 @@
-[
-    {
-        "req_id": "35312b4d-eef7-47c4-b239-66ecf8e92a2e",
-        "prompt": "Tell me a dad joke",
-        "engine_used": "llama3",
-        "response": "Here's one:\n\nWhy did the scarecrow win an award?\n\nBecause he was outstanding in his field! (get it?)",
-        "timestamp": "2025-07-22T17:09:46.080843"
-    },
-    {
-        "req_id": "e41adc8b-f031-4676-a2c1-1ecce51f35ac",
-        "prompt": "What time is it in Detroit right now?",
-        "engine_used": "llama3",
-        "response": "I'm just an AI, I don't have real-time access to current information. However, I can tell you that Detroit is located in the Eastern Time Zone (ET) and observes daylight saving time (DST). So, if you want to know the current time in Detroit, you can easily check online or on your phone using a reliable clock website or app.\n\nAlternatively, you can also use a world clock website like WorldTimeBuddy or TimeAndDate.com, which allow you to enter the city name and get the current local time.",
-        "timestamp": "2025-07-24T17:58:29.971246"
-    }
-]
+[{"req_id": "35312b4d-eef7-47c4-b239-66ecf8e92a2e", "prompt": "Tell me a dad joke", "engine_used": "llama3", "response": "Here's one:\n\nWhy did the scarecrow win an award?\n\nBecause he was outstanding in his field! (get it?)", "timestamp": "2025-07-22T17:09:46.080843"}, {"req_id": "e41adc8b-f031-4676-a2c1-1ecce51f35ac", "prompt": "What time is it in Detroit right now?", "engine_used": "llama3", "response": "I'm just an AI, I don't have real-time access to current information. However, I can tell you that Detroit is located in the Eastern Time Zone (ET) and observes daylight saving time (DST). So, if you want to know the current time in Detroit, you can easily check online or on your phone using a reliable clock website or app.\n\nAlternatively, you can also use a world clock website like WorldTimeBuddy or TimeAndDate.com, which allow you to enter the city name and get the current local time.", "timestamp": "2025-07-24T17:58:29.971246"}, {"req_id": "-", "prompt": "hello", "engine_used": "gpt-4o", "response": "ok", "timestamp": "2025-07-24T21:26:13.986324"}, {"req_id": "-", "prompt": "hello", "engine_used": "gpt-4o", "response": "ok", "timestamp": "2025-07-24T21:29:01.092006"}, {"req_id": "-", "prompt": "hello", "engine_used": "gpt-4o", "response": "ok", "timestamp": "2025-07-24T21:30:56.483725"}, {"req_id": "8be8fba3-4752-421e-b85a-61dd640c1f3b", "prompt": "Hey Gesahni, what\u2019s the date today?", "engine_used": "llama3", "response": "I'm happy to help! However, I'm not Gesahni, and I'm an artificial intelligence language model. I don't have personal information or a physical presence. But since you asked, I can tell you that the current date is [insert current date]. If you want to know the exact date, please let me know what timezone you're in!", "timestamp": "2025-07-24T21:45:56.663368"}]
