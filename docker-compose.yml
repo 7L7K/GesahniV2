@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  app:
+    image: python:3.11-slim
+    working_dir: /code
+    command: sh -c "pip install --no-cache-dir -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    volumes:
+      - ./app:/code/app
+      - ./requirements.txt:/code/requirements.txt
+      - ./sessions:/code/sessions
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_URL=${OLLAMA_URL}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL}
+      - HOME_ASSISTANT_URL=${HOME_ASSISTANT_URL}
+      - HOME_ASSISTANT_TOKEN=${HOME_ASSISTANT_TOKEN}
+      - LOG_LEVEL=${LOG_LEVEL}
+    ports:
+      - "8000:8000"

@@ -60,6 +60,16 @@ docker build -t smart-assistant .
 docker run -d -p 8000:8000 --env-file .env smart-assistant
 ```
 
+### 🐳 Docker Compose
+
+For local development you can spin everything up with Docker Compose. The
+service reads variables from your `.env` file and stores chat sessions under
+`./sessions`:
+
+```bash
+docker compose up
+```
+
 ## 🎯 Endpoints
 
 * `/ask`: Send your prompt here.
