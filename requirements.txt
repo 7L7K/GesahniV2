@@ -4,3 +4,4 @@ python-dotenv
 openai
 httpx
 homeassistant
+sounddevice

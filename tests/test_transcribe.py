@@ -1,21 +1,42 @@
-import sys, os
+import os, sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app import transcribe
+from fastapi.testclient import TestClient
 
 
-def test_transcribe_file(monkeypatch, tmp_path):
-    audio_path = tmp_path / "audio.wav"
-    audio_path.write_bytes(b"dummy")
+def setup_app(monkeypatch, tmp_path):
+    os.environ["OLLAMA_URL"] = "http://x"
+    os.environ["OLLAMA_MODEL"] = "llama3"
+    os.environ["HOME_ASSISTANT_URL"] = "http://ha"
+    os.environ["HOME_ASSISTANT_TOKEN"] = "token"
+    from app import main
+    monkeypatch.setattr(main, "ha_startup", lambda: None)
+    monkeypatch.setattr(main, "llama_startup", lambda: None)
+    monkeypatch.setattr(main, "SESSIONS_DIR", tmp_path)
+    return main
 
-    def fake_transcribe(model, file, api_key=None):
-        assert model == "whisper-test"
-        assert api_key == "sk-test"
-        file.read()
-        return {"text": "hello"}
 
-    monkeypatch.setattr(transcribe, "WHISPER_MODEL", "whisper-test")
-    monkeypatch.setattr(transcribe, "OPENAI_API_KEY", "sk-test")
-    monkeypatch.setattr(transcribe.openai.Audio, "transcribe", fake_transcribe)
-    result = transcribe.transcribe_file(str(audio_path))
-    assert result == "hello"
+def test_transcribe_post_and_file_created(monkeypatch, tmp_path):
+    main = setup_app(monkeypatch, tmp_path)
+
+    async def fake_transcribe(path):
+        return "hello"
+
+    monkeypatch.setattr(main, "transcribe_file", fake_transcribe)
+    client = TestClient(main.app)
+    resp = client.post("/transcribe/123")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "accepted"}
+    transcript = tmp_path / "123" / "transcript.txt"
+    assert transcript.read_text() == "hello"
+
+
+def test_transcribe_get(monkeypatch, tmp_path):
+    main = setup_app(monkeypatch, tmp_path)
+    session = tmp_path / "abc"
+    session.mkdir()
+    (session / "transcript.txt").write_text("hi")
+    client = TestClient(main.app)
+    resp = client.get("/transcribe/abc")
+    assert resp.status_code == 200
+    assert resp.json() == {"text": "hi"}
