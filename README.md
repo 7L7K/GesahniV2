@@ -75,6 +75,16 @@ python record_session.py --duration 5 --output ./sessions
 * `/config`: View current config.
 * `/intent-test`: Debug your prompt intent.
 
+## Skills
+
+Built-in skills handle common tasks before hitting the language model. The first
+skill that matches your prompt runs:
+
+```bash
+curl -X POST localhost:8000/ask -d '{"prompt":"turn off kitchen lights"}'
+# → OK—kitchen lights off.
+```
+
 ## 🤖 Smart Routing Logic
 
 * **Home Assistant**: Automation and device commands.
