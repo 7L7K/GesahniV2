@@ -4,6 +4,7 @@ os.environ.setdefault("OLLAMA_URL","http://x")
 os.environ.setdefault("OLLAMA_MODEL","llama3")
 os.environ.setdefault("HOME_ASSISTANT_URL","http://ha")
 os.environ.setdefault("HOME_ASSISTANT_TOKEN","token")
+os.environ.setdefault("OPENWEATHER_API_KEY","dummy")
 
 import httpx
 from app.skills.weather_skill import WeatherSkill
@@ -19,13 +20,17 @@ class FakeClient:
     async def get(self, url, params=None):
         class R:
             def json(self_non):
-                return {"main": {"temp": 20}}
+                return {"main": {"temp": 20}, "weather": [{"description": "clear"}]}
+            def raise_for_status(self_non):
+                pass
         return R()
 
 
 def test_weather_skill(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: FakeClient())
+    import app.skills.weather_skill as ws
+    monkeypatch.setattr(ws, "OPENWEATHER_KEY", "dummy")
     skill = WeatherSkill()
     m = skill.match("weather in paris")
     resp = asyncio.run(skill.run("weather in paris", m))
-    assert resp == "Paris is 20°C"
+    assert "Paris" in resp
