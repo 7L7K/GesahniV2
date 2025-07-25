@@ -16,10 +16,18 @@ def test_lights_turn_on(monkeypatch):
     async def fake_turn_on(entity):
         assert entity == "light.kitchen"
 
+    async def fake_get_states():
+        return [{"entity_id": "light.kitchen", "attributes": {"friendly_name": "Kitchen Light"}}]
+
+    async def fake_call_service(domain, service, data):
+        assert domain == "light" and service == "turn_on"
+
     monkeypatch.setattr(home_assistant, "resolve_entity", fake_resolve)
     monkeypatch.setattr(home_assistant, "turn_on", fake_turn_on)
+    monkeypatch.setattr(home_assistant, "get_states", fake_get_states)
+    monkeypatch.setattr(home_assistant, "call_service", fake_call_service)
 
     skill = LightsSkill()
     m = skill.match("turn on kitchen lights")
     resp = asyncio.run(skill.run("turn on kitchen lights", m))
-    assert "light.kitchen" in resp
+    assert "Kitchen" in resp
