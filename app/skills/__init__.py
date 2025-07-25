@@ -14,6 +14,12 @@ from .climate_skill import ClimateSkill
 from .vacuum_skill import VacuumSkill
 from .notes_skill import NotesSkill
 from .status_skill import StatusSkill
+from .timer_skill import TimerSkill
+from .scene_skill import SceneSkill
+from .script_skill import ScriptSkill
+from .cover_skill import CoverSkill
+from .fan_skill import FanSkill
+from .notify_skill import NotifySkill
 
 # NEW skills
 from .teach_skill import TeachSkill          # “my bedroom is Hija room”
@@ -26,9 +32,16 @@ SKILLS.extend([
     ClockSkill(),
     WeatherSkill(),
     ReminderSkill(),
+    TimerSkill(),
 
     TeachSkill(),        # alias learning first for quick matches
     EntitiesSkill(),     # optional helper to dump HA entities
+
+    SceneSkill(),
+    ScriptSkill(),
+    CoverSkill(),
+    FanSkill(),
+    NotifySkill(),
 
     LightsSkill(),
     DoorLockSkill(),
@@ -55,6 +68,12 @@ __all__ = [
     "RokuSkill",
     "ClimateSkill",
     "VacuumSkill",
+    "TimerSkill",
+    "SceneSkill",
+    "ScriptSkill",
+    "CoverSkill",
+    "FanSkill",
+    "NotifySkill",
     "NotesSkill",
     "StatusSkill",
     "SKILLS",

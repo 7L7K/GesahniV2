@@ -17,3 +17,14 @@ def test_music_play(monkeypatch):
     m = skill.match("play music")
     resp = asyncio.run(skill.run("play music", m))
     assert "Music playe" in resp or "Music play" in resp
+
+
+def test_music_artist(monkeypatch):
+    async def fake_call_service(domain, service, data):
+        assert service == "play_media"
+        assert data["media_content_id"] == "spotify:artist:NERD"
+    monkeypatch.setattr(home_assistant, "call_service", fake_call_service)
+    skill = MusicSkill()
+    m = skill.match("play N.E.R.D")
+    resp = asyncio.run(skill.run("play N.E.R.D", m))
+    assert "Playing" in resp
