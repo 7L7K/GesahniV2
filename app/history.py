@@ -28,9 +28,11 @@ logger = logging.getLogger(__name__)
 
 
 async def append_history(prompt: str, engine_used: str, response: str) -> None:
-    """
-    Append one newline‑delimited JSON object to HISTORY_FILE.
-    Uses an asyncio lock + aiofiles so concurrent requests never clobber.
+    """Append a history record to ``HISTORY_FILE``.
+
+    If the file extension is ``.json`` we maintain a JSON array for tests,
+    otherwise we append newline-delimited JSON objects (``.jsonl`` default).
+    A lock ensures concurrent writes don't clobber the file.
     """
     print("📝 append_history called! engine =", engine_used)
     print("📁 will write to:", HISTORY_FILE)
@@ -45,8 +47,20 @@ async def append_history(prompt: str, engine_used: str, response: str) -> None:
 
     async with _lock:
         try:
-            async with aiofiles.open(HISTORY_FILE, "a", encoding="utf-8") as f:
-                await f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            file_path = Path(HISTORY_FILE)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            if file_path.suffix == ".json":
+                existing = []
+                if file_path.exists():
+                    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                        content = await f.read()
+                        existing = json.loads(content) if content else []
+                existing.append(record)
+                async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
+                    await f.write(json.dumps(existing, ensure_ascii=False))
+            else:
+                async with aiofiles.open(file_path, "a", encoding="utf-8") as f:
+                    await f.write(json.dumps(record, ensure_ascii=False) + "\n")
             logger.debug("history_write_ok", extra={"meta": record})
         except Exception:
             logger.exception("Failed to append history")
