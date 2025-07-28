@@ -44,11 +44,13 @@ async def route_prompt(prompt: str) -> Any:
         else:
             print("🧠 About to log LLaMA result...")
             await append_history(prompt, engine_used, str(result))
+            await record("llama")
             print("✅ LLaMA response logged.")
             return result
 
     print("🤖 About to log GPT result...")
-    response = await ask_gpt(prompt, model=OPENAI_MODEL)
+    response = await ask_gpt(prompt)
     await append_history(prompt, "gpt", str(response))
+    await record("gpt", fallback=use_llama)
     print("✅ GPT response logged.")
     return response
