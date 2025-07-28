@@ -4,3 +4,5 @@
 *.zip
 history.json
 .DS_Store
+ollama.log
+data/history.jsonl

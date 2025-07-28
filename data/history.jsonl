@@ -1,1 +1,2 @@
 {"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-07-28T04:27:59Z"}
+{"req_id": "78fe687d-b6f4-4d64-ae2f-2fd36be06391", "timestamp": "2025-07-28T16:08:12Z", "user_id": "local", "received_at": "2025-07-28T16:08:12.723705+00:00", "started_at": "2025-07-28T16:08:12.723705+00:00", "finished_at": "2025-07-28T16:08:12.726438+00:00", "latency_ms": 2, "status": "OK"}
