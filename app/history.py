@@ -6,21 +6,9 @@ import logging
 
 from .logging_config import req_id_var
 
-HISTORY_FILE = os.path.join(os.path.dirname(__file__), "..", "history.json")
+HISTORY_FILE = os.path.join(os.path.dirname(__file__), "..", "history.jsonl")
 _lock = asyncio.Lock()
 logger = logging.getLogger(__name__)
-
-
-def _write(record: dict) -> None:
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    else:
-        data = []
-    data.append(record)
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f)
-
 
 async def append_history(prompt: str, engine_used: str, response: str) -> None:
     record = {
@@ -32,6 +20,10 @@ async def append_history(prompt: str, engine_used: str, response: str) -> None:
     }
     async with _lock:
         try:
-            await asyncio.to_thread(_write, record)
+            # Append one line per record (newline JSON)
+            line = json.dumps(record, ensure_ascii=False)
+            await asyncio.to_thread(
+                lambda: open(HISTORY_FILE, "a", encoding="utf-8").write(line + "\n")
+            )
         except Exception as e:
             logger.exception("Failed to append history: %s", e)
