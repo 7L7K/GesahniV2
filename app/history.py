@@ -4,6 +4,9 @@ import asyncio
 from datetime import datetime
 from pathlib import Path
 import logging
+from typing import Any
+
+from .telemetry import LogRecord
 
 import aiofiles                                   # pip install aiofiles
 
@@ -27,23 +30,31 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------
 
 
-async def append_history(prompt: str, engine_used: str, response: str) -> None:
+async def append_history(
+    record_or_prompt: LogRecord | str,
+    engine_used: str | None = None,
+    response: str | None = None,
+) -> None:
     """Append a history record to ``HISTORY_FILE``.
 
-    If the file extension is ``.json`` we maintain a JSON array for tests,
-    otherwise we append newline-delimited JSON objects (``.jsonl`` default).
-    A lock ensures concurrent writes don't clobber the file.
+    ``record_or_prompt`` may be a ``LogRecord`` instance or the legacy
+    ``prompt`` string (with ``engine_used`` and ``response`` also supplied).
+    The function writes newline-delimited JSON objects. Missing optional fields
+    are omitted from the output.
     """
-    print("📝 append_history called! engine =", engine_used)
-    print("📁 will write to:", HISTORY_FILE)
-
-    record = {
-        "req_id": req_id_var.get(),
-        "prompt": prompt,
-        "engine_used": engine_used,
-        "response": response,
-        "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-    }
+    if isinstance(record_or_prompt, LogRecord):
+        rec = record_or_prompt
+    else:
+        rec = LogRecord(
+            req_id=req_id_var.get(),
+            prompt=record_or_prompt,
+            engine_used=engine_used,
+            response=response,
+            timestamp=datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        )
+    if rec.timestamp is None:
+        rec.timestamp = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    record: dict[str, Any] = rec.model_dump(exclude_none=True)
 
     async with _lock:
         try:
