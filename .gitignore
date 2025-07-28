@@ -3,3 +3,4 @@
 *.venv
 *.zip
 history.json
+.DS_Store
