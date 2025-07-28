@@ -12,7 +12,7 @@ def test_router_fallback_metrics_updated(monkeypatch):
         return {"error": "timeout", "llm_used": "llama3"}
 
     async def fake_gpt(prompt):
-        return "ok"
+        return "ok", 0, 0, 0.0
 
     monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
     monkeypatch.setattr(router, "ask_llama", fake_llama)
