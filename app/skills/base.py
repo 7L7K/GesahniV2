@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Pattern, List
 
 from ..history import append_history
+from ..telemetry import log_record_var
 
 
 class Skill(ABC):
@@ -56,8 +57,13 @@ async def check_builtin_skills(prompt: str) -> Optional[str]:
     for skill in SKILLS:
         m = skill.match(norm)
         if m:
-            # still pass original prompt so skills can keep punctuation if needed
             resp = await skill.run(prompt, m)
+            rec = log_record_var.get()
+            if rec is not None:
+                rec.matched_skill = skill.__class__.__name__
+                rec.match_confidence = 1.0
+                rec.engine_used = skill.__class__.__name__
+                rec.response = str(resp)
             await append_history(prompt, skill.__class__.__name__, str(resp))
             return resp
     return None
