@@ -2,19 +2,23 @@ from dotenv import load_dotenv; load_dotenv()
 import logging
 import uuid
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, File, UploadFile, BackgroundTasks
-from pydantic import BaseModel
 import os
+import time
+import asyncio
+from hashlib import sha256
+from fastapi import FastAPI, HTTPException, File, UploadFile, BackgroundTasks, Response
+from pydantic import BaseModel
 
 from .router import route_prompt
 from .skills.base import check_builtin_skills
 import app.skills  # populate SKILLS
 from .home_assistant import get_states, call_service, resolve_entity, startup_check as ha_startup
 from .llama_integration import startup_check as llama_startup
-from .middleware import RequestIDMiddleware
-from .logging_config import configure_logging
+from .logging_config import configure_logging, req_id_var
+from .telemetry import LogRecord, log_record_var, utc_now
 from .status import router as status_router
 from .transcription import transcribe_file
+from .history import append_history
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -22,9 +26,46 @@ logger = logging.getLogger(__name__)
 SESSIONS_DIR = Path(os.getenv("SESSIONS_DIR", Path(__file__).parent.parent / "sessions"))
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
+
+def _anon_user_id(auth: str | None) -> str:
+    """Return an anonymous user identifier from an auth header."""
+    if not auth:
+        return "local"
+    return sha256(auth.encode("utf-8")).hexdigest()[:12]
+
 app = FastAPI(title="GesahniV2")
-app.add_middleware(RequestIDMiddleware)
+
 app.include_router(status_router)
+
+
+@app.middleware("http")
+async def trace_request(request, call_next):
+    rec = LogRecord(req_id=str(uuid.uuid4()))
+    token_req = req_id_var.set(rec.req_id)
+    token_rec = log_record_var.set(rec)
+    rec.session_id = request.headers.get("X-Session-ID")
+    rec.user_id = _anon_user_id(request.headers.get("Authorization"))
+    rec.channel = request.headers.get("X-Channel")
+    rec.received_at = utc_now().isoformat()
+    rec.started_at = rec.received_at
+    start_time = time.monotonic()
+    response: Response | None = None
+    try:
+        response = await call_next(request)
+        rec.status = "OK"
+    except asyncio.TimeoutError:
+        rec.status = "ERR_TIMEOUT"
+        raise
+    finally:
+        rec.finished_at = utc_now().isoformat()
+        rec.latency_ms = int((time.monotonic() - start_time) * 1000)
+        request_id = rec.req_id
+        if isinstance(response, Response):
+            response.headers["X-Request-ID"] = request_id
+        await append_history(rec)
+        log_record_var.reset(token_rec)
+        req_id_var.reset(token_req)
+    return response
 
 @app.on_event("startup")
 async def startup_event() -> None:

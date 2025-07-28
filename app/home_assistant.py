@@ -4,6 +4,8 @@ import httpx
 import re
 from typing import Any, List, Optional
 
+from .telemetry import log_record_var
+
 HOME_ASSISTANT_URL = os.getenv("HOME_ASSISTANT_URL")
 HOME_ASSISTANT_TOKEN = os.getenv("HOME_ASSISTANT_TOKEN")
 
@@ -43,7 +45,13 @@ async def get_states() -> list[dict]:
 
 
 async def call_service(domain: str, service: str, data: dict) -> Any:
-    """Call a Home Assistant service."""
+    """Call a Home Assistant service and record telemetry."""
+    rec = log_record_var.get()
+    if rec is not None:
+        rec.ha_service_called = f"{domain}.{service}"
+        ids = data.get("entity_id")
+        if ids is not None:
+            rec.entity_ids = [ids] if isinstance(ids, str) else list(ids)
     return await _request("POST", f"/services/{domain}/{service}", json=data)
 
 

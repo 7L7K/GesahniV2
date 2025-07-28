@@ -112,6 +112,24 @@ curl -X POST localhost:8000/ask -d '{"prompt":"turn off kitchen lights"}'
 * Check logs at `/config` endpoint.
 * Detailed error logs saved locally.
 
+## Event Log
+
+Each `/ask` request writes a JSON object to `data/history.jsonl` capturing core
+metadata and timing. New fields include `session_id`, `latency_ms`, `status` and
+token usage. Missing fields default to `null`.
+
+```json
+{
+  "req_id": "abc123",
+  "session_id": "s-42",
+  "prompt": "turn on hallway light",
+  "engine_used": "LightsSkill",
+  "response": "Done.",
+  "latency_ms": 120,
+  "status": "OK"
+}
+```
+
 ---
 
 Made by the King, for the King. Let's run it! 🚀🔥
