@@ -13,7 +13,7 @@ def setup_app(monkeypatch):
     monkeypatch.setattr(main, "ha_startup", lambda: None)
     monkeypatch.setattr(main, "llama_startup", lambda: None)
     called = {"route": False}
-    async def fake_route(prompt):
+    async def fake_route(prompt, model=None):
         called["route"] = True
         return "llm"
     monkeypatch.setattr(main, "route_prompt", fake_route)

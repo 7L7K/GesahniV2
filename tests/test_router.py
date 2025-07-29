@@ -8,10 +8,10 @@ def test_router_fallback_metrics_updated(monkeypatch):
     os.environ["OLLAMA_URL"] = "http://x"
     os.environ["OLLAMA_MODEL"] = "llama3"
     from app import router, analytics
-    async def fake_llama(prompt):
+    async def fake_llama(prompt, model=None):
         return {"error": "timeout", "llm_used": "llama3"}
 
-    async def fake_gpt(prompt):
+    async def fake_gpt(prompt, model=None):
         return "ok", 0, 0, 0.0
 
     monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
