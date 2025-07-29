@@ -6,3 +6,6 @@ httpx
 homeassistant
 sounddevice
 apscheduler
+aiofiles
+numpy
+scipy
