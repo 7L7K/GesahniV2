@@ -1,44 +1,45 @@
-import React, { useState } from 'react';
+// src/components/InputBar.tsx
+import { PaperPlane } from "lucide-react";
+import { useState, KeyboardEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
-interface InputBarProps {
+export default function InputBar({
+  onSend,
+  loading,
+}: {
   onSend: (text: string) => void;
-  disabled?: boolean;
-}
+  loading: boolean;
+}) {
+  const [text, setText] = useState("");
 
-const InputBar: React.FC<InputBarProps> = ({ onSend, disabled }) => {
-  const [value, setValue] = useState('');
-
-  const send = () => {
-    const text = value.trim();
-    if (!text) return;
-    onSend(text);
-    setValue('');
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+  const handleKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
       send();
     }
   };
 
+  const send = () => {
+    onSend(text);
+    setText("");
+  };
+
   return (
-    <div className="flex space-x-2 mt-4">
-      <input
-        className="flex-grow border rounded px-2 py-1"
-        value={value}
-        onChange={e => setValue(e.target.value)}
-        onKeyDown={onKeyDown}
-        disabled={disabled}
+    <div className="flex gap-2">
+      <Textarea
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={handleKey}
+        placeholder="Type a message…"
+        className="flex-1 resize-none"
+        rows={1}
+        maxRows={6}
+        disabled={loading}
       />
-      <button
-        className="px-4 py-1 bg-blue-600 text-white rounded"
-        onClick={send}
-        disabled={disabled}
-      >
-        Send
-      </button>
+      <Button onClick={send} disabled={loading || !text.trim()} size="icon">
+        <PaperPlane className="size-4" />
+      </Button>
     </div>
   );
-};
-
-export default InputBar;
+}

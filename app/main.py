@@ -6,7 +6,9 @@ import os
 import time
 import asyncio
 from hashlib import sha256
+
 from fastapi import FastAPI, HTTPException, File, UploadFile, BackgroundTasks, Response
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .router import route_prompt
@@ -33,7 +35,18 @@ def _anon_user_id(auth: str | None) -> str:
         return "local"
     return sha256(auth.encode("utf-8")).hexdigest()[:12]
 
+
 app = FastAPI(title="GesahniV2")
+
+# ─── CORS MIDDLEWARE ───────────────────────────────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # your Next.js dev URL
+    allow_credentials=True,
+    allow_methods=["*"],    # includes OPTIONS
+    allow_headers=["*"],    # includes Content-Type, Authorization, etc.
+)
+# ───────────────────────────────────────────────────────────────────────────────────
 
 app.include_router(status_router)
 
