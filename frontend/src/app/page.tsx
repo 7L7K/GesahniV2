@@ -15,6 +15,7 @@ export default function Page() {
     { role: 'assistant', content: "Hey King, what’s good?" },
   ]);
   const [loading, setLoading] = useState(false);
+  const [model, setModel] = useState('llama3');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto‑scroll whenever messages change
@@ -31,7 +32,7 @@ export default function Page() {
 
     try {
       // 🔗 Use the shared helper so we always hit NEXT_PUBLIC_API_URL
-      const replyText = await sendPrompt(text);
+      const replyText = await sendPrompt(text, model);
       setMessages(prev => [...prev, { role: 'assistant', content: replyText }]);
     } catch (err: any) {
       setMessages(prev => [
@@ -57,7 +58,12 @@ export default function Page() {
       {/* input pinned bottom */}
       <footer className="sticky bottom-0 w-full border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="max-w-2xl mx-auto p-4">
-          <InputBar onSend={handleSend} loading={loading} />
+          <InputBar
+            onSend={handleSend}
+            loading={loading}
+            model={model}
+            onModelChange={setModel}
+          />
         </div>
       </footer>
     </main>
