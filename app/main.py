@@ -90,6 +90,7 @@ async def startup_event() -> None:
 
 class AskRequest(BaseModel):
     prompt: str
+    model: str | None = None
 
 class ServiceRequest(BaseModel):
     domain: str
@@ -103,7 +104,7 @@ async def ask(req: AskRequest):
         skill_resp = await check_builtin_skills(req.prompt)
         if skill_resp is not None:
             return {"response": skill_resp}
-        answer = await route_prompt(req.prompt)
+        answer = await route_prompt(req.prompt, req.model)
         return {"response": answer}
     except Exception as e:
         logger.exception("Error processing prompt: %s", e)
