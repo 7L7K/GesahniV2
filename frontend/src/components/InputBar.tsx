@@ -7,9 +7,13 @@ import { Textarea } from "@/components/ui/textarea";
 export default function InputBar({
   onSend,
   loading,
+  model,
+  onModelChange,
 }: {
   onSend: (text: string) => void;
   loading: boolean;
+  model: string;
+  onModelChange: (m: string) => void;
 }) {
   const [text, setText] = useState("");
 
@@ -26,7 +30,15 @@ export default function InputBar({
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 items-end">
+      <select
+        value={model}
+        onChange={(e) => onModelChange(e.target.value)}
+        className="border border-input rounded-md px-2 py-1 text-sm bg-background"
+      >
+        <option value="llama3">llama3</option>
+        <option value="gpt-4o">gpt-4o</option>
+      </select>
       <Textarea
         value={text}
         onChange={e => setText(e.target.value)}
