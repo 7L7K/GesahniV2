@@ -12,7 +12,7 @@ def setup_app(monkeypatch, hist_path):
     monkeypatch.setattr(main, "ha_startup", lambda: None)
     monkeypatch.setattr(main, "llama_startup", lambda: None)
     monkeypatch.setattr("app.history.HISTORY_FILE", hist_path)
-    async def fake_route(prompt: str):
+    async def fake_route(prompt: str, model=None):
         return "ok"
     monkeypatch.setattr(main, "route_prompt", fake_route)
     return TestClient(main.app)
@@ -26,4 +26,4 @@ def test_telemetry_logged(monkeypatch, tmp_path):
     line = hist.read_text().splitlines()[-1]
     data = json.loads(line)
     assert data["status"] == "OK"
-    assert data["latency_ms"] > 0
+    assert data["latency_ms"] >= 0

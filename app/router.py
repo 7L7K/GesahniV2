@@ -12,7 +12,7 @@ from .telemetry import log_record_var
 logger = logging.getLogger(__name__)
 
 
-async def route_prompt(prompt: str) -> Any:
+async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     print("➡️ route_prompt fired with prompt:", prompt)
     rec = log_record_var.get()
     if rec is not None:
@@ -28,9 +28,14 @@ async def route_prompt(prompt: str) -> Any:
         print("✅ HA response logged.")
         return ha_resp
 
-    intent, confidence = detect_intent(prompt)
-    use_llama = len(prompt) < 250 and confidence in ("medium", "high")
-    model = OLLAMA_MODEL if use_llama else OPENAI_MODEL
+    if model_override:
+        use_llama = model_override.lower().startswith("llama")
+        model = model_override
+        confidence = "override"
+    else:
+        intent, confidence = detect_intent(prompt)
+        use_llama = len(prompt) < 250 and confidence in ("medium", "high")
+        model = OLLAMA_MODEL if use_llama else OPENAI_MODEL
     engine_used = "llama" if use_llama else "gpt"
 
     logger.info(
@@ -45,7 +50,7 @@ async def route_prompt(prompt: str) -> Any:
     )
 
     if use_llama:
-        result = await ask_llama(prompt)
+        result = await ask_llama(prompt, model)
         if isinstance(result, dict) and "error" in result:
             logger.error("llama_error", extra={"error": result["error"]})
         else:
@@ -60,7 +65,7 @@ async def route_prompt(prompt: str) -> Any:
             return result
 
     print("🤖 About to log GPT result...")
-    text, pt, ct, price = await ask_gpt(prompt)
+    text, pt, ct, price = await ask_gpt(prompt, model if not use_llama else None)
     if rec is not None:
         rec.engine_used = "gpt"
         rec.response = str(text)
