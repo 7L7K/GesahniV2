@@ -6,6 +6,7 @@ export async function sendPrompt(prompt: string): Promise<string> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt })
   });
+  console.debug("API_URL baked into bundle:", API_URL);
 
   if (!res.ok) {
     throw new Error(`Request failed: ${res.status}`);

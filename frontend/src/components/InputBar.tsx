@@ -1,5 +1,5 @@
 // src/components/InputBar.tsx
-import { PaperPlane } from "lucide-react";
+import { Send } from "lucide-react";
 import { useState, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,11 +34,10 @@ export default function InputBar({
         placeholder="Type a message…"
         className="flex-1 resize-none"
         rows={1}
-        maxRows={6}
         disabled={loading}
       />
       <Button onClick={send} disabled={loading || !text.trim()} size="icon">
-        <PaperPlane className="size-4" />
+        <Send className="size-4" />
       </Button>
     </div>
   );
