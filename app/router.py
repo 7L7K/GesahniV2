@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from .llama_integration import ask_llama, OLLAMA_MODEL
+from .llama_integration import ask_llama, OLLAMA_MODEL, LLAMA_HEALTHY
 from .gpt_client import ask_gpt, OPENAI_MODEL
 from .home_assistant import handle_command
 from .intent_detector import detect_intent
@@ -29,13 +29,16 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         return ha_resp
 
     if model_override:
-        use_llama = model_override.lower().startswith("llama")
+        would_use_llama = model_override.lower().startswith("llama")
         model = model_override
+        gpt_model = model_override if not would_use_llama else OPENAI_MODEL
         confidence = "override"
     else:
         intent, confidence = detect_intent(prompt)
-        use_llama = len(prompt) < 250 and confidence in ("medium", "high")
-        model = OLLAMA_MODEL if use_llama else OPENAI_MODEL
+        would_use_llama = len(prompt) < 250 and confidence in ("medium", "high")
+        model = OLLAMA_MODEL if would_use_llama else OPENAI_MODEL
+        gpt_model = OPENAI_MODEL
+    use_llama = would_use_llama and LLAMA_HEALTHY
     engine_used = "llama" if use_llama else "gpt"
 
     logger.info(
@@ -65,15 +68,15 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
             return result
 
     print("🤖 About to log GPT result...")
-    text, pt, ct, price = await ask_gpt(prompt, model if not use_llama else None)
+    text, pt, ct, price = await ask_gpt(prompt, gpt_model if not use_llama else None)
     if rec is not None:
         rec.engine_used = "gpt"
         rec.response = str(text)
-        rec.model_name = model
+        rec.model_name = gpt_model if not use_llama else OPENAI_MODEL
         rec.prompt_tokens = pt
         rec.completion_tokens = ct
         rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * price
     await append_history(prompt, "gpt", str(text))
-    await record("gpt", fallback=use_llama)
+    await record("gpt", fallback=would_use_llama)
     print("✅ GPT response logged.")
     return text

@@ -7,7 +7,10 @@ import asyncio
 def test_router_fallback_metrics_updated(monkeypatch):
     os.environ["OLLAMA_URL"] = "http://x"
     os.environ["OLLAMA_MODEL"] = "llama3"
-    from app import router, analytics
+    os.environ["HOME_ASSISTANT_URL"] = "http://ha"
+    os.environ["HOME_ASSISTANT_TOKEN"] = "token"
+    from app import router, analytics, llama_integration
+    llama_integration.LLAMA_HEALTHY = True
     async def fake_llama(prompt, model=None):
         return {"error": "timeout", "llm_used": "llama3"}
 
