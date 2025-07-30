@@ -12,3 +12,4 @@ data/history.jsonl
 data/history.jsonl
 *.jsonl
 data/history.jsonl
+.direnv/*
