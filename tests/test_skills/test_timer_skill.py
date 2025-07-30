@@ -20,3 +20,19 @@ def test_timer_skill(monkeypatch):
     assert called["domain"] == "timer"
     assert called["service"] == "start"
     assert "2 minutes" in resp
+
+
+def test_named_timer_cancel_query(monkeypatch):
+    events = []
+    async def fake_call_service(domain, service, data):
+        events.append((service, data["entity_id"]))
+    monkeypatch.setattr(home_assistant, "call_service", fake_call_service)
+    skill = TimerSkill()
+    m = skill.match("start kitchen timer for 1 seconds")
+    asyncio.run(skill.run("start kitchen timer for 1 seconds", m))
+    m2 = skill.match("how long left on kitchen timer")
+    resp = asyncio.run(skill.run("how long left on kitchen timer", m2))
+    assert "kitchen" in resp
+    m3 = skill.match("cancel kitchen timer")
+    asyncio.run(skill.run("cancel kitchen timer", m3))
+    assert ("cancel", "timer.kitchen") in events
