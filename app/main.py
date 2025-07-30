@@ -1,4 +1,6 @@
-from dotenv import load_dotenv; load_dotenv()
+from dotenv import load_dotenv
+
+load_dotenv()
 import logging
 import uuid
 from pathlib import Path
@@ -14,7 +16,12 @@ from pydantic import BaseModel
 from .router import route_prompt
 from .skills.base import check_builtin_skills
 import app.skills  # populate SKILLS
-from .home_assistant import get_states, call_service, resolve_entity, startup_check as ha_startup
+from .home_assistant import (
+    get_states,
+    call_service,
+    resolve_entity,
+    startup_check as ha_startup,
+)
 from .llama_integration import startup_check as llama_startup
 from .logging_config import configure_logging, req_id_var
 from .telemetry import LogRecord, log_record_var, utc_now
@@ -25,7 +32,9 @@ from .history import append_history
 configure_logging()
 logger = logging.getLogger(__name__)
 
-SESSIONS_DIR = Path(os.getenv("SESSIONS_DIR", Path(__file__).parent.parent / "sessions"))
+SESSIONS_DIR = Path(
+    os.getenv("SESSIONS_DIR", Path(__file__).parent.parent / "sessions")
+)
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -43,8 +52,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],  # your Next.js dev URL
     allow_credentials=True,
-    allow_methods=["*"],    # includes OPTIONS
-    allow_headers=["*"],    # includes Content-Type, Authorization, etc.
+    allow_methods=["*"],  # includes OPTIONS
+    allow_headers=["*"],  # includes Content-Type, Authorization, etc.
 )
 # ───────────────────────────────────────────────────────────────────────────────────
 
@@ -80,6 +89,7 @@ async def trace_request(request, call_next):
         req_id_var.reset(token_req)
     return response
 
+
 @app.on_event("startup")
 async def startup_event() -> None:
     try:
@@ -88,27 +98,28 @@ async def startup_event() -> None:
     except Exception as e:
         logger.error(f"Startup check failed: {e}")
 
+
 class AskRequest(BaseModel):
     prompt: str
     model: str | None = None
+
 
 class ServiceRequest(BaseModel):
     domain: str
     service: str
     data: dict | None = None
 
+
 @app.post("/ask")
 async def ask(req: AskRequest):
     logger.info("Received prompt: %s", req.prompt)
     try:
-        skill_resp = await check_builtin_skills(req.prompt)
-        if skill_resp is not None:
-            return {"response": skill_resp}
         answer = await route_prompt(req.prompt, req.model)
         return {"response": answer}
     except Exception as e:
         logger.exception("Error processing prompt: %s", e)
         raise HTTPException(status_code=500, detail="Error processing prompt")
+
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
@@ -122,10 +133,12 @@ async def upload(file: UploadFile = File(...)):
     logger.info(f"File uploaded to {dest}")
     return {"session_id": session_id}
 
+
 @app.post("/intent-test")
 async def intent_test(req: AskRequest):
     logger.info("Intent test for: %s", req.prompt)
     return {"intent": "test", "prompt": req.prompt}
+
 
 @app.get("/ha/entities")
 async def ha_entities():
@@ -135,6 +148,7 @@ async def ha_entities():
         logger.exception("HA states error: %s", e)
         raise HTTPException(status_code=500, detail="Home Assistant error")
 
+
 @app.post("/ha/service")
 async def ha_service(req: ServiceRequest):
     try:
@@ -143,6 +157,7 @@ async def ha_service(req: ServiceRequest):
     except Exception as e:
         logger.exception("HA service error: %s", e)
         raise HTTPException(status_code=500, detail="Home Assistant error")
+
 
 @app.get("/ha/resolve")
 async def ha_resolve(name: str):
@@ -157,6 +172,7 @@ async def ha_resolve(name: str):
         logger.exception("HA resolve error: %s", e)
         raise HTTPException(status_code=500, detail="Home Assistant error")
 
+
 async def _background_transcribe(session_id: str) -> None:
     audio_path = SESSIONS_DIR / session_id / "audio.wav"
     transcript_path = SESSIONS_DIR / session_id / "transcript.txt"
@@ -167,10 +183,12 @@ async def _background_transcribe(session_id: str) -> None:
     except Exception as e:
         logger.exception("Transcription failed: %s", e)
 
+
 @app.post("/transcribe/{session_id}")
 async def start_transcription(session_id: str, background_tasks: BackgroundTasks):
     background_tasks.add_task(_background_transcribe, session_id)
     return {"status": "accepted"}
+
 
 @app.get("/transcribe/{session_id}")
 async def get_transcription(session_id: str):
@@ -179,6 +197,8 @@ async def get_transcription(session_id: str):
         return {"text": transcript_path.read_text(encoding="utf-8")}
     raise HTTPException(status_code=404, detail="Transcript not found")
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
