@@ -98,10 +98,16 @@ Welcome to the cast of GesahniV2—your personal AI ensemble that handles everyt
 
 ### API Endpoints Overview
 - **POST `/ask`** → `RouterAgent`  
-- **POST `/intent-test`** → `IntentTestAgent`  
-- **GET `/ha/entities`** → raw `get_states()` JSON  
-- **POST `/ha/service`** → manual `call_service(domain, service, data)`  
-- **GET `/ha/resolve?name=<foo>`** → `{ "entity_id": "<domain.foo>" }`
+- **POST `/intent-test`** → `IntentTestAgent`
+- **POST `/upload`** → start audio upload session
+- **POST `/transcribe/{session_id}`** → begin transcription
+- **GET `/transcribe/{session_id}`** → get transcribed text
+- **GET `/status`** → combined service health
+- **GET `/health`** → basic heartbeat
+- **GET `/config`** → environment dump
+- **GET `/ha/entities`** → raw `get_states()` JSON
+- **POST `/ha/service`** → manual `call_service(domain, service, data)`
+- **GET `/ha/resolve?name=<foo>`** → `{ "entity_id": "<domain.foo>" }
 
 ---
 
