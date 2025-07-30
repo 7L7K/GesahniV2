@@ -22,7 +22,7 @@ from .skills.notes_skill import NotesSkill
 
 # Precompile regex patterns for skill routing
 SKILL_PATTERNS = [
-    (re.compile(r"\b(what(?:’|'|")?s?|calculate|how much is)\b", re.IGNORECASE), MathSkill),
+    (re.compile(r"\b(what(?:'|\")?s?|calculate|how much is)\b", re.IGNORECASE), MathSkill),
     (re.compile(r"\b(translate|how do you say)\b", re.IGNORECASE), TranslateSkill),
     (re.compile(r"\b(who|what|when|where)\b", re.IGNORECASE), SearchSkill),
     (re.compile(r"\b(\w+ timer|list all active timers|cancel .+ timer)\b", re.IGNORECASE), TimerSkill),
