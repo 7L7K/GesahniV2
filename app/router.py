@@ -6,8 +6,9 @@ from .llama_integration import ask_llama, OLLAMA_MODEL, LLAMA_HEALTHY
 from .gpt_client import ask_gpt, OPENAI_MODEL
 from .home_assistant import handle_command
 from .intent_detector import detect_intent
-from .analytics import record                # ⬅︎ kept as‑is
-from .history import append_history          # ⬅︎ signature unchanged
+from .keyword_catalog import check_keyword_catalog
+from .analytics import record  # ⬅︎ kept as‑is
+from .history import append_history  # ⬅︎ signature unchanged
 from .telemetry import log_record_var
 
 logger = logging.getLogger(__name__)
