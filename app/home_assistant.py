@@ -66,7 +66,10 @@ async def turn_off(entity_id: str) -> Any:
 
 
 async def startup_check() -> None:
-    await _request("GET", "/states")
+    if HOME_ASSISTANT_URL:
+        await _request("GET", "/states")
+    else:
+        logger.warning("Skipping HA startup check – no URL provided")
 
 
 # ---------------------------------------------------------------------------

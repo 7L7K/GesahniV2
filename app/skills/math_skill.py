@@ -1,16 +1,13 @@
 from __future__ import annotations
-
 import re
 from typing import Optional
-
 from .base import Skill
-
 
 class MathSkill(Skill):
     PATTERNS = [
         re.compile(r"(?P<a>\d+(?:\.\d+)?)\s*(?P<op>[+\-*/x×])\s*(?P<b>\d+(?:\.\d+)?)", re.I),
-        re.compile(r"(?P<pct>\d+(?:\.\d+)?)%\s*of\s*(?P<of>\d+(?:\.\d+)?)", re.I),
-        re.compile(r"round\s+(?P<val>\d+(?:\.\d+)?)\s+to\s+(?P<places>\d+)\s+decimal", re.I),
+        re.compile(r"(?P<pct>\d+(?:\.\d+)?)%\\s*of\\s*(?P<of>\\d+(?:\\.\\d+)?)", re.I),
+        re.compile(r"round\\s+(?P<val>\\d+(?:\\.\\d+)?)\\s+to\\s+(?P<places>\\d+)\\s+decimal", re.I),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
@@ -40,3 +37,10 @@ class MathSkill(Skill):
             places = int(d["places"])
             return str(round(val, places))
         return "Could not compute"
+
+    async def handle(self, prompt: str) -> str:
+        for pat in self.PATTERNS:
+            match = pat.search(prompt)
+            if match:
+                return await self.run(prompt, match)
+        return "Sorry, I couldn't understand that math problem."
