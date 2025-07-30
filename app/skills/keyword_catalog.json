@@ -1,0 +1,7 @@
+{
+    "MathSkill": ["+", "-", "*", "x", "×", "/", "% of", "round"],
+    "TranslateSkill": ["translate", "detect language"],
+    "SearchSkill": ["search", "who is", "what is"],
+    "TimerSkill": ["timer"],
+    "NotesSkill": ["note", "notes"]
+}
