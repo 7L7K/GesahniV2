@@ -15,6 +15,9 @@ from .vacuum_skill import VacuumSkill
 from .notes_skill import NotesSkill
 from .status_skill import StatusSkill
 from .timer_skill import TimerSkill
+from .math_skill import MathSkill
+from .translate_skill import TranslateSkill
+from .search_skill import SearchSkill
 from .scene_skill import SceneSkill
 from .script_skill import ScriptSkill
 from .cover_skill import CoverSkill
@@ -33,6 +36,9 @@ SKILLS.extend([
     WeatherSkill(),
     ReminderSkill(),
     TimerSkill(),
+    MathSkill(),
+    TranslateSkill(),
+    SearchSkill(),
 
     TeachSkill(),        # alias learning first for quick matches
     EntitiesSkill(),     # optional helper to dump HA entities
@@ -69,6 +75,9 @@ __all__ = [
     "ClimateSkill",
     "VacuumSkill",
     "TimerSkill",
+    "MathSkill",
+    "TranslateSkill",
+    "SearchSkill",
     "SceneSkill",
     "ScriptSkill",
     "CoverSkill",

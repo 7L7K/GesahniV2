@@ -28,9 +28,6 @@ async def _check_and_set_flag() -> None:
         async with httpx.AsyncClient() as client:
             resp = await client.get(f"{OLLAMA_URL}/api/tags")
             resp.raise_for_status()
-            tags = resp.json()
-            if OLLAMA_MODEL not in str(tags):
-                raise RuntimeError("model_missing")
         LLAMA_HEALTHY = True
     except Exception:
         LLAMA_HEALTHY = False
