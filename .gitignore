@@ -5,11 +5,8 @@
 history.json
 .DS_Store
 ollama.log
-data/history.jsonl
-data/history.jsonl
 /node_modules/*
 *.log
-data/history.jsonl
 *.jsonl
-data/history.jsonl
 .direnv/*
+data/*
