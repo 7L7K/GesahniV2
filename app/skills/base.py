@@ -25,6 +25,13 @@ class Skill(ABC):
         """Execute the skill and return the response text."""
         raise NotImplementedError
 
+    async def handle(self, prompt: str) -> str:
+        """Convenience wrapper used by the router."""
+        m = self.match(prompt)
+        if not m:
+            raise ValueError("no pattern matched")
+        return await self.run(prompt, m)
+
 
 SKILLS: List[Skill] = []
 
