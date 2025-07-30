@@ -30,7 +30,7 @@ async def _check_and_set_flag() -> None:
             resp.raise_for_status()
             tags = resp.json()
             if OLLAMA_MODEL not in str(tags):
-                raise RuntimeError("model_missing")
+                logger.warning("Model %s missing on Ollama", OLLAMA_MODEL)
         LLAMA_HEALTHY = True
     except Exception:
         LLAMA_HEALTHY = False
