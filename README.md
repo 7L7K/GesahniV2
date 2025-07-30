@@ -71,9 +71,12 @@ python record_session.py --duration 5 --output ./sessions
 ## 🎯 Endpoints
 
 * `/ask`: Send your prompt here.
-* `/health`: Check backend health.
-* `/config`: View current config.
-* `/intent-test`: Debug your prompt intent.
+* `/upload`: upload audio for transcription.
+* `/transcribe/{session_id}` (POST/GET): start or fetch transcription.
+* `/ha/entities`, `/ha/service`, `/ha/resolve`: Home Assistant helpers.
+* `/health` and `/status`: service status info.
+* `/config`: view config.
+* `/intent-test`: debug your prompt intent.
 
 ## Skills
 
