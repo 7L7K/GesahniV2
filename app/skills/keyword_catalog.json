@@ -1,22 +1,91 @@
+
 [
+  {
+    "skill": "ClimateSkill",
+    "keywords": ["climate", "temperature", "humidity", "thermostat", "hvac", "set temperature", "what's the temperature"]
+  },
+  {
+    "skill": "ClockSkill",
+    "keywords": ["time", "clock", "what time is it", "current time", "date", "day", "what day is it"]
+  },
+  {
+    "skill": "CoverSkill",
+    "keywords": ["cover", "blinds", "shutters", "open cover", "close cover", "raise blinds", "lower blinds"]
+  },
+  {
+    "skill": "DoorLockSkill",
+    "keywords": ["lock", "unlock", "door", "front door", "back door", "secure", "unsecure"]
+  },
+  {
+    "skill": "EntitiesSkill",
+    "keywords": ["entities", "list entities", "show devices", "what entities", "device list"]
+  },
+  {
+    "skill": "FanSkill",
+    "keywords": ["fan", "ceiling fan", "turn on fan", "turn off fan", "fan speed", "set fan speed"]
+  },
+  {
+    "skill": "LightsSkill",
+    "keywords": ["light", "lights", "lamp", "turn on light", "turn off light", "make it brighter", "make it dimmer"]
+  },
   {
     "skill": "MathSkill",
     "keywords": ["+", "-", "*", "x", "×", "/", "% of", "round"]
   },
   {
-    "skill": "TranslateSkill",
-    "keywords": ["translate", "detect language"]
-  },
-  {
-    "skill": "SearchSkill",
-    "keywords": ["search", "who is", "what is"]
-  },
-  {
-    "skill": "TimerSkill",
-    "keywords": ["timer"]
+    "skill": "MusicSkill",
+    "keywords": ["music", "play music", "pause music", "next song", "previous song", "stop music", "volume"]
   },
   {
     "skill": "NotesSkill",
-    "keywords": ["note", "notes"]
+    "keywords": ["note", "notes", "take note", "remember this", "list notes", "delete note"]
+  },
+  {
+    "skill": "NotifySkill",
+    "keywords": ["notify", "notification", "send notification", "alert", "send message"]
+  },
+  {
+    "skill": "ReminderSkill",
+    "keywords": ["remind", "reminder", "remind me", "set reminder", "delete reminder", "what are my reminders"]
+  },
+  {
+    "skill": "RokuSkill",
+    "keywords": ["roku", "tv", "stream", "play on roku", "launch app", "roku channel"]
+  },
+  {
+    "skill": "SceneSkill",
+    "keywords": ["scene", "activate scene", "set scene", "load scene", "run scene"]
+  },
+  {
+    "skill": "ScriptSkill",
+    "keywords": ["run script", "script", "execute script", "start script"]
+  },
+  {
+    "skill": "WeatherSkill",
+    "keywords": ["weather", "forecast", "rain", "temperature", "how hot", "how cold", "is it raining"]
+  },
+  {
+    "skill": "SearchSkill",
+    "keywords": ["search ", "lookup ", "who is ", "find "]
+  },
+  {
+    "skill": "StatusSkill",
+    "keywords": ["status", "what is the status", "health check", "system status", "check status"]
+  },
+  {
+    "skill": "TeachSkill",
+    "keywords": ["teach", "train", "learn", "example", "show me how"]
+  },
+  {
+    "skill": "TimerSkill",
+    "keywords": ["timer", "set timer", "start timer", "how much time left", "cancel timer", "timer status"]
+  },
+  {
+    "skill": "TranslateSkill",
+    "keywords": ["translate", "detect language", "what does", "in spanish", "in french"]
+  },
+  {
+    "skill": "VacuumSkill",
+    "keywords": ["vacuum", "robot vacuum", "start vacuum", "stop vacuum", "clean floor", "dock vacuum"]
   }
 ]

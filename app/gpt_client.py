@@ -1,3 +1,5 @@
+# app/gpt_client.py
+
 import os
 import logging
 from openai import AsyncOpenAI
@@ -39,4 +41,3 @@ async def ask_gpt(prompt: str, model: str | None = None) -> tuple[str, int, int,
     except Exception as e:
         logger.exception("OpenAI request failed: %s", e)
         raise
-
