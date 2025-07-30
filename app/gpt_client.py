@@ -10,6 +10,13 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 logger = logging.getLogger(__name__)
 _client: AsyncOpenAI | None = None
 
+# price in USD per 1k tokens
+MODEL_PRICING = {
+    "gpt-4o": 0.005,
+    "gpt-3.5-turbo": 0.002,
+    "gpt-4": 0.01,
+}
+
 def get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
@@ -29,7 +36,7 @@ async def ask_gpt(prompt: str, model: str | None = None) -> tuple[str, int, int,
         usage = resp.usage or {}
         pt = int(getattr(usage, "prompt_tokens", 0))
         ct = int(getattr(usage, "completion_tokens", 0))
-        unit_price = 0.0
+        unit_price = MODEL_PRICING.get(model, 0.0)
         return text, pt, ct, unit_price
     except Exception as e:
         logger.exception("OpenAI request failed: %s", e)

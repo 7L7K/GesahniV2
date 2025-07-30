@@ -28,6 +28,7 @@ from .telemetry import LogRecord, log_record_var, utc_now
 from .status import router as status_router
 from .transcription import transcribe_file
 from .history import append_history
+from .middleware import DedupMiddleware
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ app.add_middleware(
     allow_headers=["*"],  # includes Content-Type, Authorization, etc.
 )
 # ───────────────────────────────────────────────────────────────────────────────────
+app.add_middleware(DedupMiddleware)
 
 app.include_router(status_router)
 
