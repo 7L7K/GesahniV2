@@ -1,7 +1,22 @@
-{
-    "MathSkill": ["+", "-", "*", "x", "×", "/", "% of", "round"],
-    "TranslateSkill": ["translate", "detect language"],
-    "SearchSkill": ["search", "who is", "what is"],
-    "TimerSkill": ["timer"],
-    "NotesSkill": ["note", "notes"]
-}
+[
+  {
+    "skill": "MathSkill",
+    "keywords": ["+", "-", "*", "x", "×", "/", "% of", "round"]
+  },
+  {
+    "skill": "TranslateSkill",
+    "keywords": ["translate", "detect language"]
+  },
+  {
+    "skill": "SearchSkill",
+    "keywords": ["search", "who is", "what is"]
+  },
+  {
+    "skill": "TimerSkill",
+    "keywords": ["timer"]
+  },
+  {
+    "skill": "NotesSkill",
+    "keywords": ["note", "notes"]
+  }
+]
