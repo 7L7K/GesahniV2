@@ -18,3 +18,17 @@ def test_reminder_skill(monkeypatch):
     resp = asyncio.run(skill.run("remind me to work out in 2 minutes", m))
     assert called['seconds'] == 120
     assert "Reminder set" in resp
+
+
+def test_reminder_recurring(monkeypatch):
+    info = {}
+    def fake_add_job(func, trigger, **kw):
+        info['trigger'] = trigger
+        info.update(kw)
+    monkeypatch.setattr(scheduler, 'add_job', fake_add_job)
+    skill = ReminderSkill()
+    m = skill.match("remind me to stretch every day")
+    resp = asyncio.run(skill.run("remind me to stretch every day", m))
+    assert info['trigger'] == 'interval'
+    assert info['days'] == 1
+    assert "Recurring" in resp

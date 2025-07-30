@@ -17,6 +17,11 @@ def test_notes(monkeypatch):
     skill = NotesSkill()
     m1 = skill.match("note hello")
     asyncio.run(skill.run("note hello", m1))
-    m2 = skill.match("show notes")
-    out = asyncio.run(skill.run("show notes", m2))
-    assert "hello" in out
+    m2 = skill.match("list notes")
+    out = asyncio.run(skill.run("list notes", m2))
+    assert "1." in out
+    m3 = skill.match("delete note 1")
+    asyncio.run(skill.run("delete note 1", m3))
+    m4 = skill.match("list notes")
+    out2 = asyncio.run(skill.run("list notes", m4))
+    assert "No notes" in out2
