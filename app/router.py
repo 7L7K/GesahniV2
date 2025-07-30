@@ -1,10 +1,4 @@
-"""Prompt routing module
-
-This version resolves merge‑conflict markers, drops the unused
-`SKILL_PATTERNS` prototype, and keeps the keyword‑catalog approach.
-It also clarifies model‑selection logic and ensures every pathway
-updates telemetry + history consistently.
-"""
+# app/router.py
 
 from __future__ import annotations
 
@@ -25,9 +19,7 @@ from .telemetry import log_record_var
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# 1.  Load keyword catalog ---------------------------------------------------
-# ---------------------------------------------------------------------------
+# 1. Load keyword catalog ---------------------------------------------------
 CAT_PATH = pathlib.Path(__file__).parent / "skills" / "keyword_catalog.json"
 try:
     with CAT_PATH.open(encoding="utf-8") as fh:
@@ -36,38 +28,27 @@ except FileNotFoundError:
     logger.error("keyword_catalog.json not found at %s", CAT_PATH)
     _RAW_CATALOG = []
 
-# Build (keywords, SkillCls) lookup table
 CATALOG: list[tuple[list[str], type]] = []
 for entry in _RAW_CATALOG:
-    skill_name: str | None = entry.get("skill")
+    skill_name = entry.get("skill")
     if not skill_name:
         continue
-
-    # CamelCase → snake_case (e.g. MathSkill → math_skill)
     module_name = re.sub(r"(?<!^)(?=[A-Z])", "_", skill_name).lower()
     try:
         mod = importlib.import_module(f".skills.{module_name}", package=__package__)
         SkillCls = getattr(mod, skill_name)
         CATALOG.append((entry.get("keywords", []), SkillCls))
-    except Exception as exc:
-        logger.exception("Failed loading skill %s: %s", skill_name, exc)
+    except Exception:
+        logger.exception("Failed loading skill %s", skill_name)
 
-# ---------------------------------------------------------------------------
-# 2.  Main routing function --------------------------------------------------
-# ---------------------------------------------------------------------------
+# 2. Main routing function --------------------------------------------------
 async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
-    """Route *prompt* through:
-    A) Home‑Assistant commands,
-    B) Keyword‑triggered custom skills, or
-    C) LLaMA / GPT model fallback.
-    """
-
     rec = log_record_var.get()
     if rec:
         rec.prompt = prompt
     logger.debug("route_prompt received: %s", prompt)
 
-    # ---- A. Home‑Assistant short‑circuit ----------------------------------
+    # A) Home‑Assistant
     ha_resp = await handle_command(prompt)
     if ha_resp is not None:
         if rec:
@@ -77,22 +58,31 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         logger.debug("HA handled prompt → %s", ha_resp)
         return ha_resp
 
-    # ---- B. Catalog‑based skill routing -----------------------------------
     prompt_lower = prompt.lower()
+    # B) Catalog skills
     for keywords, SkillCls in CATALOG:
+        logger.debug("Trying %s with keywords %s", SkillCls.__name__, keywords)
         if any(kw in prompt_lower for kw in keywords):
             skill = SkillCls()
-            result = await skill.handle(prompt)
+            try:
+                result = await skill.handle(prompt)
+            except ValueError as ve:
+                logger.debug("%s pattern miss: %s", SkillCls.__name__, ve)
+                continue
+            except Exception as exc:
+                logger.exception("%s error: %s", SkillCls.__name__, exc)
+                continue
+
             skill_name = getattr(skill, "name", skill.__class__.__name__)
             if rec:
                 rec.engine_used = skill_name
                 rec.response = str(result)
             await append_history(prompt, skill_name, str(result))
             await record(skill_name)
-            logger.debug("%s handled prompt", skill_name)
+            logger.debug("Catalog match → %s", skill_name)
             return result
 
-    # ---- C. Model selection (LLaMA vs GPT) --------------------------------
+    # C) Model selection
     if model_override:
         use_llama_pref = model_override.lower().startswith("llama")
         llama_model = model_override
@@ -105,7 +95,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         gpt_model = OPENAI_MODEL
 
     use_llama = use_llama_pref and LLAMA_HEALTHY
-    model_chosen = llama_model if use_llama else gpt_model
+    chosen_model = llama_model if use_llama else gpt_model
     engine_used = "llama" if use_llama else "gpt"
 
     logger.info(
@@ -114,12 +104,12 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
             "meta": {
                 "prompt_length": len(prompt),
                 "intent_confidence": confidence,
-                "engine_used": model_chosen,
+                "engine_used": chosen_model,
             }
         },
     )
 
-    # ---- D. LLaMA pathway --------------------------------------------------
+    # D) LLaMA
     if use_llama:
         result = await ask_llama(prompt, llama_model)
         if isinstance(result, dict) and "error" in result:
@@ -134,17 +124,23 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
             logger.debug("LLaMA responded OK")
             return result
 
-    # ---- E. GPT (fallback or primary) -------------------------------------
-    text, pt, ct, price = await ask_gpt(prompt, gpt_model)
+    # E) GPT fallback, bias 3.5 for light skills
+    light_skill_hint = any(
+        kw in prompt_lower
+        for kw in ["translate", "search ", "remind", "reminder"]
+    )
+    final_model = "gpt-3.5-turbo" if light_skill_hint else chosen_model
+
+    text, pt, ct, unit_price = await ask_gpt(prompt, final_model)
     if rec:
         rec.engine_used = "gpt"
-        rec.response = str(text)
-        rec.model_name = gpt_model
+        rec.response = text
+        rec.model_name = final_model
         rec.prompt_tokens = pt
         rec.completion_tokens = ct
-        rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * price
+        rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
 
-    await append_history(prompt, "gpt", str(text))
+    await append_history(prompt, "gpt", text)
     await record("gpt", fallback=use_llama)
-    logger.debug("GPT responded OK")
+    logger.debug("GPT responded OK with %s", final_model)
     return text
