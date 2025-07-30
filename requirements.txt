@@ -9,3 +9,4 @@ apscheduler
 aiofiles
 numpy
 scipy
+python-multipart
