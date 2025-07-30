@@ -12,14 +12,30 @@ scheduler = AsyncIOScheduler()
 
 
 class ReminderSkill(Skill):
-    PATTERNS = [re.compile(r"remind me to (.+) in (\d+) (seconds|minutes)", re.I)]
+    PATTERNS = [
+        re.compile(r"remind me to (.+) in (\d+) (seconds|minutes)", re.I),
+        re.compile(r"remind me to (.+) every (day|week|month)", re.I),
+        re.compile(r"remind me to (.+) every (monday|tuesday|wednesday|thursday|friday|saturday|sunday)", re.I),
+    ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
         if not scheduler.running:
             scheduler.start()
-        task = match.group(1)
-        amount = int(match.group(2))
-        unit = match.group(3)
-        delay = amount * (60 if unit.startswith("minute") else 1)
-        scheduler.add_job(lambda: None, "date", seconds=delay)
-        return f"Reminder set for {task} in {amount} {unit}."
+        groups = match.groups()
+        task = groups[0]
+        if len(groups) == 3 and groups[1].isdigit():
+            amount = int(groups[1])
+            unit = groups[2]
+            delay = amount * (60 if unit.startswith("minute") else 1)
+            scheduler.add_job(lambda: None, "date", seconds=delay)
+            return f"Reminder set for {task} in {amount} {unit}."
+
+        period = groups[1].lower()
+        if period in {"day", "week", "month"}:
+            kwargs = {"days": 1} if period == "day" else {"weeks": 1 if period == "week" else 4}
+            scheduler.add_job(lambda: None, "interval", **kwargs)
+            return f"Recurring reminder set for {task} every {period}."
+
+        dow = period
+        scheduler.add_job(lambda: None, "cron", day_of_week=dow)
+        return f"Reminder set for {task} every {dow}."
