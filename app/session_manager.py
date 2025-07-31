@@ -4,14 +4,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
-from fastapi import UploadFile
+from fastapi import UploadFile, HTTPException
 
 from .history import append_history
 from .telemetry import LogRecord
+from .analytics import record_session as analytics_record_session
 
 # Base directory for session storage
 SESSIONS_DIR = Path(os.getenv("SESSIONS_DIR", Path(__file__).parent.parent / "sessions"))
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", "10485760"))  # 10MB
+ALLOWED_AUDIO_TYPES = {"audio/wav", "audio/mpeg", "audio/webm"}
+ALLOWED_VIDEO_TYPES = {"video/mp4", "video/webm"}
 
 
 def _session_path(session_id: str) -> Path:
@@ -27,6 +32,10 @@ def _load_meta(session_id: str) -> dict[str, Any]:
     if mp.exists():
         return json.loads(mp.read_text(encoding="utf-8"))
     return {}
+
+
+def get_session_meta(session_id: str) -> dict[str, Any]:
+    return _load_meta(session_id)
 
 
 def _save_meta(session_id: str, meta: dict[str, Any]) -> None:
@@ -50,6 +59,7 @@ async def start_session() -> dict[str, str]:
     _save_meta(session_id, meta)
     rec = LogRecord(req_id="session", session_id=session_id, prompt="session_start")
     await append_history(rec)
+    await analytics_record_session()
     return {"session_id": session_id, "path": str(session_dir)}
 
 
@@ -68,10 +78,18 @@ async def save_session(
     _save_meta(session_id, meta)
 
     if audio is not None:
+        if audio.content_type not in ALLOWED_AUDIO_TYPES:
+            raise HTTPException(status_code=415, detail="unsupported audio type")
         data = await audio.read()
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="audio too large")
         (session_dir / "audio.wav").write_bytes(data)
     if video is not None:
+        if video.content_type not in ALLOWED_VIDEO_TYPES:
+            raise HTTPException(status_code=415, detail="unsupported video type")
         data = await video.read()
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="video too large")
         (session_dir / "video.mp4").write_bytes(data)
     if transcript is not None:
         (session_dir / "transcript.txt").write_text(transcript, encoding="utf-8")
@@ -101,21 +119,27 @@ async def search_sessions(query: str) -> List[dict[str, Any]]:
             continue
         sid = sess_dir.name
         score = 0
+        snippet: str | None = None
         tfile = sess_dir / "transcript.txt"
         if tfile.exists():
-            text = tfile.read_text(encoding="utf-8").lower()
-            if q in text:
+            raw = tfile.read_text(encoding="utf-8")
+            text = raw.lower()
+            idx = text.find(q)
+            if idx != -1:
                 score += 1
+                start = max(idx - 20, 0)
+                end = min(idx + 20, len(raw))
+                snippet = raw[start:end]
         tagfile = sess_dir / "tags.json"
         if tagfile.exists():
             try:
                 tags = json.loads(tagfile.read_text(encoding="utf-8"))
                 if any(q in str(tag).lower() for tag in tags):
-                    score += 1
+                    score += 2  # weight tag matches higher
             except Exception:
                 pass
         if score:
-            results.append({"session_id": sid, "score": score})
+            results.append({"session_id": sid, "score": score, "snippet": snippet})
     return results
 
 
@@ -147,5 +171,6 @@ __all__ = [
     "save_session",
     "generate_tags",
     "search_sessions",
+    "get_session_meta",
     "extract_tags_from_text",
 ]
