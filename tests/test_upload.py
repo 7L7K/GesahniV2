@@ -13,10 +13,14 @@ def test_upload_saves_file(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "ha_startup", lambda: None)
     monkeypatch.setattr(main, "llama_startup", lambda: None)
     monkeypatch.setattr(main, "SESSIONS_DIR", str(tmp_path))
+    monkeypatch.setenv("API_TOKEN", "secret")
 
     client = TestClient(main.app)
     data = b"abc"
-    resp = client.post("/upload", files={"file": ("foo.wav", data, "audio/wav")})
+    headers = {"Authorization": "Bearer secret"}
+    resp = client.post(
+        "/upload", files={"file": ("foo.wav", data, "audio/wav")}, headers=headers
+    )
     assert resp.status_code == 200
     sid = resp.json()["session_id"]
     saved = tmp_path / sid / "source.wav"

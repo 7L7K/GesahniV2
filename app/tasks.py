@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ from .session_manager import (
     extract_tags_from_text,
 )
 from .transcribe import transcribe_file as sync_transcribe_file
+from .analytics import record_transcription
 
 
 def _get_queue() -> Queue:
@@ -48,6 +50,8 @@ def transcribe_task(session_id: str) -> None:
     audio_path = session_dir / "audio.wav"
     transcript_path = session_dir / "transcript.txt"
     meta = _load_meta(session_id)
+    start = time.monotonic()
+    error = False
     try:
         text = sync_transcribe_file(str(audio_path))
         transcript_path.write_text(text, encoding="utf-8")
@@ -55,7 +59,16 @@ def transcribe_task(session_id: str) -> None:
     except Exception as e:  # pragma: no cover - network errors
         meta.setdefault("errors", []).append(str(e))
         meta["status"] = "error"
+        error = True
     _save_meta(session_id, meta)
+    duration = int((time.monotonic() - start) * 1000)
+    try:
+        import asyncio
+
+        asyncio.run(record_transcription(duration, error=error))
+    except RuntimeError:
+        # already running loop
+        asyncio.create_task(record_transcription(duration, error=error))
 
 
 def tag_task(session_id: str) -> None:
