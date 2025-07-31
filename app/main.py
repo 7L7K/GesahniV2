@@ -22,6 +22,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from fastapi import Depends, Request
 
 from .router import route_prompt
 from .skills.base import check_builtin_skills
@@ -46,6 +47,8 @@ from .session_manager import (
     search_sessions as search_session_store,
     SESSIONS_DIR,
 )
+from .session_manager import get_session_meta
+from .security import verify_token, rate_limit, verify_ws, rate_limit_ws
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -62,9 +65,11 @@ def _anon_user_id(auth: str | None) -> str:
 app = FastAPI(title="GesahniV2")
 
 # ─── CORS MIDDLEWARE ───────────────────────────────────────────────────────────────
+_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # your Next.js dev URL
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],  # includes OPTIONS
     allow_headers=["*"],  # includes Content-Type, Authorization, etc.
@@ -137,7 +142,12 @@ async def ask(req: AskRequest):
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...)):
+async def upload(
+    request: Request,
+    file: UploadFile = File(...),
+    _: None = Depends(verify_token),
+    __: None = Depends(rate_limit),
+):
     session_id = uuid.uuid4().hex
     session_dir = Path(SESSIONS_DIR) / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
@@ -154,48 +164,93 @@ async def upload(file: UploadFile = File(...)):
 
 
 @app.post("/capture/start")
-async def capture_start():
+async def capture_start(
+    request: Request,
+    _: None = Depends(verify_token),
+    __: None = Depends(rate_limit),
+):
     return await start_capture_session()
 
 
 @app.post("/capture/save")
 async def capture_save(
+    request: Request,
     session_id: str = Form(...),
     audio: UploadFile | None = File(None),
     video: UploadFile | None = File(None),
     transcript: str | None = Form(None),
+    _: None = Depends(verify_token),
+    __: None = Depends(rate_limit),
 ):
     await finalize_capture_session(session_id, audio, video, transcript)
-    return {"status": "ok"}
+    return get_session_meta(session_id)
 
 
 @app.post("/capture/tags")
-async def capture_tags(session_id: str = Form(...)):
+async def capture_tags(
+    request: Request,
+    session_id: str = Form(...),
+    _: None = Depends(verify_token),
+    __: None = Depends(rate_limit),
+):
     await queue_tag_extraction(session_id)
     return {"status": "accepted"}
 
 
+@app.get("/capture/status/{session_id}")
+async def capture_status(
+    session_id: str,
+    _: None = Depends(verify_token),
+    __: None = Depends(rate_limit),
+):
+    meta = get_session_meta(session_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="session not found")
+    return meta
+
+
 @app.get("/search/sessions")
-async def search_sessions(q: str):
+async def search_sessions(
+    q: str,
+    _: None = Depends(verify_token),
+    __: None = Depends(rate_limit),
+):
     return await search_session_store(q)
 
 
 @app.websocket("/transcribe")
 async def websocket_transcribe(ws: WebSocket):
+    await verify_ws(ws)
+    await rate_limit_ws(ws)
     await ws.accept()
+    meta = await ws.receive_json()
     session_id = uuid.uuid4().hex
     audio_path = Path(SESSIONS_DIR) / session_id / "stream.wav"
     audio_path.parent.mkdir(parents=True, exist_ok=True)
+    full_text = ""
     with open(audio_path, "ab") as fh:
         try:
             while True:
-                data = await ws.receive_bytes()
-                fh.write(data)
+                msg = await ws.receive()
+                if "text" in msg and msg["text"]:
+                    if msg["text"] == "end":
+                        break
+                    continue
+                chunk = msg.get("bytes")
+                if not chunk:
+                    continue
+                fh.write(chunk)
+                tmp = audio_path.with_suffix(".part")
+                tmp.write_bytes(chunk)
                 try:
-                    text = await transcribe_file(str(audio_path))
-                    await ws.send_json({"text": text, "session_id": session_id})
+                    text = await transcribe_file(str(tmp))
+                    full_text += (" " if full_text else "") + text
+                    await ws.send_json({"text": full_text, "session_id": session_id})
                 except Exception as e:
                     await ws.send_json({"error": str(e)})
+                finally:
+                    if tmp.exists():
+                        tmp.unlink()
         except WebSocketDisconnect:
             pass
 
