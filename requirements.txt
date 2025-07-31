@@ -10,3 +10,6 @@ aiofiles
 numpy
 scipy
 python-multipart
+redis
+rq
+spacy

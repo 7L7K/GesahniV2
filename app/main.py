@@ -9,7 +9,17 @@ import time
 import asyncio
 from hashlib import sha256
 
-from fastapi import FastAPI, HTTPException, File, UploadFile, BackgroundTasks, Response
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    File,
+    UploadFile,
+    BackgroundTasks,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    Form,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -29,14 +39,17 @@ from .status import router as status_router
 from .transcription import transcribe_file
 from .history import append_history
 from .middleware import DedupMiddleware
+from .session_manager import (
+    start_session as start_capture_session,
+    save_session as finalize_capture_session,
+    generate_tags as queue_tag_extraction,
+    search_sessions as search_session_store,
+    SESSIONS_DIR,
+)
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
-SESSIONS_DIR = Path(
-    os.getenv("SESSIONS_DIR", Path(__file__).parent.parent / "sessions")
-)
-SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _anon_user_id(auth: str | None) -> str:
@@ -126,14 +139,66 @@ async def ask(req: AskRequest):
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
     session_id = uuid.uuid4().hex
-    session_base = Path(SESSIONS_DIR)
-    session_dir = session_base / session_id
+    session_dir = Path(SESSIONS_DIR) / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
     dest = session_dir / "source.wav"
     content = await file.read()
     dest.write_bytes(content)
     logger.info(f"File uploaded to {dest}")
     return {"session_id": session_id}
+
+
+# ---------------------------------------------------------------------------
+#  Capture & Transcription endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/capture/start")
+async def capture_start():
+    return await start_capture_session()
+
+
+@app.post("/capture/save")
+async def capture_save(
+    session_id: str = Form(...),
+    audio: UploadFile | None = File(None),
+    video: UploadFile | None = File(None),
+    transcript: str | None = Form(None),
+):
+    await finalize_capture_session(session_id, audio, video, transcript)
+    return {"status": "ok"}
+
+
+@app.post("/capture/tags")
+async def capture_tags(session_id: str = Form(...)):
+    await queue_tag_extraction(session_id)
+    return {"status": "accepted"}
+
+
+@app.get("/search/sessions")
+async def search_sessions(q: str):
+    return await search_session_store(q)
+
+
+@app.websocket("/transcribe")
+async def websocket_transcribe(ws: WebSocket):
+    await ws.accept()
+    session_id = uuid.uuid4().hex
+    audio_path = Path(SESSIONS_DIR) / session_id / "stream.wav"
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(audio_path, "ab") as fh:
+        try:
+            while True:
+                data = await ws.receive_bytes()
+                fh.write(data)
+                try:
+                    text = await transcribe_file(str(audio_path))
+                    await ws.send_json({"text": text, "session_id": session_id})
+                except Exception as e:
+                    await ws.send_json({"error": str(e)})
+        except WebSocketDisconnect:
+            pass
+
 
 
 @app.post("/intent-test")
@@ -176,8 +241,9 @@ async def ha_resolve(name: str):
 
 
 async def _background_transcribe(session_id: str) -> None:
-    audio_path = SESSIONS_DIR / session_id / "audio.wav"
-    transcript_path = SESSIONS_DIR / session_id / "transcript.txt"
+    base = Path(SESSIONS_DIR)
+    audio_path = base / session_id / "audio.wav"
+    transcript_path = base / session_id / "transcript.txt"
     try:
         text = await transcribe_file(str(audio_path))
         transcript_path.parent.mkdir(parents=True, exist_ok=True)
@@ -194,7 +260,7 @@ async def start_transcription(session_id: str, background_tasks: BackgroundTasks
 
 @app.get("/transcribe/{session_id}")
 async def get_transcription(session_id: str):
-    transcript_path = SESSIONS_DIR / session_id / "transcript.txt"
+    transcript_path = Path(SESSIONS_DIR) / session_id / "transcript.txt"
     if transcript_path.exists():
         return {"text": transcript_path.read_text(encoding="utf-8")}
     raise HTTPException(status_code=404, detail="Transcript not found")
