@@ -6,8 +6,8 @@ from .base import Skill
 class MathSkill(Skill):
     PATTERNS = [
         re.compile(r"(?P<a>\d+(?:\.\d+)?)\s*(?P<op>[+\-*/x×])\s*(?P<b>\d+(?:\.\d+)?)", re.I),
-        re.compile(r"(?P<pct>\d+(?:\.\d+)?)%\\s*of\\s*(?P<of>\\d+(?:\\.\\d+)?)", re.I),
-        re.compile(r"round\\s+(?P<val>\\d+(?:\\.\\d+)?)\\s+to\\s+(?P<places>\\d+)\\s+decimal", re.I),
+        re.compile(r"(?P<pct>\d+(?:\.\d+)?)%\s*of\s*(?P<of>\d+(?:\.\d+)?)", re.I),
+        re.compile(r"round\s+(?P<val>\d+(?:\.\d+)?)\s+to\s+(?P<places>\d+)\s+decimal", re.I),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
