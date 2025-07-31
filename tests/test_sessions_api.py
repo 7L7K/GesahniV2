@@ -100,3 +100,23 @@ def test_search_sort_and_pagination(monkeypatch, tmp_path):
     results = resp.json()
     assert len(results) == 1
     assert results[0]["session_id"] == "2023-01-02T00-00-00"
+
+def test_search_by_tag(monkeypatch, tmp_path):
+    setup_temp(monkeypatch, tmp_path)
+    headers = {"Authorization": "Bearer secret"}
+    sid = "tagonly"
+    sd = tmp_path / sid
+    sd.mkdir()
+    (sd / "transcript.txt").write_text("nothing", encoding="utf-8")
+    (sd / "tags.json").write_text(json.dumps(["special"]))
+    meta = {"session_id": sid, "created_at": "2023-01-01T00:00:00Z", "status": "tagged"}
+    (sd / "meta.json").write_text(json.dumps(meta))
+    client = TestClient(app)
+    resp = client.get(
+        "/search/sessions",
+        params={"q": "special"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    results = resp.json()
+    assert any(r["session_id"] == sid for r in results)
