@@ -20,8 +20,20 @@ def test_router_fallback_metrics_updated(monkeypatch):
     monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
     monkeypatch.setattr(router, "ask_llama", fake_llama)
     monkeypatch.setattr(router, "ask_gpt", fake_gpt)
-    analytics._metrics = {"total": 0, "llama": 0, "gpt": 0, "fallback": 0}
+    analytics._metrics = {
+        "total": 0,
+        "llama": 0,
+        "gpt": 0,
+        "fallback": 0,
+        "session_count": 0,
+        "transcribe_ms": 0,
+        "transcribe_count": 0,
+        "transcribe_errors": 0,
+    }
 
     result = asyncio.run(router.route_prompt("hello"))
     assert result == "ok"
-    assert analytics.get_metrics() == {"total": 1, "llama": 0, "gpt": 1, "fallback": 1}
+    m = analytics.get_metrics()
+    assert m["total"] == 1
+    assert m["gpt"] == 1
+    assert m["fallback"] == 1
