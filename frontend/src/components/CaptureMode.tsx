@@ -3,12 +3,21 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+const audioMime = MediaRecorder.isTypeSupported('audio/webm')
+  ? 'audio/webm'
+  : 'audio/mp4';
+
+const videoMime = MediaRecorder.isTypeSupported('video/mp4')
+  ? 'video/mp4'
+  : 'video/webm';
+
 export default function CaptureMode() {
   const camRef = useRef<HTMLVideoElement>(null);
   const audioRecorder = useRef<MediaRecorder>();
   const videoRecorder = useRef<MediaRecorder>();
   const streamRef = useRef<MediaStream>();
   const wsRef = useRef<WebSocket>();
+  const sessionIdRef = useRef<string | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const videoChunks = useRef<Blob[]>([]);
   const [captionText, setCaptionText] = useState('');
@@ -75,11 +84,17 @@ export default function CaptureMode() {
       await setupStream();
       if (!streamRef.current) return;
     }
-
-    await fetch('/capture/start', { method: 'POST' });
-
-    // direct WS to FastAPI
-    const ws = new WebSocket('ws://localhost:8000/transcribe');
+    try {
+      const res = await fetch('/capture/start', { method: 'POST' });
+      if (!res.ok) throw new Error('start failed');
+      const data = await res.json();
+      sessionIdRef.current = data.session_id;
+    } catch (err) {
+      console.error('failed to start capture', err);
+      setError('Failed to start recording.');
+      return;
+    }
+    const ws = new WebSocket(`${window.location.origin.replace(/^http/, 'ws')}/transcribe`);
     ws.onmessage = (e) => {
       setCaptionText((prev) => (prev ? prev + '\n' : '') + e.data);
       setShowIndicator(false);
@@ -120,18 +135,39 @@ export default function CaptureMode() {
   }, []);
 
   const stopRecording = useCallback(async () => {
+    const audioStopped = new Promise<void>((resolve) => {
+      audioRecorder.current?.addEventListener('stop', () => resolve(), { once: true });
+    });
+    const videoStopped = new Promise<void>((resolve) => {
+      videoRecorder.current?.addEventListener('stop', () => resolve(), { once: true });
+    });
     audioRecorder.current?.stop();
     videoRecorder.current?.stop();
     wsRef.current?.close();
+    await Promise.all([audioStopped, videoStopped]);
     setRecording(false);
 
     const audioBlob = new Blob(audioChunks.current, { type: audioMime });
     const videoBlob = new Blob(videoChunks.current, { type: videoMime });
     const form = new FormData();
-    form.append('audio', audioBlob, 'audio.webm');
-    form.append('video', videoBlob, 'video.mp4');
-    await fetch('/capture/save', { method: 'POST', body: form });
-  }, [audioMime, videoMime]);
+    form.append('session_id', sessionIdRef.current || '');
+    form.append(
+      'audio',
+      audioBlob,
+      audioMime === 'audio/webm' ? 'audio.webm' : 'audio.mp4',
+    );
+    form.append(
+      'video',
+      videoBlob,
+      videoMime === 'video/mp4' ? 'video.mp4' : 'video.webm',
+    );
+    try {
+      await fetch('/capture/save', { method: 'POST', body: form });
+    } catch (err) {
+      console.error('failed to save capture', err);
+      setError('Failed to save recording.');
+    }
+  }, []);
 
   const newQuestion = () => setCaptionText('');
 
