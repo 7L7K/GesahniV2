@@ -1,6 +1,10 @@
 import os
 import json
-from datetime import datetime
+import hashlib
+import tarfile
+import shutil
+import logging
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, List
 
@@ -17,6 +21,8 @@ SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", "10485760"))  # 10MB
 ALLOWED_AUDIO_TYPES = {"audio/wav", "audio/mpeg", "audio/webm"}
 ALLOWED_VIDEO_TYPES = {"video/mp4", "video/webm"}
+
+logger = logging.getLogger(__name__)
 
 
 def _session_path(session_id: str) -> Path:
@@ -63,6 +69,29 @@ async def start_session() -> dict[str, str]:
     return {"session_id": session_id, "path": str(session_dir)}
 
 
+async def _save_upload_file(
+    file: UploadFile, dest: Path, max_bytes: int | None = None
+) -> str:
+    hash = hashlib.sha256()
+    total = 0
+    with open(dest, "wb") as fh:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            fh.write(chunk)
+            hash.update(chunk)
+            total += len(chunk)
+            if max_bytes and total > max_bytes:
+                fh.close()
+                dest.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail="file too large")
+            if total > 100 * 1024 * 1024:
+                logger.info("upload_progress", extra={"meta": {"bytes": total}})
+    await file.close()
+    return hash.hexdigest()
+
+
 async def save_session(
     session_id: str,
     audio: UploadFile | None = None,
@@ -80,29 +109,44 @@ async def save_session(
     if audio is not None:
         if audio.content_type not in ALLOWED_AUDIO_TYPES:
             raise HTTPException(status_code=415, detail="unsupported audio type")
-        data = await audio.read()
-        if len(data) > MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail="audio too large")
-        (session_dir / "audio.wav").write_bytes(data)
+        checksum = await _save_upload_file(
+            audio, session_dir / "audio.wav", MAX_UPLOAD_BYTES
+        )
+        meta["audio_checksum"] = checksum
     if video is not None:
         if video.content_type not in ALLOWED_VIDEO_TYPES:
             raise HTTPException(status_code=415, detail="unsupported video type")
-        data = await video.read()
-        if len(data) > MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail="video too large")
-        (session_dir / "video.mp4").write_bytes(data)
+        checksum = await _save_upload_file(
+            video, session_dir / "video.mp4", MAX_UPLOAD_BYTES
+        )
+        meta["video_checksum"] = checksum
+    tags: List[str] = []
     if transcript is not None:
         (session_dir / "transcript.txt").write_text(transcript, encoding="utf-8")
+        tags = extract_tags_from_text(transcript)
+        (session_dir / "tags.json").write_text(
+            json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        meta["tags"] = tags
+        meta["status"] = "tagged"
+    else:
+        meta["status"] = "saved"
 
-    meta["status"] = "saved"
     _save_meta(session_id, meta)
 
     if transcript is None:
         from .tasks import enqueue_transcription
+
         enqueue_transcription(session_id)
-    else:
-        from .tasks import enqueue_tag_extraction
-        enqueue_tag_extraction(session_id)
+
+    record = {
+        "type": "capture",
+        "session_id": session_id,
+        "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "tags": tags,
+        "path": str(session_dir.relative_to(SESSIONS_DIR.parent)),
+    }
+    await append_history(record)
 
 
 async def generate_tags(session_id: str) -> None:
@@ -111,7 +155,9 @@ async def generate_tags(session_id: str) -> None:
     enqueue_tag_extraction(session_id)
 
 
-async def search_sessions(query: str) -> List[dict[str, Any]]:
+async def search_sessions(
+    query: str, sort: str = "recent", page: int = 1, limit: int = 10
+) -> List[dict[str, Any]]:
     q = query.lower()
     results: List[dict[str, Any]] = []
     for sess_dir in SESSIONS_DIR.iterdir():
@@ -139,8 +185,47 @@ async def search_sessions(query: str) -> List[dict[str, Any]]:
             except Exception:
                 pass
         if score:
-            results.append({"session_id": sid, "score": score, "snippet": snippet})
-    return results
+            meta = _load_meta(sid)
+            results.append(
+                {
+                    "session_id": sid,
+                    "score": score,
+                    "snippet": snippet,
+                    "created_at": meta.get("created_at"),
+                }
+            )
+    if sort == "recent":
+        results.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    else:
+        results.sort(key=lambda r: r.get("score", 0), reverse=True)
+    start = (page - 1) * limit
+    end = start + limit
+    return results[start:end]
+
+
+def archive_old_sessions(days: int = 90) -> List[str]:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    archived: List[str] = []
+    archive_dir = SESSIONS_DIR / "archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    for sess_dir in SESSIONS_DIR.iterdir():
+        if not sess_dir.is_dir() or sess_dir.name == "archive":
+            continue
+        meta = _load_meta(sess_dir.name)
+        created_at = meta.get("created_at")
+        if not created_at:
+            continue
+        try:
+            created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if created_dt < cutoff:
+            archive_path = archive_dir / f"{sess_dir.name}.tar.gz"
+            with tarfile.open(archive_path, "w:gz") as tar:
+                tar.add(sess_dir, arcname=sess_dir.name)
+            shutil.rmtree(sess_dir)
+            archived.append(str(archive_path))
+    return archived
 
 
 # helper for tag extraction -----------------------------------------------------
@@ -172,5 +257,6 @@ __all__ = [
     "generate_tags",
     "search_sessions",
     "get_session_meta",
+    "archive_old_sessions",
     "extract_tags_from_text",
 ]
