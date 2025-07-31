@@ -15,7 +15,7 @@ class SearchSkill(Skill):
 
     async def run(self, prompt: str, match: re.Match) -> str:
         query = match.group("query").strip()
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(
                 "https://api.duckduckgo.com/",
                 params={
@@ -24,7 +24,6 @@ class SearchSkill(Skill):
                     "no_redirect": "1",
                     "no_html": "1",
                 },
-                timeout=5.0,
             )
             resp.raise_for_status()
             data = resp.json()
