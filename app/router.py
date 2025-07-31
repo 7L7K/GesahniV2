@@ -95,6 +95,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         gpt_model = OPENAI_MODEL
 
     use_llama = use_llama_pref and LLAMA_HEALTHY
+    fallback_used = use_llama_pref
     chosen_model = llama_model if use_llama else gpt_model
     engine_used = "llama" if use_llama else "gpt"
 
@@ -141,6 +142,6 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
 
     await append_history(prompt, "gpt", text)
-    await record("gpt", fallback=use_llama)
+    await record("gpt", fallback=fallback_used)
     logger.debug("GPT responded OK with %s", final_model)
     return text
