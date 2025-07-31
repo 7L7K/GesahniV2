@@ -212,10 +212,13 @@ async def capture_status(
 @app.get("/search/sessions")
 async def search_sessions(
     q: str,
+    sort: str = "recent",
+    page: int = 1,
+    limit: int = 10,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
 ):
-    return await search_session_store(q)
+    return await search_session_store(q, sort=sort, page=page, limit=limit)
 
 
 @app.websocket("/transcribe")
