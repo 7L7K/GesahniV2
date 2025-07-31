@@ -20,7 +20,20 @@ def test_status_endpoint(monkeypatch):
     monkeypatch.setattr(llama_integration, "startup_check", lambda: None)
     monkeypatch.setattr(status, "_request", fake_request)
     monkeypatch.setattr(status, "llama_get_status", fake_llama_status)
-    monkeypatch.setattr(status, "get_metrics", lambda: {"total": 1, "llama": 1, "gpt": 0, "fallback": 0})
+    monkeypatch.setattr(
+        status,
+        "get_metrics",
+        lambda: {
+            "total": 1,
+            "llama": 1,
+            "gpt": 0,
+            "fallback": 0,
+            "session_count": 0,
+            "transcribe_ms": 0,
+            "transcribe_count": 0,
+            "transcribe_errors": 0,
+        },
+    )
 
     client = TestClient(main.app)
     resp = client.get("/status")
