@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 async def append_history(
-    record_or_prompt: LogRecord | str,
+    record_or_prompt: LogRecord | str | dict[str, Any],
     engine_used: str | None = None,
     response: str | None = None,
 ) -> None:
@@ -42,19 +42,24 @@ async def append_history(
     The function writes newline-delimited JSON objects. Missing optional fields
     are omitted from the output.
     """
-    if isinstance(record_or_prompt, LogRecord):
-        rec = record_or_prompt
+    if isinstance(record_or_prompt, dict):
+        record = record_or_prompt
+        if "timestamp" not in record:
+            record["timestamp"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     else:
-        rec = LogRecord(
-            req_id=req_id_var.get(),
-            prompt=record_or_prompt,
-            engine_used=engine_used,
-            response=response,
-            timestamp=datetime.utcnow().isoformat(timespec="seconds") + "Z",
-        )
-    if rec.timestamp is None:
-        rec.timestamp = datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    record: dict[str, Any] = rec.model_dump(exclude_none=True)
+        if isinstance(record_or_prompt, LogRecord):
+            rec = record_or_prompt
+        else:
+            rec = LogRecord(
+                req_id=req_id_var.get(),
+                prompt=record_or_prompt,
+                engine_used=engine_used,
+                response=response,
+                timestamp=datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            )
+        if rec.timestamp is None:
+            rec.timestamp = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        record = rec.model_dump(exclude_none=True)
 
     async with _lock:
         try:

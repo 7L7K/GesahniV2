@@ -1,6 +1,5 @@
-import json
-import json
 import os
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -14,6 +13,7 @@ from app.main import app
 import app.session_manager as sm
 import app.tasks as tasks
 import app.main as main
+import app.history as history
 
 
 def setup_temp(monkeypatch, tmp_path: Path):
@@ -22,6 +22,8 @@ def setup_temp(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(sm, "SESSIONS_DIR", tmp_path)
     monkeypatch.setattr(tasks, "SESSIONS_DIR", tmp_path)
     monkeypatch.setattr(main, "SESSIONS_DIR", tmp_path)
+    monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "history.jsonl")
+    monkeypatch.setattr(sm, "append_history", history.append_history)
     monkeypatch.setenv("API_TOKEN", "secret")
 
 
@@ -57,11 +59,44 @@ def test_capture_flow(monkeypatch, tmp_path):
     tags = json.loads(tag_file.read_text())
     assert "hello" in tags
 
-    resp = client.get("/search/sessions", params={"q": "hello"}, headers=headers)
+    resp = client.get(
+        "/search/sessions",
+        params={"q": "hello", "sort": "recent", "page": 1, "limit": 10},
+        headers=headers,
+    )
     assert resp.status_code == 200
     results = resp.json()
-    assert any(r["session_id"] == session_id and "snippet" in r for r in results)
+    assert any(
+        r["session_id"] == session_id and "snippet" in r and "created_at" in r
+        for r in results
+    )
 
-    resp = client.get(f"/capture/status/{session_id}", headers=headers)
+    hist_file = tmp_path / "history.jsonl"
+    assert hist_file.exists()
+    lines = hist_file.read_text().strip().splitlines()
+    capture_records = [json.loads(l) for l in lines if json.loads(l).get("type") == "capture"]
+    assert capture_records and capture_records[-1]["session_id"] == session_id
+    assert "hello" in capture_records[-1]["tags"]
+
+
+def test_search_sort_and_pagination(monkeypatch, tmp_path):
+    setup_temp(monkeypatch, tmp_path)
+    headers = {"Authorization": "Bearer secret"}
+    for i in range(3):
+        sid = f"2023-01-0{i+1}T00-00-00"
+        sd = tmp_path / sid
+        sd.mkdir()
+        (sd / "transcript.txt").write_text("hello world", encoding="utf-8")
+        (sd / "tags.json").write_text(json.dumps(["hello"]))
+        meta = {"session_id": sid, "created_at": f"2023-01-0{i+1}T00:00:00Z", "status": "tagged"}
+        (sd / "meta.json").write_text(json.dumps(meta))
+    client = TestClient(app)
+    resp = client.get(
+        "/search/sessions",
+        params={"q": "hello", "sort": "recent", "page": 2, "limit": 1},
+        headers=headers,
+    )
     assert resp.status_code == 200
-    assert resp.json()["status"] in {"saved", "tagged"}
+    results = resp.json()
+    assert len(results) == 1
+    assert results[0]["session_id"] == "2023-01-02T00-00-00"
