@@ -34,10 +34,11 @@ export default function Page() {
       // 🔗 Use the shared helper so we always hit NEXT_PUBLIC_API_URL
       const replyText = await sendPrompt(text, model);
       setMessages(prev => [...prev, { role: 'assistant', content: replyText }]);
-    } catch (err: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: `❌ ${(err.message ?? 'Unknown error')}` },
+        { role: 'assistant', content: `❌ ${message}` },
       ]);
     } finally {
       setLoading(false);
