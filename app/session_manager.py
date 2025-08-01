@@ -80,6 +80,7 @@ async def save_session(
     audio: UploadFile | None = None,
     video: UploadFile | None = None,
     transcript: str | None = None,
+    tags: List[str] | None = None,
 ) -> None:
     """Persist provided media and queue jobs."""
     session_dir = _session_path(session_id)
@@ -105,10 +106,15 @@ async def save_session(
         )
         meta["video_checksum"] = checksum
 
-    tags: List[str] = []
+    tags = tags or []
     if transcript is not None:
         (session_dir / "transcript.txt").write_text(transcript, encoding="utf-8")
         meta["status"] = SessionStatus.TRANSCRIBED.value
+    if tags:
+        meta["tags"] = tags
+        (session_dir / "tags.json").write_text(
+            json.dumps(tags, ensure_ascii=False), encoding="utf-8"
+        )
     _save_meta(session_id, meta)
 
     record = {
