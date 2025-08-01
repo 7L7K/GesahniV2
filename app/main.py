@@ -48,6 +48,8 @@ from .session_manager import (
     SESSIONS_DIR,
 )
 from .session_manager import get_session_meta
+from .session_store import list_sessions as list_session_store, SessionStatus
+from .tasks import enqueue_transcription, enqueue_summary
 from .security import verify_token, rate_limit, verify_ws, rate_limit_ws
 
 configure_logging()
@@ -219,6 +221,35 @@ async def search_sessions(
     __: None = Depends(rate_limit),
 ):
     return await search_session_store(q, sort=sort, page=page, limit=limit)
+
+
+@app.get("/sessions")
+async def list_sessions(
+    status: SessionStatus | None = None,
+    _: None = Depends(verify_token),
+    __: None = Depends(rate_limit),
+):
+    return list_session_store(status)
+
+
+@app.post("/sessions/{session_id}/transcribe")
+async def trigger_transcription_endpoint(
+    session_id: str,
+    _: None = Depends(verify_token),
+    __: None = Depends(rate_limit),
+):
+    enqueue_transcription(session_id)
+    return {"status": "accepted"}
+
+
+@app.post("/sessions/{session_id}/summarize")
+async def trigger_summary_endpoint(
+    session_id: str,
+    _: None = Depends(verify_token),
+    __: None = Depends(rate_limit),
+):
+    enqueue_summary(session_id)
+    return {"status": "accepted"}
 
 
 @app.websocket("/transcribe")
