@@ -19,7 +19,9 @@ SESSIONS_DIR = Path(os.getenv("SESSIONS_DIR", Path(__file__).parent.parent / "se
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", "10485760"))  # 10MB
-ALLOWED_AUDIO_TYPES = {"audio/wav", "audio/mpeg", "audio/webm"}
+
+# allow only the base MIME types (no codec params)
+ALLOWED_AUDIO_TYPES = {"audio/wav", "audio/mpeg", "audio/webm", "audio/mp4"}
 ALLOWED_VIDEO_TYPES = {"video/mp4", "video/webm"}
 
 logger = logging.getLogger(__name__)
@@ -92,6 +94,14 @@ async def _save_upload_file(
     return hash.hexdigest()
 
 
+def _base_type(content_type: str) -> str:
+    """
+    Strip any ';' params from a MIME type and lowercase.
+    e.g. 'audio/webm; codecs=opus' -> 'audio/webm'
+    """
+    return content_type.split(";", 1)[0].strip().lower()
+
+
 async def save_session(
     session_id: str,
     audio: UploadFile | None = None,
@@ -107,19 +117,23 @@ async def save_session(
     _save_meta(session_id, meta)
 
     if audio is not None:
-        if audio.content_type not in ALLOWED_AUDIO_TYPES:
-            raise HTTPException(status_code=415, detail="unsupported audio type")
+        base_audio = _base_type(audio.content_type)
+        if base_audio not in ALLOWED_AUDIO_TYPES:
+            raise HTTPException(status_code=415, detail=f"unsupported audio type '{audio.content_type}'")
         checksum = await _save_upload_file(
             audio, session_dir / "audio.wav", MAX_UPLOAD_BYTES
         )
         meta["audio_checksum"] = checksum
+
     if video is not None:
-        if video.content_type not in ALLOWED_VIDEO_TYPES:
-            raise HTTPException(status_code=415, detail="unsupported video type")
+        base_video = _base_type(video.content_type)
+        if base_video not in ALLOWED_VIDEO_TYPES:
+            raise HTTPException(status_code=415, detail=f"unsupported video type '{video.content_type}'")
         checksum = await _save_upload_file(
             video, session_dir / "video.mp4", MAX_UPLOAD_BYTES
         )
         meta["video_checksum"] = checksum
+
     tags: List[str] = []
     if transcript is not None:
         (session_dir / "transcript.txt").write_text(transcript, encoding="utf-8")
@@ -136,7 +150,6 @@ async def save_session(
 
     if transcript is None:
         from .tasks import enqueue_transcription
-
         enqueue_transcription(session_id)
 
     record = {
@@ -151,7 +164,6 @@ async def save_session(
 
 async def generate_tags(session_id: str) -> None:
     from .tasks import enqueue_tag_extraction
-
     enqueue_tag_extraction(session_id)
 
 
