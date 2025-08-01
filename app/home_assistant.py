@@ -7,15 +7,18 @@ from typing import Any, List, Optional
 
 from .telemetry import log_record_var
 
+# Environment variables are loaded but not validated until startup
 HOME_ASSISTANT_URL = os.getenv("HOME_ASSISTANT_URL")
 HOME_ASSISTANT_TOKEN = os.getenv("HOME_ASSISTANT_TOKEN")
 
 logger = logging.getLogger(__name__)
 
+# Default headers; Authorization added if token is present
 HEADERS = {"Content-Type": "application/json"}
 if HOME_ASSISTANT_TOKEN:
     HEADERS["Authorization"] = f"Bearer {HOME_ASSISTANT_TOKEN}"
 
+# Synonyms for room names
 ROOM_SYNONYMS = {
     "living room": ["lounge", "den"],
     "kitchen": ["cook room"],
@@ -38,14 +41,15 @@ async def _request(method: str, path: str, json: dict | None = None, timeout: fl
     logger.info("ha_request", extra={"meta": {"method": method, "path": path, "json": json}})
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.request(method, url, headers=HEADERS, json=json)
+
     data = resp.json() if resp.content else None
-    body: str
+    # Redact tokens if present
     if data is None:
         body = re.sub(r'("access_token"\s*:\s*")[^"]+"', r'\1[redacted]"', resp.text)
     else:
         body = json.dumps(_redact(data))
     if len(body) > 2048:
-        body = body[:2048] + "..."  # truncated
+        body = body[:2048] + "..."
     logger.info("ha_response", extra={"meta": {"status": resp.status_code, "body": body}})
     resp.raise_for_status()
     return data
@@ -79,14 +83,19 @@ async def turn_off(entity_id: str) -> Any:
 
 
 async def startup_check() -> None:
-    if not HOME_ASSISTANT_URL or not HOME_ASSISTANT_TOKEN:
-        raise RuntimeError("Missing Home Assistant credentials")
+    """Ensure necessary environment vars are set and Home Assistant is reachable."""
+    missing: List[str] = []
+    if not HOME_ASSISTANT_URL:
+        missing.append("HOME_ASSISTANT_URL")
+    if not HOME_ASSISTANT_TOKEN:
+        missing.append("HOME_ASSISTANT_TOKEN")
+    if missing:
+        logger.error("Missing env vars: %s", ", ".join(missing))
+        raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
+    # Verify connectivity by fetching states
     await _request("GET", "/states")
 
 
-# ---------------------------------------------------------------------------
-# Dynamic entity resolution (line 78)
-# ---------------------------------------------------------------------------
 async def resolve_entity(name: str) -> List[str]:
     """Return matching entity IDs for the given name, considering synonyms."""
     states = await get_states()

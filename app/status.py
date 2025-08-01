@@ -1,12 +1,14 @@
 import os
 import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from .home_assistant import _request
 from .llama_integration import get_status as llama_get_status
 from .analytics import get_metrics
 
 router = APIRouter()
+
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
 
 
 @router.get("/health")
@@ -15,7 +17,9 @@ async def health() -> dict:
 
 
 @router.get("/config")
-async def config() -> dict:
+async def config(token: str | None = Query(default=None)) -> dict:
+    if not ADMIN_TOKEN or token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="forbidden")
     return {k: v for k, v in os.environ.items() if k.isupper()}
 
 

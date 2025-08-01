@@ -1,5 +1,5 @@
 import os
-from openai import OpenAI
+from openai import AsyncClient as OpenAI
 from openai import OpenAIError
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
