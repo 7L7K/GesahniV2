@@ -9,9 +9,6 @@ from .telemetry import log_record_var
 HOME_ASSISTANT_URL = os.getenv("HOME_ASSISTANT_URL")
 HOME_ASSISTANT_TOKEN = os.getenv("HOME_ASSISTANT_TOKEN")
 
-if not HOME_ASSISTANT_URL or not HOME_ASSISTANT_TOKEN:
-    raise RuntimeError("Missing Home Assistant credentials")
-
 logger = logging.getLogger(__name__)
 
 HEADERS = {
@@ -66,10 +63,18 @@ async def turn_off(entity_id: str) -> Any:
 
 
 async def startup_check() -> None:
-    if HOME_ASSISTANT_URL:
-        await _request("GET", "/states")
-    else:
-        logger.warning("Skipping HA startup check – no URL provided")
+    missing = [
+        name
+        for name, val in {
+            "HOME_ASSISTANT_URL": HOME_ASSISTANT_URL,
+            "HOME_ASSISTANT_TOKEN": HOME_ASSISTANT_TOKEN,
+        }.items()
+        if not val
+    ]
+    if missing:
+        logger.error("Missing env vars: %s", ", ".join(missing))
+        raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
+    await _request("GET", "/states")
 
 
 # ---------------------------------------------------------------------------
