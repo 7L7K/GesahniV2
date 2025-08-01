@@ -14,13 +14,14 @@ _metrics = {
 _lock = asyncio.Lock()
 
 
-async def record(engine: str, fallback: bool = False) -> None:
+async def record(engine: str, fallback: bool = False, source: str = "gpt") -> None:
     async with _lock:
         _metrics["total"] += 1
-        if engine == "llama":
-            _metrics["llama"] += 1
-        else:
-            _metrics["gpt"] += 1
+        if source == "gpt":
+            if engine == "llama":
+                _metrics["llama"] += 1
+            elif engine == "gpt":
+                _metrics["gpt"] += 1
         if fallback:
             _metrics["fallback"] += 1
 
