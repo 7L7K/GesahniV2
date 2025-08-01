@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from random import getrandbits
+from time import time_ns
 from typing import Any, List
 
 # Base directory for session metadata and media
@@ -58,7 +60,7 @@ def save_meta(session_id: str, meta: dict[str, Any]) -> None:
 def create_session() -> dict[str, Any]:
     """Create a new session entry and return its metadata."""
     ts = datetime.utcnow().isoformat(timespec="seconds")
-    session_id = ts.replace(":", "-")
+    session_id = f"{time_ns()}_{getrandbits(12):03x}"
     meta = {
         "session_id": session_id,
         "created_at": ts + "Z",
