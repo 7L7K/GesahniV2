@@ -1,17 +1,9 @@
-// frontend/src/components/CaptureMode.tsx
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const audioMime = MediaRecorder.isTypeSupported('audio/webm')
-  ? 'audio/webm'
-  : 'audio/mp4';
-
-const videoMime = MediaRecorder.isTypeSupported('video/mp4')
-  ? 'video/mp4'
-  : 'video/webm';
-
 export default function CaptureMode() {
+  // Refs and state
   const camRef = useRef<HTMLVideoElement>(null);
   const audioRecorder = useRef<MediaRecorder>();
   const videoRecorder = useRef<MediaRecorder>();
@@ -20,6 +12,7 @@ export default function CaptureMode() {
   const sessionIdRef = useRef<string | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const videoChunks = useRef<Blob[]>([]);
+
   const [captionText, setCaptionText] = useState('');
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState('');
@@ -27,20 +20,28 @@ export default function CaptureMode() {
   const lastSend = useRef<number>(0);
   const [volume, setVolume] = useState(0);
 
-  const [audioMime, setAudioMime] = useState<'audio/webm; codecs=opus' | 'audio/mp4'>('audio/mp4');
-  const [videoMime, setVideoMime] = useState<'video/mp4; codecs="avc1.42E01E"' | 'video/webm; codecs=vp9'>(
-    'video/webm; codecs=vp9'
-  );
+  // Dynamic MIME types
+  const [audioMime, setAudioMime] = useState<string>('');
+  const [videoMime, setVideoMime] = useState<string>('');
+
   useEffect(() => {
-    if (typeof window !== 'undefined' && typeof MediaRecorder !== 'undefined') {
-      setAudioMime(
-        MediaRecorder.isTypeSupported('audio/webm; codecs=opus') ? 'audio/webm; codecs=opus' : 'audio/mp4'
-      );
-      setVideoMime(
-        MediaRecorder.isTypeSupported('video/mp4; codecs="avc1.42E01E"')
-          ? 'video/mp4; codecs="avc1.42E01E"'
-          : 'video/webm; codecs=vp9'
-      );
+    if (typeof MediaRecorder !== 'undefined') {
+      const aMime = MediaRecorder.isTypeSupported('audio/webm; codecs=opus')
+        ? 'audio/webm; codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/mp4';
+      const vMime = MediaRecorder.isTypeSupported('video/mp4; codecs="avc1.42E01E"')
+        ? 'video/mp4; codecs="avc1.42E01E"'
+        : MediaRecorder.isTypeSupported('video/mp4')
+        ? 'video/mp4'
+        : 'video/webm';
+      setAudioMime(aMime);
+      setVideoMime(vMime);
+
+      if (!aMime || !vMime) {
+        console.error('No supported codecs – recording disabled');
+      }
     }
   }, []);
 
@@ -51,8 +52,9 @@ export default function CaptureMode() {
       if (camRef.current) camRef.current.srcObject = stream;
 
       const AudioCtx =
-        window.AudioContext ||
-        (window as any).webkitAudioContext;
+        (window.AudioContext || (window as any).webkitAudioContext) as {
+          new (): AudioContext;
+        };
       const audioCtx = new AudioCtx();
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
@@ -94,7 +96,10 @@ export default function CaptureMode() {
       setError('Failed to start recording.');
       return;
     }
-    const ws = new WebSocket(`${window.location.origin.replace(/^http/, 'ws')}/transcribe`);
+
+    const ws = new WebSocket(
+      `${window.location.origin.replace(/^http/, 'ws')}/transcribe`
+    );
     ws.onmessage = (e) => {
       setCaptionText((prev) => (prev ? prev + '\n' : '') + e.data);
       setShowIndicator(false);
@@ -118,6 +123,7 @@ export default function CaptureMode() {
         }
       }
     };
+
     videoRecorder.current.ondataavailable = (e) => {
       if (e.data.size) videoChunks.current.push(e.data);
     };
@@ -154,20 +160,22 @@ export default function CaptureMode() {
     form.append(
       'audio',
       audioBlob,
-      audioMime === 'audio/webm' ? 'audio.webm' : 'audio.mp4',
+      audioMime === 'audio/webm' ? 'audio.webm' : 'audio.mp4'
     );
     form.append(
       'video',
       videoBlob,
-      videoMime === 'video/mp4' ? 'video.mp4' : 'video.webm',
+      videoMime === 'video/mp4' ? 'video.mp4' : 'video.webm'
     );
+
     try {
-      await fetch('/capture/save', { method: 'POST', body: form });
+      const res = await fetch('/capture/save', { method: 'POST', body: form });
+      if (!res.ok) throw new Error(await res.text());
     } catch (err) {
       console.error('failed to save capture', err);
       setError('Failed to save recording.');
     }
-  }, []);
+  }, [audioMime, videoMime]);
 
   const newQuestion = () => setCaptionText('');
 
