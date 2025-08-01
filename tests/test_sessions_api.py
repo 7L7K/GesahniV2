@@ -14,6 +14,8 @@ import app.session_manager as sm
 import app.tasks as tasks
 import app.main as main
 import app.history as history
+from app.session_store import SessionStatus
+import app.session_store as store
 
 
 def setup_temp(monkeypatch, tmp_path: Path):
@@ -22,6 +24,7 @@ def setup_temp(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(sm, "SESSIONS_DIR", tmp_path)
     monkeypatch.setattr(tasks, "SESSIONS_DIR", tmp_path)
     monkeypatch.setattr(main, "SESSIONS_DIR", tmp_path)
+    monkeypatch.setattr(store, "SESSIONS_DIR", tmp_path)
     monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "history.jsonl")
     monkeypatch.setattr(sm, "append_history", history.append_history)
     monkeypatch.setenv("API_TOKEN", "secret")
@@ -47,10 +50,14 @@ def test_capture_flow(monkeypatch, tmp_path):
         headers=headers,
     )
     assert resp.status_code == 200
-    assert resp.json()["status"] in {"saved", "tagged"}
+    assert resp.json()["status"] == SessionStatus.TRANSCRIBED.value
 
+    async def fake_gpt(prompt):
+        return "summary", 0, 0, 0
+
+    monkeypatch.setattr(tasks, "ask_gpt", fake_gpt, raising=False)
     resp = client.post(
-        "/capture/tags", data={"session_id": session_id}, headers=headers
+        f"/sessions/{session_id}/summarize", headers=headers
     )
     assert resp.status_code == 200
 
@@ -76,7 +83,6 @@ def test_capture_flow(monkeypatch, tmp_path):
     lines = hist_file.read_text().strip().splitlines()
     capture_records = [json.loads(l) for l in lines if json.loads(l).get("type") == "capture"]
     assert capture_records and capture_records[-1]["session_id"] == session_id
-    assert "hello" in capture_records[-1]["tags"]
 
 
 def test_search_sort_and_pagination(monkeypatch, tmp_path):
@@ -88,7 +94,7 @@ def test_search_sort_and_pagination(monkeypatch, tmp_path):
         sd.mkdir()
         (sd / "transcript.txt").write_text("hello world", encoding="utf-8")
         (sd / "tags.json").write_text(json.dumps(["hello"]))
-        meta = {"session_id": sid, "created_at": f"2023-01-0{i+1}T00:00:00Z", "status": "tagged"}
+        meta = {"session_id": sid, "created_at": f"2023-01-0{i+1}T00:00:00Z", "status": SessionStatus.DONE.value}
         (sd / "meta.json").write_text(json.dumps(meta))
     client = TestClient(app)
     resp = client.get(
@@ -109,7 +115,7 @@ def test_search_by_tag(monkeypatch, tmp_path):
     sd.mkdir()
     (sd / "transcript.txt").write_text("nothing", encoding="utf-8")
     (sd / "tags.json").write_text(json.dumps(["special"]))
-    meta = {"session_id": sid, "created_at": "2023-01-01T00:00:00Z", "status": "tagged"}
+    meta = {"session_id": sid, "created_at": "2023-01-01T00:00:00Z", "status": SessionStatus.DONE.value}
     (sd / "meta.json").write_text(json.dumps(meta))
     client = TestClient(app)
     resp = client.get(
@@ -120,3 +126,37 @@ def test_search_by_tag(monkeypatch, tmp_path):
     assert resp.status_code == 200
     results = resp.json()
     assert any(r["session_id"] == sid for r in results)
+
+
+def test_manual_pipeline(monkeypatch, tmp_path):
+    setup_temp(monkeypatch, tmp_path)
+    headers = {"Authorization": "Bearer secret"}
+    client = TestClient(app)
+
+    # create session and save only audio
+    resp = client.post("/capture/start", headers=headers)
+    session_id = resp.json()["session_id"]
+    files = {"audio": ("a.wav", b"data", "audio/wav")}
+    resp = client.post(
+        "/capture/save", data={"session_id": session_id}, files=files, headers=headers
+    )
+    assert resp.json()["status"] == SessionStatus.PENDING.value
+
+    # pending sessions listing
+    resp = client.get(
+        "/sessions", params={"status": SessionStatus.PENDING.value}, headers=headers
+    )
+    assert any(s["session_id"] == session_id for s in resp.json())
+
+    monkeypatch.setattr(tasks, "sync_transcribe_file", lambda p: "hi there")
+    resp = client.post(f"/sessions/{session_id}/transcribe", headers=headers)
+    assert resp.status_code == 200
+    assert sm.get_session_meta(session_id)["status"] == SessionStatus.TRANSCRIBED.value
+
+    async def fake_gpt2(prompt):
+        return "summary", 0, 0, 0
+
+    monkeypatch.setattr(tasks, "ask_gpt", fake_gpt2, raising=False)
+    resp = client.post(f"/sessions/{session_id}/summarize", headers=headers)
+    assert resp.status_code == 200
+    assert sm.get_session_meta(session_id)["status"] == SessionStatus.DONE.value
