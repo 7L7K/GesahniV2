@@ -182,10 +182,12 @@ async def capture_save(
     audio: UploadFile | None = File(None),
     video: UploadFile | None = File(None),
     transcript: str | None = Form(None),
+    tags: str | None = Form(None),
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
 ):
-    await finalize_capture_session(session_id, audio, video, transcript)
+    tags_list = json.loads(tags) if tags else None
+    await finalize_capture_session(session_id, audio, video, transcript, tags_list)
     return get_session_meta(session_id)
 
 
