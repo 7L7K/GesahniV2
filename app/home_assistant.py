@@ -2,6 +2,7 @@ import os
 import logging
 import httpx
 import re
+import json
 from typing import Any, List, Optional
 
 from .telemetry import log_record_var
@@ -9,15 +10,11 @@ from .telemetry import log_record_var
 HOME_ASSISTANT_URL = os.getenv("HOME_ASSISTANT_URL")
 HOME_ASSISTANT_TOKEN = os.getenv("HOME_ASSISTANT_TOKEN")
 
-if not HOME_ASSISTANT_URL or not HOME_ASSISTANT_TOKEN:
-    raise RuntimeError("Missing Home Assistant credentials")
-
 logger = logging.getLogger(__name__)
 
-HEADERS = {
-    "Authorization": f"Bearer {HOME_ASSISTANT_TOKEN}",
-    "Content-Type": "application/json",
-}
+HEADERS = {"Content-Type": "application/json"}
+if HOME_ASSISTANT_TOKEN:
+    HEADERS["Authorization"] = f"Bearer {HOME_ASSISTANT_TOKEN}"
 
 ROOM_SYNONYMS = {
     "living room": ["lounge", "den"],
@@ -27,15 +24,31 @@ ROOM_SYNONYMS = {
 _SYN_TO_ROOM = {syn: room for room, syns in ROOM_SYNONYMS.items() for syn in syns}
 
 
+def _redact(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: ("[redacted]" if k == "access_token" else _redact(v)) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_redact(v) for v in obj]
+    return obj
+
+
 async def _request(method: str, path: str, json: dict | None = None, timeout: float = 10.0) -> Any:
     """Internal helper to talk to the Home Assistant API."""
     url = f"{HOME_ASSISTANT_URL.rstrip('/')}/api{path}"
     logger.info("ha_request", extra={"meta": {"method": method, "path": path, "json": json}})
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.request(method, url, headers=HEADERS, json=json)
-    logger.info("ha_response", extra={"meta": {"status": resp.status_code, "body": resp.text}})
+    data = resp.json() if resp.content else None
+    body: str
+    if data is None:
+        body = re.sub(r'("access_token"\s*:\s*")[^"]+"', r'\1[redacted]"', resp.text)
+    else:
+        body = json.dumps(_redact(data))
+    if len(body) > 2048:
+        body = body[:2048] + "..."  # truncated
+    logger.info("ha_response", extra={"meta": {"status": resp.status_code, "body": body}})
     resp.raise_for_status()
-    return resp.json() if resp.content else None
+    return data
 
 
 async def get_states() -> list[dict]:
@@ -66,10 +79,9 @@ async def turn_off(entity_id: str) -> Any:
 
 
 async def startup_check() -> None:
-    if HOME_ASSISTANT_URL:
-        await _request("GET", "/states")
-    else:
-        logger.warning("Skipping HA startup check – no URL provided")
+    if not HOME_ASSISTANT_URL or not HOME_ASSISTANT_TOKEN:
+        raise RuntimeError("Missing Home Assistant credentials")
+    await _request("GET", "/states")
 
 
 # ---------------------------------------------------------------------------
