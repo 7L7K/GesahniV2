@@ -13,10 +13,16 @@ from fastapi import UploadFile, HTTPException
 from .history import append_history
 from .telemetry import LogRecord
 from .analytics import record_session as analytics_record_session
-
-# Base directory for session storage
-SESSIONS_DIR = Path(os.getenv("SESSIONS_DIR", Path(__file__).parent.parent / "sessions"))
-SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+from .session_store import (
+    SESSIONS_DIR,
+    SessionStatus,
+    session_path as _session_path,
+    load_meta as _load_meta,
+    save_meta as _save_meta,
+    create_session,
+    update_status,
+    get_session as get_session_meta,
+)
 
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", "10485760"))  # 10MB
 
@@ -27,48 +33,15 @@ ALLOWED_VIDEO_TYPES = {"video/mp4", "video/webm"}
 logger = logging.getLogger(__name__)
 
 
-def _session_path(session_id: str) -> Path:
-    return SESSIONS_DIR / session_id
-
-
-def _meta_path(session_id: str) -> Path:
-    return _session_path(session_id) / "meta.json"
-
-
-def _load_meta(session_id: str) -> dict[str, Any]:
-    mp = _meta_path(session_id)
-    if mp.exists():
-        return json.loads(mp.read_text(encoding="utf-8"))
-    return {}
-
-
-def get_session_meta(session_id: str) -> dict[str, Any]:
-    return _load_meta(session_id)
-
-
-def _save_meta(session_id: str, meta: dict[str, Any]) -> None:
-    mp = _meta_path(session_id)
-    mp.parent.mkdir(parents=True, exist_ok=True)
-    mp.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
 async def start_session() -> dict[str, str]:
     """Create a new session folder and meta.json entry."""
-    ts = datetime.utcnow().isoformat(timespec="seconds")
-    session_id = ts.replace(":", "-")
-    session_dir = _session_path(session_id)
+    meta = create_session()
+    session_dir = _session_path(meta["session_id"])
     session_dir.mkdir(parents=True, exist_ok=True)
-    meta = {
-        "session_id": session_id,
-        "status": "started",
-        "created_at": ts + "Z",
-        "errors": [],
-    }
-    _save_meta(session_id, meta)
-    rec = LogRecord(req_id="session", session_id=session_id, prompt="session_start")
+    rec = LogRecord(req_id="session", session_id=meta["session_id"], prompt="session_start")
     await append_history(rec)
     await analytics_record_session()
-    return {"session_id": session_id, "path": str(session_dir)}
+    return {"session_id": meta["session_id"], "path": str(session_dir)}
 
 
 async def _save_upload_file(
@@ -113,8 +86,6 @@ async def save_session(
     if not session_dir.exists():
         raise FileNotFoundError("session not found")
     meta = _load_meta(session_id)
-    meta["status"] = "saving"
-    _save_meta(session_id, meta)
 
     if audio is not None:
         base_audio = _base_type(audio.content_type)
@@ -137,20 +108,8 @@ async def save_session(
     tags: List[str] = []
     if transcript is not None:
         (session_dir / "transcript.txt").write_text(transcript, encoding="utf-8")
-        tags = extract_tags_from_text(transcript)
-        (session_dir / "tags.json").write_text(
-            json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        meta["tags"] = tags
-        meta["status"] = "tagged"
-    else:
-        meta["status"] = "saved"
-
+        meta["status"] = SessionStatus.TRANSCRIBED.value
     _save_meta(session_id, meta)
-
-    if transcript is None:
-        from .tasks import enqueue_transcription
-        enqueue_transcription(session_id)
 
     record = {
         "type": "capture",
