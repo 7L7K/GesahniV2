@@ -7,6 +7,7 @@ from pathlib import Path
 import os
 import time
 import asyncio
+import json
 from hashlib import sha256
 
 from fastapi import (
@@ -257,7 +258,21 @@ async def websocket_transcribe(ws: WebSocket):
     await verify_ws(ws)
     await rate_limit_ws(ws)
     await ws.accept()
-    meta = await ws.receive_json()
+    msg = await ws.receive()
+    meta = None
+    if "text" in msg and msg["text"]:
+        try:
+            meta = json.loads(msg["text"])
+        except Exception:
+            await ws.send_json({"error": "invalid metadata"})
+            await ws.close()
+            return
+        msg = await ws.receive()
+    elif "bytes" not in msg:
+        await ws.send_json({"error": "no data received"})
+        await ws.close()
+        return
+
     session_id = uuid.uuid4().hex
     audio_path = Path(SESSIONS_DIR) / session_id / "stream.wav"
     audio_path.parent.mkdir(parents=True, exist_ok=True)
@@ -265,13 +280,14 @@ async def websocket_transcribe(ws: WebSocket):
     with open(audio_path, "ab") as fh:
         try:
             while True:
-                msg = await ws.receive()
                 if "text" in msg and msg["text"]:
                     if msg["text"] == "end":
                         break
+                    msg = await ws.receive()
                     continue
                 chunk = msg.get("bytes")
                 if not chunk:
+                    msg = await ws.receive()
                     continue
                 fh.write(chunk)
                 tmp = audio_path.with_suffix(".part")
@@ -285,6 +301,7 @@ async def websocket_transcribe(ws: WebSocket):
                 finally:
                     if tmp.exists():
                         tmp.unlink()
+                msg = await ws.receive()
         except WebSocketDisconnect:
             pass
 
