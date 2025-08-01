@@ -103,7 +103,7 @@ export default function CaptureMode() {
       setError('Failed to start recording.');
       return;
     }
-    const ws = new WebSocket(`${window.location.origin.replace(/^http/, 'ws')}/transcribe`);
+    const ws = new WebSocket(`ws://${window.location.hostname}:8000/transcribe`);
     ws.onopen = () => console.log('ws: opened');
     ws.onclose = () => console.log('ws: closed');
     ws.onerror = (e) => console.error('ws: error', e);
