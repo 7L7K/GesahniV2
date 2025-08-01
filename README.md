@@ -43,6 +43,9 @@ Update the copied `.env` with your credentials:
 OPENAI_API_KEY=your_openai_key
 HOME_ASSISTANT_URL=http://your-ha-instance
 HOME_ASSISTANT_TOKEN=your_long_lived_token
+EMBEDDING_BACKEND=openai  # or "llama"
+# Required when using the LLaMA backend
+LLAMA_EMBEDDINGS_MODEL=/path/to/gguf
 ```
 
 ### 🌐 4. Launch Backend
