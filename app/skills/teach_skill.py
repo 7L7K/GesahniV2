@@ -9,6 +9,9 @@ class TeachSkill(Skill):
 
     async def run(self, prompt, m):
         alias, actual = m.group(1), m.group(2)
-        entity = (await ha.resolve_entity(actual))[0]
+        results = await ha.resolve_entity(actual)
+        if not results:
+            raise ValueError("entity not found")
+        entity = results[0]
         await alias_store.set(alias, entity)
         return f"Got it – when you say “{alias}” I’ll use {entity}."
