@@ -9,6 +9,7 @@ import time
 import asyncio
 import json
 from hashlib import sha256
+import sys
 
 from fastapi import (
     FastAPI,
@@ -120,6 +121,7 @@ async def startup_event() -> None:
         await ha_startup()
     except Exception as e:
         logger.error(f"Startup check failed: {e}")
+        sys.exit(1)
 
 
 class AskRequest(BaseModel):
