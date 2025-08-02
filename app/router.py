@@ -1,5 +1,3 @@
-# app/router.py
-
 from __future__ import annotations
 
 import importlib
@@ -19,6 +17,13 @@ from .home_assistant import handle_command
 from .intent_detector import detect_intent
 from .llama_integration import LLAMA_HEALTHY, OLLAMA_MODEL, ask_llama
 from .telemetry import log_record_var
+from .memory import memgpt
+from .memory.vector_store import (
+    add_user_memory,
+    cache_answer,
+    lookup_cached_answer,
+    query_user_memories,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +64,8 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     rec = log_record_var.get()
     if rec:
         rec.prompt = prompt
+    session_id = rec.session_id if rec and rec.session_id else "default"
+    user_id = rec.user_id if rec and rec.user_id else "anon"
     logger.debug("route_prompt received: %s", prompt)
 
     # A) Home‑Assistant
@@ -95,7 +102,30 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
             logger.debug("Catalog match → %s", skill_name)
             return result
 
-    # C) Model selection
+    # C) Memory lookup & context enrichment
+    cached = lookup_cached_answer(prompt)
+    if cached is not None:
+        if rec:
+            rec.engine_used = "cache"
+            rec.response = cached
+        await append_history(prompt, "cache", cached)
+        await record("cache", source="cache")
+        logger.debug("Cache hit")
+        return cached
+
+    summary = memgpt.summarize_session(session_id)
+    pieces: list[str] = []
+    if summary:
+        pieces.append(f"Session summary: {summary}")
+    memories = memgpt.retrieve_relevant_memories(prompt)
+    if memories:
+        mem_lines = [f"Q: {m['prompt']}\nA: {m['answer']}" for m in memories]
+        pieces.append("\n\n".join(mem_lines))
+    pieces.append(prompt)
+    prompt_ctx = "\n\n".join(pieces)
+    await append_history({"event": "prompt_captured", "prompt": prompt, "context": prompt_ctx})
+
+    # D) Model selection
     if model_override:
         if model_override.lower().startswith("llama"):
             use_llama_pref = True
@@ -131,29 +161,33 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         },
     )
 
-    # D) LLaMA
+    # E) LLaMA
     if use_llama:
-        result = await ask_llama(prompt, llama_model)
+        result = await ask_llama(llama_prompt, llama_model)
         if isinstance(result, dict) and "error" in result:
             logger.error("llama_error", extra={"error": result["error"]})
         else:
+            result_text = str(result)
             if rec:
                 rec.engine_used = engine_used
-                rec.response = str(result)
+                rec.response = result_text
                 rec.model_name = llama_model
-            await append_history(prompt, engine_used, str(result))
+            await append_history(prompt, engine_used, result_text)
             await record("llama")
+            memgpt.store_interaction(prompt, result_text, session_id=session_id)
+            add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
+            cache_answer(prompt, result_text)
             logger.debug("LLaMA responded OK")
-            return result
+            return result_text
 
-    # E) GPT fallback, bias 3.5 for light skills
+    # F) GPT fallback, bias 3.5 for light skills
     light_skill_hint = any(
         kw in prompt_lower
         for kw in ["translate", "search ", "remind", "reminder"]
     )
     final_model = "gpt-3.5-turbo" if light_skill_hint else chosen_model
 
-    text, pt, ct, unit_price = await ask_gpt(prompt, final_model)
+    text, pt, ct, unit_price = await ask_gpt(prompt, final_model, system_prompt)
     if rec:
         rec.engine_used = "gpt"
         rec.response = text
@@ -164,5 +198,8 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
 
     await append_history(prompt, "gpt", text)
     await record("gpt", fallback=fallback_used)
+    memgpt.store_interaction(prompt, text, session_id=session_id)
+    add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
+    cache_answer(prompt, text)
     logger.debug("GPT responded OK with %s", final_model)
     return text

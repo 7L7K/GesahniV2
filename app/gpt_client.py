@@ -23,14 +23,20 @@ def get_client() -> AsyncOpenAI:
         _client = AsyncOpenAI(api_key=OPENAI_API_KEY)
     return _client
 
-async def ask_gpt(prompt: str, model: str | None = None) -> tuple[str, int, int, float]:
+async def ask_gpt(
+    prompt: str, model: str | None = None, system: str | None = None
+) -> tuple[str, int, int, float]:
     """Return text, prompt tokens, completion tokens and price per 1k tokens."""
     model = model or OPENAI_MODEL
     client = get_client()
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
     try:
         resp = await client.chat.completions.create(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
         )
         text = resp.choices[0].message.content.strip()
         usage = resp.usage or {}
