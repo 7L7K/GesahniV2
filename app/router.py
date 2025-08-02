@@ -5,9 +5,12 @@ from __future__ import annotations
 import importlib
 import json
 import logging
+import os
 import pathlib
 import re
 from typing import Any
+
+from fastapi import HTTPException
 
 from .analytics import record
 from .gpt_client import ask_gpt, OPENAI_MODEL
@@ -18,6 +21,16 @@ from .llama_integration import LLAMA_HEALTHY, OLLAMA_MODEL, ask_llama
 from .telemetry import log_record_var
 
 logger = logging.getLogger(__name__)
+
+ALLOWED_GPT_MODELS = set(
+    filter(
+        None,
+        os.getenv(
+            "ALLOWED_GPT_MODELS", "gpt-4o,gpt-4,gpt-3.5-turbo"
+        ).split(","),
+    )
+)
+KW_RE = re.compile(r"\b(?:code|research|analyze|explain)\b", re.I)
 
 # 1. Load keyword catalog ---------------------------------------------------
 CAT_PATH = pathlib.Path(__file__).parent / "skills" / "keyword_catalog.json"
@@ -78,19 +91,27 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
                 rec.engine_used = skill_name
                 rec.response = str(result)
             await append_history(prompt, skill_name, str(result))
-            await record(skill_name)
+            await record(skill_name, source="skill")
             logger.debug("Catalog match → %s", skill_name)
             return result
 
     # C) Model selection
     if model_override:
-        use_llama_pref = model_override.lower().startswith("llama")
-        llama_model = model_override
-        gpt_model = OPENAI_MODEL
+        if model_override.lower().startswith("llama"):
+            use_llama_pref = True
+            llama_model = model_override
+            gpt_model = OPENAI_MODEL
+        elif model_override in ALLOWED_GPT_MODELS:
+            use_llama_pref = False
+            gpt_model = model_override
+            llama_model = OLLAMA_MODEL
+        else:
+            raise HTTPException(status_code=400, detail="invalid model override")
         confidence = "override"
     else:
         intent, confidence = detect_intent(prompt)
-        use_llama_pref = len(prompt) < 250 and confidence in ("medium", "high")
+        is_complex = len(prompt.split()) > 30 or bool(KW_RE.search(prompt))
+        use_llama_pref = not is_complex
         llama_model = OLLAMA_MODEL
         gpt_model = OPENAI_MODEL
 

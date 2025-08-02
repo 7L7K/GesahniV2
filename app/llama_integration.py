@@ -12,9 +12,6 @@ from .logging_config import req_id_var
 OLLAMA_URL = os.getenv("OLLAMA_URL")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
 
-if not OLLAMA_URL or not OLLAMA_MODEL:
-    raise RuntimeError("Missing OLLAMA_URL or OLLAMA_MODEL")
-
 logger = logging.getLogger(__name__)
 
 # Global health flag toggled by startup and periodic checks
@@ -39,6 +36,14 @@ async def _check_and_set_flag() -> None:
 
 async def startup_check() -> None:
     """Verify the configured model exists on the Ollama server and start health checks."""
+    missing = [
+        name
+        for name, val in {"OLLAMA_URL": OLLAMA_URL, "OLLAMA_MODEL": OLLAMA_MODEL}.items()
+        if not val
+    ]
+    if missing:
+        logger.error("Missing env vars: %s", ", ".join(missing))
+        raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
     await _check_and_set_flag()
     scheduler.add_job(_check_and_set_flag, "interval", minutes=5)
     scheduler_start()

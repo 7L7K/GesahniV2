@@ -13,3 +13,6 @@ python-multipart
 redis
 rq
 spacy
+llama-cpp-python
+chromadb
+aiosqlite
