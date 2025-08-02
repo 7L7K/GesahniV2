@@ -52,6 +52,7 @@ class PromptBuilder:
                 "conversation_summary": summary,
                 "memories": mem_text,
                 "custom_instructions": custom_instructions,
+                "user_prompt": user_prompt,
                 "debug_info": dbg,
             }
             for key, val in replacements.items():
