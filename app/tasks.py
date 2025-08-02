@@ -23,6 +23,7 @@ from .session_store import (
 from .transcribe import transcribe_file as sync_transcribe_file
 from .analytics import record_transcription
 from .gpt_client import ask_gpt
+from .memory.vector_store import add_user_memory
 
 
 def _get_queue() -> Queue:
@@ -31,6 +32,11 @@ def _get_queue() -> Queue:
     url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     conn = Redis.from_url(url)
     return Queue("default", connection=conn)
+
+
+def _chunk_text(text: str, size: int = 1024) -> list[str]:
+    words = text.split()
+    return [" ".join(words[i : i + size]) for i in range(0, len(words), size)]
 
 
 def enqueue_transcription(session_id: str) -> None:
@@ -82,6 +88,8 @@ def transcribe_task(session_id: str) -> None:
         text = sync_transcribe_file(str(audio_path))
         transcript_path.write_text(text, encoding="utf-8")
         update_status(session_id, SessionStatus.TRANSCRIBED)
+        for chunk in _chunk_text(text):
+            add_user_memory("anon", chunk)
     except Exception as e:  # pragma: no cover - network errors
         append_error(session_id, str(e))
         update_status(session_id, SessionStatus.ERROR)
