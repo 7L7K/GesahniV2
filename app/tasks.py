@@ -88,10 +88,11 @@ def transcribe_task(session_id: str) -> None:
         error = True
     duration = int((time.monotonic() - start) * 1000)
     try:
-        asyncio.run(record_transcription(duration, error=error))
+        loop = asyncio.get_running_loop()
     except RuntimeError:
-        # already running loop
-        asyncio.create_task(record_transcription(duration, error=error))
+        asyncio.run(record_transcription(duration, error=error))
+    else:
+        loop.create_task(record_transcription(duration, error=error))
 
 
 def tag_task(session_id: str) -> None:

@@ -2,23 +2,23 @@ import os
 import logging
 import httpx
 import re
+import json
 from typing import Any, List, Optional
 
 from .telemetry import log_record_var
 
+# Environment variables are loaded but not validated until startup
 HOME_ASSISTANT_URL = os.getenv("HOME_ASSISTANT_URL")
 HOME_ASSISTANT_TOKEN = os.getenv("HOME_ASSISTANT_TOKEN")
 
-if not HOME_ASSISTANT_URL or not HOME_ASSISTANT_TOKEN:
-    raise RuntimeError("Missing Home Assistant credentials")
-
 logger = logging.getLogger(__name__)
 
-HEADERS = {
-    "Authorization": f"Bearer {HOME_ASSISTANT_TOKEN}",
-    "Content-Type": "application/json",
-}
+# Default headers; Authorization added if token is present
+HEADERS = {"Content-Type": "application/json"}
+if HOME_ASSISTANT_TOKEN:
+    HEADERS["Authorization"] = f"Bearer {HOME_ASSISTANT_TOKEN}"
 
+# Synonyms for room names
 ROOM_SYNONYMS = {
     "living room": ["lounge", "den"],
     "kitchen": ["cook room"],
@@ -27,15 +27,32 @@ ROOM_SYNONYMS = {
 _SYN_TO_ROOM = {syn: room for room, syns in ROOM_SYNONYMS.items() for syn in syns}
 
 
+def _redact(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: ("[redacted]" if k == "access_token" else _redact(v)) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_redact(v) for v in obj]
+    return obj
+
+
 async def _request(method: str, path: str, json: dict | None = None, timeout: float = 10.0) -> Any:
     """Internal helper to talk to the Home Assistant API."""
     url = f"{HOME_ASSISTANT_URL.rstrip('/')}/api{path}"
     logger.info("ha_request", extra={"meta": {"method": method, "path": path, "json": json}})
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.request(method, url, headers=HEADERS, json=json)
-    logger.info("ha_response", extra={"meta": {"status": resp.status_code, "body": resp.text}})
+
+    data = resp.json() if resp.content else None
+    # Redact tokens if present
+    if data is None:
+        body = re.sub(r'("access_token"\s*:\s*")[^"]+"', r'\1[redacted]"', resp.text)
+    else:
+        body = json.dumps(_redact(data))
+    if len(body) > 2048:
+        body = body[:2048] + "..."
+    logger.info("ha_response", extra={"meta": {"status": resp.status_code, "body": body}})
     resp.raise_for_status()
-    return resp.json() if resp.content else None
+    return data
 
 
 async def get_states() -> list[dict]:
@@ -66,15 +83,19 @@ async def turn_off(entity_id: str) -> Any:
 
 
 async def startup_check() -> None:
-    if HOME_ASSISTANT_URL:
-        await _request("GET", "/states")
-    else:
-        logger.warning("Skipping HA startup check – no URL provided")
+    """Ensure necessary environment vars are set and Home Assistant is reachable."""
+    missing: List[str] = []
+    if not HOME_ASSISTANT_URL:
+        missing.append("HOME_ASSISTANT_URL")
+    if not HOME_ASSISTANT_TOKEN:
+        missing.append("HOME_ASSISTANT_TOKEN")
+    if missing:
+        logger.error("Missing env vars: %s", ", ".join(missing))
+        raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
+    # Verify connectivity by fetching states
+    await _request("GET", "/states")
 
 
-# ---------------------------------------------------------------------------
-# Dynamic entity resolution (line 78)
-# ---------------------------------------------------------------------------
 async def resolve_entity(name: str) -> List[str]:
     """Return matching entity IDs for the given name, considering synonyms."""
     states = await get_states()
