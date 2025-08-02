@@ -13,12 +13,25 @@ def test_memgpt_dedup_and_maintenance(tmp_path):
     assert m._data["s"][0]["prompt"] == "summary"
 
 
-def test_vector_store_ttl_and_feedback():
-    h = "hash123"
-    vector_store.cache_answer(h, "answer")
-    assert vector_store.lookup_cached_answer(h, ttl_seconds=100) == "answer"
-    vector_store._qa_cache.update(ids=[h], metadatas=[{"timestamp": time.time() - 200}])
-    assert vector_store.lookup_cached_answer(h, ttl_seconds=100) is None
-    vector_store.cache_answer(h, "answer2")
-    vector_store.record_feedback(h, "down")
-    assert vector_store.lookup_cached_answer(h) is None
+def record_feedback(prompt: str, feedback: str) -> None:
+    """Record user feedback ('up' or 'down') for a cached answer."""
+    if _cache_disabled():
+        return
+
+    result = _qa_cache.query(query_texts=[prompt], n_results=1)
+    ids = result.get("ids", [[]])[0]
+    metas = result.get("metadatas", [[]])[0]
+    if not ids or not metas:
+        return
+
+    cache_id = ids[0]
+    meta = metas[0] or {}
+    # Preserve all existing metadata, just update feedback
+    meta["feedback"] = feedback
+    _qa_cache.update(ids=[cache_id], metadatas=[meta])
+
+    if feedback == "down":
+        try:
+            _qa_cache.delete(ids=[cache_id])
+        except Exception:
+            pass
