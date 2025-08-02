@@ -11,11 +11,13 @@ def test_router_fallback_metrics_updated(monkeypatch):
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     from app import router, analytics, llama_integration
+    from app.memory import vector_store
+    vector_store._qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
     llama_integration.LLAMA_HEALTHY = True
     async def fake_llama(prompt, model=None):
         return {"error": "timeout", "llm_used": "llama3"}
 
-    async def fake_gpt(prompt, model=None):
+    async def fake_gpt(prompt, model=None, system=None):
         return "ok", 0, 0, 0.0
 
     monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
@@ -49,7 +51,7 @@ def test_gpt_override(monkeypatch):
 
     llama_integration.LLAMA_HEALTHY = True
 
-    async def fake_gpt(prompt, model=None):
+    async def fake_gpt(prompt, model=None, system=None):
         return model, 0, 0, 0.0
 
     monkeypatch.setattr(router, "ask_gpt", fake_gpt)
@@ -64,6 +66,8 @@ def test_gpt_override_invalid(monkeypatch):
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     from app import router
+    from app.memory import vector_store
+    vector_store._qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
 
     monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
     with pytest.raises(HTTPException):
@@ -79,7 +83,7 @@ def test_complexity_checks(monkeypatch):
 
     llama_integration.LLAMA_HEALTHY = True
 
-    async def fake_gpt(prompt, model=None):
+    async def fake_gpt(prompt, model=None, system=None):
         return "gpt", 0, 0, 0.0
 
     async def fake_llama(prompt, model=None):
