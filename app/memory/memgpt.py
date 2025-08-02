@@ -5,6 +5,8 @@ from pathlib import Path
 from threading import RLock
 from textwrap import shorten
 from typing import Any, Dict, List
+import hashlib
+import time
 
 
 class MemGPT:
@@ -14,11 +16,21 @@ class MemGPT:
     return condensed session summaries or interactions that match a prompt.
     """
 
-    def __init__(self, storage_path: str | Path | None = None) -> None:
-        self.storage_path = Path(storage_path or Path(__file__).resolve().parent.parent / "data" / "memories.json")
+    def __init__(self, storage_path: str | Path | None = None, ttl_seconds: int = 60 * 60 * 24 * 30) -> None:
+        """Create a memory manager.
+
+        ``ttl_seconds`` controls how long memories are kept during nightly
+        maintenance. The default keeps data for ~30 days.
+        """
+
+        self.storage_path = Path(
+            storage_path
+            or Path(__file__).resolve().parent.parent / "data" / "memories.json"
+        )
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = RLock()
         self._data: Dict[str, List[Dict[str, Any]]] = {}
+        self.ttl_seconds = ttl_seconds
         self._load()
 
     # ------------------------------------------------------------------
@@ -44,9 +56,22 @@ class MemGPT:
         ``tags`` may be supplied to aid later retrieval.
         """
 
+        entry_hash = hashlib.sha256((prompt + answer).encode("utf-8")).hexdigest()
+        now = time.time()
         with self._lock:
             bucket = self._data.setdefault(session_id, [])
-            bucket.append({"prompt": prompt, "answer": answer, "tags": tags or []})
+            for item in bucket:
+                if item.get("hash") == entry_hash:
+                    return
+            bucket.append(
+                {
+                    "prompt": prompt,
+                    "answer": answer,
+                    "tags": tags or [],
+                    "timestamp": now,
+                    "hash": entry_hash,
+                }
+            )
             self._save()
 
     def summarize_session(self, session_id: str) -> str:
@@ -82,6 +107,46 @@ class MemGPT:
                     if prompt_l in item["prompt"].lower() or any(t in prompt_l for t in tags):
                         results.append(item)
         return results
+
+    def nightly_maintenance(self) -> None:
+        """Deduplicate, purge stale entries and summarize old sessions."""
+
+        now = time.time()
+        with self._lock:
+            for sid, interactions in list(self._data.items()):
+                seen: set[str] = set()
+                kept: List[Dict[str, Any]] = []
+                for item in interactions:
+                    h = item.get("hash") or hashlib.sha256(
+                        (item.get("prompt", "") + item.get("answer", "")).encode("utf-8")
+                    ).hexdigest()
+                    item["hash"] = h
+                    if h in seen:
+                        continue
+                    seen.add(h)
+                    ts = item.get("timestamp", now)
+                    if now - ts > self.ttl_seconds:
+                        continue
+                    kept.append(item)
+
+                if not kept:
+                    summary = self.summarize_session(sid)
+                    if summary:
+                        kept.append(
+                            {
+                                "prompt": "summary",
+                                "answer": summary,
+                                "tags": ["summary"],
+                                "timestamp": now,
+                                "hash": hashlib.sha256(
+                                    ("summary" + summary).encode("utf-8")
+                                ).hexdigest(),
+                            }
+                        )
+
+                self._data[sid] = kept
+
+            self._save()
 
 
 # Reusable singleton ---------------------------------------------------------
