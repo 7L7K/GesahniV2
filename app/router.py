@@ -13,7 +13,7 @@ from .telemetry import log_record_var
 from .memory import memgpt
 from .memory.vector_store import add_user_memory, cache_answer, lookup_cached_answer
 from .prompt_builder import PromptBuilder
-from .skills.base import check_builtin_skills
+from .skills.base import check_builtin_skills, SKILLS as CATALOG
 
 logger = logging.getLogger(__name__)
 
