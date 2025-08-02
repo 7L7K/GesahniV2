@@ -1,5 +1,3 @@
-# app/router.py
-
 from __future__ import annotations
 
 import importlib
@@ -8,7 +6,6 @@ import logging
 import os
 import pathlib
 import re
-import hashlib
 from typing import Any
 
 from fastapi import HTTPException
@@ -25,7 +22,6 @@ from .memory.vector_store import (
     add_user_memory,
     cache_answer,
     lookup_cached_answer,
-    lookup_semantic_cached_answer,
     query_user_memories,
 )
 
@@ -107,32 +103,27 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
             return result
 
     # C) Memory lookup & context enrichment
-    prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
-    cached = lookup_cached_answer(prompt_hash)
-    if cached is None:
-        cached = lookup_semantic_cached_answer(prompt)
+    cached = lookup_cached_answer(prompt)
     if cached is not None:
         if rec:
             rec.engine_used = "cache"
             rec.response = cached
         await append_history(prompt, "cache", cached)
         await record("cache", source="cache")
-        logger.debug("Cache hit → %s", prompt_hash)
+        logger.debug("Cache hit")
         return cached
 
+    summary = memgpt.summarize_session(session_id)
+    pieces: list[str] = []
+    if summary:
+        pieces.append(f"Session summary: {summary}")
     memories = memgpt.retrieve_relevant_memories(prompt)
-    vector_mems = query_user_memories(user_id, prompt)
-    context_items: list[str] = [
-        f"Q: {m['prompt']}\nA: {m['answer']}" for m in memories
-    ]
-    context_items.extend(vector_mems)
-    if context_items:
-        context = "\n\n".join(context_items)
-        llama_prompt = f"{context}\n\n{prompt}"
-        system_prompt = f"Here are relevant past interactions:\n{context}"
-    else:
-        llama_prompt = prompt
-        system_prompt = None
+    if memories:
+        mem_lines = [f"Q: {m['prompt']}\nA: {m['answer']}" for m in memories]
+        pieces.append("\n\n".join(mem_lines))
+    pieces.append(prompt)
+    prompt_ctx = "\n\n".join(pieces)
+    await append_history({"event": "prompt_captured", "prompt": prompt, "context": prompt_ctx})
 
     # D) Model selection
     if model_override:
@@ -185,7 +176,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
             await record("llama")
             memgpt.store_interaction(prompt, result_text, session_id=session_id)
             add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
-            cache_answer(prompt_hash, prompt, result_text)
+            cache_answer(prompt, result_text)
             logger.debug("LLaMA responded OK")
             return result_text
 
@@ -209,6 +200,6 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     await record("gpt", fallback=fallback_used)
     memgpt.store_interaction(prompt, text, session_id=session_id)
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
-    cache_answer(prompt_hash, prompt, text)
+    cache_answer(prompt, text)
     logger.debug("GPT responded OK with %s", final_model)
     return text

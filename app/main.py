@@ -139,6 +139,9 @@ class ServiceRequest(BaseModel):
 async def ask(req: AskRequest):
     logger.info("Received prompt: %s", req.prompt)
     try:
+        skill_resp = await check_builtin_skills(req.prompt)
+        if skill_resp is not None:
+            return {"response": skill_resp}
         answer = await route_prompt(req.prompt, req.model)
         return {"response": answer}
     except Exception as e:
