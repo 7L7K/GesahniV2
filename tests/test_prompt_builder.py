@@ -9,3 +9,12 @@ def test_prompt_builder_respects_token_limit(monkeypatch):
 
     prompt, tokens = PromptBuilder.build("hi", session_id="s", user_id="u")
     assert tokens <= MAX_PROMPT_TOKENS
+    
+def test_prompt_builder_includes_user_prompt(monkeypatch):
+    monkeypatch.setattr(prompt_builder.memgpt, "summarize_session", lambda sid: "")
+    monkeypatch.setattr(
+        prompt_builder, "query_user_memories", lambda uid, q, n_results=5: []
+    )
+    user_msg = "what is the weather?"
+    prompt, _ = PromptBuilder.build(user_msg, session_id="s", user_id="u")
+    assert user_msg in prompt
