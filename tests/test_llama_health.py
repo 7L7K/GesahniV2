@@ -54,7 +54,7 @@ def test_router_skips_when_unhealthy(monkeypatch):
     async def fake_llama(prompt, model=None):
         raise AssertionError("should not call llama")
 
-    async def fake_gpt(prompt, model=None):
+    async def fake_gpt(prompt, model=None, system=None):
         return "ok", 0, 0, 0.0
 
     monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
