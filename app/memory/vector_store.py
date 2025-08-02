@@ -87,7 +87,7 @@ def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> Optional[str]
     fb = meta.get("feedback")
     ts = meta.get("timestamp", 0)
 
-    # Delete and return None if negative feedback or expired
+    # Purge if negative feedback or expired
     if fb == "down" or (ts and time.time() - ts > ttl_seconds):
         try:
             _qa_cache.delete(ids=[prompt_hash])

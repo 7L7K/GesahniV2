@@ -52,7 +52,7 @@ def test_capture_flow(monkeypatch, tmp_path):
     assert resp.status_code == 200
     assert resp.json()["status"] == SessionStatus.TRANSCRIBED.value
 
-    async def fake_gpt(prompt):
+    async def fake_gpt(prompt, model=None, system=None):
         return "summary", 0, 0, 0
 
     monkeypatch.setattr(tasks, "ask_gpt", fake_gpt, raising=False)
@@ -153,7 +153,7 @@ def test_manual_pipeline(monkeypatch, tmp_path):
     assert resp.status_code == 200
     assert sm.get_session_meta(session_id)["status"] == SessionStatus.TRANSCRIBED.value
 
-    async def fake_gpt2(prompt):
+    async def fake_gpt2(prompt, model=None, system=None):
         return "summary", 0, 0, 0
 
     monkeypatch.setattr(tasks, "ask_gpt", fake_gpt2, raising=False)
