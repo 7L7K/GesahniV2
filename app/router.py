@@ -8,7 +8,6 @@ import logging
 import os
 import pathlib
 import re
-import hashlib
 from typing import Any
 
 from fastapi import HTTPException
@@ -103,24 +102,28 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
             return result
 
     # C) Memory lookup & context enrichment
-    prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
-    cached = lookup_cached_answer(prompt_hash)
+    cached = lookup_cached_answer(prompt)
     if cached is not None:
         if rec:
             rec.engine_used = "cache"
             rec.response = cached
         await append_history(prompt, "cache", cached)
         await record("cache", source="cache")
-        logger.debug("Cache hit → %s", prompt_hash)
+        logger.debug("Cache hit")
         return cached
 
+    session_id = rec.session_id if rec and rec.session_id else "default"
     memories = memgpt.retrieve_relevant_memories(prompt)
+    summary = memgpt.summarize_session(session_id)
+    pieces: list[str] = []
+    if summary:
+        pieces.append(f"Session summary: {summary}")
     if memories:
         mem_lines = [f"Q: {m['prompt']}\nA: {m['answer']}" for m in memories]
-        context = "\n\n".join(mem_lines)
-        prompt_ctx = f"{context}\n\n{prompt}"
-    else:
-        prompt_ctx = prompt
+        pieces.append("\n\n".join(mem_lines))
+    pieces.append(prompt)
+    prompt_ctx = "\n\n".join(pieces)
+    await append_history({"event": "prompt_captured", "prompt": prompt, "context": prompt_ctx})
 
     # D) Model selection
     if model_override:
@@ -175,7 +178,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
             user_id = rec.user_id if rec and rec.user_id else "anon"
             memgpt.store_interaction(prompt, result_text, session_id=session_id)
             add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
-            cache_answer(prompt_hash, result_text)
+            cache_answer(prompt, result_text)
             logger.debug("LLaMA responded OK")
             return result_text
 
@@ -201,6 +204,6 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     user_id = rec.user_id if rec and rec.user_id else "anon"
     memgpt.store_interaction(prompt, text, session_id=session_id)
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
-    cache_answer(prompt_hash, text)
+    cache_answer(prompt, text)
     logger.debug("GPT responded OK with %s", final_model)
     return text

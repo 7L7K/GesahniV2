@@ -4,6 +4,8 @@ from typing import List, Optional
 import chromadb
 from chromadb.config import Settings
 from chromadb.utils.embedding_functions import EmbeddingFunction
+import hashlib
+import os
 
 
 class _LengthEmbeddingFunction(EmbeddingFunction):
@@ -20,6 +22,10 @@ _user_memories = _client.get_or_create_collection(
 _qa_cache = _client.get_or_create_collection(
     "qa_cache", embedding_function=_LengthEmbeddingFunction()
 )
+
+
+def _cache_disabled() -> bool:
+    return bool(os.getenv("DISABLE_QA_CACHE") or os.getenv("PYTEST_CURRENT_TEST"))
 
 
 def add_user_memory(user_id: str, memory: str) -> str:
@@ -44,18 +50,25 @@ def query_user_memories(user_id: str, query: str, n_results: int = 5) -> List[st
     return results.get("documents", [[]])[0]
 
 
-def cache_answer(prompt_hash: str, answer: str) -> None:
-    """Cache an answer using the prompt hash as the id."""
+def cache_answer(prompt: str, answer: str) -> None:
+    """Cache an answer keyed by a hash of the prompt."""
+    if _cache_disabled():
+        return
+    prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
     _qa_cache.upsert(
         ids=[prompt_hash],
-        documents=[answer],
+        documents=[prompt],
+        metadatas=[{"answer": answer}],
     )
 
 
-def lookup_cached_answer(prompt_hash: str) -> Optional[str]:
-    """Retrieve a cached answer by prompt hash."""
+def lookup_cached_answer(prompt: str) -> Optional[str]:
+    """Retrieve a cached answer using the hashed prompt."""
+    if _cache_disabled():
+        return None
+    prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
     result = _qa_cache.get(ids=[prompt_hash])
-    docs = result.get("documents")
-    if docs and docs[0]:
-        return docs[0][0]
+    metas = result.get("metadatas")
+    if metas and metas[0] and "answer" in metas[0]:
+        return metas[0]["answer"]
     return None
