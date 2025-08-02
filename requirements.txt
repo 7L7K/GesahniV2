@@ -17,3 +17,4 @@ llama-cpp-python
 chromadb
 aiosqlite
 chromadb
+tiktoken
