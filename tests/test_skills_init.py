@@ -8,10 +8,15 @@ from app import skills
 
 EXPECTED_ORDER = [
     skills.ClockSkill,
+    skills.WorldClockSkill,
     skills.WeatherSkill,
+    skills.ForecastSkill,
     skills.ReminderSkill,
     skills.TimerSkill,
     skills.MathSkill,
+    skills.UnitConversionSkill,
+    skills.CurrencySkill,
+    skills.CalendarSkill,
     skills.TeachSkill,
     skills.EntitiesSkill,
     skills.SceneSkill,
