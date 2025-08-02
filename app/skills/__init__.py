@@ -23,6 +23,10 @@ from .fan_skill import FanSkill
 from .notify_skill import NotifySkill
 from .search_skill import SearchSkill
 from .translate_skill import TranslateSkill
+from .news_skill import NewsSkill
+from .joke_skill import JokeSkill
+from .dictionary_skill import DictionarySkill
+from .recipe_skill import RecipeSkill
 
 # NEW skills
 from .teach_skill import TeachSkill          # “my bedroom is Hija room”
@@ -48,6 +52,10 @@ SKILLS.extend([
     NotifySkill(),
     SearchSkill(),
     TranslateSkill(),
+    NewsSkill(),
+    JokeSkill(),
+    DictionarySkill(),
+    RecipeSkill(),
 
     LightsSkill(),
     DoorLockSkill(),
@@ -83,6 +91,10 @@ __all__ = [
     "NotifySkill",
     "SearchSkill",
     "TranslateSkill",
+    "NewsSkill",
+    "JokeSkill",
+    "DictionarySkill",
+    "RecipeSkill",
     "NotesSkill",
     "StatusSkill",
     "SKILLS",
