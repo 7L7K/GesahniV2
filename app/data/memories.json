@@ -1,0 +1,18 @@
+{
+  "default": [
+    {
+      "prompt": "hi",
+      "answer": "Hello! How can I assist you today?",
+      "tags": [],
+      "timestamp": 1754152138.9102879,
+      "hash": "8b3a8a7ebc719581e4fa1b659dc86e6c12e17e9b8c4637a468cfe6bc55165408"
+    },
+    {
+      "prompt": "give me an action movie to watch ",
+      "answer": "If you're looking for an action-packed movie, I recommend \"Mad Max: Fury Road\" (2015). It's a high-octane, visually stunning film directed by George Miller. The movie follows Max Rockatansky, played by Tom Hardy, and Furiosa, played by Charlize Theron, as they navigate a post-apocalyptic wasteland and face off against tyrannical warlords. It's filled with incredible action sequences and has received critical acclaim for its direction, stunts, and visual effects.",
+      "tags": [],
+      "timestamp": 1754152197.995151,
+      "hash": "4ef1211143648ec2c441b80340a4cd84fa14597aced453ccab5c4d9b6bd18e2e"
+    }
+  ]
+}
