@@ -28,4 +28,7 @@ CONVO SNAPSHOT
 {{conversation_summary}}
 
 RELEVANT MEMORY
-{{memories}}_______
+{{memories}}
+
+USER PROMPT
+{{user_prompt}}_______
