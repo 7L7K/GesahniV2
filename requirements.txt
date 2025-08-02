@@ -16,3 +16,4 @@ spacy
 llama-cpp-python
 chromadb
 aiosqlite
+chromadb
