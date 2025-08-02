@@ -1,5 +1,6 @@
 import uuid
 from typing import List, Optional
+import time
 
 import chromadb
 from chromadb.config import Settings
@@ -49,13 +50,36 @@ def cache_answer(prompt_hash: str, answer: str) -> None:
     _qa_cache.upsert(
         ids=[prompt_hash],
         documents=[answer],
+        metadatas=[{"timestamp": time.time(), "feedback": None}],
     )
 
 
-def lookup_cached_answer(prompt_hash: str) -> Optional[str]:
-    """Retrieve a cached answer by prompt hash."""
+def lookup_cached_answer(prompt_hash: str, ttl_seconds: int = 60 * 60 * 24) -> Optional[str]:
+    """Retrieve a cached answer by prompt hash honoring TTL and feedback."""
+
     result = _qa_cache.get(ids=[prompt_hash])
     docs = result.get("documents")
-    if docs and docs[0]:
-        return docs[0][0]
-    return None
+    metas = result.get("metadatas")
+    if not (docs and docs[0]):
+        return None
+
+    meta = metas[0] if metas else {}
+    fb = meta.get("feedback")
+    ts = meta.get("timestamp", 0)
+    if fb == "down" or (ts and time.time() - ts > ttl_seconds):
+        try:
+            _qa_cache.delete(ids=[prompt_hash])
+        finally:
+            return None
+    return docs[0]
+
+
+def record_feedback(prompt_hash: str, feedback: str) -> None:
+    """Record user feedback for a cached answer."""
+
+    _qa_cache.update(ids=[prompt_hash], metadatas=[{"feedback": feedback}])
+    if feedback == "down":
+        try:
+            _qa_cache.delete(ids=[prompt_hash])
+        except Exception:
+            pass
