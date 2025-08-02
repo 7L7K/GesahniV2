@@ -25,6 +25,8 @@ from .memory.vector_store import (
     add_user_memory,
     cache_answer,
     lookup_cached_answer,
+    lookup_semantic_cached_answer,
+    query_user_memories,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,6 +68,8 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     rec = log_record_var.get()
     if rec:
         rec.prompt = prompt
+    session_id = rec.session_id if rec and rec.session_id else "default"
+    user_id = rec.user_id if rec and rec.user_id else "anon"
     logger.debug("route_prompt received: %s", prompt)
 
     # A) Home‑Assistant
@@ -105,6 +109,8 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     # C) Memory lookup & context enrichment
     prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
     cached = lookup_cached_answer(prompt_hash)
+    if cached is None:
+        cached = lookup_semantic_cached_answer(prompt)
     if cached is not None:
         if rec:
             rec.engine_used = "cache"
@@ -115,12 +121,18 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         return cached
 
     memories = memgpt.retrieve_relevant_memories(prompt)
-    if memories:
-        mem_lines = [f"Q: {m['prompt']}\nA: {m['answer']}" for m in memories]
-        context = "\n\n".join(mem_lines)
-        prompt_ctx = f"{context}\n\n{prompt}"
+    vector_mems = query_user_memories(user_id, prompt)
+    context_items: list[str] = [
+        f"Q: {m['prompt']}\nA: {m['answer']}" for m in memories
+    ]
+    context_items.extend(vector_mems)
+    if context_items:
+        context = "\n\n".join(context_items)
+        llama_prompt = f"{context}\n\n{prompt}"
+        system_prompt = f"Here are relevant past interactions:\n{context}"
     else:
-        prompt_ctx = prompt
+        llama_prompt = prompt
+        system_prompt = None
 
     # D) Model selection
     if model_override:
@@ -160,7 +172,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
 
     # E) LLaMA
     if use_llama:
-        result = await ask_llama(prompt_ctx, llama_model)
+        result = await ask_llama(llama_prompt, llama_model)
         if isinstance(result, dict) and "error" in result:
             logger.error("llama_error", extra={"error": result["error"]})
         else:
@@ -171,11 +183,9 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
                 rec.model_name = llama_model
             await append_history(prompt, engine_used, result_text)
             await record("llama")
-            session_id = rec.session_id if rec and rec.session_id else "default"
-            user_id = rec.user_id if rec and rec.user_id else "anon"
             memgpt.store_interaction(prompt, result_text, session_id=session_id)
             add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
-            cache_answer(prompt_hash, result_text)
+            cache_answer(prompt_hash, prompt, result_text)
             logger.debug("LLaMA responded OK")
             return result_text
 
@@ -186,7 +196,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     )
     final_model = "gpt-3.5-turbo" if light_skill_hint else chosen_model
 
-    text, pt, ct, unit_price = await ask_gpt(prompt_ctx, final_model)
+    text, pt, ct, unit_price = await ask_gpt(prompt, final_model, system_prompt)
     if rec:
         rec.engine_used = "gpt"
         rec.response = text
@@ -197,10 +207,8 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
 
     await append_history(prompt, "gpt", text)
     await record("gpt", fallback=fallback_used)
-    session_id = rec.session_id if rec and rec.session_id else "default"
-    user_id = rec.user_id if rec and rec.user_id else "anon"
     memgpt.store_interaction(prompt, text, session_id=session_id)
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
-    cache_answer(prompt_hash, text)
+    cache_answer(prompt_hash, prompt, text)
     logger.debug("GPT responded OK with %s", final_model)
     return text
