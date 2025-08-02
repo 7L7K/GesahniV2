@@ -7,6 +7,9 @@ from openai import AsyncOpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
+# Temporary system prompt to prime the assistant
+SYSTEM_PROMPT = "You are a helpful assistant."
+
 logger = logging.getLogger(__name__)
 _client: AsyncOpenAI | None = None
 
