@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from .analytics import record
-from .gpt_client import ask_gpt, OPENAI_MODEL
+from .gpt_client import ask_gpt, OPENAI_MODEL, SYSTEM_PROMPT
 from .history import append_history
 from .home_assistant import handle_command
 from .intent_detector import detect_intent
@@ -187,7 +187,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     )
     final_model = "gpt-3.5-turbo" if light_skill_hint else chosen_model
 
-    text, pt, ct, unit_price = await ask_gpt(prompt, final_model, system_prompt)
+    text, pt, ct, unit_price = await ask_gpt(prompt, final_model, SYSTEM_PROMPT)
     if rec:
         rec.engine_used = "gpt"
         rec.response = text
