@@ -41,6 +41,55 @@
       "tags": [],
       "timestamp": 1754163785.823692,
       "hash": "14a97782fafbc96deb4c4971a643cedccff768a71895accb4dc00aa03d907974"
+    },
+    {
+      "prompt": "hi",
+      "answer": "Hey there! Need help with something specific? Let me know!",
+      "tags": [],
+      "timestamp": 1754172221.7362509,
+      "hash": "ad6fee70bc5f562bb58ae36b1d5715dec0e010b1a62e9a064e18b063202dd4d7"
+    },
+    {
+      "prompt": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word ",
+      "answer": "gpt",
+      "tags": [],
+      "timestamp": 1754172662.335349,
+      "hash": "22dbfd5e41e9ab379dd0426080cf65e13fed262240930a1016c27859b1ae020f"
+    },
+    {
+      "prompt": "hello",
+      "answer": "ok",
+      "tags": [],
+      "timestamp": 1754173097.571458,
+      "hash": "888ec256cee46a16e07bd9d402a173b8c754104da6d5c1aa64e9794ab0db6a7b"
+    },
+    {
+      "prompt": "hi",
+      "answer": "Hey there! How can I help you today? Let me know if there's anything specific you need!",
+      "tags": [],
+      "timestamp": 1754173099.739108,
+      "hash": "bfe53f8cf8d552d8249040b5a2328d8833459bdcc1608eb936408191f17f4bbf"
+    },
+    {
+      "prompt": "hi",
+      "answer": "gpt-4",
+      "tags": [],
+      "timestamp": 1754173770.319273,
+      "hash": "a68e8950bd0213c4a515c158aaf6932d745f373f11eadf44483fc723489af1f6"
+    },
+    {
+      "prompt": "please analyze this",
+      "answer": "gpt",
+      "tags": [],
+      "timestamp": 1754173770.341179,
+      "hash": "4fcd479273f953285c595aaca2604d5464fdd58210dd7082352707554425be33"
+    },
+    {
+      "prompt": "dummy task",
+      "answer": "Hey there! How can I assist you today? Let me know if there's anything specific you need help with.",
+      "tags": [],
+      "timestamp": 1754173901.284642,
+      "hash": "7803e53c6f8821cfba96f09e86e07bbbd95d6e01f1de66f84922841d04832e15"
     }
   ]
 }
