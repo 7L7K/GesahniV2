@@ -111,6 +111,20 @@
       "tags": [],
       "timestamp": 1754175437.8737411,
       "hash": "b2b2c00d0a19414468c53330d277add57dbda63ba7cf303174142275a1cb318d"
+    },
+    {
+      "prompt": "what color is the sky",
+      "answer": "Hey! The sky is generally blue due to the scattering of sunlight by the atmosphere. Let me know if there’s anything else you’d like to know!",
+      "tags": [],
+      "timestamp": 1754177183.5300229,
+      "hash": "acb10f6fc9306312ad98708d39132798c92c33f4c978f6e6a119ad70fa8065a8"
+    },
+    {
+      "prompt": "why si it blue",
+      "answer": "Hey there! The sky appears blue because of a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it hits particles and molecules in the air. Blue light is scattered in all directions by these tiny molecules of air, more so than other colors because it travels in shorter, smaller waves. This is why we see a blue sky most of the time. Let me know if you have any other questions!",
+      "tags": [],
+      "timestamp": 1754177197.934618,
+      "hash": "b682845b722053cda3772e4c988658f839ffcfce835a1fa9d8a2d1050328c8aa"
     }
   ]
 }
