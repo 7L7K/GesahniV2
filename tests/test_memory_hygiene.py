@@ -18,7 +18,7 @@ def record_feedback(prompt: str, feedback: str) -> None:
     if _cache_disabled():
         return
 
-    result = _qa_cache.query(query_texts=[prompt], n_results=1)
+    result = qa_cache.query(query_texts=[prompt], n_results=1)
     ids = result.get("ids", [[]])[0]
     metas = result.get("metadatas", [[]])[0]
     if not ids or not metas:

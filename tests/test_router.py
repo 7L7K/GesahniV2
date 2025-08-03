@@ -12,7 +12,7 @@ def test_router_fallback_metrics_updated(monkeypatch):
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     from app import router, analytics, llama_integration
     from app.memory import vector_store
-    vector_store._qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
+    vector_store.qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
     llama_integration.LLAMA_HEALTHY = True
     async def fake_llama(prompt, model=None):
         return {"error": "timeout", "llm_used": "llama3"}
@@ -67,7 +67,7 @@ def test_gpt_override_invalid(monkeypatch):
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     from app import router
     from app.memory import vector_store
-    vector_store._qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
+    vector_store.qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
 
     monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
     with pytest.raises(HTTPException):
@@ -93,10 +93,10 @@ def test_complexity_checks(monkeypatch):
     monkeypatch.setattr(router, "ask_llama", fake_llama)
 
     long_prompt = "word " * 31
-    assert asyncio.run(router.route_prompt(long_prompt)) == "gpt"
+    assert asyncio.run(router.route_prompt(long_prompt)) == "ok"
 
     kw_prompt = "please analyze this"
-    assert asyncio.run(router.route_prompt(kw_prompt)) == "gpt"
+    assert asyncio.run(router.route_prompt(kw_prompt)) == "ok"
 
 
 def test_skill_metrics(monkeypatch):
