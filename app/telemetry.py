@@ -30,6 +30,7 @@ class LogRecord(BaseModel):
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
     latency_ms: Optional[int] = None
+    p95_latency_ms: Optional[int] = None
     status: Optional[str] = None
 
     # routing / skills
@@ -52,6 +53,9 @@ class LogRecord(BaseModel):
     rag_top_k: Optional[int] = None
     rag_doc_ids: Optional[List[str]] = None
     rag_scores: Optional[List[float]] = None
+    embed_tokens: Optional[int] = None
+    retrieval_count: Optional[int] = None
+    cache_hit: Optional[bool] = None
 
 
 log_record_var: ContextVar[LogRecord | None] = ContextVar("log_record", default=None)

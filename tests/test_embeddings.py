@@ -5,7 +5,11 @@ import asyncio
 
 
 class DummyOpenAIEmbeddings:
+    def __init__(self):
+        self.last_model = None
+
     def create(self, model: str, input: str):  # pragma: no cover - simple stub
+        self.last_model = model
         class Resp:
             data = [type("d", (), {"embedding": [1.0, 2.0, 3.0]})()]
 
@@ -29,6 +33,24 @@ def test_embed_openai(monkeypatch):
 
     res = asyncio.run(embeddings.embed("hi"))
     assert res == [1.0, 2.0, 3.0]
+
+
+def test_embed_model_env(monkeypatch):
+    os.environ["EMBEDDING_BACKEND"] = "openai"
+    from app import embeddings
+
+    dummy = DummyOpenAIClient()
+    monkeypatch.setattr(embeddings, "get_openai_client", lambda: dummy)
+    embeddings._embed_openai_sync.cache_clear()
+
+    monkeypatch.setenv("EMBED_MODEL", "m1")
+    embeddings._embed_openai_sync("hello", 0)
+    assert dummy.embeddings.last_model == "m1"
+
+    embeddings._embed_openai_sync.cache_clear()
+    monkeypatch.setenv("EMBED_MODEL", "m2")
+    embeddings._embed_openai_sync("hello", 1)
+    assert dummy.embeddings.last_model == "m2"
 
 
 def test_embed_llama(monkeypatch):
