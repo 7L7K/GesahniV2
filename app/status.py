@@ -27,7 +27,7 @@ except Exception:  # pragma: no cover - executed when dependency missing
         except Exception:
             return b""
 
-from .home_assistant import _request
+from app.home_assistant import _request
 from .llama_integration import get_status as llama_get_status
 from .analytics import get_metrics
 

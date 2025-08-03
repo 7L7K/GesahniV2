@@ -1,7 +1,7 @@
 import os
 import time
 from fastapi import APIRouter, HTTPException, Query, Response
-from .home_assistant import _request
+from app.home_assistant import _request
 from .llama_integration import get_status as llama_get_status
 from .analytics import get_metrics
 
