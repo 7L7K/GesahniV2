@@ -9,6 +9,61 @@ import hashlib
 import time
 
 
+def jaro_winkler_similarity(s1: str, s2: str) -> float:
+    """Compute the Jaro-Winkler similarity between two strings."""
+    if not s1 and not s2:
+        return 1.0
+    if not s1 or not s2:
+        return 0.0
+
+    s1_len, s2_len = len(s1), len(s2)
+    match_distance = max(s1_len, s2_len) // 2 - 1
+
+    s1_matches = [False] * s1_len
+    s2_matches = [False] * s2_len
+    matches = 0
+
+    for i in range(s1_len):
+        start = max(0, i - match_distance)
+        end = min(i + match_distance + 1, s2_len)
+        for j in range(start, end):
+            if s2_matches[j] or s1[i] != s2[j]:
+                continue
+            s1_matches[i] = s2_matches[j] = True
+            matches += 1
+            break
+
+    if not matches:
+        return 0.0
+
+    k = 0
+    transpositions = 0
+    for i in range(s1_len):
+        if not s1_matches[i]:
+            continue
+        while not s2_matches[k]:
+            k += 1
+        if s1[i] != s2[k]:
+            transpositions += 1
+        k += 1
+    transpositions /= 2
+
+    jaro = (
+        matches / s1_len
+        + matches / s2_len
+        + (matches - transpositions) / matches
+    ) / 3
+
+    prefix = 0
+    for i in range(min(4, s1_len, s2_len)):
+        if s1[i] == s2[i]:
+            prefix += 1
+        else:
+            break
+
+    return jaro + 0.1 * prefix * (1 - jaro)
+
+
 class MemGPT:
     """Simple in-process memory manager.
 
@@ -63,6 +118,13 @@ class MemGPT:
             for item in bucket:
                 if item.get("hash") == entry_hash:
                     return
+
+            for item in bucket[-3:]:
+                prev_answer = item.get("answer", "")
+                sim = jaro_winkler_similarity(answer, prev_answer)
+                if sim >= 0.9:
+                    return
+
             bucket.append(
                 {
                     "prompt": prompt,
@@ -152,4 +214,4 @@ class MemGPT:
 # Reusable singleton ---------------------------------------------------------
 memgpt = MemGPT()
 
-__all__ = ["MemGPT", "memgpt"]
+__all__ = ["MemGPT", "memgpt", "jaro_winkler_similarity"]
