@@ -14,7 +14,7 @@ from .llama_integration import OLLAMA_MODEL, ask_llama
 from . import llama_integration
 from .telemetry import log_record_var
 from .memory import memgpt
-from .prompt_builder import PromptBuilder
+from .prompt_builder import PromptBuilder, _count_tokens
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from .intent_detector import detect_intent
 
@@ -32,6 +32,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     rec = log_record_var.get()
     if rec:
         rec.prompt = prompt
+        rec.embed_tokens = _count_tokens(prompt)
     session_id = rec.session_id if rec and rec.session_id else "default"
     user_id = rec.user_id if rec and rec.user_id else "anon"
     logger.debug("route_prompt received: %s", prompt)
@@ -92,14 +93,17 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         return ha_resp
 
     # D) Semantic cache lookup (TTL + feedback)
+    norm_prompt = norm_prompt  # already lower+strip above
     cached = lookup_cached_answer(norm_prompt)
+    if rec:
+        rec.cache_hit = bool(cached)
     if cached is not None:
         if rec:
             rec.engine_used = "cache"
             rec.response = cached
         await append_history(prompt, "cache", cached)
         await record("cache", source="cache")
-        logger.debug("Cache hit")
+        logger.debug("Cache hit for prompt: %s", norm_prompt)
         return cached
 
     # E) Complexity check: skip LLaMA only for truly complex prompts
