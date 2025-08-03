@@ -100,8 +100,9 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         logger.debug("Cache hit")
         return cached
 
-    # E) Complexity check: skip LLaMA for long prompts (>30 words)
-    if len(prompt.split()) > 30:
+    # E) Complexity check: skip LLaMA for long prompts or certain keywords
+    keywords = {"code", "research", "analyze", "explain"}
+    if len(prompt.split()) > 30 or any(k in prompt.lower() for k in keywords):
         built, _ = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
         text, pt, ct, unit_price = await ask_gpt(built, "gpt-4o", SYSTEM_PROMPT)
         if rec:
