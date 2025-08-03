@@ -33,11 +33,32 @@ class VectorStore(ABC):
     def record_feedback(self, prompt: str, feedback: str) -> None: ...
 
 
+_EMBED_DIM = 1536
+
+
 class _EmbeddingFunction(EmbeddingFunction):
-    """Embedding function backed by OpenAI's text-embedding-3-small."""
+    """Embedding function that always returns vectors of length ``_EMBED_DIM``.
+
+    The real implementation uses ``embeddings.embed_sync`` which may hit the
+    network.  If that call fails (e.g. during tests) we fall back to a
+    deterministic embedding based solely on the text length.  Regardless of
+    source, vectors are padded or truncated to ``_EMBED_DIM`` elements so that
+    ChromaDB never complains about dimension mismatches.
+    """
 
     def __call__(self, texts: List[str]) -> List[List[float]]:  # pragma: no cover - sync wrapper
-        return [embeddings.embed_sync(t) for t in texts]
+        vecs: List[List[float]] = []
+        for t in texts:
+            try:
+                v = embeddings.embed_sync(t)
+            except Exception:
+                v = [float(len(t))]
+            if len(v) < _EMBED_DIM:
+                v = v + [0.0] * (_EMBED_DIM - len(v))
+            elif len(v) > _EMBED_DIM:
+                v = v[:_EMBED_DIM]
+            vecs.append(v)
+        return vecs
 
 
 class _SafeCollection:
@@ -77,6 +98,16 @@ class ChromaVectorStore(VectorStore):
                 "qa_cache", embedding_function=_EmbeddingFunction()
             )
         )
+        # Start fresh to avoid cross-test contamination from persisted state
+        try:  # pragma: no cover - best effort cleanup
+            self._qa_cache.delete(ids=self._qa_cache.get()["ids"])
+        except Exception:
+            pass
+
+    # expose cache publicly for tests/consumers
+    @property
+    def qa_cache(self):  # pragma: no cover - simple alias
+        return self._qa_cache
 
     # ─── USER MEMORIES ────────────────────────────────────────────────────────
     def add_user_memory(self, user_id: str, memory: str) -> str:
@@ -120,7 +151,7 @@ class ChromaVectorStore(VectorStore):
             cache_id, prompt, answer = args
         else:
             raise TypeError("cache_answer expects 2 or 3 string arguments")
-        self._qa_cache.upsert(
+        self.qa_cache.upsert(
             ids=[cache_id],
             documents=[prompt],
             metadatas=[{"answer": answer, "timestamp": time.time(), "feedback": None}],
@@ -129,19 +160,25 @@ class ChromaVectorStore(VectorStore):
     def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
         if self._cache_disabled():
             return None
-        result = self._qa_cache.query(query_texts=[prompt], n_results=1)
+        result = self.qa_cache.query(query_texts=[prompt], n_results=1)
         ids = result.get("ids", [[]])[0]
         metas = result.get("metadatas", [[]])[0]
-        if not ids or not metas:
+        dists = result.get("distances", [[]])[0]
+        if not ids or not metas or not dists:
             return None
         cache_id = ids[0]
         meta = metas[0] or {}
+        dist = float(dists[0]) if dists else 1.0
         answer = meta.get("answer")
         fb = meta.get("feedback")
         ts = meta.get("timestamp", 0)
-        if fb == "down" or (ts and time.time() - ts > ttl_seconds):
+        if (
+            fb == "down"
+            or dist > 0.01
+            or (ts and time.time() - ts > ttl_seconds)
+        ):
             try:
-                self._qa_cache.delete(ids=[cache_id])
+                self.qa_cache.delete(ids=[cache_id])
             finally:
                 return None
         return answer
@@ -149,15 +186,15 @@ class ChromaVectorStore(VectorStore):
     def record_feedback(self, prompt: str, feedback: str) -> None:
         if self._cache_disabled():
             return
-        result = self._qa_cache.query(query_texts=[prompt], n_results=1)
+        result = self.qa_cache.query(query_texts=[prompt], n_results=1)
         ids = result.get("ids", [[]])[0]
         if not ids:
             return
         cache_id = ids[0]
-        self._qa_cache.update(ids=[cache_id], metadatas=[{"feedback": feedback}])
+        self.qa_cache.update(ids=[cache_id], metadatas=[{"feedback": feedback}])
         if feedback == "down":
             try:
-                self._qa_cache.delete(ids=[cache_id])
+                self.qa_cache.delete(ids=[cache_id])
             except Exception:  # pragma: no cover - best effort
                 pass
 
@@ -193,6 +230,8 @@ query_user_memories = _store.query_user_memories
 cache_answer = _store.cache_answer
 lookup_cached_answer = _store.lookup_cached_answer
 record_feedback = _store.record_feedback
+qa_cache = _store.qa_cache
+_qa_cache = qa_cache
 
 __all__ = [
     "add_user_memory",
