@@ -71,6 +71,13 @@ Record interaction sessions for later review:
 python record_session.py --duration 5 --output ./sessions
 ```
 
+### 📊 Metrics & Monitoring
+
+* The backend exposes Prometheus metrics at `http://localhost:8000/metrics`.
+* Metrics include request volume, latency histograms, and request cost.
+* Import `grafana_dashboard.json` into Grafana for a sample dashboard with latency,
+  cache hit rate, cost, and request volume panels.
+
 ## 🎯 Endpoints
 
 * `/ask`: Send your prompt here.
@@ -117,6 +124,14 @@ curl -X POST localhost:8000/ask -d '{"prompt":"turn off kitchen lights"}'
 
 * Check logs at `/config` endpoint.
 * Detailed error logs saved locally.
+
+### 🗑️ Invalidate Cached Answers
+
+Remove a stored response from the semantic cache using the CLI:
+
+```bash
+python -m app.vector_store invalidate "your original prompt"
+```
 
 ## Event Log
 

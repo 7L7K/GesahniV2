@@ -18,3 +18,4 @@ chromadb
 aiosqlite
 chromadb
 tiktoken
+prometheus-client
