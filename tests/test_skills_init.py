@@ -7,6 +7,7 @@ os.environ.setdefault("OLLAMA_MODEL", "llama3")
 from app import skills
 
 EXPECTED_ORDER = [
+    skills.SmalltalkSkill,
     skills.ClockSkill,
     skills.WorldClockSkill,
     skills.WeatherSkill,
