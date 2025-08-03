@@ -179,10 +179,13 @@ class ChromaVectorStore(VectorStore):
             return
         result = self.qa_cache.query(query_texts=[prompt], n_results=1)
         ids = result.get("ids", [[]])[0]
-        if not ids:
+        metas = result.get("metadatas", [[]])[0]
+        if not ids or not metas:
             return
         cache_id = ids[0]
-        self.qa_cache.update(ids=[cache_id], metadatas=[{"feedback": feedback}])
+        meta = metas[0] or {}
+        meta["feedback"] = feedback
+        self.qa_cache.update(ids=[cache_id], metadatas=[meta])
         if feedback == "down":
             try:
                 self.qa_cache.delete(ids=[cache_id])
