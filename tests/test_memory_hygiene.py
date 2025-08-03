@@ -25,7 +25,7 @@ def test_memgpt_pins_persist_and_no_dedup(tmp_path):
     # pins should persist through maintenance
     assert len(m.list_pins("s")) == 2
 
- def test_memgpt_fuzzy_filter(tmp_path):
+def test_memgpt_fuzzy_filter(tmp_path):
     m = MemGPT(storage_path=tmp_path / "mem.json")
     base = "The quick brown fox jumps over the lazy dog"
     m.store_interaction("p", base, session_id="s")
