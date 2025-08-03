@@ -53,6 +53,7 @@ from .session_manager import get_session_meta
 from .session_store import list_sessions as list_session_store, SessionStatus
 from .tasks import enqueue_transcription, enqueue_summary
 from .security import verify_token, rate_limit, verify_ws, rate_limit_ws
+from .metrics import REQUEST_COUNT, REQUEST_LATENCY, REQUEST_COST
 from .analytics import record_latency, latency_p95
 
 configure_logging()
@@ -97,6 +98,7 @@ async def trace_request(request, call_next):
     rec.started_at = rec.received_at
     start_time = time.monotonic()
     response: Response | None = None
+
     try:
         response = await call_next(request)
         rec.status = "OK"
@@ -104,16 +106,20 @@ async def trace_request(request, call_next):
         rec.status = "ERR_TIMEOUT"
         raise
     finally:
-        rec.finished_at = utc_now().isoformat()
+        # compute and record latency
         rec.latency_ms = int((time.monotonic() - start_time) * 1000)
         await record_latency(rec.latency_ms)
         rec.p95_latency_ms = latency_p95()
-        request_id = rec.req_id
+
+        # tag response header
         if isinstance(response, Response):
-            response.headers["X-Request-ID"] = request_id
+            response.headers["X-Request-ID"] = rec.req_id
+
+        # persist history & reset context vars
         await append_history(rec)
         log_record_var.reset(token_rec)
         req_id_var.reset(token_req)
+
     return response
 
 

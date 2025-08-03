@@ -1,6 +1,7 @@
 import os
 import time
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from .home_assistant import _request
 from .llama_integration import get_status as llama_get_status
@@ -70,3 +71,9 @@ async def full_status() -> dict:
         "fallbacks": m["fallback"],
     }
     return out
+
+
+@router.get("/metrics")
+async def metrics() -> Response:
+    data = generate_latest()
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)
