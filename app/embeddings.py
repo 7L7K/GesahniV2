@@ -69,7 +69,8 @@ _TTL = 24 * 60 * 60
 def _embed_openai_sync(text: str, ttl_bucket: int) -> List[float]:
     """Return an embedding using the OpenAI sync client."""
     client = get_openai_client()
-    resp = client.embeddings.create(model="text-embedding-3-small", input=text)
+    model = os.getenv("EMBED_MODEL", "text-embedding-3-small")
+    resp = client.embeddings.create(model=model, input=text)
     return resp.data[0].embedding  # type: ignore[return-value]
 
 
