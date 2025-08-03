@@ -189,17 +189,22 @@ class ChromaVectorStore(VectorStore):
         if self._cache_disabled():
             return
         cache_id, _ = self._normalize(prompt)
-        result = self.qa_cache.get(ids=[cache_id], include=["metadatas"])
+        # fetch existing metadata
+        result = self._qa_cache.get(ids=[cache_id], include=["metadatas"])
         metas = result.get("metadatas", [])
-        if not metas:
+        if not metas or metas[0] is None:
             return
-        self.qa_cache.update(ids=[cache_id], metadatas=[{"feedback": feedback}])
+
+        # update only the feedback field
+        new_meta = metas[0]
+        new_meta["feedback"] = feedback
+        self._qa_cache.update(ids=[cache_id], metadatas=[new_meta])
+
         if feedback == "down":
             try:
-                self.qa_cache.delete(ids=[cache_id])
-            except Exception:  # pragma: no cover - best effort
+                self._qa_cache.delete(ids=[cache_id])
+            except Exception:
                 pass
-
 
 class PgVectorStore(VectorStore):  # pragma: no cover - stub implementation
     def add_user_memory(self, user_id: str, memory: str) -> str:
