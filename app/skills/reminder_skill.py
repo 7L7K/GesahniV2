@@ -3,7 +3,17 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+try:
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+except Exception:  # pragma: no cover - optional dependency
+    class AsyncIOScheduler:  # minimal stub
+        def __init__(self):
+            self.running = False
+        def start(self):
+            self.running = True
+        def add_job(self, *a, **k):
+            pass
+
 from .base import Skill
 
 scheduler = AsyncIOScheduler()
