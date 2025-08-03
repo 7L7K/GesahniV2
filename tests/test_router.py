@@ -34,7 +34,7 @@ def test_router_fallback_metrics_updated(monkeypatch):
         "transcribe_errors": 0,
     }
 
-    result = asyncio.run(router.route_prompt("hello"))
+    result = asyncio.run(router.route_prompt("hello world"))
     assert result == "ok"
     m = analytics.get_metrics()
     assert m["total"] == 1
@@ -56,7 +56,7 @@ def test_gpt_override(monkeypatch):
 
     monkeypatch.setattr(router, "ask_gpt", fake_gpt)
     monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
-    result = asyncio.run(router.route_prompt("hi", "gpt-4"))
+    result = asyncio.run(router.route_prompt("hello world", "gpt-4"))
     assert result == "gpt-4"
 
 
@@ -71,7 +71,7 @@ def test_gpt_override_invalid(monkeypatch):
 
     monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
     with pytest.raises(HTTPException):
-        asyncio.run(router.route_prompt("hi", "gpt-3"))
+        asyncio.run(router.route_prompt("hello world", "gpt-3"))
 
 
 def test_complexity_checks(monkeypatch):
@@ -161,8 +161,8 @@ def test_debug_env_toggle(monkeypatch):
     monkeypatch.setattr(router.PromptBuilder, "build", staticmethod(fake_build))
 
     monkeypatch.setenv("DEBUG", "0")
-    asyncio.run(router.route_prompt("hi"))
+    asyncio.run(router.route_prompt("hello world"))
     monkeypatch.setenv("DEBUG", "1")
-    asyncio.run(router.route_prompt("hi"))
+    asyncio.run(router.route_prompt("hello world"))
 
     assert flags == [False, True]
