@@ -129,7 +129,7 @@ class ChromaVectorStore(VectorStore):
     def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
         if self._cache_disabled():
             return None
-        result = self._qa_cache.query(query_texts=[prompt], n_results=1)
+        result = self.qa_cache.query(query_texts=[prompt], n_results=1)
         ids = result.get("ids", [[]])[0]
         metas = result.get("metadatas", [[]])[0]
         if not ids or not metas:
@@ -149,7 +149,7 @@ class ChromaVectorStore(VectorStore):
     def record_feedback(self, prompt: str, feedback: str) -> None:
         if self._cache_disabled():
             return
-        result = self._qa_cache.query(query_texts=[prompt], n_results=1)
+        result = self.qa_cache.query(query_texts=[prompt], n_results=1)
         ids = result.get("ids", [[]])[0]
         if not ids:
             return
