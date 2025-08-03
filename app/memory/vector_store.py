@@ -16,6 +16,12 @@ from chromadb.utils.embedding_functions import EmbeddingFunction
 class VectorStore(ABC):
     """Abstract VectorStore interface."""
 
+    def __init__(self) -> None:
+        # Similarity threshold (0-1) for cache lookups.
+        self._sim_threshold = float(os.getenv("SIM_THRESHOLD", "0.90"))
+        # Chroma returns "distance" as 1 - similarity; convert threshold.
+        self._dist_cutoff = 1.0 - self._sim_threshold
+
     @abstractmethod
     def add_user_memory(self, user_id: str, memory: str) -> str: ...
 
@@ -70,6 +76,7 @@ class _SafeCollection:
 
 class ChromaVectorStore(VectorStore):
     def __init__(self) -> None:
+        super().__init__()
         settings = Settings(anonymized_telemetry=False)
         data = Path("data")
         final = data / "chroma"
@@ -161,7 +168,11 @@ class ChromaVectorStore(VectorStore):
         answer = meta.get("answer")
         fb = meta.get("feedback")
         ts = meta.get("timestamp", 0)
-        if fb == "down" or (ts and time.time() - ts > ttl_seconds):
+        if (
+            fb == "down"
+            or dist > self._dist_cutoff
+            or (ts and time.time() - ts > ttl_seconds)
+        ):
             try:
                 self.qa_cache.delete(ids=[cache_id])
             finally:

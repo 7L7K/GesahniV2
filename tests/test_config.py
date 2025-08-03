@@ -11,6 +11,8 @@ def setup_app(monkeypatch):
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     os.environ["ADMIN_TOKEN"] = "secret"
+    os.environ["OPENAI_API_KEY"] = "key"
+    os.environ["OPENAI_MODEL"] = "gpt"
     import app.home_assistant as home_assistant
     import app.llama_integration as llama_integration
     import app.status as status
@@ -38,3 +40,4 @@ def test_config_allowed(monkeypatch):
     assert resp.status_code == 200
     data = resp.json()
     assert data["OLLAMA_URL"] == "http://x"
+    assert data["SIM_THRESHOLD"] == "0.90"
