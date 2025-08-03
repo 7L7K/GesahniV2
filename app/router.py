@@ -10,7 +10,8 @@ from .gpt_client import ask_gpt, SYSTEM_PROMPT
 from .history import append_history
 from .home_assistant import handle_command
 from .memory.vector_store import add_user_memory, cache_answer, lookup_cached_answer, record_feedback
-from .llama_integration import LLAMA_HEALTHY, OLLAMA_MODEL, ask_llama
+from .llama_integration import OLLAMA_MODEL, ask_llama
+from . import llama_integration
 from .telemetry import log_record_var
 from .memory import memgpt
 from .prompt_builder import PromptBuilder
@@ -34,6 +35,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     session_id = rec.session_id if rec and rec.session_id else "default"
     user_id = rec.user_id if rec and rec.user_id else "anon"
     logger.debug("route_prompt received: %s", prompt)
+    norm_prompt = prompt.lower().strip()
 
     # A) Model override if using GPT
     if model_override is not None:
@@ -51,7 +53,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
             await record("gpt", fallback=True)
             memgpt.store_interaction(prompt, text, session_id=session_id)
             add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
-            cache_answer(prompt, text)
+            cache_answer(norm_prompt, text)
             return text
         else:
             raise HTTPException(
@@ -90,7 +92,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         return ha_resp
 
     # D) Semantic cache lookup (TTL + feedback)
-    cached = lookup_cached_answer(prompt)
+    cached = lookup_cached_answer(norm_prompt)
     if cached is not None:
         if rec:
             rec.engine_used = "cache"
@@ -121,7 +123,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         await record("gpt", source="complex")
         memgpt.store_interaction(prompt, text, session_id=session_id)
         add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
-        cache_answer(prompt, text)
+        cache_answer(norm_prompt, text)
         return text
 
     # F) Build prompt with context
@@ -137,7 +139,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         rec.prompt_tokens = ptokens
 
     # G) LLaMA first
-    if LLAMA_HEALTHY:
+    if llama_integration.LLAMA_HEALTHY:
         llama_model = (
             model_override
             if (model_override and model_override.lower().startswith("llama"))
@@ -157,7 +159,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
                     prompt, result_text, session_id=session_id
                 )
                 add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
-                cache_answer(prompt, result_text)
+                cache_answer(norm_prompt, result_text)
                 logger.debug("LLaMA responded OK")
                 return result_text
 
@@ -175,7 +177,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     await record("gpt", fallback=True)
     memgpt.store_interaction(prompt, text, session_id=session_id)
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
-    cache_answer(prompt, text)
+    cache_answer(norm_prompt, text)
     logger.debug("GPT responded OK with gpt-4o")
     return text
 
