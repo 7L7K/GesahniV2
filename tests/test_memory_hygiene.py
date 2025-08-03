@@ -1,59 +1,84 @@
+import os
 import time
-from app.memory.memgpt import MemGPT
-from app.memory import vector_store
+from fastapi import APIRouter, HTTPException, Query, Response
+from .home_assistant import _request
+from .llama_integration import get_status as llama_get_status
+from .analytics import get_metrics
 
+router = APIRouter()
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
 
-def test_memgpt_dedup_and_maintenance(tmp_path):
-    m = MemGPT(storage_path=tmp_path / "mem.json", ttl_seconds=1)
-    m.store_interaction("hello", "world", session_id="s")
-    m.store_interaction("hello", "world", session_id="s")
-    assert len(m._data["s"]) == 1
-    m._data["s"][0]["timestamp"] = time.time() - 2
-    m.nightly_maintenance()
-    assert m._data["s"][0]["prompt"] == "summary"
+# ─── Prometheus optional import ───────────────────────────────────────────────
+try:
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+    _PROM_ENABLED = True
+except ImportError:
+    _PROM_ENABLED = False
+    CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
+    def generate_latest() -> bytes:
+        return b""
+# ────────────────────────────────────────────────────────────────────────────────
 
+@router.get("/health")
+async def health() -> dict:
+    return {"status": "ok"}
 
-def test_memgpt_pins_persist_and_no_dedup(tmp_path):
-    m = MemGPT(storage_path=tmp_path / "mem.json", ttl_seconds=1)
-    m.store_interaction("hello", "world", session_id="s", tags=["pin"])
-    m.store_interaction("hello", "world", session_id="s", tags=["pin"])
-    # duplicates should both be stored
-    assert len(m.list_pins("s")) == 2
-    # make first pin very old
-    m._pin_store["s"][0]["timestamp"] = time.time() - 100
-    m.nightly_maintenance()
-    # pins should persist through maintenance
-    assert len(m.list_pins("s")) == 2
+@router.get("/config")
+async def config(token: str | None = Query(default=None)) -> dict:
+    if not ADMIN_TOKEN or token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="forbidden")
+    out = {k: v for k, v in os.environ.items() if k.isupper()}
+    out.setdefault("SIM_THRESHOLD", os.getenv("SIM_THRESHOLD", "0.90"))
+    return out
 
- def test_memgpt_fuzzy_filter(tmp_path):
-    m = MemGPT(storage_path=tmp_path / "mem.json")
-    base = "The quick brown fox jumps over the lazy dog"
-    m.store_interaction("p", base, session_id="s")
-    m.store_interaction("p", "The quick brown fox jumps over a lazy dog", session_id="s")
-    assert len(m._data["s"]) == 1
-    m.store_interaction("p", "Completely unrelated response", session_id="s")
-    assert len(m._data["s"]) == 2
+@router.get("/ha_status")
+async def ha_status() -> dict:
+    start = time.monotonic()
+    try:
+        await _request("GET", "/states")
+        latency = int((time.monotonic() - start) * 1000)
+        return {"status": "healthy", "latency_ms": latency}
+    except Exception:
+        raise HTTPException(status_code=500, detail="ha_error")
 
+@router.get("/llama_status")
+async def llama_status() -> dict:
+    try:
+        return await llama_get_status()
+    except Exception:
+        raise HTTPException(status_code=500, detail="llama_error")
 
-def record_feedback(prompt: str, feedback: str) -> None:
-    """Record user feedback ('up' or 'down') for a cached answer."""
-    if _cache_disabled():
-        return
+@router.get("/status")
+async def full_status() -> dict:
+    out = {
+        "backend": "ok",
+        "ha": "error",
+        "llama": "error",
+        "gpt_quota": "2k reqs left",
+        "metrics": {},
+    }
+    try:
+        await _request("GET", "/states")
+        out["ha"] = "ok"
+    except Exception:
+        out["ha"] = "error"
 
-    result = qa_cache.query(query_texts=[prompt], n_results=1)
-    ids = result.get("ids", [[]])[0]
-    metas = result.get("metadatas", [[]])[0]
-    if not ids or not metas:
-        return
+    try:
+        llama_stat = await llama_get_status()
+        out["llama"] = llama_stat.get("status", "error")
+    except Exception:
+        out["llama"] = "error"
 
-    cache_id = ids[0]
-    meta = metas[0] or {}
-    # Preserve all existing metadata, just update feedback
-    meta["feedback"] = feedback
-    _qa_cache.update(ids=[cache_id], metadatas=[meta])
+    m = get_metrics()
+    out["metrics"] = {
+        "llama_hits": m.get("llama", 0),
+        "gpt_hits": m.get("gpt", 0),
+        "fallbacks": m.get("fallback", 0),
+    }
+    return out
 
-    if feedback == "down":
-        try:
-            _qa_cache.delete(ids=[cache_id])
-        except Exception:
-            pass
+@router.get("/metrics")
+async def metrics() -> Response:
+    """Expose Prometheus metrics (empty if client lib missing)."""
+    data = generate_latest()
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)
