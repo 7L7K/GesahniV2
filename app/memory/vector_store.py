@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import time
+import unicodedata
 import uuid
 import hashlib
 from abc import ABC, abstractmethod
@@ -212,6 +214,27 @@ class PgVectorStore(VectorStore):  # pragma: no cover - stub implementation
         pass
 
 
+def _normalize(text: str) -> str:
+    """Return a canonical form for hashing prompts."""
+    text = unicodedata.normalize("NFKD", text)
+    replacements = {
+        "’": "'",
+        "‘": "'",
+        "“": '"',
+        "”": '"',
+        "—": "-",
+        "–": "-",
+    }
+    for bad, good in replacements.items():
+        text = text.replace(bad, good)
+    return " ".join(text.split()).lower()
+
+
+def _normalized_hash(prompt: str) -> str:
+    """Return SHA-256 hash of the normalized prompt."""
+    return hashlib.sha256(_normalize(prompt).encode("utf-8")).hexdigest()
+
+
 def _get_store() -> VectorStore:
     backend = os.getenv("VECTOR_STORE", "chroma").lower()
     if backend == "pgvector":
@@ -229,12 +252,24 @@ record_feedback = _store.record_feedback
 qa_cache = _store.qa_cache
 _qa_cache = qa_cache
 
+
+def invalidate_cache(prompt: str) -> None:
+    """Remove a cached answer for ``prompt`` if present."""
+    if bool(os.getenv("DISABLE_QA_CACHE")):
+        return
+    cache_id = _normalized_hash(prompt)
+    try:
+        _qa_cache.delete(ids=[cache_id])
+    except Exception:  # pragma: no cover - best effort
+        pass
+
 __all__ = [
     "add_user_memory",
     "query_user_memories",
     "cache_answer",
     "lookup_cached_answer",
     "record_feedback",
+    "invalidate_cache",
     "VectorStore",
     "ChromaVectorStore",
     "PgVectorStore",
