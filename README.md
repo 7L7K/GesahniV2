@@ -71,6 +71,13 @@ Record interaction sessions for later review:
 python record_session.py --duration 5 --output ./sessions
 ```
 
+### 📊 Metrics & Monitoring
+
+* The backend exposes Prometheus metrics at `http://localhost:8000/metrics`.
+* Metrics include request volume, latency histograms, and request cost.
+* Import `grafana_dashboard.json` into Grafana for a sample dashboard with latency,
+  cache hit rate, cost, and request volume panels.
+
 ## 🎯 Endpoints
 
 * `/ask`: Send your prompt here.
