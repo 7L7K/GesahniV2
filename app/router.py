@@ -9,7 +9,12 @@ from .analytics import record
 from .gpt_client import ask_gpt, SYSTEM_PROMPT
 from .history import append_history
 from .home_assistant import handle_command
-from .memory.vector_store import add_user_memory, cache_answer, lookup_cached_answer, record_feedback
+from .memory.vector_store import (
+    add_user_memory,
+    cache_answer,
+    lookup_cached_answer,
+    record_feedback,
+)
 from .llama_integration import OLLAMA_MODEL, ask_llama
 from . import llama_integration
 from .telemetry import log_record_var
@@ -29,6 +34,7 @@ ALLOWED_GPT_MODELS = set(
 # Expose catalog so tests can monkey-patch it
 CATALOG = BUILTIN_CATALOG
 
+
 async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     rec = log_record_var.get()
     if rec:
@@ -39,11 +45,18 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     logger.debug("route_prompt received: %s", prompt)
     norm_prompt = prompt.lower().strip()
 
+    intent, priority = detect_intent(prompt)
+    skip_skills = intent == "chat" and priority == "high"
+
     # A) Model override if using GPT
     if model_override is not None:
         if model_override in ALLOWED_GPT_MODELS:
-            built, _ = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
-            text, pt, ct, unit_price = await ask_gpt(built, model_override, SYSTEM_PROMPT)
+            built, _ = PromptBuilder.build(
+                prompt, session_id=session_id, user_id=user_id
+            )
+            text, pt, ct, unit_price = await ask_gpt(
+                built, model_override, SYSTEM_PROMPT
+            )
             if rec:
                 rec.engine_used = "gpt"
                 rec.response = text
@@ -59,29 +72,29 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
             return text
         else:
             raise HTTPException(
-                status_code=400,
-                detail=f"Model override {model_override} not allowed"
+                status_code=400, detail=f"Model override {model_override} not allowed"
             )
 
     # B) Built-in skills via CATALOG (supports test tuples too)
-    for entry in CATALOG:
-        if isinstance(entry, tuple) and len(entry) == 2:
-            keywords, SkillClass = entry
-            if any(kw in prompt for kw in keywords):
-                skill_resp = await SkillClass().handle(prompt)
-                if rec:
-                    rec.engine_used = "skill"
-                await append_history(prompt, "skill", str(skill_resp))
-                await record("done", source="skill")
-                return skill_resp
-    # fallback to the helper for real SkillClasses
-    skill_resp = await check_builtin_skills(prompt)
-    if skill_resp is not None:
-        if rec:
-            rec.engine_used = "skill"
-        await append_history(prompt, "skill", str(skill_resp))
-        await record("done", source="skill")
-        return skill_resp
+    if not skip_skills:
+        for entry in CATALOG:
+            if isinstance(entry, tuple) and len(entry) == 2:
+                keywords, SkillClass = entry
+                if any(kw in prompt for kw in keywords):
+                    skill_resp = await SkillClass().handle(prompt)
+                    if rec:
+                        rec.engine_used = "skill"
+                    await append_history(prompt, "skill", str(skill_resp))
+                    await record("done", source="skill")
+                    return skill_resp
+        # fallback to the helper for real SkillClasses
+        skill_resp = await check_builtin_skills(prompt)
+        if skill_resp is not None:
+            if rec:
+                rec.engine_used = "skill"
+            await append_history(prompt, "skill", str(skill_resp))
+            await record("done", source="skill")
+            return skill_resp
 
     # C) Home Assistant
     ha_resp = await handle_command(prompt)
@@ -160,9 +173,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
                     rec.model_name = llama_model
                 await append_history(prompt, "llama", result_text)
                 await record("llama")
-                memgpt.store_interaction(
-                    prompt, result_text, session_id=session_id
-                )
+                memgpt.store_interaction(prompt, result_text, session_id=session_id)
                 add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
                 cache_answer(norm_prompt, result_text)
                 logger.debug("LLaMA responded OK")
@@ -186,8 +197,10 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     logger.debug("GPT responded OK with gpt-4o")
     return text
 
+
 def _low_conf(resp: str) -> bool:
     import re
+
     if not resp.strip():
         return True
     if re.search(r"\b(i don't know|i am not sure|not sure|cannot help)\b", resp, re.I):
