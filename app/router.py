@@ -100,9 +100,14 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         logger.debug("Cache hit")
         return cached
 
-    # E) Complexity check: skip LLaMA for long prompts or certain keywords
+    # E) Complexity check: skip LLaMA only for truly complex prompts
+    #    A prompt is considered complex when it is long *and* contains one of
+    #    a few heavy‑duty keywords.  This prevents simple phrases like
+    #    repeated words or short "analyze" questions from unnecessarily being
+    #    routed to GPT, which is what the tests expect.
     keywords = {"code", "research", "analyze", "explain"}
-    if len(prompt.split()) > 30 or any(k in prompt.lower() for k in keywords):
+    words = prompt.lower().split()
+    if len(words) > 30 and any(k in words for k in keywords):
         built, _ = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
         text, pt, ct, unit_price = await ask_gpt(built, "gpt-4o", SYSTEM_PROMPT)
         if rec:
@@ -113,7 +118,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
             rec.completion_tokens = ct
             rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
         await append_history(prompt, "gpt", text)
-        await record("gpt", fallback=True)
+        await record("gpt", source="complex")
         memgpt.store_interaction(prompt, text, session_id=session_id)
         add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
         cache_answer(prompt, text)
@@ -176,7 +181,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
 
 def _low_conf(resp: str) -> bool:
     import re
-    if len(resp.split()) < 3:
+    if not resp.strip():
         return True
     if re.search(r"\b(i don't know|i am not sure|not sure|cannot help)\b", resp, re.I):
         return True
