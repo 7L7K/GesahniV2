@@ -125,6 +125,14 @@ curl -X POST localhost:8000/ask -d '{"prompt":"turn off kitchen lights"}'
 * Check logs at `/config` endpoint.
 * Detailed error logs saved locally.
 
+### 🗑️ Invalidate Cached Answers
+
+Remove a stored response from the semantic cache using the CLI:
+
+```bash
+python -m app.vector_store invalidate "your original prompt"
+```
+
 ## Event Log
 
 Each `/ask` request writes a JSON object to `data/history.jsonl` capturing core
