@@ -3,9 +3,10 @@ from __future__ import annotations
 import os
 import time
 import uuid
+import hashlib
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import chromadb
 from chromadb.config import Settings
@@ -22,7 +23,7 @@ class VectorStore(ABC):
     def query_user_memories(self, prompt: str, k: int = 5) -> List[str]: ...
 
     @abstractmethod
-    def cache_answer(self, *args: str) -> None: ...
+    def cache_answer(self, prompt: str, answer: str) -> None: ...
 
     @abstractmethod
     def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]: ...
@@ -133,41 +134,34 @@ class ChromaVectorStore(VectorStore):
     def _cache_disabled(self) -> bool:
         return bool(os.getenv("DISABLE_QA_CACHE"))
 
-    def cache_answer(self, *args: str) -> None:
+    def _normalize(self, prompt: str) -> Tuple[str, str]:
+        normalized = prompt.lower().strip()
+        hashed = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+        return hashed, normalized
+
+    def cache_answer(self, prompt: str, answer: str) -> None:
         if self._cache_disabled():
             return
-        if len(args) == 2:
-            cache_id, prompt, answer = args[0], args[0], args[1]
-        elif len(args) == 3:
-            cache_id, prompt, answer = args
-        else:
-            raise TypeError("cache_answer expects 2 or 3 string arguments")
+        cache_id, norm = self._normalize(prompt)
         self.qa_cache.upsert(
             ids=[cache_id],
-            documents=[prompt],
+            documents=[norm],
             metadatas=[{"answer": answer, "timestamp": time.time(), "feedback": None}],
         )
 
     def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
         if self._cache_disabled():
             return None
-        result = self.qa_cache.query(query_texts=[prompt], n_results=1)
-        ids = result.get("ids", [[]])[0]
-        metas = result.get("metadatas", [[]])[0]
-        dists = result.get("distances", [[]])[0]
-        if not ids or not metas or not dists:
+        cache_id, _ = self._normalize(prompt)
+        result = self.qa_cache.get(ids=[cache_id], include=["metadatas", "documents"])
+        metas = result.get("metadatas", [])
+        if not metas:
             return None
-        cache_id = ids[0]
         meta = metas[0] or {}
-        dist = float(dists[0]) if dists else 1.0
         answer = meta.get("answer")
         fb = meta.get("feedback")
         ts = meta.get("timestamp", 0)
-        if (
-            fb == "down"
-            or dist > 0.01
-            or (ts and time.time() - ts > ttl_seconds)
-        ):
+        if fb == "down" or (ts and time.time() - ts > ttl_seconds):
             try:
                 self.qa_cache.delete(ids=[cache_id])
             finally:
@@ -177,11 +171,11 @@ class ChromaVectorStore(VectorStore):
     def record_feedback(self, prompt: str, feedback: str) -> None:
         if self._cache_disabled():
             return
-        result = self.qa_cache.query(query_texts=[prompt], n_results=1)
-        ids = result.get("ids", [[]])[0]
-        if not ids:
+        cache_id, _ = self._normalize(prompt)
+        result = self.qa_cache.get(ids=[cache_id], include=["metadatas"])
+        metas = result.get("metadatas", [])
+        if not metas:
             return
-        cache_id = ids[0]
         self.qa_cache.update(ids=[cache_id], metadatas=[{"feedback": feedback}])
         if feedback == "down":
             try:
@@ -197,7 +191,7 @@ class PgVectorStore(VectorStore):  # pragma: no cover - stub implementation
     def query_user_memories(self, prompt: str, k: int = 5) -> List[str]:
         return []
 
-    def cache_answer(self, *args: str) -> None:
+    def cache_answer(self, prompt: str, answer: str) -> None:
         pass
 
     def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
