@@ -20,25 +20,26 @@ import asyncio
 import os
 import time
 import logging
+from functools import lru_cache
 from typing import List, Dict, TYPE_CHECKING
 
 
 if TYPE_CHECKING:  # pragma: no cover - for type checkers only
-    from openai import AsyncOpenAI
+    from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-_openai_client: "AsyncOpenAI | None" = None
+_openai_client: "OpenAI | None" = None
 _llama_model = None
 
 
-def get_openai_client() -> "AsyncOpenAI":
-    """Return a cached AsyncOpenAI client."""
+def get_openai_client() -> "OpenAI":
+    """Return a cached synchronous OpenAI client."""
     global _openai_client
     if _openai_client is None:
-        from openai import AsyncOpenAI  # type: ignore
+        from openai import OpenAI  # type: ignore
 
-        _openai_client = AsyncOpenAI()
+        _openai_client = OpenAI()
     return _openai_client
 
 
@@ -61,12 +62,22 @@ def _get_llama_model():
     return _llama_model
 
 
-async def _embed_openai(text: str) -> List[float]:
+_TTL = 24 * 60 * 60
+
+
+@lru_cache(maxsize=5_000)
+def _embed_openai_sync(text: str, ttl_bucket: int) -> List[float]:
+    """Return an embedding using the OpenAI sync client."""
     client = get_openai_client()
-    resp = await client.embeddings.create(
-        model="text-embedding-3-small", input=text
-    )
+    resp = client.embeddings.create(model="text-embedding-3-small", input=text)
     return resp.data[0].embedding  # type: ignore[return-value]
+
+
+async def _embed_openai(text: str) -> List[float]:
+    """Asynchronously compute an OpenAI embedding with caching."""
+    bucket = int(time.time() // _TTL)
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _embed_openai_sync, text, bucket)
 
 
 async def _embed_llama(text: str) -> List[float]:
@@ -95,6 +106,12 @@ async def embed(text: str) -> List[float]:
     raise ValueError(f"Unsupported EMBEDDING_BACKEND: {backend}")
 
 
+def embed_sync(text: str) -> List[float]:
+    """Synchronous helper used by vector stores."""
+    bucket = int(time.time() // _TTL)
+    return _embed_openai_sync(text, bucket)
+
+
 async def benchmark(text: str, iterations: int = 10) -> Dict[str, float]:
     """Run ``embed`` ``iterations`` times and log latency and throughput."""
 
@@ -108,4 +125,7 @@ async def benchmark(text: str, iterations: int = 10) -> Dict[str, float]:
         "Embedding latency %.4fs throughput %.2f req/s", latency, throughput
     )
     return {"latency": latency, "throughput": throughput}
+
+
+__all__ = ["embed", "benchmark", "embed_sync"]
 
