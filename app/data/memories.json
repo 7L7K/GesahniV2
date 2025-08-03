@@ -125,6 +125,27 @@
       "tags": [],
       "timestamp": 1754177197.934618,
       "hash": "b682845b722053cda3772e4c988658f839ffcfce835a1fa9d8a2d1050328c8aa"
+    },
+    {
+      "prompt": "hi",
+      "answer": "Hey there! How can I help you today? Let me know if there's something specific you're looking for or if you need any assistance.",
+      "tags": [],
+      "timestamp": 1754234085.1986182,
+      "hash": "660dccdb58fd5f4797019fb7db3055b9e94e2f8358ea9e6cf9b4e9c98303d44d"
+    },
+    {
+      "prompt": "if the sky is blue but the sun is yellow explain it ",
+      "answer": "Hey there! The sky appears blue because of the scattering of sunlight by the Earth's atmosphere. This phenomenon is called Rayleigh scattering, which affects shorter wavelengths like blue more than longer wavelengths like red or yellow. On the other hand, the sun looks yellow because it emits light in all colors, but the atmosphere scatters blue light, causing the sun's direct light, which is less scattered and thus yellower, to reach our eyes.\n\nIf you have any more questions or need further clarification, just let me know!",
+      "tags": [],
+      "timestamp": 1754234184.3486001,
+      "hash": "66c2b86b3602e28ccdb7c6aa5f203f217d497cc54a892483836396872fef8c7c"
+    },
+    {
+      "prompt": "if the sky is blue but the sun is yellow whats going on\n",
+      "answer": "The sky appears blue because of a phenomenon called Rayleigh scattering, where shorter wavelengths of light (blue) are scattered in all directions by the gases and particles in the Earth's atmosphere. Meanwhile, the sun appears yellow because it emits light across the spectrum, but when it passes through the thicker part of the atmosphere (especially at sunrise and sunset), the shorter blue wavelengths are scattered out, leaving the longer red and yellow wavelengths more dominant.\n\nNeed more info on light and color? Let me know!",
+      "tags": [],
+      "timestamp": 1754234205.654572,
+      "hash": "58bb726187d7f0d4e0e2d3c1155995445e75b6a2802cdca930ac1b686edd9276"
     }
   ]
 }
