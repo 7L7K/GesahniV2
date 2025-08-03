@@ -10,6 +10,7 @@ import tiktoken
 
 from .memory import memgpt
 from .memory.vector_store import query_user_memories
+from .telemetry import log_record_var
 
 MAX_PROMPT_TOKENS = 8_000
 
@@ -40,6 +41,9 @@ class PromptBuilder:
         date_time = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
         summary = memgpt.summarize_session(session_id) or ""
         memories: List[str] = query_user_memories(user_prompt, k=top_k)[:3]
+        rec = log_record_var.get()
+        if rec:
+            rec.embed_tokens = _count_tokens(user_prompt)
         while _count_tokens("\n".join(memories)) > 55 and memories:
             memories.pop()
         dbg = debug_info if debug else ""
@@ -89,6 +93,8 @@ class PromptBuilder:
                 mem_list.pop()
                 continue
             break
+        if rec:
+            rec.retrieval_count = len(mem_list)
         return prompt, prompt_tokens
 
 __all__ = ["PromptBuilder", "MAX_PROMPT_TOKENS"]
