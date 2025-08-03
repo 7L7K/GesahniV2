@@ -120,9 +120,12 @@ class ChromaVectorStore(VectorStore):
         )
         return mem_id
 
-    def query_user_memories(self, prompt: str, k: int = 5) -> List[str]:
+    def query_user_memories(self, prompt: str, k: int | None = None) -> List[str]:
+        top_k = k if k is not None else int(os.getenv("MEM_TOP_K", "5"))
         results = self._user_memories.query(
-            query_texts=[prompt], n_results=k, include=["documents", "distances", "metadatas"]
+            query_texts=[prompt],
+            n_results=top_k,
+            include=["documents", "distances", "metadatas"],
         )
         docs = results.get("documents", [[]])[0]
         dists = results.get("distances", [[]])[0]
@@ -132,12 +135,13 @@ class ChromaVectorStore(VectorStore):
             if not doc:
                 continue
             sim = 1.0 - float(dist)
-            if sim < 0.80:
+            threshold = float(os.getenv("SIM_THRESHOLD", "0.80"))
+            if sim < threshold:
                 continue
             ts = float((meta or {}).get("ts", 0))
             items.append({"doc": doc, "sim": sim, "ts": ts})
         items.sort(key=lambda x: (-x["sim"], -x["ts"]))
-        return [it["doc"] for it in items[:3]]
+        return [it["doc"] for it in items[:top_k]]
 
     # ─── QA CACHE ─────────────────────────────────────────────────────────────
     def _cache_disabled(self) -> bool:

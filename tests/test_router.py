@@ -129,3 +129,40 @@ def test_skill_metrics(monkeypatch):
     assert m["total"] == 1
     assert m["gpt"] == 0
     assert m["llama"] == 0
+
+
+def test_debug_env_toggle(monkeypatch):
+    os.environ["OLLAMA_URL"] = "http://x"
+    os.environ["OLLAMA_MODEL"] = "llama3"
+    os.environ["HOME_ASSISTANT_URL"] = "http://ha"
+    os.environ["HOME_ASSISTANT_TOKEN"] = "token"
+    from app import router
+
+    async def fake_gpt(prompt, model=None, system=None):
+        return "ok", 0, 0, 0.0
+
+    monkeypatch.setattr(router, "ask_gpt", fake_gpt)
+    async def handle_cmd(prompt):
+        return None
+
+    monkeypatch.setattr(router, "handle_command", handle_cmd)
+    monkeypatch.setattr(router, "lookup_cached_answer", lambda p: None)
+    router.LLAMA_HEALTHY = False
+    monkeypatch.setattr(router.memgpt, "store_interaction", lambda *a, **k: None)
+    monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
+    monkeypatch.setattr(router, "cache_answer", lambda *a, **k: None)
+
+    flags = []
+
+    def fake_build(prompt, **kwargs):
+        flags.append(kwargs.get("debug"))
+        return "p", 0
+
+    monkeypatch.setattr(router.PromptBuilder, "build", staticmethod(fake_build))
+
+    monkeypatch.setenv("DEBUG", "0")
+    asyncio.run(router.route_prompt("hi"))
+    monkeypatch.setenv("DEBUG", "1")
+    asyncio.run(router.route_prompt("hi"))
+
+    assert flags == [False, True]
