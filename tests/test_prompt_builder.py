@@ -1,8 +1,7 @@
 import sys
 import types
 
-# Provide a minimal chromadb stub so prompt_builder can be imported without the
-# heavy dependency.
+# Provide a minimal chromadb stub so prompt_builder can be imported without the heavy dependency.
 class _DummyCollection:
     def add(self, *a, **k):
         pass
