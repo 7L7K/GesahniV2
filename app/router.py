@@ -16,6 +16,7 @@ from .telemetry import log_record_var
 from .memory import memgpt
 from .prompt_builder import PromptBuilder, _count_tokens
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
+from . import skills  # populate built-in registry (SmalltalkSkill, etc.)
 from .intent_detector import detect_intent
 
 

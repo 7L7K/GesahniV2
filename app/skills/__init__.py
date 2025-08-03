@@ -3,6 +3,7 @@
 from .base import SKILLS
 
 # core skills
+from .smalltalk_skill import SmalltalkSkill
 from .clock_skill import ClockSkill
 from .world_clock_skill import WorldClockSkill
 from .weather_skill import WeatherSkill
@@ -41,6 +42,7 @@ from .entities_skill import EntitiesSkill    # “list all lights”
 # Instantiate in desired order
 # ───────────────────────────────────────────
 SKILLS.extend([
+    SmalltalkSkill(),
     ClockSkill(),
     WorldClockSkill(),
     WeatherSkill(),
@@ -81,6 +83,7 @@ SKILLS.extend([
 # Public exports
 # ───────────────────────────────────────────
 __all__ = [
+    "SmalltalkSkill",
     "ClockSkill",
     "WorldClockSkill",
     "WeatherSkill",
