@@ -11,7 +11,7 @@ def test_semantic_cache_hit(monkeypatch):
     from app.memory import vector_store
 
     # Clear cache
-    vector_store._qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
+    vector_store.qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
 
     # Seed cache with a prompt/answer pair
     original_prompt = "abcdefgh"  # length 8
