@@ -85,6 +85,10 @@ class MemGPT:
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = RLock()
         self._data: Dict[str, List[Dict[str, Any]]] = {}
+        # Dedicated store for pinned memories
+        self._pin_store: Dict[str, List[Dict[str, Any]]] = {}
+        # Separate file so pins survive across restarts
+        self._pin_path = self.storage_path.with_name("pinned_memories.json")
         self.ttl_seconds = ttl_seconds
         self._load()
 
@@ -97,10 +101,17 @@ class MemGPT:
                 self._data = json.loads(self.storage_path.read_text(encoding="utf-8"))
             except Exception:
                 self._data = {}
+        if self._pin_path.exists():
+            try:
+                self._pin_store = json.loads(self._pin_path.read_text(encoding="utf-8"))
+            except Exception:
+                self._pin_store = {}
 
     def _save(self) -> None:
         with self.storage_path.open("w", encoding="utf-8") as f:
             json.dump(self._data, f, ensure_ascii=False, indent=2)
+        with self._pin_path.open("w", encoding="utf-8") as f:
+            json.dump(self._pin_store, f, ensure_ascii=False, indent=2)
 
     # ------------------------------------------------------------------
     # Public API
@@ -108,33 +119,43 @@ class MemGPT:
     def store_interaction(self, prompt: str, answer: str, session_id: str, tags: List[str] | None = None) -> None:
         """Persist a prompt/answer pair for ``session_id``.
 
-        ``tags`` may be supplied to aid later retrieval.
+        ``tags`` may include "pin" to force-pin an interaction.
         """
 
         entry_hash = hashlib.sha256((prompt + answer).encode("utf-8")).hexdigest()
         now = time.time()
+
         with self._lock:
-            bucket = self._data.setdefault(session_id, [])
-            for item in bucket:
-                if item.get("hash") == entry_hash:
-                    return
+            is_pinned = "pin" in (tags or [])
 
-            for item in bucket[-3:]:
-                prev_answer = item.get("answer", "")
-                sim = jaro_winkler_similarity(answer, prev_answer)
-                if sim >= 0.9:
-                    return
+            if is_pinned:
+                bucket = self._pin_store.setdefault(session_id, [])
+                # avoid exact-duplicate pins
+                for item in bucket:
+                    if item.get("hash") == entry_hash:
+                        return
+            else:
+                bucket = self._data.setdefault(session_id, [])
+                # exact hash-dedupe
+                for item in bucket:
+                    if item.get("hash") == entry_hash:
+                        return
+                # Jaro-Winkler dedupe vs last 3 answers
+                for item in bucket[-3:]:
+                    prev = item.get("answer", "")
+                    if jaro_winkler_similarity(answer, prev) >= 0.9:
+                        return
 
-            bucket.append(
-                {
-                    "prompt": prompt,
-                    "answer": answer,
-                    "tags": tags or [],
-                    "timestamp": now,
-                    "hash": entry_hash,
-                }
-            )
+            bucket.append({
+                "prompt": prompt,
+                "answer": answer,
+                "tags": tags or [],
+                "timestamp": now,
+                "hash": entry_hash,
+            })
+
             self._save()
+
 
     def summarize_session(self, session_id: str) -> str:
         """Return a condensed representation of a session's interactions."""
@@ -163,7 +184,34 @@ class MemGPT:
         prompt_l = prompt.lower()
         results: List[Dict[str, Any]] = []
         with self._lock:
-            for interactions in self._data.values():
+            stores = [self._data, self._pin_store]
+            for store in stores:
+                for interactions in store.values():
+                    for item in interactions:
+                        tags = [t.lower() for t in item.get("tags", [])]
+                        if prompt_l in item["prompt"].lower() or any(t in prompt_l for t in tags):
+                            results.append(item)
+        return results
+
+    # Pinned helpers ---------------------------------------------------
+    def list_pins(self, session_id: str | None = None) -> List[Dict[str, Any]]:
+        """Return pinned memories. If ``session_id`` is supplied, only that session."""
+
+        with self._lock:
+            if session_id is not None:
+                return list(self._pin_store.get(session_id, []))
+            all_items: List[Dict[str, Any]] = []
+            for interactions in self._pin_store.values():
+                all_items.extend(interactions)
+            return all_items
+
+    def retrieve_pinned_memories(self, prompt: str) -> List[Dict[str, Any]]:
+        """Search only pinned memories for matches to ``prompt``."""
+
+        prompt_l = prompt.lower()
+        results: List[Dict[str, Any]] = []
+        with self._lock:
+            for interactions in self._pin_store.values():
                 for item in interactions:
                     tags = [t.lower() for t in item.get("tags", [])]
                     if prompt_l in item["prompt"].lower() or any(t in prompt_l for t in tags):
@@ -179,6 +227,9 @@ class MemGPT:
                 seen: set[str] = set()
                 kept: List[Dict[str, Any]] = []
                 for item in interactions:
+                    if "pin" in item.get("tags", []):
+                        kept.append(item)
+                        continue
                     h = item.get("hash") or hashlib.sha256(
                         (item.get("prompt", "") + item.get("answer", "")).encode("utf-8")
                     ).hexdigest()
