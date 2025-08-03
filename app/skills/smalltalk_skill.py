@@ -1,14 +1,28 @@
+"""Smalltalk skill mini-prompt.
+
+Respond to simple greetings with a friendly opener while keeping the chat
+fresh:
+
+- Rotate through greetings without repeating until all are used.
+- Occasionally append a persona tag (configurable rate).
+- Add a follow-up based on time of day or the user's last project.
+- Avoid repeating the last couple of full responses.
+"""
+
 from __future__ import annotations
 
+import logging
+import os
 import random
 import re
+import threading
 from collections import deque
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, Callable, Literal, Optional
 
 from .base import Skill
 
-# Core phrases and tags
+# Core phrases and tags -----------------------------------------------------
 GREETINGS = [
     "Hey there!",
     "Yo!",
@@ -49,13 +63,12 @@ PERSONA_TAGS = [
 
 FALLBACK = "Hey! I'm here—what's the move?"
 
-# Track used greetings and recent responses to avoid repeats
-_USED_GREETINGS: set[str] = set()
-_RECENT_RESPONSES: deque[str] = deque(maxlen=2)
+log = logging.getLogger(__name__)
 
 
 def is_greeting(prompt: str) -> bool:
-    """Return True if the prompt looks like a casual greeting."""
+    """Return ``True`` if *prompt* looks like a casual greeting."""
+
     p = prompt.strip().lower()
     p = re.sub(r"[!?.]+$", "", p)
     roots = {
@@ -71,88 +84,134 @@ def is_greeting(prompt: str) -> bool:
     return p in roots
 
 
-def time_of_day() -> Literal["morning", "afternoon", "evening"]:
-    now = datetime.now().hour
-    if now < 12:
-        return "morning"
-    if now < 18:
-        return "afternoon"
-    return "evening"
-
-
 def memory_hook(user) -> Optional[str]:
-    """Return a project hook string if available."""
-    return getattr(user, "last_project", None)
+    """Return a formatted project hook string if available."""
+
+    project = getattr(user, "last_project", None)
+    if not project:
+        return None
+    project = str(project).strip()
+    if not project:
+        return None
+    project = project.capitalize()
+    return f"`{project}`"
 
 
 class SmalltalkSkill(Skill):
     """Quick canned responses for casual greetings."""
 
+    def __init__(
+        self,
+        *,
+        time_provider: Callable[[], datetime] = datetime.now,
+        persona_rate: float | None = None,
+    ) -> None:
+        self._time_provider = time_provider
+        self._persona_rate = (
+            float(os.getenv("SMALLTALK_PERSONA_RATE", "0.3"))
+            if persona_rate is None
+            else persona_rate
+        )
+        self._used_greetings: set[str] = set()
+        self._recent_responses: deque[str] = deque(maxlen=2)
+        self._lock = threading.RLock()
+
     def name(self) -> str:  # pragma: no cover - trivial
+        """Return the skill's canonical name."""
+
         return "smalltalk"
 
     def match(self, prompt: str) -> bool:
+        """Return ``True`` if *prompt* is a greeting."""
+
         return is_greeting(prompt)
 
     async def run(self, prompt: str, match: Any) -> str:
-        # ``match`` is ignored; provided for compatibility with ``Skill``
+        """Execute the skill and return the greeting response."""
+
         resp = self.handle(prompt, getattr(match, "user", None))
         if resp is None:
             raise ValueError("no greeting detected")
         return resp
 
     def handle(self, prompt: str, user=None) -> Optional[str]:
+        """Return a canned response or ``None`` if *prompt* isn't a greeting."""
+
         if not is_greeting(prompt):
             return None
 
-        greeting = self._pick_greeting()
-        follow = self._follow_up(user)
-        tag = self._maybe_persona_tag()
-
-        parts = [greeting]
-        if tag:
-            parts.append(tag)
-        parts.append(follow or FALLBACK)
-        resp = " ".join(parts)
-
-        # Avoid repeating last couple responses
-        tries = 0
-        while resp in _RECENT_RESPONSES and tries < 5:
+        with self._lock:
             greeting = self._pick_greeting()
+            follow = self._follow_up(user) or FALLBACK
             tag = self._maybe_persona_tag()
-            follow = self._follow_up(user)
+
             parts = [greeting]
             if tag:
                 parts.append(tag)
-            parts.append(follow or FALLBACK)
+            parts.append(follow)
             resp = " ".join(parts)
-            tries += 1
-        _RECENT_RESPONSES.append(resp)
-        return resp
+
+            tries = 0
+            while resp in self._recent_responses and tries < 5:
+                greeting = self._pick_greeting()
+                tag = self._maybe_persona_tag()
+                follow = self._follow_up(user) or FALLBACK
+                parts = [greeting]
+                if tag:
+                    parts.append(tag)
+                parts.append(follow)
+                resp = " ".join(parts)
+                tries += 1
+
+            self._recent_responses.append(resp)
+            log.debug("Recorded smalltalk response", extra={"resp": resp})
+            return resp
 
     # Internal helpers -------------------------------------------------
     def _pick_greeting(self) -> str:
-        choices = [g for g in GREETINGS if g not in _USED_GREETINGS]
-        if not choices:
-            _USED_GREETINGS.clear()
-            choices = GREETINGS[:]
-        greeting = random.choice(choices)
-        _USED_GREETINGS.add(greeting)
-        return greeting
+        """Return a greeting not recently used."""
+
+        with self._lock:
+            choices = [g for g in GREETINGS if g not in self._used_greetings]
+            if not choices:
+                self._used_greetings.clear()
+                choices = GREETINGS[:]
+            greeting = random.choice(choices)
+            self._used_greetings.add(greeting)
+            log.debug("Greeting used", extra={"greeting": greeting})
+            return greeting
 
     def _maybe_persona_tag(self) -> Optional[str]:
-        if PERSONA_TAGS and random.random() < 0.3:
+        """Return a persona tag based on configured rate."""
+
+        if PERSONA_TAGS and random.random() < self._persona_rate:
             return random.choice(PERSONA_TAGS)
         return None
 
+    def _time_of_day(self) -> Literal["morning", "afternoon", "evening"]:
+        """Return the current time of day using the injected provider."""
+
+        hour = self._time_provider().hour
+        if hour < 12:
+            return "morning"
+        if hour < 18:
+            return "afternoon"
+        return "evening"
+
     def _follow_up(self, user) -> str:
-        tod = time_of_day()
+        """Return a follow-up question based on time of day and memory."""
+
+        tod = self._time_of_day()
         follow = {
             "morning": "Ready to crush the day?",
             "afternoon": "How’s your grind going?",
             "evening": "Late-night hustle or winding down?",
-        }.get(tod, FALLBACK)
+        }.get(tod) or FALLBACK
         mem = memory_hook(user)
         if mem:
             follow = f"How’s {mem} coming along?"
-        return follow
+        return follow or FALLBACK
+
+
+__all__ = ["SmalltalkSkill", "is_greeting", "GREETINGS"]
+
