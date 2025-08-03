@@ -136,7 +136,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         session_id=session_id,
         user_id=user_id,
         custom_instructions=getattr(rec, "custom_instructions", ""),
-        debug=getattr(rec, "debug", False),
+        debug=os.getenv("DEBUG", "").lower() in {"1", "true", "yes"},
         debug_info=getattr(rec, "debug_info", ""),
     )
     if rec:
