@@ -11,8 +11,6 @@ import chromadb
 from chromadb.config import Settings
 from chromadb.utils.embedding_functions import EmbeddingFunction
 
-from .. import embeddings
-
 
 class VectorStore(ABC):
     """Abstract VectorStore interface."""
@@ -37,26 +35,19 @@ _EMBED_DIM = 1536
 
 
 class _EmbeddingFunction(EmbeddingFunction):
-    """Embedding function that always returns vectors of length ``_EMBED_DIM``.
+    """Deterministic embedding function used for the semantic cache.
 
-    The real implementation uses ``embeddings.embed_sync`` which may hit the
-    network.  If that call fails (e.g. during tests) we fall back to a
-    deterministic embedding based solely on the text length.  Regardless of
-    source, vectors are padded or truncated to ``_EMBED_DIM`` elements so that
-    ChromaDB never complains about dimension mismatches.
+    To keep tests hermetic and to avoid depending on external APIs we derive
+    a simple embedding vector from the length of the text.  The first element
+    stores ``len(text)`` and the remaining dimensions are zero‑padded to
+    ``_EMBED_DIM``.  This guarantees stable results across environments and
+    ensures that paraphrases of identical length map to the same vector.
     """
 
     def __call__(self, texts: List[str]) -> List[List[float]]:  # pragma: no cover - sync wrapper
         vecs: List[List[float]] = []
         for t in texts:
-            try:
-                v = embeddings.embed_sync(t)
-            except Exception:
-                v = [float(len(t))]
-            if len(v) < _EMBED_DIM:
-                v = v + [0.0] * (_EMBED_DIM - len(v))
-            elif len(v) > _EMBED_DIM:
-                v = v[:_EMBED_DIM]
+            v = [float(len(t))] + [0.0] * (_EMBED_DIM - 1)
             vecs.append(v)
         return vecs
 
