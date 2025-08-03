@@ -27,11 +27,12 @@ from pydantic import BaseModel
 from fastapi import Depends, Request
 
 from . import router
-from .skills.base import check_builtin_skills
 
 
 async def route_prompt(*args, **kwargs):
     return await router.route_prompt(*args, **kwargs)
+
+
 import app.skills  # populate SKILLS
 from .home_assistant import (
     get_states,
@@ -62,7 +63,6 @@ from .analytics import record_latency, latency_p95
 
 configure_logging()
 logger = logging.getLogger(__name__)
-
 
 
 def _anon_user_id(auth: str | None) -> str:
@@ -158,9 +158,6 @@ class ServiceRequest(BaseModel):
 async def ask(req: AskRequest):
     logger.info("Received prompt: %s", req.prompt)
     try:
-        skill_resp = await check_builtin_skills(req.prompt)
-        if skill_resp is not None:
-            return {"response": skill_resp}
         answer = await route_prompt(req.prompt, req.model)
         return {"response": answer}
     except Exception as e:
@@ -330,7 +327,6 @@ async def websocket_transcribe(ws: WebSocket):
                 msg = await ws.receive()
         except WebSocketDisconnect:
             pass
-
 
 
 @app.post("/intent-test")
