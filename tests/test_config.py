@@ -1,6 +1,8 @@
 import os, sys
 from fastapi.testclient import TestClient
 from importlib import reload
+import time
+from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -11,6 +13,7 @@ def setup_app(monkeypatch):
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     os.environ["ADMIN_TOKEN"] = "secret"
+    os.environ["OPENAI_API_KEY"] = "x"
     import app.home_assistant as home_assistant
     import app.llama_integration as llama_integration
     import app.status as status
@@ -38,3 +41,17 @@ def test_config_allowed(monkeypatch):
     assert resp.status_code == 200
     data = resp.json()
     assert data["OLLAMA_URL"] == "http://x"
+
+
+def test_config_env_reload(monkeypatch):
+    env = Path(".env")
+    env.write_text("ADMIN_TOKEN=secret\nDEBUG=0\n")
+    main = setup_app(monkeypatch)
+    client = TestClient(main.app)
+    resp = client.get("/config", params={"token": "secret"})
+    assert resp.json()["DEBUG"] == "0"
+    env.write_text("ADMIN_TOKEN=secret\nDEBUG=1\n")
+    time.sleep(0.1)
+    resp = client.get("/config", params={"token": "secret"})
+    assert resp.json()["DEBUG"] == "1"
+    env.unlink()
