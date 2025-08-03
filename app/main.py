@@ -53,6 +53,7 @@ from .session_manager import get_session_meta
 from .session_store import list_sessions as list_session_store, SessionStatus
 from .tasks import enqueue_transcription, enqueue_summary
 from .security import verify_token, rate_limit, verify_ws, rate_limit_ws
+from .analytics import record_latency, latency_p95
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -105,6 +106,8 @@ async def trace_request(request, call_next):
     finally:
         rec.finished_at = utc_now().isoformat()
         rec.latency_ms = int((time.monotonic() - start_time) * 1000)
+        await record_latency(rec.latency_ms)
+        rec.p95_latency_ms = latency_p95()
         request_id = rec.req_id
         if isinstance(response, Response):
             response.headers["X-Request-ID"] = request_id
