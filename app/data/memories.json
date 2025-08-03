@@ -146,6 +146,20 @@
       "tags": [],
       "timestamp": 1754234205.654572,
       "hash": "58bb726187d7f0d4e0e2d3c1155995445e75b6a2802cdca930ac1b686edd9276"
+    },
+    {
+      "prompt": "hello world",
+      "answer": "ok",
+      "tags": [],
+      "timestamp": 1754245830.920537,
+      "hash": "d6e16d0fd494b9650bf484357771e61bc65d893f86f5b80f932922bc33bae88c"
+    },
+    {
+      "prompt": "hello world",
+      "answer": "gpt-4",
+      "tags": [],
+      "timestamp": 1754245830.928742,
+      "hash": "3a1943fda39b066311a080480250253af3a5edf752a37387cf40f708db2922be"
     }
   ]
 }

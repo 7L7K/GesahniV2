@@ -1,123 +1,210 @@
-# AGENTS.md
+## Project One-Liner
+GesahniV2 is a FastAPI-based assistant that blends local LLaMA models, OpenAI GPT, and
+Home Assistant to answer questions and automate your home.
 
-Welcome to the cast of GesahniV2—your personal AI ensemble that handles everything from local LLaMA chat to flicking on the hallway lights. Here’s who’s who and what they do.
+## Directory Cheat Sheet
+| Path | Purpose |
+| --- | --- |
+| `app/` | Backend services, skills, and routing logic |
+| `frontend/` | Next.js web UI for interacting with the assistant |
+| `tests/` | Pytest suite validating routing, skills, and utilities |
+| `data/` | History log, follow-up storage, sample calendar |
+| `sessions/` | Captured audio/video sessions and metadata |
+| `bench/` | Benchmark helpers for embeddings |
 
----
+## Core Agents / Modules
+| Agent | Location | Entrypoint | Purpose |
+| --- | --- | --- | --- |
+| RouterAgent | `app/router.py` | `route_prompt` | Decide between skills, Home Assistant, LLaMA, or GPT. |
+| LLaMAAgent | `app/llama_integration.py` | `ask_llama` | Query local Ollama with retries; env: `OLLAMA_URL`, `OLLAMA_MODEL`. |
+| GPTAgent | `app/gpt_client.py` | `ask_gpt` | Call OpenAI chat API; env: `OPENAI_API_KEY`, `OPENAI_MODEL`. |
+| HomeAssistantAgent | `app/home_assistant.py` | `handle_command` | Parse on/off commands and call HA REST API. |
+| IntentAgent | `app/intent_detector.py` | `detect_intent` | Heuristic categorization of prompts. |
+| TranscriptionAgent | `app/transcription.py` | `transcribe_file` | Async Whisper transcription. |
+| SessionManager | `app/session_manager.py` | `start_session` | Handle media uploads and tagging. |
+| SecurityGuard | `app/security.py` | `verify_token` | Bearer token auth and per-IP rate limiting. |
+| StatusReporter | `app/status.py` | `router` | Expose health, config, and metrics endpoints. |
 
-## RouterAgent
-**Location:** `app/router.py`  
-**Entrypoint:** `async def route_prompt(prompt: str) -> str`
+## HTTP Endpoints
+Method | Path | Handler
+--- | --- | ---
+POST | `/ask` | Route prompt through skills and LLMs
+POST | `/upload` | Save raw audio upload
+POST | `/capture/start` | Begin capture session
+POST | `/capture/save` | Finalize capture, store media
+POST | `/capture/tags` | Queue tag extraction
+GET | `/capture/status/{id}` | Fetch session metadata
+GET | `/search/sessions` | Search stored sessions
+GET | `/sessions` | List sessions by status
+POST | `/sessions/{id}/summarize` | Queue session summary
+WS | `/transcribe` | Stream audio chunks for live transcription
+POST | `/intent-test` | Echo prompt for intent debugging
+GET | `/ha/entities` | Dump Home Assistant states
+POST | `/ha/service` | Call arbitrary HA service
+GET | `/ha/resolve` | Resolve friendly name to entity ID
+POST | `/transcribe/{id}` | Transcribe saved session
+GET | `/transcribe/{id}` | Retrieve transcript
+GET | `/health` | Basic heartbeat
+GET | `/config` | Dump environment (requires `ADMIN_TOKEN`)
+GET | `/ha_status` | Home Assistant health check
+GET | `/llama_status` | Ollama health check
+GET | `/status` | Aggregate service health
+GET | `/metrics` | Prometheus metrics
 
-- **Purpose:**  
-  Decide which backend “voice” answers your prompt: Home Assistant → GPT → LLaMA (with smart fallbacks and retries).
-- **Trigger:**  
-  Every incoming `/ask` request.
-- **Logic:**  
-  1. **HA first**: If `handle_command(prompt)` returns a non-`None` result, serve it.  
-  2. **Complex?** If prompt >30 words or contains keywords (`code`, `research`, `analyze`, `explain`), try GPT → on error fallback to LLaMA.  
-  3. **Else** use LLaMA → on error fallback to GPT.
-- **Tools:**  
-  - `ask_llama` (Ollama)  
-  - `ask_gpt` (OpenAI)  
-  - `handle_command` (Home Assistant)
+## Skills Catalog
+Skills are tried in the order defined in `app/skills/__init__.py`; first match wins.
+| Skill | name() | Purpose |
+| --- | --- | --- |
+| SmalltalkSkill | `smalltalk` | Friendly greetings and persona tags |
+| ClockSkill | `clock` | Report time, date, or start a countdown |
+| WorldClockSkill | `world_clock` | Show time in major cities |
+| WeatherSkill | `weather` | Current weather via OpenWeather |
+| ForecastSkill | `forecast` | 3-day forecast from OpenWeather |
+| ReminderSkill | `reminder` | Schedule one-off or recurring reminders |
+| TimerSkill | `timer` | Start, cancel, or query timers |
+| MathSkill | `math` | Basic arithmetic and percentages |
+| UnitConversionSkill | `unit_conversion` | Convert between units (C↔F, km↔mi, etc.) |
+| CurrencySkill | `currency` | Convert currency amounts |
+| CalendarSkill | `calendar` | Show today's or upcoming events |
+| TeachSkill | `teach` | Map nicknames to Home Assistant entities |
+| EntitiesSkill | `entities` | List HA entities, lights, or switches |
+| SceneSkill | `scene` | Activate a Home Assistant scene |
+| ScriptSkill | `script` | Run a Home Assistant script |
+| CoverSkill | `cover` | Open or close covers (blinds, garage) |
+| FanSkill | `fan` | Turn fans or air purifiers on/off |
+| NotifySkill | `notify` | Send a phone notification |
+| SearchSkill | `search` | DuckDuckGo instant answer search |
+| TranslateSkill | `translate` | Translate text or detect language |
+| NewsSkill | `news` | Top headlines from Hacker News RSS |
+| JokeSkill | `joke` | Fetch a random joke |
+| DictionarySkill | `dictionary` | Define words or list synonyms |
+| RecipeSkill | `recipe` | Pull recipe ingredients and steps |
+| LightsSkill | `lights` | Control lights and brightness |
+| DoorLockSkill | `door_lock` | Lock, unlock, or query doors |
+| MusicSkill | `music` | Play/pause music or artists via HA |
+| RokuSkill | `roku` | Launch Roku apps |
+| ClimateSkill | `climate` | Set or report thermostat temperature |
+| VacuumSkill | `vacuum` | Start or stop the vacuum |
+| NotesSkill | `notes` | Add, list, show, or delete notes |
+| StatusSkill | `status` | Report backend, HA, and LLaMA health |
 
----
+## Environment & Secrets
+| Var | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `OPENAI_API_KEY` | – | yes | OpenAI auth for GPT & Whisper |
+| `OPENAI_MODEL` | `gpt-4o` | no | Default GPT model |
+| `OPENAI_TRANSCRIBE_MODEL` | `whisper-1` | no | Async Whisper model |
+| `WHISPER_MODEL` | `whisper-1` | no | Sync Whisper model |
+| `ALLOWED_GPT_MODELS` | `gpt-4o,gpt-4,gpt-3.5-turbo` | no | Valid `/ask` model overrides |
+| `DEBUG` | – | no | Enable extra prompt debug info |
+| `LOG_LEVEL` | `INFO` | no | Logging verbosity |
+| `FOLLOW_UPS_FILE` | `data/follow_ups.json` | no | Stored follow-up reminders |
+| `OLLAMA_URL` | `http://localhost:11434` | no | Ollama base URL |
+| `OLLAMA_MODEL` | – | yes | LLaMA model name |
+| `API_TOKEN` | – | no | Bearer token for protected endpoints |
+| `RATE_LIMIT_PER_MIN` | `60` | no | Requests per minute per IP |
+| `REDIS_URL` | `redis://localhost:6379/0` | no | RQ queue for async tasks |
+| `HISTORY_FILE` | `data/history.jsonl` | no | Request history log |
+| `CORS_ALLOW_ORIGINS` | `http://localhost:3000` | no | Allowed web origins |
+| `PORT` | `8000` | no | Server port when running `python app/main.py` |
+| `SESSIONS_DIR` | `sessions/` | no | Base directory for session media |
+| `ADMIN_TOKEN` | – | no | Required to read `/config` |
+| `SIM_THRESHOLD` | `0.90` | no | Vector similarity cutoff |
+| `HOME_ASSISTANT_URL` | `http://localhost:8123` | no | Home Assistant base URL |
+| `HOME_ASSISTANT_TOKEN` | – | yes | HA long-lived token |
+| `LLAMA_EMBEDDINGS_MODEL` | – | yes* | Path to GGUF when using llama embeddings |
+| `EMBED_MODEL` | `text-embedding-3-small` | no | OpenAI embedding model |
+| `EMBEDDING_BACKEND` | `openai` | no | Embedding provider (`openai` or `llama`) |
+| `TRANSLATE_URL` | `http://localhost:5000` | no | Translation microservice |
+| `OPENWEATHER_API_KEY` | – | yes | Weather and forecast lookups |
+| `CITY_NAME` | `Detroit,US` | no | Default weather city |
+| `NOTES_DB` | `notes.db` | no | SQLite file for notes skill |
+| `CALENDAR_FILE` | `data/calendar.json` | no | Calendar events source |
+| `MAX_UPLOAD_BYTES` | `10485760` | no | Max upload size for session media |
+| `MEM_TOP_K` | `5` | no | Memories returned from vector store |
+| `DISABLE_QA_CACHE` | `false` | no | Skip semantic cache when set |
+| `VECTOR_STORE` | `chroma` | no | Vector store backend |
 
-## LLaMAAgent
-**Location:** `app/llama_integration.py`
-**Entrypoint:** `async def ask_llama(prompt: str, model: str | None = None) -> str`
+*Required only when `EMBEDDING_BACKEND=llama`.
 
-- **Purpose:**  
-  Handle local “LLaMA” conversations via your self‑hosted Ollama server.
-- **Inputs:**  
-  - `prompt`: plain text  
-  - `model`: optional override (defaults to `OLLAMA_MODEL`)
-- **Outputs:**  
-  - Stripped response text from Ollama.
-- **Tools:**  
-  - `httpx.AsyncClient` → `POST {OLLAMA_URL}/api/generate`  
-  - Env vars: `OLLAMA_URL`, `OLLAMA_MODEL`
-- **Error Handling:**  
-  Logs and re‑raises any exceptions for RouterAgent to catch.
+## Setup / Local Dev Quick-Start
+1. **Install deps**
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. **Run LLaMA (Ollama)**
+   ```bash
+   ollama pull llama3
+   ollama run llama3
+   ```
+3. **Start backend**
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+4. **Start frontend**
+   ```bash
+   cd frontend && npm run dev
+   ```
 
----
+## Testing & Validation
+Run before committing:
+```bash
+pytest -q
+ruff check .
+black --check .
+```
 
-## GPTagent
-**Location:** `app/gpt_client.py`  
-**Entrypoint:** `async def ask_gpt(prompt: str, model: str | None = None) -> str`
+## Skill-Authoring Checklist
+- Copy `app/skills/example_skill.py` style into a new `<name>_skill.py`.
+- Implement a `Skill` subclass with `PATTERNS` and `run()`.
+- Import and append the class in `app/skills/__init__.py` to set execution order.
+- Add tests under `tests/` covering positive and negative cases.
+- Run formatting, lint, and test commands above.
 
-- **Purpose:**  
-  Fallback and heavy‑lifting for complex prompts using OpenAI’s API.
-- **Inputs:**  
-  - `prompt`: user text  
-  - `model`: optional override (defaults to `OPENAI_MODEL`)
-- **Outputs:**  
-  - First choice content from the chat completion response.
-- **Tools:**  
-  - `openai.AsyncOpenAI` client  
-  - Env vars: `OPENAI_API_KEY`, `OPENAI_MODEL`
-- **Error Handling:**  
-  Logs and re‑raises to let RouterAgent handle fallbacks.
+## Contribution / PR Template
+```
+### Problem
+Explain the issue.
 
----
+### Solution
+Describe your change.
 
-## HomeAssistantAgent
-**Location:** `app/home_assistant.py`  
-**Entrypoint:** `async def handle_command(prompt: str) -> Optional[str]`
+### Tests
+`pytest -q`
+`ruff check .`
+`black --check .`
 
-- **Purpose:**  
-  Parse “turn on/off `<entity>`” style prompts, resolve entity IDs, and call HA services.
-- **Trigger:**  
-  Prompts matching `^(?:ha[:]?)?\s*(?:turn|switch)\s+(on|off)\s+(.+)$`.
-- **Workflow:**  
-  1. **_request:** Internal HTTP helper (GET/POST) to HA REST API.  
-  2. **get_states:** Fetch all entities with `/api/states`.  
-  3. **resolve_entity:** Match user-friendly name or partial entity_id → returns `domain.entity`.  
-  4. **call_service:** Hit `/api/services/{domain}/{service}` with JSON data.  
-  5. **turn_on/turn_off:** Convenience wrappers around `call_service`.  
-- **Outputs:**  
-  - Success strings: e.g. `Turned on light.kitchen`  
-  - Errors: `Entity 'foo' not found` or `Failed to execute command`
-- **Tools:**  
-  - `httpx`, `re`, HA URL/Token env vars.
+### Risk
+Note any edge cases or follow-up work.
+```
 
----
-
-## IntentTestAgent
-**Location:** `app/main.py`  
-**Entrypoint:** `POST /intent-test`
-
-- **Purpose:**  
-  Simple stub for testing intent detection.  
-- **Behavior:**  
-  Echoes back the prompt under `{"intent": "test", "prompt": <your text>}`.  
-- **Tool:**  
-  Pydantic model + FastAPI route.
-
----
-
-### API Endpoints Overview
-- **POST `/ask`** → `RouterAgent`  
-- **POST `/intent-test`** → `IntentTestAgent`
-- **POST `/upload`** → start audio upload session
-- **POST `/transcribe/{session_id}`** → begin transcription
-- **GET `/transcribe/{session_id}`** → get transcribed text
-- **GET `/status`** → combined service health
-- **GET `/health`** → basic heartbeat
-- **GET `/config`** → environment dump
-- **GET `/ha/entities`** → raw `get_states()` JSON
-- **POST `/ha/service`** → manual `call_service(domain, service, data)`
-- **GET `/ha/resolve?name=<foo>`** → `{ "entity_id": "<domain.foo>" }
-
----
-
-### Skills Package
-
-- **Location:** `app/skills/`
-- **Ordering:** Skills are checked in order defined in
-  `app/skills/__init__.py`. The first matching skill responds.
-
-#### Smalltalk Skill
-
-- Persona tag rate is configurable via `SMALLTALK_PERSONA_RATE`.
-- Run `pytest tests/test_smalltalk.py` to validate greeting logic.
+## Request Flow
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant A as /ask
+  participant R as RouterAgent
+  participant S as Skills
+  participant H as Home Assistant
+  participant L as LLaMA
+  participant G as GPT
+  U->>A: POST /ask
+  A->>R: route_prompt
+  R->>S: check_builtin_skills
+  alt skill match
+    S-->>R: response
+  else
+    R->>H: handle_command
+    alt HA success
+      H-->>R: result
+    else
+      R->>L: ask_llama
+      alt LLaMA ok
+        L-->>R: answer
+      else
+        R->>G: ask_gpt
+        G-->>R: answer
+      end
+    end
+  end
+  R-->>U: final response
