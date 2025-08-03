@@ -2,6 +2,11 @@ import os, asyncio
 import pytest
 
 
+def _clear_cache(vector_store):
+    """Helper to remove all items from the QA cache."""
+    vector_store.qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
+
+
 def test_semantic_cache_hit(monkeypatch):
     os.environ["OLLAMA_URL"] = "http://x"
     os.environ["OLLAMA_MODEL"] = "llama3"
@@ -11,7 +16,7 @@ def test_semantic_cache_hit(monkeypatch):
     from app.memory import vector_store
 
     # Clear cache
-    vector_store.qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
+    _clear_cache(vector_store)
 
     # Seed cache with a prompt/answer pair
     original_prompt = "abcdefgh"  # length 8
@@ -36,3 +41,25 @@ def test_semantic_cache_hit(monkeypatch):
 
     result = asyncio.run(router.route_prompt(paraphrase))
     assert result == "cached"
+
+
+def test_record_feedback_preserves_metadata():
+    from app.memory import vector_store
+
+    # Start fresh
+    _clear_cache(vector_store)
+
+    prompt = "foo"
+    answer = "bar"
+    cache_id = "hash1"
+    vector_store.cache_answer(cache_id, prompt, answer)
+
+    meta_before = vector_store.qa_cache.get(ids=[cache_id])["metadatas"][0]
+
+    vector_store.record_feedback(prompt, "up")
+
+    meta_after = vector_store.qa_cache.get(ids=[cache_id])["metadatas"][0]
+
+    assert meta_after["answer"] == answer
+    assert meta_after["timestamp"] == meta_before["timestamp"]
+    assert meta_after["feedback"] == "up"
