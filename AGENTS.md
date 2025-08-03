@@ -116,3 +116,8 @@ Welcome to the cast of GesahniV2—your personal AI ensemble that handles everyt
 - **Location:** `app/skills/`
 - **Ordering:** Skills are checked in order defined in
   `app/skills/__init__.py`. The first matching skill responds.
+
+#### Smalltalk Skill
+
+- Persona tag rate is configurable via `SMALLTALK_PERSONA_RATE`.
+- Run `pytest tests/test_smalltalk.py` to validate greeting logic.
