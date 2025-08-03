@@ -26,8 +26,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi import Depends, Request
 
-from .router import route_prompt
+from . import router
 from .skills.base import check_builtin_skills
+
+
+async def route_prompt(*args, **kwargs):
+    return await router.route_prompt(*args, **kwargs)
 import app.skills  # populate SKILLS
 from .home_assistant import (
     get_states,

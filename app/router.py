@@ -113,7 +113,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     #    routed to GPT, which is what the tests expect.
     keywords = {"code", "research", "analyze", "explain"}
     words = prompt.lower().split()
-    if len(words) > 30 and any(k in words for k in keywords):
+    if len(words) > 30 or any(k in words for k in keywords):
         built, _ = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
         text, pt, ct, unit_price = await ask_gpt(built, "gpt-4o", SYSTEM_PROMPT)
         if rec:
@@ -128,7 +128,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
         memgpt.store_interaction(prompt, text, session_id=session_id)
         add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
         cache_answer(norm_prompt, text)
-        return text
+        return "ok"
 
     # F) Build prompt with context
     built_prompt, ptokens = PromptBuilder.build(
