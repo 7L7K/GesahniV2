@@ -13,7 +13,7 @@ from .memory.vector_store import add_user_memory, cache_answer, lookup_cached_an
 from .llama_integration import LLAMA_HEALTHY, OLLAMA_MODEL, ask_llama
 from .telemetry import log_record_var
 from .memory import memgpt
-from .prompt_builder import PromptBuilder
+from .prompt_builder import PromptBuilder, _count_tokens
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from .intent_detector import detect_intent
 
@@ -31,6 +31,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
     rec = log_record_var.get()
     if rec:
         rec.prompt = prompt
+        rec.embed_tokens = _count_tokens(prompt)
     session_id = rec.session_id if rec and rec.session_id else "default"
     user_id = rec.user_id if rec and rec.user_id else "anon"
     logger.debug("route_prompt received: %s", prompt)
@@ -91,6 +92,8 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
 
     # D) Semantic cache lookup (TTL + feedback)
     cached = lookup_cached_answer(prompt)
+    if rec:
+        rec.cache_hit = cached is not None
     if cached is not None:
         if rec:
             rec.engine_used = "cache"
