@@ -34,7 +34,7 @@ class PromptBuilder:
         custom_instructions: str = "",
         debug: bool = False,
         debug_info: str = "",
-        top_k: int = 5,
+        top_k: int | None = None,
     ) -> Tuple[str, int]:
         """Return a tuple of (prompt_str, prompt_tokens)."""
         date_time = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
