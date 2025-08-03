@@ -9,6 +9,61 @@ import hashlib
 import time
 
 
+def jaro_winkler_similarity(s1: str, s2: str) -> float:
+    """Compute the Jaro-Winkler similarity between two strings."""
+    if not s1 and not s2:
+        return 1.0
+    if not s1 or not s2:
+        return 0.0
+
+    s1_len, s2_len = len(s1), len(s2)
+    match_distance = max(s1_len, s2_len) // 2 - 1
+
+    s1_matches = [False] * s1_len
+    s2_matches = [False] * s2_len
+    matches = 0
+
+    for i in range(s1_len):
+        start = max(0, i - match_distance)
+        end = min(i + match_distance + 1, s2_len)
+        for j in range(start, end):
+            if s2_matches[j] or s1[i] != s2[j]:
+                continue
+            s1_matches[i] = s2_matches[j] = True
+            matches += 1
+            break
+
+    if not matches:
+        return 0.0
+
+    k = 0
+    transpositions = 0
+    for i in range(s1_len):
+        if not s1_matches[i]:
+            continue
+        while not s2_matches[k]:
+            k += 1
+        if s1[i] != s2[k]:
+            transpositions += 1
+        k += 1
+    transpositions /= 2
+
+    jaro = (
+        matches / s1_len
+        + matches / s2_len
+        + (matches - transpositions) / matches
+    ) / 3
+
+    prefix = 0
+    for i in range(min(4, s1_len, s2_len)):
+        if s1[i] == s2[i]:
+            prefix += 1
+        else:
+            break
+
+    return jaro + 0.1 * prefix * (1 - jaro)
+
+
 class MemGPT:
     """Simple in-process memory manager.
 
@@ -64,31 +119,43 @@ class MemGPT:
     def store_interaction(self, prompt: str, answer: str, session_id: str, tags: List[str] | None = None) -> None:
         """Persist a prompt/answer pair for ``session_id``.
 
-        ``tags`` may be supplied to aid later retrieval.
+        ``tags`` may include "pin" to force-pin an interaction.
         """
 
         entry_hash = hashlib.sha256((prompt + answer).encode("utf-8")).hexdigest()
         now = time.time()
+
         with self._lock:
             is_pinned = "pin" in (tags or [])
+
             if is_pinned:
                 bucket = self._pin_store.setdefault(session_id, [])
-            else:
-                bucket = self._data.setdefault(session_id, [])
+                # avoid exact-duplicate pins
                 for item in bucket:
                     if item.get("hash") == entry_hash:
                         return
+            else:
+                bucket = self._data.setdefault(session_id, [])
+                # exact hash-dedupe
+                for item in bucket:
+                    if item.get("hash") == entry_hash:
+                        return
+                # Jaro-Winkler dedupe vs last 3 answers
+                for item in bucket[-3:]:
+                    prev = item.get("answer", "")
+                    if jaro_winkler_similarity(answer, prev) >= 0.9:
+                        return
 
-            bucket.append(
-                {
-                    "prompt": prompt,
-                    "answer": answer,
-                    "tags": tags or [],
-                    "timestamp": now,
-                    "hash": entry_hash,
-                }
-            )
+            bucket.append({
+                "prompt": prompt,
+                "answer": answer,
+                "tags": tags or [],
+                "timestamp": now,
+                "hash": entry_hash,
+            })
+
             self._save()
+
 
     def summarize_session(self, session_id: str) -> str:
         """Return a condensed representation of a session's interactions."""
@@ -198,4 +265,4 @@ class MemGPT:
 # Reusable singleton ---------------------------------------------------------
 memgpt = MemGPT()
 
-__all__ = ["MemGPT", "memgpt"]
+__all__ = ["MemGPT", "memgpt", "jaro_winkler_similarity"]
