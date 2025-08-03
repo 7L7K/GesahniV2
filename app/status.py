@@ -20,7 +20,9 @@ async def health() -> dict:
 async def config(token: str | None = Query(default=None)) -> dict:
     if not ADMIN_TOKEN or token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="forbidden")
-    return {k: v for k, v in os.environ.items() if k.isupper()}
+    out = {k: v for k, v in os.environ.items() if k.isupper()}
+    out.setdefault("SIM_THRESHOLD", os.getenv("SIM_THRESHOLD", "0.90"))
+    return out
 
 
 @router.get("/ha_status")
