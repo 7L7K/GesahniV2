@@ -1,6 +1,7 @@
 import os
 import time
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from .home_assistant import _request
 from .llama_integration import get_status as llama_get_status
@@ -20,7 +21,9 @@ async def health() -> dict:
 async def config(token: str | None = Query(default=None)) -> dict:
     if not ADMIN_TOKEN or token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="forbidden")
-    return {k: v for k, v in os.environ.items() if k.isupper()}
+    out = {k: v for k, v in os.environ.items() if k.isupper()}
+    out.setdefault("SIM_THRESHOLD", os.getenv("SIM_THRESHOLD", "0.90"))
+    return out
 
 
 @router.get("/ha_status")
@@ -68,3 +71,9 @@ async def full_status() -> dict:
         "fallbacks": m["fallback"],
     }
     return out
+
+
+@router.get("/metrics")
+async def metrics() -> Response:
+    data = generate_latest()
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)

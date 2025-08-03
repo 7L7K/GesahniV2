@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import time
+import unicodedata
 import uuid
+import hashlib
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import chromadb
 from chromadb.config import Settings
@@ -15,6 +18,12 @@ from chromadb.utils.embedding_functions import EmbeddingFunction
 class VectorStore(ABC):
     """Abstract VectorStore interface."""
 
+    def __init__(self) -> None:
+        # Similarity threshold (0-1) for cache lookups.
+        self._sim_threshold = float(os.getenv("SIM_THRESHOLD", "0.90"))
+        # Chroma returns "distance" as 1 - similarity; convert threshold.
+        self._dist_cutoff = 1.0 - self._sim_threshold
+
     @abstractmethod
     def add_user_memory(self, user_id: str, memory: str) -> str: ...
 
@@ -22,7 +31,7 @@ class VectorStore(ABC):
     def query_user_memories(self, prompt: str, k: int = 5) -> List[str]: ...
 
     @abstractmethod
-    def cache_answer(self, *args: str) -> None: ...
+    def cache_answer(self, prompt: str, answer: str) -> None: ...
 
     @abstractmethod
     def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]: ...
@@ -69,6 +78,7 @@ class _SafeCollection:
 
 class ChromaVectorStore(VectorStore):
     def __init__(self) -> None:
+        super().__init__()
         settings = Settings(anonymized_telemetry=False)
         data = Path("data")
         final = data / "chroma"
@@ -110,9 +120,12 @@ class ChromaVectorStore(VectorStore):
         )
         return mem_id
 
-    def query_user_memories(self, prompt: str, k: int = 5) -> List[str]:
+    def query_user_memories(self, prompt: str, k: int | None = None) -> List[str]:
+        top_k = k if k is not None else int(os.getenv("MEM_TOP_K", "5"))
         results = self._user_memories.query(
-            query_texts=[prompt], n_results=k, include=["documents", "distances", "metadatas"]
+            query_texts=[prompt],
+            n_results=top_k,
+            include=["documents", "distances", "metadatas"],
         )
         docs = results.get("documents", [[]])[0]
         dists = results.get("distances", [[]])[0]
@@ -122,50 +135,48 @@ class ChromaVectorStore(VectorStore):
             if not doc:
                 continue
             sim = 1.0 - float(dist)
-            if sim < 0.80:
+            threshold = float(os.getenv("SIM_THRESHOLD", "0.80"))
+            if sim < threshold:
                 continue
             ts = float((meta or {}).get("ts", 0))
             items.append({"doc": doc, "sim": sim, "ts": ts})
         items.sort(key=lambda x: (-x["sim"], -x["ts"]))
-        return [it["doc"] for it in items[:3]]
+        return [it["doc"] for it in items[:top_k]]
 
     # ─── QA CACHE ─────────────────────────────────────────────────────────────
     def _cache_disabled(self) -> bool:
         return bool(os.getenv("DISABLE_QA_CACHE"))
 
-    def cache_answer(self, *args: str) -> None:
+    def _normalize(self, prompt: str) -> Tuple[str, str]:
+        normalized = prompt.lower().strip()
+        hashed = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+        return hashed, normalized
+
+    def cache_answer(self, prompt: str, answer: str) -> None:
         if self._cache_disabled():
             return
-        if len(args) == 2:
-            cache_id, prompt, answer = args[0], args[0], args[1]
-        elif len(args) == 3:
-            cache_id, prompt, answer = args
-        else:
-            raise TypeError("cache_answer expects 2 or 3 string arguments")
+        cache_id, norm = self._normalize(prompt)
         self.qa_cache.upsert(
             ids=[cache_id],
-            documents=[prompt],
+            documents=[norm],
             metadatas=[{"answer": answer, "timestamp": time.time(), "feedback": None}],
         )
 
     def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
         if self._cache_disabled():
             return None
-        result = self.qa_cache.query(query_texts=[prompt], n_results=1)
-        ids = result.get("ids", [[]])[0]
-        metas = result.get("metadatas", [[]])[0]
-        dists = result.get("distances", [[]])[0]
-        if not ids or not metas or not dists:
+        cache_id, _ = self._normalize(prompt)
+        result = self.qa_cache.get(ids=[cache_id], include=["metadatas", "documents"])
+        metas = result.get("metadatas", [])
+        if not metas:
             return None
-        cache_id = ids[0]
         meta = metas[0] or {}
-        dist = float(dists[0]) if dists else 1.0
         answer = meta.get("answer")
         fb = meta.get("feedback")
         ts = meta.get("timestamp", 0)
         if (
             fb == "down"
-            or dist > 0.01
+            or dist > self._dist_cutoff
             or (ts and time.time() - ts > ttl_seconds)
         ):
             try:
@@ -177,21 +188,23 @@ class ChromaVectorStore(VectorStore):
     def record_feedback(self, prompt: str, feedback: str) -> None:
         if self._cache_disabled():
             return
-        result = self.qa_cache.query(query_texts=[prompt], n_results=1)
-        ids = result.get("ids", [[]])[0]
-        metas = result.get("metadatas", [[]])[0]
-        if not ids or not metas:
+        cache_id, _ = self._normalize(prompt)
+        # fetch existing metadata
+        result = self._qa_cache.get(ids=[cache_id], include=["metadatas"])
+        metas = result.get("metadatas", [])
+        if not metas or metas[0] is None:
             return
-        cache_id = ids[0]
-        meta = metas[0] or {}
-        meta["feedback"] = feedback
-        self.qa_cache.update(ids=[cache_id], metadatas=[meta])
+
+        # update only the feedback field
+        new_meta = metas[0]
+        new_meta["feedback"] = feedback
+        self._qa_cache.update(ids=[cache_id], metadatas=[new_meta])
+
         if feedback == "down":
             try:
-                self.qa_cache.delete(ids=[cache_id])
-            except Exception:  # pragma: no cover - best effort
+                self._qa_cache.delete(ids=[cache_id])
+            except Exception:
                 pass
-
 
 class PgVectorStore(VectorStore):  # pragma: no cover - stub implementation
     def add_user_memory(self, user_id: str, memory: str) -> str:
@@ -200,7 +213,7 @@ class PgVectorStore(VectorStore):  # pragma: no cover - stub implementation
     def query_user_memories(self, prompt: str, k: int = 5) -> List[str]:
         return []
 
-    def cache_answer(self, *args: str) -> None:
+    def cache_answer(self, prompt: str, answer: str) -> None:
         pass
 
     def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
@@ -208,6 +221,27 @@ class PgVectorStore(VectorStore):  # pragma: no cover - stub implementation
 
     def record_feedback(self, prompt: str, feedback: str) -> None:
         pass
+
+
+def _normalize(text: str) -> str:
+    """Return a canonical form for hashing prompts."""
+    text = unicodedata.normalize("NFKD", text)
+    replacements = {
+        "’": "'",
+        "‘": "'",
+        "“": '"',
+        "”": '"',
+        "—": "-",
+        "–": "-",
+    }
+    for bad, good in replacements.items():
+        text = text.replace(bad, good)
+    return " ".join(text.split()).lower()
+
+
+def _normalized_hash(prompt: str) -> str:
+    """Return SHA-256 hash of the normalized prompt."""
+    return hashlib.sha256(_normalize(prompt).encode("utf-8")).hexdigest()
 
 
 def _get_store() -> VectorStore:
@@ -227,12 +261,24 @@ record_feedback = _store.record_feedback
 qa_cache = _store.qa_cache
 _qa_cache = qa_cache
 
+
+def invalidate_cache(prompt: str) -> None:
+    """Remove a cached answer for ``prompt`` if present."""
+    if bool(os.getenv("DISABLE_QA_CACHE")):
+        return
+    cache_id = _normalized_hash(prompt)
+    try:
+        _qa_cache.delete(ids=[cache_id])
+    except Exception:  # pragma: no cover - best effort
+        pass
+
 __all__ = [
     "add_user_memory",
     "query_user_memories",
     "cache_answer",
     "lookup_cached_answer",
     "record_feedback",
+    "invalidate_cache",
     "VectorStore",
     "ChromaVectorStore",
     "PgVectorStore",
