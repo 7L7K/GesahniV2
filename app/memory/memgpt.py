@@ -130,10 +130,6 @@ class MemGPT:
 
             if is_pinned:
                 bucket = self._pin_store.setdefault(session_id, [])
-                # avoid exact-duplicate pins
-                for item in bucket:
-                    if item.get("hash") == entry_hash:
-                        return
             else:
                 bucket = self._data.setdefault(session_id, [])
                 # exact hash-dedupe

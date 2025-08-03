@@ -6,8 +6,34 @@ from pathlib import Path
 from typing import List, Dict, Any
 from uuid import uuid4
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.date import DateTrigger
+try:
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.date import DateTrigger
+except Exception:  # pragma: no cover - optional dependency
+    class AsyncIOScheduler:  # minimal stub
+        def __init__(self, *a, **k):
+            self.running = False
+            self._jobs: Dict[str, Any] = {}
+
+        def start(self):
+            self.running = True
+
+        def add_job(self, func, trigger=None, id=None, args=None, replace_existing=False, **kw):
+            self._jobs[id] = {"func": func, "trigger": trigger, "args": args or []}
+
+        def remove_job(self, id):
+            self._jobs.pop(id, None)
+
+        def get_job(self, id):
+            return self._jobs.get(id)
+
+        def shutdown(self, wait=True):
+            self._jobs.clear()
+            self.running = False
+
+    class DateTrigger:  # pragma: no cover - simple container
+        def __init__(self, run_date=None):
+            self.run_date = run_date
 
 from .history import append_history
 
