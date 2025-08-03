@@ -5,7 +5,7 @@ import asyncio
 
 
 class DummyOpenAIEmbeddings:
-    async def create(self, model: str, input: str):  # pragma: no cover - simple stub
+    def create(self, model: str, input: str):  # pragma: no cover - simple stub
         class Resp:
             data = [type("d", (), {"embedding": [1.0, 2.0, 3.0]})()]
 
@@ -53,4 +53,3 @@ def test_benchmark(monkeypatch):
 
     metrics = asyncio.run(embeddings.benchmark("x", iterations=5))
     assert "latency" in metrics and "throughput" in metrics
-
