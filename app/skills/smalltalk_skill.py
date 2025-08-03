@@ -129,14 +129,20 @@ class SmalltalkSkill(Skill):
     async def run(self, prompt: str, match: Any) -> str:
         """Execute the skill and return the greeting response."""
 
-        resp = self.handle(prompt, getattr(match, "user", None))
+        resp = self._respond(prompt)
         if resp is None:
             raise ValueError("no greeting detected")
         return resp
 
-    def handle(self, prompt: str, user=None) -> Optional[str]:
-        """Return a canned response or ``None`` if *prompt* isn't a greeting."""
+    async def handle(self, prompt: str, user=None) -> str:
+        """Return a canned response or raise ``ValueError`` if not a greeting."""
 
+        resp = self._respond(prompt, user)
+        if resp is None:
+            raise ValueError("no greeting detected")
+        return resp
+
+    def _respond(self, prompt: str, user=None) -> Optional[str]:
         if not is_greeting(prompt):
             return None
 
@@ -214,4 +220,3 @@ class SmalltalkSkill(Skill):
 
 
 __all__ = ["SmalltalkSkill", "is_greeting", "GREETINGS"]
-
