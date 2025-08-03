@@ -10,7 +10,15 @@ try:
     import sounddevice as sd
 except Exception:  # pragma: no cover - optional dependency
     sd = None
-from scipy.io import wavfile
+
+try:
+    from scipy.io import wavfile  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    class _WavFileStub:
+        def write(self, *args, **kwargs):
+            raise RuntimeError("scipy not installed")
+
+    wavfile = _WavFileStub()  # type: ignore
 
 
 logger = logging.getLogger(__name__)
