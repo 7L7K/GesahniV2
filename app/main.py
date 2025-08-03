@@ -1,6 +1,6 @@
-from dotenv import load_dotenv
+from .env_utils import load_env
 
-load_dotenv()
+load_env()
 import logging
 import uuid
 from pathlib import Path
@@ -112,6 +112,12 @@ async def trace_request(request, call_next):
         log_record_var.reset(token_rec)
         req_id_var.reset(token_req)
     return response
+
+
+@app.middleware("http")
+async def reload_env_middleware(request: Request, call_next):
+    load_env()
+    return await call_next(request)
 
 
 @app.on_event("startup")
