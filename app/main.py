@@ -27,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi import Depends, Request
 from .deps.user import get_current_user_id
+from .user_store import user_store
 
 from . import router
 
@@ -104,6 +105,8 @@ async def trace_request(request, call_next):
     token_rec = log_record_var.set(rec)
     rec.session_id = request.headers.get("X-Session-ID")
     rec.user_id = _anon_user_id(request)
+    await user_store.ensure_user(rec.user_id)
+    await user_store.increment_request(rec.user_id)
     rec.channel = request.headers.get("X-Channel")
     rec.received_at = utc_now().isoformat()
     rec.started_at = rec.received_at
@@ -159,6 +162,22 @@ class ServiceRequest(BaseModel):
     domain: str
     service: str
     data: dict | None = None
+
+
+@app.post("/login")
+async def login(user_id: str = Depends(get_current_user_id)):
+    await user_store.ensure_user(user_id)
+    await user_store.increment_login(user_id)
+    stats = await user_store.get_stats(user_id)
+    return {"user_id": user_id, **stats}
+
+
+@app.get("/me")
+async def get_me(user_id: str = Depends(get_current_user_id)):
+    stats = await user_store.get_stats(user_id)
+    if stats is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"user_id": user_id, **stats}
 
 
 @app.post("/ask")
