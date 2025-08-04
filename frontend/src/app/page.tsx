@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ChatBubble from '../components/ChatBubble';
 import InputBar from '../components/InputBar';
+import { Button } from '@/components/ui/button';
 import { sendPrompt } from '@/lib/api';
 
 interface ChatMessage {
@@ -11,15 +12,33 @@ interface ChatMessage {
 }
 
 export default function Page() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'assistant', content: "Hey King, what’s good?" },
-  ]);
+  const initialMessage: ChatMessage = {
+    role: 'assistant',
+    content: "Hey King, what’s good?",
+  };
+  const [messages, setMessages] = useState<ChatMessage[]>([initialMessage]);
   const [loading, setLoading] = useState(false);
   const [model, setModel] = useState('llama3');
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto‑scroll whenever messages change
+  // Hydrate from localStorage on mount
   useEffect(() => {
+    const stored = localStorage.getItem('chat-history');
+    if (stored) {
+      try {
+        setMessages(JSON.parse(stored));
+      } catch {
+        setMessages([initialMessage]);
+      }
+    }
+  }, []);
+
+  // Persist messages after each update & auto‑scroll
+  useEffect(() => {
+    localStorage.setItem(
+      'chat-history',
+      JSON.stringify(messages.slice(-100)),
+    );
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -45,6 +64,10 @@ export default function Page() {
     }
   };
 
+  const clearHistory = () => {
+    setMessages([initialMessage]);
+  };
+
   return (
     <main className="flex flex-col h-screen bg-muted/50">
       {/* chat scroll area */}
@@ -58,13 +81,21 @@ export default function Page() {
 
       {/* input pinned bottom */}
       <footer className="sticky bottom-0 w-full border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-2xl mx-auto p-4">
+        <div className="max-w-2xl mx-auto p-4 space-y-2">
           <InputBar
             onSend={handleSend}
             loading={loading}
             model={model}
             onModelChange={setModel}
           />
+          <Button
+            onClick={clearHistory}
+            variant="ghost"
+            size="sm"
+            className="text-xs"
+          >
+            Clear history
+          </Button>
         </div>
       </footer>
     </main>
