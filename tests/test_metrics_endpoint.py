@@ -15,7 +15,7 @@ def test_metrics_endpoint(monkeypatch):
     monkeypatch.setattr(home_assistant, "startup_check", lambda: None)
     monkeypatch.setattr(llama_integration, "startup_check", lambda: None)
 
-    async def fake_route(prompt, model=None):
+    async def fake_route(prompt, model=None, user_id="u"):
         rec = log_record_var.get()
         if rec:
             rec.engine_used = "gpt"

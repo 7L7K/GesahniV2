@@ -44,8 +44,8 @@ class PromptBuilder:
     ) -> Tuple[str, int]:
         """Return a tuple of (prompt_str, prompt_tokens)."""
         date_time = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
-        summary = memgpt.summarize_session(session_id) or ""
-        memories: List[str] = query_user_memories(user_prompt, k=top_k)[:3]
+        summary = memgpt.summarize_session(session_id, user_id=user_id) or ""
+        memories: List[str] = query_user_memories(user_id, user_prompt, k=top_k)[:3]
         rec = log_record_var.get()
         if rec:
             rec.embed_tokens = _count_tokens(user_prompt)
