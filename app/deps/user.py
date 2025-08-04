@@ -2,7 +2,6 @@ from __future__ import annotations
 from uuid import uuid4
 from fastapi import Request, WebSocket
 from ..telemetry import LogRecord, log_record_var
-from ..main import _anon_user_id
 
 def get_current_user_id(request: Request | None = None, websocket: WebSocket | None = None) -> str:
     """
@@ -24,6 +23,7 @@ def get_current_user_id(request: Request | None = None, websocket: WebSocket | N
     # 2) If WS and still empty, derive via anon helper
     if not user_id and websocket is not None:
         auth = websocket.headers.get("Authorization")
+        from ..main import _anon_user_id  # local import to avoid circular
         user_id = _anon_user_id(auth)
         rec.user_id = user_id
 

@@ -20,3 +20,4 @@ chromadb
 tiktoken
 prometheus-client
 passlib[bcrypt]
+python-jose[cryptography]
