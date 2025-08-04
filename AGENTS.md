@@ -101,7 +101,7 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `FOLLOW_UPS_FILE` | `data/follow_ups.json` | no | Stored follow-up reminders |
 | `OLLAMA_URL` | `http://localhost:11434` | no | Ollama base URL |
 | `OLLAMA_MODEL` | – | yes | LLaMA model name |
-| `API_TOKEN` | – | no | Bearer token for protected endpoints |
+| `API_TOKEN` | – | no | JWT secret for protected endpoints |
 | `RATE_LIMIT_PER_MIN` | `60` | no | Requests per minute per IP |
 | `REDIS_URL` | `redis://localhost:6379/0` | no | RQ queue for async tasks |
 | `HISTORY_FILE` | `data/history.jsonl` | no | Request history log |

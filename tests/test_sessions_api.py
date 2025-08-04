@@ -2,6 +2,7 @@ import os
 import json
 from pathlib import Path
 
+import jwt
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("OLLAMA_URL", "http://x")
@@ -30,11 +31,16 @@ def setup_temp(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("API_TOKEN", "secret")
 
 
+def _headers() -> dict:
+    token = jwt.encode({"user_id": "tester"}, "secret", algorithm="HS256")
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_capture_flow(monkeypatch, tmp_path):
     setup_temp(monkeypatch, tmp_path)
     client = TestClient(app)
 
-    headers = {"Authorization": "Bearer secret"}
+    headers = _headers()
     resp = client.post("/capture/start", headers=headers)
     assert resp.status_code == 200
     data = resp.json()
@@ -87,7 +93,7 @@ def test_capture_flow(monkeypatch, tmp_path):
 
 def test_search_sort_and_pagination(monkeypatch, tmp_path):
     setup_temp(monkeypatch, tmp_path)
-    headers = {"Authorization": "Bearer secret"}
+    headers = _headers()
     for i in range(3):
         sid = f"2023-01-0{i+1}T00-00-00"
         sd = tmp_path / sid
@@ -109,7 +115,7 @@ def test_search_sort_and_pagination(monkeypatch, tmp_path):
 
 def test_search_by_tag(monkeypatch, tmp_path):
     setup_temp(monkeypatch, tmp_path)
-    headers = {"Authorization": "Bearer secret"}
+    headers = _headers()
     sid = "tagonly"
     sd = tmp_path / sid
     sd.mkdir()
@@ -130,7 +136,7 @@ def test_search_by_tag(monkeypatch, tmp_path):
 
 def test_manual_pipeline(monkeypatch, tmp_path):
     setup_temp(monkeypatch, tmp_path)
-    headers = {"Authorization": "Bearer secret"}
+    headers = _headers()
     client = TestClient(app)
 
     # create session and save only audio
