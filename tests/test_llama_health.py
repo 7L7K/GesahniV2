@@ -71,7 +71,7 @@ def test_router_skips_when_unhealthy(monkeypatch):
         "transcribe_errors": 0,
     }
 
-    result = asyncio.run(router.route_prompt("hello"))
+    result = asyncio.run(router.route_prompt("hello", user_id="u"))
     assert result == "ok"
     m = analytics.get_metrics()
     assert m["total"] == 1

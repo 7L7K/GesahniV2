@@ -33,7 +33,7 @@ def test_handle_returns_valid_format():
 
 
 def test_router_integration():
-    result = asyncio.run(router.route_prompt("hello"))
+    result = asyncio.run(router.route_prompt("hello", user_id="u"))
     assert any(result.startswith(g) for g in GREETINGS)
 
 

@@ -25,6 +25,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi import Depends, Request
+from .deps.user import get_current_user_id
 
 from . import router
 
@@ -155,10 +156,10 @@ class ServiceRequest(BaseModel):
 
 
 @app.post("/ask")
-async def ask(req: AskRequest):
+async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     logger.info("Received prompt: %s", req.prompt)
     try:
-        answer = await route_prompt(req.prompt, req.model)
+        answer = await route_prompt(req.prompt, req.model, user_id)
         return {"response": answer}
     except Exception as e:
         logger.exception("Error processing prompt: %s", e)
@@ -171,6 +172,7 @@ async def upload(
     file: UploadFile = File(...),
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     session_id = uuid.uuid4().hex
     session_dir = Path(SESSIONS_DIR) / session_id
@@ -192,6 +194,7 @@ async def capture_start(
     request: Request,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     return await start_capture_session()
 
@@ -206,6 +209,7 @@ async def capture_save(
     tags: str | None = Form(None),
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     tags_list = json.loads(tags) if tags else None
     await finalize_capture_session(session_id, audio, video, transcript, tags_list)
@@ -218,6 +222,7 @@ async def capture_tags(
     session_id: str = Form(...),
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     await queue_tag_extraction(session_id)
     return {"status": "accepted"}
@@ -228,6 +233,7 @@ async def capture_status(
     session_id: str,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     meta = get_session_meta(session_id)
     if not meta:
@@ -243,6 +249,7 @@ async def search_sessions(
     limit: int = 10,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     return await search_session_store(q, sort=sort, page=page, limit=limit)
 
@@ -252,6 +259,7 @@ async def list_sessions(
     status: SessionStatus | None = None,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     return list_session_store(status)
 
@@ -261,6 +269,7 @@ async def trigger_transcription_endpoint(
     session_id: str,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     enqueue_transcription(session_id)
     return {"status": "accepted"}
@@ -271,13 +280,14 @@ async def trigger_summary_endpoint(
     session_id: str,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     enqueue_summary(session_id)
     return {"status": "accepted"}
 
 
 @app.websocket("/transcribe")
-async def websocket_transcribe(ws: WebSocket):
+async def websocket_transcribe(ws: WebSocket, user_id: str = Depends(get_current_user_id)):
     await verify_ws(ws)
     await rate_limit_ws(ws)
     await ws.accept()
@@ -330,13 +340,13 @@ async def websocket_transcribe(ws: WebSocket):
 
 
 @app.post("/intent-test")
-async def intent_test(req: AskRequest):
+async def intent_test(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     logger.info("Intent test for: %s", req.prompt)
     return {"intent": "test", "prompt": req.prompt}
 
 
 @app.get("/ha/entities")
-async def ha_entities():
+async def ha_entities(user_id: str = Depends(get_current_user_id)):
     try:
         return await get_states()
     except Exception as e:
@@ -345,7 +355,7 @@ async def ha_entities():
 
 
 @app.post("/ha/service")
-async def ha_service(req: ServiceRequest):
+async def ha_service(req: ServiceRequest, user_id: str = Depends(get_current_user_id)):
     try:
         resp = await call_service(req.domain, req.service, req.data or {})
         return resp or {"status": "ok"}
@@ -355,7 +365,7 @@ async def ha_service(req: ServiceRequest):
 
 
 @app.get("/ha/resolve")
-async def ha_resolve(name: str):
+async def ha_resolve(name: str, user_id: str = Depends(get_current_user_id)):
     try:
         entity = await resolve_entity(name)
         if entity:
@@ -381,13 +391,17 @@ async def _background_transcribe(session_id: str) -> None:
 
 
 @app.post("/transcribe/{session_id}")
-async def start_transcription(session_id: str, background_tasks: BackgroundTasks):
+async def start_transcription(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user_id),
+):
     background_tasks.add_task(_background_transcribe, session_id)
     return {"status": "accepted"}
 
 
 @app.get("/transcribe/{session_id}")
-async def get_transcription(session_id: str):
+async def get_transcription(session_id: str, user_id: str = Depends(get_current_user_id)):
     transcript_path = Path(SESSIONS_DIR) / session_id / "transcript.txt"
     if transcript_path.exists():
         return {"text": transcript_path.read_text(encoding="utf-8")}
