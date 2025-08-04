@@ -48,16 +48,22 @@ from app.prompt_builder import PromptBuilder, MAX_PROMPT_TOKENS
 
 def test_prompt_builder_respects_token_limit(monkeypatch):
     big = "token " * 12000
-    monkeypatch.setattr(prompt_builder.memgpt, "summarize_session", lambda sid: big)
-    monkeypatch.setattr(prompt_builder, "query_user_memories", lambda q, k=5: [big, big])
+    monkeypatch.setattr(
+        prompt_builder.memgpt, "summarize_session", lambda sid, user_id=None: big
+    )
+    monkeypatch.setattr(
+        prompt_builder, "query_user_memories", lambda uid, q, k=5: [big, big]
+    )
 
     prompt, tokens = PromptBuilder.build("hi", session_id="s", user_id="u")
     assert tokens <= MAX_PROMPT_TOKENS
     
 def test_prompt_builder_includes_user_prompt(monkeypatch):
-    monkeypatch.setattr(prompt_builder.memgpt, "summarize_session", lambda sid: "")
     monkeypatch.setattr(
-        prompt_builder, "query_user_memories", lambda q, k=5: []
+        prompt_builder.memgpt, "summarize_session", lambda sid, user_id=None: ""
+    )
+    monkeypatch.setattr(
+        prompt_builder, "query_user_memories", lambda uid, q, k=5: []
     )
     user_msg = "what is the weather?"
     prompt, _ = PromptBuilder.build(user_msg, session_id="s", user_id="u")
@@ -66,12 +72,12 @@ def test_prompt_builder_includes_user_prompt(monkeypatch):
 
 def test_prompt_builder_fills_all_fields(monkeypatch):
     monkeypatch.setattr(
-        prompt_builder.memgpt, "summarize_session", lambda sid: "a summary"
+        prompt_builder.memgpt, "summarize_session", lambda sid, user_id=None: "a summary"
     )
     monkeypatch.setattr(
         prompt_builder,
         "query_user_memories",
-        lambda q, k=5: ["memory1", "memory2"],
+        lambda uid, q, k=5: ["memory1", "memory2"],
     )
     prompt, _ = PromptBuilder.build(
         "question?",
@@ -97,9 +103,13 @@ def test_prompt_builder_drops_summary_before_memories(monkeypatch):
     )
     monkeypatch.setattr(prompt_builder, "_count_tokens", lambda text: len(text))
     monkeypatch.setattr(prompt_builder, "MAX_PROMPT_TOKENS", 50)
-    monkeypatch.setattr(prompt_builder.memgpt, "summarize_session", lambda sid: "S" * 40)
     monkeypatch.setattr(
-        prompt_builder, "query_user_memories", lambda q, k=5: ["M" * 30]
+        prompt_builder.memgpt,
+        "summarize_session",
+        lambda sid, user_id=None: "S" * 40,
+    )
+    monkeypatch.setattr(
+        prompt_builder, "query_user_memories", lambda uid, q, k=5: ["M" * 30]
     )
     prompt, _ = PromptBuilder.build("hi", session_id="s", user_id="u")
     assert "S" * 40 not in prompt
