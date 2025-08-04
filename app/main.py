@@ -46,6 +46,7 @@ from .llama_integration import startup_check as llama_startup
 from .logging_config import configure_logging, req_id_var
 from .telemetry import LogRecord, log_record_var, utc_now
 from .status import router as status_router
+from .auth import router as auth_router
 from .transcription import transcribe_file
 from .history import append_history
 from .middleware import DedupMiddleware
@@ -72,7 +73,9 @@ def _anon_user_id(request: Request) -> str:
     if auth:
         return sha256(auth.encode("utf-8")).hexdigest()[:32]
 
-    ip = request.headers.get("X-Forwarded-For") or (request.client.host if request.client else None)
+    ip = request.headers.get("X-Forwarded-For") or (
+        request.client.host if request.client else None
+    )
     if ip:
         return sha256(ip.encode("utf-8")).hexdigest()[:32]
 
@@ -95,6 +98,7 @@ app.add_middleware(
 app.add_middleware(DedupMiddleware)
 
 app.include_router(status_router)
+app.include_router(auth_router)
 
 
 @app.middleware("http")
@@ -295,9 +299,9 @@ async def trigger_summary_endpoint(
 @app.websocket("/transcribe")
 async def websocket_transcribe(
     ws: WebSocket,
-    user_id: str      = Depends(get_current_user_id),
-    _: None           = Depends(verify_ws),
-    __: None          = Depends(rate_limit_ws),
+    user_id: str = Depends(get_current_user_id),
+    _: None = Depends(verify_ws),
+    __: None = Depends(rate_limit_ws),
 ):
     # Now we’re clean—accept and roll
     await ws.accept()
