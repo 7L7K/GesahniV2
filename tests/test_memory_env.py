@@ -14,8 +14,8 @@ def test_memory_env_reload(monkeypatch):
     monkeypatch.setattr(store, "_user_memories", fake_collection)
     monkeypatch.setenv("SIM_THRESHOLD", "0")
     monkeypatch.setenv("MEM_TOP_K", "1")
-    assert store.query_user_memories("x") == ["A"]
+    assert store.query_user_memories("u", "x") == ["A"]
     monkeypatch.setenv("MEM_TOP_K", "2")
-    assert store.query_user_memories("x") == ["A", "B"]
+    assert store.query_user_memories("u", "x") == ["A", "B"]
     monkeypatch.setenv("SIM_THRESHOLD", "0.95")
-    assert store.query_user_memories("x") == []
+    assert store.query_user_memories("u", "x") == []
