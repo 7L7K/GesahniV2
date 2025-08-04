@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from .env_utils import load_env
 
 load_env()
@@ -59,7 +60,6 @@ from .session_manager import get_session_meta
 from .session_store import list_sessions as list_session_store, SessionStatus
 from .tasks import enqueue_transcription, enqueue_summary
 from .security import verify_token, rate_limit, verify_ws, rate_limit_ws
-from .metrics import REQUEST_COUNT, REQUEST_LATENCY, REQUEST_COST
 from .analytics import record_latency, latency_p95
 
 configure_logging()
@@ -67,26 +67,16 @@ logger = logging.getLogger(__name__)
 
 
 def _anon_user_id(request: Request) -> str:
-    """Return an anonymous user identifier from request details.
-
-    The identifier is derived from the ``Authorization`` header when present.
-    If absent, the client's IP address is hashed.  As a last resort a random
-    session ID is generated.  The resulting string is a short, stable hash that
-    can be used to correlate requests from the same client without exposing
-    sensitive data.
-    """
-
+    """Return an anonymous user identifier from request details (auth header → IP → random)."""
     auth = request.headers.get("Authorization")
     if auth:
-        return sha256(auth.encode("utf-8")).hexdigest()[:12]
+        return sha256(auth.encode("utf-8")).hexdigest()[:32]
 
-    ip = request.headers.get("X-Forwarded-For")
-    if not ip and request.client:
-        ip = request.client.host
+    ip = request.headers.get("X-Forwarded-For") or (request.client.host if request.client else None)
     if ip:
-        return sha256(ip.encode("utf-8")).hexdigest()[:12]
+        return sha256(ip.encode("utf-8")).hexdigest()[:32]
 
-    return uuid.uuid4().hex[:12]
+    return uuid.uuid4().hex[:32]
 
 
 app = FastAPI(title="GesahniV2")
@@ -287,7 +277,7 @@ async def trigger_transcription_endpoint(
     __: None = Depends(rate_limit),
     user_id: str = Depends(get_current_user_id),
 ):
-    enqueue_transcription(session_id)
+    enqueue_transcription(session_id, user_id)
     return {"status": "accepted"}
 
 
@@ -310,10 +300,9 @@ async def websocket_transcribe(
     await rate_limit_ws(ws)
     await ws.accept()
     msg = await ws.receive()
-    meta = None
     if "text" in msg and msg["text"]:
         try:
-            meta = json.loads(msg["text"])
+            json.loads(msg["text"])
         except Exception:
             await ws.send_json({"error": "invalid metadata"})
             await ws.close()
