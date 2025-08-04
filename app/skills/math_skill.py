@@ -1,13 +1,17 @@
 from __future__ import annotations
 import re
-from typing import Optional
 from .base import Skill
+
 
 class MathSkill(Skill):
     PATTERNS = [
-        re.compile(r"(?P<a>\d+(?:\.\d+)?)\s*(?P<op>[+\-*/x×])\s*(?P<b>\d+(?:\.\d+)?)", re.I),
+        re.compile(
+            r"(?P<a>\d+(?:\.\d+)?)\s*(?P<op>[+\-*/x×])\s*(?P<b>\d+(?:\.\d+)?)", re.I
+        ),
         re.compile(r"(?P<pct>\d+(?:\.\d+)?)%\s*of\s*(?P<of>\d+(?:\.\d+)?)", re.I),
-        re.compile(r"round\s+(?P<val>\d+(?:\.\d+)?)\s+to\s+(?P<places>\d+)\s+decimal", re.I),
+        re.compile(
+            r"round\s+(?P<val>\d+(?:\.\d+)?)\s+to\s+(?P<places>\d+)\s+decimal", re.I
+        ),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
@@ -19,6 +23,8 @@ class MathSkill(Skill):
             if op in {"x", "×", "*"}:
                 res = a * b
             elif op == "/":
+                if b == 0:
+                    return "Cannot divide by zero"
                 res = a / b
             elif op == "+":
                 res = a + b
