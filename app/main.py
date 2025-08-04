@@ -294,12 +294,15 @@ async def trigger_summary_endpoint(
 
 @app.websocket("/transcribe")
 async def websocket_transcribe(
-    ws: WebSocket, user_id: str = Depends(get_current_user_id)
+    ws: WebSocket,
+    user_id: str      = Depends(get_current_user_id),
+    _: None           = Depends(verify_ws),
+    __: None          = Depends(rate_limit_ws),
 ):
-    await verify_ws(ws)
-    await rate_limit_ws(ws)
+    # Now we’re clean—accept and roll
     await ws.accept()
     msg = await ws.receive()
+
     if "text" in msg and msg["text"]:
         try:
             json.loads(msg["text"])
@@ -317,6 +320,7 @@ async def websocket_transcribe(
     audio_path = Path(SESSIONS_DIR) / session_id / "stream.wav"
     audio_path.parent.mkdir(parents=True, exist_ok=True)
     full_text = ""
+
     with open(audio_path, "ab") as fh:
         try:
             while True:
@@ -325,13 +329,16 @@ async def websocket_transcribe(
                         break
                     msg = await ws.receive()
                     continue
+
                 chunk = msg.get("bytes")
                 if not chunk:
                     msg = await ws.receive()
                     continue
+
                 fh.write(chunk)
                 tmp = audio_path.with_suffix(".part")
                 tmp.write_bytes(chunk)
+
                 try:
                     text = await transcribe_file(str(tmp))
                     full_text += (" " if full_text else "") + text
@@ -341,6 +348,7 @@ async def websocket_transcribe(
                 finally:
                     if tmp.exists():
                         tmp.unlink()
+
                 msg = await ws.receive()
         except WebSocketDisconnect:
             pass
