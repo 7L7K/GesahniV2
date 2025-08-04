@@ -19,3 +19,4 @@ aiosqlite
 chromadb
 tiktoken
 prometheus-client
+sqlalchemy
