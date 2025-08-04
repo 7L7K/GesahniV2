@@ -19,5 +19,6 @@ aiosqlite
 chromadb
 tiktoken
 prometheus-client
+sqlalchemy
 passlib[bcrypt]
 python-jose[cryptography]
