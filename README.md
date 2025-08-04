@@ -78,6 +78,17 @@ python record_session.py --duration 5 --output ./sessions
 * Import `grafana_dashboard.json` into Grafana for a sample dashboard with latency,
   cache hit rate, cost, and request volume panels.
 
+## 🔐 Authentication
+
+Authenticate by POSTing to `/login` with a JSON body containing `username` and
+`password`. Valid credentials are supplied via the `LOGIN_USERS` environment
+variable as a JSON object mapping usernames to passwords. A successful login
+returns a JWT access token embedding the user ID in the `sub` claim.
+
+Tokens expire after `JWT_EXPIRE_MINUTES` (default 30 minutes) to limit risk if a
+token is leaked. There is no long‑lived refresh token yet—clients should simply
+call `/login` again to obtain a fresh token when the previous one expires.
+
 ## 🎯 Endpoints
 
 * `/ask`: Send your prompt here.
