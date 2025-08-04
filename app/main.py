@@ -66,15 +66,29 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 
-def _anon_user_id(request: Request) -> str:
-    """Return an anonymous user identifier from request details (auth header → IP → random)."""
-    auth = request.headers.get("Authorization")
+def _anon_user_id(source: Request | str | None) -> str:
+    """Return a stable anonymous identifier.
+
+    Accepts either a FastAPI ``Request`` (uses auth header then IP), a raw
+    Authorization header string, or ``None`` which yields "local".
+    Auth-derived hashes are 32 chars; IP-derived hashes are truncated to 12.
+    """
+
+    if source is None:
+        return "local"
+
+    if isinstance(source, str):
+        return sha256(source.encode("utf-8")).hexdigest()[:32]
+
+    auth = source.headers.get("Authorization")
     if auth:
         return sha256(auth.encode("utf-8")).hexdigest()[:32]
 
-    ip = request.headers.get("X-Forwarded-For") or (request.client.host if request.client else None)
+    ip = source.headers.get("X-Forwarded-For") or (
+        source.client.host if source.client else None
+    )
     if ip:
-        return sha256(ip.encode("utf-8")).hexdigest()[:32]
+        return sha256(ip.encode("utf-8")).hexdigest()[:12]
 
     return uuid.uuid4().hex[:32]
 
