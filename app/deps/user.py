@@ -5,7 +5,7 @@ from fastapi import Request, WebSocket
 from ..telemetry import log_record_var
 
 
-def get_current_user_id(request: Request | WebSocket | None = None) -> str:
+def get_current_user_id(request: Request = None, websocket: WebSocket = None) -> str:
     """Return the current user's identifier.
 
     The ID is pulled from ``log_record_var`` which is populated by the request
@@ -17,8 +17,9 @@ def get_current_user_id(request: Request | WebSocket | None = None) -> str:
 
     rec = log_record_var.get()
     user_id = rec.user_id if rec and rec.user_id else "local"
-    if request is not None:
-        request.state.user_id = user_id
+    req = request or websocket
+    if req is not None:
+        req.state.user_id = user_id
     return user_id
 
 __all__ = ["get_current_user_id"]
