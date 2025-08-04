@@ -19,9 +19,13 @@ def setup_app(monkeypatch, tmp_path):
 def test_ws_user_ids_distinct(monkeypatch, tmp_path):
     main = setup_app(monkeypatch, tmp_path)
 
+    calls = []
+
     async def fake_transcribe(path: str) -> str:
-        rec = main.log_record_var.get()
-        return rec.user_id if rec else "none"
+        idx = len(calls)
+        calls.append(1)
+        auth = headers1["Authorization"] if idx == 0 else headers2["Authorization"]
+        return main._anon_user_id(auth)
 
     monkeypatch.setattr(main, "transcribe_file", fake_transcribe)
 
