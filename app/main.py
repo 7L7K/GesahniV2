@@ -70,7 +70,11 @@ def _anon_user_id(auth: str | None) -> str:
     """Return an anonymous user identifier from an auth header."""
     if not auth:
         return "local"
-    return sha256(auth.encode("utf-8")).hexdigest()[:12]
+    # Use a longer slice of the SHA-256 digest to minimise collision risk when
+    # deriving an anonymous identifier from the provided auth header.  Twelve
+    # hex characters (~48 bits) was previously used which could collide for a
+    # large user base; expand to the first 32 characters (~128 bits).
+    return sha256(auth.encode("utf-8")).hexdigest()[:32]
 
 
 app = FastAPI(title="GesahniV2")
