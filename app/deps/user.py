@@ -1,41 +1,43 @@
 from __future__ import annotations
-
 from uuid import uuid4
-
 from fastapi import Request, WebSocket
-
 from ..telemetry import LogRecord, log_record_var
+from ..main import _anon_user_id
 
-
-def get_current_user_id(request: Request) -> str:
-    """Return the current user's identifier.
-
-    The ID is pulled from ``log_record_var`` which is populated by the request
-    tracing middleware. When called outside of a request context, ``"local"`` is
-    returned. If a ``Request`` or ``WebSocket`` is provided the resolved
-    ``user_id`` is also attached to ``request.state`` for easy downstream
-    access.
+def get_current_user_id(request: Request | None = None, websocket: WebSocket | None = None) -> str:
     """
-
+    Return the current user's identifier.
+    - Pulled from log_record_var if set by HTTP middleware.
+    - For WebSocket, fall back to hashing Authorization/IP via _anon_user_id.
+    - Defaults to "local" outside of any context.
+    Also attaches user_id to request.state or websocket.state.
+    """
+    # 1) Try to get existing LogRecord
     rec = log_record_var.get()
     if rec is None:
+        # no HTTP context—create a minimal record so we have a place to stash
         rec = LogRecord(req_id=uuid4().hex)
         log_record_var.set(rec)
 
-    user_id = rec.user_id
+    user_id = rec.user_id or ""
 
-    if not user_id and isinstance(request, WebSocket):
-        from ..main import _anon_user_id
-
-        user_id = _anon_user_id(request.headers.get("Authorization"))
+    # 2) If WS and still empty, derive via anon helper
+    if not user_id and websocket is not None:
+        auth = websocket.headers.get("Authorization")
+        user_id = _anon_user_id(auth)
         rec.user_id = user_id
 
+    # 3) Final fallback
     if not user_id:
         user_id = "local"
 
-    request.state.user_id = user_id
+    # 4) Attach to state for whichever object we got
+    target = request or websocket
+    if target is not None:
+        target.state.user_id = user_id
 
     return user_id
+
 
 
 __all__ = ["get_current_user_id"]
