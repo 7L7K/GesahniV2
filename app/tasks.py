@@ -2,8 +2,6 @@ import json
 import os
 import time
 import asyncio
-from pathlib import Path
-from typing import Any
 
 try:
     from redis import Redis
@@ -39,17 +37,20 @@ def _chunk_text(text: str, size: int = 1024) -> list[str]:
     return [" ".join(words[i : i + size]) for i in range(0, len(words), size)]
 
 
-def enqueue_transcription(session_id: str) -> None:
+def enqueue_transcription(session_id: str, user_id: str | None = None) -> None:
     update_status(session_id, SessionStatus.PROCESSING_WHISPER)
+    if user_id is None:
+        meta = _load_meta(session_id)
+        user_id = meta.get("user_id", "anon")
     try:
         q = _get_queue()
-        q.enqueue(transcribe_task, session_id)
+        q.enqueue(transcribe_task, session_id, user_id)
     except Exception:
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(asyncio.to_thread(transcribe_task, session_id))
+            loop.create_task(asyncio.to_thread(transcribe_task, session_id, user_id))
         except RuntimeError:
-            transcribe_task(session_id)
+            transcribe_task(session_id, user_id)
 
 
 def enqueue_tag_extraction(session_id: str) -> None:
@@ -78,7 +79,7 @@ def enqueue_summary(session_id: str) -> None:
             summary_task(session_id)
 
 
-def transcribe_task(session_id: str) -> None:
+def transcribe_task(session_id: str, user_id: str) -> None:
     session_dir = SESSIONS_DIR / session_id
     audio_path = session_dir / "audio.wav"
     transcript_path = session_dir / "transcript.txt"
@@ -89,7 +90,7 @@ def transcribe_task(session_id: str) -> None:
         transcript_path.write_text(text, encoding="utf-8")
         update_status(session_id, SessionStatus.TRANSCRIBED)
         for chunk in _chunk_text(text):
-            add_user_memory("anon", chunk)
+            add_user_memory(user_id, chunk)
     except Exception as e:  # pragma: no cover - network errors
         append_error(session_id, str(e))
         update_status(session_id, SessionStatus.ERROR)
@@ -111,7 +112,9 @@ def tag_task(session_id: str) -> None:
     try:
         text = transcript_path.read_text(encoding="utf-8")
         tags = extract_tags_from_text(text)
-        tags_path.write_text(json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8")
+        tags_path.write_text(
+            json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         meta["tags"] = tags
         update_status(session_id, SessionStatus.DONE)
     except Exception as e:  # pragma: no cover - nlp errors
@@ -134,7 +137,9 @@ def summary_task(session_id: str) -> None:
             json.dumps({"summary": summary}, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        tags_path.write_text(json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8")
+        tags_path.write_text(
+            json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         meta = _load_meta(session_id)
         meta["tags"] = tags
         _save_meta(session_id, meta)
