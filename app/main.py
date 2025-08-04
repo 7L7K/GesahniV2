@@ -66,15 +66,17 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 
-def _anon_user_id(auth: str | None) -> str:
-    """Return an anonymous user identifier from an auth header."""
-    if not auth:
-        return "local"
-    # Use a longer slice of the SHA-256 digest to minimise collision risk when
-    # deriving an anonymous identifier from the provided auth header.  Twelve
-    # hex characters (~48 bits) was previously used which could collide for a
-    # large user base; expand to the first 32 characters (~128 bits).
-    return sha256(auth.encode("utf-8")).hexdigest()[:32]
+def _anon_user_id(request: Request) -> str:
+    """Return an anonymous user identifier from request details (auth header → IP → random)."""
+    auth = request.headers.get("Authorization")
+    if auth:
+        return sha256(auth.encode("utf-8")).hexdigest()[:32]
+
+    ip = request.headers.get("X-Forwarded-For") or (request.client.host if request.client else None)
+    if ip:
+        return sha256(ip.encode("utf-8")).hexdigest()[:32]
+
+    return uuid.uuid4().hex[:32]
 
 
 app = FastAPI(title="GesahniV2")
@@ -101,7 +103,7 @@ async def trace_request(request, call_next):
     token_req = req_id_var.set(rec.req_id)
     token_rec = log_record_var.set(rec)
     rec.session_id = request.headers.get("X-Session-ID")
-    rec.user_id = _anon_user_id(request.headers.get("Authorization"))
+    rec.user_id = _anon_user_id(request)
     rec.channel = request.headers.get("X-Channel")
     rec.received_at = utc_now().isoformat()
     rec.started_at = rec.received_at
