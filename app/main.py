@@ -66,11 +66,27 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 
-def _anon_user_id(auth: str | None) -> str:
-    """Return an anonymous user identifier from an auth header."""
-    if not auth:
-        return "local"
-    return sha256(auth.encode("utf-8")).hexdigest()[:12]
+def _anon_user_id(request: Request) -> str:
+    """Return an anonymous user identifier from request details.
+
+    The identifier is derived from the ``Authorization`` header when present.
+    If absent, the client's IP address is hashed.  As a last resort a random
+    session ID is generated.  The resulting string is a short, stable hash that
+    can be used to correlate requests from the same client without exposing
+    sensitive data.
+    """
+
+    auth = request.headers.get("Authorization")
+    if auth:
+        return sha256(auth.encode("utf-8")).hexdigest()[:12]
+
+    ip = request.headers.get("X-Forwarded-For")
+    if not ip and request.client:
+        ip = request.client.host
+    if ip:
+        return sha256(ip.encode("utf-8")).hexdigest()[:12]
+
+    return uuid.uuid4().hex[:12]
 
 
 app = FastAPI(title="GesahniV2")
@@ -97,7 +113,7 @@ async def trace_request(request, call_next):
     token_req = req_id_var.set(rec.req_id)
     token_rec = log_record_var.set(rec)
     rec.session_id = request.headers.get("X-Session-ID")
-    rec.user_id = _anon_user_id(request.headers.get("Authorization"))
+    rec.user_id = _anon_user_id(request)
     rec.channel = request.headers.get("X-Channel")
     rec.received_at = utc_now().isoformat()
     rec.started_at = rec.received_at
@@ -287,7 +303,9 @@ async def trigger_summary_endpoint(
 
 
 @app.websocket("/transcribe")
-async def websocket_transcribe(ws: WebSocket, user_id: str = Depends(get_current_user_id)):
+async def websocket_transcribe(
+    ws: WebSocket, user_id: str = Depends(get_current_user_id)
+):
     await verify_ws(ws)
     await rate_limit_ws(ws)
     await ws.accept()
@@ -401,7 +419,9 @@ async def start_transcription(
 
 
 @app.get("/transcribe/{session_id}")
-async def get_transcription(session_id: str, user_id: str = Depends(get_current_user_id)):
+async def get_transcription(
+    session_id: str, user_id: str = Depends(get_current_user_id)
+):
     transcript_path = Path(SESSIONS_DIR) / session_id / "transcript.txt"
     if transcript_path.exists():
         return {"text": transcript_path.read_text(encoding="utf-8")}
