@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from .env_utils import load_env
 
 load_env()
@@ -59,18 +60,23 @@ from .session_manager import get_session_meta
 from .session_store import list_sessions as list_session_store, SessionStatus
 from .tasks import enqueue_transcription, enqueue_summary
 from .security import verify_token, rate_limit, verify_ws, rate_limit_ws
-from .metrics import REQUEST_COUNT, REQUEST_LATENCY, REQUEST_COST
 from .analytics import record_latency, latency_p95
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
 
-def _anon_user_id(auth: str | None) -> str:
-    """Return an anonymous user identifier from an auth header."""
-    if not auth:
-        return "local"
-    return sha256(auth.encode("utf-8")).hexdigest()[:12]
+def _anon_user_id(request: Request) -> str:
+    """Return an anonymous user identifier from request details (auth header → IP → random)."""
+    auth = request.headers.get("Authorization")
+    if auth:
+        return sha256(auth.encode("utf-8")).hexdigest()[:32]
+
+    ip = request.headers.get("X-Forwarded-For") or (request.client.host if request.client else None)
+    if ip:
+        return sha256(ip.encode("utf-8")).hexdigest()[:32]
+
+    return uuid.uuid4().hex[:32]
 
 
 app = FastAPI(title="GesahniV2")
@@ -97,7 +103,7 @@ async def trace_request(request, call_next):
     token_req = req_id_var.set(rec.req_id)
     token_rec = log_record_var.set(rec)
     rec.session_id = request.headers.get("X-Session-ID")
-    rec.user_id = _anon_user_id(request.headers.get("Authorization"))
+    rec.user_id = _anon_user_id(request)
     rec.channel = request.headers.get("X-Channel")
     rec.received_at = utc_now().isoformat()
     rec.started_at = rec.received_at
@@ -271,7 +277,7 @@ async def trigger_transcription_endpoint(
     __: None = Depends(rate_limit),
     user_id: str = Depends(get_current_user_id),
 ):
-    enqueue_transcription(session_id)
+    enqueue_transcription(session_id, user_id)
     return {"status": "accepted"}
 
 
@@ -287,16 +293,19 @@ async def trigger_summary_endpoint(
 
 
 @app.websocket("/transcribe")
-async def websocket_transcribe(ws: WebSocket) -> None:
-    user_id = get_current_user_id(ws)
-    await verify_ws(ws)
-    await rate_limit_ws(ws)
+async def websocket_transcribe(
+    ws: WebSocket,
+    user_id: str      = Depends(get_current_user_id),
+    _: None           = Depends(verify_ws),
+    __: None          = Depends(rate_limit_ws),
+):
+    # Now we’re clean—accept and roll
     await ws.accept()
     msg = await ws.receive()
-    meta = None
+
     if "text" in msg and msg["text"]:
         try:
-            meta = json.loads(msg["text"])
+            json.loads(msg["text"])
         except Exception:
             await ws.send_json({"error": "invalid metadata"})
             await ws.close()
@@ -311,6 +320,7 @@ async def websocket_transcribe(ws: WebSocket) -> None:
     audio_path = Path(SESSIONS_DIR) / session_id / "stream.wav"
     audio_path.parent.mkdir(parents=True, exist_ok=True)
     full_text = ""
+
     with open(audio_path, "ab") as fh:
         try:
             while True:
@@ -319,13 +329,16 @@ async def websocket_transcribe(ws: WebSocket) -> None:
                         break
                     msg = await ws.receive()
                     continue
+
                 chunk = msg.get("bytes")
                 if not chunk:
                     msg = await ws.receive()
                     continue
+
                 fh.write(chunk)
                 tmp = audio_path.with_suffix(".part")
                 tmp.write_bytes(chunk)
+
                 try:
                     text = await transcribe_file(str(tmp))
                     full_text += (" " if full_text else "") + text
@@ -335,6 +348,7 @@ async def websocket_transcribe(ws: WebSocket) -> None:
                 finally:
                     if tmp.exists():
                         tmp.unlink()
+
                 msg = await ws.receive()
         except WebSocketDisconnect:
             pass

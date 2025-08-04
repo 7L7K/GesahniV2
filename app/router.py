@@ -13,7 +13,6 @@ from .memory.vector_store import (
     add_user_memory,
     cache_answer,
     lookup_cached_answer,
-    record_feedback,
 )
 from .llama_integration import OLLAMA_MODEL, ask_llama
 from . import llama_integration
@@ -21,7 +20,7 @@ from .telemetry import log_record_var
 from .memory import memgpt
 from .prompt_builder import PromptBuilder, _count_tokens
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
-from . import skills  # populate built-in registry (SmalltalkSkill, etc.)
+from . import skills  # populate built-in registry (SmalltalkSkill, etc.)  # noqa: F401
 from .intent_detector import detect_intent
 from .deps.user import get_current_user_id
 
@@ -71,7 +70,9 @@ async def route_prompt(
                 rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
             await append_history(prompt, "gpt", text)
             await record("gpt", fallback=True)
-            memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
+            memgpt.store_interaction(
+                prompt, text, session_id=session_id, user_id=user_id
+            )
             add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
             cache_answer(norm_prompt, text)
             return text
@@ -147,7 +148,7 @@ async def route_prompt(
         memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
         add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
         cache_answer(norm_prompt, text)
-        return "ok"
+        return text
 
     # F) Build prompt with context
     built_prompt, ptokens = PromptBuilder.build(

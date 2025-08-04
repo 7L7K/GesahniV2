@@ -56,6 +56,6 @@ class WeatherSkill(Skill):
         desc = data.get("weather", [{}])[0].get("description", "")
         return (
             f"{city.title()} is currently {desc}, around {temp:.0f}°F."
-            if temp
+            if temp is not None
             else f"No weather data for {city}."
         )

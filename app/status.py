@@ -1,6 +1,7 @@
 import os
 import time
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from .deps.user import get_current_user_id
 # ``prometheus_client`` is an optional dependency that provides a helper for
 # exposing metrics in Prometheus' text format.  The library isn't required for
 # most of the application logic and the unit tests used in this kata do not
@@ -37,12 +38,15 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
 
 
 @router.get("/health")
-async def health() -> dict:
+async def health(user_id: str = Depends(get_current_user_id)) -> dict:
     return {"status": "ok"}
 
 
 @router.get("/config")
-async def config(token: str | None = Query(default=None)) -> dict:
+async def config(
+    token: str | None = Query(default=None),
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
     if not ADMIN_TOKEN or token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="forbidden")
     out = {k: v for k, v in os.environ.items() if k.isupper()}
@@ -56,7 +60,7 @@ async def config(token: str | None = Query(default=None)) -> dict:
 
 
 @router.get("/ha_status")
-async def ha_status() -> dict:
+async def ha_status(user_id: str = Depends(get_current_user_id)) -> dict:
     start = time.monotonic()
     try:
         await _request("GET", "/states")
@@ -67,7 +71,7 @@ async def ha_status() -> dict:
 
 
 @router.get("/llama_status")
-async def llama_status() -> dict:
+async def llama_status(user_id: str = Depends(get_current_user_id)) -> dict:
     try:
         return await llama_get_status()
     except Exception:
@@ -75,7 +79,7 @@ async def llama_status() -> dict:
 
 
 @router.get("/status")
-async def full_status() -> dict:
+async def full_status(user_id: str = Depends(get_current_user_id)) -> dict:
     out = {
         "backend": "ok",
         "ha": "error",
@@ -103,6 +107,6 @@ async def full_status() -> dict:
 
 
 @router.get("/metrics")
-async def metrics() -> Response:
+async def metrics(user_id: str = Depends(get_current_user_id)) -> Response:
     data = generate_latest()
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)
