@@ -287,7 +287,8 @@ async def trigger_summary_endpoint(
 
 
 @app.websocket("/transcribe")
-async def websocket_transcribe(ws: WebSocket, user_id: str = Depends(get_current_user_id)):
+async def websocket_transcribe(ws: WebSocket) -> None:
+    user_id = get_current_user_id(ws)
     await verify_ws(ws)
     await rate_limit_ws(ws)
     await ws.accept()
@@ -401,7 +402,9 @@ async def start_transcription(
 
 
 @app.get("/transcribe/{session_id}")
-async def get_transcription(session_id: str, user_id: str = Depends(get_current_user_id)):
+async def get_transcription(
+    session_id: str, user_id: str = Depends(get_current_user_id)
+):
     transcript_path = Path(SESSIONS_DIR) / session_id / "transcript.txt"
     if transcript_path.exists():
         return {"text": transcript_path.read_text(encoding="utf-8")}
