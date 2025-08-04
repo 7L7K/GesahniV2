@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from .env_utils import load_env
 
 load_env()
@@ -59,7 +60,6 @@ from .session_manager import get_session_meta
 from .session_store import list_sessions as list_session_store, SessionStatus
 from .tasks import enqueue_transcription, enqueue_summary
 from .security import verify_token, rate_limit, verify_ws, rate_limit_ws
-from .metrics import REQUEST_COUNT, REQUEST_LATENCY, REQUEST_COST
 from .analytics import record_latency, latency_p95
 
 configure_logging()
@@ -271,7 +271,7 @@ async def trigger_transcription_endpoint(
     __: None = Depends(rate_limit),
     user_id: str = Depends(get_current_user_id),
 ):
-    enqueue_transcription(session_id)
+    enqueue_transcription(session_id, user_id)
     return {"status": "accepted"}
 
 
@@ -287,15 +287,16 @@ async def trigger_summary_endpoint(
 
 
 @app.websocket("/transcribe")
-async def websocket_transcribe(ws: WebSocket, user_id: str = Depends(get_current_user_id)):
+async def websocket_transcribe(
+    ws: WebSocket, user_id: str = Depends(get_current_user_id)
+):
     await verify_ws(ws)
     await rate_limit_ws(ws)
     await ws.accept()
     msg = await ws.receive()
-    meta = None
     if "text" in msg and msg["text"]:
         try:
-            meta = json.loads(msg["text"])
+            json.loads(msg["text"])
         except Exception:
             await ws.send_json({"error": "invalid metadata"})
             await ws.close()
@@ -401,7 +402,9 @@ async def start_transcription(
 
 
 @app.get("/transcribe/{session_id}")
-async def get_transcription(session_id: str, user_id: str = Depends(get_current_user_id)):
+async def get_transcription(
+    session_id: str, user_id: str = Depends(get_current_user_id)
+):
     transcript_path = Path(SESSIONS_DIR) / session_id / "transcript.txt"
     if transcript_path.exists():
         return {"text": transcript_path.read_text(encoding="utf-8")}
