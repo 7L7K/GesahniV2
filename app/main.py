@@ -27,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi import Depends, Request
 from .deps.user import get_current_user_id
+from .user_store import user_store
 
 from . import router
 
@@ -46,6 +47,7 @@ from .llama_integration import startup_check as llama_startup
 from .logging_config import configure_logging, req_id_var
 from .telemetry import LogRecord, log_record_var, utc_now
 from .status import router as status_router
+from .auth import router as auth_router
 from .transcription import transcribe_file
 from .history import append_history
 from .middleware import DedupMiddleware
@@ -72,7 +74,9 @@ def _anon_user_id(request: Request) -> str:
     if auth:
         return sha256(auth.encode("utf-8")).hexdigest()[:32]
 
-    ip = request.headers.get("X-Forwarded-For") or (request.client.host if request.client else None)
+    ip = request.headers.get("X-Forwarded-For") or (
+        request.client.host if request.client else None
+    )
     if ip:
         return sha256(ip.encode("utf-8")).hexdigest()[:32]
 
@@ -95,6 +99,7 @@ app.add_middleware(
 app.add_middleware(DedupMiddleware)
 
 app.include_router(status_router)
+app.include_router(auth_router)
 
 
 @app.middleware("http")
@@ -104,6 +109,8 @@ async def trace_request(request, call_next):
     token_rec = log_record_var.set(rec)
     rec.session_id = request.headers.get("X-Session-ID")
     rec.user_id = _anon_user_id(request)
+    await user_store.ensure_user(rec.user_id)
+    await user_store.increment_request(rec.user_id)
     rec.channel = request.headers.get("X-Channel")
     rec.received_at = utc_now().isoformat()
     rec.started_at = rec.received_at
@@ -159,6 +166,22 @@ class ServiceRequest(BaseModel):
     domain: str
     service: str
     data: dict | None = None
+
+
+@app.post("/login")
+async def login(user_id: str = Depends(get_current_user_id)):
+    await user_store.ensure_user(user_id)
+    await user_store.increment_login(user_id)
+    stats = await user_store.get_stats(user_id)
+    return {"user_id": user_id, **stats}
+
+
+@app.get("/me")
+async def get_me(user_id: str = Depends(get_current_user_id)):
+    stats = await user_store.get_stats(user_id)
+    if stats is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"user_id": user_id, **stats}
 
 
 @app.post("/ask")
@@ -295,9 +318,9 @@ async def trigger_summary_endpoint(
 @app.websocket("/transcribe")
 async def websocket_transcribe(
     ws: WebSocket,
-    user_id: str      = Depends(get_current_user_id),
-    _: None           = Depends(verify_ws),
-    __: None          = Depends(rate_limit_ws),
+    user_id: str = Depends(get_current_user_id),
+    _: None = Depends(verify_ws),
+    __: None = Depends(rate_limit_ws),
 ):
     # Now we’re clean—accept and roll
     await ws.accept()
