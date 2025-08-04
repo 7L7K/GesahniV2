@@ -54,14 +54,14 @@ def setup_cache(monkeypatch):
 def test_semantic_cache_hit_case_insensitive(setup_cache):
     router, vector_store = setup_cache
     vector_store.cache_answer("Hello World", "cached")
-    result = asyncio.run(router.route_prompt("HELLO world"))
+    result = asyncio.run(router.route_prompt("HELLO world", user_id="u"))
     assert result == "cached"
 
 
 def test_semantic_cache_hit_whitespace_insensitive(setup_cache):
     router, vector_store = setup_cache
     vector_store.cache_answer("Hello World", "cached")
-    result = asyncio.run(router.route_prompt("   hello world   "))
+    result = asyncio.run(router.route_prompt("   hello world   ", user_id="u"))
     assert result == "cached"
 
 

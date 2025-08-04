@@ -34,7 +34,7 @@ def test_router_fallback_metrics_updated(monkeypatch):
         "transcribe_errors": 0,
     }
 
-    result = asyncio.run(router.route_prompt("hello world"))
+    result = asyncio.run(router.route_prompt("hello world", user_id="u"))
     assert result == "ok"
     m = analytics.get_metrics()
     assert m["total"] == 1
@@ -56,7 +56,7 @@ def test_gpt_override(monkeypatch):
 
     monkeypatch.setattr(router, "ask_gpt", fake_gpt)
     monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
-    result = asyncio.run(router.route_prompt("hello world", "gpt-4"))
+    result = asyncio.run(router.route_prompt("hello world", "gpt-4", user_id="u"))
     assert result == "gpt-4"
 
 
@@ -71,7 +71,7 @@ def test_gpt_override_invalid(monkeypatch):
 
     monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
     with pytest.raises(HTTPException):
-        asyncio.run(router.route_prompt("hello world", "gpt-3"))
+        asyncio.run(router.route_prompt("hello world", "gpt-3", user_id="u"))
 
 
 def test_complexity_checks(monkeypatch):
@@ -93,10 +93,10 @@ def test_complexity_checks(monkeypatch):
     monkeypatch.setattr(router, "ask_llama", fake_llama)
 
     long_prompt = "word " * 31
-    assert asyncio.run(router.route_prompt(long_prompt)) == "ok"
+    assert asyncio.run(router.route_prompt(long_prompt, user_id="u")) == "ok"
 
     kw_prompt = "please analyze this"
-    assert asyncio.run(router.route_prompt(kw_prompt)) == "ok"
+    assert asyncio.run(router.route_prompt(kw_prompt, user_id="u")) == "ok"
 
 
 def test_skill_metrics(monkeypatch):
@@ -123,7 +123,7 @@ def test_skill_metrics(monkeypatch):
         "transcribe_count": 0,
         "transcribe_errors": 0,
     }
-    result = asyncio.run(router.route_prompt("dummy task"))
+    result = asyncio.run(router.route_prompt("dummy task", user_id="u"))
     assert result == "done"
     m = analytics.get_metrics()
     assert m["total"] == 1
@@ -161,8 +161,8 @@ def test_debug_env_toggle(monkeypatch):
     monkeypatch.setattr(router.PromptBuilder, "build", staticmethod(fake_build))
 
     monkeypatch.setenv("DEBUG", "0")
-    asyncio.run(router.route_prompt("hello world"))
+    asyncio.run(router.route_prompt("hello world", user_id="u"))
     monkeypatch.setenv("DEBUG", "1")
-    asyncio.run(router.route_prompt("hello world"))
+    asyncio.run(router.route_prompt("hello world", user_id="u"))
 
     assert flags == [False, True]

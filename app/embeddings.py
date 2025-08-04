@@ -113,8 +113,13 @@ def embed_sync(text: str) -> List[float]:
     return _embed_openai_sync(text, bucket)
 
 
-async def benchmark(text: str, iterations: int = 10) -> Dict[str, float]:
-    """Run ``embed`` ``iterations`` times and log latency and throughput."""
+async def benchmark(
+    text: str, iterations: int = 10, user_id: str | None = None
+) -> Dict[str, float]:
+    """Run ``embed`` ``iterations`` times and log latency and throughput.
+
+    ``user_id`` is accepted for interface parity but is not used.
+    """
 
     start = time.perf_counter()
     for _ in range(iterations):
