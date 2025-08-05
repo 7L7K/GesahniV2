@@ -48,6 +48,20 @@ async def route_prompt(
     session_id = rec.session_id if rec and rec.session_id else "default"
     logger.debug("route_prompt received: %s", prompt)
     norm_prompt = prompt.lower().strip()
+    debug_model_routing = os.getenv("DEBUG_MODEL_ROUTING", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+    def _dry_return(engine: str, model: str) -> str:
+        msg = f"[dry-run] would call {engine} {model}"
+        logger.info(msg)
+        if rec:
+            rec.engine_used = engine
+            rec.model_name = model
+            rec.response = msg
+        return msg
 
     intent, priority = detect_intent(prompt)
     skip_skills = intent == "chat" and priority == "high"
@@ -58,6 +72,8 @@ async def route_prompt(
             built, _ = PromptBuilder.build(
                 prompt, session_id=session_id, user_id=user_id
             )
+            if debug_model_routing:
+                return _dry_return("gpt", model_override)
             text, pt, ct, unit_price = await ask_gpt(
                 built, model_override, SYSTEM_PROMPT
             )
@@ -135,6 +151,8 @@ async def route_prompt(
     words = prompt.lower().split()
     if len(words) > 30 or any(k in words for k in keywords):
         built, _ = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
+        if debug_model_routing:
+            return _dry_return("gpt", "gpt-4o")
         text, pt, ct, unit_price = await ask_gpt(built, "gpt-4o", SYSTEM_PROMPT)
         if rec:
             rec.engine_used = "gpt"
@@ -169,6 +187,8 @@ async def route_prompt(
             if (model_override and model_override.lower().startswith("llama"))
             else OLLAMA_MODEL
         )
+        if debug_model_routing:
+            return _dry_return("llama", llama_model)
         result = await ask_llama(built_prompt, llama_model)
         if not (isinstance(result, dict) and "error" in result):
             result_text = str(result).strip()
@@ -188,6 +208,8 @@ async def route_prompt(
                 return result_text
 
     # H) GPT-4o fallback
+    if debug_model_routing:
+        return _dry_return("gpt", "gpt-4o")
     text, pt, ct, unit_price = await ask_gpt(built_prompt, "gpt-4o", SYSTEM_PROMPT)
     if rec:
         rec.engine_used = "gpt"
