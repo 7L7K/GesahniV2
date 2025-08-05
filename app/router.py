@@ -14,8 +14,9 @@ from .memory.vector_store import (
     cache_answer,
     lookup_cached_answer,
 )
-from .llama_integration import OLLAMA_MODEL, ask_llama
+from .llama_integration import ask_llama
 from . import llama_integration
+from .model_picker import pick_model
 from .telemetry import log_record_var
 from .memory import memgpt
 from .prompt_builder import PromptBuilder, _count_tokens
@@ -41,9 +42,10 @@ async def route_prompt(
     user_id: str = Depends(get_current_user_id),
 ) -> Any:
     rec = log_record_var.get()
+    tokens = _count_tokens(prompt)
     if rec:
         rec.prompt = prompt
-        rec.embed_tokens = _count_tokens(prompt)
+        rec.embed_tokens = tokens
         rec.user_id = user_id
     session_id = rec.session_id if rec and rec.session_id else "default"
     logger.debug("route_prompt received: %s", prompt)
@@ -126,31 +128,10 @@ async def route_prompt(
         logger.debug("Cache hit for prompt: %s", norm_prompt)
         return cached
 
-    # E) Complexity check: skip LLaMA only for truly complex prompts
-    #    A prompt is considered complex when it is long *and* contains one of
-    #    a few heavy‑duty keywords.  This prevents simple phrases like
-    #    repeated words or short "analyze" questions from unnecessarily being
-    #    routed to GPT, which is what the tests expect.
-    keywords = {"code", "research", "analyze", "explain"}
-    words = prompt.lower().split()
-    if len(words) > 30 or any(k in words for k in keywords):
-        built, _ = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
-        text, pt, ct, unit_price = await ask_gpt(built, "gpt-4o", SYSTEM_PROMPT)
-        if rec:
-            rec.engine_used = "gpt"
-            rec.response = text
-            rec.model_name = "gpt-4o"
-            rec.prompt_tokens = pt
-            rec.completion_tokens = ct
-            rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
-        await append_history(prompt, "gpt", text)
-        await record("gpt", source="complex")
-        memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
-        add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
-        cache_answer(norm_prompt, text)
-        return text
+    # E) Delegate model choice
+    engine, model_name = pick_model(prompt, intent, tokens)
 
-    # F) Build prompt with context
+    # Build prompt with context
     built_prompt, ptokens = PromptBuilder.build(
         prompt,
         session_id=session_id,
@@ -162,12 +143,30 @@ async def route_prompt(
     if rec:
         rec.prompt_tokens = ptokens
 
-    # G) LLaMA first
+    if engine == "gpt":
+        text, pt, ct, unit_price = await ask_gpt(
+            built_prompt, model_name, SYSTEM_PROMPT
+        )
+        if rec:
+            rec.engine_used = "gpt"
+            rec.response = text
+            rec.model_name = model_name
+            rec.prompt_tokens = pt
+            rec.completion_tokens = ct
+            rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
+        await append_history(prompt, "gpt", text)
+        await record("gpt", source="complex")
+        memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
+        add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
+        cache_answer(norm_prompt, text)
+        return text
+
+    # LLaMA first
     if llama_integration.LLAMA_HEALTHY:
         llama_model = (
             model_override
             if (model_override and model_override.lower().startswith("llama"))
-            else OLLAMA_MODEL
+            else model_name
         )
         result = await ask_llama(built_prompt, llama_model)
         if not (isinstance(result, dict) and "error" in result):
@@ -187,7 +186,7 @@ async def route_prompt(
                 logger.debug("LLaMA responded OK")
                 return result_text
 
-    # H) GPT-4o fallback
+    # GPT fallback
     text, pt, ct, unit_price = await ask_gpt(built_prompt, "gpt-4o", SYSTEM_PROMPT)
     if rec:
         rec.engine_used = "gpt"
