@@ -1,4 +1,5 @@
 import sys, os
+import jwt
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from fastapi.testclient import TestClient
 
@@ -17,7 +18,8 @@ def test_upload_saves_file(tmp_path, monkeypatch):
 
     client = TestClient(main.app)
     data = b"abc"
-    headers = {"Authorization": "Bearer secret"}
+    token = jwt.encode({"user_id": "tester"}, "secret", algorithm="HS256")
+    headers = {"Authorization": f"Bearer {token}"}
     resp = client.post(
         "/upload", files={"file": ("foo.wav", data, "audio/wav")}, headers=headers
     )
