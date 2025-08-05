@@ -14,7 +14,6 @@ _lock = asyncio.Lock()
 _http_requests: Dict[str, int] = {}
 _ws_requests: Dict[str, int] = {}
 
-
 def _apply_rate_limit(
     key: str, bucket: Dict[str, int], limit: int, period: float
 ) -> bool:
@@ -27,9 +26,11 @@ def _apply_rate_limit(
     bucket[key] = count
     return count <= limit
 
-
 async def verify_token(request: Request) -> None:
-    """Validate Authorization header as a JWT if a secret is configured."""
+    """Validate Authorization header as a JWT if a secret is configured.
+
+    On success the decoded payload is attached to ``request.state.jwt_payload``.
+    """
     if not JWT_SECRET:
         return
     auth = request.headers.get("Authorization")
@@ -37,10 +38,10 @@ async def verify_token(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     token = auth.split(" ", 1)[1]
     try:
-        jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        request.state.jwt_payload = payload
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Unauthorized")
-
 
 async def rate_limit(request: Request) -> None:
     """Rate limit requests per authenticated user (or IP when unauthenticated)."""
@@ -56,7 +57,6 @@ async def rate_limit(request: Request) -> None:
     if not ok:
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-
 async def verify_ws(ws: WebSocket) -> None:
     """JWT validation for WebSocket connections."""
     if not JWT_SECRET:
@@ -69,7 +69,6 @@ async def verify_ws(ws: WebSocket) -> None:
         jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
     except jwt.PyJWTError:
         raise WebSocketException(code=1008)
-
 
 async def rate_limit_ws(ws: WebSocket) -> None:
     """Per-user rate limiting for WebSocket connections."""

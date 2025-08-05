@@ -1,12 +1,12 @@
 import os
 import asyncio
 import logging
-import httpx
 import time
 from typing import Any
 
 from .deps.scheduler import scheduler, start as scheduler_start
 from .logging_config import req_id_var
+from .http_utils import json_request, log_exceptions
 
 # Default to local Ollama if not provided
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
@@ -18,16 +18,16 @@ logger = logging.getLogger(__name__)
 LLAMA_HEALTHY: bool = False
 
 
+@log_exceptions("llama")
 async def _check_and_set_flag() -> None:
     """Ping Ollama and update ``LLAMA_HEALTHY`` accordingly."""
     global LLAMA_HEALTHY
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{OLLAMA_URL}/api/tags")
-            resp.raise_for_status()
-            tags = resp.json()
-            if OLLAMA_MODEL and OLLAMA_MODEL not in str(tags):
-                logger.warning("Model %s missing on Ollama", OLLAMA_MODEL)
+        tags, err = await json_request("GET", f"{OLLAMA_URL}/api/tags")
+        if err:
+            raise RuntimeError(err)
+        if OLLAMA_MODEL and OLLAMA_MODEL not in str(tags):
+            logger.warning("Model %s missing on Ollama", OLLAMA_MODEL)
         LLAMA_HEALTHY = True
         logger.debug("Ollama is healthy")
     except Exception as e:
@@ -75,6 +75,7 @@ async def get_status() -> dict[str, Any]:
     raise RuntimeError("llama_error")
 
 
+@log_exceptions("llama")
 async def ask_llama(
     prompt: str, model: str | None = None, timeout: float = 30.0
 ) -> Any:
@@ -84,47 +85,35 @@ async def ask_llama(
     """
     global LLAMA_HEALTHY
     model = model or OLLAMA_MODEL
+    if not model:
+        logger.warning("ask_llama called without model")
+        return {"error": "model_not_set"}
+
     attempt = 0
     error: dict[str, Any] | None = None
 
     while attempt < 2:
-        try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post(
-                    f"{OLLAMA_URL}/api/generate",
-                    json={"model": model, "prompt": prompt, "stream": False},
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                return data.get("response", "").strip()
+        data, err = await json_request(
+            "POST",
+            f"{OLLAMA_URL}/api/generate",
+            json={"model": model, "prompt": prompt, "stream": False},
+            timeout=timeout,
+        )
+        if err is None and isinstance(data, dict):
+            return data.get("response", "").strip()
 
-        except httpx.TimeoutException as e:
-            LLAMA_HEALTHY = False
-            logger.exception(
-                "Ollama timeout",
-                extra={"meta": {"attempt": attempt, "req_id": req_id_var.get()}},
-            )
-            error = {"error": "timeout", "llm_used": model}
-
-        except httpx.HTTPError as e:
-            LLAMA_HEALTHY = False
-            logger.exception(
-                "Ollama HTTP error",
-                extra={"meta": {"attempt": attempt, "req_id": req_id_var.get()}},
-            )
-            error = {"error": "http_error", "llm_used": model}
-
-        except Exception as e:
-            LLAMA_HEALTHY = False
-            logger.exception(
-                "Ollama JSON error",
-                extra={"meta": {"attempt": attempt, "req_id": req_id_var.get()}},
-            )
-            error = {"error": "json_error", "llm_used": model}
+        LLAMA_HEALTHY = False
+        logger.warning(
+            "Ollama request failed",
+            extra={
+                "meta": {"attempt": attempt, "req_id": req_id_var.get(), "error": err}
+            },
+        )
+        mapped = {"network_error": "timeout"}
+        error = {"error": mapped.get(err, err or "http_error"), "llm_used": model}
 
         attempt += 1
-        # exponential backoff-ish
-        await asyncio.sleep(0.2 * (attempt + 1))
+        if attempt < 2:
+            await asyncio.sleep(0.2 * (attempt + 1))
 
-    # both attempts failed
     return error or {"error": "http_error", "llm_used": model}
