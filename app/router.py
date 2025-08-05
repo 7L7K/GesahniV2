@@ -18,7 +18,8 @@ from .llama_integration import OLLAMA_MODEL, ask_llama
 from . import llama_integration
 from .telemetry import log_record_var
 from .memory import memgpt
-from .prompt_builder import PromptBuilder, _count_tokens
+from .prompt_builder import PromptBuilder
+from .token_utils import count_tokens
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from . import skills  # populate built-in registry (SmalltalkSkill, etc.)  # noqa: F401
 from .intent_detector import detect_intent
@@ -43,7 +44,7 @@ async def route_prompt(
     rec = log_record_var.get()
     if rec:
         rec.prompt = prompt
-        rec.embed_tokens = _count_tokens(prompt)
+        rec.embed_tokens = count_tokens(prompt)
         rec.user_id = user_id
     session_id = rec.session_id if rec and rec.session_id else "default"
     logger.debug("route_prompt received: %s", prompt)
