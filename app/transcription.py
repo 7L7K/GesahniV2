@@ -1,26 +1,35 @@
+import logging
 import os
+
+from fastapi import HTTPException
 from openai import AsyncClient as OpenAI
 from openai import OpenAIError
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 TRANSCRIBE_MODEL = os.getenv("OPENAI_TRANSCRIBE_MODEL", "whisper-1")
 
+logger = logging.getLogger(__name__)
 _client: OpenAI | None = None
 
 
-def _get_client() -> OpenAI:
-    """Return a singleton OpenAI client.
-
-    The original module created the client at import time which raised an
-    exception when the ``OPENAI_API_KEY`` environment variable was not set.
-    Tests run in an isolated environment without real credentials, so we
-    lazily construct the client on first use instead.
-    """
+def get_whisper_client() -> OpenAI:
+    """Return a singleton OpenAI client with runtime API key lookup."""
 
     global _client
     if _client is None:
-        _client = OpenAI(api_key=OPENAI_API_KEY)
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY not set")
+        _client = OpenAI(api_key=api_key)
     return _client
+
+
+async def close_whisper_client() -> None:
+    """Close the cached Whisper client if present."""
+
+    global _client
+    if _client is not None:
+        await _client.close()
+        _client = None
 
 
 async def transcribe_file(path: str, model: str | None = None) -> str:
@@ -30,19 +39,27 @@ async def transcribe_file(path: str, model: str | None = None) -> str:
     """
     model = model or TRANSCRIBE_MODEL
 
-    # read file bytes
-    client = _get_client()
+    logger.debug("transcribe_file start: %s", path)
+    client = get_whisper_client()
     try:
         with open(path, "rb") as f:
             resp = await client.audio.transcriptions.create(
                 model=model,
                 file=f,
             )
+    except FileNotFoundError as e:
+        logger.debug("transcribe_file file not found: %s", path)
+        raise HTTPException(status_code=400, detail="file_not_found") from e
     except OpenAIError as e:
-        # catch and re-raise as a simple Exception so your route logs it
+        logger.debug("transcribe_file openai error: %s", e)
         raise RuntimeError(f"Whisper API error: {e}") from e
     except Exception as e:
+        logger.debug("transcribe_file error: %s", e)
         raise RuntimeError(f"Failed to read or send {path!r}: {e}") from e
 
-    # the v1 response has `.text`
-    return resp.text
+    text = getattr(resp, "text", None)
+    if not text:
+        raise ValueError("empty_transcription")
+
+    logger.debug("transcribe_file success: %s", path)
+    return text
