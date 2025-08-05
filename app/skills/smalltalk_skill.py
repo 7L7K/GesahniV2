@@ -16,6 +16,7 @@ import os
 import random
 import re
 import threading
+import time
 from collections import deque
 from datetime import datetime
 from typing import Any, Callable, Literal, Optional
@@ -66,11 +67,17 @@ FALLBACK = "Hey! I'm here—what's the move?"
 log = logging.getLogger(__name__)
 
 
+def _normalize(prompt: str) -> str:
+    """Return a lowercase greeting without trailing punctuation."""
+
+    p = prompt.strip().lower()
+    return re.sub(r"[!?.]+$", "", p)
+
+
 def is_greeting(prompt: str) -> bool:
     """Return ``True`` if *prompt* looks like a casual greeting."""
 
-    p = prompt.strip().lower()
-    p = re.sub(r"[!?.]+$", "", p)
+    p = _normalize(prompt)
     roots = {
         "hi",
         "hello",
@@ -105,6 +112,7 @@ class SmalltalkSkill(Skill):
         *,
         time_provider: Callable[[], datetime] = datetime.now,
         persona_rate: float | None = None,
+        cache_ttl: float | None = None,
     ) -> None:
         self._time_provider = time_provider
         self._persona_rate = (
@@ -112,8 +120,14 @@ class SmalltalkSkill(Skill):
             if persona_rate is None
             else persona_rate
         )
+        self._cache_ttl = (
+            float(os.getenv("SMALLTALK_CACHE_TTL", "30"))
+            if cache_ttl is None
+            else cache_ttl
+        )
         self._used_greetings: set[str] = set()
         self._recent_responses: deque[str] = deque(maxlen=2)
+        self._cache: dict[str, tuple[str, float]] = {}
         self._lock = threading.RLock()
 
     def name(self) -> str:  # pragma: no cover - trivial
@@ -146,7 +160,13 @@ class SmalltalkSkill(Skill):
         if not is_greeting(prompt):
             return None
 
+        key = _normalize(prompt)
+        now = time.time()
         with self._lock:
+            cached = self._cache.get(key)
+            if cached and now - cached[1] < self._cache_ttl:
+                return cached[0]
+
             greeting = self._pick_greeting()
             follow = self._follow_up(user) or FALLBACK
             tag = self._maybe_persona_tag()
@@ -170,6 +190,7 @@ class SmalltalkSkill(Skill):
                 tries += 1
 
             self._recent_responses.append(resp)
+            self._cache[key] = (resp, now)
             log.debug("Recorded smalltalk response", extra={"resp": resp})
             return resp
 
