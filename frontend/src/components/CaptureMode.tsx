@@ -9,10 +9,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export default function CaptureMode() {
   // Refs and state
   const camRef = useRef<HTMLVideoElement>(null);
-  const audioRecorder = useRef<MediaRecorder>();
-  const videoRecorder = useRef<MediaRecorder>();
-  const streamRef = useRef<MediaStream>();
-  const wsRef = useRef<WebSocket>();
+  const audioRecorder = useRef<MediaRecorder | null>(null);
+  const videoRecorder = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const videoChunks = useRef<Blob[]>([]);

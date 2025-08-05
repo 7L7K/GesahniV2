@@ -27,13 +27,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi import Depends, Request
 from .deps.user import get_current_user_id
+from .user_store import user_store
 
 from . import router
 
-
 async def route_prompt(*args, **kwargs):
     return await router.route_prompt(*args, **kwargs)
-
 
 import app.skills  # populate SKILLS
 from .home_assistant import (
@@ -46,6 +45,7 @@ from .llama_integration import startup_check as llama_startup
 from .logging_config import configure_logging, req_id_var
 from .telemetry import LogRecord, log_record_var, utc_now
 from .status import router as status_router
+from .auth import router as auth_router
 from .transcription import transcribe_file
 from .history import append_history
 from .middleware import DedupMiddleware
@@ -73,7 +73,6 @@ def _anon_user_id(source: Request | str | None) -> str:
     Authorization header string, or ``None`` which yields "local".
     Auth-derived hashes are 32 chars; IP-derived hashes are truncated to 12.
     """
-
     if source is None:
         return "local"
 
@@ -105,19 +104,21 @@ app.add_middleware(
     allow_methods=["*"],  # includes OPTIONS
     allow_headers=["*"],  # includes Content-Type, Authorization, etc.
 )
-# ───────────────────────────────────────────────────────────────────────────────────
 app.add_middleware(DedupMiddleware)
 
 app.include_router(status_router)
+app.include_router(auth_router)
 
 
 @app.middleware("http")
-async def trace_request(request, call_next):
+async def trace_request(request: Request, call_next):
     rec = LogRecord(req_id=str(uuid.uuid4()))
     token_req = req_id_var.set(rec.req_id)
     token_rec = log_record_var.set(rec)
     rec.session_id = request.headers.get("X-Session-ID")
     rec.user_id = _anon_user_id(request)
+    await user_store.ensure_user(rec.user_id)
+    await user_store.increment_request(rec.user_id)
     rec.channel = request.headers.get("X-Channel")
     rec.received_at = utc_now().isoformat()
     rec.started_at = rec.received_at
@@ -131,16 +132,13 @@ async def trace_request(request, call_next):
         rec.status = "ERR_TIMEOUT"
         raise
     finally:
-        # compute and record latency
         rec.latency_ms = int((time.monotonic() - start_time) * 1000)
         await record_latency(rec.latency_ms)
         rec.p95_latency_ms = latency_p95()
 
-        # tag response header
         if isinstance(response, Response):
             response.headers["X-Request-ID"] = rec.req_id
 
-        # persist history & reset context vars
         await append_history(rec)
         log_record_var.reset(token_rec)
         req_id_var.reset(token_req)
@@ -173,6 +171,22 @@ class ServiceRequest(BaseModel):
     domain: str
     service: str
     data: dict | None = None
+
+
+@app.post("/login")
+async def login(user_id: str = Depends(get_current_user_id)):
+    await user_store.ensure_user(user_id)
+    await user_store.increment_login(user_id)
+    stats = await user_store.get_stats(user_id)
+    return {"user_id": user_id, **stats}
+
+
+@app.get("/me")
+async def get_me(user_id: str = Depends(get_current_user_id)):
+    stats = await user_store.get_stats(user_id)
+    if stats is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"user_id": user_id, **stats}
 
 
 @app.post("/ask")
@@ -309,11 +323,10 @@ async def trigger_summary_endpoint(
 @app.websocket("/transcribe")
 async def websocket_transcribe(
     ws: WebSocket,
-    user_id: str      = Depends(get_current_user_id),
-    _: None           = Depends(verify_ws),
-    __: None          = Depends(rate_limit_ws),
+    user_id: str = Depends(get_current_user_id),
+    _: None = Depends(verify_ws),
+    __: None = Depends(rate_limit_ws),
 ):
-    # Now we’re clean—accept and roll
     await ws.accept()
     msg = await ws.receive()
 
@@ -430,9 +443,7 @@ async def start_transcription(
 
 
 @app.get("/transcribe/{session_id}")
-async def get_transcription(
-    session_id: str, user_id: str = Depends(get_current_user_id)
-):
+async def get_transcription(session_id: str, user_id: str = Depends(get_current_user_id)):
     transcript_path = Path(SESSIONS_DIR) / session_id / "transcript.txt"
     if transcript_path.exists():
         return {"text": transcript_path.read_text(encoding="utf-8")}
