@@ -15,7 +15,7 @@ from .memory.vector_store import (
     cache_answer,
     lookup_cached_answer,
 )
-from .llama_integration import ask_llama
+from .llama_integration import ask_llama, LLAMA_HEALTHY
 from . import llama_integration
 from .model_picker import pick_model
 from .telemetry import log_record_var
@@ -139,9 +139,9 @@ async def route_prompt(
     if ha_resp is not None:
         if rec:
             rec.engine_used = "ha"
-            rec.response = str(ha_resp)
-        await append_history(prompt, "ha", str(ha_resp))
-        logger.debug("HA handled prompt → %s", ha_resp)
+            rec.response = ha_resp.message
+        await append_history(prompt, "ha", ha_resp.message)
+        logger.debug("HA handled prompt → %s", ha_resp.message)
         return ha_resp
 
     # Cache lookup
