@@ -3,32 +3,45 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta
+
 try:
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
 except Exception:  # pragma: no cover - optional dependency
+
     class AsyncIOScheduler:  # minimal stub
         def __init__(self):
             self.running = False
+
         def start(self):
             self.running = True
+
         def add_job(self, *a, **k):
             pass
+
 
 from .base import Skill
 
 scheduler = AsyncIOScheduler()
+
 
 class ReminderSkill(Skill):
     # Catch natural phrasing & intervals
     PATTERNS = [
         # "remind me tomorrow at 9am to send the report"
         re.compile(
-            r"remind me (?P<when>tomorrow(?: at \d{1,2}(?::\d{2})?\s*(?:am|pm))?) to (?P<task>.+)", re.I
+            r"remind me (?P<when>tomorrow(?: at \d{1,2}(?::\d{2})?\s*(?:am|pm))?) to (?P<task>.+)",
+            re.I,
         ),
         # "remind me to call grandma in 10 minutes"
-        re.compile(r"remind me to (?P<task>.+) in (?P<amt>\d+)\s*(?P<unit>seconds?|minutes?|hours?)", re.I),
+        re.compile(
+            r"remind me to (?P<task>.+) in (?P<amt>\d+)\s*(?P<unit>seconds?|minutes?|hours?)",
+            re.I,
+        ),
         # "remind me to pay rent every month"
-        re.compile(r"remind me to (?P<task>.+) every (?P<period>day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)", re.I),
+        re.compile(
+            r"remind me to (?P<task>.+) every (?P<period>day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)",
+            re.I,
+        ),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
@@ -67,7 +80,11 @@ class ReminderSkill(Skill):
             task = gd["task"]
             # daily/weekly/monthly or specific weekday
             if period in {"day", "week", "month"}:
-                kwargs = {"days": 1} if period == "day" else {"weeks": 1} if period == "week" else {"days": 30}
+                kwargs = (
+                    {"days": 1}
+                    if period == "day"
+                    else {"weeks": 1} if period == "week" else {"days": 30}
+                )
                 scheduler.add_job(lambda: None, "interval", **kwargs)
                 return f"Recurring reminder set for {task} every {period}."
             else:

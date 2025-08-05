@@ -1,4 +1,5 @@
 import os, sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import asyncio
@@ -27,4 +28,3 @@ def test_record_creates_file(tmp_path, monkeypatch):
     out = tmp_path / "test.wav"
     asyncio.run(capture.record(0.01, str(out)))
     assert out.exists()
-

@@ -11,17 +11,23 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
 # ─── Prometheus optional import ───────────────────────────────────────────────
 try:
     from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
     _PROM_ENABLED = True
 except ImportError:
     _PROM_ENABLED = False
     CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
+
     def generate_latest() -> bytes:
         return b""
+
+
 # ────────────────────────────────────────────────────────────────────────────────
+
 
 @router.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
+
 
 @router.get("/config")
 async def config(token: str | None = Query(default=None)) -> dict:
@@ -30,6 +36,7 @@ async def config(token: str | None = Query(default=None)) -> dict:
     out = {k: v for k, v in os.environ.items() if k.isupper()}
     out.setdefault("SIM_THRESHOLD", os.getenv("SIM_THRESHOLD", "0.90"))
     return out
+
 
 @router.get("/ha_status")
 async def ha_status() -> dict:
@@ -41,12 +48,14 @@ async def ha_status() -> dict:
     except Exception:
         raise HTTPException(status_code=500, detail="ha_error")
 
+
 @router.get("/llama_status")
 async def llama_status() -> dict:
     try:
         return await llama_get_status()
     except Exception:
         raise HTTPException(status_code=500, detail="llama_error")
+
 
 @router.get("/status")
 async def full_status() -> dict:
@@ -76,6 +85,7 @@ async def full_status() -> dict:
         "fallbacks": m.get("fallback", 0),
     }
     return out
+
 
 @router.get("/metrics")
 async def metrics() -> Response:

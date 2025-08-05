@@ -30,7 +30,11 @@ class RecipeSkill(Skill):
             ing = meal.get(f"strIngredient{i}")
             meas = meal.get(f"strMeasure{i}")
             if ing and ing.strip():
-                part = f"{meas.strip()} {ing.strip()}" if meas and meas.strip() else ing.strip()
+                part = (
+                    f"{meas.strip()} {ing.strip()}"
+                    if meas and meas.strip()
+                    else ing.strip()
+                )
                 ingredients.append(part.strip())
         instructions = meal.get("strInstructions", "").strip()
         ing_text = "; ".join(ingredients[:5])

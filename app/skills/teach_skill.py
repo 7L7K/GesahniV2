@@ -4,6 +4,7 @@ from .base import Skill
 from .. import home_assistant as ha
 from .. import alias_store
 
+
 class TeachSkill(Skill):
     PATTERNS = [re.compile(r"^my (.+?) is (.+)$", re.I)]
 

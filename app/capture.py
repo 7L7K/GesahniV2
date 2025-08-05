@@ -14,6 +14,7 @@ except Exception:  # pragma: no cover - optional dependency
 try:
     from scipy.io import wavfile  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
+
     class _WavFileStub:
         def write(self, *args, **kwargs):
             raise RuntimeError("scipy not installed")
@@ -57,4 +58,3 @@ async def record(duration: float, output: str) -> Path:
 
 
 __all__ = ["record"]
-

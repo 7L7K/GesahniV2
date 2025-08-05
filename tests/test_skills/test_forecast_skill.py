@@ -1,10 +1,11 @@
 import os, sys, asyncio
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-os.environ.setdefault("OLLAMA_URL","http://x")
-os.environ.setdefault("OLLAMA_MODEL","llama3")
-os.environ.setdefault("HOME_ASSISTANT_URL","http://ha")
-os.environ.setdefault("HOME_ASSISTANT_TOKEN","token")
-os.environ.setdefault("OPENWEATHER_API_KEY","dummy")
+os.environ.setdefault("OLLAMA_URL", "http://x")
+os.environ.setdefault("OLLAMA_MODEL", "llama3")
+os.environ.setdefault("HOME_ASSISTANT_URL", "http://ha")
+os.environ.setdefault("HOME_ASSISTANT_TOKEN", "token")
+os.environ.setdefault("OPENWEATHER_API_KEY", "dummy")
 
 import httpx
 from app.skills.forecast_skill import ForecastSkill
@@ -30,14 +31,17 @@ class FakeClient:
                         {"dt_txt": "2025-01-03 03:00:00", "main": {"temp": 80}},
                     ]
                 }
+
             def raise_for_status(self_non):
                 pass
+
         return R()
 
 
 def test_forecast_skill(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: FakeClient())
     import app.skills.forecast_skill as fs
+
     monkeypatch.setattr(fs, "OPENWEATHER_KEY", "dummy")
     skill = ForecastSkill()
     m = skill.match("3 day forecast for Paris")

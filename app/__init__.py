@@ -19,5 +19,3 @@ def __getattr__(name: str) -> Any:  # pragma: no cover - trivial
         globals()[name] = module
         return module
     raise AttributeError(name)
-
-

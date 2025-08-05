@@ -49,9 +49,7 @@ def jaro_winkler_similarity(s1: str, s2: str) -> float:
     transpositions /= 2
 
     jaro = (
-        matches / s1_len
-        + matches / s2_len
-        + (matches - transpositions) / matches
+        matches / s1_len + matches / s2_len + (matches - transpositions) / matches
     ) / 3
 
     prefix = 0
@@ -71,7 +69,11 @@ class MemGPT:
     return condensed session summaries or interactions that match a prompt.
     """
 
-    def __init__(self, storage_path: str | Path | None = None, ttl_seconds: int = 60 * 60 * 24 * 30) -> None:
+    def __init__(
+        self,
+        storage_path: str | Path | None = None,
+        ttl_seconds: int = 60 * 60 * 24 * 30,
+    ) -> None:
         """Create a memory manager.
 
         ``ttl_seconds`` controls how long memories are kept during nightly
@@ -150,16 +152,17 @@ class MemGPT:
                     if jaro_winkler_similarity(answer, prev) >= 0.9:
                         return
 
-            bucket.append({
-                "prompt": prompt,
-                "answer": answer,
-                "tags": tags or [],
-                "timestamp": now,
-                "hash": entry_hash,
-            })
+            bucket.append(
+                {
+                    "prompt": prompt,
+                    "answer": answer,
+                    "tags": tags or [],
+                    "timestamp": now,
+                    "hash": entry_hash,
+                }
+            )
 
             self._save()
-
 
     def summarize_session(self, session_id: str, user_id: str | None = None) -> str:
         """Return a condensed representation of a session's interactions."""
@@ -193,7 +196,9 @@ class MemGPT:
                 for interactions in store.values():
                     for item in interactions:
                         tags = [t.lower() for t in item.get("tags", [])]
-                        if prompt_l in item["prompt"].lower() or any(t in prompt_l for t in tags):
+                        if prompt_l in item["prompt"].lower() or any(
+                            t in prompt_l for t in tags
+                        ):
                             results.append(item)
         return results
 
@@ -218,7 +223,9 @@ class MemGPT:
             for interactions in self._pin_store.values():
                 for item in interactions:
                     tags = [t.lower() for t in item.get("tags", [])]
-                    if prompt_l in item["prompt"].lower() or any(t in prompt_l for t in tags):
+                    if prompt_l in item["prompt"].lower() or any(
+                        t in prompt_l for t in tags
+                    ):
                         results.append(item)
         return results
 
@@ -234,9 +241,14 @@ class MemGPT:
                     if "pin" in item.get("tags", []):
                         kept.append(item)
                         continue
-                    h = item.get("hash") or hashlib.sha256(
-                        (item.get("prompt", "") + item.get("answer", "")).encode("utf-8")
-                    ).hexdigest()
+                    h = (
+                        item.get("hash")
+                        or hashlib.sha256(
+                            (item.get("prompt", "") + item.get("answer", "")).encode(
+                                "utf-8"
+                            )
+                        ).hexdigest()
+                    )
                     item["hash"] = h
                     if h in seen:
                         continue

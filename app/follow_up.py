@@ -10,6 +10,7 @@ try:
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
     from apscheduler.triggers.date import DateTrigger
 except Exception:  # pragma: no cover - optional dependency
+
     class AsyncIOScheduler:  # minimal stub
         def __init__(self, *a, **k):
             self.running = False
@@ -18,7 +19,9 @@ except Exception:  # pragma: no cover - optional dependency
         def start(self):
             self.running = True
 
-        def add_job(self, func, trigger=None, id=None, args=None, replace_existing=False, **kw):
+        def add_job(
+            self, func, trigger=None, id=None, args=None, replace_existing=False, **kw
+        ):
             self._jobs[id] = {"func": func, "trigger": trigger, "args": args or []}
 
         def remove_job(self, id):
@@ -35,6 +38,7 @@ except Exception:  # pragma: no cover - optional dependency
         def __init__(self, run_date=None):
             self.run_date = run_date
 
+
 from .history import append_history
 
 # ---------------------------------------------------------------------------
@@ -42,7 +46,10 @@ from .history import append_history
 # ---------------------------------------------------------------------------
 
 FOLLOW_UPS_FILE = Path(
-    os.getenv("FOLLOW_UPS_FILE", Path(__file__).resolve().parent.parent / "data" / "follow_ups.json")
+    os.getenv(
+        "FOLLOW_UPS_FILE",
+        Path(__file__).resolve().parent.parent / "data" / "follow_ups.json",
+    )
 )
 FOLLOW_UPS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
@@ -69,7 +76,9 @@ def _load_followups() -> List[Dict[str, Any]]:
 
 
 def _save_followups(entries: List[Dict[str, Any]]) -> None:
-    FOLLOW_UPS_FILE.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
+    FOLLOW_UPS_FILE.write_text(
+        json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 async def _fire_followup(prompt: str, session_id: str, fid: str) -> None:
@@ -113,6 +122,7 @@ for _entry in _load_followups():
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def schedule_follow_up(prompt: str, when: datetime | str, session_id: str) -> str:
     """Schedule a follow-up reminder and persist it.
 
@@ -127,18 +137,22 @@ def schedule_follow_up(prompt: str, when: datetime | str, session_id: str) -> st
         "session_id": session_id,
     }
     _schedule(entry)
+
     async def _save_and_log() -> None:
         async with _lock:
             data = _load_followups()
             data.append(entry)
             _save_followups(data)
-        await append_history({
-            "event": "schedule_follow_up",
-            "session_id": session_id,
-            "follow_up_id": fid,
-            "prompt": prompt,
-            "when": entry["when"],
-        })
+        await append_history(
+            {
+                "event": "schedule_follow_up",
+                "session_id": session_id,
+                "follow_up_id": fid,
+                "prompt": prompt,
+                "when": entry["when"],
+            }
+        )
+
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -159,6 +173,7 @@ def list_follow_ups(session_id: str | None = None) -> List[Dict[str, Any]]:
 def cancel_follow_up(fid: str) -> bool:
     """Cancel a scheduled follow-up by ID."""
     removed = False
+
     async def _cancel() -> None:
         nonlocal removed
         async with _lock:
@@ -173,6 +188,7 @@ def cancel_follow_up(fid: str) -> bool:
                 _save_followups(new)
         if removed:
             await append_history({"event": "cancel_follow_up", "follow_up_id": fid})
+
     try:
         _scheduler.remove_job(fid)
     except Exception:

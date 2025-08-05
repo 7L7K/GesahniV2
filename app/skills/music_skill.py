@@ -40,5 +40,7 @@ class MusicSkill(Skill):
 
         action = match.group(1).lower() if match.groups() else "play"
         service = "media_play" if action == "play" else "media_pause"
-        await ha.call_service("media_player", service, {"entity_id": "media_player.house"})
+        await ha.call_service(
+            "media_player", service, {"entity_id": "media_player.house"}
+        )
         return f"Music {action}ed"

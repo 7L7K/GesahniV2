@@ -1,4 +1,5 @@
 import os, sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from fastapi.testclient import TestClient
@@ -10,6 +11,7 @@ def setup_app(monkeypatch, tmp_path):
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     from app import main
+
     monkeypatch.setattr(main, "ha_startup", lambda: None)
     monkeypatch.setattr(main, "llama_startup", lambda: None)
     monkeypatch.setattr(main, "SESSIONS_DIR", tmp_path)

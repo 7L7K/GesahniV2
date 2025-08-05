@@ -11,5 +11,7 @@ class RokuSkill(Skill):
 
     async def run(self, prompt: str, match: re.Match) -> str:
         app = match.group(1).strip()
-        await ha.call_service("remote", "send_command", {"entity_id": "remote.roku", "command": app})
+        await ha.call_service(
+            "remote", "send_command", {"entity_id": "remote.roku", "command": app}
+        )
         return f"Launching {app} on Roku"

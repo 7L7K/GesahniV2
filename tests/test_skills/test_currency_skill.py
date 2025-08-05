@@ -1,9 +1,10 @@
 import os, sys, asyncio
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-os.environ.setdefault("OLLAMA_URL","http://x")
-os.environ.setdefault("OLLAMA_MODEL","llama3")
-os.environ.setdefault("HOME_ASSISTANT_URL","http://ha")
-os.environ.setdefault("HOME_ASSISTANT_TOKEN","token")
+os.environ.setdefault("OLLAMA_URL", "http://x")
+os.environ.setdefault("OLLAMA_MODEL", "llama3")
+os.environ.setdefault("HOME_ASSISTANT_URL", "http://ha")
+os.environ.setdefault("HOME_ASSISTANT_TOKEN", "token")
 
 import httpx
 from app.skills.currency_skill import CurrencySkill
@@ -20,8 +21,10 @@ class FakeClient:
         class R:
             def json(self_non):
                 return {"result": 90}
+
             def raise_for_status(self_non):
                 pass
+
         return R()
 
 

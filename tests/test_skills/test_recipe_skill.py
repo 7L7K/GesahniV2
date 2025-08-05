@@ -1,4 +1,5 @@
 import os, sys, asyncio
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import httpx
@@ -32,8 +33,10 @@ class FakeClient:
         class R:
             def json(self_inner):
                 return DATA
+
             def raise_for_status(self_inner):
                 pass
+
         return R()
 
 

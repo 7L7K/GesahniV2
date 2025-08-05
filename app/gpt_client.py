@@ -20,11 +20,13 @@ MODEL_PRICING = {
     "gpt-4": 0.01,
 }
 
+
 def get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
         _client = AsyncOpenAI(api_key=OPENAI_API_KEY)
     return _client
+
 
 async def ask_gpt(
     prompt: str, model: str | None = None, system: str | None = None

@@ -8,7 +8,9 @@ from pathlib import Path
 def _reload(tmp_path, monkeypatch):
     monkeypatch.setenv("FOLLOW_UPS_FILE", str(tmp_path / "follow_ups.json"))
     import app.follow_up as fu
+
     return importlib.reload(fu)
+
 
 def test_schedule_and_persist(tmp_path, monkeypatch):
     fu = _reload(tmp_path, monkeypatch)

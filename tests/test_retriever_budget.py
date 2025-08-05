@@ -1,6 +1,7 @@
 import sys
 import types
 
+
 # Minimal chromadb stub
 class _DummyCollection:
     def add(self, *a, **k):
@@ -32,6 +33,8 @@ chromadb_stub = types.SimpleNamespace(
     PersistentClient=lambda *a, **k: _DummyClient(),
 )
 sys.modules.setdefault("chromadb", chromadb_stub)
+
+
 class _Settings:
     def __init__(self, *a, **k):
         pass
@@ -39,7 +42,8 @@ class _Settings:
 
 sys.modules.setdefault("chromadb.config", types.SimpleNamespace(Settings=_Settings))
 sys.modules.setdefault(
-    "chromadb.utils.embedding_functions", types.SimpleNamespace(EmbeddingFunction=object)
+    "chromadb.utils.embedding_functions",
+    types.SimpleNamespace(EmbeddingFunction=object),
 )
 
 from app.prompt_builder import PromptBuilder

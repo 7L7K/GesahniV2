@@ -2,8 +2,9 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-_ENV_PATH = Path(".env").resolve()         # absolute path = no cwd surprises
-_last_mtime: float | None = None          # None = never loaded
+_ENV_PATH = Path(".env").resolve()  # absolute path = no cwd surprises
+_last_mtime: float | None = None  # None = never loaded
+
 
 def load_env() -> None:
     """(Re)load .env into os.environ only when the file timestamp bumps."""

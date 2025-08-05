@@ -8,7 +8,7 @@ from typing import Any
 
 from .telemetry import LogRecord
 
-import aiofiles                                   # pip install aiofiles
+import aiofiles  # pip install aiofiles
 
 from .logging_config import req_id_var
 
@@ -19,9 +19,7 @@ from .logging_config import req_id_var
 #   • By default we write to   <repo‑root>/data/history.jsonl
 #     (repo‑root = two dirs up from this file).
 # --------------------------------------------------------------------------
-_DEFAULT_PATH = (
-    Path(__file__).resolve().parent.parent / "data" / "history.jsonl"
-)
+_DEFAULT_PATH = Path(__file__).resolve().parent.parent / "data" / "history.jsonl"
 HISTORY_FILE = Path(os.getenv("HISTORY_FILE", _DEFAULT_PATH))
 HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
 

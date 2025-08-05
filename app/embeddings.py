@@ -127,11 +127,8 @@ async def benchmark(
     elapsed = time.perf_counter() - start
     latency = elapsed / iterations if iterations else 0.0
     throughput = iterations / elapsed if elapsed else 0.0
-    logger.info(
-        "Embedding latency %.4fs throughput %.2f req/s", latency, throughput
-    )
+    logger.info("Embedding latency %.4fs throughput %.2f req/s", latency, throughput)
     return {"latency": latency, "throughput": throughput}
 
 
 __all__ = ["embed", "benchmark", "embed_sync"]
-
