@@ -1,12 +1,13 @@
 import os
-import json
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
 import aiosqlite
-from passlib.context import CryptContext
+from fastapi import APIRouter, Depends, HTTPException
 from jose import jwt
+from passlib.context import CryptContext
+from pydantic import BaseModel
+
+from .deps.user import get_current_user_id
 
 # Configuration
 DB_PATH = os.getenv("USERS_DB", "users.db")
@@ -20,19 +21,22 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # Router
 router = APIRouter()
 
+
 # Pydantic models
-type LoginResponse = dict
 class RegisterRequest(BaseModel):
     username: str
     password: str
+
 
 class LoginRequest(BaseModel):
     username: str
     password: str
 
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
 
 # Ensure user table exists
 async def _ensure_table() -> None:
@@ -48,9 +52,10 @@ async def _ensure_table() -> None:
         )
         await db.commit()
 
+
 # Register endpoint
 @router.post("/register", response_model=dict)
-async def register(req: RegisterRequest):
+async def register(req: RegisterRequest, user_id: str = Depends(get_current_user_id)):
     await _ensure_table()
     hashed = pwd_context.hash(req.password)
     try:
@@ -64,9 +69,12 @@ async def register(req: RegisterRequest):
         raise HTTPException(status_code=400, detail="username_taken")
     return {"status": "ok"}
 
+
 # Login endpoint
 @router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest) -> TokenResponse:
+async def login(
+    req: LoginRequest, user_id: str = Depends(get_current_user_id)
+) -> TokenResponse:
     await _ensure_table()
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
