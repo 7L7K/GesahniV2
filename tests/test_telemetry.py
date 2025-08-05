@@ -46,11 +46,11 @@ def test_telemetry_logged(monkeypatch, tmp_path):
     assert resp.status_code == 200
     line = hist.read_text().splitlines()[-1]
     data = json.loads(line)
-    from app.prompt_builder import _count_tokens
+    from app.token_utils import count_tokens
 
     assert data["status"] == "OK"
     assert data["latency_ms"] >= 0
-    assert data["embed_tokens"] == _count_tokens("hi")
+    assert data["embed_tokens"] == count_tokens("hi")
     assert data["retrieval_count"] == 2
     assert data["cache_hit"] is False
     assert data["p95_latency_ms"] == data["latency_ms"]
