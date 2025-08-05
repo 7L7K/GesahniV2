@@ -16,7 +16,6 @@ spacy
 llama-cpp-python
 chromadb
 aiosqlite
-chromadb
 tiktoken
 prometheus-client
 pyjwt
@@ -24,3 +23,4 @@ sqlalchemy
 passlib[bcrypt]
 python-jose[cryptography]
 passlib
+pytest-asyncio
