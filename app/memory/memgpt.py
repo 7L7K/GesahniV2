@@ -116,7 +116,15 @@ class MemGPT:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def store_interaction(self, prompt: str, answer: str, session_id: str, tags: List[str] | None = None) -> None:
+    def store_interaction(
+        self,
+        prompt: str,
+        answer: str,
+        session_id: str,
+        *,
+        user_id: str | None = None,
+        tags: List[str] | None = None,
+    ) -> None:
         """Persist a prompt/answer pair for ``session_id``.
 
         ``tags`` may include "pin" to force-pin an interaction.
@@ -153,7 +161,7 @@ class MemGPT:
             self._save()
 
 
-    def summarize_session(self, session_id: str) -> str:
+    def summarize_session(self, session_id: str, user_id: str | None = None) -> str:
         """Return a condensed representation of a session's interactions."""
 
         with self._lock:
