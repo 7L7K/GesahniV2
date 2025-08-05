@@ -31,10 +31,8 @@ from .user_store import user_store
 
 from . import router
 
-
 async def route_prompt(*args, **kwargs):
     return await router.route_prompt(*args, **kwargs)
-
 
 import app.skills  # populate SKILLS
 from .home_assistant import (
@@ -68,17 +66,28 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 
-def _anon_user_id(request: Request) -> str:
-    """Return an anonymous user identifier from request details (auth header → IP → random)."""
-    auth = request.headers.get("Authorization")
+def _anon_user_id(source: Request | str | None) -> str:
+    """Return a stable anonymous identifier.
+
+    Accepts either a FastAPI ``Request`` (uses auth header then IP), a raw
+    Authorization header string, or ``None`` which yields "local".
+    Auth-derived hashes are 32 chars; IP-derived hashes are truncated to 12.
+    """
+    if source is None:
+        return "local"
+
+    if isinstance(source, str):
+        return sha256(source.encode("utf-8")).hexdigest()[:32]
+
+    auth = source.headers.get("Authorization")
     if auth:
         return sha256(auth.encode("utf-8")).hexdigest()[:32]
 
-    ip = request.headers.get("X-Forwarded-For") or (
-        request.client.host if request.client else None
+    ip = source.headers.get("X-Forwarded-For") or (
+        source.client.host if source.client else None
     )
     if ip:
-        return sha256(ip.encode("utf-8")).hexdigest()[:32]
+        return sha256(ip.encode("utf-8")).hexdigest()[:12]
 
     return uuid.uuid4().hex[:32]
 
@@ -95,7 +104,6 @@ app.add_middleware(
     allow_methods=["*"],  # includes OPTIONS
     allow_headers=["*"],  # includes Content-Type, Authorization, etc.
 )
-# ───────────────────────────────────────────────────────────────────────────────────
 app.add_middleware(DedupMiddleware)
 
 app.include_router(status_router)
@@ -103,7 +111,7 @@ app.include_router(auth_router)
 
 
 @app.middleware("http")
-async def trace_request(request, call_next):
+async def trace_request(request: Request, call_next):
     rec = LogRecord(req_id=str(uuid.uuid4()))
     token_req = req_id_var.set(rec.req_id)
     token_rec = log_record_var.set(rec)
@@ -124,16 +132,13 @@ async def trace_request(request, call_next):
         rec.status = "ERR_TIMEOUT"
         raise
     finally:
-        # compute and record latency
         rec.latency_ms = int((time.monotonic() - start_time) * 1000)
         await record_latency(rec.latency_ms)
         rec.p95_latency_ms = latency_p95()
 
-        # tag response header
         if isinstance(response, Response):
             response.headers["X-Request-ID"] = rec.req_id
 
-        # persist history & reset context vars
         await append_history(rec)
         log_record_var.reset(token_rec)
         req_id_var.reset(token_req)
@@ -322,7 +327,6 @@ async def websocket_transcribe(
     _: None = Depends(verify_ws),
     __: None = Depends(rate_limit_ws),
 ):
-    # Now we’re clean—accept and roll
     await ws.accept()
     msg = await ws.receive()
 
@@ -439,9 +443,7 @@ async def start_transcription(
 
 
 @app.get("/transcribe/{session_id}")
-async def get_transcription(
-    session_id: str, user_id: str = Depends(get_current_user_id)
-):
+async def get_transcription(session_id: str, user_id: str = Depends(get_current_user_id)):
     transcript_path = Path(SESSIONS_DIR) / session_id / "transcript.txt"
     if transcript_path.exists():
         return {"text": transcript_path.read_text(encoding="utf-8")}
