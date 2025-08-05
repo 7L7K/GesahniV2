@@ -20,7 +20,7 @@ class UserStore:
             self._conn = await aiosqlite.connect(self._path)
             await self._conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS users (
+                CREATE TABLE IF NOT EXISTS user_stats (
                     user_id TEXT PRIMARY KEY,
                     login_count INTEGER DEFAULT 0,
                     last_login TEXT,
@@ -34,7 +34,7 @@ class UserStore:
     async def ensure_user(self, user_id: str) -> None:
         conn = await self._get_conn()
         await conn.execute(
-            "INSERT OR IGNORE INTO users (user_id) VALUES (?)",
+            "INSERT OR IGNORE INTO user_stats (user_id) VALUES (?)",
             (user_id,),
         )
         await conn.commit()
@@ -44,7 +44,7 @@ class UserStore:
         now = datetime.utcnow().isoformat()
         await conn.execute(
             """
-            UPDATE users
+            UPDATE user_stats
             SET login_count = login_count + 1, last_login = ?
             WHERE user_id = ?
             """,
@@ -55,7 +55,7 @@ class UserStore:
     async def increment_request(self, user_id: str) -> None:
         conn = await self._get_conn()
         await conn.execute(
-            "UPDATE users SET request_count = request_count + 1 WHERE user_id = ?",
+            "UPDATE user_stats SET request_count = request_count + 1 WHERE user_id = ?",
             (user_id,),
         )
         await conn.commit()
@@ -63,7 +63,7 @@ class UserStore:
     async def get_stats(self, user_id: str) -> dict | None:
         conn = await self._get_conn()
         async with conn.execute(
-            "SELECT login_count, last_login, request_count FROM users WHERE user_id = ?",
+            "SELECT login_count, last_login, request_count FROM user_stats WHERE user_id = ?",
             (user_id,),
         ) as cur:
             row = await cur.fetchone()

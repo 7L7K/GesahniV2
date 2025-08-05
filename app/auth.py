@@ -10,6 +10,7 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 
 from .deps.user import get_current_user_id
+from .user_store import user_store
 
 # Configuration
 DB_PATH = os.getenv("USERS_DB", "users.db")
@@ -27,29 +28,36 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # Router
 router = APIRouter()
 
+
 # Pydantic models
 class RegisterRequest(BaseModel):
     username: str
     password: str
 
+
 class LoginRequest(BaseModel):
     username: str
     password: str
+
 
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    token: str | None = None
+    stats: dict | None = None
+
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
 
 # Ensure user table exists
 async def _ensure_table() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
-            CREATE TABLE IF NOT EXISTS auth_users (
+            CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL
@@ -57,6 +65,7 @@ async def _ensure_table() -> None:
             """
         )
         await db.commit()
+
 
 # Register endpoint
 @router.post("/register", response_model=dict)
@@ -66,7 +75,7 @@ async def register(req: RegisterRequest, user_id: str = Depends(get_current_user
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
-                "INSERT INTO auth_users (username, password_hash) VALUES (?, ?)",
+                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
                 (req.username, hashed),
             )
             await db.commit()
@@ -74,13 +83,16 @@ async def register(req: RegisterRequest, user_id: str = Depends(get_current_user
         raise HTTPException(status_code=400, detail="username_taken")
     return {"status": "ok"}
 
+
 # Login endpoint
 @router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest, user_id: str = Depends(get_current_user_id)) -> TokenResponse:
+async def login(
+    req: LoginRequest, user_id: str = Depends(get_current_user_id)
+) -> TokenResponse:
     await _ensure_table()
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT password_hash FROM auth_users WHERE username = ?",
+            "SELECT password_hash FROM users WHERE username = ?",
             (req.username,),
         ) as cursor:
             row = await cursor.fetchone()
@@ -110,7 +122,16 @@ async def login(req: LoginRequest, user_id: str = Depends(get_current_user_id)) 
     }
     refresh_token = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
 
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    await user_store.ensure_user(user_id)
+    await user_store.increment_login(user_id)
+    stats = await user_store.get_stats(user_id) or {}
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token=access_token,
+        stats=stats,
+    )
+
 
 # Refresh endpoint
 @router.post("/refresh", response_model=TokenResponse)
@@ -153,7 +174,10 @@ async def refresh(req: RefreshRequest) -> TokenResponse:
     }
     refresh_token = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
 
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    return TokenResponse(
+        access_token=access_token, refresh_token=refresh_token, token=access_token
+    )
+
 
 # Logout endpoint
 @router.post("/logout", response_model=dict)
