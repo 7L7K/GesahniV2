@@ -7,6 +7,7 @@ import jwt
 from fastapi import Request, HTTPException, WebSocket
 
 JWT_SECRET = os.getenv("JWT_SECRET")
+API_TOKEN = os.getenv("API_TOKEN")
 RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MIN", "60"))
 _window = 60.0
 _lock = asyncio.Lock()
