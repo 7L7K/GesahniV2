@@ -167,6 +167,13 @@
       "tags": [],
       "timestamp": 1754255295.623787,
       "hash": "4fccd47228ad77b3d957a186823b00c3b4d4b6dca3f85455884f4fa3843d7213"
+    },
+    {
+      "prompt": "going good how are you today ",
+      "answer": "Hey there! I'm doing well, thanks for asking. How can I assist you today?",
+      "tags": [],
+      "timestamp": 1754419163.235889,
+      "hash": "747d07a0e281d97e51a98d9b6e6141fe6f6244b798fa07d0ac590bdac6c94811"
     }
   ]
 }

@@ -1,49 +1,80 @@
-import os, sys
+import os
+import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-os.environ.setdefault("HOME_ASSISTANT_URL", "http://ha")
-os.environ.setdefault("HOME_ASSISTANT_TOKEN", "token")
-os.environ.setdefault("OLLAMA_URL", "http://x")
-os.environ.setdefault("OLLAMA_MODEL", "llama3")
+
 from app import skills
+from app.skills.smalltalk_skill import SmalltalkSkill
+from app.skills.clock_skill import ClockSkill
+from app.skills.world_clock_skill import WorldClockSkill
+from app.skills.weather_skill import WeatherSkill
+from app.skills.forecast_skill import ForecastSkill
+from app.skills.reminder_skill import ReminderSkill
+from app.skills.timer_skill import TimerSkill
+from app.skills.math_skill import MathSkill
+from app.skills.unit_conversion_skill import UnitConversionSkill
+from app.skills.currency_skill import CurrencySkill
+from app.skills.calendar_skill import CalendarSkill
+from app.skills.teach_skill import TeachSkill
+from app.skills.entities_skill import EntitiesSkill
+from app.skills.scene_skill import SceneSkill
+from app.skills.script_skill import ScriptSkill
+from app.skills.cover_skill import CoverSkill
+from app.skills.fan_skill import FanSkill
+from app.skills.notify_skill import NotifySkill
+from app.skills.search_skill import SearchSkill
+from app.skills.translate_skill import TranslateSkill
+from app.skills.news_skill import NewsSkill
+from app.skills.joke_skill import JokeSkill
+from app.skills.dictionary_skill import DictionarySkill
+from app.skills.recipe_skill import RecipeSkill
+from app.skills.lights_skill import LightsSkill
+from app.skills.door_lock_skill import DoorLockSkill
+from app.skills.music_skill import MusicSkill
+from app.skills.roku_skill import RokuSkill
+from app.skills.climate_skill import ClimateSkill
+from app.skills.vacuum_skill import VacuumSkill
+from app.skills.notes_skill import NotesSkill
+from app.skills.status_skill import StatusSkill
 
 EXPECTED_ORDER = [
-    skills.SmalltalkSkill,
-    skills.ClockSkill,
-    skills.WorldClockSkill,
-    skills.WeatherSkill,
-    skills.ForecastSkill,
-    skills.ReminderSkill,
-    skills.TimerSkill,
-    skills.MathSkill,
-    skills.UnitConversionSkill,
-    skills.CurrencySkill,
-    skills.CalendarSkill,
-    skills.TeachSkill,
-    skills.EntitiesSkill,
-    skills.SceneSkill,
-    skills.ScriptSkill,
-    skills.CoverSkill,
-    skills.FanSkill,
-    skills.NotifySkill,
-    skills.SearchSkill,
-    skills.TranslateSkill,
-    skills.NewsSkill,
-    skills.JokeSkill,
-    skills.DictionarySkill,
-    skills.RecipeSkill,
-    skills.LightsSkill,
-    skills.DoorLockSkill,
-    skills.MusicSkill,
-    skills.RokuSkill,
-    skills.ClimateSkill,
-    skills.VacuumSkill,
-    skills.NotesSkill,
-    skills.StatusSkill,
+    SmalltalkSkill,
+    ClockSkill,
+    WorldClockSkill,
+    WeatherSkill,
+    ForecastSkill,
+    ReminderSkill,
+    TimerSkill,
+    MathSkill,
+    UnitConversionSkill,
+    CurrencySkill,
+    CalendarSkill,
+    TeachSkill,
+    EntitiesSkill,
+    SceneSkill,
+    ScriptSkill,
+    CoverSkill,
+    FanSkill,
+    NotifySkill,
+    SearchSkill,
+    TranslateSkill,
+    NewsSkill,
+    JokeSkill,
+    DictionarySkill,
+    RecipeSkill,
+    LightsSkill,
+    DoorLockSkill,
+    MusicSkill,
+    RokuSkill,
+    ClimateSkill,
+    VacuumSkill,
+    NotesSkill,
+    StatusSkill,
 ]
 
 
 def test_skills_order_and_length():
-    assert len(skills.SKILLS) == len(EXPECTED_ORDER)
+    assert skills.SKILL_CLASSES == EXPECTED_ORDER
+    assert len(skills.SKILL_CLASSES) == len(skills.SKILLS)
     for skill_obj, cls in zip(skills.SKILLS, EXPECTED_ORDER):
         assert isinstance(skill_obj, cls)

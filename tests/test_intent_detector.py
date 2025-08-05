@@ -1,10 +1,20 @@
-import os, sys
+import os
+import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+import pytest
 from app.intent_detector import detect_intent
 
 
-def test_short_greeting_classification():
-    assert detect_intent("hi") == ("smalltalk", "low")
-    assert detect_intent("hello") == ("smalltalk", "low")
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("yo", ("smalltalk", "low")),
+        ("turn on the lights", ("control", "high")),
+        ("tell me a fun fact", ("chat", "medium")),
+        ("asdasdasd", ("unknown", "low")),
+    ],
+)
+def test_detect_intent_cases(text, expected):
+    assert detect_intent(text) == expected

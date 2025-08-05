@@ -16,6 +16,7 @@ from .memory.vector_store import (
     lookup_cached_answer,
 )
 from .llama_integration import ask_llama, LLAMA_HEALTHY
+from . import llama_integration
 from .model_picker import pick_model
 from .telemetry import log_record_var
 from .memory import memgpt
@@ -23,8 +24,11 @@ from .prompt_builder import PromptBuilder
 from .token_utils import count_tokens
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from . import skills  # populate built-in registry (SmalltalkSkill, etc.)  # noqa: F401
+from .skills.smalltalk_skill import SmalltalkSkill
 from .intent_detector import detect_intent
 from .deps.user import get_current_user_id
+
+_SMALLTALK = SmalltalkSkill()
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +73,7 @@ async def route_prompt(
     intent, priority = detect_intent(prompt)
     # Smalltalk shortcut
     if intent == "smalltalk":
-        from .skills.smalltalk_skill import SmalltalkSkill
-
-        skill_resp = await SmalltalkSkill().handle(prompt)
+        skill_resp = await _SMALLTALK.handle(prompt)
         if rec:
             rec.engine_used = "skill"
         await append_history(prompt, "skill", str(skill_resp))
@@ -192,7 +194,7 @@ async def route_prompt(
         return text
 
     # LLaMA first
-    if engine == "llama" and LLAMA_HEALTHY:
+    if engine == "llama" and llama_integration.LLAMA_HEALTHY:
         if debug_model_routing:
             return _dry_return("llama", model_name)
         result = await ask_llama(built_prompt, model_name)
