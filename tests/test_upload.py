@@ -15,7 +15,7 @@ def test_upload_saves_file(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "ha_startup", lambda: None)
     monkeypatch.setattr(main, "llama_startup", lambda: None)
     monkeypatch.setattr(main, "SESSIONS_DIR", str(tmp_path))
-    monkeypatch.setenv("API_TOKEN", "secret")
+    monkeypatch.setenv("JWT_SECRET", "secret")
 
     client = TestClient(main.app)
     data = b"abc"

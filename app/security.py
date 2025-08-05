@@ -6,7 +6,7 @@ from typing import Dict, List
 import jwt
 from fastapi import Request, HTTPException, WebSocket
 
-API_TOKEN = os.getenv("API_TOKEN")
+JWT_SECRET = os.getenv("JWT_SECRET")
 RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MIN", "60"))
 _window = 60.0
 _lock = asyncio.Lock()
@@ -15,14 +15,14 @@ _requests: Dict[str, List[float]] = {}
 
 async def verify_token(request: Request) -> None:
     """Validate Authorization header as a JWT if a secret is configured."""
-    if not API_TOKEN:
+    if not JWT_SECRET:
         return
     auth = request.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
     token = auth.split(" ", 1)[1]
     try:
-        jwt.decode(token, API_TOKEN, algorithms=["HS256"])
+        jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -44,7 +44,7 @@ async def rate_limit(request: Request) -> None:
 
 async def verify_ws(ws: WebSocket) -> None:
     """JWT validation for WebSocket connections."""
-    if not API_TOKEN:
+    if not JWT_SECRET:
         return
     auth = ws.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):
@@ -52,7 +52,7 @@ async def verify_ws(ws: WebSocket) -> None:
         raise HTTPException(status_code=1008, detail="Unauthorized")
     token = auth.split(" ", 1)[1]
     try:
-        jwt.decode(token, API_TOKEN, algorithms=["HS256"])
+        jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
     except jwt.PyJWTError:
         await ws.close(code=1008)
         raise HTTPException(status_code=1008, detail="Unauthorized")
