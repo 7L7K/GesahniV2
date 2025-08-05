@@ -34,9 +34,7 @@ def setup_temp(monkeypatch, tmp_path: Path):
     # put history file in tmp
     monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "history.jsonl")
     monkeypatch.setattr(sm, "append_history", history.append_history)
-
-    # use a consistent API token
-    monkeypatch.setenv("API_TOKEN", "secret")
+    monkeypatch.setenv("JWT_SECRET", "secret")
 
 
 def _headers() -> dict:
