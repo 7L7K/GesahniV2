@@ -1,9 +1,8 @@
-import sys, os
+import os
+import sys
+import asyncio
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import pytest
-
-import asyncio
 
 
 def test_handle_command_entity_not_found(monkeypatch):
@@ -16,4 +15,6 @@ def test_handle_command_entity_not_found(monkeypatch):
 
     monkeypatch.setattr(home_assistant, "get_states", fake_states)
     res = asyncio.run(home_assistant.handle_command("turn on kitchen"))
-    assert res == {"error": "entity_not_found", "name": "kitchen"}
+    assert res == home_assistant.CommandResult(
+        success=False, message="entity_not_found", data={"name": "kitchen"}
+    )

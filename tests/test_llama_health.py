@@ -1,8 +1,8 @@
-import os, sys, asyncio
+import os
+import sys
+import asyncio
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-import pytest
 
 
 def test_llama_error_sets_flag(monkeypatch):
@@ -12,35 +12,23 @@ def test_llama_error_sets_flag(monkeypatch):
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     from app import llama_integration
 
-    import httpx
+    async def fake_json_request(*args, **kwargs):
+        return None, "network_error"
 
-    class DummyClient:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            pass
-
-        async def post(self, *a, **k):
-            raise httpx.TimeoutException("boom")
-
-    monkeypatch.setattr(
-        llama_integration,
-        "httpx",
-        type(
-            "x",
-            (),
-            {
-                "AsyncClient": lambda *a, **k: DummyClient(),
-                "TimeoutException": httpx.TimeoutException,
-                "HTTPError": httpx.HTTPError,
-            },
-        ),
-    )
+    monkeypatch.setattr(llama_integration, "json_request", fake_json_request)
     llama_integration.LLAMA_HEALTHY = True
     res = asyncio.run(llama_integration.ask_llama("hi"))
     assert res["error"] == "timeout"
     assert llama_integration.LLAMA_HEALTHY is False
+
+
+def test_llama_model_guard(monkeypatch):
+    os.environ["OLLAMA_URL"] = "http://x"
+    from app import llama_integration
+
+    llama_integration.OLLAMA_MODEL = None
+    res = asyncio.run(llama_integration.ask_llama("hi"))
+    assert res == {"error": "model_not_set"}
 
 
 def test_router_skips_when_unhealthy(monkeypatch):
