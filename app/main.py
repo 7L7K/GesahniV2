@@ -48,7 +48,7 @@ from .logging_config import configure_logging, req_id_var
 from .telemetry import LogRecord, log_record_var, utc_now
 from .status import router as status_router
 from .auth import router as auth_router
-from .transcription import transcribe_file
+from .transcription import transcribe_file, close_whisper_client
 from .history import append_history
 from .middleware import DedupMiddleware
 from .session_manager import (
@@ -63,6 +63,7 @@ from .session_store import list_sessions as list_session_store, SessionStatus
 from .tasks import enqueue_transcription, enqueue_summary
 from .security import verify_token, rate_limit, verify_ws, rate_limit_ws
 from .analytics import record_latency, latency_p95
+from .gpt_client import close_client
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -162,6 +163,17 @@ async def startup_event() -> None:
     except Exception as e:
         logger.error(f"Startup check failed: {e}")
         sys.exit(1)
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    """Close external API clients on shutdown."""
+
+    for func in (close_client, close_whisper_client):
+        try:
+            await func()
+        except Exception as e:
+            logger.debug("shutdown cleanup failed: %s", e)
 
 
 class AskRequest(BaseModel):
