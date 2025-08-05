@@ -1,6 +1,5 @@
 from __future__ import annotations
 import os
-from hashlib import sha256
 from uuid import uuid4
 from fastapi import Request, WebSocket, HTTPException
 import jwt
@@ -8,10 +7,6 @@ import jwt
 from ..telemetry import LogRecord, log_record_var
 
 JWT_SECRET = os.getenv("JWT_SECRET")
-
-
-def _hash(value: str, length: int = 32) -> str:
-    return sha256(value.encode("utf-8")).hexdigest()[:length]
 
 
 def get_current_user_id(
@@ -23,10 +18,8 @@ def get_current_user_id(
     Preference order:
     1. Existing log record set by middleware.
     2. JWT "user_id" claim when API token/secret is configured.
-    3. Hash of Authorization header.
-    4. Hash of client IP.
-    5. Fallback to "local".
-    The resolved ID is attached to request/websocket state.
+    3. Fallback to anonymous.
+    The resolved ID is attached to request/websocket state when authenticated.
     """
     target = request or websocket
 
@@ -36,7 +29,7 @@ def get_current_user_id(
         rec = LogRecord(req_id=uuid4().hex)
         log_record_var.set(rec)
 
-    user_id = rec.user_id or ""
+    user_id = ""
 
     # 2) Try JWT-based user_id
     auth_header = None
@@ -54,25 +47,12 @@ def get_current_user_id(
             # Unauthorized if token is malformed or invalid
             raise HTTPException(status_code=401, detail="Invalid authentication token")
 
-    # 3) Fallback: hash the raw Authorization header
-    if not user_id and auth_header:
-        user_id = _hash(auth_header)
-
-    # 4) Fallback: hash client IP / X-Forwarded-For
-    if not user_id and target:
-        ip = target.headers.get("X-Forwarded-For") or (
-            target.client.host if target.client else None
-        )
-        if ip:
-            user_id = _hash(ip, length=12)
-
-    # 5) Last resort
     if not user_id:
-        user_id = "local"
+        user_id = "anon"
 
-    # Attach to record + state
+    # Attach to record + state for authenticated users only
     rec.user_id = user_id
-    if target:
+    if target and user_id != "anon":
         target.state.user_id = user_id
 
     return user_id
