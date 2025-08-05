@@ -1,9 +1,11 @@
 import os
 from datetime import datetime, timedelta
+from uuid import uuid4
+from typing import Set
 
 import aiosqlite
-from fastapi import APIRouter, Depends, HTTPException
-from jose import jwt
+from fastapi import APIRouter, Depends, HTTPException, Request
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 
@@ -14,6 +16,10 @@ DB_PATH = os.getenv("USERS_DB", "users.db")
 ALGORITHM = "HS256"
 SECRET_KEY = os.getenv("JWT_SECRET", "change-me")
 EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
+REFRESH_EXPIRE_MINUTES = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
+
+# Revocation store
+revoked_tokens: Set[str] = set()
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -35,7 +41,12 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 # Ensure user table exists
@@ -86,6 +97,68 @@ async def login(
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     expire = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
-    payload = {"sub": req.username, "exp": expire}
-    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-    return TokenResponse(access_token=token)
+    jti = uuid4().hex
+    payload = {"sub": req.username, "exp": expire, "jti": jti, "type": "access"}
+    access_token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    refresh_expire = datetime.utcnow() + timedelta(minutes=REFRESH_EXPIRE_MINUTES)
+    refresh_jti = uuid4().hex
+    refresh_payload = {
+        "sub": req.username,
+        "exp": refresh_expire,
+        "jti": refresh_jti,
+        "type": "refresh",
+    }
+    refresh_token = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh(req: RefreshRequest) -> TokenResponse:
+    try:
+        payload = jwt.decode(req.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=400, detail="Invalid token type")
+
+    jti = payload.get("jti")
+    if jti in revoked_tokens:
+        raise HTTPException(status_code=401, detail="Token revoked")
+
+    revoked_tokens.add(jti)
+    username = payload.get("sub")
+
+    expire = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
+    new_jti = uuid4().hex
+    access_payload = {"sub": username, "exp": expire, "jti": new_jti, "type": "access"}
+    access_token = jwt.encode(access_payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    refresh_expire = datetime.utcnow() + timedelta(minutes=REFRESH_EXPIRE_MINUTES)
+    refresh_jti = uuid4().hex
+    refresh_payload = {
+        "sub": username,
+        "exp": refresh_expire,
+        "jti": refresh_jti,
+        "type": "refresh",
+    }
+    refresh_token = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/logout", response_model=dict)
+async def logout(request: Request) -> dict:
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    token = auth.split(" ", 1)[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    jti = payload.get("jti")
+    if jti:
+        revoked_tokens.add(jti)
+    return {"status": "ok"}
