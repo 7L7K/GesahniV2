@@ -14,6 +14,7 @@ def _client(monkeypatch):
     db_fd, db_path = tempfile.mkstemp()
     os.close(db_fd)
     monkeypatch.setenv("USERS_DB", db_path)
+    monkeypatch.setenv("USER_DB", db_path)
     monkeypatch.setenv("JWT_SECRET", "testsecret")
     monkeypatch.setenv("JWT_EXPIRE_MINUTES", "5")
     sys.modules.pop("app.auth", None)
@@ -36,11 +37,13 @@ def test_login_success(monkeypatch):
 
     resp = client.post("/login", json={"username": "alice", "password": "wonderland"})
     assert resp.status_code == 200
-    token = resp.json()["access_token"]
+    data = resp.json()
+    token = data["token"]
     payload = jwt.decode(token, "testsecret", algorithms=["HS256"])
     assert payload["sub"] == "alice"
     assert payload["user_id"] == "abc"
     assert "exp" in payload
+    assert data["stats"]["login_count"] == 1
 
 
 def test_login_bad_credentials(monkeypatch):

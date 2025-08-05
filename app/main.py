@@ -175,14 +175,6 @@ class ServiceRequest(BaseModel):
     data: dict | None = None
 
 
-@app.post("/login")
-async def login(user_id: str = Depends(get_current_user_id)):
-    await user_store.ensure_user(user_id)
-    await user_store.increment_login(user_id)
-    stats = await user_store.get_stats(user_id)
-    return {"user_id": user_id, **stats}
-
-
 @app.get("/me")
 async def get_me(user_id: str = Depends(get_current_user_id)):
     stats = await user_store.get_stats(user_id)
