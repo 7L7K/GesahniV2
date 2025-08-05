@@ -15,8 +15,8 @@ def _hash(value: str, length: int = 32) -> str:
 
 
 def get_current_user_id(
-    request: Request | None = None,
-    websocket: WebSocket | None = None,
+    request: Request = None,
+    websocket: WebSocket = None,
 ) -> str:
     """Return the current user's identifier.
 
