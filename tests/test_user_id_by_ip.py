@@ -18,7 +18,8 @@ async def whoami(
 def test_unauthenticated_requests_are_rate_limited_per_ip(monkeypatch):
     client = TestClient(app)
     monkeypatch.setattr(security, "RATE_LIMIT", 1)
-    security._requests.clear()
+    security._http_requests.clear()
+    security._ws_requests.clear()
 
     ip1 = "1.1.1.1"
     ip2 = "2.2.2.2"
