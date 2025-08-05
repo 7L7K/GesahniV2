@@ -97,6 +97,7 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `WHISPER_MODEL` | `whisper-1` | no | Sync Whisper model |
 | `ALLOWED_GPT_MODELS` | `gpt-4o,gpt-4,gpt-3.5-turbo` | no | Valid `/ask` model overrides |
 | `DEBUG` | – | no | Enable extra prompt debug info |
+| `DEBUG_MODEL_ROUTING` | – | no | Log model path without external calls |
 | `LOG_LEVEL` | `INFO` | no | Logging verbosity |
 | `FOLLOW_UPS_FILE` | `data/follow_ups.json` | no | Stored follow-up reminders |
 | `OLLAMA_URL` | `http://localhost:11434` | no | Ollama base URL |
