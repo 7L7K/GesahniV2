@@ -4,6 +4,8 @@ import logging
 import time
 from typing import Any
 
+import httpx  # noqa: F401  # exposed for monkeypatching in tests
+
 from .deps.scheduler import scheduler, start as scheduler_start
 from .logging_config import req_id_var
 from .http_utils import json_request, log_exceptions
