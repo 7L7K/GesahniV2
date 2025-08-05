@@ -101,9 +101,8 @@ def transcribe_task(session_id: str, user_id: str) -> None:
                 add_user_memory(user_id, chunk)
             except Exception:
                 pass
-        meta = _load_meta(session_id)
-        meta["status"] = SessionStatus.TRANSCRIBED.value
-        _save_meta(session_id, meta)
+        # ensure session status reflects successful transcription
+        update_status(session_id, SessionStatus.TRANSCRIBED)
     except Exception as e:  # pragma: no cover - network errors
         append_error(session_id, str(e))
         update_status(session_id, SessionStatus.ERROR)
@@ -150,13 +149,14 @@ def summary_task(session_id: str) -> None:
             json.dumps({"summary": summary}, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        # persist tags so subsequent searches can find this session
         tags_path.write_text(
             json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         meta = _load_meta(session_id)
         meta["tags"] = tags
+        meta["status"] = SessionStatus.DONE.value
         _save_meta(session_id, meta)
-        update_status(session_id, SessionStatus.DONE)
     except Exception as e:  # pragma: no cover - network errors
         append_error(session_id, str(e))
         update_status(session_id, SessionStatus.ERROR)
