@@ -4,6 +4,8 @@ import pytest
 
 from app import gpt_client
 
+# Async test relies on pytest-asyncio to provide an event loop
+
 
 def test_get_client_missing_key(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
