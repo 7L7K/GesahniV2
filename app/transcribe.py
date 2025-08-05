@@ -2,7 +2,6 @@ import os
 import logging
 import openai
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "whisper-1")
 
 logger = logging.getLogger(__name__)
@@ -11,9 +10,12 @@ logger = logging.getLogger(__name__)
 def transcribe_file(path: str, model: str | None = None) -> str:
     """Transcribe the given audio file using OpenAI's Whisper API."""
     model = model or WHISPER_MODEL
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY not set")
     try:
         with open(path, "rb") as fh:
-            resp = openai.Audio.transcribe(model=model, file=fh, api_key=OPENAI_API_KEY)
+            resp = openai.Audio.transcribe(model=model, file=fh, api_key=api_key)
         if isinstance(resp, dict):
             text = resp.get("text", "")
         else:
