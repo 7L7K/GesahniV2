@@ -27,11 +27,19 @@ def _client(monkeypatch):
 
 def test_login_success(monkeypatch):
     client = _client(monkeypatch)
+
+    def fake_user_id(request: Request) -> str:
+        request.state.user_id = "abc"
+        return "abc"
+
+    client.app.dependency_overrides[get_current_user_id] = fake_user_id
+
     resp = client.post("/login", json={"username": "alice", "password": "wonderland"})
     assert resp.status_code == 200
     token = resp.json()["access_token"]
     payload = jwt.decode(token, "testsecret", algorithms=["HS256"])
     assert payload["sub"] == "alice"
+    assert payload["user_id"] == "abc"
     assert "exp" in payload
 
 
