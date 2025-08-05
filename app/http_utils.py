@@ -1,0 +1,64 @@
+import asyncio
+import logging
+from typing import Tuple
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+
+def log_exceptions(module: str):
+    """Decorator to log exceptions for async functions."""
+
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:  # pragma: no cover - just logging
+                logger.warning("%s error: %s", module, e)
+                raise
+
+        return wrapper
+
+    return decorator
+
+
+async def json_request(
+    method: str, url: str, **kwargs
+) -> Tuple[dict | None, str | None]:
+    """Perform an HTTP request and return JSON with retry logic.
+
+    Returns a tuple of ``(data, error)`` where ``error`` is ``None`` on success
+    or a short string identifying the failure type.
+    """
+
+    delay = 1.0
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.request(method, url, **kwargs)
+            resp.raise_for_status()
+            try:
+                return resp.json(), None
+            except Exception:
+                logger.warning("JSON decode failed for %s", url)
+                return None, "json_error"
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            logger.warning("HTTP %s for %s", status, url)
+            if 500 <= status < 600 and attempt < 2:
+                await asyncio.sleep(delay)
+                delay *= 2
+                continue
+            return None, "http_error"
+        except httpx.RequestError as e:
+            logger.warning("Network error for %s: %s", url, e)
+            if attempt < 2:
+                await asyncio.sleep(delay)
+                delay *= 2
+                continue
+            return None, "network_error"
+        except Exception as e:  # pragma: no cover - unexpected
+            logger.warning("Unexpected error for %s: %s", url, e)
+            return None, "unknown_error"
+    return None, "http_error"
