@@ -1,5 +1,5 @@
-import os, sys
-import asyncio
+import os
+import sys
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -18,7 +18,7 @@ def setup_app(monkeypatch):
 
     async def fake_llm(prompt, model=None, system=None):
         called["llm"] = True
-        return "llm"
+        return "llm", 0, 0, 0.0
 
     monkeypatch.setattr(router, "ask_llama", fake_llm)
     monkeypatch.setattr(router, "ask_gpt", fake_llm)

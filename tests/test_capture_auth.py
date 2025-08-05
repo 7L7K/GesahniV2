@@ -1,5 +1,6 @@
 import jwt
 from datetime import datetime, timedelta
+from typing import Any
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 
@@ -10,10 +11,11 @@ import app.deps.user as user_deps
 def _build_client(monkeypatch):
     monkeypatch.setattr(security, "API_TOKEN", "secret")
     monkeypatch.setattr(user_deps, "JWT_SECRET", "secret")
-    monkeypatch.setattr(security, "_requests", {})
+    monkeypatch.setattr(security, "_http_requests", {})
+    monkeypatch.setattr(security, "_ws_requests", {})
 
     app = FastAPI()
-    captured: dict[str, str] = {}
+    captured: dict[str, Any] = {}
 
     @app.post("/login")
     def login():
@@ -31,6 +33,7 @@ def _build_client(monkeypatch):
         _user_id: str = Depends(user_deps.get_current_user_id),
     ):
         captured["user_id"] = request.state.user_id
+        captured["payload"] = request.state.jwt_payload
         return {"ok": True}
 
     client = TestClient(app)
@@ -43,6 +46,7 @@ def test_capture_start_sets_user_id_from_token(monkeypatch):
     resp = client.post("/capture/start", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
     assert captured["user_id"] == "alice"
+    assert captured["payload"]["user_id"] == "alice"
 
 
 def test_capture_start_invalid_token(monkeypatch):
