@@ -7,21 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
 
-try:  # pragma: no cover - optional dependency
-    import tiktoken
-
-    _ENCODING = tiktoken.get_encoding("cl100k_base")
-
-    def _count_tokens(text: str) -> int:
-        return len(_ENCODING.encode(text))
-
-except Exception:  # pragma: no cover - simple fallback
-    tiktoken = None  # type: ignore
-
-    def _count_tokens(text: str) -> int:
-        return len(text.split())
-
-
+from .token_utils import count_tokens
 from .memory import memgpt
 from .memory.vector_store import query_user_memories
 from .telemetry import log_record_var
@@ -31,7 +17,7 @@ MAX_PROMPT_TOKENS = 8_000
 # Load static prompt core at import time
 _CORE_PATH = Path(__file__).parent / "prompts" / "prompt_core.txt"
 _PROMPT_CORE = _CORE_PATH.read_text(encoding="utf-8")
-# note: if tiktoken is missing, _count_tokens defined above will perform a
+# note: if tiktoken is missing, token_utils.count_tokens will perform a
 # naive word-based count which is sufficient for tests.
 
 
@@ -54,8 +40,8 @@ class PromptBuilder:
         memories: List[str] = query_user_memories(user_id, user_prompt, k=top_k)[:3]
         rec = log_record_var.get()
         if rec:
-            rec.embed_tokens = _count_tokens(user_prompt)
-        while _count_tokens("\n".join(memories)) > 55 and memories:
+            rec.embed_tokens = count_tokens(user_prompt)
+        while count_tokens("\n".join(memories)) > 55 and memories:
             memories.pop()
         dbg = debug_info if debug else ""
         base_prompt = _PROMPT_CORE
@@ -69,7 +55,7 @@ class PromptBuilder:
         }
         for key, val in base_replacements.items():
             base_prompt = base_prompt.replace(f"{{{{{key}}}}}", val)
-        base_tokens = _count_tokens(base_prompt)
+        base_tokens = count_tokens(base_prompt)
 
         # Token budgeting: remove summary first, then drop low-sim/oldest
         mem_list = list(memories)
@@ -86,7 +72,7 @@ class PromptBuilder:
             }
             for key, val in replacements.items():
                 prompt = prompt.replace(f"{{{{{key}}}}}", val)
-            prompt_tokens = _count_tokens(prompt)
+            prompt_tokens = count_tokens(prompt)
             if prompt_tokens <= MAX_PROMPT_TOKENS and prompt_tokens - base_tokens <= 75:
                 break
             if summary:
@@ -95,7 +81,7 @@ class PromptBuilder:
                 base_prompt = _PROMPT_CORE
                 for key, val in base_replacements.items():
                     base_prompt = base_prompt.replace(f"{{{{{key}}}}}", val)
-                base_tokens = _count_tokens(base_prompt)
+                base_tokens = count_tokens(base_prompt)
                 continue
             if mem_list:
                 mem_list.pop()
