@@ -13,7 +13,7 @@ def setup_app(monkeypatch, hist_path):
     monkeypatch.setattr(main, "ha_startup", lambda: None)
     monkeypatch.setattr(main, "llama_startup", lambda: None)
     monkeypatch.setattr("app.history.HISTORY_FILE", hist_path)
-    async def fake_route(prompt: str, model=None):
+    async def fake_route(prompt: str, model=None, user_id: str = "u"):
         from app.prompt_builder import PromptBuilder
         from app.telemetry import log_record_var
         PromptBuilder.build(prompt, session_id="s", user_id="u")
@@ -30,9 +30,11 @@ def test_telemetry_logged(monkeypatch, tmp_path):
     client = setup_app(monkeypatch, str(hist))
     from app import prompt_builder, analytics
     analytics._latency_samples = []
-    monkeypatch.setattr(prompt_builder.memgpt, "summarize_session", lambda sid: "")
     monkeypatch.setattr(
-        prompt_builder, "query_user_memories", lambda q, k=5: ["m1", "m2"]
+        prompt_builder.memgpt, "summarize_session", lambda sid, user_id=None: ""
+    )
+    monkeypatch.setattr(
+        prompt_builder, "query_user_memories", lambda uid, q, k=5: ["m1", "m2"]
     )
     resp = client.post("/ask", json={"prompt": "hi"})
     assert resp.status_code == 200

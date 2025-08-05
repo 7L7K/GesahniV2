@@ -1,4 +1,5 @@
 import os
+import jwt
 from fastapi.testclient import TestClient
 
 
@@ -24,8 +25,9 @@ def test_websocket_transcription(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "transcribe_file", fake_transcribe)
 
     client = TestClient(main.app)
+    token = jwt.encode({"user_id": "tester"}, "secret", algorithm="HS256")
     with client.websocket_connect(
-        "/transcribe", headers={"Authorization": "Bearer secret"}
+        "/transcribe", headers={"Authorization": f"Bearer {token}"}
     ) as ws:
         ws.send_json({"rate": 16000})
         ws.send_bytes(b"audio")

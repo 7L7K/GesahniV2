@@ -165,7 +165,9 @@ class VectorStore:
     def add_user_memory(self, user_id: str, memory: str) -> str:  # pragma: no cover - stub
         raise NotImplementedError
 
-    def query_user_memories(self, prompt: str, k: int = 5) -> List[str]:  # pragma: no cover - stub
+    def query_user_memories(
+        self, user_id: str, prompt: str, k: int = 5
+    ) -> List[str]:  # pragma: no cover - stub
         raise NotImplementedError
 
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:  # pragma: no cover - stub
@@ -194,7 +196,9 @@ class ChromaVectorStore(VectorStore):
         bucket.append((mem_id, memory, time.time()))
         return mem_id
 
-    def query_user_memories(self, prompt: str, k: int | None = None) -> List[str]:
+    def query_user_memories(
+        self, user_id: str, prompt: str, k: int | None = None
+    ) -> List[str]:
         threshold = float(os.getenv("SIM_THRESHOLD", str(self._sim_threshold)))
         cutoff = 1.0 - threshold
         if hasattr(self._user_memories, "query"):
@@ -220,13 +224,12 @@ class ChromaVectorStore(VectorStore):
 
         _, prompt_l = _normalize(prompt)
         results: List[Tuple[float, str]] = []
-        for mems in self._user_memories.values():
-            for _, text, ts in mems:
-                _, norm_text = _normalize(text)
-                dist = abs(len(norm_text) - len(prompt_l))
-                if dist > cutoff:
-                    continue
-                results.append((dist, text))
+        for _, text, ts in self._user_memories.get(user_id, []):
+            _, norm_text = _normalize(text)
+            dist = abs(len(norm_text) - len(prompt_l))
+            if dist > cutoff:
+                continue
+            results.append((dist, text))
         results.sort(key=lambda x: x[0])
         top = k if k is not None else int(os.getenv("MEM_TOP_K", "5"))
         return [text for _, text in results[:top]]
@@ -320,8 +323,8 @@ def add_user_memory(user_id: str, memory: str) -> str:
     return _store.add_user_memory(user_id, memory)
 
 
-def query_user_memories(prompt: str, k: int = 5) -> List[str]:
-    return _store.query_user_memories(prompt, k)
+def query_user_memories(user_id: str, prompt: str, k: int = 5) -> List[str]:
+    return _store.query_user_memories(user_id, prompt, k)
 
 
 def cache_answer(*args) -> None:

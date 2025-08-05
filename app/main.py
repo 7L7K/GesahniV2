@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from .env_utils import load_env
 
 load_env()
@@ -25,13 +26,13 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi import Depends, Request
+from .deps.user import get_current_user_id
+from .user_store import user_store
 
 from . import router
 
-
 async def route_prompt(*args, **kwargs):
     return await router.route_prompt(*args, **kwargs)
-
 
 import app.skills  # populate SKILLS
 from .home_assistant import (
@@ -44,6 +45,7 @@ from .llama_integration import startup_check as llama_startup
 from .logging_config import configure_logging, req_id_var
 from .telemetry import LogRecord, log_record_var, utc_now
 from .status import router as status_router
+from .auth import router as auth_router
 from .transcription import transcribe_file
 from .history import append_history
 from .middleware import DedupMiddleware
@@ -58,18 +60,36 @@ from .session_manager import get_session_meta
 from .session_store import list_sessions as list_session_store, SessionStatus
 from .tasks import enqueue_transcription, enqueue_summary
 from .security import verify_token, rate_limit, verify_ws, rate_limit_ws
-from .metrics import REQUEST_COUNT, REQUEST_LATENCY, REQUEST_COST
 from .analytics import record_latency, latency_p95
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
 
-def _anon_user_id(auth: str | None) -> str:
-    """Return an anonymous user identifier from an auth header."""
-    if not auth:
+def _anon_user_id(source: Request | str | None) -> str:
+    """Return a stable anonymous identifier.
+
+    Accepts either a FastAPI ``Request`` (uses auth header then IP), a raw
+    Authorization header string, or ``None`` which yields "local".
+    Auth-derived hashes are 32 chars; IP-derived hashes are truncated to 12.
+    """
+    if source is None:
         return "local"
-    return sha256(auth.encode("utf-8")).hexdigest()[:12]
+
+    if isinstance(source, str):
+        return sha256(source.encode("utf-8")).hexdigest()[:32]
+
+    auth = source.headers.get("Authorization")
+    if auth:
+        return sha256(auth.encode("utf-8")).hexdigest()[:32]
+
+    ip = source.headers.get("X-Forwarded-For") or (
+        source.client.host if source.client else None
+    )
+    if ip:
+        return sha256(ip.encode("utf-8")).hexdigest()[:12]
+
+    return uuid.uuid4().hex[:32]
 
 
 app = FastAPI(title="GesahniV2")
@@ -84,19 +104,21 @@ app.add_middleware(
     allow_methods=["*"],  # includes OPTIONS
     allow_headers=["*"],  # includes Content-Type, Authorization, etc.
 )
-# ───────────────────────────────────────────────────────────────────────────────────
 app.add_middleware(DedupMiddleware)
 
 app.include_router(status_router)
+app.include_router(auth_router)
 
 
 @app.middleware("http")
-async def trace_request(request, call_next):
+async def trace_request(request: Request, call_next):
     rec = LogRecord(req_id=str(uuid.uuid4()))
     token_req = req_id_var.set(rec.req_id)
     token_rec = log_record_var.set(rec)
     rec.session_id = request.headers.get("X-Session-ID")
-    rec.user_id = _anon_user_id(request.headers.get("Authorization"))
+    rec.user_id = _anon_user_id(request)
+    await user_store.ensure_user(rec.user_id)
+    await user_store.increment_request(rec.user_id)
     rec.channel = request.headers.get("X-Channel")
     rec.received_at = utc_now().isoformat()
     rec.started_at = rec.received_at
@@ -110,16 +132,13 @@ async def trace_request(request, call_next):
         rec.status = "ERR_TIMEOUT"
         raise
     finally:
-        # compute and record latency
         rec.latency_ms = int((time.monotonic() - start_time) * 1000)
         await record_latency(rec.latency_ms)
         rec.p95_latency_ms = latency_p95()
 
-        # tag response header
         if isinstance(response, Response):
             response.headers["X-Request-ID"] = rec.req_id
 
-        # persist history & reset context vars
         await append_history(rec)
         log_record_var.reset(token_rec)
         req_id_var.reset(token_req)
@@ -154,11 +173,27 @@ class ServiceRequest(BaseModel):
     data: dict | None = None
 
 
+@app.post("/login")
+async def login(user_id: str = Depends(get_current_user_id)):
+    await user_store.ensure_user(user_id)
+    await user_store.increment_login(user_id)
+    stats = await user_store.get_stats(user_id)
+    return {"user_id": user_id, **stats}
+
+
+@app.get("/me")
+async def get_me(user_id: str = Depends(get_current_user_id)):
+    stats = await user_store.get_stats(user_id)
+    if stats is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"user_id": user_id, **stats}
+
+
 @app.post("/ask")
-async def ask(req: AskRequest):
+async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     logger.info("Received prompt: %s", req.prompt)
     try:
-        answer = await route_prompt(req.prompt, req.model)
+        answer = await route_prompt(req.prompt, req.model, user_id)
         return {"response": answer}
     except Exception as e:
         logger.exception("Error processing prompt: %s", e)
@@ -171,6 +206,7 @@ async def upload(
     file: UploadFile = File(...),
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     session_id = uuid.uuid4().hex
     session_dir = Path(SESSIONS_DIR) / session_id
@@ -192,6 +228,7 @@ async def capture_start(
     request: Request,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     return await start_capture_session()
 
@@ -206,6 +243,7 @@ async def capture_save(
     tags: str | None = Form(None),
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     tags_list = json.loads(tags) if tags else None
     await finalize_capture_session(session_id, audio, video, transcript, tags_list)
@@ -218,6 +256,7 @@ async def capture_tags(
     session_id: str = Form(...),
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     await queue_tag_extraction(session_id)
     return {"status": "accepted"}
@@ -228,6 +267,7 @@ async def capture_status(
     session_id: str,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     meta = get_session_meta(session_id)
     if not meta:
@@ -243,6 +283,7 @@ async def search_sessions(
     limit: int = 10,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     return await search_session_store(q, sort=sort, page=page, limit=limit)
 
@@ -252,6 +293,7 @@ async def list_sessions(
     status: SessionStatus | None = None,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     return list_session_store(status)
 
@@ -261,8 +303,9 @@ async def trigger_transcription_endpoint(
     session_id: str,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
-    enqueue_transcription(session_id)
+    enqueue_transcription(session_id, user_id)
     return {"status": "accepted"}
 
 
@@ -271,21 +314,25 @@ async def trigger_summary_endpoint(
     session_id: str,
     _: None = Depends(verify_token),
     __: None = Depends(rate_limit),
+    user_id: str = Depends(get_current_user_id),
 ):
     enqueue_summary(session_id)
     return {"status": "accepted"}
 
 
 @app.websocket("/transcribe")
-async def websocket_transcribe(ws: WebSocket):
-    await verify_ws(ws)
-    await rate_limit_ws(ws)
+async def websocket_transcribe(
+    ws: WebSocket,
+    user_id: str = Depends(get_current_user_id),
+    _: None = Depends(verify_ws),
+    __: None = Depends(rate_limit_ws),
+):
     await ws.accept()
     msg = await ws.receive()
-    meta = None
+
     if "text" in msg and msg["text"]:
         try:
-            meta = json.loads(msg["text"])
+            json.loads(msg["text"])
         except Exception:
             await ws.send_json({"error": "invalid metadata"})
             await ws.close()
@@ -300,6 +347,7 @@ async def websocket_transcribe(ws: WebSocket):
     audio_path = Path(SESSIONS_DIR) / session_id / "stream.wav"
     audio_path.parent.mkdir(parents=True, exist_ok=True)
     full_text = ""
+
     with open(audio_path, "ab") as fh:
         try:
             while True:
@@ -308,13 +356,16 @@ async def websocket_transcribe(ws: WebSocket):
                         break
                     msg = await ws.receive()
                     continue
+
                 chunk = msg.get("bytes")
                 if not chunk:
                     msg = await ws.receive()
                     continue
+
                 fh.write(chunk)
                 tmp = audio_path.with_suffix(".part")
                 tmp.write_bytes(chunk)
+
                 try:
                     text = await transcribe_file(str(tmp))
                     full_text += (" " if full_text else "") + text
@@ -324,19 +375,20 @@ async def websocket_transcribe(ws: WebSocket):
                 finally:
                     if tmp.exists():
                         tmp.unlink()
+
                 msg = await ws.receive()
         except WebSocketDisconnect:
             pass
 
 
 @app.post("/intent-test")
-async def intent_test(req: AskRequest):
+async def intent_test(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     logger.info("Intent test for: %s", req.prompt)
     return {"intent": "test", "prompt": req.prompt}
 
 
 @app.get("/ha/entities")
-async def ha_entities():
+async def ha_entities(user_id: str = Depends(get_current_user_id)):
     try:
         return await get_states()
     except Exception as e:
@@ -345,7 +397,7 @@ async def ha_entities():
 
 
 @app.post("/ha/service")
-async def ha_service(req: ServiceRequest):
+async def ha_service(req: ServiceRequest, user_id: str = Depends(get_current_user_id)):
     try:
         resp = await call_service(req.domain, req.service, req.data or {})
         return resp or {"status": "ok"}
@@ -355,7 +407,7 @@ async def ha_service(req: ServiceRequest):
 
 
 @app.get("/ha/resolve")
-async def ha_resolve(name: str):
+async def ha_resolve(name: str, user_id: str = Depends(get_current_user_id)):
     try:
         entity = await resolve_entity(name)
         if entity:
@@ -381,13 +433,17 @@ async def _background_transcribe(session_id: str) -> None:
 
 
 @app.post("/transcribe/{session_id}")
-async def start_transcription(session_id: str, background_tasks: BackgroundTasks):
+async def start_transcription(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user_id),
+):
     background_tasks.add_task(_background_transcribe, session_id)
     return {"status": "accepted"}
 
 
 @app.get("/transcribe/{session_id}")
-async def get_transcription(session_id: str):
+async def get_transcription(session_id: str, user_id: str = Depends(get_current_user_id)):
     transcript_path = Path(SESSIONS_DIR) / session_id / "transcript.txt"
     if transcript_path.exists():
         return {"text": transcript_path.read_text(encoding="utf-8")}
