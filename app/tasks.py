@@ -96,9 +96,14 @@ def transcribe_task(session_id: str, user_id: str) -> None:
     try:
         text = sync_transcribe_file(str(audio_path))
         transcript_path.write_text(text, encoding="utf-8")
-        update_status(session_id, SessionStatus.TRANSCRIBED)
         for chunk in _chunk_text(text):
-            add_user_memory(user_id, chunk)
+            try:
+                add_user_memory(user_id, chunk)
+            except Exception:
+                pass
+        meta = _load_meta(session_id)
+        meta["status"] = SessionStatus.TRANSCRIBED.value
+        _save_meta(session_id, meta)
     except Exception as e:  # pragma: no cover - network errors
         append_error(session_id, str(e))
         update_status(session_id, SessionStatus.ERROR)
