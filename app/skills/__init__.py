@@ -34,6 +34,7 @@ from .vacuum_skill import VacuumSkill
 from .notes_skill import NotesSkill
 from .status_skill import StatusSkill
 
+# Preserve class order but avoid duplicates when this module reloads
 SKILL_CLASSES: list[type] = [
     SmalltalkSkill,
     ClockSkill,
@@ -69,7 +70,11 @@ SKILL_CLASSES: list[type] = [
     StatusSkill,
 ]
 
-SKILLS = [cls() for cls in SKILL_CLASSES]
-_base.SKILLS = SKILLS
+_base.SKILLS.clear()
+for cls in SKILL_CLASSES:
+    if not any(isinstance(s, cls) for s in _base.SKILLS):
+        _base.SKILLS.append(cls())
+
+SKILLS = _base.SKILLS
 
 __all__ = ["SKILL_CLASSES", "SKILLS"]
