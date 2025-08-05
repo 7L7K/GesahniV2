@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 import asyncio
 from datetime import datetime
 
@@ -10,7 +11,7 @@ os.environ.setdefault("OLLAMA_MODEL", "llama3")
 os.environ.setdefault("SMALLTALK_PERSONA_RATE", "0")
 
 from app.skills.smalltalk_skill import GREETINGS, SmalltalkSkill, is_greeting
-from app import router, skills
+from app import router, skills  # noqa: F401
 
 
 def test_is_greeting():
@@ -37,10 +38,17 @@ def test_router_integration():
     assert any(result.startswith(g) for g in GREETINGS)
 
 
-def test_no_repeat_logic():
+def test_cached_responses_are_deterministic():
     s = SmalltalkSkill(persona_rate=0)
-    resps = {asyncio.run(s.handle("hi")) for _ in range(3)}
-    assert len(resps) >= 2
+    first = asyncio.run(s.handle("hi"))
+    second = asyncio.run(s.handle("hi"))
+    assert first == second
+
+
+def test_router_uses_smalltalk_cache():
+    first = asyncio.run(router.route_prompt("yo", user_id="u"))
+    second = asyncio.run(router.route_prompt("yo", user_id="u"))
+    assert first == second
 
 
 def test_time_provider_injection():
