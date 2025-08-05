@@ -5,6 +5,7 @@ from pathlib import Path
 import jwt
 from fastapi.testclient import TestClient
 
+# ensure our env vars don’t point at real services
 os.environ.setdefault("OLLAMA_URL", "http://x")
 os.environ.setdefault("OLLAMA_MODEL", "llama3")
 os.environ.setdefault("HOME_ASSISTANT_URL", "http://ha")
@@ -20,14 +21,21 @@ import app.session_store as store
 
 
 def setup_temp(monkeypatch, tmp_path: Path):
+    # stub out real startup hooks
     monkeypatch.setattr(main, "ha_startup", lambda: None)
     monkeypatch.setattr(main, "llama_startup", lambda: None)
+
+    # point all session dirs & tasks at our temp
     monkeypatch.setattr(sm, "SESSIONS_DIR", tmp_path)
     monkeypatch.setattr(tasks, "SESSIONS_DIR", tmp_path)
     monkeypatch.setattr(main, "SESSIONS_DIR", tmp_path)
     monkeypatch.setattr(store, "SESSIONS_DIR", tmp_path)
+
+    # put history file in tmp
     monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "history.jsonl")
     monkeypatch.setattr(sm, "append_history", history.append_history)
+
+    # use a consistent API token
     monkeypatch.setenv("API_TOKEN", "secret")
 
 
@@ -41,6 +49,7 @@ def test_capture_flow(monkeypatch, tmp_path):
     client = TestClient(app)
 
     headers = _headers()
+    # 1) start a new session
     resp = client.post("/capture/start", headers=headers)
     assert resp.status_code == 200
     data = resp.json()
@@ -48,6 +57,7 @@ def test_capture_flow(monkeypatch, tmp_path):
     sess_dir = tmp_path / session_id
     assert sess_dir.exists()
 
+    # 2) save audio + transcript
     files = {"audio": ("a.wav", b"data", "audio/wav")}
     resp = client.post(
         "/capture/save",
@@ -58,6 +68,7 @@ def test_capture_flow(monkeypatch, tmp_path):
     assert resp.status_code == 200
     assert resp.json()["status"] == SessionStatus.TRANSCRIBED.value
 
+    # 3) stub GPT and call summarize
     async def fake_gpt(prompt, model=None, system=None):
         return "summary", 0, 0, 0
 
@@ -65,11 +76,13 @@ def test_capture_flow(monkeypatch, tmp_path):
     resp = client.post(f"/sessions/{session_id}/summarize", headers=headers)
     assert resp.status_code == 200
 
+    # 4) tags.json must now exist and include our keyword
     tag_file = sess_dir / "tags.json"
     assert tag_file.exists()
     tags = json.loads(tag_file.read_text())
     assert "hello" in tags
 
+    # 5) search endpoint should return our session with snippet & timestamp
     resp = client.get(
         "/search/sessions",
         params={"q": "hello", "sort": "recent", "page": 1, "limit": 10},
@@ -82,6 +95,7 @@ def test_capture_flow(monkeypatch, tmp_path):
         for r in results
     )
 
+    # 6) history.jsonl should have a capture record
     hist_file = tmp_path / "history.jsonl"
     assert hist_file.exists()
     lines = hist_file.read_text().strip().splitlines()
@@ -94,6 +108,8 @@ def test_capture_flow(monkeypatch, tmp_path):
 def test_search_sort_and_pagination(monkeypatch, tmp_path):
     setup_temp(monkeypatch, tmp_path)
     headers = _headers()
+
+    # create three fake sessions on disk
     for i in range(3):
         sid = f"2023-01-0{i+1}T00-00-00"
         sd = tmp_path / sid
@@ -106,6 +122,7 @@ def test_search_sort_and_pagination(monkeypatch, tmp_path):
             "status": SessionStatus.DONE.value,
         }
         (sd / "meta.json").write_text(json.dumps(meta))
+
     client = TestClient(app)
     resp = client.get(
         "/search/sessions",
@@ -114,6 +131,7 @@ def test_search_sort_and_pagination(monkeypatch, tmp_path):
     )
     assert resp.status_code == 200
     results = resp.json()
+    # page 2, limit 1 should give us the second newest
     assert len(results) == 1
     assert results[0]["session_id"] == "2023-01-02T00-00-00"
 
@@ -121,6 +139,8 @@ def test_search_sort_and_pagination(monkeypatch, tmp_path):
 def test_search_by_tag(monkeypatch, tmp_path):
     setup_temp(monkeypatch, tmp_path)
     headers = _headers()
+
+    # a session that only has a tag, no transcript
     sid = "tagonly"
     sd = tmp_path / sid
     sd.mkdir()
@@ -132,6 +152,7 @@ def test_search_by_tag(monkeypatch, tmp_path):
         "status": SessionStatus.DONE.value,
     }
     (sd / "meta.json").write_text(json.dumps(meta))
+
     client = TestClient(app)
     resp = client.get(
         "/search/sessions",
@@ -148,7 +169,7 @@ def test_manual_pipeline(monkeypatch, tmp_path):
     headers = _headers()
     client = TestClient(app)
 
-    # create session and save only audio
+    # 1) create session and save only audio
     resp = client.post("/capture/start", headers=headers)
     session_id = resp.json()["session_id"]
     files = {"audio": ("a.wav", b"data", "audio/wav")}
@@ -157,17 +178,19 @@ def test_manual_pipeline(monkeypatch, tmp_path):
     )
     assert resp.json()["status"] == SessionStatus.PENDING.value
 
-    # pending sessions listing
+    # 2) check listing of pending sessions
     resp = client.get(
         "/sessions", params={"status": SessionStatus.PENDING.value}, headers=headers
     )
     assert any(s["session_id"] == session_id for s in resp.json())
 
+    # 3) monkey-patch the synchronous transcriber
     monkeypatch.setattr(tasks, "sync_transcribe_file", lambda p: "hi there")
     resp = client.post(f"/sessions/{session_id}/transcribe", headers=headers)
     assert resp.status_code == 200
     assert sm.get_session_meta(session_id)["status"] == SessionStatus.TRANSCRIBED.value
 
+    # 4) monkey-patch GPT and summarize to DONE
     async def fake_gpt2(prompt, model=None, system=None):
         return "summary", 0, 0, 0
 
