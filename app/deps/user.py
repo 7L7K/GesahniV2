@@ -7,7 +7,7 @@ import jwt
 
 from ..telemetry import LogRecord, log_record_var
 
-JWT_SECRET = os.getenv("API_TOKEN")
+JWT_SECRET = os.getenv("JWT_SECRET")
 
 
 def _hash(value: str, length: int = 32) -> str:

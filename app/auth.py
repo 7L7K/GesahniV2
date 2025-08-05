@@ -27,34 +27,29 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # Router
 router = APIRouter()
 
-
 # Pydantic models
 class RegisterRequest(BaseModel):
     username: str
     password: str
 
-
 class LoginRequest(BaseModel):
     username: str
     password: str
-
 
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
 
-
 class RefreshRequest(BaseModel):
     refresh_token: str
-
 
 # Ensure user table exists
 async def _ensure_table() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE IF NOT EXISTS auth_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL
@@ -62,7 +57,6 @@ async def _ensure_table() -> None:
             """
         )
         await db.commit()
-
 
 # Register endpoint
 @router.post("/register", response_model=dict)
@@ -72,7 +66,7 @@ async def register(req: RegisterRequest, user_id: str = Depends(get_current_user
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                "INSERT INTO auth_users (username, password_hash) VALUES (?, ?)",
                 (req.username, hashed),
             )
             await db.commit()
@@ -80,27 +74,32 @@ async def register(req: RegisterRequest, user_id: str = Depends(get_current_user
         raise HTTPException(status_code=400, detail="username_taken")
     return {"status": "ok"}
 
-
 # Login endpoint
 @router.post("/login", response_model=TokenResponse)
-async def login(
-    req: LoginRequest, user_id: str = Depends(get_current_user_id)
-) -> TokenResponse:
+async def login(req: LoginRequest, user_id: str = Depends(get_current_user_id)) -> TokenResponse:
     await _ensure_table()
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT password_hash FROM users WHERE username = ?", (req.username,)
+            "SELECT password_hash FROM auth_users WHERE username = ?",
+            (req.username,),
         ) as cursor:
             row = await cursor.fetchone()
 
     if not row or not pwd_context.verify(req.password, row[0]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    # Create access token
     expire = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
     jti = uuid4().hex
-    payload = {"sub": req.username, "exp": expire, "jti": jti, "type": "access"}
-    access_token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    access_payload = {
+        "sub": req.username,
+        "exp": expire,
+        "jti": jti,
+        "type": "access",
+    }
+    access_token = jwt.encode(access_payload, SECRET_KEY, algorithm=ALGORITHM)
 
+    # Create refresh token
     refresh_expire = datetime.utcnow() + timedelta(minutes=REFRESH_EXPIRE_MINUTES)
     refresh_jti = uuid4().hex
     refresh_payload = {
@@ -110,9 +109,10 @@ async def login(
         "type": "refresh",
     }
     refresh_token = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
+
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
-
+# Refresh endpoint
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(req: RefreshRequest) -> TokenResponse:
     try:
@@ -127,14 +127,22 @@ async def refresh(req: RefreshRequest) -> TokenResponse:
     if jti in revoked_tokens:
         raise HTTPException(status_code=401, detail="Token revoked")
 
+    # Revoke used refresh token
     revoked_tokens.add(jti)
     username = payload.get("sub")
 
+    # Issue new access token
     expire = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
     new_jti = uuid4().hex
-    access_payload = {"sub": username, "exp": expire, "jti": new_jti, "type": "access"}
+    access_payload = {
+        "sub": username,
+        "exp": expire,
+        "jti": new_jti,
+        "type": "access",
+    }
     access_token = jwt.encode(access_payload, SECRET_KEY, algorithm=ALGORITHM)
 
+    # Issue new refresh token
     refresh_expire = datetime.utcnow() + timedelta(minutes=REFRESH_EXPIRE_MINUTES)
     refresh_jti = uuid4().hex
     refresh_payload = {
@@ -147,7 +155,7 @@ async def refresh(req: RefreshRequest) -> TokenResponse:
 
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
-
+# Logout endpoint
 @router.post("/logout", response_model=dict)
 async def logout(request: Request) -> dict:
     auth = request.headers.get("Authorization")
