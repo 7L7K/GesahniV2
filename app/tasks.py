@@ -2,6 +2,7 @@ import json
 import os
 import time
 import asyncio
+from threading import Thread
 
 try:
     from redis import Redis
@@ -38,6 +39,15 @@ def _chunk_text(text: str, size: int = 1024) -> list[str]:
 
 
 def enqueue_transcription(session_id: str, user_id: str | None = None) -> None:
+    """Run transcription immediately when a task queue isn't available.
+
+    The original implementation scheduled ``transcribe_task`` on the running
+    event loop which meant API handlers returned before the work completed.
+    Tests expect the transcription to finish synchronously so we execute the
+    task in a background thread and block until it's done when Redis/RQ is not
+    present.
+    """
+
     update_status(session_id, SessionStatus.PROCESSING_WHISPER)
     if user_id is None:
         meta = _load_meta(session_id)
@@ -46,37 +56,35 @@ def enqueue_transcription(session_id: str, user_id: str | None = None) -> None:
         q = _get_queue()
         q.enqueue(transcribe_task, session_id, user_id)
     except Exception:
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(asyncio.to_thread(transcribe_task, session_id, user_id))
-        except RuntimeError:
-            transcribe_task(session_id, user_id)
+        thread = Thread(target=transcribe_task, args=(session_id, user_id))
+        thread.start()
+        thread.join()
 
 
 def enqueue_tag_extraction(session_id: str) -> None:
+    """Run tag extraction synchronously when no queue is configured."""
+
     update_status(session_id, SessionStatus.PROCESSING_GPT)
     try:
         q = _get_queue()
         q.enqueue(tag_task, session_id)
     except Exception:
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(asyncio.to_thread(tag_task, session_id))
-        except RuntimeError:
-            tag_task(session_id)
+        thread = Thread(target=tag_task, args=(session_id,))
+        thread.start()
+        thread.join()
 
 
 def enqueue_summary(session_id: str) -> None:
+    """Run summarization synchronously when the background queue is missing."""
+
     update_status(session_id, SessionStatus.PROCESSING_GPT)
     try:
         q = _get_queue()
         q.enqueue(summary_task, session_id)
     except Exception:
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(asyncio.to_thread(summary_task, session_id))
-        except RuntimeError:
-            summary_task(session_id)
+        thread = Thread(target=summary_task, args=(session_id,))
+        thread.start()
+        thread.join()
 
 
 def transcribe_task(session_id: str, user_id: str) -> None:
