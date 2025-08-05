@@ -77,11 +77,15 @@ def test_record_feedback_preserves_metadata():
     cache_id, _ = vector_store._normalize(prompt)
     vector_store.cache_answer(prompt, answer)
 
-    meta_before = vector_store.qa_cache.get(ids=[cache_id], include=["metadatas"])["metadatas"][0]
+    meta_before = vector_store.qa_cache.get(ids=[cache_id], include=["metadatas"])[
+        "metadatas"
+    ][0]
 
     vector_store.record_feedback(prompt, "up")
 
-    meta_after = vector_store.qa_cache.get(ids=[cache_id], include=["metadatas"])["metadatas"][0]
+    meta_after = vector_store.qa_cache.get(ids=[cache_id], include=["metadatas"])[
+        "metadatas"
+    ][0]
 
     assert meta_after["answer"] == answer
     assert meta_after["timestamp"] == meta_before["timestamp"]

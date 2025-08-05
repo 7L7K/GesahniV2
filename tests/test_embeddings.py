@@ -1,4 +1,5 @@
 import os, sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import asyncio
@@ -10,6 +11,7 @@ class DummyOpenAIEmbeddings:
 
     def create(self, model: str, input: str):  # pragma: no cover - simple stub
         self.last_model = model
+
         class Resp:
             data = [type("d", (), {"embedding": [1.0, 2.0, 3.0]})()]
 

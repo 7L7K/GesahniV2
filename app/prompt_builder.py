@@ -1,4 +1,5 @@
 """PromptBuilder module for constructing LLM prompts."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,13 +9,18 @@ from typing import List, Tuple
 
 try:  # pragma: no cover - optional dependency
     import tiktoken
+
     _ENCODING = tiktoken.get_encoding("cl100k_base")
+
     def _count_tokens(text: str) -> int:
         return len(_ENCODING.encode(text))
+
 except Exception:  # pragma: no cover - simple fallback
     tiktoken = None  # type: ignore
+
     def _count_tokens(text: str) -> int:
         return len(text.split())
+
 
 from .memory import memgpt
 from .memory.vector_store import query_user_memories
@@ -81,10 +87,7 @@ class PromptBuilder:
             for key, val in replacements.items():
                 prompt = prompt.replace(f"{{{{{key}}}}}", val)
             prompt_tokens = _count_tokens(prompt)
-            if (
-                prompt_tokens <= MAX_PROMPT_TOKENS
-                and prompt_tokens - base_tokens <= 75
-            ):
+            if prompt_tokens <= MAX_PROMPT_TOKENS and prompt_tokens - base_tokens <= 75:
                 break
             if summary:
                 summary = ""
@@ -101,5 +104,6 @@ class PromptBuilder:
         if rec:
             rec.retrieval_count = len(mem_list)
         return prompt, prompt_tokens
+
 
 __all__ = ["PromptBuilder", "MAX_PROMPT_TOKENS"]

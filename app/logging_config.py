@@ -41,6 +41,6 @@ def configure_logging() -> None:
     handler.setFormatter(JsonFormatter())
 
     root = logging.getLogger()
-    root.handlers = [handler]          # blow away default handlers
+    root.handlers = [handler]  # blow away default handlers
     root.setLevel(level)
     root.filters = [RequestIdFilter()]

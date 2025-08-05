@@ -5,6 +5,7 @@ import re
 import httpx
 from .base import Skill
 
+
 class SearchSkill(Skill):
     # Only match true “search” intents, not generic “what is the weather?”
     PATTERNS = [

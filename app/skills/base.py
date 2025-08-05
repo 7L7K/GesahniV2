@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-import unicodedata          # ← NEW
+import unicodedata  # ← NEW
 from abc import ABC, abstractmethod
 from typing import Optional, Pattern, List
 
@@ -11,6 +11,7 @@ from ..telemetry import log_record_var
 
 class Skill(ABC):
     """Abstract base class for all built in skills."""
+
     PATTERNS: List[Pattern[str]] = []
 
     def match(self, prompt: str) -> Optional[re.Match]:
@@ -51,6 +52,8 @@ def _normalize(text: str) -> str:
     for bad, good in replacements.items():
         text = text.replace(bad, good)
     return text
+
+
 # ---------------------------------
 
 

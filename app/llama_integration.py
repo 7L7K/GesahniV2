@@ -42,11 +42,16 @@ async def startup_check() -> None:
     """
     missing = [
         name
-        for name, val in {"OLLAMA_URL": OLLAMA_URL, "OLLAMA_MODEL": OLLAMA_MODEL}.items()
+        for name, val in {
+            "OLLAMA_URL": OLLAMA_URL,
+            "OLLAMA_MODEL": OLLAMA_MODEL,
+        }.items()
         if not val
     ]
     if missing:
-        logger.warning("OLLAMA startup skipped – missing env vars: %s", ", ".join(missing))
+        logger.warning(
+            "OLLAMA startup skipped – missing env vars: %s", ", ".join(missing)
+        )
         return
 
     # Initial health check (won’t crash on failure)

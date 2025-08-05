@@ -106,7 +106,9 @@ class _Collection:
                 if rec and (not include or "metadatas" in include)
                 else None
             )
-            docs.append(rec.doc if rec and (not include or "documents" in include) else None)
+            docs.append(
+                rec.doc if rec and (not include or "documents" in include) else None
+            )
         out = {"ids": ids}
         if not include or "metadatas" in include:
             out["metadatas"] = metas
@@ -162,7 +164,9 @@ class _Collection:
 class VectorStore:
     """Abstract base class kept for compatibility."""
 
-    def add_user_memory(self, user_id: str, memory: str) -> str:  # pragma: no cover - stub
+    def add_user_memory(
+        self, user_id: str, memory: str
+    ) -> str:  # pragma: no cover - stub
         raise NotImplementedError
 
     def query_user_memories(
@@ -170,13 +174,19 @@ class VectorStore:
     ) -> List[str]:  # pragma: no cover - stub
         raise NotImplementedError
 
-    def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:  # pragma: no cover - stub
+    def cache_answer(
+        self, cache_id: str, prompt: str, answer: str
+    ) -> None:  # pragma: no cover - stub
         raise NotImplementedError
 
-    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:  # pragma: no cover - stub
+    def lookup_cached_answer(
+        self, prompt: str, ttl_seconds: int = 86400
+    ) -> Optional[str]:  # pragma: no cover - stub
         raise NotImplementedError
 
-    def record_feedback(self, prompt: str, feedback: str) -> None:  # pragma: no cover - stub
+    def record_feedback(
+        self, prompt: str, feedback: str
+    ) -> None:  # pragma: no cover - stub
         raise NotImplementedError
 
 
@@ -249,7 +259,9 @@ class ChromaVectorStore(VectorStore):
             metadatas=[{"answer": answer, "timestamp": time.time(), "feedback": None}],
         )
 
-    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
+    def lookup_cached_answer(
+        self, prompt: str, ttl_seconds: int = 86400
+    ) -> Optional[str]:
         if bool(os.getenv("DISABLE_QA_CACHE")):
             return None
         _, norm = _normalize(prompt)
@@ -297,7 +309,9 @@ class PgVectorStore(VectorStore):  # pragma: no cover - stub
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
         pass
 
-    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
+    def lookup_cached_answer(
+        self, prompt: str, ttl_seconds: int = 86400
+    ) -> Optional[str]:
         return None
 
     def record_feedback(self, prompt: str, feedback: str) -> None:
@@ -375,4 +389,3 @@ __all__ = [
     "ChromaVectorStore",
     "PgVectorStore",
 ]
-

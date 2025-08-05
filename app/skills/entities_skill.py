@@ -17,18 +17,18 @@ class EntitiesSkill(Skill):
 
     PATTERNS = [
         re.compile(
-            r"\b(?:list|show)\s+"                  # list / show
-            r"(?:all\s+)?"                         # optional “all”
-            r"(?:home\s*assistant\s+)?"            # optional “home assistant”
+            r"\b(?:list|show)\s+"  # list / show
+            r"(?:all\s+)?"  # optional “all”
+            r"(?:home\s*assistant\s+)?"  # optional “home assistant”
             r"(?P<kind>entities|lights|switches)"  # the thing we’re listing
-            r"(?:\s+page\s+(?P<page>\d+))?"        # optional “page N”
+            r"(?:\s+page\s+(?P<page>\d+))?"  # optional “page N”
             r"\b",
             re.I,
         )
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
-        kind = match.group("kind").lower()            # entities / lights / switches
+        kind = match.group("kind").lower()  # entities / lights / switches
         page = int(match.group("page") or 1)
         PAGE_SIZE = 50
         start, end = (page - 1) * PAGE_SIZE, page * PAGE_SIZE
@@ -56,8 +56,10 @@ class EntitiesSkill(Skill):
 
         # append pagination hint if we truncated results
         if len(wanted) > end:
-            body += f"\n… and {len(wanted) - end} more. " \
-                    f'Ask “list {kind} page {page + 1}” for the next page.'
+            body += (
+                f"\n… and {len(wanted) - end} more. "
+                f"Ask “list {kind} page {page + 1}” for the next page."
+            )
 
         header = (
             f"Here are the {kind} I see:"

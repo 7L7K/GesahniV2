@@ -35,49 +35,48 @@ from .dictionary_skill import DictionarySkill
 from .recipe_skill import RecipeSkill
 
 # NEW skills
-from .teach_skill import TeachSkill          # “my bedroom is Hija room”
-from .entities_skill import EntitiesSkill    # “list all lights”
+from .teach_skill import TeachSkill  # “my bedroom is Hija room”
+from .entities_skill import EntitiesSkill  # “list all lights”
 
 # ───────────────────────────────────────────
 # Instantiate in desired order
 # ───────────────────────────────────────────
-SKILLS.extend([
-    SmalltalkSkill(),
-    ClockSkill(),
-    WorldClockSkill(),
-    WeatherSkill(),
-    ForecastSkill(),
-    ReminderSkill(),
-    TimerSkill(),
-    MathSkill(),
-    UnitConversionSkill(),
-    CurrencySkill(),
-    CalendarSkill(),
-
-    TeachSkill(),        # alias learning first for quick matches
-    EntitiesSkill(),     # optional helper to dump HA entities
-
-    SceneSkill(),
-    ScriptSkill(),
-    CoverSkill(),
-    FanSkill(),
-    NotifySkill(),
-    SearchSkill(),
-    TranslateSkill(),
-    NewsSkill(),
-    JokeSkill(),
-    DictionarySkill(),
-    RecipeSkill(),
-
-    LightsSkill(),
-    DoorLockSkill(),
-    MusicSkill(),
-    RokuSkill(),
-    ClimateSkill(),
-    VacuumSkill(),
-    NotesSkill(),
-    StatusSkill(),
-])
+SKILLS.extend(
+    [
+        SmalltalkSkill(),
+        ClockSkill(),
+        WorldClockSkill(),
+        WeatherSkill(),
+        ForecastSkill(),
+        ReminderSkill(),
+        TimerSkill(),
+        MathSkill(),
+        UnitConversionSkill(),
+        CurrencySkill(),
+        CalendarSkill(),
+        TeachSkill(),  # alias learning first for quick matches
+        EntitiesSkill(),  # optional helper to dump HA entities
+        SceneSkill(),
+        ScriptSkill(),
+        CoverSkill(),
+        FanSkill(),
+        NotifySkill(),
+        SearchSkill(),
+        TranslateSkill(),
+        NewsSkill(),
+        JokeSkill(),
+        DictionarySkill(),
+        RecipeSkill(),
+        LightsSkill(),
+        DoorLockSkill(),
+        MusicSkill(),
+        RokuSkill(),
+        ClimateSkill(),
+        VacuumSkill(),
+        NotesSkill(),
+        StatusSkill(),
+    ]
+)
 
 # ───────────────────────────────────────────
 # Public exports

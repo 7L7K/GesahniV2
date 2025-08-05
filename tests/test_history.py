@@ -1,4 +1,5 @@
 import sys, os
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import json
 import os
@@ -13,7 +14,9 @@ def test_history_appends_entry(tmp_path, monkeypatch):
     hist = tmp_path / "history.json"
     monkeypatch.setattr("app.history.HISTORY_FILE", str(hist))
     token = req_id_var.set("testid")
-    rec = LogRecord(req_id="testid", prompt="prompt", engine_used="llama", response="resp")
+    rec = LogRecord(
+        req_id="testid", prompt="prompt", engine_used="llama", response="resp"
+    )
     asyncio.run(append_history(rec))
     req_id_var.reset(token)
     with open(hist) as f:

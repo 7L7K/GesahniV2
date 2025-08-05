@@ -5,6 +5,7 @@ import aiofiles
 _PATH = pathlib.Path("alias_store.json")
 _LOCK = asyncio.Lock()
 
+
 async def _load() -> dict[str, str]:
     try:
         async with aiofiles.open(_PATH, "r") as f:
@@ -12,10 +13,12 @@ async def _load() -> dict[str, str]:
     except FileNotFoundError:
         return {}
 
+
 async def get(name: str) -> str | None:
     async with _LOCK:
         data = await _load()
         return data.get(name.lower().strip())
+
 
 async def set(name: str, entity_id: str):
     async with _LOCK:

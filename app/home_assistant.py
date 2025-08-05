@@ -36,16 +36,23 @@ _SYN_TO_ROOM = {syn: room for room, syns in ROOM_SYNONYMS.items() for syn in syn
 def _redact(obj: Any) -> Any:
     """Recursively replace any access_token values with [redacted]."""
     if isinstance(obj, dict):
-        return {k: ("[redacted]" if k == "access_token" else _redact(v)) for k, v in obj.items()}
+        return {
+            k: ("[redacted]" if k == "access_token" else _redact(v))
+            for k, v in obj.items()
+        }
     if isinstance(obj, list):
         return [_redact(v) for v in obj]
     return obj
 
 
-async def _request(method: str, path: str, json: dict | None = None, timeout: float = 10.0) -> Any:
+async def _request(
+    method: str, path: str, json: dict | None = None, timeout: float = 10.0
+) -> Any:
     """Low‑level Home Assistant request helper with rich logging."""
     url = f"{HOME_ASSISTANT_URL.rstrip('/')}/api{path}"
-    logger.info("ha_request", extra={"meta": {"method": method, "path": path, "json": json}})
+    logger.info(
+        "ha_request", extra={"meta": {"method": method, "path": path, "json": json}}
+    )
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.request(method, url, headers=HEADERS, json=json)
 
@@ -58,7 +65,9 @@ async def _request(method: str, path: str, json: dict | None = None, timeout: fl
     )
     if len(body) > 2048:
         body = body[:2048] + "..."
-    logger.info("ha_response", extra={"meta": {"status": resp.status_code, "body": body}})
+    logger.info(
+        "ha_response", extra={"meta": {"status": resp.status_code, "body": body}}
+    )
 
     resp.raise_for_status()
     return data
@@ -134,7 +143,9 @@ async def resolve_entity(name: str) -> List[str]:
 
 async def handle_command(prompt: str) -> Optional[Any]:
     """Parse simple "ha: turn on X" commands and execute them."""
-    m = re.match(r"^(?:ha[:]?)?\s*(?:turn|switch)\s+(on|off)\s+(.+)$", prompt.strip(), re.I)
+    m = re.match(
+        r"^(?:ha[:]?)?\s*(?:turn|switch)\s+(on|off)\s+(.+)$", prompt.strip(), re.I
+    )
     if not m:
         return None
 

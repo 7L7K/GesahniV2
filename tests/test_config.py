@@ -20,6 +20,7 @@ def setup_app(monkeypatch):
     import app.llama_integration as llama_integration
     import app.status as status
     import app.main as main
+
     reload(home_assistant)
     reload(llama_integration)
     reload(status)

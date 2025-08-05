@@ -38,7 +38,9 @@ async def start_session() -> dict[str, str]:
     meta = create_session()
     session_dir = _session_path(meta["session_id"])
     session_dir.mkdir(parents=True, exist_ok=True)
-    rec = LogRecord(req_id="session", session_id=meta["session_id"], prompt="session_start")
+    rec = LogRecord(
+        req_id="session", session_id=meta["session_id"], prompt="session_start"
+    )
     await append_history(rec)
     await analytics_record_session()
     return {"session_id": meta["session_id"], "path": str(session_dir)}
@@ -91,7 +93,9 @@ async def save_session(
     if audio is not None:
         base_audio = _base_type(audio.content_type)
         if base_audio not in ALLOWED_AUDIO_TYPES:
-            raise HTTPException(status_code=415, detail=f"unsupported audio type '{audio.content_type}'")
+            raise HTTPException(
+                status_code=415, detail=f"unsupported audio type '{audio.content_type}'"
+            )
         checksum = await _save_upload_file(
             audio, session_dir / "audio.wav", MAX_UPLOAD_BYTES
         )
@@ -100,7 +104,9 @@ async def save_session(
     if video is not None:
         base_video = _base_type(video.content_type)
         if base_video not in ALLOWED_VIDEO_TYPES:
-            raise HTTPException(status_code=415, detail=f"unsupported video type '{video.content_type}'")
+            raise HTTPException(
+                status_code=415, detail=f"unsupported video type '{video.content_type}'"
+            )
         checksum = await _save_upload_file(
             video, session_dir / "video.mp4", MAX_UPLOAD_BYTES
         )
@@ -129,6 +135,7 @@ async def save_session(
 
 async def generate_tags(session_id: str) -> None:
     from .tasks import enqueue_tag_extraction
+
     enqueue_tag_extraction(session_id)
 
 
@@ -206,6 +213,7 @@ def archive_old_sessions(days: int = 90) -> List[str]:
 
 
 # helper for tag extraction -----------------------------------------------------
+
 
 def extract_tags_from_text(text: str) -> List[str]:
     """Return a simple list of tags from text using spaCy if available."""

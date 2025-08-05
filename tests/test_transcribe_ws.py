@@ -10,6 +10,7 @@ def setup_app(monkeypatch, tmp_path):
     os.environ.setdefault("HOME_ASSISTANT_TOKEN", "token")
     os.environ["API_TOKEN"] = "secret"
     from app import main
+
     monkeypatch.setattr(main, "ha_startup", lambda: None)
     monkeypatch.setattr(main, "llama_startup", lambda: None)
     monkeypatch.setattr(main, "SESSIONS_DIR", tmp_path)

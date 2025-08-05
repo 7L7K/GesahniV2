@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 def test_transcribe_file_success(tmp_path, monkeypatch):
     os.environ["OPENAI_API_KEY"] = "x"
     from app import transcription
+
     reload(transcription)
     audio = tmp_path / "a.wav"
     audio.write_text("data")
@@ -26,9 +27,7 @@ def test_transcribe_file_success(tmp_path, monkeypatch):
         (),
         {
             "audio": type(
-                "A",
-                (),
-                {"transcriptions": type("T", (), {"create": fake_create})()}
+                "A", (), {"transcriptions": type("T", (), {"create": fake_create})()}
             )()
         },
     )()
@@ -41,6 +40,7 @@ def test_transcribe_file_success(tmp_path, monkeypatch):
 def test_transcribe_file_error(tmp_path, monkeypatch):
     os.environ["OPENAI_API_KEY"] = "x"
     from app import transcription
+
     reload(transcription)
     audio = tmp_path / "a.wav"
     audio.write_text("data")
@@ -53,9 +53,7 @@ def test_transcribe_file_error(tmp_path, monkeypatch):
         (),
         {
             "audio": type(
-                "A",
-                (),
-                {"transcriptions": type("T", (), {"create": fake_create})()}
+                "A", (), {"transcriptions": type("T", (), {"create": fake_create})()}
             )()
         },
     )()

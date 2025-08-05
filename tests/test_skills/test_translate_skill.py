@@ -1,4 +1,5 @@
 import os, sys, asyncio
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import httpx
@@ -18,8 +19,10 @@ class FakeClient:
                 if url.endswith("/translate"):
                     return {"translatedText": "hola"}
                 return [{"language": "es"}]
+
             def raise_for_status(self_inner):
                 pass
+
         return R()
 
 

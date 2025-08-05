@@ -11,16 +11,25 @@ log = logging.getLogger(__name__)
 
 # basic currency name to code mapping
 CODES = {
-    "usd": "USD", "dollar": "USD", "dollars": "USD",
-    "eur": "EUR", "euro": "EUR", "euros": "EUR",
-    "jpy": "JPY", "yen": "JPY",
-    "gbp": "GBP", "pound": "GBP", "pounds": "GBP",
+    "usd": "USD",
+    "dollar": "USD",
+    "dollars": "USD",
+    "eur": "EUR",
+    "euro": "EUR",
+    "euros": "EUR",
+    "jpy": "JPY",
+    "yen": "JPY",
+    "gbp": "GBP",
+    "pound": "GBP",
+    "pounds": "GBP",
 }
 
 
 class CurrencySkill(Skill):
     PATTERNS = [
-        re.compile(r"how many ([a-zA-Z]+) (?:is|are) (\d+(?:\.\d+)?) ([a-zA-Z]+)", re.I),
+        re.compile(
+            r"how many ([a-zA-Z]+) (?:is|are) (\d+(?:\.\d+)?) ([a-zA-Z]+)", re.I
+        ),
         re.compile(r"(\d+(?:\.\d+)?) ([a-zA-Z]+) to ([a-zA-Z]+)", re.I),
         re.compile(r"convert (\d+(?:\.\d+)?) ([a-zA-Z]+) to ([a-zA-Z]+)", re.I),
     ]

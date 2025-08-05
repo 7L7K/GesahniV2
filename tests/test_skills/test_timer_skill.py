@@ -1,4 +1,5 @@
 import os, sys, asyncio
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 os.environ.setdefault("OLLAMA_URL", "http://x")
 os.environ.setdefault("OLLAMA_MODEL", "llama3")
@@ -11,8 +12,10 @@ from app import home_assistant
 
 def test_timer_skill(monkeypatch):
     called = {}
+
     async def fake_call_service(domain, service, data):
         called.update({"domain": domain, "service": service, "data": data})
+
     monkeypatch.setattr(home_assistant, "call_service", fake_call_service)
     skill = TimerSkill()
     m = skill.match("start a timer for 2 minutes")
@@ -24,8 +27,10 @@ def test_timer_skill(monkeypatch):
 
 def test_named_timer_cancel_query(monkeypatch):
     events = []
+
     async def fake_call_service(domain, service, data):
         events.append((service, data["entity_id"]))
+
     monkeypatch.setattr(home_assistant, "call_service", fake_call_service)
     skill = TimerSkill()
     m = skill.match("start kitchen timer for 1 seconds")

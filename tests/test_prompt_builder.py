@@ -1,6 +1,7 @@
 import sys
 import types
 
+
 # Provide a minimal chromadb stub so prompt_builder can be imported without the heavy dependency.
 class _DummyCollection:
     def add(self, *a, **k):
@@ -32,6 +33,8 @@ chromadb_stub = types.SimpleNamespace(
     PersistentClient=lambda *a, **k: _DummyClient(),
 )
 sys.modules.setdefault("chromadb", chromadb_stub)
+
+
 class _Settings:
     def __init__(self, *a, **k):
         pass
@@ -39,7 +42,8 @@ class _Settings:
 
 sys.modules.setdefault("chromadb.config", types.SimpleNamespace(Settings=_Settings))
 sys.modules.setdefault(
-    "chromadb.utils.embedding_functions", types.SimpleNamespace(EmbeddingFunction=object)
+    "chromadb.utils.embedding_functions",
+    types.SimpleNamespace(EmbeddingFunction=object),
 )
 
 from app import prompt_builder
@@ -57,14 +61,13 @@ def test_prompt_builder_respects_token_limit(monkeypatch):
 
     prompt, tokens = PromptBuilder.build("hi", session_id="s", user_id="u")
     assert tokens <= MAX_PROMPT_TOKENS
-    
+
+
 def test_prompt_builder_includes_user_prompt(monkeypatch):
     monkeypatch.setattr(
         prompt_builder.memgpt, "summarize_session", lambda sid, user_id=None: ""
     )
-    monkeypatch.setattr(
-        prompt_builder, "query_user_memories", lambda uid, q, k=5: []
-    )
+    monkeypatch.setattr(prompt_builder, "query_user_memories", lambda uid, q, k=5: [])
     user_msg = "what is the weather?"
     prompt, _ = PromptBuilder.build(user_msg, session_id="s", user_id="u")
     assert user_msg in prompt
@@ -72,7 +75,9 @@ def test_prompt_builder_includes_user_prompt(monkeypatch):
 
 def test_prompt_builder_fills_all_fields(monkeypatch):
     monkeypatch.setattr(
-        prompt_builder.memgpt, "summarize_session", lambda sid, user_id=None: "a summary"
+        prompt_builder.memgpt,
+        "summarize_session",
+        lambda sid, user_id=None: "a summary",
     )
     monkeypatch.setattr(
         prompt_builder,
