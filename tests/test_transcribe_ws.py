@@ -8,7 +8,7 @@ def setup_app(monkeypatch, tmp_path):
     os.environ.setdefault("OLLAMA_MODEL", "llama3")
     os.environ.setdefault("HOME_ASSISTANT_URL", "http://ha")
     os.environ.setdefault("HOME_ASSISTANT_TOKEN", "token")
-    os.environ["API_TOKEN"] = "secret"
+    os.environ["JWT_SECRET"] = "secret"
     from app import main
 
     monkeypatch.setattr(main, "ha_startup", lambda: None)
