@@ -4,7 +4,7 @@ import logging
 import os
 from typing import Any
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Depends
 from .analytics import record
 from .gpt_client import ask_gpt, SYSTEM_PROMPT
 from .history import append_history
@@ -13,7 +13,6 @@ from .memory.vector_store import (
     add_user_memory,
     cache_answer,
     lookup_cached_answer,
-    record_feedback,
 )
 from .llama_integration import OLLAMA_MODEL, ask_llama
 from . import llama_integration
@@ -21,8 +20,9 @@ from .telemetry import log_record_var
 from .memory import memgpt
 from .prompt_builder import PromptBuilder, _count_tokens
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
-from . import skills  # populate built-in registry (SmalltalkSkill, etc.)
+from . import skills  # populate built-in registry (SmalltalkSkill, etc.)  # noqa: F401
 from .intent_detector import detect_intent
+from .deps.user import get_current_user_id
 
 
 logger = logging.getLogger(__name__)
@@ -35,13 +35,17 @@ ALLOWED_GPT_MODELS = set(
 CATALOG = BUILTIN_CATALOG
 
 
-async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
+async def route_prompt(
+    prompt: str,
+    model_override: str | None = None,
+    user_id: str = Depends(get_current_user_id),
+) -> Any:
     rec = log_record_var.get()
     if rec:
         rec.prompt = prompt
         rec.embed_tokens = _count_tokens(prompt)
+        rec.user_id = user_id
     session_id = rec.session_id if rec and rec.session_id else "default"
-    user_id = rec.user_id if rec and rec.user_id else "anon"
     logger.debug("route_prompt received: %s", prompt)
     norm_prompt = prompt.lower().strip()
 
@@ -66,7 +70,9 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
                 rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
             await append_history(prompt, "gpt", text)
             await record("gpt", fallback=True)
-            memgpt.store_interaction(prompt, text, session_id=session_id)
+            memgpt.store_interaction(
+                prompt, text, session_id=session_id, user_id=user_id
+            )
             add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
             cache_answer(norm_prompt, text)
             return text
@@ -139,10 +145,10 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
             rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
         await append_history(prompt, "gpt", text)
         await record("gpt", source="complex")
-        memgpt.store_interaction(prompt, text, session_id=session_id)
+        memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
         add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
         cache_answer(norm_prompt, text)
-        return "ok"
+        return text
 
     # F) Build prompt with context
     built_prompt, ptokens = PromptBuilder.build(
@@ -173,7 +179,9 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
                     rec.model_name = llama_model
                 await append_history(prompt, "llama", result_text)
                 await record("llama")
-                memgpt.store_interaction(prompt, result_text, session_id=session_id)
+                memgpt.store_interaction(
+                    prompt, result_text, session_id=session_id, user_id=user_id
+                )
                 add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
                 cache_answer(norm_prompt, result_text)
                 logger.debug("LLaMA responded OK")
@@ -191,7 +199,7 @@ async def route_prompt(prompt: str, model_override: str | None = None) -> Any:
 
     await append_history(prompt, "gpt", text)
     await record("gpt", fallback=True)
-    memgpt.store_interaction(prompt, text, session_id=session_id)
+    memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
     cache_answer(norm_prompt, text)
     logger.debug("GPT responded OK with gpt-4o")

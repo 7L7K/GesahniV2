@@ -47,10 +47,14 @@ from app import prompt_builder
 
 
 def test_retriever_budget(monkeypatch):
-    monkeypatch.setattr(prompt_builder.memgpt, "summarize_session", lambda sid: "")
+    monkeypatch.setattr(
+        prompt_builder.memgpt, "summarize_session", lambda sid, user_id=None: ""
+    )
     # five memories ~10 tokens each
     mems = [f"memory {i} " * 5 for i in range(5)]
-    monkeypatch.setattr(prompt_builder, "query_user_memories", lambda q, k=5: mems[:k])
+    monkeypatch.setattr(
+        prompt_builder, "query_user_memories", lambda uid, q, k=5: mems[:k]
+    )
 
     base_prompt, base_tokens = PromptBuilder.build("hi", top_k=0)
     prompt, tokens = PromptBuilder.build("hi", top_k=5)
