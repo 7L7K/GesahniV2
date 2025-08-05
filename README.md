@@ -43,6 +43,7 @@ Update the copied `.env` with your credentials:
 OPENAI_API_KEY=your_openai_key
 HOME_ASSISTANT_URL=http://your-ha-instance
 HOME_ASSISTANT_TOKEN=your_long_lived_token
+JWT_SECRET=your_jwt_secret
 EMBEDDING_BACKEND=openai  # or "llama"
 # Required when using the LLaMA backend
 LLAMA_EMBEDDINGS_MODEL=/path/to/gguf
@@ -83,11 +84,29 @@ python record_session.py --duration 5 --output ./sessions
 Authenticate by POSTing to `/login` with a JSON body containing `username` and
 `password`. Valid credentials are supplied via the `LOGIN_USERS` environment
 variable as a JSON object mapping usernames to passwords. A successful login
-returns a JWT access token embedding the user ID in the `sub` claim.
+returns both an access token and a refresh token. Access tokens embed the user
+ID in the `sub` claim and expire after `JWT_EXPIRE_MINUTES` (default 30 minutes).
 
-Tokens expire after `JWT_EXPIRE_MINUTES` (default 30 minutes) to limit risk if a
-token is leaked. There is no long‑lived refresh token yet—clients should simply
-call `/login` again to obtain a fresh token when the previous one expires.
+```bash
+curl -X POST localhost:8000/login \
+     -H "Content-Type: application/json" \
+     -d '{"username":"alice","password":"wonderland"}'
+```
+
+Use the refresh token to obtain a new pair of tokens by POSTing to `/refresh`:
+
+```bash
+curl -X POST localhost:8000/refresh \
+     -H "Content-Type: application/json" \
+     -d '{"refresh_token":"<token>"}'
+```
+
+To explicitly revoke a token, call `/logout` with the token in the Authorization
+header. Revoked token IDs are stored in memory and cannot be reused.
+
+```bash
+curl -X POST localhost:8000/logout -H "Authorization: Bearer <refresh_token>"
+```
 
 ## 🎯 Endpoints
 
