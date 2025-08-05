@@ -10,7 +10,8 @@ import app.deps.user as user_deps
 def _build_client(monkeypatch):
     monkeypatch.setattr(security, "API_TOKEN", "secret")
     monkeypatch.setattr(user_deps, "JWT_SECRET", "secret")
-    monkeypatch.setattr(security, "_requests", {})
+    monkeypatch.setattr(security, "_http_requests", {})
+    monkeypatch.setattr(security, "_ws_requests", {})
 
     app = FastAPI()
     captured: dict[str, str] = {}
