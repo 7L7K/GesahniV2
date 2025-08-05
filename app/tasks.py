@@ -144,7 +144,7 @@ def summary_task(session_id: str) -> None:
     try:
         text = transcript_path.read_text(encoding="utf-8")
         # simple prompt; tests may monkeypatch ask_gpt
-        summary, *_ = asyncio.run(ask_gpt(f"Summarize the following:\n{text}"))
+        summary, _, _, _ = asyncio.run(ask_gpt(f"Summarize the following:\n{text}"))
         tags = extract_tags_from_text(text)
         summary_path.write_text(
             json.dumps({"summary": summary}, ensure_ascii=False, indent=2),
