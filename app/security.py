@@ -14,7 +14,10 @@ _requests: Dict[str, List[float]] = {}
 
 
 async def verify_token(request: Request) -> None:
-    """Validate Authorization header as a JWT if a secret is configured."""
+    """Validate Authorization header as a JWT if a secret is configured.
+
+    On success the decoded payload is attached to ``request.state.jwt_payload``.
+    """
     if not JWT_SECRET:
         return
     auth = request.headers.get("Authorization")
@@ -22,7 +25,8 @@ async def verify_token(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     token = auth.split(" ", 1)[1]
     try:
-        jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        request.state.jwt_payload = payload
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -34,14 +38,7 @@ async def rate_limit(request: Request) -> None:
         key = request.headers.get("X-Forwarded-For") or (
             request.client.host if request.client else "anon"
         )
-    now = time.time()
-    async with _lock:
-        timestamps = _requests.setdefault(key, [])
-        fresh = [ts for ts in timestamps if now - ts < _window]
-        if len(fresh) >= RATE_LIMIT:
-            raise HTTPException(status_code=429, detail="Rate limit exceeded")
-        fresh.append(now)
-        _requests[key] = fresh
+    await _apply_rate_limit(key)
 
 
 async def verify_ws(ws: WebSocket) -> None:
@@ -67,12 +64,24 @@ async def rate_limit_ws(ws: WebSocket) -> None:
         key = ws.headers.get("X-Forwarded-For") or (
             ws.client.host if ws.client else "anon"
         )
+    await _apply_rate_limit(key, ws)
+
+
+async def _apply_rate_limit(
+    key: str, ws: WebSocket | None = None, record: bool = True
+) -> None:
     now = time.time()
     async with _lock:
-        timestamps = _requests.setdefault(key, [])
+        timestamps = _requests.get(key, [])
         fresh = [ts for ts in timestamps if now - ts < _window]
-        if len(fresh) >= RATE_LIMIT:
-            await ws.close(code=1013)
-            raise HTTPException(status_code=1013, detail="Rate limit exceeded")
-        fresh.append(now)
-        _requests[key] = fresh
+        if record and len(fresh) >= RATE_LIMIT:
+            if ws is not None:
+                await ws.close(code=1013)
+                raise HTTPException(status_code=1013, detail="Rate limit exceeded")
+            raise HTTPException(status_code=429, detail="Rate limit exceeded")
+        if record:
+            fresh.append(now)
+        if fresh:
+            _requests[key] = fresh
+        elif key in _requests:
+            del _requests[key]

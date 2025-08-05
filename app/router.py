@@ -16,7 +16,6 @@ from .memory.vector_store import (
     lookup_cached_answer,
 )
 from .llama_integration import ask_llama, LLAMA_HEALTHY
-from . import llama_integration
 from .model_picker import pick_model
 from .telemetry import log_record_var
 from .memory import memgpt
@@ -35,6 +34,7 @@ ALLOWED_GPT_MODELS = set(
 )
 # Expose catalog so tests can monkey-patch it
 CATALOG = BUILTIN_CATALOG
+
 
 async def route_prompt(
     prompt: str,
@@ -137,9 +137,9 @@ async def route_prompt(
     if ha_resp is not None:
         if rec:
             rec.engine_used = "ha"
-            rec.response = str(ha_resp)
-        await append_history(prompt, "ha", str(ha_resp))
-        logger.debug("HA handled prompt → %s", ha_resp)
+            rec.response = ha_resp.message
+        await append_history(prompt, "ha", ha_resp.message)
+        logger.debug("HA handled prompt → %s", ha_resp.message)
         return ha_resp
 
     # Cache lookup
@@ -186,9 +186,7 @@ async def route_prompt(
             rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
         await append_history(prompt, "gpt", text)
         await record("gpt", source="model_picker")
-        memgpt.store_interaction(
-            prompt, text, session_id=session_id, user_id=user_id
-        )
+        memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
         add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
         cache_answer(norm_prompt, text)
         return text
@@ -221,9 +219,7 @@ async def route_prompt(
     # Fallback to GPT-4o
     if debug_model_routing:
         return _dry_return("gpt", "gpt-4o")
-    text, pt, ct, unit_price = await ask_gpt(
-        built_prompt, "gpt-4o", SYSTEM_PROMPT
-    )
+    text, pt, ct, unit_price = await ask_gpt(built_prompt, "gpt-4o", SYSTEM_PROMPT)
     if rec:
         rec.engine_used = "gpt"
         rec.response = text
