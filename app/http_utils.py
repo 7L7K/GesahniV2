@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import logging
 from typing import Tuple
 
@@ -35,8 +36,18 @@ async def json_request(
     delay = 1.0
     for attempt in range(3):
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.request(method, url, **kwargs)
+            httpx_module = httpx
+            try:
+                llama_module = importlib.import_module("app.llama_integration")
+                httpx_module = getattr(llama_module, "httpx", httpx_module)
+            except Exception:  # pragma: no cover - fallback if import fails
+                pass
+            async with httpx_module.AsyncClient() as client:
+                if hasattr(client, "request"):
+                    resp = await client.request(method, url, **kwargs)
+                else:  # pragma: no cover - testing hooks
+                    func = getattr(client, method.lower())
+                    resp = await func(url, **kwargs)
             resp.raise_for_status()
             try:
                 return resp.json(), None
