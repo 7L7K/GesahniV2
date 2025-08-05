@@ -8,6 +8,7 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 
 from .deps.user import get_current_user_id
+from .user_store import user_store
 
 # Configuration
 DB_PATH = os.getenv("USERS_DB", "users.db")
@@ -33,17 +34,12 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
 # Ensure user table exists
 async def _ensure_table() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE IF NOT EXISTS auth_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL
@@ -61,7 +57,7 @@ async def register(req: RegisterRequest, user_id: str = Depends(get_current_user
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                "INSERT INTO auth_users (username, password_hash) VALUES (?, ?)",
                 (req.username, hashed),
             )
             await db.commit()
@@ -71,14 +67,13 @@ async def register(req: RegisterRequest, user_id: str = Depends(get_current_user
 
 
 # Login endpoint
-@router.post("/login", response_model=TokenResponse)
-async def login(
-    req: LoginRequest, user_id: str = Depends(get_current_user_id)
-) -> TokenResponse:
+@router.post("/login", response_model=dict)
+async def login(req: LoginRequest, user_id: str = Depends(get_current_user_id)) -> dict:
     await _ensure_table()
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT password_hash FROM users WHERE username = ?", (req.username,)
+            "SELECT password_hash FROM auth_users WHERE username = ?",
+            (req.username,),
         ) as cursor:
             row = await cursor.fetchone()
 
@@ -88,4 +83,9 @@ async def login(
     expire = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
     payload = {"sub": req.username, "exp": expire, "user_id": user_id}
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-    return TokenResponse(access_token=token)
+
+    await user_store.ensure_user(user_id)
+    await user_store.increment_login(user_id)
+    stats = await user_store.get_stats(user_id)
+
+    return {"token": token, "stats": stats}
