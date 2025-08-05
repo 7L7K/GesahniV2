@@ -50,6 +50,15 @@ async def route_prompt(
     norm_prompt = prompt.lower().strip()
 
     intent, priority = detect_intent(prompt)
+    if intent == "smalltalk":
+        from .skills.smalltalk_skill import SmalltalkSkill
+
+        skill_resp = await SmalltalkSkill().handle(prompt)
+        if rec:
+            rec.engine_used = "skill"
+        await append_history(prompt, "skill", str(skill_resp))
+        await record("done", source="skill")
+        return skill_resp
     skip_skills = intent == "chat" and priority == "high"
 
     # A) Model override if using GPT
