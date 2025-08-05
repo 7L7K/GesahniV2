@@ -15,7 +15,7 @@ from .memory.vector_store import (
     cache_answer,
     lookup_cached_answer,
 )
-from .llama_integration import ask_llama, LLAMA_HEALTHY
+from .llama_integration import ask_llama
 from . import llama_integration
 from .model_picker import pick_model
 from .telemetry import log_record_var
@@ -24,8 +24,11 @@ from .prompt_builder import PromptBuilder
 from .token_utils import count_tokens
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from . import skills  # populate built-in registry (SmalltalkSkill, etc.)  # noqa: F401
+from .skills.smalltalk_skill import SmalltalkSkill
 from .intent_detector import detect_intent
 from .deps.user import get_current_user_id
+
+_SMALLTALK = SmalltalkSkill()
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +38,7 @@ ALLOWED_GPT_MODELS = set(
 )
 # Expose catalog so tests can monkey-patch it
 CATALOG = BUILTIN_CATALOG
+
 
 async def route_prompt(
     prompt: str,
@@ -69,9 +73,7 @@ async def route_prompt(
     intent, priority = detect_intent(prompt)
     # Smalltalk shortcut
     if intent == "smalltalk":
-        from .skills.smalltalk_skill import SmalltalkSkill
-
-        skill_resp = await SmalltalkSkill().handle(prompt)
+        skill_resp = await _SMALLTALK.handle(prompt)
         if rec:
             rec.engine_used = "skill"
         await append_history(prompt, "skill", str(skill_resp))
@@ -186,15 +188,13 @@ async def route_prompt(
             rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
         await append_history(prompt, "gpt", text)
         await record("gpt", source="model_picker")
-        memgpt.store_interaction(
-            prompt, text, session_id=session_id, user_id=user_id
-        )
+        memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
         add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
         cache_answer(norm_prompt, text)
         return text
 
     # LLaMA first
-    if engine == "llama" and LLAMA_HEALTHY:
+    if engine == "llama" and llama_integration.LLAMA_HEALTHY:
         if debug_model_routing:
             return _dry_return("llama", model_name)
         result = await ask_llama(built_prompt, model_name)
@@ -221,9 +221,7 @@ async def route_prompt(
     # Fallback to GPT-4o
     if debug_model_routing:
         return _dry_return("gpt", "gpt-4o")
-    text, pt, ct, unit_price = await ask_gpt(
-        built_prompt, "gpt-4o", SYSTEM_PROMPT
-    )
+    text, pt, ct, unit_price = await ask_gpt(built_prompt, "gpt-4o", SYSTEM_PROMPT)
     if rec:
         rec.engine_used = "gpt"
         rec.response = text
