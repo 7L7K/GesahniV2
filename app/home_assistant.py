@@ -2,7 +2,7 @@ import os
 import logging
 import httpx
 import re
-import json
+import json as json_module
 from typing import Any, List, Optional
 
 from .telemetry import log_record_var
@@ -61,7 +61,7 @@ async def _request(
     body = (
         re.sub(r'("access_token"\s*:\s*")[^"]+"', r'\1[redacted]"', resp.text)
         if data is None
-        else json.dumps(_redact(data))
+        else json_module.dumps(_redact(data))
     )
     if len(body) > 2048:
         body = body[:2048] + "..."
