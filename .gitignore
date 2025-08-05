@@ -12,3 +12,4 @@ ollama.log
 data/*
 sessions/*
 
+.envrc
