@@ -28,7 +28,7 @@ def setup_temp(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(store, "SESSIONS_DIR", tmp_path)
     monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "history.jsonl")
     monkeypatch.setattr(sm, "append_history", history.append_history)
-    monkeypatch.setenv("API_TOKEN", "secret")
+    monkeypatch.setenv("JWT_SECRET", "secret")
 
 
 def _headers() -> dict:
