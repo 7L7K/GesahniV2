@@ -8,7 +8,10 @@ from .. import home_assistant as ha
 
 class FanSkill(Skill):
     PATTERNS = [
-        re.compile(r"turn (on|off) (?:the )?(?P<name>[\w\s]*(?:fan|air purifier|air filter))", re.I)
+        re.compile(
+            r"turn (on|off) (?:the )?(?P<name>[\w\s]*(?:fan|air purifier|air filter))",
+            re.I,
+        )
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:

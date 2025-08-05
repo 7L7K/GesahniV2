@@ -1,8 +1,10 @@
 import sys, os
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pytest
 
 import asyncio
+
 
 def test_handle_command_entity_not_found(monkeypatch):
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"

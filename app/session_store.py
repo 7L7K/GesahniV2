@@ -11,7 +11,9 @@ from time import time_ns
 from typing import Any, List
 
 # Base directory for session metadata and media
-SESSIONS_DIR = Path(os.getenv("SESSIONS_DIR", Path(__file__).parent.parent / "sessions"))
+SESSIONS_DIR = Path(
+    os.getenv("SESSIONS_DIR", Path(__file__).parent.parent / "sessions")
+)
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 

@@ -1,7 +1,9 @@
 import os, sys, json, asyncio
 from pathlib import Path
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pytest
+
 
 def test_save_session_tags(monkeypatch, tmp_path):
     import app.session_manager as sm

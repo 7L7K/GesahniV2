@@ -13,7 +13,10 @@ TIMERS: dict[str, float] = {}
 
 class TimerSkill(Skill):
     PATTERNS = [
-        re.compile(r"(?:start|set) (?:(?P<name>\w+) )?timer for (?P<amount>\d+) (?P<unit>seconds|minutes)", re.I),
+        re.compile(
+            r"(?:start|set) (?:(?P<name>\w+) )?timer for (?P<amount>\d+) (?P<unit>seconds|minutes)",
+            re.I,
+        ),
         re.compile(r"cancel (?:(?P<cname>\w+) )?timer", re.I),
         re.compile(r"how long left on (?:(?P<qname>\w+) )?timer", re.I),
     ]

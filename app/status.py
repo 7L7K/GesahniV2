@@ -2,6 +2,7 @@ import os
 import time
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from .deps.user import get_current_user_id
+
 # ``prometheus_client`` is an optional dependency that provides a helper for
 # exposing metrics in Prometheus' text format.  The library isn't required for
 # most of the application logic and the unit tests used in this kata do not
@@ -19,6 +20,7 @@ except Exception:  # pragma: no cover - executed when dependency missing
 
         try:
             from . import metrics
+
             parts = [
                 f"{metrics.REQUEST_COUNT.name} {metrics.REQUEST_COUNT.value}",
                 f"{metrics.REQUEST_LATENCY.name} {metrics.REQUEST_LATENCY.value}",
@@ -27,6 +29,7 @@ except Exception:  # pragma: no cover - executed when dependency missing
             return ("\n".join(parts) + "\n").encode()
         except Exception:
             return b""
+
 
 from app.home_assistant import _request
 from .llama_integration import get_status as llama_get_status
@@ -53,6 +56,7 @@ async def config(
     out.setdefault("SIM_THRESHOLD", os.getenv("SIM_THRESHOLD", "0.90"))
     try:
         import builtins
+
         builtins.data = out
     except Exception:  # pragma: no cover - best effort
         pass

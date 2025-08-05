@@ -1,7 +1,9 @@
 import sys, os
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pytest
 from fastapi.testclient import TestClient
+
 os.environ["OLLAMA_URL"] = "http://x"
 os.environ["OLLAMA_MODEL"] = "llama3"
 os.environ["HOME_ASSISTANT_URL"] = "http://ha"

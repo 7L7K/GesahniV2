@@ -11,7 +11,8 @@ from .base import Skill
 log = logging.getLogger(__name__)
 
 OPENWEATHER_KEY = os.getenv("OPENWEATHER_API_KEY")
-DEFAULT_CITY    = os.getenv("CITY_NAME", "Detroit,US")
+DEFAULT_CITY = os.getenv("CITY_NAME", "Detroit,US")
+
 
 class WeatherSkill(Skill):
     PATTERNS = [

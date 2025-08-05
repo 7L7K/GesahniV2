@@ -1,4 +1,5 @@
 import sys, os
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +11,7 @@ def test_status_endpoint(monkeypatch):
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     from app import main, status, home_assistant, llama_integration
+
     async def fake_request(method, path, json=None, timeout=10.0):
         return {}
 

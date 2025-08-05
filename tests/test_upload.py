@@ -1,5 +1,6 @@
 import sys, os
 import jwt
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from fastapi.testclient import TestClient
 
@@ -28,4 +29,3 @@ def test_upload_saves_file(tmp_path, monkeypatch):
     saved = tmp_path / sid / "source.wav"
     assert saved.exists()
     assert saved.read_bytes() == data
-

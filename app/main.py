@@ -31,8 +31,10 @@ from .user_store import user_store
 
 from . import router
 
+
 async def route_prompt(*args, **kwargs):
     return await router.route_prompt(*args, **kwargs)
+
 
 import app.skills  # populate SKILLS
 from .home_assistant import (
@@ -443,7 +445,9 @@ async def start_transcription(
 
 
 @app.get("/transcribe/{session_id}")
-async def get_transcription(session_id: str, user_id: str = Depends(get_current_user_id)):
+async def get_transcription(
+    session_id: str, user_id: str = Depends(get_current_user_id)
+):
     transcript_path = Path(SESSIONS_DIR) / session_id / "transcript.txt"
     if transcript_path.exists():
         return {"text": transcript_path.read_text(encoding="utf-8")}

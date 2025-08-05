@@ -1,4 +1,5 @@
 import os, sys
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 os.environ.setdefault("HOME_ASSISTANT_URL", "http://ha")
 os.environ.setdefault("HOME_ASSISTANT_TOKEN", "token")

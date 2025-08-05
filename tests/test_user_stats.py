@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 def test_login_and_me(tmp_path, monkeypatch):
     monkeypatch.setenv("USER_DB", str(tmp_path / "users.db"))
     import app.user_store as user_store
+
     reload(user_store)
 
     def _anon_user_id(request: Request) -> str:

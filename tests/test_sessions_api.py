@@ -62,9 +62,7 @@ def test_capture_flow(monkeypatch, tmp_path):
         return "summary", 0, 0, 0
 
     monkeypatch.setattr(tasks, "ask_gpt", fake_gpt, raising=False)
-    resp = client.post(
-        f"/sessions/{session_id}/summarize", headers=headers
-    )
+    resp = client.post(f"/sessions/{session_id}/summarize", headers=headers)
     assert resp.status_code == 200
 
     tag_file = sess_dir / "tags.json"
@@ -87,7 +85,9 @@ def test_capture_flow(monkeypatch, tmp_path):
     hist_file = tmp_path / "history.jsonl"
     assert hist_file.exists()
     lines = hist_file.read_text().strip().splitlines()
-    capture_records = [json.loads(l) for l in lines if json.loads(l).get("type") == "capture"]
+    capture_records = [
+        json.loads(l) for l in lines if json.loads(l).get("type") == "capture"
+    ]
     assert capture_records and capture_records[-1]["session_id"] == session_id
 
 
@@ -100,7 +100,11 @@ def test_search_sort_and_pagination(monkeypatch, tmp_path):
         sd.mkdir()
         (sd / "transcript.txt").write_text("hello world", encoding="utf-8")
         (sd / "tags.json").write_text(json.dumps(["hello"]))
-        meta = {"session_id": sid, "created_at": f"2023-01-0{i+1}T00:00:00Z", "status": SessionStatus.DONE.value}
+        meta = {
+            "session_id": sid,
+            "created_at": f"2023-01-0{i+1}T00:00:00Z",
+            "status": SessionStatus.DONE.value,
+        }
         (sd / "meta.json").write_text(json.dumps(meta))
     client = TestClient(app)
     resp = client.get(
@@ -113,6 +117,7 @@ def test_search_sort_and_pagination(monkeypatch, tmp_path):
     assert len(results) == 1
     assert results[0]["session_id"] == "2023-01-02T00-00-00"
 
+
 def test_search_by_tag(monkeypatch, tmp_path):
     setup_temp(monkeypatch, tmp_path)
     headers = _headers()
@@ -121,7 +126,11 @@ def test_search_by_tag(monkeypatch, tmp_path):
     sd.mkdir()
     (sd / "transcript.txt").write_text("nothing", encoding="utf-8")
     (sd / "tags.json").write_text(json.dumps(["special"]))
-    meta = {"session_id": sid, "created_at": "2023-01-01T00:00:00Z", "status": SessionStatus.DONE.value}
+    meta = {
+        "session_id": sid,
+        "created_at": "2023-01-01T00:00:00Z",
+        "status": SessionStatus.DONE.value,
+    }
     (sd / "meta.json").write_text(json.dumps(meta))
     client = TestClient(app)
     resp = client.get(
