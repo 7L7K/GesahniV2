@@ -11,8 +11,12 @@ API_TOKEN = os.getenv("API_TOKEN")
 RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MIN", "60"))
 _window = 60.0
 _lock = asyncio.Lock()
-_http_requests: Dict[str, int] = {}
-_ws_requests: Dict[str, int] = {}
+http_requests: Dict[str, int] = {}
+ws_requests: Dict[str, int] = {}
+# Backwards-compatible aliases
+_http_requests = http_requests
+_ws_requests = ws_requests
+
 
 def _apply_rate_limit(
     key: str, bucket: Dict[str, int], limit: int, period: float
@@ -25,6 +29,7 @@ def _apply_rate_limit(
     count = bucket.get(key, 0) + 1
     bucket[key] = count
     return count <= limit
+
 
 async def verify_token(request: Request) -> None:
     """Validate Authorization header as a JWT if a secret is configured.
@@ -43,6 +48,7 @@ async def verify_token(request: Request) -> None:
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+
 async def rate_limit(request: Request) -> None:
     """Rate limit requests per authenticated user (or IP when unauthenticated)."""
     key = getattr(request.state, "user_id", None)
@@ -53,9 +59,10 @@ async def rate_limit(request: Request) -> None:
         else:
             key = request.client.host if request.client else "anon"
     async with _lock:
-        ok = _apply_rate_limit(key, _http_requests, RATE_LIMIT, _window)
+        ok = _apply_rate_limit(key, http_requests, RATE_LIMIT, _window)
     if not ok:
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
 
 async def verify_ws(ws: WebSocket) -> None:
     """JWT validation for WebSocket connections."""
@@ -70,6 +77,7 @@ async def verify_ws(ws: WebSocket) -> None:
     except jwt.PyJWTError:
         raise WebSocketException(code=1008)
 
+
 async def rate_limit_ws(ws: WebSocket) -> None:
     """Per-user rate limiting for WebSocket connections."""
     key = getattr(ws.state, "user_id", None)
@@ -80,6 +88,6 @@ async def rate_limit_ws(ws: WebSocket) -> None:
         else:
             key = ws.client.host if ws.client else "anon"
     async with _lock:
-        ok = _apply_rate_limit(key, _ws_requests, RATE_LIMIT, _window)
+        ok = _apply_rate_limit(key, ws_requests, RATE_LIMIT, _window)
     if not ok:
         raise WebSocketException(code=1013)
