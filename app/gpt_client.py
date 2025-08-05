@@ -4,7 +4,6 @@ import os
 import logging
 from openai import AsyncOpenAI
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 # Temporary system prompt to prime the assistant
@@ -22,10 +21,28 @@ MODEL_PRICING = {
 
 
 def get_client() -> AsyncOpenAI:
+    """Return a singleton ``AsyncOpenAI`` client.
+
+    The API key is fetched at call time so tests can monkeypatch the
+    environment. If the key is missing a ``RuntimeError`` is raised.
+    """
+
     global _client
     if _client is None:
-        _client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY not set")
+        _client = AsyncOpenAI(api_key=api_key)
     return _client
+
+
+async def close_client() -> None:
+    """Close the cached client and reset the singleton."""
+
+    global _client
+    if _client is not None:
+        await _client.close()
+        _client = None
 
 
 async def ask_gpt(
@@ -52,3 +69,6 @@ async def ask_gpt(
     except Exception as e:
         logger.exception("OpenAI request failed: %s", e)
         raise
+
+
+__all__ = ["get_client", "close_client", "ask_gpt", "MODEL_PRICING", "SYSTEM_PROMPT"]
