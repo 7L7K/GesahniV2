@@ -31,7 +31,9 @@ async def rate_limit(request: Request) -> None:
     """Rate limit requests per authenticated user (or IP when unauthenticated)."""
     key = getattr(request.state, "user_id", None)
     if not key:
-        key = request.client.host if request.client else "anon"
+        key = request.headers.get("X-Forwarded-For") or (
+            request.client.host if request.client else "anon"
+        )
     now = time.time()
     async with _lock:
         timestamps = _requests.setdefault(key, [])
@@ -62,7 +64,9 @@ async def rate_limit_ws(ws: WebSocket) -> None:
     """Per-user rate limiting for WebSocket connections."""
     key = getattr(ws.state, "user_id", None)
     if not key:
-        key = ws.client.host if ws.client else "anon"
+        key = ws.headers.get("X-Forwarded-For") or (
+            ws.client.host if ws.client else "anon"
+        )
     now = time.time()
     async with _lock:
         timestamps = _requests.setdefault(key, [])
