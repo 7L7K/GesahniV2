@@ -106,7 +106,7 @@ def test_prompt_builder_drops_summary_before_memories(monkeypatch):
         "_PROMPT_CORE",
         "{{conversation_summary}} {{memories}} {{user_prompt}}",
     )
-    monkeypatch.setattr(prompt_builder, "_count_tokens", lambda text: len(text))
+    monkeypatch.setattr(prompt_builder, "count_tokens", lambda text: len(text))
     monkeypatch.setattr(prompt_builder, "MAX_PROMPT_TOKENS", 50)
     monkeypatch.setattr(
         prompt_builder.memgpt,
