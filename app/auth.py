@@ -86,6 +86,6 @@ async def login(
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     expire = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
-    payload = {"sub": req.username, "exp": expire}
+    payload = {"sub": req.username, "exp": expire, "user_id": user_id}
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     return TokenResponse(access_token=token)
