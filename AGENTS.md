@@ -155,6 +155,11 @@ ruff check .
 black --check .
 ```
 
+## Model Routing Rules
+- Accept `model_override` from frontend POST body.
+- Route `"llama*"` models to `ask_llama()`, `"gpt*"` models to `ask_gpt()`.
+- If OpenAI dependency is missing, fallback to LLaMA instead of failing.
+
 ## Skill-Authoring Checklist
 - Copy `app/skills/example_skill.py` style into a new `<name>_skill.py`.
 - Implement a `Skill` subclass with `PATTERNS` and `run()`.
