@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 // Determine supported mime types for media recording
 // (defaults will be refined once the component mounts)
@@ -209,9 +210,9 @@ export default function CaptureMode() {
     return (
       <div className="p-4">
         <p>{error}</p>
-        <button onClick={setupStream} className="mt-2 px-3 py-1 bg-blue-500 text-white rounded">
+        <Button onClick={setupStream} className="mt-2">
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
@@ -226,30 +227,18 @@ export default function CaptureMode() {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <button
-          onClick={startRecording}
-          disabled={recording}
-          className="px-2 py-1 bg-green-500 text-white rounded"
-        >
+        <Button onClick={startRecording} disabled={recording} variant="default">
           ▶️ Start Recording
-        </button>
-        <button
-          onClick={pauseRecording}
-          disabled={!recording}
-          className="px-2 py-1 bg-yellow-500 text-white rounded"
-        >
+        </Button>
+        <Button onClick={pauseRecording} disabled={!recording} variant="secondary">
           ⏸️ Pause Recording
-        </button>
-        <button
-          onClick={stopRecording}
-          disabled={!recording}
-          className="px-2 py-1 bg-red-500 text-white rounded"
-        >
+        </Button>
+        <Button onClick={stopRecording} disabled={!recording} variant="destructive">
           ⏹️ Stop & Save
-        </button>
-        <button onClick={newQuestion} className="px-2 py-1 bg-blue-500 text-white rounded">
+        </Button>
+        <Button onClick={newQuestion} variant="default">
           🔄 New Question
-        </button>
+        </Button>
         <div className="ml-4 w-24 h-2 bg-gray-300">
           <div
             className="h-full bg-green-500"
