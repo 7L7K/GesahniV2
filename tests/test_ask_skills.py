@@ -16,7 +16,7 @@ def setup_app(monkeypatch):
     monkeypatch.setattr(main, "llama_startup", lambda: None)
     called = {"llm": False}
 
-    async def fake_llm(prompt, model=None, system=None):
+    async def fake_llm(prompt, model=None, system=None, **kwargs):
         called["llm"] = True
         return "llm", 0, 0, 0.0
 
