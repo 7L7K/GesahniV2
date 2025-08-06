@@ -198,6 +198,8 @@ class ChromaVectorStore(VectorStore):
         self._dist_cutoff = 1.0 - self._sim_threshold
         self._cache = _Collection()
         self._user_memories: Dict[str, List[Tuple[str, str, float]]] = {}
+        self._cache_max = int(os.getenv("QA_CACHE_MAX", "1024"))
+        self._cache_ttl = int(os.getenv("QA_CACHE_TTL", "86400"))
 
     # User memory --------------------------------------------------------
     def add_user_memory(self, user_id: str, memory: str) -> str:
@@ -252,11 +254,23 @@ class ChromaVectorStore(VectorStore):
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
         if bool(os.getenv("DISABLE_QA_CACHE")):
             return
+        now = time.time()
+        # purge expired entries
+        if self._cache_ttl:
+            for cid, rec in list(self._cache._store.items()):
+                if now - rec.timestamp > self._cache_ttl:
+                    self._cache.delete(ids=[cid])
+        # enforce max size
+        if self._cache_max and len(self._cache._store) >= self._cache_max:
+            oldest_id = min(self._cache._store.items(), key=lambda kv: kv[1].timestamp)[
+                0
+            ]
+            self._cache.delete(ids=[oldest_id])
         _, norm = _normalize(prompt)
         self._cache.upsert(
             ids=[cache_id],
             documents=[norm],
-            metadatas=[{"answer": answer, "timestamp": time.time(), "feedback": None}],
+            metadatas=[{"answer": answer, "timestamp": now, "feedback": None}],
         )
 
     def lookup_cached_answer(

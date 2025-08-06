@@ -17,6 +17,18 @@ async def health(user_id: str = Depends(get_current_user_id)) -> dict:
     return {"status": "ok"}
 
 
+@router.get("/healthz")
+async def healthz(user_id: str = Depends(get_current_user_id)) -> dict:
+    """Report backend and LLaMA health for probes."""
+    llama_status = "error"
+    try:
+        stat = await llama_get_status()
+        llama_status = stat["status"]
+    except Exception:
+        llama_status = "error"
+    return {"backend": "ok", "llama": llama_status}
+
+
 @router.get("/config")
 async def config(
     token: str | None = Query(default=None),
