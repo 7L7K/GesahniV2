@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Tuple
 
 from .llama_integration import OLLAMA_MODEL
@@ -20,7 +21,7 @@ def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str]:
 
     keywords = {"code", "research", "analyze", "explain"}
     heavy_intents = {"analysis", "research"}
-    words = prompt.lower().split()
+    words = re.findall(r"\w+", prompt.lower())
     if (
         len(words) > 30
         or any(k in words for k in keywords)
