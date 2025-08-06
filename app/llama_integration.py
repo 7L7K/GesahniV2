@@ -22,19 +22,27 @@ LLAMA_HEALTHY: bool = False
 
 @log_exceptions("llama")
 async def _check_and_set_flag() -> None:
-    """Ping Ollama and update ``LLAMA_HEALTHY`` accordingly."""
+    """Attempt a tiny generation and update ``LLAMA_HEALTHY`` accordingly."""
     global LLAMA_HEALTHY
     try:
-        tags, err = await json_request("GET", f"{OLLAMA_URL}/api/tags")
-        if err:
-            raise RuntimeError(err)
-        if OLLAMA_MODEL and OLLAMA_MODEL not in str(tags):
-            logger.warning("Model %s missing on Ollama", OLLAMA_MODEL)
+        data, err = await json_request(
+            "POST",
+            f"{OLLAMA_URL}/api/generate",
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": "ping",
+                "stream": False,
+                "options": {"num_predict": 1},
+            },
+            timeout=10.0,
+        )
+        if err or not isinstance(data, dict) or not data.get("response"):
+            raise RuntimeError(err or "empty_response")
         LLAMA_HEALTHY = True
-        logger.debug("Ollama is healthy")
+        logger.debug("Ollama generation successful")
     except Exception as e:
         LLAMA_HEALTHY = False
-        logger.warning("Cannot reach Ollama at %s – %s", OLLAMA_URL, e)
+        logger.warning("Cannot generate with Ollama at %s – %s", OLLAMA_URL, e)
 
 
 async def startup_check() -> None:
