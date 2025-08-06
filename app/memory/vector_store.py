@@ -10,10 +10,11 @@ code.
 The implementation is intentionally simple:
 
 * Text is normalised via :func:`_normalize` before being stored.  The
-  normalised text length acts as a deterministic embedding.
-* Distances are computed as the absolute difference between the lengths of the
-  normalised texts.  The similarity threshold is honoured by converting the
-  ``SIM_THRESHOLD`` environment variable into a distance cut-off.
+  resulting numeric embedding is generated using the project's embedding
+  utilities.
+* Distances are computed using cosine similarity between embedding vectors.
+  The ``SIM_THRESHOLD`` environment variable represents the minimum cosine
+  similarity for a match.
 * A very small collection API (`get`, `upsert`, `delete`, `update`, `query`) is
   provided so that tests can introspect and manipulate the cache in a similar
   fashion to a real ChromaDB collection.
@@ -32,6 +33,10 @@ import time
 import unicodedata
 import uuid
 from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+
+from app.embeddings import embed_sync
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +67,17 @@ def _normalized_hash(prompt: str) -> str:
     return _normalize(prompt)[0]
 
 
+def _cosine_similarity(a: List[float], b: List[float]) -> float:
+    """Return the cosine similarity between two vectors."""
+
+    a_arr = np.array(a)
+    b_arr = np.array(b)
+    denom = np.linalg.norm(a_arr) * np.linalg.norm(b_arr)
+    if denom == 0:
+        return 0.0
+    return float(np.dot(a_arr, b_arr) / denom)
+
+
 # ---------------------------------------------------------------------------
 # Minimal collection used to back the cache
 # ---------------------------------------------------------------------------
@@ -69,6 +85,7 @@ def _normalized_hash(prompt: str) -> str:
 
 @dataclass
 class _CacheRecord:
+    embedding: List[float]
     doc: str
     answer: str
     timestamp: float
@@ -82,9 +99,16 @@ class _Collection:
         self._store: Dict[str, _CacheRecord] = {}
 
     # Chroma style helpers -------------------------------------------------
-    def upsert(self, ids: List[str], documents: List[str], metadatas: List[Dict]):
-        for i, doc, meta in zip(ids, documents, metadatas):
+    def upsert(
+        self,
+        ids: List[str],
+        embeddings: List[List[float]],
+        documents: List[str],
+        metadatas: List[Dict],
+    ) -> None:
+        for i, emb, doc, meta in zip(ids, embeddings, documents, metadatas):
             self._store[i] = _CacheRecord(
+                embedding=emb,
                 doc=doc,
                 answer=meta.get("answer", ""),
                 timestamp=meta.get("timestamp", time.time()),
@@ -130,11 +154,11 @@ class _Collection:
                     setattr(rec, k, v)
 
     def query(self, query_texts: List[str], n_results: int = 1):
-        _, q_norm = _normalize(query_texts[0])
-        q_len = len(q_norm)
+        q_emb = embed_sync(query_texts[0])
         best: List[Tuple[float, str, _CacheRecord]] = []
         for cache_id, rec in self._store.items():
-            dist = abs(len(rec.doc) - q_len)
+            sim = _cosine_similarity(q_emb, rec.embedding)
+            dist = 1.0 - sim
             best.append((dist, cache_id, rec))
         best.sort(key=lambda x: x[0])
         ids = [cid for _, cid, _ in best[:n_results]]
@@ -197,13 +221,14 @@ class ChromaVectorStore(VectorStore):
         self._sim_threshold = float(os.getenv("SIM_THRESHOLD", "0.90"))
         self._dist_cutoff = 1.0 - self._sim_threshold
         self._cache = _Collection()
-        self._user_memories: Dict[str, List[Tuple[str, str, float]]] = {}
+        self._user_memories: Dict[str, List[Tuple[str, str, List[float], float]]] = {}
 
     # User memory --------------------------------------------------------
     def add_user_memory(self, user_id: str, memory: str) -> str:
         mem_id = str(uuid.uuid4())
+        embedding = embed_sync(memory)
         bucket = self._user_memories.setdefault(user_id, [])
-        bucket.append((mem_id, memory, time.time()))
+        bucket.append((mem_id, memory, embedding, time.time()))
         return mem_id
 
     def query_user_memories(
@@ -232,11 +257,11 @@ class ChromaVectorStore(VectorStore):
             items.sort(key=lambda x: (x["dist"], -x["ts"]))
             return [it["doc"] for it in items[:top_k]]
 
-        _, prompt_l = _normalize(prompt)
+        q_emb = embed_sync(prompt)
         results: List[Tuple[float, str]] = []
-        for _, text, ts in self._user_memories.get(user_id, []):
-            _, norm_text = _normalize(text)
-            dist = abs(len(norm_text) - len(prompt_l))
+        for _, text, emb, _ts in self._user_memories.get(user_id, []):
+            sim = _cosine_similarity(q_emb, emb)
+            dist = 1.0 - sim
             if dist > cutoff:
                 continue
             results.append((dist, text))
@@ -253,8 +278,10 @@ class ChromaVectorStore(VectorStore):
         if bool(os.getenv("DISABLE_QA_CACHE")):
             return
         _, norm = _normalize(prompt)
+        embedding = embed_sync(norm)
         self._cache.upsert(
             ids=[cache_id],
+            embeddings=[embedding],
             documents=[norm],
             metadatas=[{"answer": answer, "timestamp": time.time(), "feedback": None}],
         )
@@ -265,12 +292,13 @@ class ChromaVectorStore(VectorStore):
         if bool(os.getenv("DISABLE_QA_CACHE")):
             return None
         _, norm = _normalize(prompt)
-        q_len = len(norm)
+        q_emb = embed_sync(norm)
         best_id = None
         best_rec = None
         best_dist = None
         for cid, rec in self._cache._store.items():
-            dist = abs(len(rec.doc) - q_len)
+            sim = _cosine_similarity(q_emb, rec.embedding)
+            dist = 1.0 - sim
             if dist > self._dist_cutoff:
                 continue
             if best_dist is None or dist < best_dist:
