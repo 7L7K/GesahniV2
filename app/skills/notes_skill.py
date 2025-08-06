@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from pathlib import Path
 
 import aiosqlite
@@ -99,3 +100,20 @@ class NotesSkill(Skill):
 
         rows = await dao.all_texts()
         return "; ".join(rows) if rows else "No notes"
+
+
+# When this module is reloaded (e.g. in tests), ensure the package level
+# ``SKILL_CLASSES`` list references the freshly defined class rather than the
+# stale copy from the previous import.
+try:  # pragma: no cover - best effort hook
+    _skills = sys.modules.get("app.skills")
+    if _skills:
+        classes = getattr(_skills, "SKILL_CLASSES", [])
+        for i, cls in enumerate(classes):
+            if getattr(cls, "__name__", None) == "NotesSkill":
+                classes[i] = NotesSkill
+                if i < len(getattr(_skills, "SKILLS", [])):
+                    _skills.SKILLS[i] = NotesSkill()
+                break
+except Exception:
+    pass
