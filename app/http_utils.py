@@ -1,6 +1,7 @@
 import asyncio
 import importlib
 import logging
+from functools import wraps
 from typing import Tuple
 
 import httpx
@@ -12,6 +13,7 @@ def log_exceptions(module: str):
     """Decorator to log exceptions for async functions."""
 
     def decorator(func):
+        @wraps(func)
         async def wrapper(*args, **kwargs):
             try:
                 return await func(*args, **kwargs)
