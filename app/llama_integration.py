@@ -1,8 +1,8 @@
 import os
-import asyncio
 import logging
 import time
-from typing import Any
+import json
+from typing import Any, AsyncIterator
 
 import httpx  # noqa: F401  # exposed for monkeypatching in tests
 
@@ -77,45 +77,51 @@ async def get_status() -> dict[str, Any]:
     raise RuntimeError("llama_error")
 
 
-@log_exceptions("llama")
 async def ask_llama(
     prompt: str, model: str | None = None, timeout: float = 30.0
-) -> Any:
+) -> AsyncIterator[str]:
+    """Stream tokens from Ollama.
+
+    The previous implementation returned the entire response after the request
+    completed.  This version streams partial tokens as they arrive so callers
+    can surface incremental output to clients.
     """
-    Send a generate request to Ollama, with up to two retries on timeout/HTTP errors.
-    Returns the Llama response string, or an error dict if both attempts fail.
-    """
+
     global LLAMA_HEALTHY
     model = model or OLLAMA_MODEL
     if not model:
         logger.warning("ask_llama called without model")
-        return {"error": "model_not_set"}
+        raise RuntimeError("model_not_set")
 
-    attempt = 0
-    error: dict[str, Any] | None = None
+    url = f"{OLLAMA_URL}/api/generate"
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "stream": True,
+        "options": {"num_ctx": 2048},
+    }
 
-    while attempt < 2:
-        data, err = await json_request(
-            "POST",
-            f"{OLLAMA_URL}/api/generate",
-            json={"model": model, "prompt": prompt, "stream": False},
-            timeout=timeout,
-        )
-        if err is None and isinstance(data, dict):
-            return data.get("response", "").strip()
-
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream("POST", url, json=payload) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except Exception:  # pragma: no cover - defensive
+                        continue
+                    token = data.get("response")
+                    if token:
+                        yield token
+                    if data.get("done"):
+                        break
+        LLAMA_HEALTHY = True
+    except Exception as e:
         LLAMA_HEALTHY = False
         logger.warning(
             "Ollama request failed",
-            extra={
-                "meta": {"attempt": attempt, "req_id": req_id_var.get(), "error": err}
-            },
+            extra={"meta": {"req_id": req_id_var.get(), "error": str(e)}},
         )
-        mapped = {"network_error": "timeout"}
-        error = {"error": mapped.get(err, err or "http_error"), "llm_used": model}
-
-        attempt += 1
-        if attempt < 2:
-            await asyncio.sleep(0.2 * (attempt + 1))
-
-    return error or {"error": "http_error", "llm_used": model}
+        raise
