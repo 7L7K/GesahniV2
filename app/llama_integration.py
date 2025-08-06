@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 import time
 import json
@@ -18,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 # Global health flag toggled by startup and periodic checks
 LLAMA_HEALTHY: bool = False
+_MAX_STREAMS = int(os.getenv("LLAMA_MAX_STREAMS", "2"))
+_sema = asyncio.Semaphore(_MAX_STREAMS)
 
 
 @log_exceptions("llama")
@@ -110,21 +113,22 @@ async def ask_llama(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream("POST", url, json=payload) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.strip():
-                        continue
-                    try:
-                        data = json.loads(line)
-                    except Exception:  # pragma: no cover - defensive
-                        continue
-                    token = data.get("response")
-                    if token:
-                        yield token
-                    if data.get("done"):
-                        break
+        async with _sema:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                async with client.stream("POST", url, json=payload) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line.strip():
+                            continue
+                        try:
+                            data = json.loads(line)
+                        except Exception:  # pragma: no cover - defensive
+                            continue
+                        token = data.get("response")
+                        if token:
+                            yield token
+                        if data.get("done"):
+                            break
         LLAMA_HEALTHY = True
     except Exception as e:
         LLAMA_HEALTHY = False

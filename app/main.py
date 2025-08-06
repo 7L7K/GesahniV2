@@ -2,34 +2,34 @@
 from .env_utils import load_env
 
 load_env()
-import logging
-import uuid
-from pathlib import Path
-import os
-import time
 import asyncio
 import json
-from hashlib import sha256
-import sys
+import logging
+import os
+import uuid
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import (
-    FastAPI,
-    HTTPException,
-    File,
-    UploadFile,
+    APIRouter,
     BackgroundTasks,
-    Response,
-    WebSocket,
-    WebSocketDisconnect,
+    Depends,
+    FastAPI,
+    File,
     Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from fastapi import Depends, Request
-from .deps.user import get_current_user_id
-from .user_store import user_store
 
+from .deps.scheduler import shutdown as scheduler_shutdown
+from .deps.user import get_current_user_id
+from .gpt_client import close_client
+from .user_store import user_store
 from . import router
 
 
@@ -39,155 +39,125 @@ async def route_prompt(*args, **kwargs):
         res = await router.route_prompt(*args, **kwargs)
         logger.info("⬆️ main.route_prompt got res=%s", res)
         return res
-    except Exception as e:
+    except Exception as e:  # pragma: no cover - defensive
         logger.error("💥 main.route_prompt bubbled exception: %s", e)
         raise
 
 
 import app.skills  # populate SKILLS
 from .home_assistant import (
-    get_states,
     call_service,
+    get_states,
     resolve_entity,
     startup_check as ha_startup,
 )
 from .llama_integration import startup_check as llama_startup
-from .logging_config import configure_logging, req_id_var
-from .telemetry import LogRecord, log_record_var, utc_now
+from .logging_config import configure_logging
 from .status import router as status_router
 from .auth import router as auth_router
-from .transcription import transcribe_file, close_whisper_client
-from .history import append_history
-from .middleware import DedupMiddleware
-from .session_manager import (
-    start_session as start_capture_session,
-    save_session as finalize_capture_session,
-    generate_tags as queue_tag_extraction,
-    search_sessions as search_session_store,
-    SESSIONS_DIR,
+from .transcription import (
+    TranscriptionStream,
+    close_whisper_client,
+    transcribe_file,
 )
-from .session_manager import get_session_meta
-from .session_store import list_sessions as list_session_store, SessionStatus
-from .tasks import enqueue_transcription, enqueue_summary
-from .security import verify_token, rate_limit, verify_ws, rate_limit_ws
-from .analytics import record_latency, latency_p95
-from .gpt_client import close_client
-from .deps.scheduler import shutdown as scheduler_shutdown
+from .middleware import DedupMiddleware, reload_env_middleware, trace_request
+from .session_manager import (
+    SESSIONS_DIR,
+    generate_tags as queue_tag_extraction,
+    save_session as finalize_capture_session,
+    search_sessions as search_session_store,
+    start_session as start_capture_session,
+    get_session_meta,
+)
+from .session_store import SessionStatus, list_sessions as list_session_store
+from .tasks import enqueue_summary, enqueue_transcription
+from .security import rate_limit, rate_limit_ws, verify_token, verify_ws
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
 
-def _anon_user_id(source: Request | str | None) -> str:
-    """Return a stable anonymous identifier.
-
-    Accepts either a FastAPI ``Request`` (uses auth header then IP), a raw
-    Authorization header string, or ``None`` which yields "local".
-    Auth-derived hashes are 32 chars; IP-derived hashes are truncated to 12.
-    """
-    if source is None:
-        return "local"
-
-    if isinstance(source, str):
-        return sha256(source.encode("utf-8")).hexdigest()[:32]
-
-    auth = source.headers.get("Authorization")
-    if auth:
-        return sha256(auth.encode("utf-8")).hexdigest()[:32]
-
-    ip = source.headers.get("X-Forwarded-For") or (
-        source.client.host if source.client else None
-    )
-    if ip:
-        return sha256(ip.encode("utf-8")).hexdigest()[:12]
-
-    return uuid.uuid4().hex[:32]
+tags_metadata = [
+    {"name": "core", "description": "Core operations"},
+    {
+        "name": "sessions",
+        "description": "Session capture and transcription",
+    },
+    {
+        "name": "home-assistant",
+        "description": "Home Assistant integration",
+    },
+    {"name": "status", "description": "System status"},
+    {"name": "auth", "description": "Authentication"},
+]
 
 
-app = FastAPI(title="GesahniV2")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        await llama_startup()
+        await ha_startup()
+        yield
+    finally:
+        for func in (close_client, close_whisper_client):
+            try:
+                await func()
+            except Exception as e:  # pragma: no cover - best effort
+                logger.debug("shutdown cleanup failed: %s", e)
+        try:
+            scheduler_shutdown()
+        except Exception as e:  # pragma: no cover - best effort
+            logger.debug("scheduler shutdown failed: %s", e)
 
-# ─── CORS MIDDLEWARE ───────────────────────────────────────────────────────────────
+
+app = FastAPI(title="GesahniV2", lifespan=lifespan, openapi_tags=tags_metadata)
+
+# CORS middleware
 _cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],  # includes OPTIONS
-    allow_headers=["*"],  # includes Content-Type, Authorization, etc.
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 app.add_middleware(DedupMiddleware)
+app.middleware("http")(trace_request)
+app.middleware("http")(reload_env_middleware)
 
-app.include_router(status_router)
-app.include_router(auth_router)
+try:  # pragma: no cover - optional dependency
+    from prometheus_client import make_asgi_app
+except Exception:  # pragma: no cover - executed when dependency missing
+    from starlette.responses import Response
 
+    def make_asgi_app():
+        async def _app(scope, receive, send):
+            if scope.get("type") != "http":
+                raise RuntimeError("metrics endpoint only supports HTTP")
+            try:
+                from . import metrics  # type: ignore
 
-@app.middleware("http")
-async def trace_request(request: Request, call_next):
-    rec = LogRecord(req_id=str(uuid.uuid4()))
-    token_req = req_id_var.set(rec.req_id)
-    token_rec = log_record_var.set(rec)
-    rec.session_id = request.headers.get("X-Session-ID")
-    rec.user_id = _anon_user_id(request)
-    await user_store.ensure_user(rec.user_id)
-    await user_store.increment_request(rec.user_id)
-    rec.channel = request.headers.get("X-Channel")
-    rec.received_at = utc_now().isoformat()
-    rec.started_at = rec.received_at
-    start_time = time.monotonic()
-    response: Response | None = None
+                parts = [
+                    f"{metrics.REQUEST_COUNT.name} {metrics.REQUEST_COUNT.value}",
+                    f"{metrics.REQUEST_LATENCY.name} {metrics.REQUEST_LATENCY.value}",
+                    f"{metrics.REQUEST_COST.name} {metrics.REQUEST_COST.value}",
+                ]
+                body = ("\n".join(parts) + "\n").encode()
+            except Exception:
+                body = b""
+            response = Response(content=body, media_type="text/plain; version=0.0.4")
+            await response(scope, receive, send)
 
-    try:
-        response = await call_next(request)
-        rec.status = "OK"
-    except asyncio.TimeoutError:
-        rec.status = "ERR_TIMEOUT"
-        raise
-    finally:
-        rec.latency_ms = int((time.monotonic() - start_time) * 1000)
-        await record_latency(rec.latency_ms)
-        rec.p95_latency_ms = latency_p95()
-
-        if isinstance(response, Response):
-            response.headers["X-Request-ID"] = rec.req_id
-
-        await append_history(rec)
-        log_record_var.reset(token_rec)
-        req_id_var.reset(token_req)
-
-    return response
+        return _app
 
 
-@app.middleware("http")
-async def reload_env_middleware(request: Request, call_next):
-    load_env()
-    return await call_next(request)
+app.mount("/metrics", make_asgi_app())
 
 
-@app.on_event("startup")
-async def startup_event() -> None:
-    try:
-        await llama_startup()
-        await ha_startup()
-    except Exception as e:
-        logger.error(f"Startup check failed: {e}")
-        sys.exit(1)
-
-
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
-    """Close external API clients on shutdown."""
-
-    for func in (close_client, close_whisper_client):
-        try:
-            await func()
-        except Exception as e:
-            logger.debug("shutdown cleanup failed: %s", e)
-
-    try:
-        scheduler_shutdown()
-    except Exception as e:
-        logger.debug("scheduler shutdown failed: %s", e)
+@app.get("/healthz", tags=["status"])
+async def healthz() -> dict:
+    return {"status": "ok"}
 
 
 class AskRequest(BaseModel):
@@ -204,7 +174,14 @@ class ServiceRequest(BaseModel):
     data: dict | None = None
 
 
-@app.get("/me")
+core_router = APIRouter(tags=["core"])
+protected_router = APIRouter(dependencies=[Depends(verify_token), Depends(rate_limit)])
+ws_router = APIRouter(
+    dependencies=[Depends(verify_ws), Depends(rate_limit_ws)], tags=["sessions"]
+)
+
+
+@core_router.get("/me")
 async def get_me(user_id: str = Depends(get_current_user_id)):
     stats = await user_store.get_stats(user_id)
     if stats is None:
@@ -212,21 +189,24 @@ async def get_me(user_id: str = Depends(get_current_user_id)):
     return {"user_id": user_id, **stats}
 
 
-@app.post("/ask")
+@core_router.post("/ask")
 async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     logger.info("Received prompt: %s", req.prompt)
 
     queue: asyncio.Queue[str | None] = asyncio.Queue()
+    status_code: int | None = None
 
     async def _stream_cb(token: str) -> None:
         await queue.put(token)
 
     async def _producer() -> None:
+        nonlocal status_code
         try:
             await route_prompt(
                 req.prompt, req.model_override, user_id, stream_cb=_stream_cb
             )
         except HTTPException as exc:
+            status_code = exc.status_code
             await queue.put(f"[error:{exc.detail}]")
         except Exception as e:  # pragma: no cover - defensive
             logger.exception("Error processing prompt: %s", e)
@@ -236,22 +216,26 @@ async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
 
     asyncio.create_task(_producer())
 
+    first_chunk = await queue.get()
+
     async def _streamer():
+        if first_chunk is not None:
+            yield first_chunk
         while True:
             chunk = await queue.get()
             if chunk is None:
                 break
             yield chunk
 
-    return StreamingResponse(_streamer(), media_type="text/plain")
+    return StreamingResponse(
+        _streamer(), media_type="text/plain", status_code=status_code or 200
+    )
 
 
-@app.post("/upload")
+@protected_router.post("/upload", tags=["sessions"])
 async def upload(
     request: Request,
     file: UploadFile = File(...),
-    _: None = Depends(verify_token),
-    __: None = Depends(rate_limit),
     user_id: str = Depends(get_current_user_id),
 ):
     session_id = uuid.uuid4().hex
@@ -264,22 +248,15 @@ async def upload(
     return {"session_id": session_id}
 
 
-# ---------------------------------------------------------------------------
-#  Capture & Transcription endpoints
-# ---------------------------------------------------------------------------
-
-
-@app.post("/capture/start")
+@protected_router.post("/capture/start", tags=["sessions"])
 async def capture_start(
     request: Request,
-    _: None = Depends(verify_token),
-    __: None = Depends(rate_limit),
     user_id: str = Depends(get_current_user_id),
 ):
     return await start_capture_session()
 
 
-@app.post("/capture/save")
+@protected_router.post("/capture/save", tags=["sessions"])
 async def capture_save(
     request: Request,
     session_id: str = Form(...),
@@ -287,8 +264,6 @@ async def capture_save(
     video: UploadFile | None = File(None),
     transcript: str | None = Form(None),
     tags: str | None = Form(None),
-    _: None = Depends(verify_token),
-    __: None = Depends(rate_limit),
     user_id: str = Depends(get_current_user_id),
 ):
     tags_list = json.loads(tags) if tags else None
@@ -296,23 +271,19 @@ async def capture_save(
     return get_session_meta(session_id)
 
 
-@app.post("/capture/tags")
+@protected_router.post("/capture/tags", tags=["sessions"])
 async def capture_tags(
     request: Request,
     session_id: str = Form(...),
-    _: None = Depends(verify_token),
-    __: None = Depends(rate_limit),
     user_id: str = Depends(get_current_user_id),
 ):
     await queue_tag_extraction(session_id)
     return {"status": "accepted"}
 
 
-@app.get("/capture/status/{session_id}")
+@protected_router.get("/capture/status/{session_id}", tags=["sessions"])
 async def capture_status(
     session_id: str,
-    _: None = Depends(verify_token),
-    __: None = Depends(rate_limit),
     user_id: str = Depends(get_current_user_id),
 ):
     meta = get_session_meta(session_id)
@@ -321,119 +292,59 @@ async def capture_status(
     return meta
 
 
-@app.get("/search/sessions")
+@protected_router.get("/search/sessions", tags=["sessions"])
 async def search_sessions(
     q: str,
     sort: str = "recent",
     page: int = 1,
     limit: int = 10,
-    _: None = Depends(verify_token),
-    __: None = Depends(rate_limit),
     user_id: str = Depends(get_current_user_id),
 ):
     return await search_session_store(q, sort=sort, page=page, limit=limit)
 
 
-@app.get("/sessions")
+@protected_router.get("/sessions", tags=["sessions"])
 async def list_sessions(
     status: SessionStatus | None = None,
-    _: None = Depends(verify_token),
-    __: None = Depends(rate_limit),
     user_id: str = Depends(get_current_user_id),
 ):
     return list_session_store(status)
 
 
-@app.post("/sessions/{session_id}/transcribe")
+@protected_router.post("/sessions/{session_id}/transcribe", tags=["sessions"])
 async def trigger_transcription_endpoint(
     session_id: str,
-    _: None = Depends(verify_token),
-    __: None = Depends(rate_limit),
     user_id: str = Depends(get_current_user_id),
 ):
     enqueue_transcription(session_id, user_id)
     return {"status": "accepted"}
 
 
-@app.post("/sessions/{session_id}/summarize")
+@protected_router.post("/sessions/{session_id}/summarize", tags=["sessions"])
 async def trigger_summary_endpoint(
     session_id: str,
-    _: None = Depends(verify_token),
-    __: None = Depends(rate_limit),
     user_id: str = Depends(get_current_user_id),
 ):
     enqueue_summary(session_id)
     return {"status": "accepted"}
 
 
-@app.websocket("/transcribe")
+@ws_router.websocket("/transcribe")
 async def websocket_transcribe(
     ws: WebSocket,
     user_id: str = Depends(get_current_user_id),
-    _: None = Depends(verify_ws),
-    __: None = Depends(rate_limit_ws),
 ):
-    await ws.accept()
-    msg = await ws.receive()
-
-    if "text" in msg and msg["text"]:
-        try:
-            json.loads(msg["text"])
-        except Exception:
-            await ws.send_json({"error": "invalid metadata"})
-            await ws.close()
-            return
-        msg = await ws.receive()
-    elif "bytes" not in msg:
-        await ws.send_json({"error": "no data received"})
-        await ws.close()
-        return
-
-    session_id = uuid.uuid4().hex
-    audio_path = Path(SESSIONS_DIR) / session_id / "stream.wav"
-    audio_path.parent.mkdir(parents=True, exist_ok=True)
-    full_text = ""
-
-    with open(audio_path, "ab") as fh:
-        try:
-            while True:
-                if "text" in msg and msg["text"]:
-                    if msg["text"] == "end":
-                        break
-                    msg = await ws.receive()
-                    continue
-
-                chunk = msg.get("bytes")
-                if not chunk:
-                    msg = await ws.receive()
-                    continue
-
-                fh.write(chunk)
-                tmp = audio_path.with_suffix(".part")
-                tmp.write_bytes(chunk)
-
-                try:
-                    text = await transcribe_file(str(tmp))
-                    full_text += (" " if full_text else "") + text
-                    await ws.send_json({"text": full_text, "session_id": session_id})
-                except Exception as e:
-                    await ws.send_json({"error": str(e)})
-                finally:
-                    if tmp.exists():
-                        tmp.unlink()
-
-                msg = await ws.receive()
-        except WebSocketDisconnect:
-            pass
+    stream = TranscriptionStream(ws)
+    await stream.process()
 
 
-@app.post("/intent-test")
+@core_router.post("/intent-test")
 async def intent_test(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     logger.info("Intent test for: %s", req.prompt)
     return {"intent": "test", "prompt": req.prompt}
 
 
-@app.get("/ha/entities")
+@protected_router.get("/ha/entities", tags=["home-assistant"])
 async def ha_entities(user_id: str = Depends(get_current_user_id)):
     try:
         return await get_states()
@@ -442,7 +353,7 @@ async def ha_entities(user_id: str = Depends(get_current_user_id)):
         raise HTTPException(status_code=500, detail="Home Assistant error")
 
 
-@app.post("/ha/service")
+@protected_router.post("/ha/service", tags=["home-assistant"])
 async def ha_service(req: ServiceRequest, user_id: str = Depends(get_current_user_id)):
     try:
         resp = await call_service(req.domain, req.service, req.data or {})
@@ -452,7 +363,7 @@ async def ha_service(req: ServiceRequest, user_id: str = Depends(get_current_use
         raise HTTPException(status_code=500, detail="Home Assistant error")
 
 
-@app.get("/ha/resolve")
+@protected_router.get("/ha/resolve", tags=["home-assistant"])
 async def ha_resolve(name: str, user_id: str = Depends(get_current_user_id)):
     try:
         entity = await resolve_entity(name)
@@ -474,11 +385,11 @@ async def _background_transcribe(session_id: str) -> None:
         text = await transcribe_file(str(audio_path))
         transcript_path.parent.mkdir(parents=True, exist_ok=True)
         transcript_path.write_text(text, encoding="utf-8")
-    except Exception as e:
+    except Exception as e:  # pragma: no cover - best effort
         logger.exception("Transcription failed: %s", e)
 
 
-@app.post("/transcribe/{session_id}")
+@core_router.post("/transcribe/{session_id}")
 async def start_transcription(
     session_id: str,
     background_tasks: BackgroundTasks,
@@ -488,7 +399,7 @@ async def start_transcription(
     return {"status": "accepted"}
 
 
-@app.get("/transcribe/{session_id}")
+@core_router.get("/transcribe/{session_id}")
 async def get_transcription(
     session_id: str, user_id: str = Depends(get_current_user_id)
 ):
@@ -496,6 +407,19 @@ async def get_transcription(
     if transcript_path.exists():
         return {"text": transcript_path.read_text(encoding="utf-8")}
     raise HTTPException(status_code=404, detail="Transcript not found")
+
+
+# Include routers with versioned and unversioned paths
+app.include_router(core_router, prefix="/v1")
+app.include_router(core_router, include_in_schema=False)
+app.include_router(protected_router, prefix="/v1")
+app.include_router(protected_router, include_in_schema=False)
+app.include_router(ws_router, prefix="/v1")
+app.include_router(ws_router, include_in_schema=False)
+app.include_router(status_router, prefix="/v1")
+app.include_router(status_router, include_in_schema=False)
+app.include_router(auth_router, prefix="/v1")
+app.include_router(auth_router, include_in_schema=False)
 
 
 if __name__ == "__main__":
