@@ -72,6 +72,7 @@ from .tasks import enqueue_transcription, enqueue_summary
 from .security import verify_token, rate_limit, verify_ws, rate_limit_ws
 from .analytics import record_latency, latency_p95
 from .gpt_client import close_client
+from .deps.scheduler import shutdown as scheduler_shutdown
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -182,6 +183,11 @@ async def shutdown_event() -> None:
             await func()
         except Exception as e:
             logger.debug("shutdown cleanup failed: %s", e)
+
+    try:
+        scheduler_shutdown()
+    except Exception as e:
+        logger.debug("scheduler shutdown failed: %s", e)
 
 
 class AskRequest(BaseModel):
