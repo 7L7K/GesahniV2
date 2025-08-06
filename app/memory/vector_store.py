@@ -1,10 +1,8 @@
-"""Chroma-backed vector store for user memories and QA caching.
+"""Unified vector store module.
 
-This module wraps a minimal subset of the original project's vector store
-interface. It uses a chromadb.PersistentClient with a very small embedding
-function that simply encodes the length of the normalized text. This keeps
-behavior deterministic for tests while exercising the real Chroma collection
-APIs.
+Supports:
+- MemoryVectorStore: lightweight in-memory store for unit tests, mimicking ChromaDB interface.
+- ChromaVectorStore: production store using chromadb PersistentClient.
 """
 
 from __future__ import annotations
@@ -14,8 +12,11 @@ import os
 import time
 import unicodedata
 import uuid
-from typing import List, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Sequence, Tuple
 
+import numpy as np
+from app.embeddings import embed_sync
 import chromadb
 
 # ---------------------------------------------------------------------------
@@ -44,6 +45,16 @@ def _normalized_hash(prompt: str) -> str:
     """Hash of normalized prompt."""
     return _normalize(prompt)[0]
 
+
+def _cosine_similarity(a: List[float], b: List[float]) -> float:
+    """Return the cosine similarity between two vectors."""
+    a_arr = np.array(a)
+    b_arr = np.array(b)
+    denom = np.linalg.norm(a_arr) * np.linalg.norm(b_arr)
+    if denom == 0.0:
+        return 0.0
+    return float(np.dot(a_arr, b_arr) / denom)
+
 # ---------------------------------------------------------------------------
 # Embedding helper
 # ---------------------------------------------------------------------------
@@ -53,6 +64,80 @@ class _LengthEmbedder:
 
     def __call__(self, texts: Sequence[str]) -> List[List[float]]:
         return [[float(len(_normalize(text)[1]))] for text in texts]
+
+# ---------------------------------------------------------------------------
+# In-memory store for tests
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _CacheRecord:
+    embedding: List[float]
+    doc: str
+    answer: str
+    timestamp: float
+    feedback: Optional[str] = None
+
+class _Collection:
+    """In-memory approximation of a ChromaDB collection."""
+
+    def __init__(self) -> None:
+        self._store: Dict[str, _CacheRecord] = {}
+
+    def upsert(
+        self,
+        ids: List[str],
+        embeddings: List[List[float]],
+        documents: List[str],
+        metadatas: List[Dict]
+    ) -> None:
+        for i, emb, doc, meta in zip(ids, embeddings, documents, metadatas):
+            self._store[i] = _CacheRecord(
+                embedding=emb,
+                doc=doc,
+                answer=meta.get("answer", ""),
+                timestamp=meta.get("timestamp", time.time()),
+                feedback=meta.get("feedback")
+            )
+
+    def get(
+        self,
+        ids: List[str] | None = None,
+        include: List[str] | None = None
+    ):
+        if ids is None:
+            ids = list(self._store.keys())
+        metas, docs = [], []
+        for i in ids:
+            rec = self._store.get(i)
+            if rec:
+                if include is None or "metadatas" in include:
+                    metas.append({"answer": rec.answer, "timestamp": rec.timestamp, "feedback": rec.feedback})
+                if include is None or "documents" in include:
+                    docs.append(rec.doc)
+            else:
+                if include is None or "metadatas" in include:
+                    metas.append(None)
+                if include is None or "documents" in include:
+                    docs.append(None)
+        result: Dict[str, List] = {"ids": ids}
+        if include is None or "metadatas" in include:
+            result["metadatas"] = metas
+        if include is None or "documents" in include:
+            result["documents"] = docs
+        return result
+
+    def delete(self, ids: List[str] | None = None) -> None:
+        if not ids:
+            return
+        for i in ids:
+            self._store.pop(i, None)
+
+    def update(self, ids: List[str], metadatas: List[Dict]) -> None:
+        for i, meta in zip(ids, metadatas):
+            rec = self._store.get(i)
+            if rec:
+                for k, v in meta.items():
+                    setattr(rec, k, v)
 
 # ---------------------------------------------------------------------------
 # Vector store interface
@@ -75,6 +160,83 @@ class VectorStore:
 
     def record_feedback(self, prompt: str, feedback: str) -> None:
         raise NotImplementedError
+
+# ---------------------------------------------------------------------------
+# In-memory implementation
+# ---------------------------------------------------------------------------
+
+class MemoryVectorStore(VectorStore):
+    """Lightweight in-memory store for unit tests."""
+
+    def __init__(self) -> None:
+        self._sim_threshold = float(os.getenv("SIM_THRESHOLD", "0.90"))
+        self._dist_cutoff = 1.0 - self._sim_threshold
+        self._cache = _Collection()
+        self._user_memories: Dict[str, List[Tuple[str, str, List[float], float]]] = {}
+
+    def add_user_memory(self, user_id: str, memory: str) -> str:
+        mem_id = str(uuid.uuid4())
+        embedding = embed_sync(memory)
+        ts = time.time()
+        self._user_memories.setdefault(user_id, []).append((mem_id, memory, embedding, ts))
+        return mem_id
+
+    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
+        top_k = k
+        q_emb = embed_sync(prompt)
+        results: List[Tuple[float, float, str]] = []
+        for _id, doc, emb, ts in self._user_memories.get(user_id, []):
+            sim = _cosine_similarity(q_emb, emb)
+            dist = 1.0 - sim
+            if dist > self._dist_cutoff:
+                continue
+            results.append((dist, -ts, doc))
+        results.sort()
+        return [doc for _, _, doc in results[:top_k]]
+
+    @property
+    def qa_cache(self) -> _Collection:
+        return self._cache
+
+    def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
+        now = time.time()
+        _, norm = _normalize(prompt)
+        embedding = embed_sync(norm)
+        self._cache.upsert(
+            ids=[cache_id],
+            embeddings=[embedding],
+            documents=[norm],
+            metadatas=[{"answer": answer, "timestamp": now, "feedback": None}],
+        )
+
+    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
+        best_id = None
+        best_rec: Optional[_CacheRecord] = None
+        best_dist: Optional[float] = None
+        _, norm = _normalize(prompt)
+        q_emb = embed_sync(norm)
+        for cid, rec in self._cache._store.items():
+            sim = _cosine_similarity(q_emb, rec.embedding)
+            dist = 1.0 - sim
+            if dist > self._dist_cutoff:
+                continue
+            if best_dist is None or dist < best_dist:
+                best_id, best_rec, best_dist = cid, rec, dist
+        if not best_rec:
+            return None
+        if best_rec.feedback == "down":
+            self._cache.delete(ids=[best_id])
+            return None
+        if ttl_seconds and time.time() - best_rec.timestamp > ttl_seconds:
+            self._cache.delete(ids=[best_id])
+            return None
+        return best_rec.answer
+
+    def record_feedback(self, prompt: str, feedback: str) -> None:
+        cache_id = _normalized_hash(prompt)
+        self._cache.update(ids=[cache_id], metadatas=[{"feedback": feedback}])
+        if feedback == "down":
+            self._cache.delete(ids=[cache_id])
 
 # ---------------------------------------------------------------------------
 # Chroma-based implementation
@@ -170,10 +332,16 @@ class ChromaVectorStore(VectorStore):
             self._cache.delete(ids=[cache_id])
 
 # ---------------------------------------------------------------------------
-# Module-level API
+# Module-level store selection and API
 # ---------------------------------------------------------------------------
 
-_store = ChromaVectorStore()
+def _get_store() -> VectorStore:
+    backend = os.getenv("VECTOR_STORE", "chroma").lower()
+    if backend in ("memory", "inmemory"):
+        return MemoryVectorStore()
+    return ChromaVectorStore()
+
+_store: VectorStore = _get_store()
 
 
 def add_user_memory(user_id: str, memory: str) -> str:
@@ -222,5 +390,6 @@ __all__ = [
     "record_feedback",
     "invalidate_cache",
     "VectorStore",
+    "MemoryVectorStore",
     "ChromaVectorStore",
 ]
