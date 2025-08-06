@@ -1,21 +1,3 @@
-"""Prompt‑routing layer for GesahniV2.
-
-Responsible for:
-* Intent detection & small‑talk short‑circuit
-* Built‑in skill execution
-* Home‑Assistant command handling
-* Cache lookup / storage
-* Delegating to GPT or LLaMA back‑ends (with override support)
-
-Changes in this revision
------------------------
-1. **Safer model‑override logic** – key off `.startswith("gpt")` / `.startswith("llama")` and allow‑lists.
-2. **Separate allow‑lists** – `ALLOWED_GPT_MODELS` and `ALLOWED_LLAMA_MODELS`.
-3. **Early health‑check for LLaMA** – explicit 503 if unhealthy.
-4. **Cleaner debug flag parsing** – boolean `debug_route`.
-5. **Extra logging breadcrumbs** for easier tracing.
-"""
-
 import logging
 import os
 from typing import Any, Awaitable, Callable
@@ -56,7 +38,6 @@ _SMALLTALK = SmalltalkSkill()
 # Helpers
 # ---------------------------------------------------------------------------
 
-
 def _low_conf(resp: str) -> bool:
     import re
 
@@ -65,7 +46,6 @@ def _low_conf(resp: str) -> bool:
     if re.search(r"\b(i don't know|i am not sure|not sure|cannot help)\b", resp, re.I):
         return True
     return False
-
 
 # ---------------------------------------------------------------------------
 # Main entry‑point
@@ -219,7 +199,6 @@ async def route_prompt(
         stream_cb=stream_cb,
     )
 
-
 # -------------------------------
 # Override and helper routines
 # -------------------------------
@@ -249,7 +228,6 @@ async def _call_gpt_override(
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
     cache_answer(norm_prompt, text)
     return text
-
 
 async def _call_llama_override(
     model,
@@ -286,7 +264,6 @@ async def _call_llama_override(
     cache_answer(norm_prompt, result_text)
     return result_text
 
-
 async def _call_gpt(
     *,
     prompt: str,
@@ -308,11 +285,11 @@ async def _call_gpt(
         rec.prompt_tokens = pt
         rec.completion_tokens = ct
         rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
+        rec.response = text
     memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
     cache_answer(norm_prompt, text)
     return await _finalise("gpt", prompt, text, rec)
-
 
 async def _call_llama(
     *,
@@ -341,13 +318,13 @@ async def _call_llama(
         rec.engine_used = "llama"
         rec.model_name = model
         rec.prompt_tokens = ptoks
+        rec.response = result_text
     memgpt.store_interaction(
         prompt, result_text, session_id=session_id, user_id=user_id
     )
     add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
     cache_answer(norm_prompt, result_text)
     return await _finalise("llama", prompt, result_text, rec)
-
 
 async def _finalise(engine: str, prompt: str, text: str, rec):
     if rec:
@@ -356,7 +333,6 @@ async def _finalise(engine: str, prompt: str, text: str, rec):
     await append_history(prompt, engine, text)
     await record(engine)
     return text
-
 
 async def _run_skill(prompt: str, SkillClass, rec):
     skill_resp = await SkillClass().handle(prompt)
