@@ -33,7 +33,14 @@ from . import router
 
 
 async def route_prompt(*args, **kwargs):
-    return await router.route_prompt(*args, **kwargs)
+    logger.info("⬇️ main.route_prompt args=%s kwargs=%s", args, kwargs)
+    try:
+        res = await router.route_prompt(*args, **kwargs)
+        logger.info("⬆️ main.route_prompt got res=%s", res)
+        return res
+    except Exception as e:
+        logger.error("💥 main.route_prompt bubbled exception: %s", e)
+        raise
 
 
 import app.skills  # populate SKILLS
