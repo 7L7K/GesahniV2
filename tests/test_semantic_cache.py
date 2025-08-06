@@ -35,7 +35,7 @@ def setup_cache(monkeypatch):
     async def fake_llama(prompt, model=None):
         raise AssertionError("llama should not be called")
 
-    async def fake_gpt(prompt, model=None, system=None):
+    async def fake_gpt(prompt, model=None, system=None, **kwargs):
         raise AssertionError("gpt should not be called")
 
     monkeypatch.setattr(router, "ask_llama", fake_llama)
