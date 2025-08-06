@@ -14,7 +14,7 @@ redis
 rq
 spacy
 llama-cpp-python
-chromadb
+chromadb>=0.4.24
 aiosqlite
 tiktoken
 prometheus-client
@@ -26,3 +26,5 @@ passlib
 pytest-asyncio
 sentence-transformers
 rapidfuzz
+psycopg
+pgvector
