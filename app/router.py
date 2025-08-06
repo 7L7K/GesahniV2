@@ -38,6 +38,7 @@ _SMALLTALK = SmalltalkSkill()
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _low_conf(resp: str) -> bool:
     import re
 
@@ -46,6 +47,7 @@ def _low_conf(resp: str) -> bool:
     if re.search(r"\b(i don't know|i am not sure|not sure|cannot help)\b", resp, re.I):
         return True
     return False
+
 
 # ---------------------------------------------------------------------------
 # Main entry‑point
@@ -97,9 +99,32 @@ async def route_prompt(
                 raise HTTPException(status_code=400, detail=f"Model '{mv}' not allowed")
             if debug_route:
                 return _dry("gpt", mv)
-            return await _call_gpt_override(
-                mv, prompt, norm_prompt, session_id, user_id, rec, stream_cb
-            )
+            try:
+                return await _call_gpt_override(
+                    mv, prompt, norm_prompt, session_id, user_id, rec, stream_cb
+                )
+            except Exception as e:
+                logger.warning("GPT override failed: %s", e)
+                if LLAMA_HEALTHY:
+                    fallback_built, fallback_pt = PromptBuilder.build(
+                        prompt, session_id=session_id, user_id=user_id
+                    )
+                    fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
+                    return await _call_llama(
+                        prompt=prompt,
+                        built_prompt=fallback_built,
+                        model=fallback_model,
+                        rec=rec,
+                        norm_prompt=norm_prompt,
+                        session_id=session_id,
+                        user_id=user_id,
+                        ptoks=fallback_pt,
+                        stream_cb=stream_cb,
+                    )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="GPT backend unavailable",
+                )
         # LLaMA override
         if mv.startswith("llama"):
             if ALLOWED_LLAMA_MODELS and mv not in ALLOWED_LLAMA_MODELS:
@@ -157,17 +182,37 @@ async def route_prompt(
     if engine == "gpt":
         if debug_route:
             return _dry("gpt", model_name)
-        return await _call_gpt(
-            prompt=prompt,
-            built_prompt=built_prompt,
-            model=model_name,
-            rec=rec,
-            norm_prompt=norm_prompt,
-            session_id=session_id,
-            user_id=user_id,
-            ptoks=ptoks,
-            stream_cb=stream_cb,
-        )
+        try:
+            return await _call_gpt(
+                prompt=prompt,
+                built_prompt=built_prompt,
+                model=model_name,
+                rec=rec,
+                norm_prompt=norm_prompt,
+                session_id=session_id,
+                user_id=user_id,
+                ptoks=ptoks,
+                stream_cb=stream_cb,
+            )
+        except Exception as e:
+            logger.warning("GPT call failed: %s", e)
+            if LLAMA_HEALTHY:
+                fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
+                return await _call_llama(
+                    prompt=prompt,
+                    built_prompt=built_prompt,
+                    model=fallback_model,
+                    rec=rec,
+                    norm_prompt=norm_prompt,
+                    session_id=session_id,
+                    user_id=user_id,
+                    ptoks=ptoks,
+                    stream_cb=stream_cb,
+                )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="GPT backend unavailable",
+            )
 
     if engine == "llama" and LLAMA_HEALTHY:
         if debug_route:
@@ -187,17 +232,38 @@ async def route_prompt(
     # Fallback GPT-4o
     if debug_route:
         return _dry("gpt", "gpt-4o")
-    return await _call_gpt(
-        prompt=prompt,
-        built_prompt=built_prompt,
-        model="gpt-4o",
-        rec=rec,
-        norm_prompt=norm_prompt,
-        session_id=session_id,
-        user_id=user_id,
-        ptoks=ptoks,
-        stream_cb=stream_cb,
-    )
+    try:
+        return await _call_gpt(
+            prompt=prompt,
+            built_prompt=built_prompt,
+            model="gpt-4o",
+            rec=rec,
+            norm_prompt=norm_prompt,
+            session_id=session_id,
+            user_id=user_id,
+            ptoks=ptoks,
+            stream_cb=stream_cb,
+        )
+    except Exception as e:
+        logger.warning("GPT fallback failed: %s", e)
+        if LLAMA_HEALTHY:
+            fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
+            return await _call_llama(
+                prompt=prompt,
+                built_prompt=built_prompt,
+                model=fallback_model,
+                rec=rec,
+                norm_prompt=norm_prompt,
+                session_id=session_id,
+                user_id=user_id,
+                ptoks=ptoks,
+                stream_cb=stream_cb,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="GPT backend unavailable",
+        )
+
 
 # -------------------------------
 # Override and helper routines
@@ -228,6 +294,7 @@ async def _call_gpt_override(
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
     cache_answer(norm_prompt, text)
     return text
+
 
 async def _call_llama_override(
     model,
@@ -264,6 +331,7 @@ async def _call_llama_override(
     cache_answer(norm_prompt, result_text)
     return result_text
 
+
 async def _call_gpt(
     *,
     prompt: str,
@@ -290,6 +358,7 @@ async def _call_gpt(
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
     cache_answer(norm_prompt, text)
     return await _finalise("gpt", prompt, text, rec)
+
 
 async def _call_llama(
     *,
@@ -326,6 +395,7 @@ async def _call_llama(
     cache_answer(norm_prompt, result_text)
     return await _finalise("llama", prompt, result_text, rec)
 
+
 async def _finalise(engine: str, prompt: str, text: str, rec):
     if rec:
         rec.engine_used = engine
@@ -333,6 +403,7 @@ async def _finalise(engine: str, prompt: str, text: str, rec):
     await append_history(prompt, engine, text)
     await record(engine)
     return text
+
 
 async def _run_skill(prompt: str, SkillClass, rec):
     skill_resp = await SkillClass().handle(prompt)
