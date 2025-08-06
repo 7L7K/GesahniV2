@@ -1,6 +1,10 @@
 import os
 import logging
-import openai
+
+try:  # pragma: no cover - exercised when openai is installed
+    import openai
+except Exception:  # pragma: no cover - executed when dependency missing
+    openai = None  # type: ignore
 
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "whisper-1")
 
@@ -13,6 +17,8 @@ def transcribe_file(path: str, model: str | None = None) -> str:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY not set")
+    if openai is None:
+        raise RuntimeError("openai package not installed")
     try:
         with open(path, "rb") as fh:
             resp = openai.Audio.transcribe(model=model, file=fh, api_key=api_key)

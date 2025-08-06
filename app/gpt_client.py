@@ -1,8 +1,32 @@
 # app/gpt_client.py
 
-import os
+"""Thin wrapper around the OpenAI chat API.
+
+The original project depended on the official ``openai`` package.  The
+execution environment for the kata purposely omits this optional dependency so
+that the tests can run without network access.  Importing the module
+unconditionally would therefore raise a ``ModuleNotFoundError`` during test
+collection which prevented the rest of the application from loading.
+
+To keep the surface area of the module intact we attempt to import
+``AsyncOpenAI`` and fall back to a tiny stub that simply raises a helpful error
+when used.  Tests monkey‑patch ``ask_gpt`` so the stub is never exercised, but
+the import no longer fails when the dependency is missing.
+"""
+
 import logging
-from openai import AsyncOpenAI
+import os
+
+try:  # pragma: no cover - exercised when openai is installed
+    from openai import AsyncOpenAI
+except Exception:  # pragma: no cover - executed when dependency missing
+
+    class AsyncOpenAI:  # type: ignore[misc]
+        """Fallback used when the ``openai`` package isn't available."""
+
+        def __init__(self, *_, **__):  # pragma: no cover - simple stub
+            raise RuntimeError("openai package not installed")
+
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
