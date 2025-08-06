@@ -28,7 +28,9 @@ from .memory.vector_store import add_user_memory
 def _get_queue() -> Queue:
     if Redis is None or Queue is None:
         raise RuntimeError("redis/rq not installed")
-    url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    url = os.getenv("REDIS_URL")
+    if not url:
+        raise RuntimeError("REDIS_URL not configured")
     conn = Redis.from_url(url)
     return Queue("default", connection=conn)
 
