@@ -18,12 +18,10 @@ HEAVY_INTENTS = {"analysis", "research"}
 def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str]:
     """Route prompt to the best engine/model for the task."""
     prompt_lc = prompt.lower()
-    words = re.findall(r"\w+", prompt_lc)  # Ignore punctuation
-    
-    # Keyword match (basic; could stem if you wanna flex)
+    words = re.findall(r"\w+", prompt_lc)
     if (
         len(words) > HEAVY_WORD_COUNT
-        or any(k in prompt_lc for k in KEYWORDS)
+        or any(re.search(rf"\b{k}\b", prompt_lc) for k in KEYWORDS)
         or tokens > HEAVY_TOKENS
         or intent in HEAVY_INTENTS
     ):
