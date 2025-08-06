@@ -1,9 +1,28 @@
+"""Helpers for transcribing audio with OpenAI Whisper.
+
+The real project uses the official ``openai`` package.  To allow the test suite
+to run in environments where this heavy optional dependency isn't installed we
+guard the import and fall back to a minimal stub.  Tests monkey‑patch the
+transcriber so the stub is never exercised directly.
+"""
+
 import logging
 import os
 
 from fastapi import HTTPException
-from openai import AsyncClient as OpenAI
-from openai import OpenAIError
+
+try:  # pragma: no cover - executed when openai is available
+    from openai import AsyncClient as OpenAI
+    from openai import OpenAIError
+except Exception:  # pragma: no cover - exercised when dependency missing
+
+    class OpenAIError(Exception):
+        pass
+
+    class OpenAI:  # type: ignore[misc]
+        def __init__(self, *_, **__):
+            raise RuntimeError("openai package not installed")
+
 
 TRANSCRIBE_MODEL = os.getenv("OPENAI_TRANSCRIBE_MODEL", "whisper-1")
 
