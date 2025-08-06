@@ -194,16 +194,19 @@ async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     logger.info("Received prompt: %s", req.prompt)
 
     queue: asyncio.Queue[str | None] = asyncio.Queue()
+    status_code: int | None = None
 
     async def _stream_cb(token: str) -> None:
         await queue.put(token)
 
     async def _producer() -> None:
+        nonlocal status_code
         try:
             await route_prompt(
                 req.prompt, req.model_override, user_id, stream_cb=_stream_cb
             )
         except HTTPException as exc:
+            status_code = exc.status_code
             await queue.put(f"[error:{exc.detail}]")
         except Exception as e:  # pragma: no cover - defensive
             logger.exception("Error processing prompt: %s", e)
@@ -213,14 +216,20 @@ async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
 
     asyncio.create_task(_producer())
 
+    first_chunk = await queue.get()
+
     async def _streamer():
+        if first_chunk is not None:
+            yield first_chunk
         while True:
             chunk = await queue.get()
             if chunk is None:
                 break
             yield chunk
 
-    return StreamingResponse(_streamer(), media_type="text/plain")
+    return StreamingResponse(
+        _streamer(), media_type="text/plain", status_code=status_code or 200
+    )
 
 
 @protected_router.post("/upload", tags=["sessions"])
