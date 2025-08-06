@@ -22,7 +22,7 @@ def test_router_fallback_metrics_updated(monkeypatch):
     async def fake_llama(prompt, model=None):
         return {"error": "timeout", "llm_used": "llama3"}
 
-    async def fake_gpt(prompt, model=None, system=None):
+    async def fake_gpt(prompt, model=None, system=None, **kwargs):
         return "ok", 0, 0, 0.0
 
     monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
@@ -56,7 +56,7 @@ def test_gpt_override(monkeypatch):
 
     llama_integration.LLAMA_HEALTHY = True
 
-    async def fake_gpt(prompt, model=None, system=None):
+    async def fake_gpt(prompt, model=None, system=None, **kwargs):
         return model, 0, 0, 0.0
 
     monkeypatch.setattr(router, "ask_gpt", fake_gpt)
@@ -89,7 +89,7 @@ def test_complexity_checks(monkeypatch):
 
     llama_integration.LLAMA_HEALTHY = True
 
-    async def fake_gpt(prompt, model=None, system=None):
+    async def fake_gpt(prompt, model=None, system=None, **kwargs):
         return "gpt", 0, 0, 0.0
 
     async def fake_llama(prompt, model=None):
@@ -144,7 +144,7 @@ def test_debug_env_toggle(monkeypatch):
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     from app import router
 
-    async def fake_gpt(prompt, model=None, system=None):
+    async def fake_gpt(prompt, model=None, system=None, **kwargs):
         return "ok", 0, 0, 0.0
 
     monkeypatch.setattr(router, "ask_gpt", fake_gpt)

@@ -16,6 +16,11 @@ the import no longer fails when the dependency is missing.
 
 import logging
 import os
+import time
+from collections.abc import Awaitable, Callable
+
+from .metrics import REQUEST_COST, REQUEST_COUNT, REQUEST_LATENCY
+from .telemetry import log_record_var
 
 try:  # pragma: no cover - exercised when openai is installed
     from openai import AsyncOpenAI
@@ -75,26 +80,75 @@ async def close_client() -> None:
 
 
 async def ask_gpt(
-    prompt: str, model: str | None = None, system: str | None = None
-) -> tuple[str, int, int, float]:
-    """Return text, prompt tokens, completion tokens and price per 1k tokens."""
+    prompt: str,
+    model: str | None = None,
+    system: str | None = None,
+    *,
+    stream: bool = False,
+    on_token: Callable[[str], Awaitable[None]] | None = None,
+    raw: bool = False,
+) -> tuple[str, int, int, float] | tuple[str, int, int, float, object]:
+    """Return text, prompt tokens, completion tokens and total price.
+
+    ``stream=True`` enables token streaming via the OpenAI client.  When
+    streaming is active each token is forwarded to ``on_token`` if provided.
+    When ``raw=True`` the underlying response object is appended to the return
+    tuple so callers can inspect metadata such as finish reason or response ID.
+    """
+
     model = model or OPENAI_MODEL
     client = get_client()
-    messages = []
+    messages: list[dict[str, str]] = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
+
+    start = time.perf_counter()
     try:
-        resp = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-        )
-        text = resp.choices[0].message.content.strip()
-        usage = resp.usage or {}
+        if stream:
+            resp_stream = await client.chat.completions.create(
+                model=model, messages=messages, stream=True
+            )
+            chunks: list[str] = []
+            final = None
+            async for part in resp_stream:
+                delta = getattr(part.choices[0], "delta", None)
+                token = getattr(delta, "content", None)
+                if token:
+                    chunks.append(token)
+                    if on_token:
+                        await on_token(token)
+                if getattr(part.choices[0], "finish_reason", None):
+                    final = part
+            resp = final
+            text = "".join(chunks).strip()
+        else:
+            resp = await client.chat.completions.create(model=model, messages=messages)
+            text = resp.choices[0].message.content.strip()
+            if on_token:
+                await on_token(text)
+        usage = getattr(resp, "usage", None) or {}
         pt = int(getattr(usage, "prompt_tokens", 0))
         ct = int(getattr(usage, "completion_tokens", 0))
         unit_price = MODEL_PRICING.get(model, 0.0)
-        return text, pt, ct, unit_price
+        cost = unit_price * (pt + ct) / 1000
+
+        # telemetry & metrics
+        rec = log_record_var.get()
+        if rec:
+            rec.model_name = model
+            rec.prompt_tokens = pt
+            rec.completion_tokens = ct
+            rec.cost_usd = cost
+
+        duration = time.perf_counter() - start
+        REQUEST_COUNT.labels("ask_gpt", "chat", model).inc()
+        REQUEST_LATENCY.labels("ask_gpt", "chat", model).observe(duration)
+        REQUEST_COST.labels("ask_gpt", "chat", model).observe(cost)
+
+        if raw:
+            return text, pt, ct, cost, resp
+        return text, pt, ct, cost
     except Exception as e:
         logger.exception("OpenAI request failed: %s", e)
         raise
