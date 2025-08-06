@@ -26,7 +26,7 @@ revoked_tokens: Set[str] = set()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Router
-router = APIRouter()
+router = APIRouter(tags=["auth"])
 
 
 # Pydantic models
