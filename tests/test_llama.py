@@ -1,7 +1,7 @@
-import sys, os
+import os
+import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import pytest
 
 import asyncio
 
@@ -14,7 +14,7 @@ class DummyResponse:
         pass
 
     def json(self):
-        return {}
+        return {"response": "pong"}
 
 
 class DummyClient:
@@ -24,7 +24,7 @@ class DummyClient:
     async def __aexit__(self, exc_type, exc, tb):
         pass
 
-    async def get(self, url):
+    async def request(self, method, url, **kwargs):
         return DummyResponse()
 
 
@@ -40,3 +40,4 @@ def test_llama_status_returns_healthy(monkeypatch):
     )
     res = asyncio.run(llama_integration.get_status())
     assert res["status"] == "healthy"
+    assert "latency_ms" in res
