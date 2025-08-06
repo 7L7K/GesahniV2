@@ -15,6 +15,7 @@ HEAVY_TOKENS = int(os.getenv("MODEL_ROUTER_HEAVY_TOKENS", "1000"))
 KEYWORDS = {"code", "research", "analyze", "explain", "diagram", "summarize"}
 HEAVY_INTENTS = {"analysis", "research"}
 
+
 def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str]:
     """Route prompt to the best engine/model for the task."""
     prompt_lc = prompt.lower()
