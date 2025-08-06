@@ -201,9 +201,11 @@ async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     try:
         answer = await route_prompt(req.prompt, req.model, user_id)
         return {"response": answer}
+    except HTTPException as exc:
+        raise exc
     except Exception as e:
         logger.exception("Error processing prompt: %s", e)
-        raise HTTPException(status_code=500, detail="Error processing prompt")
+        raise HTTPException(status_code=500, detail="Error processing prompt") from e
 
 
 @app.post("/upload")
