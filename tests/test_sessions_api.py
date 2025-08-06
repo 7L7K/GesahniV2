@@ -67,7 +67,7 @@ def test_capture_flow(monkeypatch, tmp_path):
     assert resp.json()["status"] == SessionStatus.TRANSCRIBED.value
 
     # 3) stub GPT and call summarize
-    async def fake_gpt(prompt, model=None, system=None):
+    async def fake_gpt(prompt, model=None, system=None, **kwargs):
         return "summary", 0, 0, 0
 
     monkeypatch.setattr(tasks, "ask_gpt", fake_gpt, raising=False)
@@ -189,7 +189,7 @@ def test_manual_pipeline(monkeypatch, tmp_path):
     assert sm.get_session_meta(session_id)["status"] == SessionStatus.TRANSCRIBED.value
 
     # 4) monkey-patch GPT and summarize to DONE
-    async def fake_gpt2(prompt, model=None, system=None):
+    async def fake_gpt2(prompt, model=None, system=None, **kwargs):
         return "summary", 0, 0, 0
 
     monkeypatch.setattr(tasks, "ask_gpt", fake_gpt2, raising=False)
