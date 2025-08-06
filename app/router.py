@@ -15,7 +15,7 @@ from .memory.vector_store import (
     cache_answer,
     lookup_cached_answer,
 )
-from .llama_integration import ask_llama, LLAMA_HEALTHY
+from .llama_integration import ask_llama
 from . import llama_integration
 from .model_picker import pick_model
 from .telemetry import log_record_var
@@ -35,6 +35,9 @@ logger = logging.getLogger(__name__)
 # Expose this so tests can override/inspect it
 ALLOWED_GPT_MODELS = set(
     os.getenv("ALLOWED_GPT_MODELS", "gpt-4o,gpt-4,gpt-3.5-turbo").split(",")
+)
+ALLOWED_LLAMA_MODELS = set(
+    os.getenv("ALLOWED_LLAMA_MODELS", "llama3:latest,llama3").split(",")
 )
 # Expose catalog so tests can monkey-patch it
 CATALOG = BUILTIN_CATALOG
@@ -90,9 +93,35 @@ async def route_prompt(
             )
             if debug_model_routing:
                 return _dry_return("gpt", model_override)
-            text, pt, ct, unit_price = await ask_gpt(
-                built, model_override, SYSTEM_PROMPT
-            )
+            try:
+                text, pt, ct, unit_price = await ask_gpt(
+                    built, model_override, SYSTEM_PROMPT
+                )
+            except RuntimeError as e:
+                if "openai package not installed" in str(e).lower():
+                    logger.warning("OpenAI not installed, falling back to LLaMA")
+                    if debug_model_routing:
+                        return _dry_return("llama", model_override)
+                    result = await ask_llama(built)
+                    if isinstance(result, dict) and "error" in result:
+                        raise HTTPException(
+                            status_code=503, detail="LLaMA backend unavailable"
+                        )
+                    result_text = str(result).strip()
+                    if rec:
+                        rec.engine_used = "llama"
+                        rec.response = result_text
+                        rec.model_name = model_override
+                        rec.prompt_tokens = ptokens
+                    await append_history(prompt, "llama", result_text)
+                    await record("llama", fallback=True)
+                    memgpt.store_interaction(
+                        prompt, result_text, session_id=session_id, user_id=user_id
+                    )
+                    add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
+                    cache_answer(norm_prompt, result_text)
+                    return result_text
+                raise
             if rec:
                 rec.engine_used = "gpt"
                 rec.response = text
@@ -108,6 +137,31 @@ async def route_prompt(
             add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
             cache_answer(norm_prompt, text)
             return text
+        elif model_override in ALLOWED_LLAMA_MODELS:
+            built, ptokens = PromptBuilder.build(
+                prompt, session_id=session_id, user_id=user_id
+            )
+            if debug_model_routing:
+                return _dry_return("llama", model_override)
+            result = await ask_llama(built, model_override)
+            if isinstance(result, dict) and "error" in result:
+                raise HTTPException(status_code=503, detail="LLaMA backend unavailable")
+            result_text = str(result).strip()
+            if result_text and not _low_conf(result_text):
+                if rec:
+                    rec.engine_used = "llama"
+                    rec.response = result_text
+                    rec.model_name = model_override
+                    rec.prompt_tokens = ptokens
+                await append_history(prompt, "llama", result_text)
+                await record("llama", fallback=True)
+                memgpt.store_interaction(
+                    prompt, result_text, session_id=session_id, user_id=user_id
+                )
+                add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
+                cache_answer(norm_prompt, result_text)
+                return result_text
+            raise HTTPException(status_code=503, detail="LLaMA returned empty response")
         else:
             raise HTTPException(
                 status_code=400,
@@ -176,9 +230,32 @@ async def route_prompt(
     if engine == "gpt":
         if debug_model_routing:
             return _dry_return("gpt", model_name)
-        text, pt, ct, unit_price = await ask_gpt(
-            built_prompt, model_name, SYSTEM_PROMPT
-        )
+        try:
+            text, pt, ct, unit_price = await ask_gpt(
+                built_prompt, model_name, SYSTEM_PROMPT
+            )
+        except RuntimeError as e:
+            if "openai package not installed" in str(e).lower():
+                logger.warning("OpenAI not installed, falling back to LLaMA")
+                result = await ask_llama(built_prompt)
+                if isinstance(result, dict) and "error" in result:
+                    raise HTTPException(
+                        status_code=503, detail="LLaMA backend unavailable"
+                    )
+                result_text = str(result).strip()
+                if rec:
+                    rec.engine_used = "llama"
+                    rec.response = result_text
+                    rec.model_name = model_name
+                await append_history(prompt, "llama", result_text)
+                await record("llama", fallback=True)
+                memgpt.store_interaction(
+                    prompt, result_text, session_id=session_id, user_id=user_id
+                )
+                add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
+                cache_answer(norm_prompt, result_text)
+                return result_text
+            raise
         if rec:
             rec.engine_used = "gpt"
             rec.response = text
@@ -221,7 +298,14 @@ async def route_prompt(
     # Fallback to GPT-4o
     if debug_model_routing:
         return _dry_return("gpt", "gpt-4o")
-    text, pt, ct, unit_price = await ask_gpt(built_prompt, "gpt-4o", SYSTEM_PROMPT)
+    try:
+        text, pt, ct, unit_price = await ask_gpt(built_prompt, "gpt-4o", SYSTEM_PROMPT)
+    except RuntimeError as e:
+        if "openai package not installed" in str(e).lower():
+            raise HTTPException(
+                status_code=503, detail="OpenAI dependency not installed"
+            ) from e
+        raise
     if rec:
         rec.engine_used = "gpt"
         rec.response = text

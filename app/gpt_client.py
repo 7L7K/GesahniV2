@@ -19,7 +19,10 @@ import os
 
 try:  # pragma: no cover - exercised when openai is installed
     from openai import AsyncOpenAI
+
+    OPENAI_AVAILABLE = True
 except Exception:  # pragma: no cover - executed when dependency missing
+    OPENAI_AVAILABLE = False
 
     class AsyncOpenAI:  # type: ignore[misc]
         """Fallback used when the ``openai`` package isn't available."""
@@ -52,6 +55,8 @@ def get_client() -> AsyncOpenAI:
     """
 
     global _client
+    if not OPENAI_AVAILABLE:
+        raise RuntimeError("openai package not installed")
     if _client is None:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:

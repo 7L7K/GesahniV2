@@ -24,7 +24,7 @@ from fastapi import (
     Form,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi import Depends, Request
 from .deps.user import get_current_user_id
 from .user_store import user_store
@@ -178,7 +178,10 @@ async def shutdown_event() -> None:
 
 class AskRequest(BaseModel):
     prompt: str
-    model: str | None = None
+    model_override: str | None = Field(None, alias="model")
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 class ServiceRequest(BaseModel):
@@ -199,7 +202,7 @@ async def get_me(user_id: str = Depends(get_current_user_id)):
 async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     logger.info("Received prompt: %s", req.prompt)
     try:
-        answer = await route_prompt(req.prompt, req.model, user_id)
+        answer = await route_prompt(req.prompt, req.model_override, user_id)
         return {"response": answer}
     except HTTPException as exc:
         raise exc
