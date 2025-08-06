@@ -24,6 +24,7 @@ from fastapi import (
     Form,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from fastapi import Depends, Request
 from .deps.user import get_current_user_id
@@ -208,14 +209,35 @@ async def get_me(user_id: str = Depends(get_current_user_id)):
 @app.post("/ask")
 async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     logger.info("Received prompt: %s", req.prompt)
-    try:
-        answer = await route_prompt(req.prompt, req.model_override, user_id)
-        return {"response": answer}
-    except HTTPException as exc:
-        raise exc
-    except Exception as e:
-        logger.exception("Error processing prompt: %s", e)
-        raise HTTPException(status_code=500, detail="Error processing prompt") from e
+
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    async def _stream_cb(token: str) -> None:
+        await queue.put(token)
+
+    async def _producer() -> None:
+        try:
+            await route_prompt(
+                req.prompt, req.model_override, user_id, stream_cb=_stream_cb
+            )
+        except HTTPException as exc:
+            await queue.put(f"[error:{exc.detail}]")
+        except Exception as e:  # pragma: no cover - defensive
+            logger.exception("Error processing prompt: %s", e)
+            await queue.put("[error]")
+        finally:
+            await queue.put(None)
+
+    asyncio.create_task(_producer())
+
+    async def _streamer():
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
+            yield chunk
+
+    return StreamingResponse(_streamer(), media_type="text/plain")
 
 
 @app.post("/upload")

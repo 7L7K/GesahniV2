@@ -76,6 +76,7 @@ async def ha_status(user_id: str = Depends(get_current_user_id)) -> dict:
 
 @router.get("/llama_status")
 async def llama_status(user_id: str = Depends(get_current_user_id)) -> dict:
+    """Report LLaMA health by attempting a minimal generation."""
     try:
         return await llama_get_status()
     except Exception:
