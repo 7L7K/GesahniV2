@@ -296,26 +296,197 @@ class ChromaVectorStore(VectorStore):
             self._cache.delete(ids=[cache_id])
 
 
-# PgVectorStore remains as a stub for compatibility ---------------------
+# PgVectorStore ----------------------------------------------------------
 
 
-class PgVectorStore(VectorStore):  # pragma: no cover - stub
+class _PGCache:
+    """Minimal wrapper around a PostgreSQL QA cache table."""
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def get(self, ids: List[str] | None = None, include: List[str] | None = None):
+        with self._conn.cursor() as cur:
+            if ids:
+                cur.execute(
+                    "SELECT id, doc, answer, ts, feedback FROM qa_cache WHERE id = ANY(%s)",
+                    (ids,),
+                )
+            else:
+                cur.execute("SELECT id, doc, answer, ts, feedback FROM qa_cache")
+            rows = cur.fetchall()
+        out: Dict[str, List] = {"ids": [r[0] for r in rows]}
+        if not include or "documents" in include:
+            out["documents"] = [r[1] for r in rows]
+        if not include or "metadatas" in include:
+            out["metadatas"] = [
+                {"answer": r[2], "timestamp": r[3], "feedback": r[4]} for r in rows
+            ]
+        return out
+
+    def delete(self, ids: List[str] | None = None):
+        if not ids:
+            return
+        with self._conn.cursor() as cur:
+            cur.execute("DELETE FROM qa_cache WHERE id = ANY(%s)", (ids,))
+            self._conn.commit()
+
+
+class PgVectorStore(VectorStore):  # pragma: no cover - uses real database
+    """Vector store backed by PostgreSQL with the pgvector extension."""
+
+    def __init__(self) -> None:
+        import psycopg
+        from pgvector.psycopg import register_vector
+
+        dsn = (
+            os.getenv("PGVECTOR_URL")
+            or os.getenv("DATABASE_URL")
+            or "postgresql://localhost/postgres"
+        )
+        self._conn = psycopg.connect(dsn)
+        register_vector(self._conn)
+
+        self._sim_threshold = float(os.getenv("SIM_THRESHOLD", "0.90"))
+        self._dist_cutoff = 1.0 - self._sim_threshold
+
+        with self._conn.cursor() as cur:
+            cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_memories (
+                    id UUID PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    memory TEXT NOT NULL,
+                    embedding vector(1) NOT NULL,
+                    ts DOUBLE PRECISION NOT NULL
+                )
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS qa_cache (
+                    id TEXT PRIMARY KEY,
+                    doc TEXT NOT NULL,
+                    embedding vector(1) NOT NULL,
+                    answer TEXT NOT NULL,
+                    ts DOUBLE PRECISION NOT NULL,
+                    feedback TEXT
+                )
+                """
+            )
+            self._conn.commit()
+
+        self._cache = _PGCache(self._conn)
+
+    # User memory ----------------------------------------------------
     def add_user_memory(self, user_id: str, memory: str) -> str:
-        raise NotImplementedError
+        mem_id = str(uuid.uuid4())
+        _, norm = _normalize(memory)
+        emb = [len(norm)]
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO user_memories (id, user_id, memory, embedding, ts) VALUES (%s, %s, %s, %s, %s)",
+                (mem_id, user_id, memory, emb, time.time()),
+            )
+            self._conn.commit()
+        return mem_id
 
-    def query_user_memories(self, prompt: str, k: int = 5) -> List[str]:
-        return []
+    def query_user_memories(
+        self, user_id: str, prompt: str, k: int | None = None
+    ) -> List[str]:
+        _, norm = _normalize(prompt)
+        emb = [len(norm)]
+        top_k = k if k is not None else int(os.getenv("MEM_TOP_K", "5"))
+        cutoff = 1.0 - float(os.getenv("SIM_THRESHOLD", str(self._sim_threshold)))
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT memory, embedding <-> %s AS dist, ts
+                FROM user_memories
+                WHERE user_id = %s
+                ORDER BY dist ASC, ts DESC
+                LIMIT %s
+                """,
+                (emb, user_id, top_k),
+            )
+            rows = cur.fetchall()
+        results: List[str] = []
+        for mem, dist, _ in rows:
+            if float(dist) <= cutoff:
+                results.append(mem)
+        return results
+
+    # QA cache -------------------------------------------------------
+    @property
+    def qa_cache(self) -> _PGCache:  # pragma: no cover - simple proxy
+        return self._cache
 
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
-        pass
+        if bool(os.getenv("DISABLE_QA_CACHE")):
+            return
+        _, norm = _normalize(prompt)
+        emb = [len(norm)]
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO qa_cache (id, doc, embedding, answer, ts, feedback)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE
+                    SET doc = EXCLUDED.doc,
+                        embedding = EXCLUDED.embedding,
+                        answer = EXCLUDED.answer,
+                        ts = EXCLUDED.ts,
+                        feedback = NULL
+                """,
+                (cache_id, norm, emb, answer, time.time(), None),
+            )
+            self._conn.commit()
 
     def lookup_cached_answer(
         self, prompt: str, ttl_seconds: int = 86400
     ) -> Optional[str]:
-        return None
+        if bool(os.getenv("DISABLE_QA_CACHE")):
+            return None
+        _, norm = _normalize(prompt)
+        emb = [len(norm)]
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, answer, ts, feedback, embedding <-> %s AS dist
+                FROM qa_cache
+                ORDER BY dist ASC
+                LIMIT 1
+                """,
+                (emb,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        cache_id, answer, ts, feedback, dist = row
+        if (
+            float(dist) > self._dist_cutoff
+            or feedback == "down"
+            or (ttl_seconds and time.time() - float(ts) > ttl_seconds)
+        ):
+            with self._conn.cursor() as cur:
+                cur.execute("DELETE FROM qa_cache WHERE id = %s", (cache_id,))
+                self._conn.commit()
+            return None
+        return answer
 
     def record_feedback(self, prompt: str, feedback: str) -> None:
-        pass
+        if bool(os.getenv("DISABLE_QA_CACHE")):
+            return
+        cache_id = _normalized_hash(prompt)
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "UPDATE qa_cache SET feedback = %s WHERE id = %s",
+                (feedback, cache_id),
+            )
+            if feedback == "down":
+                cur.execute("DELETE FROM qa_cache WHERE id = %s", (cache_id,))
+            self._conn.commit()
 
 
 # ---------------------------------------------------------------------------

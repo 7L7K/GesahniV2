@@ -24,3 +24,5 @@ passlib[bcrypt]
 python-jose[cryptography]
 passlib
 pytest-asyncio
+psycopg
+pgvector
