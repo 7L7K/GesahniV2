@@ -13,3 +13,5 @@ data/*
 sessions/*
 
 .envrc
+users.db
+data/history.jsonl
