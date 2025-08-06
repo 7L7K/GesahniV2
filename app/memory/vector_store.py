@@ -35,6 +35,17 @@ from typing import Dict, List, Optional, Tuple
 
 
 # ---------------------------------------------------------------------------
+# Environment helpers
+# ---------------------------------------------------------------------------
+
+
+def _env_flag(name: str) -> bool:
+    """Return True if the environment variable is set to a truthy value."""
+
+    return os.getenv(name, "").strip().lower() in {"true", "1", "yes"}
+
+
+# ---------------------------------------------------------------------------
 # Normalisation helpers
 # ---------------------------------------------------------------------------
 
@@ -250,7 +261,7 @@ class ChromaVectorStore(VectorStore):
         return self._cache
 
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
-        if bool(os.getenv("DISABLE_QA_CACHE")):
+        if _env_flag("DISABLE_QA_CACHE"):
             return
         _, norm = _normalize(prompt)
         self._cache.upsert(
@@ -262,7 +273,7 @@ class ChromaVectorStore(VectorStore):
     def lookup_cached_answer(
         self, prompt: str, ttl_seconds: int = 86400
     ) -> Optional[str]:
-        if bool(os.getenv("DISABLE_QA_CACHE")):
+        if _env_flag("DISABLE_QA_CACHE"):
             return None
         _, norm = _normalize(prompt)
         q_len = len(norm)
@@ -285,7 +296,7 @@ class ChromaVectorStore(VectorStore):
         return best_rec.answer
 
     def record_feedback(self, prompt: str, feedback: str) -> None:
-        if bool(os.getenv("DISABLE_QA_CACHE")):
+        if _env_flag("DISABLE_QA_CACHE"):
             return
         cache_id = _normalized_hash(prompt)
         rec = self._cache._store.get(cache_id)
