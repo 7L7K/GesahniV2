@@ -9,7 +9,7 @@ def make_record(prompt: str = "hi"):
 
 
 def test_call_gpt(monkeypatch):
-    async def fake_ask_gpt(prompt, model, system):
+    async def fake_ask_gpt(prompt, model, system, **kwargs):
         return "gpt answer", 10, 2, 0.01
 
     calls = {}
@@ -112,7 +112,7 @@ def test_call_llama_fallback(monkeypatch):
     async def fake_llama(prompt, model):
         return {"error": "timeout", "llm_used": model}
 
-    async def fake_gpt(prompt, model, system):
+    async def fake_gpt(prompt, model, system, **kwargs):
         return "gpt fallback", 0, 0, 0.0
 
     calls = {"records": []}
