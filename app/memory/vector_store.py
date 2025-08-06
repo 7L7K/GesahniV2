@@ -1,47 +1,29 @@
-"""Lightweight in-memory vector store used for tests.
+"""Chroma-backed vector store for user memories and QA caching.
 
-The original project relied on `chromadb` for persistence and similarity
-search.  Shipping that dependency in the execution environment would be heavy
-and unnecessary for the unit tests bundled with this kata.  This module
-implements a tiny, self-contained replacement that mimics just enough of the
-original interface for the tests to exercise the behaviour of the higher level
-code.
-
-The implementation is intentionally simple:
-
-* Text is normalised via :func:`_normalize` before being stored.  The
-  normalised text length acts as a deterministic embedding.
-* Distances are computed as the absolute difference between the lengths of the
-  normalised texts.  The similarity threshold is honoured by converting the
-  ``SIM_THRESHOLD`` environment variable into a distance cut-off.
-* A very small collection API (`get`, `upsert`, `delete`, `update`, `query`) is
-  provided so that tests can introspect and manipulate the cache in a similar
-  fashion to a real ChromaDB collection.
-
-This is by no means a drop‑in replacement for the original vector store but it
-keeps the public surface area intact and, crucially, avoids importing optional
-third‑party libraries during test runs.
+This module wraps a minimal subset of the original project's vector store
+interface. It uses a chromadb.PersistentClient with a very small embedding
+function that simply encodes the length of the normalized text. This keeps
+behavior deterministic for tests while exercising the real Chroma collection
+APIs.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import os
 import time
 import unicodedata
 import uuid
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
+import chromadb
 
 # ---------------------------------------------------------------------------
-# Normalisation helpers
+# Normalization helpers
 # ---------------------------------------------------------------------------
-
 
 def _normalize(text: str) -> Tuple[str, str]:
-    """Return ``(hash, normalized_text)`` for ``text``."""
-
+    """Return (hash, normalized_text) for text."""
     norm = unicodedata.normalize("NFKD", text)
     replacements = {
         "’": "'",
@@ -59,192 +41,99 @@ def _normalize(text: str) -> Tuple[str, str]:
 
 
 def _normalized_hash(prompt: str) -> str:
+    """Hash of normalized prompt."""
     return _normalize(prompt)[0]
 
-
 # ---------------------------------------------------------------------------
-# Minimal collection used to back the cache
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class _CacheRecord:
-    doc: str
-    answer: str
-    timestamp: float
-    feedback: Optional[str] = None
-
-
-class _Collection:
-    """In-memory approximation of a ChromaDB collection."""
-
-    def __init__(self) -> None:
-        self._store: Dict[str, _CacheRecord] = {}
-
-    # Chroma style helpers -------------------------------------------------
-    def upsert(self, ids: List[str], documents: List[str], metadatas: List[Dict]):
-        for i, doc, meta in zip(ids, documents, metadatas):
-            self._store[i] = _CacheRecord(
-                doc=doc,
-                answer=meta.get("answer", ""),
-                timestamp=meta.get("timestamp", time.time()),
-                feedback=meta.get("feedback"),
-            )
-
-    def get(self, ids: List[str] | None = None, include: List[str] | None = None):
-        if ids is None:
-            ids = list(self._store.keys())
-        metas, docs = [], []
-        for i in ids:
-            rec = self._store.get(i)
-            metas.append(
-                {
-                    "answer": rec.answer,
-                    "timestamp": rec.timestamp,
-                    "feedback": rec.feedback,
-                }
-                if rec and (not include or "metadatas" in include)
-                else None
-            )
-            docs.append(
-                rec.doc if rec and (not include or "documents" in include) else None
-            )
-        out = {"ids": ids}
-        if not include or "metadatas" in include:
-            out["metadatas"] = metas
-        if not include or "documents" in include:
-            out["documents"] = docs
-        return out
-
-    def delete(self, ids: List[str] | None = None):
-        if not ids:
-            return
-        for i in ids:
-            self._store.pop(i, None)
-
-    def update(self, ids: List[str], metadatas: List[Dict]):
-        for i, meta in zip(ids, metadatas):
-            rec = self._store.get(i)
-            if rec:
-                for k, v in meta.items():
-                    setattr(rec, k, v)
-
-    def query(self, query_texts: List[str], n_results: int = 1):
-        _, q_norm = _normalize(query_texts[0])
-        q_len = len(q_norm)
-        best: List[Tuple[float, str, _CacheRecord]] = []
-        for cache_id, rec in self._store.items():
-            dist = abs(len(rec.doc) - q_len)
-            best.append((dist, cache_id, rec))
-        best.sort(key=lambda x: x[0])
-        ids = [cid for _, cid, _ in best[:n_results]]
-        metas = [
-            {
-                "answer": rec.answer,
-                "timestamp": rec.timestamp,
-                "feedback": rec.feedback,
-            }
-            for _, _, rec in best[:n_results]
-        ]
-        docs = [rec.doc for _, _, rec in best[:n_results]]
-        dists = [dist for dist, _, _ in best[:n_results]]
-        return {
-            "ids": [ids],
-            "metadatas": [metas],
-            "documents": [docs],
-            "distances": [dists],
-        }
-
-
-# ---------------------------------------------------------------------------
-# Vector store implementation
+# Embedding helper
 # ---------------------------------------------------------------------------
 
+class _LengthEmbedder:
+    """Very small embedding function based on text length."""
+
+    def __call__(self, texts: Sequence[str]) -> List[List[float]]:
+        return [[float(len(_normalize(text)[1]))] for text in texts]
+
+# ---------------------------------------------------------------------------
+# Vector store interface
+# ---------------------------------------------------------------------------
 
 class VectorStore:
-    """Abstract base class kept for compatibility."""
+    """Abstract base class for vector stores."""
 
-    def add_user_memory(
-        self, user_id: str, memory: str
-    ) -> str:  # pragma: no cover - stub
+    def add_user_memory(self, user_id: str, memory: str) -> str:
         raise NotImplementedError
 
-    def query_user_memories(
-        self, user_id: str, prompt: str, k: int = 5
-    ) -> List[str]:  # pragma: no cover - stub
+    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
         raise NotImplementedError
 
-    def cache_answer(
-        self, cache_id: str, prompt: str, answer: str
-    ) -> None:  # pragma: no cover - stub
+    def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
         raise NotImplementedError
 
-    def lookup_cached_answer(
-        self, prompt: str, ttl_seconds: int = 86400
-    ) -> Optional[str]:  # pragma: no cover - stub
+    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
         raise NotImplementedError
 
-    def record_feedback(
-        self, prompt: str, feedback: str
-    ) -> None:  # pragma: no cover - stub
+    def record_feedback(self, prompt: str, feedback: str) -> None:
         raise NotImplementedError
 
+# ---------------------------------------------------------------------------
+# Chroma-based implementation
+# ---------------------------------------------------------------------------
 
 class ChromaVectorStore(VectorStore):
-    """In-memory stand‑in for the original Chroma based implementation."""
+    """Chroma-based implementation for user memories and QA caching."""
 
     def __init__(self) -> None:
         self._sim_threshold = float(os.getenv("SIM_THRESHOLD", "0.90"))
         self._dist_cutoff = 1.0 - self._sim_threshold
-        self._cache = _Collection()
-        self._user_memories: Dict[str, List[Tuple[str, str, float]]] = {}
-        self._cache_max = int(os.getenv("QA_CACHE_MAX", "1024"))
-        self._cache_ttl = int(os.getenv("QA_CACHE_TTL", "86400"))
+        path = os.getenv("CHROMA_PATH", ".chromadb")
+        self._client = chromadb.PersistentClient(path=path)
+        self._embedder = _LengthEmbedder()
+        self._cache = self._client.get_or_create_collection(
+            "qa_cache", embedding_function=self._embedder
+        )
+        self._user_memories = self._client.get_or_create_collection(
+            "user_memories", embedding_function=self._embedder
+        )
 
-    # User memory --------------------------------------------------------
     def add_user_memory(self, user_id: str, memory: str) -> str:
         mem_id = str(uuid.uuid4())
-        bucket = self._user_memories.setdefault(user_id, [])
-        bucket.append((mem_id, memory, time.time()))
+        ts = time.time()
+        self._user_memories.upsert(
+            ids=[mem_id],
+            documents=[memory],
+            metadatas=[{"user_id": user_id, "ts": ts}],
+        )
         return mem_id
 
-    def query_user_memories(
-        self, user_id: str, prompt: str, k: int | None = None
-    ) -> List[str]:
-        threshold = float(os.getenv("SIM_THRESHOLD", str(self._sim_threshold)))
-        cutoff = 1.0 - threshold
-        _, prompt_l = _normalize(prompt)
-        results: List[Tuple[float, float, str]] = []
-        for _, text, ts in self._user_memories.get(user_id, []):
-            _, norm_text = _normalize(text)
-            dist = abs(len(norm_text) - len(prompt_l))
-            if dist > cutoff:
+    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
+        top_k = k
+        results = self._user_memories.query(
+            query_texts=[prompt],
+            where={"user_id": user_id},
+            n_results=top_k,
+            include=["documents", "distances", "metadatas"],
+        )
+        docs = results.get("documents", [[]])[0]
+        dists = results.get("distances", [[]])[0]
+        metas = results.get("metadatas", [[]])[0]
+        items: List[Tuple[float, float, str]] = []
+        for doc, dist, meta in zip(docs, dists, metas):
+            if not doc:
                 continue
-            results.append((dist, -ts, text))
-        results.sort()
-        top = k if k is not None else int(os.getenv("MEM_TOP_K", "5"))
-        return [text for _, _, text in results[:top]]
+            if float(dist) > self._dist_cutoff:
+                continue
+            ts = float(meta.get("ts", 0))
+            items.append((float(dist), -ts, doc))
+        items.sort()
+        return [doc for _, _, doc in items[:top_k]]
 
-    # QA cache -----------------------------------------------------------
     @property
-    def qa_cache(self) -> _Collection:  # pragma: no cover - simple proxy
+    def qa_cache(self):
         return self._cache
 
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
-        if bool(os.getenv("DISABLE_QA_CACHE")):
-            return
         now = time.time()
-        # purge expired entries
-        if self._cache_ttl:
-            for cid, rec in list(self._cache._store.items()):
-                if now - rec.timestamp > self._cache_ttl:
-                    self._cache.delete(ids=[cid])
-        # enforce max size
-        if self._cache_max and len(self._cache._store) >= self._cache_max:
-            oldest_id = min(self._cache._store.items(), key=lambda kv: kv[1].timestamp)[
-                0
-            ]
-            self._cache.delete(ids=[oldest_id])
         _, norm = _normalize(prompt)
         self._cache.upsert(
             ids=[cache_id],
@@ -252,249 +141,39 @@ class ChromaVectorStore(VectorStore):
             metadatas=[{"answer": answer, "timestamp": now, "feedback": None}],
         )
 
-    def lookup_cached_answer(
-        self, prompt: str, ttl_seconds: int = 86400
-    ) -> Optional[str]:
-        if bool(os.getenv("DISABLE_QA_CACHE")):
+    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
+        results = self._cache.query(
+            query_texts=[prompt],
+            n_results=1,
+            include=["metadatas", "distances", "ids"],
+        )
+        ids = results.get("ids", [[]])[0]
+        if not ids:
             return None
-        _, norm = _normalize(prompt)
-        q_len = len(norm)
-        best_id = None
-        best_rec = None
-        best_dist = None
-        for cid, rec in self._cache._store.items():
-            dist = abs(len(rec.doc) - q_len)
-            if dist > self._dist_cutoff:
-                continue
-            if best_dist is None or dist < best_dist:
-                best_id, best_rec, best_dist = cid, rec, dist
-        if not best_rec:
+        dist = float(results.get("distances", [[]])[0][0])
+        meta = (results.get("metadatas", [[]])[0][0] or {})
+        if dist > self._dist_cutoff:
             return None
-        if best_rec.feedback == "down" or (
-            ttl_seconds and time.time() - best_rec.timestamp > ttl_seconds
-        ):
-            self._cache.delete(ids=[best_id])
+        ts = float(meta.get("timestamp", 0))
+        if ttl_seconds and time.time() - ts > ttl_seconds:
+            self._cache.delete(ids=[ids[0]])
             return None
-        return best_rec.answer
+        if meta.get("feedback") == "down":
+            self._cache.delete(ids=[ids[0]])
+            return None
+        return meta.get("answer")
 
     def record_feedback(self, prompt: str, feedback: str) -> None:
-        if bool(os.getenv("DISABLE_QA_CACHE")):
-            return
         cache_id = _normalized_hash(prompt)
-        rec = self._cache._store.get(cache_id)
-        if not rec:
-            return
-        rec.feedback = feedback
+        self._cache.update(ids=[cache_id], metadatas=[{"feedback": feedback}])
         if feedback == "down":
             self._cache.delete(ids=[cache_id])
 
-
-# PgVectorStore ----------------------------------------------------------
-
-
-class _PGCache:
-    """Minimal wrapper around a PostgreSQL QA cache table."""
-
-    def __init__(self, conn):
-        self._conn = conn
-
-    def get(self, ids: List[str] | None = None, include: List[str] | None = None):
-        with self._conn.cursor() as cur:
-            if ids:
-                cur.execute(
-                    "SELECT id, doc, answer, ts, feedback FROM qa_cache WHERE id = ANY(%s)",
-                    (ids,),
-                )
-            else:
-                cur.execute("SELECT id, doc, answer, ts, feedback FROM qa_cache")
-            rows = cur.fetchall()
-        out: Dict[str, List] = {"ids": [r[0] for r in rows]}
-        if not include or "documents" in include:
-            out["documents"] = [r[1] for r in rows]
-        if not include or "metadatas" in include:
-            out["metadatas"] = [
-                {"answer": r[2], "timestamp": r[3], "feedback": r[4]} for r in rows
-            ]
-        return out
-
-    def delete(self, ids: List[str] | None = None):
-        if not ids:
-            return
-        with self._conn.cursor() as cur:
-            cur.execute("DELETE FROM qa_cache WHERE id = ANY(%s)", (ids,))
-            self._conn.commit()
-
-
-class PgVectorStore(VectorStore):  # pragma: no cover - uses real database
-    """Vector store backed by PostgreSQL with the pgvector extension."""
-
-    def __init__(self) -> None:
-        import psycopg
-        from pgvector.psycopg import register_vector
-
-        dsn = (
-            os.getenv("PGVECTOR_URL")
-            or os.getenv("DATABASE_URL")
-            or "postgresql://localhost/postgres"
-        )
-        self._conn = psycopg.connect(dsn)
-        register_vector(self._conn)
-
-        self._sim_threshold = float(os.getenv("SIM_THRESHOLD", "0.90"))
-        self._dist_cutoff = 1.0 - self._sim_threshold
-
-        with self._conn.cursor() as cur:
-            cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS user_memories (
-                    id UUID PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    memory TEXT NOT NULL,
-                    embedding vector(1) NOT NULL,
-                    ts DOUBLE PRECISION NOT NULL
-                )
-                """
-            )
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS qa_cache (
-                    id TEXT PRIMARY KEY,
-                    doc TEXT NOT NULL,
-                    embedding vector(1) NOT NULL,
-                    answer TEXT NOT NULL,
-                    ts DOUBLE PRECISION NOT NULL,
-                    feedback TEXT
-                )
-                """
-            )
-            self._conn.commit()
-
-        self._cache = _PGCache(self._conn)
-
-    # User memory ----------------------------------------------------
-    def add_user_memory(self, user_id: str, memory: str) -> str:
-        mem_id = str(uuid.uuid4())
-        _, norm = _normalize(memory)
-        emb = [len(norm)]
-        with self._conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO user_memories (id, user_id, memory, embedding, ts) VALUES (%s, %s, %s, %s, %s)",
-                (mem_id, user_id, memory, emb, time.time()),
-            )
-            self._conn.commit()
-        return mem_id
-
-    def query_user_memories(
-        self, user_id: str, prompt: str, k: int | None = None
-    ) -> List[str]:
-        _, norm = _normalize(prompt)
-        emb = [len(norm)]
-        top_k = k if k is not None else int(os.getenv("MEM_TOP_K", "5"))
-        cutoff = 1.0 - float(os.getenv("SIM_THRESHOLD", str(self._sim_threshold)))
-        with self._conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT memory, embedding <-> %s AS dist, ts
-                FROM user_memories
-                WHERE user_id = %s
-                ORDER BY dist ASC, ts DESC
-                LIMIT %s
-                """,
-                (emb, user_id, top_k),
-            )
-            rows = cur.fetchall()
-        results: List[str] = []
-        for mem, dist, _ in rows:
-            if float(dist) <= cutoff:
-                results.append(mem)
-        return results
-
-    # QA cache -------------------------------------------------------
-    @property
-    def qa_cache(self) -> _PGCache:  # pragma: no cover - simple proxy
-        return self._cache
-
-    def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
-        if bool(os.getenv("DISABLE_QA_CACHE")):
-            return
-        _, norm = _normalize(prompt)
-        emb = [len(norm)]
-        with self._conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO qa_cache (id, doc, embedding, answer, ts, feedback)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (id) DO UPDATE
-                    SET doc = EXCLUDED.doc,
-                        embedding = EXCLUDED.embedding,
-                        answer = EXCLUDED.answer,
-                        ts = EXCLUDED.ts,
-                        feedback = NULL
-                """,
-                (cache_id, norm, emb, answer, time.time(), None),
-            )
-            self._conn.commit()
-
-    def lookup_cached_answer(
-        self, prompt: str, ttl_seconds: int = 86400
-    ) -> Optional[str]:
-        if bool(os.getenv("DISABLE_QA_CACHE")):
-            return None
-        _, norm = _normalize(prompt)
-        emb = [len(norm)]
-        with self._conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, answer, ts, feedback, embedding <-> %s AS dist
-                FROM qa_cache
-                ORDER BY dist ASC
-                LIMIT 1
-                """,
-                (emb,),
-            )
-            row = cur.fetchone()
-        if not row:
-            return None
-        cache_id, answer, ts, feedback, dist = row
-        if (
-            float(dist) > self._dist_cutoff
-            or feedback == "down"
-            or (ttl_seconds and time.time() - float(ts) > ttl_seconds)
-        ):
-            with self._conn.cursor() as cur:
-                cur.execute("DELETE FROM qa_cache WHERE id = %s", (cache_id,))
-                self._conn.commit()
-            return None
-        return answer
-
-    def record_feedback(self, prompt: str, feedback: str) -> None:
-        if bool(os.getenv("DISABLE_QA_CACHE")):
-            return
-        cache_id = _normalized_hash(prompt)
-        with self._conn.cursor() as cur:
-            cur.execute(
-                "UPDATE qa_cache SET feedback = %s WHERE id = %s",
-                (feedback, cache_id),
-            )
-            if feedback == "down":
-                cur.execute("DELETE FROM qa_cache WHERE id = %s", (cache_id,))
-            self._conn.commit()
-
-
 # ---------------------------------------------------------------------------
-# Module level convenience API
+# Module-level API
 # ---------------------------------------------------------------------------
 
-
-def _get_store() -> VectorStore:
-    backend = os.getenv("VECTOR_STORE", "chroma").lower()
-    if backend == "pgvector":
-        return PgVectorStore()
-    return ChromaVectorStore()
-
-
-_store = _get_store()
+_store = ChromaVectorStore()
 
 
 def add_user_memory(user_id: str, memory: str) -> str:
@@ -506,36 +185,19 @@ def query_user_memories(user_id: str, prompt: str, k: int = 5) -> List[str]:
 
 
 def cache_answer(prompt: str, answer: str, cache_id: str | None = None) -> None:
-    """Cache an answer for a prompt.
-
-    The preferred usage specifies ``prompt`` and ``answer`` as named arguments
-    with an optional ``cache_id`` override. ``cache_id`` defaults to the
-    normalised hash of ``prompt``.
-    """
-
     if cache_id is None:
         cache_id = _normalized_hash(prompt)
     _store.cache_answer(cache_id, prompt, answer)
 
 
 def cache_answer_legacy(*args) -> None:
-    """Backward compatible wrapper for the previous positional API.
-
-    Supports the following call styles:
-
-    ``cache_answer_legacy(prompt, answer)`` – uses the normalised hash as the
-    cache key.
-    ``cache_answer_legacy(cache_id, prompt, answer)`` – explicitly specify the
-    key.
-    """
-
     if len(args) == 2:
         prompt, answer = args
         cache_answer(prompt=prompt, answer=answer)
     elif len(args) == 3:
         cache_id, prompt, answer = args
         cache_answer(prompt=prompt, answer=answer, cache_id=cache_id)
-    else:  # pragma: no cover - defensive
+    else:
         raise TypeError("cache_answer expects 2 or 3 arguments")
 
 
@@ -551,12 +213,6 @@ def invalidate_cache(prompt: str) -> None:
     cache_id = _normalized_hash(prompt)
     _store.qa_cache.delete(ids=[cache_id])
 
-
-# Expose the underlying collection for tests
-qa_cache = _store.qa_cache
-_qa_cache = qa_cache
-
-
 __all__ = [
     "add_user_memory",
     "query_user_memories",
@@ -567,5 +223,4 @@ __all__ = [
     "invalidate_cache",
     "VectorStore",
     "ChromaVectorStore",
-    "PgVectorStore",
 ]
