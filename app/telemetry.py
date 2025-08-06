@@ -36,6 +36,8 @@ class LogRecord(BaseModel):
     # routing / skills
     matched_skill: Optional[str] = None
     match_confidence: Optional[float] = None
+    intent: Optional[str] = None
+    intent_confidence: Optional[float] = None
 
     # llm usage
     model_name: Optional[str] = None
