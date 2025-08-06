@@ -278,15 +278,15 @@ async def _call_gpt_override(
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
 ):
     built, pt = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
-    text, pt, ct, unit_price = await ask_gpt(built, model, SYSTEM_PROMPT)
-    if stream_cb:
-        await stream_cb(text)
+    text, pt, ct, cost = await ask_gpt(
+        built, model, SYSTEM_PROMPT, stream=bool(stream_cb), on_token=stream_cb
+    )
     if rec:
         rec.engine_used = "gpt"
         rec.model_name = model
         rec.prompt_tokens = pt
         rec.completion_tokens = ct
-        rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
+        rec.cost_usd = cost
         rec.response = text
     await append_history(prompt, "gpt", text)
     await record("gpt", source="override")
@@ -344,15 +344,19 @@ async def _call_gpt(
     ptoks: int,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
 ):
-    text, pt, ct, unit_price = await ask_gpt(built_prompt, model, SYSTEM_PROMPT)
-    if stream_cb:
-        await stream_cb(text)
+    text, pt, ct, cost = await ask_gpt(
+        built_prompt,
+        model,
+        SYSTEM_PROMPT,
+        stream=bool(stream_cb),
+        on_token=stream_cb,
+    )
     if rec:
         rec.engine_used = "gpt"
         rec.model_name = model
         rec.prompt_tokens = pt
         rec.completion_tokens = ct
-        rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
+        rec.cost_usd = cost
         rec.response = text
     memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
