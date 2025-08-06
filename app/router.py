@@ -292,7 +292,7 @@ async def _call_gpt_override(
     await record("gpt", source="override")
     memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
-    cache_answer(norm_prompt, text)
+    cache_answer(prompt=norm_prompt, answer=text)
     return text
 
 
@@ -328,7 +328,7 @@ async def _call_llama_override(
         prompt, result_text, session_id=session_id, user_id=user_id
     )
     add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
-    cache_answer(norm_prompt, result_text)
+    cache_answer(prompt=norm_prompt, answer=result_text)
     return result_text
 
 
@@ -356,7 +356,7 @@ async def _call_gpt(
         rec.response = text
     memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
-    cache_answer(norm_prompt, text)
+    cache_answer(prompt=norm_prompt, answer=text)
     return await _finalise("gpt", prompt, text, rec)
 
 
@@ -392,7 +392,7 @@ async def _call_llama(
         prompt, result_text, session_id=session_id, user_id=user_id
     )
     add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
-    cache_answer(norm_prompt, result_text)
+    cache_answer(prompt=norm_prompt, answer=result_text)
     return await _finalise("llama", prompt, result_text, rec)
 
 

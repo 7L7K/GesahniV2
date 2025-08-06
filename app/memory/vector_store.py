@@ -341,23 +341,38 @@ def query_user_memories(user_id: str, prompt: str, k: int = 5) -> List[str]:
     return _store.query_user_memories(user_id, prompt, k)
 
 
-def cache_answer(*args) -> None:
+def cache_answer(prompt: str, answer: str, cache_id: str | None = None) -> None:
     """Cache an answer for a prompt.
 
-    Supports two call styles:
+    The preferred usage specifies ``prompt`` and ``answer`` as named arguments
+    with an optional ``cache_id`` override. ``cache_id`` defaults to the
+    normalised hash of ``prompt``.
+    """
 
-    ``cache_answer(prompt, answer)`` – uses the normalised hash as the cache key.
-    ``cache_answer(cache_id, prompt, answer)`` – explicitly specify the key.
+    if cache_id is None:
+        cache_id = _normalized_hash(prompt)
+    _store.cache_answer(cache_id, prompt, answer)
+
+
+def cache_answer_legacy(*args) -> None:
+    """Backward compatible wrapper for the previous positional API.
+
+    Supports the following call styles:
+
+    ``cache_answer_legacy(prompt, answer)`` – uses the normalised hash as the
+    cache key.
+    ``cache_answer_legacy(cache_id, prompt, answer)`` – explicitly specify the
+    key.
     """
 
     if len(args) == 2:
         prompt, answer = args
-        cache_id = _normalized_hash(prompt)
+        cache_answer(prompt=prompt, answer=answer)
     elif len(args) == 3:
         cache_id, prompt, answer = args
+        cache_answer(prompt=prompt, answer=answer, cache_id=cache_id)
     else:  # pragma: no cover - defensive
         raise TypeError("cache_answer expects 2 or 3 arguments")
-    _store.cache_answer(cache_id, prompt, answer)
 
 
 def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
@@ -382,6 +397,7 @@ __all__ = [
     "add_user_memory",
     "query_user_memories",
     "cache_answer",
+    "cache_answer_legacy",
     "lookup_cached_answer",
     "record_feedback",
     "invalidate_cache",
