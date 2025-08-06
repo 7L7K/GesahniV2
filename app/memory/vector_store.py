@@ -1,37 +1,22 @@
-"""Lightweight in-memory vector store used for tests.
+"""Chroma-backed vector store for user memories and QA caching.
 
-The original project relied on `chromadb` for persistence and similarity
-search.  Shipping that dependency in the execution environment would be heavy
-and unnecessary for the unit tests bundled with this kata.  This module
-implements a tiny, self-contained replacement that mimics just enough of the
-original interface for the tests to exercise the behaviour of the higher level
-code.
-
-The implementation is intentionally simple:
-
-* Text is normalised via :func:`_normalize` before being stored.  The
-  normalised text length acts as a deterministic embedding.
-* Distances are computed as the absolute difference between the lengths of the
-  normalised texts.  The similarity threshold is honoured by converting the
-  ``SIM_THRESHOLD`` environment variable into a distance cut-off.
-* A very small collection API (`get`, `upsert`, `delete`, `update`, `query`) is
-  provided so that tests can introspect and manipulate the cache in a similar
-  fashion to a real ChromaDB collection.
-
-This is by no means a drop‑in replacement for the original vector store but it
-keeps the public surface area intact and, crucially, avoids importing optional
-third‑party libraries during test runs.
+This module wraps a minimal subset of the original project's vector store
+interface.  It uses a :class:`chromadb.PersistentClient` with a very small
+embedding function that simply encodes the length of the normalised text.
+This keeps behaviour deterministic for tests while exercising the real
+Chroma collection APIs.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import os
 import time
 import unicodedata
 import uuid
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
+
+import chromadb
 
 
 # ---------------------------------------------------------------------------
@@ -63,101 +48,23 @@ def _normalized_hash(prompt: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Minimal collection used to back the cache
+# Embedding helper
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class _CacheRecord:
-    doc: str
-    answer: str
-    timestamp: float
-    feedback: Optional[str] = None
+class _LengthEmbedder:
+    """Very small embedding function based on text length."""
 
-
-class _Collection:
-    """In-memory approximation of a ChromaDB collection."""
-
-    def __init__(self) -> None:
-        self._store: Dict[str, _CacheRecord] = {}
-
-    # Chroma style helpers -------------------------------------------------
-    def upsert(self, ids: List[str], documents: List[str], metadatas: List[Dict]):
-        for i, doc, meta in zip(ids, documents, metadatas):
-            self._store[i] = _CacheRecord(
-                doc=doc,
-                answer=meta.get("answer", ""),
-                timestamp=meta.get("timestamp", time.time()),
-                feedback=meta.get("feedback"),
-            )
-
-    def get(self, ids: List[str] | None = None, include: List[str] | None = None):
-        if ids is None:
-            ids = list(self._store.keys())
-        metas, docs = [], []
-        for i in ids:
-            rec = self._store.get(i)
-            metas.append(
-                {
-                    "answer": rec.answer,
-                    "timestamp": rec.timestamp,
-                    "feedback": rec.feedback,
-                }
-                if rec and (not include or "metadatas" in include)
-                else None
-            )
-            docs.append(
-                rec.doc if rec and (not include or "documents" in include) else None
-            )
-        out = {"ids": ids}
-        if not include or "metadatas" in include:
-            out["metadatas"] = metas
-        if not include or "documents" in include:
-            out["documents"] = docs
+    def __call__(self, texts: Sequence[str]) -> List[List[float]]:
+        out: List[List[float]] = []
+        for text in texts:
+            _, norm = _normalize(text)
+            out.append([float(len(norm))])
         return out
 
-    def delete(self, ids: List[str] | None = None):
-        if not ids:
-            return
-        for i in ids:
-            self._store.pop(i, None)
-
-    def update(self, ids: List[str], metadatas: List[Dict]):
-        for i, meta in zip(ids, metadatas):
-            rec = self._store.get(i)
-            if rec:
-                for k, v in meta.items():
-                    setattr(rec, k, v)
-
-    def query(self, query_texts: List[str], n_results: int = 1):
-        _, q_norm = _normalize(query_texts[0])
-        q_len = len(q_norm)
-        best: List[Tuple[float, str, _CacheRecord]] = []
-        for cache_id, rec in self._store.items():
-            dist = abs(len(rec.doc) - q_len)
-            best.append((dist, cache_id, rec))
-        best.sort(key=lambda x: x[0])
-        ids = [cid for _, cid, _ in best[:n_results]]
-        metas = [
-            {
-                "answer": rec.answer,
-                "timestamp": rec.timestamp,
-                "feedback": rec.feedback,
-            }
-            for _, _, rec in best[:n_results]
-        ]
-        docs = [rec.doc for _, _, rec in best[:n_results]]
-        dists = [dist for dist, _, _ in best[:n_results]]
-        return {
-            "ids": [ids],
-            "metadatas": [metas],
-            "documents": [docs],
-            "distances": [dists],
-        }
-
 
 # ---------------------------------------------------------------------------
-# Vector store implementation
+# Vector store implementations
 # ---------------------------------------------------------------------------
 
 
@@ -191,19 +98,33 @@ class VectorStore:
 
 
 class ChromaVectorStore(VectorStore):
-    """In-memory stand‑in for the original Chroma based implementation."""
+    """Chroma based implementation used by the application."""
 
     def __init__(self) -> None:
         self._sim_threshold = float(os.getenv("SIM_THRESHOLD", "0.90"))
         self._dist_cutoff = 1.0 - self._sim_threshold
-        self._cache = _Collection()
-        self._user_memories: Dict[str, List[Tuple[str, str, float]]] = {}
+        path = os.getenv("CHROMA_PATH", ".chromadb")
+        self._client = chromadb.PersistentClient(path=path)
+        self._embedder = _LengthEmbedder()
+        self._cache = self._client.get_or_create_collection(
+            "qa_cache", embedding_function=self._embedder
+        )
+        self._user_memories = self._client.get_or_create_collection(
+            "user_memories", embedding_function=self._embedder
+        )
 
-    # User memory --------------------------------------------------------
+    # ------------------------------------------------------------------
+    # User memory operations
+    # ------------------------------------------------------------------
     def add_user_memory(self, user_id: str, memory: str) -> str:
         mem_id = str(uuid.uuid4())
-        bucket = self._user_memories.setdefault(user_id, [])
-        bucket.append((mem_id, memory, time.time()))
+        ts = time.time()
+        # Persist in Chroma collection
+        self._user_memories.upsert(
+            ids=[mem_id],
+            documents=[memory],
+            metadatas=[{"user_id": user_id, "ts": ts}],
+        )
         return mem_id
 
     def query_user_memories(
@@ -215,6 +136,7 @@ class ChromaVectorStore(VectorStore):
             top_k = k if k is not None else int(os.getenv("MEM_TOP_K", "5"))
             results = self._user_memories.query(
                 query_texts=[prompt],
+                where={"user_id": user_id},
                 n_results=top_k,
                 include=["documents", "distances", "metadatas"],
             )
@@ -232,21 +154,13 @@ class ChromaVectorStore(VectorStore):
             items.sort(key=lambda x: (x["dist"], -x["ts"]))
             return [it["doc"] for it in items[:top_k]]
 
-        _, prompt_l = _normalize(prompt)
-        results: List[Tuple[float, str]] = []
-        for _, text, ts in self._user_memories.get(user_id, []):
-            _, norm_text = _normalize(text)
-            dist = abs(len(norm_text) - len(prompt_l))
-            if dist > cutoff:
-                continue
-            results.append((dist, text))
-        results.sort(key=lambda x: x[0])
-        top = k if k is not None else int(os.getenv("MEM_TOP_K", "5"))
-        return [text for _, text in results[:top]]
+        return []
 
-    # QA cache -----------------------------------------------------------
+    # ------------------------------------------------------------------
+    # QA cache operations
+    # ------------------------------------------------------------------
     @property
-    def qa_cache(self) -> _Collection:  # pragma: no cover - simple proxy
+    def qa_cache(self):  # pragma: no cover - simple proxy
         return self._cache
 
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
@@ -264,39 +178,44 @@ class ChromaVectorStore(VectorStore):
     ) -> Optional[str]:
         if bool(os.getenv("DISABLE_QA_CACHE")):
             return None
-        _, norm = _normalize(prompt)
-        q_len = len(norm)
-        best_id = None
-        best_rec = None
-        best_dist = None
-        for cid, rec in self._cache._store.items():
-            dist = abs(len(rec.doc) - q_len)
-            if dist > self._dist_cutoff:
-                continue
-            if best_dist is None or dist < best_dist:
-                best_id, best_rec, best_dist = cid, rec, dist
-        if not best_rec:
+        results = self._cache.query(
+            query_texts=[prompt],
+            n_results=1,
+            include=["metadatas", "distances", "ids"],
+        )
+        ids = results.get("ids", [[]])[0]
+        if not ids:
             return None
-        if best_rec.feedback == "down" or (
-            ttl_seconds and time.time() - best_rec.timestamp > ttl_seconds
-        ):
-            self._cache.delete(ids=[best_id])
+        dists = results.get("distances", [[]])[0]
+        metas = results.get("metadatas", [[]])[0]
+        dist = float(dists[0]) if dists else None
+        meta = metas[0] if metas else {}
+        if dist is None or dist > self._dist_cutoff:
             return None
-        return best_rec.answer
+        answer = (meta or {}).get("answer")
+        ts = float((meta or {}).get("timestamp", 0))
+        feedback = (meta or {}).get("feedback")
+        cache_id = ids[0]
+        if feedback == "down" or (ttl_seconds and time.time() - ts > ttl_seconds):
+            self._cache.delete(ids=[cache_id])
+            return None
+        return answer
 
     def record_feedback(self, prompt: str, feedback: str) -> None:
         if bool(os.getenv("DISABLE_QA_CACHE")):
             return
         cache_id = _normalized_hash(prompt)
-        rec = self._cache._store.get(cache_id)
-        if not rec:
+        metas = self._cache.get(ids=[cache_id], include=["metadatas"]).get(
+            "metadatas", [None]
+        )
+        meta = metas[0]
+        if meta is None:
             return
-        rec.feedback = feedback
+        meta["feedback"] = feedback
         if feedback == "down":
             self._cache.delete(ids=[cache_id])
-
-
-# PgVectorStore remains as a stub for compatibility ---------------------
+        else:
+            self._cache.update(ids=[cache_id], metadatas=[meta])
 
 
 class PgVectorStore(VectorStore):  # pragma: no cover - stub
