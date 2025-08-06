@@ -1,24 +1,6 @@
-"""Prompt‑routing layer for GesahniV2.
-
-Responsible for:
-* Intent detection & small‑talk short‑circuit
-* Built‑in skill execution
-* Home‑Assistant command handling
-* Cache lookup / storage
-* Delegating to GPT or LLaMA back‑ends (with override support)
-
-Changes in this revision
------------------------
-1. **Safer model‑override logic** – key off `.startswith("gpt")` / `.startswith("llama")` and allow‑lists.
-2. **Separate allow‑lists** – `ALLOWED_GPT_MODELS` and `ALLOWED_LLAMA_MODELS`.
-3. **Early health‑check for LLaMA** – explicit 503 if unhealthy.
-4. **Cleaner debug flag parsing** – boolean `debug_route`.
-5. **Extra logging breadcrumbs** for easier tracing.
-"""
-
 import logging
 import os
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from fastapi import Depends, HTTPException, status
 
@@ -56,7 +38,6 @@ _SMALLTALK = SmalltalkSkill()
 # Helpers
 # ---------------------------------------------------------------------------
 
-
 def _low_conf(resp: str) -> bool:
     import re
 
@@ -66,7 +47,6 @@ def _low_conf(resp: str) -> bool:
         return True
     return False
 
-
 # ---------------------------------------------------------------------------
 # Main entry‑point
 # ---------------------------------------------------------------------------
@@ -74,6 +54,7 @@ async def route_prompt(
     prompt: str,
     model_override: str | None = None,
     user_id: str = Depends(get_current_user_id),
+    stream_cb: Callable[[str], Awaitable[None]] | None = None,
 ) -> Any:
     rec = log_record_var.get()
     norm_prompt = prompt.lower().strip()
@@ -117,7 +98,7 @@ async def route_prompt(
             if debug_route:
                 return _dry("gpt", mv)
             return await _call_gpt_override(
-                mv, prompt, norm_prompt, session_id, user_id, rec
+                mv, prompt, norm_prompt, session_id, user_id, rec, stream_cb
             )
         # LLaMA override
         if mv.startswith("llama"):
@@ -131,7 +112,7 @@ async def route_prompt(
             if debug_route:
                 return _dry("llama", mv)
             return await _call_llama_override(
-                mv, prompt, norm_prompt, session_id, user_id, rec
+                mv, prompt, norm_prompt, session_id, user_id, rec, stream_cb
             )
         raise HTTPException(
             status_code=400, detail=f"Unknown or disallowed model '{mv}'"
@@ -177,6 +158,7 @@ async def route_prompt(
         if debug_route:
             return _dry("gpt", model_name)
         return await _call_gpt(
+            prompt=prompt,
             built_prompt=built_prompt,
             model=model_name,
             rec=rec,
@@ -184,13 +166,14 @@ async def route_prompt(
             session_id=session_id,
             user_id=user_id,
             ptoks=ptoks,
-            prompt=prompt,
+            stream_cb=stream_cb,
         )
 
     if engine == "llama" and LLAMA_HEALTHY:
         if debug_route:
             return _dry("llama", model_name)
         return await _call_llama(
+            prompt=prompt,
             built_prompt=built_prompt,
             model=model_name,
             rec=rec,
@@ -198,13 +181,14 @@ async def route_prompt(
             session_id=session_id,
             user_id=user_id,
             ptoks=ptoks,
-            prompt=prompt,
+            stream_cb=stream_cb,
         )
 
     # Fallback GPT-4o
     if debug_route:
         return _dry("gpt", "gpt-4o")
     return await _call_gpt(
+        prompt=prompt,
         built_prompt=built_prompt,
         model="gpt-4o",
         rec=rec,
@@ -212,133 +196,25 @@ async def route_prompt(
         session_id=session_id,
         user_id=user_id,
         ptoks=ptoks,
-        prompt=prompt,
+        stream_cb=stream_cb,
     )
-
 
 # -------------------------------
 # Override and helper routines
 # -------------------------------
-
-
-async def _finalise(
-    engine: str,
-    prompt: str,
-    response: str,
+async def _call_gpt_override(
+    model,
+    prompt,
+    norm_prompt,
+    session_id,
+    user_id,
     rec,
-    *,
-    norm_prompt: str | None = None,
-    session_id: str | None = None,
-    user_id: str | None = None,
-    fallback: bool = False,
+    stream_cb: Callable[[str], Awaitable[None]] | None = None,
 ):
-    """Common bookkeeping after producing a response."""
-    if rec:
-        rec.engine_used = rec.engine_used or engine
-        rec.response = response
-        session_id = session_id or rec.session_id or "default"
-        user_id = user_id or rec.user_id or "anon"
-    else:
-        session_id = session_id or "default"
-        user_id = user_id or "anon"
-    norm = norm_prompt or prompt.lower().strip()
-    await append_history(prompt, engine, response)
-    metric_engine = engine if engine in {"gpt", "llama"} else "done"
-    await record(metric_engine, fallback=fallback, source=engine)
-    memgpt.store_interaction(prompt, response, session_id=session_id, user_id=user_id)
-    add_user_memory(user_id, f"Q: {prompt}\nA: {response}")
-    cache_answer(norm, response)
-    return response
-
-
-async def _call_gpt(
-    *,
-    built_prompt: str,
-    model: str,
-    rec,
-    norm_prompt: str,
-    session_id: str,
-    user_id: str,
-    ptoks: int,
-    prompt: str,
-    fallback: bool = False,
-):
-    text, pt, ct, unit_price = await ask_gpt(built_prompt, model, SYSTEM_PROMPT)
-    if rec:
-        rec.engine_used = "gpt"
-        rec.model_name = model
-        rec.prompt_tokens = pt
-        rec.completion_tokens = ct
-        rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
-        rec.response = text
-    return await _finalise(
-        "gpt",
-        prompt,
-        text,
-        rec,
-        norm_prompt=norm_prompt,
-        session_id=session_id,
-        user_id=user_id,
-        fallback=fallback,
-    )
-
-
-async def _call_llama(
-    *,
-    built_prompt: str,
-    model: str,
-    rec,
-    norm_prompt: str,
-    session_id: str,
-    user_id: str,
-    ptoks: int,
-    prompt: str,
-):
-    result = await ask_llama(built_prompt, model)
-    if isinstance(result, dict) and "error" in result:
-        return await _call_gpt(
-            built_prompt=built_prompt,
-            model="gpt-4o",
-            rec=rec,
-            norm_prompt=norm_prompt,
-            session_id=session_id,
-            user_id=user_id,
-            ptoks=ptoks,
-            prompt=prompt,
-            fallback=True,
-        )
-    result_text = str(result).strip()
-    if not result_text or _low_conf(result_text):
-        return await _call_gpt(
-            built_prompt=built_prompt,
-            model="gpt-4o",
-            rec=rec,
-            norm_prompt=norm_prompt,
-            session_id=session_id,
-            user_id=user_id,
-            ptoks=ptoks,
-            prompt=prompt,
-            fallback=True,
-        )
-    if rec:
-        rec.engine_used = "llama"
-        rec.model_name = model
-        rec.prompt_tokens = ptoks
-        rec.response = result_text
-    return await _finalise(
-        "llama",
-        prompt,
-        result_text,
-        rec,
-        norm_prompt=norm_prompt,
-        session_id=session_id,
-        user_id=user_id,
-    )
-
-
-async def _call_gpt_override(model, prompt, norm_prompt, session_id, user_id, rec):
     built, pt = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
     text, pt, ct, unit_price = await ask_gpt(built, model, SYSTEM_PROMPT)
+    if stream_cb:
+        await stream_cb(text)
     if rec:
         rec.engine_used = "gpt"
         rec.model_name = model
@@ -353,13 +229,25 @@ async def _call_gpt_override(model, prompt, norm_prompt, session_id, user_id, re
     cache_answer(norm_prompt, text)
     return text
 
-
-async def _call_llama_override(model, prompt, norm_prompt, session_id, user_id, rec):
+async def _call_llama_override(
+    model,
+    prompt,
+    norm_prompt,
+    session_id,
+    user_id,
+    rec,
+    stream_cb: Callable[[str], Awaitable[None]] | None = None,
+):
     built, pt = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
-    result = await ask_llama(built, model)
-    if isinstance(result, dict) and "error" in result:
+    tokens: list[str] = []
+    try:
+        async for tok in ask_llama(built, model):
+            tokens.append(tok)
+            if stream_cb:
+                await stream_cb(tok)
+    except Exception:
         raise HTTPException(status_code=503, detail="LLaMA backend unavailable")
-    result_text = str(result).strip()
+    result_text = "".join(tokens).strip()
     if not result_text or _low_conf(result_text):
         raise HTTPException(status_code=503, detail="Low-confidence LLaMA response")
     if rec:
@@ -376,6 +264,75 @@ async def _call_llama_override(model, prompt, norm_prompt, session_id, user_id, 
     cache_answer(norm_prompt, result_text)
     return result_text
 
+async def _call_gpt(
+    *,
+    prompt: str,
+    built_prompt: str,
+    model: str,
+    rec,
+    norm_prompt: str,
+    session_id: str,
+    user_id: str,
+    ptoks: int,
+    stream_cb: Callable[[str], Awaitable[None]] | None = None,
+):
+    text, pt, ct, unit_price = await ask_gpt(built_prompt, model, SYSTEM_PROMPT)
+    if stream_cb:
+        await stream_cb(text)
+    if rec:
+        rec.engine_used = "gpt"
+        rec.model_name = model
+        rec.prompt_tokens = pt
+        rec.completion_tokens = ct
+        rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
+        rec.response = text
+    memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
+    add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
+    cache_answer(norm_prompt, text)
+    return await _finalise("gpt", prompt, text, rec)
+
+async def _call_llama(
+    *,
+    prompt: str,
+    built_prompt: str,
+    model: str,
+    rec,
+    norm_prompt: str,
+    session_id: str,
+    user_id: str,
+    ptoks: int,
+    stream_cb: Callable[[str], Awaitable[None]] | None = None,
+):
+    tokens: list[str] = []
+    try:
+        async for tok in ask_llama(built_prompt, model):
+            tokens.append(tok)
+            if stream_cb:
+                await stream_cb(tok)
+    except Exception:
+        raise HTTPException(status_code=503, detail="LLaMA backend unavailable")
+    result_text = "".join(tokens).strip()
+    if not result_text or _low_conf(result_text):
+        raise HTTPException(status_code=503, detail="Low-confidence LLaMA response")
+    if rec:
+        rec.engine_used = "llama"
+        rec.model_name = model
+        rec.prompt_tokens = ptoks
+        rec.response = result_text
+    memgpt.store_interaction(
+        prompt, result_text, session_id=session_id, user_id=user_id
+    )
+    add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
+    cache_answer(norm_prompt, result_text)
+    return await _finalise("llama", prompt, result_text, rec)
+
+async def _finalise(engine: str, prompt: str, text: str, rec):
+    if rec:
+        rec.engine_used = engine
+        rec.response = text
+    await append_history(prompt, engine, text)
+    await record(engine)
+    return text
 
 async def _run_skill(prompt: str, SkillClass, rec):
     skill_resp = await SkillClass().handle(prompt)
