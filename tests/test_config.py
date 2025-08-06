@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 from fastapi.testclient import TestClient
 from importlib import reload
 import time
@@ -16,6 +17,7 @@ def setup_app(monkeypatch):
 
     os.environ["OPENAI_API_KEY"] = "key"
     os.environ["OPENAI_MODEL"] = "gpt"
+    os.environ["SIM_THRESHOLD"] = "0.90"
     import app.home_assistant as home_assistant
     import app.llama_integration as llama_integration
     import app.status as status
@@ -58,4 +60,5 @@ def test_config_env_reload(monkeypatch):
     resp = client.get("/config", params={"token": "secret"})
     assert resp.json()["DEBUG"] == "1"
     env.unlink()
+    data = resp.json()
     assert data["SIM_THRESHOLD"] == "0.90"
