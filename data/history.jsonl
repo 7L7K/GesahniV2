@@ -1255,3 +1255,25 @@
 {"req_id": "2f676686-4f8f-40c4-b782-057f10d3fe31", "prompt": "hi", "engine_used": "skill", "response": "Hey friend! Ready to crush the day?", "timestamp": "2025-08-06T14:19:48Z"}
 {"req_id": "2f676686-4f8f-40c4-b782-057f10d3fe31", "prompt": "hi", "engine_used": "skill", "response": "Hey friend! Ready to crush the day?", "timestamp": "2025-08-06T14:19:48Z", "user_id": "anon", "received_at": "2025-08-06T14:19:48.089974+00:00", "started_at": "2025-08-06T14:19:48.089974+00:00", "latency_ms": 6, "p95_latency_ms": 6, "status": "OK", "embed_tokens": 1}
 {"req_id": "d076a166-4afb-4e8e-9c9b-7913ec675aff", "prompt": "orange", "timestamp": "2025-08-06T14:19:52Z", "user_id": "anon", "received_at": "2025-08-06T14:19:52.919631+00:00", "started_at": "2025-08-06T14:19:52.919631+00:00", "latency_ms": 2, "p95_latency_ms": 6, "status": "OK", "embed_tokens": 1}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T16:16:36Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T16:17:09Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T16:27:32Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T16:31:56Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T16:39:14Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T16:55:29Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T16:58:31Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T18:08:18Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T18:09:32Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T18:11:45Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T18:16:06Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T18:17:34Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T18:19:40Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T18:22:13Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T19:46:52Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T19:47:03Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T20:05:28Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T20:12:32Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T20:13:42Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T20:14:25Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T20:16:07Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-06T20:16:52Z"}
