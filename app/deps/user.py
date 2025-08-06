@@ -6,7 +6,7 @@ import jwt
 
 from ..telemetry import LogRecord, log_record_var
 
-JWT_SECRET = os.getenv("JWT_SECRET")
+JWT_SECRET: str | None = None  # overridden in tests; env used when None
 
 
 def get_current_user_id(
@@ -39,9 +39,10 @@ def get_current_user_id(
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ", 1)[1]
 
-    if token and JWT_SECRET:
+    secret = JWT_SECRET or os.getenv("JWT_SECRET")
+    if token and secret:
         try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            payload = jwt.decode(token, secret, algorithms=["HS256"])
             user_id = payload.get("user_id") or user_id
         except jwt.PyJWTError:
             # Unauthorized if token is malformed or invalid
