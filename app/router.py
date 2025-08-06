@@ -56,13 +56,16 @@ _SMALLTALK = SmalltalkSkill()
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _low_conf(resp: str) -> bool:
     import re
+
     if not resp.strip():
         return True
     if re.search(r"\b(i don't know|i am not sure|not sure|cannot help)\b", resp, re.I):
         return True
     return False
+
 
 # ---------------------------------------------------------------------------
 # Main entry‑point
@@ -113,17 +116,26 @@ async def route_prompt(
                 raise HTTPException(status_code=400, detail=f"Model '{mv}' not allowed")
             if debug_route:
                 return _dry("gpt", mv)
-            return await _call_gpt_override(mv, prompt, norm_prompt, session_id, user_id, rec)
+            return await _call_gpt_override(
+                mv, prompt, norm_prompt, session_id, user_id, rec
+            )
         # LLaMA override
         if mv.startswith("llama"):
             if ALLOWED_LLAMA_MODELS and mv not in ALLOWED_LLAMA_MODELS:
                 raise HTTPException(status_code=400, detail=f"Model '{mv}' not allowed")
             if not LLAMA_HEALTHY:
-                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="LLaMA backend unavailable")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="LLaMA backend unavailable",
+                )
             if debug_route:
                 return _dry("llama", mv)
-            return await _call_llama_override(mv, prompt, norm_prompt, session_id, user_id, rec)
-        raise HTTPException(status_code=400, detail=f"Unknown or disallowed model '{mv}'")
+            return await _call_llama_override(
+                mv, prompt, norm_prompt, session_id, user_id, rec
+            )
+        raise HTTPException(
+            status_code=400, detail=f"Unknown or disallowed model '{mv}'"
+        )
 
     # 2️⃣ Built‑in skills
     if not skip_skills:
@@ -151,9 +163,12 @@ async def route_prompt(
     # 5️⃣ Automatic selection
     engine, model_name = pick_model(prompt, intent, tokens)
     built_prompt, ptoks = PromptBuilder.build(
-        prompt, session_id=session_id, user_id=user_id,
+        prompt,
+        session_id=session_id,
+        user_id=user_id,
         custom_instructions=getattr(rec, "custom_instructions", ""),
-        debug=debug_route, debug_info=getattr(rec, "debug_info", ""),
+        debug=debug_route,
+        debug_info=getattr(rec, "debug_info", ""),
     )
     if rec:
         rec.prompt_tokens = ptoks
@@ -162,32 +177,165 @@ async def route_prompt(
         if debug_route:
             return _dry("gpt", model_name)
         return await _call_gpt(
-            built_prompt=built_prompt, model=model_name,
-            rec=rec, norm_prompt=norm_prompt,
-            session_id=session_id, user_id=user_id, ptoks=ptoks
+            built_prompt=built_prompt,
+            model=model_name,
+            rec=rec,
+            norm_prompt=norm_prompt,
+            session_id=session_id,
+            user_id=user_id,
+            ptoks=ptoks,
+            prompt=prompt,
         )
 
     if engine == "llama" and LLAMA_HEALTHY:
         if debug_route:
             return _dry("llama", model_name)
         return await _call_llama(
-            built_prompt=built_prompt, model=model_name,
-            rec=rec, norm_prompt=norm_prompt,
-            session_id=session_id, user_id=user_id, ptoks=ptoks
+            built_prompt=built_prompt,
+            model=model_name,
+            rec=rec,
+            norm_prompt=norm_prompt,
+            session_id=session_id,
+            user_id=user_id,
+            ptoks=ptoks,
+            prompt=prompt,
         )
 
     # Fallback GPT-4o
     if debug_route:
         return _dry("gpt", "gpt-4o")
     return await _call_gpt(
-        built_prompt=built_prompt, model="gpt-4o",
-        rec=rec, norm_prompt=norm_prompt,
-        session_id=session_id, user_id=user_id, ptoks=ptoks
+        built_prompt=built_prompt,
+        model="gpt-4o",
+        rec=rec,
+        norm_prompt=norm_prompt,
+        session_id=session_id,
+        user_id=user_id,
+        ptoks=ptoks,
+        prompt=prompt,
     )
+
 
 # -------------------------------
 # Override and helper routines
 # -------------------------------
+
+
+async def _finalise(
+    engine: str,
+    prompt: str,
+    response: str,
+    rec,
+    *,
+    norm_prompt: str | None = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
+    fallback: bool = False,
+):
+    """Common bookkeeping after producing a response."""
+    if rec:
+        rec.engine_used = rec.engine_used or engine
+        rec.response = response
+        session_id = session_id or rec.session_id or "default"
+        user_id = user_id or rec.user_id or "anon"
+    else:
+        session_id = session_id or "default"
+        user_id = user_id or "anon"
+    norm = norm_prompt or prompt.lower().strip()
+    await append_history(prompt, engine, response)
+    metric_engine = engine if engine in {"gpt", "llama"} else "done"
+    await record(metric_engine, fallback=fallback, source=engine)
+    memgpt.store_interaction(prompt, response, session_id=session_id, user_id=user_id)
+    add_user_memory(user_id, f"Q: {prompt}\nA: {response}")
+    cache_answer(norm, response)
+    return response
+
+
+async def _call_gpt(
+    *,
+    built_prompt: str,
+    model: str,
+    rec,
+    norm_prompt: str,
+    session_id: str,
+    user_id: str,
+    ptoks: int,
+    prompt: str,
+    fallback: bool = False,
+):
+    text, pt, ct, unit_price = await ask_gpt(built_prompt, model, SYSTEM_PROMPT)
+    if rec:
+        rec.engine_used = "gpt"
+        rec.model_name = model
+        rec.prompt_tokens = pt
+        rec.completion_tokens = ct
+        rec.cost_usd = ((pt or 0) + (ct or 0)) / 1000 * unit_price
+        rec.response = text
+    return await _finalise(
+        "gpt",
+        prompt,
+        text,
+        rec,
+        norm_prompt=norm_prompt,
+        session_id=session_id,
+        user_id=user_id,
+        fallback=fallback,
+    )
+
+
+async def _call_llama(
+    *,
+    built_prompt: str,
+    model: str,
+    rec,
+    norm_prompt: str,
+    session_id: str,
+    user_id: str,
+    ptoks: int,
+    prompt: str,
+):
+    result = await ask_llama(built_prompt, model)
+    if isinstance(result, dict) and "error" in result:
+        return await _call_gpt(
+            built_prompt=built_prompt,
+            model="gpt-4o",
+            rec=rec,
+            norm_prompt=norm_prompt,
+            session_id=session_id,
+            user_id=user_id,
+            ptoks=ptoks,
+            prompt=prompt,
+            fallback=True,
+        )
+    result_text = str(result).strip()
+    if not result_text or _low_conf(result_text):
+        return await _call_gpt(
+            built_prompt=built_prompt,
+            model="gpt-4o",
+            rec=rec,
+            norm_prompt=norm_prompt,
+            session_id=session_id,
+            user_id=user_id,
+            ptoks=ptoks,
+            prompt=prompt,
+            fallback=True,
+        )
+    if rec:
+        rec.engine_used = "llama"
+        rec.model_name = model
+        rec.prompt_tokens = ptoks
+        rec.response = result_text
+    return await _finalise(
+        "llama",
+        prompt,
+        result_text,
+        rec,
+        norm_prompt=norm_prompt,
+        session_id=session_id,
+        user_id=user_id,
+    )
+
+
 async def _call_gpt_override(model, prompt, norm_prompt, session_id, user_id, rec):
     built, pt = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
     text, pt, ct, unit_price = await ask_gpt(built, model, SYSTEM_PROMPT)
@@ -205,6 +353,7 @@ async def _call_gpt_override(model, prompt, norm_prompt, session_id, user_id, re
     cache_answer(norm_prompt, text)
     return text
 
+
 async def _call_llama_override(model, prompt, norm_prompt, session_id, user_id, rec):
     built, pt = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
     result = await ask_llama(built, model)
@@ -220,10 +369,13 @@ async def _call_llama_override(model, prompt, norm_prompt, session_id, user_id, 
         rec.response = result_text
     await append_history(prompt, "llama", result_text)
     await record("llama", source="override")
-    memgpt.store_interaction(prompt, result_text, session_id=session_id, user_id=user_id)
+    memgpt.store_interaction(
+        prompt, result_text, session_id=session_id, user_id=user_id
+    )
     add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
     cache_answer(norm_prompt, result_text)
     return result_text
+
 
 async def _run_skill(prompt: str, SkillClass, rec):
     skill_resp = await SkillClass().handle(prompt)
