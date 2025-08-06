@@ -211,38 +211,17 @@ class ChromaVectorStore(VectorStore):
     ) -> List[str]:
         threshold = float(os.getenv("SIM_THRESHOLD", str(self._sim_threshold)))
         cutoff = 1.0 - threshold
-        if hasattr(self._user_memories, "query"):
-            top_k = k if k is not None else int(os.getenv("MEM_TOP_K", "5"))
-            results = self._user_memories.query(
-                query_texts=[prompt],
-                n_results=top_k,
-                include=["documents", "distances", "metadatas"],
-            )
-            docs = results.get("documents", [[]])[0]
-            dists = results.get("distances", [[]])[0]
-            metas = results.get("metadatas", [[]])[0]
-            items = []
-            for doc, dist, meta in zip(docs, dists, metas):
-                if not doc:
-                    continue
-                if float(dist) > cutoff:
-                    continue
-                ts = float((meta or {}).get("ts", 0))
-                items.append({"doc": doc, "dist": float(dist), "ts": ts})
-            items.sort(key=lambda x: (x["dist"], -x["ts"]))
-            return [it["doc"] for it in items[:top_k]]
-
         _, prompt_l = _normalize(prompt)
-        results: List[Tuple[float, str]] = []
+        results: List[Tuple[float, float, str]] = []
         for _, text, ts in self._user_memories.get(user_id, []):
             _, norm_text = _normalize(text)
             dist = abs(len(norm_text) - len(prompt_l))
             if dist > cutoff:
                 continue
-            results.append((dist, text))
-        results.sort(key=lambda x: x[0])
+            results.append((dist, -ts, text))
+        results.sort()
         top = k if k is not None else int(os.getenv("MEM_TOP_K", "5"))
-        return [text for _, text in results[:top]]
+        return [text for _, _, text in results[:top]]
 
     # QA cache -----------------------------------------------------------
     @property
