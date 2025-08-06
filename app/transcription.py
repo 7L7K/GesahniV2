@@ -6,10 +6,15 @@ guard the import and fall back to a minimal stub.  Tests monkey‑patch the
 transcriber so the stub is never exercised directly.
 """
 
+import json
 import logging
 import os
+import uuid
+from pathlib import Path
 
-from fastapi import HTTPException
+from fastapi import HTTPException, WebSocket, WebSocketDisconnect
+
+from .session_manager import SESSIONS_DIR
 
 try:  # pragma: no cover - executed when openai is available
     from openai import AsyncClient as OpenAI
@@ -82,3 +87,66 @@ async def transcribe_file(path: str, model: str | None = None) -> str:
 
     logger.debug("transcribe_file success: %s", path)
     return text
+
+
+class TranscriptionStream:
+    """Handle live transcription over a WebSocket."""
+
+    def __init__(self, ws: WebSocket):
+        self.ws = ws
+        self.session_id = uuid.uuid4().hex
+        self.audio_path = Path(SESSIONS_DIR) / self.session_id / "stream.wav"
+        self.audio_path.parent.mkdir(parents=True, exist_ok=True)
+        self.full_text = ""
+
+    async def process(self) -> None:
+        await self.ws.accept()
+        msg = await self.ws.receive()
+
+        if "text" in msg and msg["text"]:
+            try:
+                json.loads(msg["text"])
+            except Exception:
+                await self.ws.send_json({"error": "invalid metadata"})
+                await self.ws.close()
+                return
+            msg = await self.ws.receive()
+        elif "bytes" not in msg:
+            await self.ws.send_json({"error": "no data received"})
+            await self.ws.close()
+            return
+
+        tmp = self.audio_path.with_suffix(".part")
+
+        with open(self.audio_path, "ab") as fh:
+            try:
+                while True:
+                    if "text" in msg and msg["text"]:
+                        if msg["text"] == "end":
+                            break
+                        msg = await self.ws.receive()
+                        continue
+
+                    chunk = msg.get("bytes")
+                    if not chunk:
+                        msg = await self.ws.receive()
+                        continue
+
+                    fh.write(chunk)
+                    tmp.write_bytes(chunk)
+
+                    try:
+                        text = await transcribe_file(str(tmp))
+                        self.full_text += (" " if self.full_text else "") + text
+                        await self.ws.send_json(
+                            {"text": self.full_text, "session_id": self.session_id}
+                        )
+                    except Exception as e:  # pragma: no cover - network errors
+                        await self.ws.send_json({"error": str(e)})
+                    finally:
+                        if tmp.exists():
+                            tmp.unlink()
+
+                    msg = await self.ws.receive()
+            except WebSocketDisconnect:  # pragma: no cover - client disconnect
+                pass

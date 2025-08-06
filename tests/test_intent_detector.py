@@ -11,6 +11,7 @@ from app.intent_detector import detect_intent
     "text, expected",
     [
         ("yo", ("smalltalk", "low")),
+        ("hello there", ("smalltalk", "low")),
         ("turn on the lights", ("control", "high")),
         ("tell me a fun fact", ("chat", "medium")),
         ("asdasdasd", ("unknown", "low")),
