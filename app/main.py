@@ -9,6 +9,8 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from .middleware import _anon_user_id
+
 
 from fastapi import (
     APIRouter,

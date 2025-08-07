@@ -3,7 +3,6 @@ import sys
 import asyncio
 from importlib import reload
 import pytest
-from openai import OpenAIError
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -46,7 +45,7 @@ def test_transcribe_file_error(tmp_path, monkeypatch):
     audio.write_text("data")
 
     async def fake_create(*args, **kwargs):
-        raise OpenAIError("boom")
+        raise Exception("boom")
 
     fake_client = type(
         "C",

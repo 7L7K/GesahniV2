@@ -22,19 +22,6 @@ from collections.abc import Awaitable, Callable
 from .metrics import REQUEST_COST, REQUEST_COUNT, REQUEST_LATENCY
 from .telemetry import log_record_var
 
-try:  # pragma: no cover - exercised when openai is installed
-    from openai import AsyncOpenAI
-
-    OPENAI_AVAILABLE = True
-except Exception:  # pragma: no cover - executed when dependency missing
-    OPENAI_AVAILABLE = False
-
-    class AsyncOpenAI:  # type: ignore[misc]
-        """Fallback used when the ``openai`` package isn't available."""
-
-        def __init__(self, *_, **__):  # pragma: no cover - simple stub
-            raise RuntimeError("openai package not installed")
-
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
@@ -52,15 +39,16 @@ MODEL_PRICING = {
 }
 
 
-def get_client() -> AsyncOpenAI:
+def get_client() -> "AsyncOpenAI":
     """Return a singleton ``AsyncOpenAI`` client.
 
     The API key is fetched at call time so tests can monkeypatch the
     environment. If the key is missing a ``RuntimeError`` is raised.
     """
-
     global _client
-    if not OPENAI_AVAILABLE:
+    try:
+        from openai import AsyncOpenAI
+    except ImportError:
         raise RuntimeError("openai package not installed")
     if _client is None:
         api_key = os.getenv("OPENAI_API_KEY")
@@ -68,6 +56,7 @@ def get_client() -> AsyncOpenAI:
             raise RuntimeError("OPENAI_API_KEY not set")
         _client = AsyncOpenAI(api_key=api_key)
     return _client
+
 
 
 async def close_client() -> None:
