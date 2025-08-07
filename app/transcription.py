@@ -92,17 +92,15 @@ async def transcribe_file(path: str, model: str | None = None) -> str:
 class TranscriptionStream:
     """Handle live transcription over a WebSocket."""
 
-    def __init__(self, ws: WebSocket):
-        self.ws = ws
-        self.session_id = uuid.uuid4().hex
-        self.audio_path = Path(SESSIONS_DIR) / self.session_id / "stream.wav"
-        self.audio_path.parent.mkdir(parents=True, exist_ok=True)
-        self.full_text = ""
-
     async def process(self) -> None:
         await self.ws.accept()
-        msg = await self.ws.receive()
+        # initial handshake
+        try:
+            msg = await self.ws.receive()
+        except RuntimeError:
+            return
 
+        # skip initial metadata if present
         if "text" in msg and msg["text"]:
             try:
                 json.loads(msg["text"])
@@ -110,43 +108,40 @@ class TranscriptionStream:
                 await self.ws.send_json({"error": "invalid metadata"})
                 await self.ws.close()
                 return
-            msg = await self.ws.receive()
-        elif "bytes" not in msg:
-            await self.ws.send_json({"error": "no data received"})
-            await self.ws.close()
-            return
+            try:
+                msg = await self.ws.receive()
+            except RuntimeError:
+                return
 
         tmp = self.audio_path.with_suffix(".part")
-
         with open(self.audio_path, "ab") as fh:
-            try:
-                while True:
-                    if "text" in msg and msg["text"]:
-                        if msg["text"] == "end":
-                            break
-                        msg = await self.ws.receive()
-                        continue
-
-                    chunk = msg.get("bytes")
-                    if not chunk:
-                        msg = await self.ws.receive()
-                        continue
-
-                    fh.write(chunk)
-                    tmp.write_bytes(chunk)
-
-                    try:
-                        text = await transcribe_file(str(tmp))
-                        self.full_text += (" " if self.full_text else "") + text
-                        await self.ws.send_json(
-                            {"text": self.full_text, "session_id": self.session_id}
-                        )
-                    except Exception as e:  # pragma: no cover - network errors
-                        await self.ws.send_json({"error": str(e)})
-                    finally:
-                        if tmp.exists():
-                            tmp.unlink()
-
+            while True:
+                # catch disconnects
+                try:
                     msg = await self.ws.receive()
-            except WebSocketDisconnect:  # pragma: no cover - client disconnect
-                pass
+                except RuntimeError:
+                    break
+
+                if msg.get("type") == "websocket.disconnect":
+                    break
+                if "text" in msg and msg["text"] == "end":
+                    break
+
+                chunk = msg.get("bytes")
+                if not chunk:
+                    continue
+
+                fh.write(chunk)
+                tmp.write_bytes(chunk)
+                try:
+                    text = await transcribe_file(str(tmp))
+                    self.full_text += (" " if self.full_text else "") + text
+                    await self.ws.send_json({
+                        "text": self.full_text,
+                        "session_id": self.session_id
+                    })
+                except Exception as e:
+                    await self.ws.send_json({"error": str(e)})
+                finally:
+                    if tmp.exists():
+                        tmp.unlink()
