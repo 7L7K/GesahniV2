@@ -5,7 +5,9 @@ import pytest
 
 def _clear_cache(vector_store):
     """Helper to remove all items from the QA cache."""
-    ids = vector_store.qa_cache.get(include=["ids"]).get("ids", [])
+    cache = vector_store.qa_cache()    # call it
+    ids = cache.get("ids", [])
+
     if ids:
         vector_store.qa_cache.delete(ids=ids)
 
