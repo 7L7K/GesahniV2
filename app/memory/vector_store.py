@@ -234,9 +234,8 @@ class MemoryVectorStore(VectorStore):
         logger.debug("Added user memory %s for %s", mem_id, hashed)
         return mem_id
 
-    def query_user_memories(self, user_id: str, prompt: str, k: int | None = None) -> List[str]:
-        if k is None:
-            k = int(os.getenv("MEM_TOP_K", "5"))
+    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
+        self._dist_cutoff = 1.0 - _get_sim_threshold()
         q_emb = embed_sync(prompt)
         res: List[Tuple[float, float, str]] = []
         for _mid, doc, emb, ts in self._user_memories.get(user_id, []):
@@ -266,6 +265,7 @@ class MemoryVectorStore(VectorStore):
     def lookup_cached_answer(
         self, prompt: str, ttl_seconds: int = 86400
     ) -> Optional[str]:
+        self._dist_cutoff = 1.0 - _get_sim_threshold()
         hash_ = _normalized_hash(prompt)
         if _env_flag("DISABLE_QA_CACHE"):
             logger.debug("QA cache disabled; miss for %s", hash_)
@@ -337,9 +337,8 @@ class ChromaVectorStore(VectorStore):
         logger.debug("Added user memory %s for %s", mem_id, hashed)
         return mem_id
 
-    def query_user_memories(self, user_id: str, prompt: str, k: int | None = None) -> List[str]:
-        if k is None:
-            k = int(os.getenv("MEM_TOP_K", "5"))
+    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
+        self._dist_cutoff = 1.0 - _get_sim_threshold()
         res = self._user_memories.query(
             query_texts=[prompt],
             where={"user_id": user_id},
@@ -377,6 +376,7 @@ class ChromaVectorStore(VectorStore):
     def lookup_cached_answer(
         self, prompt: str, ttl_seconds: int = 86400
     ) -> Optional[str]:
+        self._dist_cutoff = 1.0 - _get_sim_threshold()
         hash_ = _normalized_hash(prompt)
         if _env_flag("DISABLE_QA_CACHE"):
             logger.debug("QA cache disabled; miss for %s", hash_)
@@ -503,10 +503,26 @@ def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> Optional[str]
 def record_feedback(prompt: str, feedback: str) -> None:
     return _store.record_feedback(prompt, feedback)
 
+class _QACacheProxy:
+    """Proxy exposing the current QA cache collection.
 
-def qa_cache():
-    """Return the underlying QA cache collection."""
-    return _store.qa_cache
+    This object is both callable (returning the underlying collection) and
+    forwards attribute access to that collection so tests can call
+    ``vector_store.qa_cache.get(...)`` without needing to worry about the
+    global store being swapped out under the hood.
+    """
+
+    def __call__(self):
+        return _store.qa_cache
+
+    def __getattr__(self, name):  # pragma: no cover - simple delegation
+        return getattr(_store.qa_cache, name)
+
+
+qa_cache = _QACacheProxy()
+
+# Backwards compatibility for tests accessing the raw QA cache
+_qa_cache = qa_cache
 
 
 def invalidate_cache(prompt: str) -> None:
