@@ -2,7 +2,7 @@ import os
 from fastapi.testclient import TestClient
 
 
-def setup_app(monkeypatch, tmp_path):
+def setup_app(monkeypatch, tmp_path, transcribe_func=None):
     os.environ.setdefault("OLLAMA_URL", "http://x")
     os.environ.setdefault("OLLAMA_MODEL", "llama3")
     os.environ.setdefault("HOME_ASSISTANT_URL", "http://ha")
@@ -13,12 +13,12 @@ def setup_app(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "ha_startup", lambda: None)
     monkeypatch.setattr(main, "llama_startup", lambda: None)
     monkeypatch.setattr(main, "SESSIONS_DIR", tmp_path)
+    if transcribe_func is not None:
+        monkeypatch.setattr(main, "transcribe_file", transcribe_func)
     return main
 
 
 def test_ws_user_ids_distinct(monkeypatch, tmp_path):
-    main = setup_app(monkeypatch, tmp_path)
-
     calls = []
 
     async def fake_transcribe(path: str) -> str:
@@ -27,7 +27,7 @@ def test_ws_user_ids_distinct(monkeypatch, tmp_path):
         auth = headers1["Authorization"] if idx == 0 else headers2["Authorization"]
         return main._anon_user_id(auth)
 
-    monkeypatch.setattr(main, "transcribe_file", fake_transcribe)
+    main = setup_app(monkeypatch, tmp_path, fake_transcribe)
 
     client = TestClient(main.app)
 
