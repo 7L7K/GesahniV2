@@ -79,6 +79,11 @@ def _get_sim_threshold() -> float:
         return DEFAULT_SIM_THRESHOLD
     return value
 
+def _clean_meta(meta: dict[str, Any]) -> dict[str, Any]:
+    """
+    Replace any None metadata values with empty strings so ChromaDB upsert won't choke.
+    """
+    return {k: (v if v is not None else "") for k, v in meta.items()}
 
 # ---------------------------------------------------------------------------
 # Normalization & helpers
@@ -225,11 +230,11 @@ class VectorStore:
 
 
 # ---------------------------------------------------------------------------
-# MemoryVectorStore
+# ChromaVectorStore
 # ---------------------------------------------------------------------------
 
 
-class MemoryVectorStore(VectorStore):
+class ChromaVectorStore(VectorStore):
     def __init__(self) -> None:
         self._dist_cutoff = 1.0 - _get_sim_threshold()
         self._cache = _Collection()
@@ -256,19 +261,21 @@ class MemoryVectorStore(VectorStore):
         return [doc for _, _, doc in res[:k]]
 
     @property
-    def qa_cache(self) -> _Collection:
+    def qa_cache(self) -> ChromaCollection:
         return self._cache
 
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
         if _env_flag("DISABLE_QA_CACHE"):
             return
         _, norm = _normalize(prompt)
+        raw_meta = {"answer": answer, "timestamp": time.time(), "feedback": None}
+        cleaned = _clean_meta(raw_meta)
         self._cache.upsert(
             ids=[cache_id],
-            embeddings=[embed_sync(norm)],
             documents=[norm],
-            metadatas=[{"answer": answer, "timestamp": time.time(), "feedback": None}],
+            metadatas=[cleaned],
         )
+
 
     def lookup_cached_answer(
         self, prompt: str, ttl_seconds: int = 86400
