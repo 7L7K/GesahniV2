@@ -43,7 +43,9 @@ export default function Page() {
   }, [messages]);
 
   const handleSend = async (text: string) => {
+    console.log('handleSend invoked');
     if (!text.trim()) return;
+    console.log('Outgoing prompt:', text);
 
     // Optimistically render the user message
     setMessages(prev => [...prev, { role: 'user', content: text }]);
@@ -52,6 +54,7 @@ export default function Page() {
     try {
       // 🔗 Use the shared helper so we always hit NEXT_PUBLIC_API_URL
       const replyText = await sendPrompt(text, model);
+      console.log('Response received:', replyText);
       setMessages(prev => [...prev, { role: 'assistant', content: replyText }]);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
