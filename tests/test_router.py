@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 import types
+import builtins
 from typing import Any
 
 from fastapi import HTTPException
@@ -26,7 +27,47 @@ class _OpenAI:
         self.embeddings = _Emb()
 
 
-sys.modules["openai"] = types.SimpleNamespace(OpenAI=_OpenAI)
+class _ChatCompletionStream:
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise StopAsyncIteration
+
+
+class _ChatCompletions:
+    async def create(self, *a, **k):
+        if k.get("stream"):
+            return _ChatCompletionStream()
+        return types.SimpleNamespace(
+            choices=[
+                types.SimpleNamespace(
+                    message=types.SimpleNamespace(content=""),
+                    delta=None,
+                    finish_reason="stop",
+                )
+            ],
+            usage=types.SimpleNamespace(prompt_tokens=0, completion_tokens=0),
+        )
+
+
+class _AsyncOpenAI:
+    def __init__(self, *a, **k):
+        self.chat = types.SimpleNamespace(completions=_ChatCompletions())
+        self.embeddings = _Emb()
+
+    async def close(self):  # pragma: no cover - trivial
+        pass
+
+
+class _OpenAIError(Exception):
+    pass
+
+
+builtins.AsyncOpenAI = _AsyncOpenAI
+sys.modules["openai"] = types.SimpleNamespace(
+    OpenAI=_OpenAI, AsyncOpenAI=_AsyncOpenAI, OpenAIError=_OpenAIError
+)
 
 
 def test_router_fallback_metrics_updated(monkeypatch):
