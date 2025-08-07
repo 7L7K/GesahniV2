@@ -13,9 +13,12 @@ from .logging_config import req_id_var
 from .http_utils import json_request, log_exceptions
 from .metrics import LLAMA_LATENCY, LLAMA_TOKENS
 
-# Default to local Ollama if not provided
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
+# ---- ENV --------------------------------------------------------------------
+OLLAMA_URL   = os.getenv("OLLAMA_URL")                    # required
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:latest") # export me!
+
+if not OLLAMA_URL:
+    raise RuntimeError("Set OLLAMA_URL, e.g. http://100.106.146.111:11434")
 
 logger = logging.getLogger(__name__)
 

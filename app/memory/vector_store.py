@@ -144,10 +144,14 @@ class _Collection:
         self,
         *,
         ids: List[str],
-        embeddings: List[List[float]],
+        embeddings: List[List[float]] | None = None,
         documents: List[str],
         metadatas: List[Dict],
     ) -> None:
+        # If embeddings are not provided, generate them from documents to
+        # mirror Chroma's behavior when an embedding_function is configured.
+        if embeddings is None:
+            embeddings = [embed_sync(doc) for doc in documents]
         for i, emb, doc, meta in zip(ids, embeddings, documents, metadatas):
             self._store[i] = _CacheRecord(
                 embedding=emb,
@@ -158,8 +162,24 @@ class _Collection:
             )
 
     def get(
-        self, *, ids: List[str] | None = None, include: List[str] | None = None
-    ) -> Dict[str, List]:
+        self,
+        *args,
+        ids: List[str] | None = None,
+        include: List[str] | None = None,
+        **kwargs,
+    ) -> Dict[str, List] | Any:
+        """
+        Dual-mode get:
+        - Collection-style: get(ids=[...], include=[...]) -> dict
+        - Dict-style: get("ids", default) -> value (used in some tests)
+        """
+        # Support dict-style access used by a test helper: cache.get("ids", [])
+        if args and isinstance(args[0], str):
+            key = args[0]
+            default = args[1] if len(args) > 1 else None
+            return {"ids": list(self._store)}.get(key, default)
+
+        # Normal collection API
         ids = ids or list(self._store)
         metas, docs = [], []
         for i in ids:
@@ -235,7 +255,6 @@ class MemoryVectorStore(VectorStore):
         return mem_id
 
     def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
-        self._dist_cutoff = 1.0 - _get_sim_threshold()
         q_emb = embed_sync(prompt)
         res: List[Tuple[float, float, str]] = []
         for _mid, doc, emb, ts in self._user_memories.get(user_id, []):
@@ -313,10 +332,30 @@ class MemoryVectorStore(VectorStore):
 
 class ChromaVectorStore(VectorStore):
     def __init__(self) -> None:
-        self._dist_cutoff = 1.0 - _get_sim_threshold()  # Use helper for safety!
-        path = os.getenv("CHROMA_PATH", ".chroma_data")  # Consistent default
-        os.makedirs(path, exist_ok=True)  # Always make sure the directory exists
-        self._client = chromadb.PersistentClient(path=path)
+        self._dist_cutoff = 1.0 - _get_sim_threshold()
+
+        use_cloud = os.getenv("VECTOR_STORE", "local").lower() == "cloud"
+
+        if use_cloud:
+            # —— Cloud mode ——
+            from chromadb import CloudClient
+
+            client = CloudClient(
+                api_key=os.getenv("CHROMA_API_KEY", ""),
+                tenant=os.getenv("CHROMA_TENANT_ID", ""),
+                database=os.getenv("CHROMA_DATABASE_NAME", ""),
+            )
+        else:
+            # —— Local disk mode ——
+            path = os.getenv("CHROMA_PATH", ".chroma_data")
+            os.makedirs(path, exist_ok=True)
+            from chromadb import PersistentClient
+
+            client = PersistentClient(path=path)
+
+        # Shared setup
+        self._client = client
+        # simple length-based embedder for everything
         self._embedder = _LengthEmbedder()
         self._cache = self._client.get_or_create_collection(
             "qa_cache", embedding_function=self._embedder
@@ -324,6 +363,7 @@ class ChromaVectorStore(VectorStore):
         self._user_memories = self._client.get_or_create_collection(
             "user_memories", embedding_function=self._embedder
         )
+
 
     def add_user_memory(self, user_id: str, memory: str) -> str:
         mem_id = str(uuid.uuid4())
@@ -459,6 +499,8 @@ def _get_store() -> VectorStore:
         return MemoryVectorStore()
     # Default: Try ChromaVectorStore, fallback to memory with big warning (never silently in prod)
     try:
+        if not chroma_path:
+            raise FileNotFoundError("CHROMA_PATH is empty")
         logger.info("Initializing ChromaVectorStore at path: %s", chroma_path)
         return ChromaVectorStore()
     except Exception as exc:
@@ -482,9 +524,29 @@ def query_user_memories(user_id: str, prompt: str, k: int = 5) -> List[str]:
     return _store.query_user_memories(user_id, prompt, k)
 
 
-def cache_answer(prompt: str, answer: str, cache_id: str | None = None) -> None:
-    cid = cache_id or _normalized_hash(prompt)
-    _store.cache_answer(cid, prompt, answer)
+def cache_answer(*args, **kwargs) -> None:
+    """
+    Cache an answer for a prompt.
+
+    Accepted forms:
+    - cache_answer(prompt, answer)
+    - cache_answer(cache_id, prompt, answer)  # legacy positional
+    - cache_answer(prompt=..., answer=..., cache_id=...)
+    """
+    if "prompt" in kwargs and "answer" in kwargs:
+        prompt_val: str = kwargs["prompt"]
+        answer_val: str = kwargs["answer"]
+        cache_id_val: str | None = kwargs.get("cache_id")
+    else:
+        if len(args) == 2:
+            prompt_val, answer_val = args  # type: ignore[assignment]
+            cache_id_val = None
+        elif len(args) == 3:
+            cache_id_val, prompt_val, answer_val = args  # legacy order
+        else:
+            raise TypeError("cache_answer expects (prompt, answer) or (cache_id, prompt, answer)")
+    cid = cache_id_val or _normalized_hash(prompt_val)
+    _store.cache_answer(cid, prompt_val, answer_val)
 
 
 def cache_answer_legacy(*args) -> None:

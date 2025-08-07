@@ -174,6 +174,48 @@
       "tags": [],
       "timestamp": 1754419163.235889,
       "hash": "747d07a0e281d97e51a98d9b6e6141fe6f6244b798fa07d0ac590bdac6c94811"
+    },
+    {
+      "prompt": "what color is the sky",
+      "answer": "The sky is generally blue due to scattering of sunlight by the atmosphere. Anything else you'd like to know?",
+      "tags": [],
+      "timestamp": 1754594611.690782,
+      "hash": "d072443a4e0da2f00675db1cc65a767f4540390a06fcc1bb29c681c5829b756d"
+    },
+    {
+      "prompt": "how does blue ray work",
+      "answer": "Hey! Here's a quick explanation of how Blu-ray works:\n\n- **High Storage Capacity**: Blu-ray discs store data using a blue-violet laser, which has a shorter wavelength than the red lasers used in regular DVDs. This allows data to be packed more tightly, offering higher storage capacity.\n\n- **Data Layer**: The disc contains multiple layers of data, allowing for more content and higher-quality video and audio.\n\n- **Playback**: Blu-ray players read the data using the blue-violet laser and process it for display on your TV or device.\n\n- **Compatibility**: While Blu-ray players are backward compatible (playing DVDs and CDs), Blu-ray discs require a specific player to be read.\n\nDo you want to know anything else about Blu-ray?",
+      "tags": [],
+      "timestamp": 1754594972.976025,
+      "hash": "12bc5ed98f14a4464eea4e2bdc6f1af2e6b2aa7ae2ac544ba00332a0e9992ebd"
+    },
+    {
+      "prompt": "how old is obama",
+      "answer": "As of today, August 7, 2025, Barack Obama is 63 years old—he was born on August 4, 1961. Let me know if you need anything else!",
+      "tags": [],
+      "timestamp": 1754599106.595256,
+      "hash": "e04d36c2a7a39a1fc6d07f2c6217fb236695744e67da94e865089aff3aa41753"
+    },
+    {
+      "prompt": "what age is Moses when he died",
+      "answer": "Moses was 120 years old when he died. \n\nIs there anything else you'd like to know?",
+      "tags": [],
+      "timestamp": 1754599126.264253,
+      "hash": "f22ab04887f34d877f2a01543feb385df5a6396c97e53c23737c53070c43aef3"
+    },
+    {
+      "prompt": "hi",
+      "answer": "Hey there! How can I assist you today?",
+      "tags": [],
+      "timestamp": 1754604858.975615,
+      "hash": "51f07d4376016986910abdb663c30645c7486ecb85ce91280a67b1f1ad2ea115"
+    },
+    {
+      "prompt": "how old is the world",
+      "answer": "Hey there! The Earth is estimated to be about 4.54 billion years old. Anything else you'd like to know?",
+      "tags": [],
+      "timestamp": 1754608138.6121778,
+      "hash": "8e7b1749172359edb5ee2f4ac7b5bddf01bc8621d40221bd4b5460b76a120b00"
     }
   ]
 }
