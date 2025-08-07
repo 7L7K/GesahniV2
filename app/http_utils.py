@@ -44,6 +44,12 @@ async def json_request(
                 httpx_module = getattr(llama_module, "httpx", httpx_module)
             except Exception:  # pragma: no cover - fallback if import fails
                 pass
+            # Quiet noisy httpx DEBUG logs unless explicitly enabled
+            if logging.getLogger("httpx").level < logging.INFO:
+                logging.getLogger("httpx").setLevel(logging.INFO)
+            if logging.getLogger("httpcore").level < logging.INFO:
+                logging.getLogger("httpcore").setLevel(logging.INFO)
+
             async with httpx_module.AsyncClient() as client:
                 if hasattr(client, "request"):
                     resp = await client.request(method, url, **kwargs)

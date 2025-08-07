@@ -27,7 +27,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from .deps.scheduler import shutdown as scheduler_shutdown
 from .deps.user import get_current_user_id
@@ -178,8 +178,8 @@ class AskRequest(BaseModel):
     prompt: str
     model_override: str | None = Field(None, alias="model")
 
-    class Config:
-        allow_population_by_field_name = True
+    # Pydantic v2 config: allow both alias ("model") and field name ("model_override")
+    model_config = ConfigDict(validate_by_name=True, validate_by_alias=True)
 
 
 class ServiceRequest(BaseModel):
@@ -210,7 +210,11 @@ async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     queue: asyncio.Queue[str | None] = asyncio.Queue()
     status_code: int | None = None
 
+    streamed_any: bool = False
+
     async def _stream_cb(token: str) -> None:
+        nonlocal streamed_any
+        streamed_any = True
         await queue.put(token)
 
     async def _producer() -> None:
@@ -218,11 +222,14 @@ async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
         try:
             params = inspect.signature(route_prompt).parameters
             if "stream_cb" in params:
-                await route_prompt(
+                result = await route_prompt(
                     req.prompt, req.model_override, user_id, stream_cb=_stream_cb
                 )
             else:  # Compatibility with tests that monkeypatch route_prompt
-                await route_prompt(req.prompt, req.model_override, user_id)
+                result = await route_prompt(req.prompt, req.model_override, user_id)
+            # If the backend didn't stream any tokens, emit the final result once
+            if not streamed_any and isinstance(result, str) and result:
+                await queue.put(result)
         except HTTPException as exc:
             status_code = exc.status_code
             await queue.put(f"[error:{exc.detail}]")

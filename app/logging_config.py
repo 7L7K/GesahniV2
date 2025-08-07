@@ -44,3 +44,8 @@ def configure_logging() -> None:
     root.handlers = [handler]  # blow away default handlers
     root.setLevel(level)
     root.filters = [RequestIdFilter()]
+
+    # Reduce third-party verbosity unless LOG_LEVEL is DEBUG
+    if level != "DEBUG":
+        for noisy in ("httpx", "httpcore", "apscheduler"):
+            logging.getLogger(noisy).setLevel(logging.WARNING)

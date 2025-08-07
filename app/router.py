@@ -159,14 +159,25 @@ async def route_prompt(
             status_code=400, detail=f"Unknown or disallowed model '{mv}'"
         )
 
-    if intent == "smalltalk":
-        skill_resp = await _SMALLTALK.handle(prompt)
+    # Cache check should happen before smalltalk so cached answers short‑circuit
+    cached = lookup_cached_answer(norm_prompt)
+    if cached is not None:
         if rec:
-            rec.engine_used = "skill"
-            rec.response = str(skill_resp)
-        await append_history(prompt, "skill", str(skill_resp))
-        await record("done", source="skill")
-        return skill_resp
+            rec.cache_hit = True
+        return await _finalise("cache", prompt, cached, rec)
+
+    if intent == "smalltalk":
+        try:
+            skill_resp = await _SMALLTALK.handle(prompt)
+        except Exception:
+            skill_resp = None
+        if skill_resp is not None:
+            if rec:
+                rec.engine_used = "skill"
+                rec.response = str(skill_resp)
+            await append_history(prompt, "skill", str(skill_resp))
+            await record("done", source="skill")
+            return skill_resp
 
     skip_skills = intent == "chat" and priority == "high"
 
@@ -188,7 +199,7 @@ async def route_prompt(
     if ha_resp is not None:
         return await _finalise("ha", prompt, ha_resp.message, rec)
 
-    # 4️⃣ Cache
+    # 4️⃣ Cache (secondary check in case routing above changed state)
     cached = lookup_cached_answer(norm_prompt)
     if cached is not None:
         if rec:
@@ -310,9 +321,12 @@ async def _call_gpt_override(
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
 ):
     built, pt = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
-    text, pt, ct, cost = await ask_gpt(
-        built, model, SYSTEM_PROMPT, stream=bool(stream_cb), on_token=stream_cb
-    )
+    try:
+        text, pt, ct, cost = await ask_gpt(
+            built, model, SYSTEM_PROMPT, stream=bool(stream_cb), on_token=stream_cb
+        )
+    except TypeError:
+        text, pt, ct, cost = await ask_gpt(built, model, SYSTEM_PROMPT)
     if rec:
         rec.engine_used = "gpt"
         rec.model_name = model
@@ -324,7 +338,10 @@ async def _call_gpt_override(
     await record("gpt", source="override")
     memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
-    cache_answer(prompt=norm_prompt, answer=text)
+    try:
+        cache_answer(prompt=norm_prompt, answer=text)
+    except Exception as e:  # pragma: no cover
+        logger.warning("QA cache store failed (gpt override): %s", e)
     return text
 
 
@@ -368,7 +385,10 @@ async def _call_llama_override(
         prompt, result_text, session_id=session_id, user_id=user_id
     )
     add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
-    cache_answer(prompt=norm_prompt, answer=result_text)
+    try:
+        cache_answer(prompt=norm_prompt, answer=result_text)
+    except Exception as e:  # pragma: no cover
+        logger.warning("QA cache store failed (llama override): %s", e)
     return result_text
 
 
@@ -384,13 +404,16 @@ async def _call_gpt(
     ptoks: int,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
 ):
-    text, pt, ct, cost = await ask_gpt(
-        built_prompt,
-        model,
-        SYSTEM_PROMPT,
-        stream=bool(stream_cb),
-        on_token=stream_cb,
-    )
+    try:
+        text, pt, ct, cost = await ask_gpt(
+            built_prompt,
+            model,
+            SYSTEM_PROMPT,
+            stream=bool(stream_cb),
+            on_token=stream_cb,
+        )
+    except TypeError:
+        text, pt, ct, cost = await ask_gpt(built_prompt, model, SYSTEM_PROMPT)
     if rec:
         rec.engine_used = "gpt"
         rec.model_name = model
@@ -400,7 +423,10 @@ async def _call_gpt(
         rec.response = text
     memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
     add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
-    cache_answer(prompt=norm_prompt, answer=text)
+    try:
+        cache_answer(prompt=norm_prompt, answer=text)
+    except Exception as e:  # pragma: no cover
+        logger.warning("QA cache store failed (gpt): %s", e)
     return await _finalise("gpt", prompt, text, rec)
 
 
@@ -463,7 +489,10 @@ async def _call_llama(
         prompt, result_text, session_id=session_id, user_id=user_id
     )
     add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
-    cache_answer(prompt=norm_prompt, answer=result_text)
+    try:
+        cache_answer(prompt=norm_prompt, answer=result_text)
+    except Exception as e:  # pragma: no cover
+        logger.warning("QA cache store failed (llama): %s", e)
     return await _finalise("llama", prompt, result_text, rec)
 
 

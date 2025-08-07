@@ -23,54 +23,78 @@ export default function Page() {
     createInitialMessage(),
   ]);
   const [loading, setLoading] = useState(false);
-  const [model, setModel] = useState(() =>
-    localStorage.getItem('selected-model') || 'llama3'
-  );
+  const [model, setModel] = useState('llama3');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Hydrate from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem('chat-history');
-    if (stored) {
-      try {
-        const parsed: ChatMessage[] = JSON.parse(stored);
-        setMessages(
-          parsed.map(m => ({ ...m, id: m.id ?? crypto.randomUUID() })),
-        );
-      } catch {
-        setMessages([createInitialMessage()]);
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('chat-history');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          // Validate that parsed data has the correct structure
+          if (Array.isArray(parsed)) {
+            type StoredMessage = Partial<ChatMessage> & { content?: unknown; role?: unknown };
+            const validMessages: ChatMessage[] = (parsed as StoredMessage[])
+              .filter((m) => m && typeof m === 'object' &&
+                typeof m.content === 'string' &&
+                (m.role === 'user' || m.role === 'assistant'))
+              .map((m) => ({
+                ...m,
+                id: m.id ?? crypto.randomUUID(),
+                role: m.role as 'user' | 'assistant'
+              }));
+            setMessages(validMessages);
+          } else {
+            setMessages([createInitialMessage()]);
+          }
+        } catch {
+          setMessages([createInitialMessage()]);
+        }
+      }
+
+      // Also hydrate the model selection
+      const storedModel = localStorage.getItem('selected-model');
+      if (storedModel) {
+        setModel(storedModel);
       }
     }
   }, []);
 
   // Persist messages after each update & auto‑scroll
   useEffect(() => {
-    localStorage.setItem(
-      'chat-history',
-      JSON.stringify(messages.slice(-100)),
-    );
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        'chat-history',
+        JSON.stringify(messages.slice(-100)),
+      );
+    }
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   // Persist model selection
   useEffect(() => {
-    localStorage.setItem('selected-model', model);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selected-model', model);
+    }
   }, [model]);
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
 
-    const userMessage = { id: crypto.randomUUID(), role: 'user', content: text };
+    const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text };
     const assistantId = crypto.randomUUID();
+    const placeholder: ChatMessage = { id: assistantId, role: 'assistant', content: '…' };
     setMessages(prev => [
       ...prev,
       userMessage,
-      { id: assistantId, role: 'assistant', content: '…' },
+      placeholder,
     ]);
     setLoading(true);
 
     try {
-      await sendPrompt(text, model, chunk => {
+      const full = await sendPrompt(text, model, chunk => {
         setMessages(prev =>
           prev.map(m =>
             m.id === assistantId
@@ -79,6 +103,12 @@ export default function Page() {
           ),
         );
       });
+      // Ensure final content is set even if the backend didn't stream tokens
+      if (typeof full === 'string') {
+        setMessages(prev =>
+          prev.map(m => (m.id === assistantId ? { ...m, content: full } : m)),
+        );
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setMessages(prev =>
