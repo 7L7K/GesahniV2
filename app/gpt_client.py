@@ -26,7 +26,7 @@ from .telemetry import log_record_var
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 # Temporary system prompt to prime the assistant
-SYSTEM_PROMPT = "You are a helpful assistant."
+SYSTEM_PROMPT = os.getenv("GPT_SYSTEM_PROMPT", "You are a helpful assistant.")
 
 logger = logging.getLogger(__name__)
 _client: AsyncOpenAI | None = None
@@ -56,7 +56,6 @@ def get_client() -> "AsyncOpenAI":
             raise RuntimeError("OPENAI_API_KEY not set")
         _client = AsyncOpenAI(api_key=api_key)
     return _client
-
 
 
 async def close_client() -> None:
