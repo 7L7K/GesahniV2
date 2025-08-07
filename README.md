@@ -47,6 +47,14 @@ JWT_SECRET=your_jwt_secret
 EMBEDDING_BACKEND=openai  # or "llama"
 # Required when using the LLaMA backend
 LLAMA_EMBEDDINGS_MODEL=/path/to/gguf
+GPT_SYSTEM_PROMPT="You are a helpful assistant."  # optional system prompt override
+```
+
+Set `GPT_SYSTEM_PROMPT` to tweak the assistant's default persona. For example:
+
+```bash
+export GPT_SYSTEM_PROMPT="You are a pirate who talks like a pirate."
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ### 🌐 4. Launch Backend
