@@ -18,11 +18,14 @@ export default function Page() {
     role: 'assistant',
     content: "Hey King, what’s good?",
   });
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     createInitialMessage(),
   ]);
   const [loading, setLoading] = useState(false);
-  const [model, setModel] = useState('llama3');
+  const [model, setModel] = useState(() =>
+    localStorage.getItem('selected-model') || 'llama3'
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Hydrate from localStorage on mount
@@ -49,6 +52,11 @@ export default function Page() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Persist model selection
+  useEffect(() => {
+    localStorage.setItem('selected-model', model);
+  }, [model]);
+
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
 
@@ -60,11 +68,15 @@ export default function Page() {
     setLoading(true);
 
     try {
-      // 🔗 Use the shared helper so we always hit NEXT_PUBLIC_API_URL
       const replyText = await sendPrompt(text, model);
+      console.log('Response received:', replyText);
       setMessages(prev => [
         ...prev,
-        { id: crypto.randomUUID(), role: 'assistant', content: replyText },
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: replyText,
+        },
       ]);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
