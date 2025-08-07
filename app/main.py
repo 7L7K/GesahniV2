@@ -142,6 +142,8 @@ except Exception:  # pragma: no cover - executed when dependency missing
                     f"{metrics.REQUEST_COUNT.name} {metrics.REQUEST_COUNT.value}",
                     f"{metrics.REQUEST_LATENCY.name} {metrics.REQUEST_LATENCY.value}",
                     f"{metrics.REQUEST_COST.name} {metrics.REQUEST_COST.value}",
+                    f"{metrics.LLAMA_TOKENS.name} {metrics.LLAMA_TOKENS.value}",
+                    f"{metrics.LLAMA_LATENCY.name} {metrics.LLAMA_LATENCY.value}",
                 ]
                 body = ("\n".join(parts) + "\n").encode()
             except Exception:
