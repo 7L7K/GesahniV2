@@ -10,7 +10,6 @@ import uuid
 import hashlib
 from contextlib import asynccontextmanager
 from pathlib import Path
-from .middleware import _anon_user_id
 
 
 from fastapi import (
@@ -348,7 +347,7 @@ async def websocket_transcribe(
     ws: WebSocket,
     user_id: str = Depends(get_current_user_id),
 ):
-    stream = TranscriptionStream(ws)
+    stream = TranscriptionStream(ws, transcribe_file)
     await stream.process()
 
 
