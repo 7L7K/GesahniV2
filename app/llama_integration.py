@@ -10,6 +10,7 @@ import httpx  # noqa: F401  # exposed for monkeypatching in tests
 from .deps.scheduler import scheduler, start as scheduler_start
 from .logging_config import req_id_var
 from .http_utils import json_request, log_exceptions
+from .metrics import LLAMA_LATENCY, LLAMA_TOKENS
 
 # Default to local Ollama if not provided
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
@@ -112,6 +113,9 @@ async def ask_llama(
         "options": {"num_ctx": 2048},
     }
 
+    start_time = time.monotonic()
+    LLAMA_TOKENS.labels(direction="prompt").inc(len(prompt.split()))
+    completion_tokens = 0
     try:
         async with _sema:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -126,6 +130,7 @@ async def ask_llama(
                             continue
                         token = data.get("response")
                         if token:
+                            completion_tokens += len(token.split())
                             yield token
                         if data.get("done"):
                             break
@@ -137,3 +142,6 @@ async def ask_llama(
             extra={"meta": {"req_id": req_id_var.get(), "error": str(e)}},
         )
         raise
+    finally:
+        LLAMA_TOKENS.labels(direction="completion").inc(completion_tokens)
+        LLAMA_LATENCY.observe((time.monotonic() - start_time) * 1000)
