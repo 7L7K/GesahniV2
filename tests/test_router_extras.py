@@ -45,16 +45,19 @@ def test_cache_hit(monkeypatch):
     monkeypatch.setattr(router.memgpt, "store_interaction", lambda *a, **k: None)
     monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
 
-    vector_store.qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
-    first = asyncio.run(router.route_prompt("hi", user_id="u"))
-    assert first == "cached"
+    try:
+        vector_store.qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
+        first = asyncio.run(router.route_prompt("hi", user_id="u"))
+        assert first == "cached"
 
-    async def explode(*args, **kwargs):
-        raise RuntimeError("should not call")
+        async def explode(*args, **kwargs):
+            raise RuntimeError("should not call")
 
-    monkeypatch.setattr(router, "ask_gpt", explode)
-    second = asyncio.run(router.route_prompt("hi", user_id="u"))
-    assert second == "cached"
+        monkeypatch.setattr(router, "ask_gpt", explode)
+        second = asyncio.run(router.route_prompt("hi", user_id="u"))
+        assert second == "cached"
+    finally:
+        vector_store.close_store()
 
 
 def test_low_conf_rejection(monkeypatch):
