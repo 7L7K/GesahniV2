@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sys
 import time
 import unicodedata
 import uuid
@@ -357,13 +358,23 @@ class ChromaVectorStore(VectorStore):
 
 
 def _get_store() -> VectorStore:
-    if os.getenv("VECTOR_STORE", "").lower() in ("memory", "inmemory"):
+    kind = os.getenv("VECTOR_STORE", "").lower()
+    # Test or explicit memory override
+    if kind in ("memory", "inmemory") or \
+       "PYTEST_CURRENT_TEST" in os.environ or \
+       "pytest" in sys.modules:
+        logger.info("Using MemoryVectorStore (test or override)")
         return MemoryVectorStore()
+    # Default: Try Chroma, fallback *loudly* to memory for dev, but error in prod
     try:
         return ChromaVectorStore()
-    except Exception as exc:  # pragma: no cover - fallback path
-        logger.warning("Falling back to MemoryVectorStore due to error: %s", exc)
+    except Exception as exc:
+        if os.getenv("ENV", "").lower() == "production":
+            logger.error("FATAL: ChromaVectorStore failed in production: %s", exc)
+            raise  # Don’t silently fallback in prod
+        logger.warning("Falling back to MemoryVectorStore due to Chroma error: %s", exc)
         return MemoryVectorStore()
+
 
 
 _store: VectorStore = _get_store()
