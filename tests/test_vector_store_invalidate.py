@@ -12,5 +12,8 @@ def test_invalidate_cache_clears_entry():
     assert vector_store.lookup_cached_answer(prompt) == answer
 
     # Invalidate using a variant that normalizes to the same text
-    vector_store.invalidate_cache('Fancy "quotes"-and dashes')
-    assert vector_store.lookup_cached_answer(prompt) is None
+    try:
+        vector_store.invalidate_cache('Fancy "quotes"-and dashes')
+        assert vector_store.lookup_cached_answer(prompt) is None
+    finally:
+        vector_store.close_store()
