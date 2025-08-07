@@ -214,11 +214,11 @@ class VectorStore:
 
 
 # ---------------------------------------------------------------------------
-# ChromaVectorStore
+# MemoryVectorStore
 # ---------------------------------------------------------------------------
 
 
-class ChromaVectorStore(VectorStore):
+class MemoryVectorStore(VectorStore):
     def __init__(self) -> None:
         self._dist_cutoff = 1.0 - _get_sim_threshold()
         self._cache = _Collection()
