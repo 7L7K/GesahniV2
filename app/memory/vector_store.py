@@ -18,12 +18,15 @@ import os
 import time
 import unicodedata
 import uuid
+import logging
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import chromadb
 from app.embeddings import embed_sync
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Environment helpers
@@ -343,11 +346,13 @@ class ChromaVectorStore(VectorStore):
 
 
 def _get_store() -> VectorStore:
-    return (
-        MemoryVectorStore()
-        if os.getenv("VECTOR_STORE", "").lower() in ("memory", "inmemory")
-        else ChromaVectorStore()
-    )
+    if os.getenv("VECTOR_STORE", "").lower() in ("memory", "inmemory"):
+        return MemoryVectorStore()
+    try:
+        return ChromaVectorStore()
+    except Exception as exc:  # pragma: no cover - fallback path
+        logger.warning("Falling back to MemoryVectorStore due to error: %s", exc)
+        return MemoryVectorStore()
 
 
 _store: VectorStore = _get_store()
