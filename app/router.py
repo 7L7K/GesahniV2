@@ -1,5 +1,6 @@
 import logging
 import os
+import inspect
 from typing import Any, Awaitable, Callable
 
 from fastapi import Depends, HTTPException, status
@@ -91,18 +92,8 @@ async def route_prompt(
         )
 
     intent, priority = detect_intent(prompt)
-    if intent == "smalltalk":
-        skill_resp = await _SMALLTALK.handle(prompt)
-        if rec:
-            rec.engine_used = "skill"
-            rec.response = str(skill_resp)
-        await append_history(prompt, "skill", str(skill_resp))
-        await record("done", source="skill")
-        return skill_resp
 
-    skip_skills = intent == "chat" and priority == "high"
-
-    # 1️⃣ Explicit override
+    # 1️⃣ Explicit override (bypass skills like smalltalk)
     if model_override:
         mv = model_override.strip()
         logger.info("🔀 Model override requested → %s", mv)
@@ -167,6 +158,17 @@ async def route_prompt(
             status_code=400, detail=f"Unknown or disallowed model '{mv}'"
         )
 
+    if intent == "smalltalk":
+        skill_resp = await _SMALLTALK.handle(prompt)
+        if rec:
+            rec.engine_used = "skill"
+            rec.response = str(skill_resp)
+        await append_history(prompt, "skill", str(skill_resp))
+        await record("done", source="skill")
+        return skill_resp
+
+    skip_skills = intent == "chat" and priority == "high"
+
     # 2️⃣ Built‑in skills
     if not skip_skills:
         for entry in CATALOG:
@@ -179,7 +181,9 @@ async def route_prompt(
             return await _finalise("skill", prompt, skill_resp, rec)
 
     # 3️⃣ Home‑Assistant
-    ha_resp = await handle_command(prompt)
+    ha_resp = handle_command(prompt)
+    if inspect.isawaitable(ha_resp):
+        ha_resp = await ha_resp
     if ha_resp is not None:
         return await _finalise("ha", prompt, ha_resp.message, rec)
 
@@ -411,7 +415,7 @@ async def _call_llama(
     ptoks: int,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     gen_opts: dict[str, Any] | None = None,
-):
+): 
     tokens: list[str] = []
     logger.debug(
         "LLaMA opts: temperature=%s top_p=%s",
@@ -419,13 +423,34 @@ async def _call_llama(
         (gen_opts or {}).get("top_p"),
     )
     try:
-        async for tok in ask_llama(built_prompt, model, **(gen_opts or {})):
-            tokens.append(tok)
-            if stream_cb:
-                await stream_cb(tok)
+        result = ask_llama(built_prompt, model, **(gen_opts or {}))
+        if inspect.isasyncgen(result):
+            async for tok in result:
+                tokens.append(tok)
+                if stream_cb:
+                    await stream_cb(tok)
+            result_text = "".join(tokens).strip()
+        else:
+            if inspect.isawaitable(result):
+                result = await result
+            if isinstance(result, dict) and result.get("error"):
+                raise RuntimeError(str(result.get("error")))
+            result_text = (result or "").strip()
     except Exception:
-        raise HTTPException(status_code=503, detail="LLaMA backend unavailable")
-    result_text = "".join(tokens).strip()
+        fallback_model = os.getenv("OPENAI_MODEL", "gpt-4o")
+        text = await _call_gpt(
+            prompt=prompt,
+            built_prompt=built_prompt,
+            model=fallback_model,
+            rec=rec,
+            norm_prompt=norm_prompt,
+            session_id=session_id,
+            user_id=user_id,
+            ptoks=ptoks,
+            stream_cb=stream_cb,
+        )
+        await record("gpt", fallback=True)
+        return text
     if not result_text or _low_conf(result_text):
         raise HTTPException(status_code=503, detail="Low-confidence LLaMA response")
     if rec:
