@@ -11,8 +11,9 @@ import logging
 import os
 import uuid
 from pathlib import Path
+from typing import Awaitable, Callable
 
-from fastapi import HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import HTTPException, WebSocket
 
 from .session_manager import SESSIONS_DIR
 
@@ -92,6 +93,20 @@ async def transcribe_file(path: str, model: str | None = None) -> str:
 class TranscriptionStream:
     """Handle live transcription over a WebSocket."""
 
+    def __init__(
+        self,
+        ws: WebSocket,
+        transcribe_func: Callable[[str], Awaitable[str]] = transcribe_file,
+    ) -> None:
+        """Initialize the stream with a websocket and transcriber."""
+
+        self.ws = ws
+        self.transcribe = transcribe_func
+        self.session_id = uuid.uuid4().hex
+        self.full_text = ""
+        self.audio_path = Path(SESSIONS_DIR) / self.session_id / "stream.wav"
+        self.audio_path.parent.mkdir(parents=True, exist_ok=True)
+
     async def process(self) -> None:
         await self.ws.accept()
         # initial handshake
@@ -134,12 +149,14 @@ class TranscriptionStream:
                 fh.write(chunk)
                 tmp.write_bytes(chunk)
                 try:
-                    text = await transcribe_file(str(tmp))
+                    text = await self.transcribe(str(tmp))
                     self.full_text += (" " if self.full_text else "") + text
-                    await self.ws.send_json({
-                        "text": self.full_text,
-                        "session_id": self.session_id
-                    })
+                    await self.ws.send_json(
+                        {
+                            "text": self.full_text,
+                            "session_id": self.session_id,
+                        }
+                    )
                 except Exception as e:
                     await self.ws.send_json({"error": str(e)})
                 finally:
