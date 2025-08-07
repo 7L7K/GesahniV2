@@ -1,5 +1,3 @@
-# app/gpt_client.py
-
 """Thin wrapper around the OpenAI chat API.
 
 The original project depended on the official ``openai`` package.  The
@@ -14,13 +12,19 @@ when used.  Tests monkey‑patch ``ask_gpt`` so the stub is never exercised, but
 the import no longer fails when the dependency is missing.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import time
 from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from .metrics import REQUEST_COST, REQUEST_COUNT, REQUEST_LATENCY
 from .telemetry import log_record_var
+
+if TYPE_CHECKING:  # pragma: no cover - only for type checkers
+    from openai import AsyncOpenAI
 
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
@@ -31,11 +35,14 @@ SYSTEM_PROMPT = "You are a helpful assistant."
 logger = logging.getLogger(__name__)
 _client: AsyncOpenAI | None = None
 
-# price in USD per 1k tokens
+# price in USD per 1k input tokens (OpenAI pricing as of 2024-07-18)
+# Source: https://openai.com/pricing
 MODEL_PRICING = {
     "gpt-4o": 0.005,
-    "gpt-3.5-turbo": 0.002,
-    "gpt-4": 0.01,
+    "gpt-4o-mini": 0.00015,
+    "gpt-4": 0.03,
+    "gpt-3.5-turbo": 0.0005,
+    "gpt-3.5-turbo-instruct": 0.0015,
 }
 
 
@@ -56,7 +63,6 @@ def get_client() -> "AsyncOpenAI":
             raise RuntimeError("OPENAI_API_KEY not set")
         _client = AsyncOpenAI(api_key=api_key)
     return _client
-
 
 
 async def close_client() -> None:
