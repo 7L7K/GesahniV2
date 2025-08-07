@@ -14,6 +14,7 @@ Environment flags:
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import sys
 import time
@@ -24,7 +25,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
-import chromadb
+
+try:  # pragma: no cover - optional dependency
+    import chromadb
+except ImportError:  # pragma: no cover - optional dependency
+    chromadb = None
 from app.embeddings import embed_sync
 from app import metrics
 from app.telemetry import hash_user_id
@@ -35,6 +40,8 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:  # pragma: no cover - used only for type hints
     from chromadb.api.models.Collection import Collection as ChromaCollection
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Environment helpers
@@ -362,21 +369,22 @@ class ChromaVectorStore(VectorStore):
 
 def _get_store() -> VectorStore:
     kind = os.getenv("VECTOR_STORE", "").lower()
-    # Test or explicit memory override
+    # Use MemoryVectorStore for test runs or explicit override
     if kind in ("memory", "inmemory") or \
        "PYTEST_CURRENT_TEST" in os.environ or \
        "pytest" in sys.modules:
         logger.info("Using MemoryVectorStore (test or override)")
         return MemoryVectorStore()
-    # Default: Try Chroma, fallback *loudly* to memory for dev, but error in prod
+    # Default: Try ChromaVectorStore, fallback to memory with big warning (never silently in prod)
     try:
         return ChromaVectorStore()
     except Exception as exc:
         if os.getenv("ENV", "").lower() == "production":
             logger.error("FATAL: ChromaVectorStore failed in production: %s", exc)
-            raise  # Don’t silently fallback in prod
+            raise  # Stop the app, don’t run “ghost mode” in prod
         logger.warning("Falling back to MemoryVectorStore due to Chroma error: %s", exc)
         return MemoryVectorStore()
+
 
 
 
