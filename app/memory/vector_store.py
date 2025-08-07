@@ -498,6 +498,11 @@ def record_feedback(prompt: str, feedback: str) -> None:
     return _store.record_feedback(prompt, feedback)
 
 
+def qa_cache():
+    """Return the underlying QA cache collection."""
+    return _store.qa_cache
+
+
 def invalidate_cache(prompt: str) -> None:
     cid = _normalized_hash(prompt)
     logger.debug("Invalidating cache for %s", cid)
@@ -521,6 +526,7 @@ __all__ = [
     "cache_answer_legacy",
     "lookup_cached_answer",
     "record_feedback",
+    "qa_cache",
     "invalidate_cache",
     "close_store",
     "VectorStore",
