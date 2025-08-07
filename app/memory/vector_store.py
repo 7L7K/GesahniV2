@@ -21,7 +21,7 @@ import unicodedata
 import uuid
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import chromadb
@@ -32,6 +32,9 @@ from app.telemetry import hash_user_id
 logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:  # pragma: no cover - used only for type hints
+    from chromadb.api.models.Collection import Collection as ChromaCollection
 
 # ---------------------------------------------------------------------------
 # Environment helpers
@@ -306,7 +309,7 @@ class ChromaVectorStore(VectorStore):
         return [doc for _, _, doc in items[:k]]
 
     @property
-    def qa_cache(self):
+    def qa_cache(self) -> "ChromaCollection":
         return self._cache
 
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
