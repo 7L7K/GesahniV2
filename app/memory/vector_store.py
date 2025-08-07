@@ -362,10 +362,12 @@ class ChromaVectorStore(VectorStore):
         if _env_flag("DISABLE_QA_CACHE"):
             return
         _, norm = _normalize(prompt)
+        raw_meta = {"answer": answer, "timestamp": time.time(), "feedback": None}
+        cleaned = _clean_meta(raw_meta)
         self._cache.upsert(
             ids=[cache_id],
             documents=[norm],
-            metadatas=[{"answer": answer, "timestamp": time.time(), "feedback": None}],
+            metadatas=[cleaned],
         )
 
     def lookup_cached_answer(
