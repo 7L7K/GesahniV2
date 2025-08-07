@@ -248,7 +248,6 @@ def test_llama_circuit_open(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    os.environ["VECTOR_STORE"] = "memory"
     from app import router
 
     monkeypatch.setattr(router, "llama_circuit_open", True)
@@ -263,7 +262,6 @@ def test_generation_options_passthrough(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    os.environ["VECTOR_STORE"] = "memory"
     from app import router
 
     monkeypatch.setattr(router, "llama_circuit_open", False)

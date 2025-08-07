@@ -21,3 +21,11 @@ def test_cache_hit_low_threshold(monkeypatch, store):
     store.cache_answer("1", "hello", "world")
     # Cutoff 1.0 -> distance 1.0 still considered a hit
     assert store.lookup_cached_answer("helloo") == "world"
+
+
+def test_threshold_out_of_range(monkeypatch, caplog):
+    monkeypatch.setenv("SIM_THRESHOLD", "5")
+    with caplog.at_level("WARNING"):
+        store = ChromaVectorStore()
+    assert store._dist_cutoff == 1.0 - 0.90
+    assert "SIM_THRESHOLD" in caplog.text
