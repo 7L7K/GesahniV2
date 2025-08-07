@@ -368,6 +368,17 @@ class ChromaVectorStore(VectorStore):
 
 
 def _get_store() -> VectorStore:
+    """
+    Return the configured vector store.
+
+    ChromaVectorStore is the default backend. If configuration or
+    initialization fails (for example, an invalid CHROMA_PATH), the call
+    transparently falls back to the in-memory implementation so that imports do
+    not raise during tests or misconfigured environments.
+
+    If running in test mode (pytest), or VECTOR_STORE is set to 'memory'/'inmemory',
+    always use MemoryVectorStore. In production, do NOT silently fall back.
+    """
     kind = os.getenv("VECTOR_STORE", "").lower()
     # Use MemoryVectorStore for test runs or explicit override
     if kind in ("memory", "inmemory") or \
@@ -384,9 +395,6 @@ def _get_store() -> VectorStore:
             raise  # Stop the app, don’t run “ghost mode” in prod
         logger.warning("Falling back to MemoryVectorStore due to Chroma error: %s", exc)
         return MemoryVectorStore()
-
-
-
 
 _store: VectorStore = _get_store()
 
