@@ -45,3 +45,10 @@ LLAMA_LATENCY = Histogram(
     "llama_latency_ms",
     "Latency of LLaMA generations in milliseconds",
 )
+
+# Counter for user memory additions
+USER_MEMORY_ADDS = Counter(
+    "user_memory_add_total",
+    "Number of user memories added",
+    ["store", "user"],
+)
