@@ -8,7 +8,7 @@ Environment flags:
 - `VECTOR_STORE`: `memory`/`inmemory` to force test store, else uses Chroma.
 - `SIM_THRESHOLD`: cosine similarity threshold (default 0.90).
 - `DISABLE_QA_CACHE`: truthy value disables all QA‑cache operations.
-- `CHROMA_PATH`: filesystem path for Chroma DB (default `.chromadb`).
+- `CHROMA_PATH`: filesystem path for Chroma DB (default `.chroma_data`).
 """
 
 from __future__ import annotations
@@ -16,11 +16,13 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import sys
 import time
 import unicodedata
 import uuid
+import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -29,6 +31,15 @@ try:  # pragma: no cover - optional dependency
 except ImportError:  # pragma: no cover - optional dependency
     chromadb = None
 from app.embeddings import embed_sync
+from app import metrics
+from app.telemetry import hash_user_id
+
+logger = logging.getLogger(__name__)
+
+logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:  # pragma: no cover - used only for type hints
+    from chromadb.api.models.Collection import Collection as ChromaCollection
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +203,9 @@ class MemoryVectorStore(VectorStore):
         self._user_memories.setdefault(user_id, []).append(
             (mem_id, memory, embed_sync(memory), time.time())
         )
+        hashed = hash_user_id(user_id)
+        metrics.USER_MEMORY_ADDS.labels("memory", hashed).inc()
+        logger.debug("Added user memory %s for %s", mem_id, hashed)
         return mem_id
 
     def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
@@ -259,7 +273,8 @@ class MemoryVectorStore(VectorStore):
 class ChromaVectorStore(VectorStore):
     def __init__(self) -> None:
         self._dist_cutoff = 1.0 - float(os.getenv("SIM_THRESHOLD", "0.90"))
-        path = os.getenv("CHROMA_PATH", ".chromadb")
+        path = os.getenv("CHROMA_PATH", ".chroma_data")
+        os.makedirs(path, exist_ok=True)
         self._client = chromadb.PersistentClient(path=path)
         self._embedder = _LengthEmbedder()
         self._cache = self._client.get_or_create_collection(
@@ -276,6 +291,9 @@ class ChromaVectorStore(VectorStore):
             documents=[memory],
             metadatas=[{"user_id": user_id, "ts": time.time()}],
         )
+        hashed = hash_user_id(user_id)
+        metrics.USER_MEMORY_ADDS.labels("chroma", hashed).inc()
+        logger.debug("Added user memory %s for %s", mem_id, hashed)
         return mem_id
 
     def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
@@ -298,7 +316,7 @@ class ChromaVectorStore(VectorStore):
         return [doc for _, _, doc in items[:k]]
 
     @property
-    def qa_cache(self):
+    def qa_cache(self) -> "ChromaCollection":
         return self._cache
 
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
@@ -350,12 +368,24 @@ class ChromaVectorStore(VectorStore):
 
 
 def _get_store() -> VectorStore:
-    if os.getenv("VECTOR_STORE", "").lower() in ("memory", "inmemory"):
+    kind = os.getenv("VECTOR_STORE", "").lower()
+    # Use MemoryVectorStore for test runs or explicit override
+    if kind in ("memory", "inmemory") or \
+       "PYTEST_CURRENT_TEST" in os.environ or \
+       "pytest" in sys.modules:
+        logger.info("Using MemoryVectorStore (test or override)")
         return MemoryVectorStore()
-    if chromadb is None:
-        logger.warning("chromadb is not installed; falling back to MemoryVectorStore")
+    # Default: Try ChromaVectorStore, fallback to memory with big warning (never silently in prod)
+    try:
+        return ChromaVectorStore()
+    except Exception as exc:
+        if os.getenv("ENV", "").lower() == "production":
+            logger.error("FATAL: ChromaVectorStore failed in production: %s", exc)
+            raise  # Stop the app, don’t run “ghost mode” in prod
+        logger.warning("Falling back to MemoryVectorStore due to Chroma error: %s", exc)
         return MemoryVectorStore()
-    return ChromaVectorStore()
+
+
 
 
 _store: VectorStore = _get_store()
