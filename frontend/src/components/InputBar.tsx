@@ -10,7 +10,7 @@ export default function InputBar({
   model,
   onModelChange,
 }: {
-  onSend: (text: string) => void;
+  onSend: (text: string) => Promise<void> | void;
   loading: boolean;
   model: string;
   onModelChange: (m: string) => void;
@@ -20,13 +20,21 @@ export default function InputBar({
   const handleKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      send();
+      void send();
     }
   };
 
-  const send = () => {
-    onSend(text);
-    setText("");
+  const send = async () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    try {
+      await onSend(trimmed);
+      setText("");
+    } catch (err) {
+      // Keep input if send fails
+      console.error(err);
+    }
   };
 
   return (
@@ -48,7 +56,7 @@ export default function InputBar({
         rows={1}
         disabled={loading}
       />
-      <Button onClick={send} disabled={loading || !text.trim()} size="icon">
+      <Button onClick={() => { void send(); }} disabled={loading || !text.trim()} size="icon">
         <Send className="size-4" />
       </Button>
     </div>

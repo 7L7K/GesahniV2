@@ -7,18 +7,25 @@ import { Button } from '@/components/ui/button';
 import { sendPrompt } from '@/lib/api';
 
 interface ChatMessage {
+  id: string;
   role: 'user' | 'assistant';
   content: string;
 }
 
 export default function Page() {
-  const initialMessage: ChatMessage = {
+  const createInitialMessage = (): ChatMessage => ({
+    id: crypto.randomUUID(),
     role: 'assistant',
     content: "Hey King, what’s good?",
-  };
-  const [messages, setMessages] = useState<ChatMessage[]>([initialMessage]);
+  });
+
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    createInitialMessage(),
+  ]);
   const [loading, setLoading] = useState(false);
-  const [model, setModel] = useState('llama3');
+  const [model, setModel] = useState(() =>
+    localStorage.getItem('selected-model') || 'llama3'
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Hydrate from localStorage on mount
@@ -26,9 +33,12 @@ export default function Page() {
     const stored = localStorage.getItem('chat-history');
     if (stored) {
       try {
-        setMessages(JSON.parse(stored));
+        const parsed: ChatMessage[] = JSON.parse(stored);
+        setMessages(
+          parsed.map(m => ({ ...m, id: m.id ?? crypto.randomUUID() })),
+        );
       } catch {
-        setMessages([initialMessage]);
+        setMessages([createInitialMessage()]);
       }
     }
   }, []);
@@ -42,40 +52,58 @@ export default function Page() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Persist model selection
+  useEffect(() => {
+    localStorage.setItem('selected-model', model);
+  }, [model]);
+
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
 
-    // Optimistically render the user message
-    setMessages(prev => [...prev, { role: 'user', content: text }]);
+    const userMessage = { id: crypto.randomUUID(), role: 'user', content: text };
+    const assistantId = crypto.randomUUID();
+    setMessages(prev => [
+      ...prev,
+      userMessage,
+      { id: assistantId, role: 'assistant', content: '…' },
+    ]);
     setLoading(true);
 
     try {
-      // 🔗 Use the shared helper so we always hit NEXT_PUBLIC_API_URL
-      const replyText = await sendPrompt(text, model);
-      setMessages(prev => [...prev, { role: 'assistant', content: replyText }]);
+      await sendPrompt(text, model, chunk => {
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === assistantId
+              ? { ...m, content: (m.content === '…' ? '' : m.content) + chunk }
+              : m,
+          ),
+        );
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: `❌ ${message}` },
-      ]);
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === assistantId
+            ? { ...m, content: `❌ ${message}` }
+            : m,
+        ),
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const clearHistory = () => {
-    setMessages([initialMessage]);
+    setMessages([createInitialMessage()]);
   };
 
   return (
     <main className="flex flex-col h-screen bg-muted/50">
       {/* chat scroll area */}
       <section className="flex-1 overflow-y-auto p-4">
-        {messages.map((m, idx) => (
-          <ChatBubble key={idx} role={m.role} text={m.content} />
+        {messages.map(m => (
+          <ChatBubble key={m.id} role={m.role} text={m.content} />
         ))}
-        {loading && <ChatBubble role="assistant" text="…" ghost />}
         <div ref={bottomRef} />
       </section>
 
