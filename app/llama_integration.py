@@ -5,14 +5,15 @@ import time
 import json
 from typing import Any, AsyncIterator, Dict, Optional
 
-import httpx  # noqa: F401  # exposed for monkeypatching in tests
+import httpx
 from tenacity import AsyncRetrying, stop_after_attempt, wait_random_exponential
 
 from .deps.scheduler import scheduler, start as scheduler_start
 from .logging_config import req_id_var
 from .http_utils import json_request, log_exceptions
+from .metrics import LLAMA_LATENCY, LLAMA_TOKENS
 
-# Default to local Ollama if not provided
+# Default to local Ollama if not provided\N{NBSP}
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL")
 
@@ -20,14 +21,13 @@ logger = logging.getLogger(__name__)
 
 # Global health flag toggled by startup and periodic checks
 LLAMA_HEALTHY: bool = True
-PROMPT_TOKENS: int = 0
-COMPLETION_TOKENS: int = 0
 
-# Simple circuit breaker state
+# Circuit breaker state
 llama_failures: int = 0
 llama_last_failure_ts: float = 0.0
 llama_circuit_open: bool = False
 
+# Concurrency limit
 _MAX_STREAMS = int(os.getenv("LLAMA_MAX_STREAMS", "2"))
 _sema = asyncio.Semaphore(_MAX_STREAMS)
 
@@ -66,7 +66,7 @@ def _record_failure() -> None:
 
 
 def _reset_failures() -> None:
-    """Reset circuit breaker after successful call."""
+    """Reset circuit breaker state after a successful call."""
     global llama_failures, llama_circuit_open
     llama_failures = 0
     llama_circuit_open = False
@@ -75,19 +75,17 @@ def _reset_failures() -> None:
 async def startup_check() -> None:
     """
     Verify Ollama config and kick off health checks.
-    If OLLAMA_URL or OLLAMA_MODEL is missing, we warn and skip.
+    If OLLAMA_URL or OLLAMA_MODEL is missing, warn and skip.
     """
     missing = [
         name
-        for name, val in {
-            "OLLAMA_URL": OLLAMA_URL,
-            "OLLAMA_MODEL": OLLAMA_MODEL,
-        }.items()
+        for name, val in {"OLLAMA_URL": OLLAMA_URL, "OLLAMA_MODEL": OLLAMA_MODEL}.items()
         if not val
     ]
     if missing:
         logger.warning(
-            "OLLAMA startup skipped – missing env vars: %s", ", ".join(missing)
+            "OLLAMA startup skipped – missing env vars: %s", 
+            ", ".join(missing)
         )
         return
 
@@ -99,7 +97,7 @@ async def startup_check() -> None:
     scheduler_start()
 
 
-async def get_status() -> dict[str, Any]:
+async def get_status() -> Dict[str, Any]:
     """
     On-demand health endpoint. Re-checks Ollama before responding.
     Returns healthy status & latency_ms, or raises if still down.
@@ -114,39 +112,29 @@ async def get_status() -> dict[str, Any]:
 
 def ask_llama(
     prompt: str,
-    model: str | None = None,
+    model: Optional[str] = None,
     timeout: float = 30.0,
     gen_opts: Optional[Dict[str, Any]] = None,
 ) -> AsyncIterator[str]:
-    """Stream tokens from Ollama with retries and token stats.
-
-    Parameters are similar to the previous version but now allow ``gen_opts`` to
-    be passed directly to Ollama.  The returned async iterator exposes
-    ``prompt_tokens`` and ``completion_tokens`` attributes after iteration.
-    """
-
+    """Stream tokens from Ollama with retries, circuit breaker, and Prometheus metrics."""
+    # Determine model
     model = model or OLLAMA_MODEL
     if not model:
         logger.warning("ask_llama called without model")
-
-        async def _err():  # pragma: no cover - defensive
+        async def _err():  # pragma: no cover
             raise RuntimeError("model_not_set")
-            yield ""  # type: ignore
-
+            yield ""
         return _err()
 
-    global llama_circuit_open, llama_last_failure_ts, llama_failures
+    # Circuit breaker check
     now = time.monotonic()
     if llama_circuit_open:
         if now - llama_last_failure_ts > 120:
-            llama_circuit_open = False
-            llama_failures = 0
+            _reset_failures()
         else:
-
-            async def _open():  # pragma: no cover - circuit breaker
+            async def _open():  # pragma: no cover
                 raise RuntimeError("llama_circuit_open")
-                yield ""  # type: ignore
-
+                yield ""
             return _open()
 
     url = f"{OLLAMA_URL}/api/generate"
@@ -158,12 +146,16 @@ def ask_llama(
     holder: Dict[str, Any] = {}
 
     async def _generator() -> AsyncIterator[str]:
-        global LLAMA_HEALTHY, PROMPT_TOKENS, COMPLETION_TOKENS
+        start_time = time.monotonic()
+        prompt_tokens = 0
+        completion_tokens = 0
+
         retry = AsyncRetrying(
             wait=wait_random_exponential(min=1, max=4),
             stop=stop_after_attempt(3),
             reraise=True,
         )
+
         async for attempt in retry:
             with attempt:
                 try:
@@ -176,36 +168,35 @@ def ask_llama(
                                         continue
                                     try:
                                         data = json.loads(line)
-                                    except Exception:  # pragma: no cover - defensive
+                                    except Exception:
                                         continue
+                                    # Token handling
                                     token = data.get("response")
                                     if token:
                                         yield token
-                                    if data.get("prompt_eval_count") is not None:
-                                        holder["gen"].prompt_tokens = data.get(
-                                            "prompt_eval_count", 0
-                                        )
-                                        PROMPT_TOKENS = holder["gen"].prompt_tokens
+                                    # Update token counts
+                                    if data.get("prompt_eval_count") is not None and prompt_tokens == 0:
+                                        prompt_tokens = data.get("prompt_eval_count", 0)
                                     if data.get("eval_count") is not None:
-                                        holder["gen"].completion_tokens = data.get(
-                                            "eval_count", 0
-                                        )
-                                        COMPLETION_TOKENS = holder[
-                                            "gen"
-                                        ].completion_tokens
+                                        completion_tokens = data.get("eval_count", completion_tokens)
                                     if data.get("done"):
                                         break
+                    # Successful call resets circuit breaker
                     LLAMA_HEALTHY = True
                     _reset_failures()
-                    return
+                    break
                 except Exception as e:
                     LLAMA_HEALTHY = False
                     _record_failure()
                     logger.warning(
-                        "Ollama request failed",
-                        extra={"meta": {"req_id": req_id_var.get(), "error": str(e)}},
+                        "Ollama request failed", 
+                        extra={"meta": {"req_id": req_id_var.get(), "error": str(e)}}
                     )
                     raise
+        # Record Prometheus metrics
+        LLAMA_TOKENS.labels(direction="prompt").inc(prompt_tokens)
+        LLAMA_TOKENS.labels(direction="completion").inc(completion_tokens)
+        LLAMA_LATENCY.observe((time.monotonic() - start_time) * 1000)
 
     gen = _generator()
     holder["gen"] = gen
