@@ -14,6 +14,7 @@ Environment flags:
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import time
 import unicodedata
@@ -22,8 +23,14 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
-import chromadb
+
+try:  # pragma: no cover - optional dependency
+    import chromadb
+except ImportError:  # pragma: no cover - optional dependency
+    chromadb = None
 from app.embeddings import embed_sync
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Environment helpers
@@ -343,11 +350,12 @@ class ChromaVectorStore(VectorStore):
 
 
 def _get_store() -> VectorStore:
-    return (
-        MemoryVectorStore()
-        if os.getenv("VECTOR_STORE", "").lower() in ("memory", "inmemory")
-        else ChromaVectorStore()
-    )
+    if os.getenv("VECTOR_STORE", "").lower() in ("memory", "inmemory"):
+        return MemoryVectorStore()
+    if chromadb is None:
+        logger.warning("chromadb is not installed; falling back to MemoryVectorStore")
+        return MemoryVectorStore()
+    return ChromaVectorStore()
 
 
 _store: VectorStore = _get_store()
