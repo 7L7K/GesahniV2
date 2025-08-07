@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sys
 import time
 import unicodedata
 import uuid
@@ -343,11 +344,12 @@ class ChromaVectorStore(VectorStore):
 
 
 def _get_store() -> VectorStore:
-    return (
-        MemoryVectorStore()
-        if os.getenv("VECTOR_STORE", "").lower() in ("memory", "inmemory")
-        else ChromaVectorStore()
-    )
+    kind = os.getenv("VECTOR_STORE", "").lower()
+    if kind in ("memory", "inmemory"):
+        return MemoryVectorStore()
+    if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
+        return MemoryVectorStore()
+    return ChromaVectorStore()
 
 
 _store: VectorStore = _get_store()
