@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import uuid
+import hashlib
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -72,6 +73,15 @@ from .session_manager import (
 from .session_store import SessionStatus, list_sessions as list_session_store
 from .tasks import enqueue_summary, enqueue_transcription
 from .security import rate_limit, rate_limit_ws, verify_token, verify_ws
+
+
+def _anon_user_id(auth_header: str | None) -> str:
+    """Return a stable 32‑char hex ID from an optional ``Authorization`` header."""
+    if not auth_header:
+        return "local"
+    token = auth_header.split()[-1]
+    return hashlib.md5(token.encode()).hexdigest()
+
 
 configure_logging()
 logger = logging.getLogger(__name__)
