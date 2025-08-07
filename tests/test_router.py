@@ -78,35 +78,38 @@ def test_router_fallback_metrics_updated(monkeypatch):
     from app import router, analytics, llama_integration
     from app.memory import vector_store
 
-    vector_store.qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
-    llama_integration.LLAMA_HEALTHY = True
+    try:
+        vector_store.qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
+        llama_integration.LLAMA_HEALTHY = True
 
-    async def fake_llama(prompt, model=None):
-        return {"error": "timeout", "llm_used": "llama3"}
+        async def fake_llama(prompt, model=None):
+            return {"error": "timeout", "llm_used": "llama3"}
 
-    async def fake_gpt(prompt, model=None, system=None, **kwargs):
-        return "ok", 0, 0, 0.0
+        async def fake_gpt(prompt, model=None, system=None, **kwargs):
+            return "ok", 0, 0, 0.0
 
-    monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
-    monkeypatch.setattr(router, "ask_llama", fake_llama)
-    monkeypatch.setattr(router, "ask_gpt", fake_gpt)
-    analytics._metrics = {
-        "total": 0,
-        "llama": 0,
-        "gpt": 0,
-        "fallback": 0,
-        "session_count": 0,
-        "transcribe_ms": 0,
-        "transcribe_count": 0,
-        "transcribe_errors": 0,
-    }
+        monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
+        monkeypatch.setattr(router, "ask_llama", fake_llama)
+        monkeypatch.setattr(router, "ask_gpt", fake_gpt)
+        analytics._metrics = {
+            "total": 0,
+            "llama": 0,
+            "gpt": 0,
+            "fallback": 0,
+            "session_count": 0,
+            "transcribe_ms": 0,
+            "transcribe_count": 0,
+            "transcribe_errors": 0,
+        }
 
-    result = asyncio.run(router.route_prompt("hello world", user_id="u"))
-    assert result == "ok"
-    m = analytics.get_metrics()
-    assert m["total"] == 1
-    assert m["gpt"] == 1
-    assert m["fallback"] == 1
+        result = asyncio.run(router.route_prompt("hello world", user_id="u"))
+        assert result == "ok"
+        m = analytics.get_metrics()
+        assert m["total"] == 1
+        assert m["gpt"] == 1
+        assert m["fallback"] == 1
+    finally:
+        vector_store.close_store()
 
 
 def test_gpt_override(monkeypatch):
@@ -135,11 +138,14 @@ def test_gpt_override_invalid(monkeypatch):
     from app import router
     from app.memory import vector_store
 
-    vector_store.qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
+    try:
+        vector_store.qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
 
-    monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
-    with pytest.raises(HTTPException):
-        asyncio.run(router.route_prompt("hello world", "gpt-3", user_id="u"))
+        monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
+        with pytest.raises(HTTPException):
+            asyncio.run(router.route_prompt("hello world", "gpt-3", user_id="u"))
+    finally:
+        vector_store.close_store()
 
 
 def test_complexity_checks(monkeypatch):
