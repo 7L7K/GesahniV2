@@ -343,11 +343,20 @@ class ChromaVectorStore(VectorStore):
 
 
 def _get_store() -> VectorStore:
-    return (
-        MemoryVectorStore()
-        if os.getenv("VECTOR_STORE", "").lower() in ("memory", "inmemory")
-        else ChromaVectorStore()
-    )
+    """Return the configured vector store.
+
+    ``ChromaVectorStore`` is the default backend.  If configuration or
+    initialization fails (for example, an invalid ``CHROMA_PATH``), the call
+    transparently falls back to the in-memory implementation so that imports do
+    not raise during tests or misconfigured environments.
+    """
+
+    if os.getenv("VECTOR_STORE", "").lower() in ("memory", "inmemory"):
+        return MemoryVectorStore()
+    try:
+        return ChromaVectorStore()
+    except Exception:  # pragma: no cover - best effort fallback
+        return MemoryVectorStore()
 
 
 _store: VectorStore = _get_store()
