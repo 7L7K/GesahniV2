@@ -27,11 +27,11 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import chromadb
 import logging
-
 try:  # pragma: no cover - optional dependency
     import chromadb
 except ImportError:  # pragma: no cover - optional dependency
     chromadb = None
+
 from app.embeddings import embed_sync
 from app import metrics
 from app.telemetry import hash_user_id
