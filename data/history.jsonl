@@ -1298,3 +1298,4 @@
 {"req_id": "b7e63ef5-0aa6-437b-b043-2798bf3af500", "prompt": "2 + 2", "engine_used": "skill", "response": "4", "timestamp": "2025-08-07T01:49:54Z", "user_id": "anon", "received_at": "2025-08-07T01:49:49.586163+00:00", "started_at": "2025-08-07T01:49:49.586163+00:00", "latency_ms": 5034, "p95_latency_ms": 5034, "status": "OK", "matched_skill": "MathSkill", "match_confidence": 1.0, "intent": "unknown", "intent_confidence": 0.2515873908996582, "embed_tokens": 3}
 {"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-07T01:53:04Z"}
 {"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-07T01:55:18Z"}
+{"req_id": "-", "prompt": "unit test", "engine_used": "test", "response": "ok", "timestamp": "2025-08-07T02:54:31Z"}
