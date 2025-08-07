@@ -29,18 +29,21 @@ if TYPE_CHECKING:  # pragma: no cover - for type checkers only
 
 logger = logging.getLogger(__name__)
 
-_openai_client: "OpenAI | None" = None
+
 _llama_model = None
 
 
 def get_openai_client() -> "OpenAI":
-    """Return a cached synchronous OpenAI client."""
-    global _openai_client
-    if _openai_client is None:
-        from openai import OpenAI  # type: ignore
+    """Return a synchronous OpenAI client.
 
-        _openai_client = OpenAI()
-    return _openai_client
+    The client is instantiated on each call to avoid cross-test pollution when
+    the ``openai`` module is monkey-patched. The overhead is negligible for the
+    lightweight test embeddings used in this project.
+    """
+
+    from openai import OpenAI  # type: ignore
+
+    return OpenAI()
 
 
 try:  # pragma: no cover - import guarded for optional dependency

@@ -58,17 +58,17 @@ MODEL_PRICING = {
 
 
 def get_client() -> AsyncOpenAI:
-    """Return a singleton ``AsyncOpenAI`` client.
+    """Return a fresh ``AsyncOpenAI`` client for each call.
 
-    The API key is fetched at call time so tests can monkeypatch the
-    environment. If the key is missing a ``RuntimeError`` is raised.
+    Tests often monkeypatch the ``openai`` module; re-instantiating the client
+    avoids cross-test leakage from previously created instances.
     """
+
     global _client
-    if _client is None:
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY not set")
-        _client = AsyncOpenAI(api_key=api_key)
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY not set")
+    _client = AsyncOpenAI(api_key=api_key)
     return _client
 
 
