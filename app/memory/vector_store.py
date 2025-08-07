@@ -14,6 +14,7 @@ Environment flags:
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import time
 import unicodedata
@@ -25,6 +26,8 @@ import numpy as np
 import chromadb
 from app.embeddings import embed_sync
 
+logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
 # Environment helpers
 # ---------------------------------------------------------------------------
@@ -32,6 +35,30 @@ from app.embeddings import embed_sync
 
 def _env_flag(name: str) -> bool:
     return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+DEFAULT_SIM_THRESHOLD = 0.90
+
+
+def _get_sim_threshold() -> float:
+    raw = os.getenv("SIM_THRESHOLD", str(DEFAULT_SIM_THRESHOLD))
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid SIM_THRESHOLD %r; falling back to %.2f",
+            raw,
+            DEFAULT_SIM_THRESHOLD,
+        )
+        return DEFAULT_SIM_THRESHOLD
+    if not 0.0 <= value <= 1.0:
+        logger.warning(
+            "SIM_THRESHOLD %.2f out of range [0, 1]; falling back to %.2f",
+            value,
+            DEFAULT_SIM_THRESHOLD,
+        )
+        return DEFAULT_SIM_THRESHOLD
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +203,7 @@ class VectorStore:
 
 class MemoryVectorStore(VectorStore):
     def __init__(self) -> None:
-        self._dist_cutoff = 1.0 - float(os.getenv("SIM_THRESHOLD", "0.90"))
+        self._dist_cutoff = 1.0 - _get_sim_threshold()
         self._cache = _Collection()
         self._user_memories: Dict[str, List[Tuple[str, str, List[float], float]]] = {}
 
@@ -251,7 +278,7 @@ class MemoryVectorStore(VectorStore):
 
 class ChromaVectorStore(VectorStore):
     def __init__(self) -> None:
-        self._dist_cutoff = 1.0 - float(os.getenv("SIM_THRESHOLD", "0.90"))
+        self._dist_cutoff = 1.0 - _get_sim_threshold()
         path = os.getenv("CHROMA_PATH", ".chromadb")
         self._client = chromadb.PersistentClient(path=path)
         self._embedder = _LengthEmbedder()
