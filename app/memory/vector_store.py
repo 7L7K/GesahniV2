@@ -8,7 +8,7 @@ Environment flags:
 - `VECTOR_STORE`: `memory`/`inmemory` to force test store, else uses Chroma.
 - `SIM_THRESHOLD`: cosine similarity threshold (default 0.90).
 - `DISABLE_QA_CACHE`: truthy value disables all QA‑cache operations.
-- `CHROMA_PATH`: filesystem path for Chroma DB (default `.chromadb`).
+- `CHROMA_PATH`: filesystem path for Chroma DB (default `.chroma_data`).
 """
 
 from __future__ import annotations
@@ -252,7 +252,8 @@ class MemoryVectorStore(VectorStore):
 class ChromaVectorStore(VectorStore):
     def __init__(self) -> None:
         self._dist_cutoff = 1.0 - float(os.getenv("SIM_THRESHOLD", "0.90"))
-        path = os.getenv("CHROMA_PATH", ".chromadb")
+        path = os.getenv("CHROMA_PATH", ".chroma_data")
+        os.makedirs(path, exist_ok=True)
         self._client = chromadb.PersistentClient(path=path)
         self._embedder = _LengthEmbedder()
         self._cache = self._client.get_or_create_collection(
