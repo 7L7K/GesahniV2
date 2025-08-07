@@ -11,6 +11,11 @@ from .history import append_history
 from .home_assistant import handle_command
 from .intent_detector import detect_intent
 from .llama_integration import LLAMA_HEALTHY, ask_llama
+
+try:  # pragma: no cover - fall back if circuit flag missing
+    from .llama_integration import llama_circuit_open  # type: ignore
+except Exception:  # pragma: no cover - defensive
+    llama_circuit_open = False  # type: ignore
 from .memory import memgpt
 from .memory.vector_store import add_user_memory, cache_answer, lookup_cached_answer
 from .model_picker import pick_model
@@ -57,6 +62,7 @@ async def route_prompt(
     model_override: str | None = None,
     user_id: str = Depends(get_current_user_id),
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
+    **gen_opts: Any,
 ) -> Any:
     rec = log_record_var.get()
     norm_prompt = prompt.lower().strip()
@@ -76,6 +82,13 @@ async def route_prompt(
             rec.model_name = model
             rec.response = msg
         return msg
+
+    # Circuit breaker check: fail fast if LLaMA is unavailable
+    if llama_circuit_open:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LLaMA circuit open",
+        )
 
     intent, priority = detect_intent(prompt)
     if intent == "smalltalk":
@@ -107,7 +120,10 @@ async def route_prompt(
                 logger.warning("GPT override failed: %s", e)
                 if LLAMA_HEALTHY:
                     fallback_built, fallback_pt = PromptBuilder.build(
-                        prompt, session_id=session_id, user_id=user_id
+                        prompt,
+                        session_id=session_id,
+                        user_id=user_id,
+                        **gen_opts,
                     )
                     fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
                     return await _call_llama(
@@ -120,6 +136,7 @@ async def route_prompt(
                         user_id=user_id,
                         ptoks=fallback_pt,
                         stream_cb=stream_cb,
+                        gen_opts=gen_opts,
                     )
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -137,7 +154,14 @@ async def route_prompt(
             if debug_route:
                 return _dry("llama", mv)
             return await _call_llama_override(
-                mv, prompt, norm_prompt, session_id, user_id, rec, stream_cb
+                mv,
+                prompt,
+                norm_prompt,
+                session_id,
+                user_id,
+                rec,
+                stream_cb,
+                gen_opts,
             )
         raise HTTPException(
             status_code=400, detail=f"Unknown or disallowed model '{mv}'"
@@ -175,6 +199,7 @@ async def route_prompt(
         custom_instructions=getattr(rec, "custom_instructions", ""),
         debug=debug_route,
         debug_info=getattr(rec, "debug_info", ""),
+        **gen_opts,
     )
     if rec:
         rec.prompt_tokens = ptoks
@@ -227,6 +252,7 @@ async def route_prompt(
             user_id=user_id,
             ptoks=ptoks,
             stream_cb=stream_cb,
+            gen_opts=gen_opts,
         )
 
     # Fallback GPT-4o
@@ -258,6 +284,7 @@ async def route_prompt(
                 user_id=user_id,
                 ptoks=ptoks,
                 stream_cb=stream_cb,
+                gen_opts=gen_opts,
             )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -304,11 +331,19 @@ async def _call_llama_override(
     user_id,
     rec,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
+    gen_opts: dict[str, Any] | None = None,
 ):
-    built, pt = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
+    built, pt = PromptBuilder.build(
+        prompt, session_id=session_id, user_id=user_id, **(gen_opts or {})
+    )
     tokens: list[str] = []
+    logger.debug(
+        "LLaMA override opts: temperature=%s top_p=%s",
+        (gen_opts or {}).get("temperature"),
+        (gen_opts or {}).get("top_p"),
+    )
     try:
-        async for tok in ask_llama(built, model):
+        async for tok in ask_llama(built, model, **(gen_opts or {})):
             tokens.append(tok)
             if stream_cb:
                 await stream_cb(tok)
@@ -375,10 +410,16 @@ async def _call_llama(
     user_id: str,
     ptoks: int,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
+    gen_opts: dict[str, Any] | None = None,
 ):
     tokens: list[str] = []
+    logger.debug(
+        "LLaMA opts: temperature=%s top_p=%s",
+        (gen_opts or {}).get("temperature"),
+        (gen_opts or {}).get("top_p"),
+    )
     try:
-        async for tok in ask_llama(built_prompt, model):
+        async for tok in ask_llama(built_prompt, model, **(gen_opts or {})):
             tokens.append(tok)
             if stream_cb:
                 await stream_cb(tok)
