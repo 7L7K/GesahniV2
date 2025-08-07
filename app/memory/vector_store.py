@@ -221,6 +221,7 @@ class VectorStore:
         self, prompt: str, ttl_seconds: int = 86400
     ) -> Optional[str]: ...
     def record_feedback(self, prompt: str, feedback: str) -> None: ...
+    def close(self) -> None: ...
 
 
 # ---------------------------------------------------------------------------
@@ -306,6 +307,10 @@ class MemoryVectorStore(VectorStore):
             self._cache.delete(ids=[cid])
         else:
             self._cache.update(ids=[cid], metadatas=[{"feedback": feedback}])
+
+    def close(self) -> None:  # pragma: no cover - trivial
+        """No-op for compatibility with :class:`ChromaVectorStore`."""
+        return
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +417,23 @@ class ChromaVectorStore(VectorStore):
             logger.debug("Cache invalidated by feedback for %s", cid)
             self._cache.delete(ids=[cid])
 
+    def close(self) -> None:  # pragma: no cover - thin wrapper
+        """Dispose of the underlying Chroma client."""
+        client = getattr(self, "_client", None)
+        if client is None:
+            return
+        try:
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()
+            else:
+                reset = getattr(client, "reset", None)
+                if callable(reset):
+                    reset()
+        except Exception:
+            pass
+        self._client = None
+
 
 # ---------------------------------------------------------------------------
 # Module-level API
@@ -491,6 +513,16 @@ def invalidate_cache(prompt: str) -> None:
     _store.qa_cache.delete(ids=[cid])
 
 
+def close_store() -> None:
+    """Close and reset the global vector store."""
+    global _store
+    if _store is not None:
+        try:
+            _store.close()
+        finally:
+            _store = _get_store()
+
+
 __all__ = [
     "add_user_memory",
     "query_user_memories",
@@ -499,6 +531,7 @@ __all__ = [
     "lookup_cached_answer",
     "record_feedback",
     "invalidate_cache",
+    "close_store",
     "VectorStore",
     "MemoryVectorStore",
     "ChromaVectorStore",

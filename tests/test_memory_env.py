@@ -1,9 +1,16 @@
 import types
+import pytest
 from app.memory.vector_store import ChromaVectorStore
 
 
-def test_memory_env_reload(monkeypatch):
-    store = ChromaVectorStore()
+@pytest.fixture
+def store():
+    s = ChromaVectorStore()
+    yield s
+    s.close()
+
+
+def test_memory_env_reload(monkeypatch, store):
     fake_collection = types.SimpleNamespace(
         query=lambda query_texts, n_results, include: {
             "documents": [["A", "B"]],
