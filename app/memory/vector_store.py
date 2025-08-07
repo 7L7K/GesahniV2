@@ -25,6 +25,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+import chromadb
+import logging
 
 try:  # pragma: no cover - optional dependency
     import chromadb
@@ -95,6 +97,14 @@ class _LengthEmbedder:
     def name(self) -> str:  # pragma: no cover - simple helper for Chroma
         """Return a stable name used by Chroma to identify the embedder."""
         return "length-embedder"
+
+
+# ---------------------------------------------------------------------------
+# Logger
+# ---------------------------------------------------------------------------
+
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -236,23 +246,29 @@ class MemoryVectorStore(VectorStore):
     def lookup_cached_answer(
         self, prompt: str, ttl_seconds: int = 86400
     ) -> Optional[str]:
+        hash_ = _normalized_hash(prompt)
         if _env_flag("DISABLE_QA_CACHE"):
+            logger.debug("QA cache disabled; miss for %s", hash_)
             return None
         _, norm = _normalize(prompt)
         q_emb = embed_sync(norm)
         best = None
+        best_id = None
         best_dist = None
         for cid, rec in self._cache._store.items():
             if rec.feedback == "down":
                 continue
             dist = 1.0 - _cosine_similarity(q_emb, rec.embedding)
             if dist <= self._dist_cutoff and (best_dist is None or dist < best_dist):
-                best, best_dist = rec, dist
+                best, best_id, best_dist = rec, cid, dist
         if not best:
+            logger.debug("Cache miss for %s", hash_)
             return None
         if ttl_seconds and time.time() - best.timestamp > ttl_seconds:
-            self._cache.delete(ids=[cid])
+            logger.debug("Cache expired for %s", hash_)
+            self._cache.delete(ids=[best_id])
             return None
+        logger.debug("Cache hit for %s (dist=%.4f)", hash_, best_dist or -1.0)
         return best.answer
 
     def record_feedback(self, prompt: str, feedback: str) -> None:
@@ -260,6 +276,7 @@ class MemoryVectorStore(VectorStore):
             return
         cid = _normalized_hash(prompt)
         if feedback == "down":
+            logger.debug("Cache invalidated by feedback for %s", cid)
             self._cache.delete(ids=[cid])
         else:
             self._cache.update(ids=[cid], metadatas=[{"feedback": feedback}])
@@ -332,25 +349,32 @@ class ChromaVectorStore(VectorStore):
     def lookup_cached_answer(
         self, prompt: str, ttl_seconds: int = 86400
     ) -> Optional[str]:
+        hash_ = _normalized_hash(prompt)
         if _env_flag("DISABLE_QA_CACHE"):
+            logger.debug("QA cache disabled; miss for %s", hash_)
             return None
         res = self._cache.query(
             query_texts=[prompt], n_results=1, include=["metadatas", "distances"]
         )
         ids = res.get("ids", [[]])[0]
         if not ids:
+            logger.debug("Cache miss for %s", hash_)
             return None
         dist = float(res.get("distances", [[]])[0][0])
         meta = res.get("metadatas", [[]])[0][0] or {}
         if dist > self._dist_cutoff:
+            logger.debug("Cache miss for %s (dist=%.4f > cutoff)", hash_, dist)
             return None
         ts = float(meta.get("timestamp", 0))
         if ttl_seconds and time.time() - ts > ttl_seconds:
+            logger.debug("Cache expired for %s", hash_)
             self._cache.delete(ids=[ids[0]])
             return None
         if meta.get("feedback") == "down":
+            logger.debug("Cache invalidated by feedback for %s", hash_)
             self._cache.delete(ids=[ids[0]])
             return None
+        logger.debug("Cache hit for %s (dist=%.4f)", hash_, dist)
         return meta.get("answer")
 
     def record_feedback(self, prompt: str, feedback: str) -> None:
@@ -359,6 +383,7 @@ class ChromaVectorStore(VectorStore):
         cid = _normalized_hash(prompt)
         self._cache.update(ids=[cid], metadatas=[{"feedback": feedback}])
         if feedback == "down":
+            logger.debug("Cache invalidated by feedback for %s", cid)
             self._cache.delete(ids=[cid])
 
 
@@ -372,7 +397,7 @@ def _get_store() -> VectorStore:
     Return the configured vector store.
 
     ChromaVectorStore is the default backend. If configuration or
-    initialization fails (for example, an invalid CHROMA_PATH), the call
+    initialization fails (e.g., invalid CHROMA_PATH), the call
     transparently falls back to the in-memory implementation so that imports do
     not raise during tests or misconfigured environments.
 
@@ -380,20 +405,25 @@ def _get_store() -> VectorStore:
     always use MemoryVectorStore. In production, do NOT silently fall back.
     """
     kind = os.getenv("VECTOR_STORE", "").lower()
+    chroma_path = os.getenv("CHROMA_PATH", ".chroma_data")
     # Use MemoryVectorStore for test runs or explicit override
     if kind in ("memory", "inmemory") or \
        "PYTEST_CURRENT_TEST" in os.environ or \
        "pytest" in sys.modules:
-        logger.info("Using MemoryVectorStore (test or override)")
+        logger.info("Using MemoryVectorStore (test mode or VECTOR_STORE=%s)", kind)
         return MemoryVectorStore()
     # Default: Try ChromaVectorStore, fallback to memory with big warning (never silently in prod)
     try:
+        logger.info("Initializing ChromaVectorStore at path: %s", chroma_path)
         return ChromaVectorStore()
     except Exception as exc:
         if os.getenv("ENV", "").lower() == "production":
             logger.error("FATAL: ChromaVectorStore failed in production: %s", exc)
             raise  # Stop the app, don’t run “ghost mode” in prod
-        logger.warning("Falling back to MemoryVectorStore due to Chroma error: %s", exc)
+        logger.warning(
+            "ChromaVectorStore unavailable at %s: %s; falling back to MemoryVectorStore",
+            chroma_path, exc,
+        )
         return MemoryVectorStore()
 
 _store: VectorStore = _get_store()
@@ -430,7 +460,9 @@ def record_feedback(prompt: str, feedback: str) -> None:
 
 
 def invalidate_cache(prompt: str) -> None:
-    _store.qa_cache.delete(ids=[_normalized_hash(prompt)])
+    cid = _normalized_hash(prompt)
+    logger.debug("Invalidating cache for %s", cid)
+    _store.qa_cache.delete(ids=[cid])
 
 
 __all__ = [
