@@ -31,6 +31,9 @@ def setup_app(monkeypatch):
     monkeypatch.setattr(llama_integration, "startup_check", lambda: None)
     return main
 
+def test_key():
+    print("👀 OPENAI_API_KEY =", os.getenv("OPENAI_API_KEY"))
+    assert os.getenv("OPENAI_API_KEY", "").startswith("sk-")
 
 def test_config_forbidden(monkeypatch):
     main = setup_app(monkeypatch)

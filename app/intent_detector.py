@@ -48,7 +48,18 @@ DEFAULT_THRESHOLD: float = float(os.getenv("INTENT_THRESHOLD", "0.7"))
 MODEL_NAME = os.getenv("SBERT_MODEL", "sentence-transformers/paraphrase-MiniLM-L3-v2")
 
 EXAMPLE_INTENTS: Dict[str, list[str]] = {
-    "chat": ["tell me a joke", "what's the weather like?"],
+    "chat": [
+        "tell me a joke",
+        "what's the weather like?",
+        "tell me a fun fact",
+        "say something interesting",
+        "share a riddle",
+        "got any trivia?",
+        "do you know a random fact?",
+        "make me laugh",
+        "what's something cool?",
+        "can you amuse me?",
+    ],
     "control": ["turn on the light", "switch off the fan"],
     "smalltalk": ["hello", "hi there"],
     "unknown": ["asdfgh", "lorem ipsum"],

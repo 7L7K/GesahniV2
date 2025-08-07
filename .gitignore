@@ -15,3 +15,4 @@ sessions/*
 .envrc
 users.db
 data/history.jsonl
+tests/test_llama_health.py

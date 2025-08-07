@@ -10,7 +10,8 @@ from .gpt_client import SYSTEM_PROMPT, ask_gpt
 from .history import append_history
 from .home_assistant import handle_command
 from .intent_detector import detect_intent
-from .llama_integration import LLAMA_HEALTHY, ask_llama
+import app.llama_integration as llama_integration
+from .llama_integration import ask_llama
 
 try:  # pragma: no cover - fall back if circuit flag missing
     from .llama_integration import llama_circuit_open  # type: ignore
@@ -118,7 +119,7 @@ async def route_prompt(
                 )
             except Exception as e:
                 logger.warning("GPT override failed: %s", e)
-                if LLAMA_HEALTHY:
+                if llama_integration.LLAMA_HEALTHY:
                     fallback_built, fallback_pt = PromptBuilder.build(
                         prompt,
                         session_id=session_id,
@@ -146,7 +147,7 @@ async def route_prompt(
         if mv.startswith("llama"):
             if ALLOWED_LLAMA_MODELS and mv not in ALLOWED_LLAMA_MODELS:
                 raise HTTPException(status_code=400, detail=f"Model '{mv}' not allowed")
-            if not LLAMA_HEALTHY:
+            if not llama_integration.LLAMA_HEALTHY:
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="LLaMA backend unavailable",
@@ -221,7 +222,7 @@ async def route_prompt(
             )
         except Exception as e:
             logger.warning("GPT call failed: %s", e)
-            if LLAMA_HEALTHY:
+            if llama_integration.LLAMA_HEALTHY:
                 fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
                 return await _call_llama(
                     prompt=prompt,
@@ -239,7 +240,7 @@ async def route_prompt(
                 detail="GPT backend unavailable",
             )
 
-    if engine == "llama" and LLAMA_HEALTHY:
+    if engine == "llama" and llama_integration.LLAMA_HEALTHY:
         if debug_route:
             return _dry("llama", model_name)
         return await _call_llama(
@@ -272,7 +273,7 @@ async def route_prompt(
         )
     except Exception as e:
         logger.warning("GPT fallback failed: %s", e)
-        if LLAMA_HEALTHY:
+        if llama_integration.LLAMA_HEALTHY:
             fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
             return await _call_llama(
                 prompt=prompt,

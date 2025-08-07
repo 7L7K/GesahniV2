@@ -234,7 +234,9 @@ class MemoryVectorStore(VectorStore):
         logger.debug("Added user memory %s for %s", mem_id, hashed)
         return mem_id
 
-    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
+    def query_user_memories(self, user_id: str, prompt: str, k: int | None = None) -> List[str]:
+        if k is None:
+            k = int(os.getenv("MEM_TOP_K", "5"))
         q_emb = embed_sync(prompt)
         res: List[Tuple[float, float, str]] = []
         for _mid, doc, emb, ts in self._user_memories.get(user_id, []):
@@ -335,7 +337,9 @@ class ChromaVectorStore(VectorStore):
         logger.debug("Added user memory %s for %s", mem_id, hashed)
         return mem_id
 
-    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
+    def query_user_memories(self, user_id: str, prompt: str, k: int | None = None) -> List[str]:
+        if k is None:
+            k = int(os.getenv("MEM_TOP_K", "5"))
         res = self._user_memories.query(
             query_texts=[prompt],
             where={"user_id": user_id},
