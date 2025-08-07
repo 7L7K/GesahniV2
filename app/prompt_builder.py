@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 from .token_utils import count_tokens
 from .memory import memgpt
@@ -33,8 +33,14 @@ class PromptBuilder:
         debug: bool = False,
         debug_info: str = "",
         top_k: int | None = None,
+        **_: Any,
     ) -> Tuple[str, int]:
-        """Return a tuple of (prompt_str, prompt_tokens)."""
+        """Return a tuple of (prompt_str, prompt_tokens).
+
+        Additional keyword arguments (e.g., ``temperature`` or ``top_p``)
+        are accepted for compatibility with generation options and are
+        currently ignored by the builder.
+        """
         date_time = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
         summary = memgpt.summarize_session(session_id, user_id=user_id) or ""
         memories: List[str] = query_user_memories(user_id, user_prompt, k=top_k)[:3]
