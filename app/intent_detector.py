@@ -8,7 +8,12 @@ from functools import lru_cache
 from typing import Any, Dict, Iterable, Tuple
 
 from rapidfuzz import fuzz
-from sentence_transformers import SentenceTransformer, util
+
+try:  # pragma: no cover - optional heavy dependency
+    from sentence_transformers import SentenceTransformer, util
+except Exception:  # pragma: no cover - fallback when library missing
+    SentenceTransformer = None  # type: ignore
+    util = None  # type: ignore
 
 from .telemetry import log_record_var
 
@@ -53,6 +58,8 @@ EXAMPLE_INTENTS: Dict[str, list[str]] = {
 @lru_cache(maxsize=1)
 def _get_model() -> tuple[SentenceTransformer, Dict[str, Any]]:
     """Return the SBERT model and prototype embeddings."""
+    if SentenceTransformer is None:
+        raise RuntimeError("sentence-transformers not installed")
     model = SentenceTransformer(MODEL_NAME)
     embeds = {
         label: model.encode(texts, convert_to_tensor=True).mean(0)
@@ -62,7 +69,15 @@ def _get_model() -> tuple[SentenceTransformer, Dict[str, Any]]:
 
 
 def _semantic_classify(text: str) -> Tuple[str, float]:
-    """Return ``(intent, score)`` using cosine similarity over prototypes."""
+    """Return ``(intent, score)`` using a semantic model or fuzzy matching."""
+    if SentenceTransformer is None or util is None:
+        best_label = "unknown"
+        best_score = 0.0
+        for label, examples in EXAMPLE_INTENTS.items():
+            score = max(fuzz.partial_ratio(text, ex) for ex in examples)
+            if score > best_score:
+                best_label, best_score = label, float(score)
+        return best_label, best_score / 100.0
     model, embeds = _get_model()
     emb = model.encode(text, convert_to_tensor=True)
     scores = {label: float(util.cos_sim(emb, proto)) for label, proto in embeds.items()}
