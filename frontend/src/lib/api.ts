@@ -1,14 +1,17 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-export async function sendPrompt(prompt: string, model: string): Promise<string> {
-  const url = `${API_URL}/ask`;
+export async function sendPrompt(
+  prompt: string,
+  modelOverride: string,
+): Promise<string> {
+  const url = `${API_URL}/v1/ask`;
   console.debug('API_URL baked into bundle:', API_URL);
   console.debug('Sending request to', url);
 
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, model })
+    body: JSON.stringify({ prompt, model_override: modelOverride })
   });
 
   console.debug('Received response', res.status, res.statusText);
