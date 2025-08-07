@@ -48,7 +48,10 @@ def setup_cache(monkeypatch):
     monkeypatch.setattr(router, "append_history", dummy)
     monkeypatch.setattr(router, "record", dummy)
 
-    return router, vector_store
+    try:
+        yield router, vector_store
+    finally:
+        vector_store.close_store()
 
 
 def test_semantic_cache_hit_case_insensitive(setup_cache):
