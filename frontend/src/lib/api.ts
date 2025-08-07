@@ -3,6 +3,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 export async function sendPrompt(
   prompt: string,
   modelOverride: string,
+  onToken?: (chunk: string) => void,
 ): Promise<string> {
   const url = `${API_URL}/v1/ask`;
   console.debug('API_URL baked into bundle:', API_URL);
@@ -18,9 +19,9 @@ export async function sendPrompt(
 
   const contentType = res.headers.get('content-type') || '';
   const isJson = contentType.includes('application/json');
-  const body = isJson ? await res.json() : await res.text();
 
   if (!res.ok) {
+    const body = isJson ? await res.json() : await res.text();
     const message =
       typeof body === 'string'
         ? body
@@ -29,8 +30,28 @@ export async function sendPrompt(
   }
 
   if (isJson) {
+    const body = await res.json();
     return (body as { response: string }).response;
   }
 
-  return body as string;
+  const reader = res.body?.getReader();
+  if (!reader) {
+    throw new Error('Response body missing');
+  }
+
+  const decoder = new TextDecoder();
+  let result = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    if (chunk.startsWith('[error')) {
+      throw new Error(chunk.replace(/\[error:?|\]$/g, ''));
+    }
+    result += chunk;
+    onToken?.(chunk);
+  }
+
+  return result;
 }
