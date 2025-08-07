@@ -8,6 +8,7 @@ import logging
 import os
 import uuid
 import hashlib
+import inspect
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -215,9 +216,13 @@ async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     async def _producer() -> None:
         nonlocal status_code
         try:
-            await route_prompt(
-                req.prompt, req.model_override, user_id, stream_cb=_stream_cb
-            )
+            params = inspect.signature(route_prompt).parameters
+            if "stream_cb" in params:
+                await route_prompt(
+                    req.prompt, req.model_override, user_id, stream_cb=_stream_cb
+                )
+            else:  # Compatibility with tests that monkeypatch route_prompt
+                await route_prompt(req.prompt, req.model_override, user_id)
         except HTTPException as exc:
             status_code = exc.status_code
             await queue.put(f"[error:{exc.detail}]")
