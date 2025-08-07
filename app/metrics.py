@@ -36,3 +36,12 @@ REQUEST_COST = Histogram(
     "Request cost in USD",
     ["endpoint", "method", "engine"],
 )
+
+# Counter for LLaMA prompt/completion tokens
+LLAMA_TOKENS = Counter("llama_tokens", "Number of LLaMA tokens", ["direction"])
+
+# Histogram for LLaMA call latency in milliseconds
+LLAMA_LATENCY = Histogram(
+    "llama_latency_ms",
+    "Latency of LLaMA generations in milliseconds",
+)
