@@ -18,12 +18,17 @@ import os
 import time
 import unicodedata
 import uuid
+import logging
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import chromadb
 from app.embeddings import embed_sync
+from app import metrics
+from app.telemetry import hash_user_id
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Environment helpers
@@ -185,6 +190,9 @@ class MemoryVectorStore(VectorStore):
         self._user_memories.setdefault(user_id, []).append(
             (mem_id, memory, embed_sync(memory), time.time())
         )
+        hashed = hash_user_id(user_id)
+        metrics.USER_MEMORY_ADDS.labels("memory", hashed).inc()
+        logger.debug("Added user memory %s for %s", mem_id, hashed)
         return mem_id
 
     def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
@@ -269,6 +277,9 @@ class ChromaVectorStore(VectorStore):
             documents=[memory],
             metadatas=[{"user_id": user_id, "ts": time.time()}],
         )
+        hashed = hash_user_id(user_id)
+        metrics.USER_MEMORY_ADDS.labels("chroma", hashed).inc()
+        logger.debug("Added user memory %s for %s", mem_id, hashed)
         return mem_id
 
     def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
