@@ -20,13 +20,11 @@ import sys
 import time
 import unicodedata
 import uuid
-import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
-import chromadb
-import logging
+
 try:  # pragma: no cover - optional dependency
     import chromadb
 except ImportError:  # pragma: no cover - optional dependency
@@ -38,14 +36,8 @@ from app.telemetry import hash_user_id
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 if TYPE_CHECKING:  # pragma: no cover - used only for type hints
     from chromadb.api.models.Collection import Collection as ChromaCollection
-
-logger = logging.getLogger(__name__)
-
-logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Environment helpers
@@ -128,14 +120,6 @@ class _LengthEmbedder:
     def name(self) -> str:  # pragma: no cover - simple helper for Chroma
         """Return a stable name used by Chroma to identify the embedder."""
         return "length-embedder"
-
-
-# ---------------------------------------------------------------------------
-# Logger
-# ---------------------------------------------------------------------------
-
-
-logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
