@@ -3,8 +3,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import List, Optional, Any
 from contextvars import ContextVar
+from hashlib import sha256
 
 from pydantic import BaseModel
+
+
+def hash_user_id(user_id: str) -> str:
+    """Return a stable hash for a user identifier."""
+    return sha256(user_id.encode("utf-8")).hexdigest()[:32]
 
 
 def utc_now() -> datetime:
