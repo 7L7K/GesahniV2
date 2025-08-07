@@ -3,7 +3,7 @@ import re
 import logging
 from typing import Tuple
 
-from .llama_integration import OLLAMA_MODEL
+from .llama_integration import OLLAMA_MODEL, LLAMA_HEALTHY, llama_circuit_open
 
 logger = logging.getLogger(__name__)
 
@@ -34,4 +34,7 @@ def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str]:
 
     if not LLAMA_DEFAULT_MODEL:
         logger.warning("No LLAMA model configured—using fallback 'llama'")
+    if not LLAMA_HEALTHY or llama_circuit_open:
+        logger.info("LLaMA unavailable, routing to GPT")
+        return "gpt", GPT_DEFAULT_MODEL
     return "llama", LLAMA_DEFAULT_MODEL
