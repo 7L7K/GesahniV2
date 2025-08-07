@@ -60,34 +60,34 @@ export default function Page() {
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
 
-    // Optimistically render the user message
+    const userMessage = { id: crypto.randomUUID(), role: 'user', content: text };
+    const assistantId = crypto.randomUUID();
     setMessages(prev => [
       ...prev,
-      { id: crypto.randomUUID(), role: 'user', content: text },
+      userMessage,
+      { id: assistantId, role: 'assistant', content: '…' },
     ]);
     setLoading(true);
 
     try {
-      const replyText = await sendPrompt(text, model);
-      console.log('Response received:', replyText);
-      setMessages(prev => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: replyText,
-        },
-      ]);
+      await sendPrompt(text, model, chunk => {
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === assistantId
+              ? { ...m, content: (m.content === '…' ? '' : m.content) + chunk }
+              : m,
+          ),
+        );
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setMessages(prev => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: `❌ ${message}`,
-        },
-      ]);
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === assistantId
+            ? { ...m, content: `❌ ${message}` }
+            : m,
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -104,7 +104,6 @@ export default function Page() {
         {messages.map(m => (
           <ChatBubble key={m.id} role={m.role} text={m.content} />
         ))}
-        {loading && <ChatBubble role="assistant" text="…" ghost />}
         <div ref={bottomRef} />
       </section>
 
