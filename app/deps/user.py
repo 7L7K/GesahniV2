@@ -4,7 +4,7 @@ from uuid import uuid4
 from fastapi import Request, WebSocket, HTTPException
 import jwt
 
-from ..telemetry import LogRecord, log_record_var
+from ..telemetry import LogRecord, log_record_var, hash_user_id
 
 JWT_SECRET: str | None = None  # overridden in tests; env used when None
 
@@ -51,8 +51,8 @@ def get_current_user_id(
     if not user_id:
         user_id = "anon"
 
-    # Attach to record + state for authenticated users only
-    rec.user_id = user_id
+    # Attach hashed ID to telemetry; keep raw on state when authenticated
+    rec.user_id = hash_user_id(user_id) if user_id != "anon" else "anon"
     if target and user_id != "anon":
         target.state.user_id = user_id
 
