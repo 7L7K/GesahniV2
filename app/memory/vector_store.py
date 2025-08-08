@@ -40,6 +40,22 @@ if TYPE_CHECKING:  # pragma: no cover - used only for type hints
     from chromadb.api.models.Collection import Collection as ChromaCollection
 
 # ---------------------------------------------------------------------------
+# Env-int parsing for vector queries
+# ---------------------------------------------------------------------------
+def _int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logging.warning("%s=%r not an int, falling back to %d", name, raw, default)
+        return default
+
+# default number of results for Chroma/Memory queries
+TOP_K = _int_env("MEM_TOP_K", 4)
+
+# ---------------------------------------------------------------------------
 # Environment helpers
 # ---------------------------------------------------------------------------
 
@@ -379,6 +395,7 @@ class ChromaVectorStore(VectorStore):
 
     def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
         self._dist_cutoff = 1.0 - _get_sim_threshold()
+        k = k if isinstance(k, int) else TOP_K
         res = self._user_memories.query(
             query_texts=[prompt],
             where={"user_id": user_id},
@@ -423,6 +440,11 @@ class ChromaVectorStore(VectorStore):
             return None
         res = self._cache.query(
             query_texts=[prompt], n_results=1, include=["metadatas", "distances"]
+        )
+        # make sure n_results is always int
+        n = 1 if not isinstance(1, int) else 1  # trivial, but shows intentio
+        res = self._cache.query(
+            query_texts=[prompt], n_results=n, include=["metadatas", "distances"]
         )
         ids = res.get("ids", [[]])[0]
         if not ids:
