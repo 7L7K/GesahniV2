@@ -53,32 +53,47 @@ def query_user_memories(user_id: str, prompt: str, k: int = 5) -> List[str]:
     return _store.query_user_memories(user_id, prompt, k)
 
 
-def cache_answer(*args, **kwargs) -> None:
-    if "prompt" in kwargs and "answer" in kwargs:
-        prompt_val: str = kwargs["prompt"]
-        answer_val: str = kwargs["answer"]
-        cache_id_val: str | None = kwargs.get("cache_id")
-    else:
-        if len(args) == 2:
-            prompt_val, answer_val = args  # type: ignore[assignment]
-            cache_id_val = None
-        elif len(args) == 3:
-            cache_id_val, prompt_val, answer_val = args
-        else:
-            raise TypeError(
-                "cache_answer expects (prompt, answer) or (cache_id, prompt, answer)"
-            )
-    cid = cache_id_val or _normalized_hash(prompt_val)
-    _store.cache_answer(cid, prompt_val, answer_val)
+def cache_answer(prompt: str, answer: str, cache_id: str | None = None) -> None:
+    """Cache an answer for the given prompt.
+
+    Parameters
+    ----------
+    prompt:
+        Normalized prompt text.
+    answer:
+        Response text to cache.
+    cache_id:
+        Optional explicit cache identifier. If omitted the identifier is
+        generated from a normalized hash of the prompt.
+    """
+
+    cid = cache_id or _normalized_hash(prompt)
+    _store.cache_answer(cid, prompt, answer)
 
 
-def cache_answer_legacy(*args) -> None:
+def cache_answer_legacy(*args) -> None:  # pragma: no cover - shim for callers
+    """Backward compatible wrapper for positional cache_answer usage.
+
+    This helper emits a ``DeprecationWarning`` and forwards to
+    :func:`cache_answer` using the new explicit signature. It will be removed
+    once all callers are migrated.
+    """
+
+    import warnings
+
+    warnings.warn(
+        "cache_answer positional arguments are deprecated; use "
+        "cache_answer(prompt, answer, cache_id=None)",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     if len(args) == 2:
         cache_answer(args[0], args[1])
     elif len(args) == 3:
-        cache_answer(args[1], args[2], args[0])
+        cache_answer(args[1], args[2], cache_id=args[0])
     else:
-        raise TypeError("cache_answer expects 2 or 3 arguments")
+        raise TypeError("cache_answer_legacy expects 2 or 3 arguments")
 
 
 def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
