@@ -42,3 +42,33 @@ def test_substring_fallback(monkeypatch):
     monkeypatch.setattr(ha, "get_states", fake_states)
     result = asyncio.run(ha.resolve_entity("coffee"))
     assert result == ["switch.coffee"]
+
+
+def test_get_states_cache_and_invalidate(monkeypatch):
+    setup_env(monkeypatch)
+    ha.invalidate_states_cache()
+
+    calls = {"states": 0}
+
+    async def fake_request(method, path, json=None, timeout=10.0):
+        if path == "/states":
+            calls["states"] += 1
+            return [
+                {
+                    "entity_id": "light.kitchen",
+                    "attributes": {"friendly_name": "Kitchen"},
+                }
+            ]
+        return {}
+
+    monkeypatch.setattr(ha, "_request", fake_request)
+
+    async def run():
+        await ha.resolve_entity("Kitchen")
+        await ha.resolve_entity("Kitchen")
+        assert calls["states"] == 1
+        await ha.call_service("light", "turn_on", {"entity_id": "light.kitchen"})
+        await ha.resolve_entity("Kitchen")
+        assert calls["states"] == 2
+
+    asyncio.run(run())

@@ -20,6 +20,18 @@ def test_rate_limit_prunes_empty(monkeypatch):
     assert "ip" not in security._requests
 
 
+# Added in response to bucket reset fix
+def test_bucket_counters_reset(monkeypatch):
+    bucket = {}
+    key = "ip"
+    limit = 1
+    period = 0.05
+    assert security._bucket_rate_limit(key, bucket, limit, period)
+    assert not security._bucket_rate_limit(key, bucket, limit, period)
+    time.sleep(period)
+    assert security._bucket_rate_limit(key, bucket, limit, period)
+
+
 # From main
 def _build_app(monkeypatch):
     monkeypatch.setattr(security, "RATE_LIMIT", 1)
