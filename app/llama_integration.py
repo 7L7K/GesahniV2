@@ -1,4 +1,6 @@
 import os
+import socket
+from urllib.parse import urlparse, urlunparse
 import asyncio
 import logging
 import time
@@ -19,6 +21,36 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:latest") # export me!
 
 if not OLLAMA_URL:
     raise RuntimeError("Set OLLAMA_URL, e.g. http://100.106.146.111:11434")
+
+# Force IPv4 resolution for the Ollama host (Tailscale compatibility)
+def _force_ipv4_base(url: str) -> str:
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        # If already an IPv4 literal, or no host, return as-is
+        try:
+            socket.inet_aton(host)
+            return url
+        except OSError:
+            pass
+
+        # Resolve A records only (IPv4). Use first result.
+        infos = socket.getaddrinfo(host, parsed.port, family=socket.AF_INET, type=socket.SOCK_STREAM)
+        if not infos:
+            return url
+        ipv4_addr = infos[0][4][0]
+        # Rebuild netloc with resolved IPv4 and original port
+        port = f":{parsed.port}" if parsed.port else ""
+        netloc = f"{ipv4_addr}{port}"
+        rebuilt = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+        return rebuilt
+    except Exception:
+        # On any failure, silently fall back to original URL
+        return url
+
+# Allow opting out via env if needed
+if os.getenv("OLLAMA_FORCE_IPV6", "").lower() not in {"1", "true", "yes"}:
+    OLLAMA_URL = _force_ipv4_base(OLLAMA_URL)
 
 logger = logging.getLogger(__name__)
 
