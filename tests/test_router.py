@@ -73,7 +73,7 @@ def patch_memgpt_and_vector(monkeypatch):
     # Patch MemGPT and any memory routines to pure no-op for tests
     monkeypatch.setattr(router, "memgpt", types.SimpleNamespace(store_interaction=lambda *a, **k: None))
     monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
-    monkeypatch.setattr(router, "cache_answer", lambda *a, **k: None)
+    monkeypatch.setattr(router, "cache_answer", lambda prompt, answer, cache_id=None: None)
     # Patch all vector store clearing for compatibility
     if hasattr(vector_store, "clear_cache"):
         monkeypatch.setattr(vector_store, "clear_cache", lambda: None)
@@ -216,7 +216,7 @@ def test_debug_env_toggle(monkeypatch):
     router.LLAMA_HEALTHY = False
     monkeypatch.setattr(router.memgpt, "store_interaction", lambda *a, **k: None)
     monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
-    monkeypatch.setattr(router, "cache_answer", lambda *a, **k: None)
+    monkeypatch.setattr(router, "cache_answer", lambda prompt, answer, cache_id=None: None)
 
     flags = []
 
@@ -262,7 +262,7 @@ def test_generation_options_passthrough(monkeypatch):
     router.LLAMA_HEALTHY = True
     monkeypatch.setattr(router.memgpt, "store_interaction", lambda *a, **k: None)
     monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
-    monkeypatch.setattr(router, "cache_answer", lambda *a, **k: None)
+    monkeypatch.setattr(router, "cache_answer", lambda prompt, answer, cache_id=None: None)
 
     captured: dict[str, Any] = {}
 

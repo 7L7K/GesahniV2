@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import ChatBubble from '../components/ChatBubble';
+import LoadingBubble from '../components/LoadingBubble';
 import InputBar from '../components/InputBar';
 import { Button } from '@/components/ui/button';
 import { sendPrompt } from '@/lib/api';
@@ -10,6 +11,7 @@ interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  loading?: boolean;
 }
 
 export default function Page() {
@@ -67,7 +69,7 @@ export default function Page() {
     if (typeof window !== 'undefined') {
       localStorage.setItem(
         'chat-history',
-        JSON.stringify(messages.slice(-100)),
+        JSON.stringify(messages.filter(m => !m.loading).slice(-100)),
       );
     }
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -85,7 +87,7 @@ export default function Page() {
 
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text };
     const assistantId = crypto.randomUUID();
-    const placeholder: ChatMessage = { id: assistantId, role: 'assistant', content: '…' };
+    const placeholder: ChatMessage = { id: assistantId, role: 'assistant', content: '', loading: true };
     setMessages(prev => [
       ...prev,
       userMessage,
@@ -98,7 +100,7 @@ export default function Page() {
         setMessages(prev =>
           prev.map(m =>
             m.id === assistantId
-              ? { ...m, content: (m.content === '…' ? '' : m.content) + chunk }
+              ? { ...m, loading: false, content: m.content + chunk }
               : m,
           ),
         );
@@ -106,7 +108,7 @@ export default function Page() {
       // Ensure final content is set even if the backend didn't stream tokens
       if (typeof full === 'string') {
         setMessages(prev =>
-          prev.map(m => (m.id === assistantId ? { ...m, content: full } : m)),
+          prev.map(m => (m.id === assistantId ? { ...m, loading: false, content: full } : m)),
         );
       }
     } catch (err) {
@@ -114,7 +116,7 @@ export default function Page() {
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantId
-            ? { ...m, content: `❌ ${message}` }
+            ? { ...m, loading: false, content: `❌ ${message}` }
             : m,
         ),
       );
@@ -131,9 +133,13 @@ export default function Page() {
     <main className="flex flex-col h-screen bg-muted/50">
       {/* chat scroll area */}
       <section className="flex-1 overflow-y-auto p-4">
-        {messages.map(m => (
-          <ChatBubble key={m.id} role={m.role} text={m.content} />
-        ))}
+        {messages.map(m =>
+          m.loading ? (
+            <LoadingBubble key={m.id} />
+          ) : (
+            <ChatBubble key={m.id} role={m.role} text={m.content} />
+          )
+        )}
         <div ref={bottomRef} />
       </section>
 
