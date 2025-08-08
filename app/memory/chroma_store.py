@@ -153,7 +153,7 @@ class ChromaVectorStore(VectorStore):
             return None
         dist = float(res.get("distances", [[]])[0][0])
         meta = res.get("metadatas", [[]])[0][0] or {}
-        if dist > self._dist_cutoff:
+        if dist >= self._dist_cutoff:
             logger.debug("Cache miss for %s (dist=%.4f > cutoff)", hash_, dist)
             return None
         ts = float(meta.get("timestamp", 0))
