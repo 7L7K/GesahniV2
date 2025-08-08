@@ -48,6 +48,16 @@ _SMALLTALK = SmalltalkSkill()
 LLAMA_HEALTHY: bool = True
 
 # ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _mark_llama_unhealthy() -> None:
+    """Flip the shared health flag so the picker knows LLaMA is down."""
+    global LLAMA_HEALTHY
+    LLAMA_HEALTHY = False
+    llama_integration.LLAMA_HEALTHY = False
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -99,7 +109,7 @@ async def route_prompt(
 
     # Circuit breaker check: degrade to GPT if LLaMA is unavailable
     if llama_circuit_open:
-        llama_integration.LLAMA_HEALTHY = False
+        _mark_llama_unhealthy()
         # keep model picker in sync so GPT is selected
         model_picker_module.LLAMA_HEALTHY = False
 
@@ -496,9 +506,7 @@ async def _call_llama(
             )
     if not result_text or _low_conf(result_text):
         # Mark LLaMA unhealthy and fall back to GPT on empty or low-confidence replies
-        global LLAMA_HEALTHY
-        LLAMA_HEALTHY = False
-        llama_integration.LLAMA_HEALTHY = False
+        _mark_llama_unhealthy()
         fallback_model = os.getenv("OPENAI_MODEL", "gpt-4o")
         try:
             text = await _call_gpt(
