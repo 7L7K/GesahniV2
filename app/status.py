@@ -37,7 +37,7 @@ async def config(
     if not ADMIN_TOKEN or token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="forbidden")
     out = {k: v for k, v in os.environ.items() if k.isupper()}
-    out.setdefault("SIM_THRESHOLD", os.getenv("SIM_THRESHOLD", "0.90"))
+    out.setdefault("SIM_THRESHOLD", os.getenv("SIM_THRESHOLD", "0.24"))
     try:
         import builtins
 
