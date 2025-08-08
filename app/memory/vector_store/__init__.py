@@ -1,4 +1,10 @@
-"""Compatibility wrapper re-exporting vector store API."""
+"""Compatibility wrapper re-exporting vector store API.
+
+This module centralizes vector store helpers under a single import path.
+Tests rely on these re-exports to avoid pulling in heavy dependencies and
+they provide a seam for swapping out the underlying provider in the future
+without touching call sites.
+"""
 
 from ..api import (
     ChromaVectorStore,
@@ -16,6 +22,7 @@ from ..api import (
 )
 from app.embeddings import embed_sync as _embed_sync
 from ..env_utils import _normalize as _normalize, _normalized_hash as _normalized_hash
+
 embed_sync = _embed_sync
 
 
@@ -35,7 +42,6 @@ __all__ = [
     "_normalize",
     "_normalized_hash",
     "embed_sync",
-
 ]
 
 # Re-export internal helper for tests that import module._get_store
@@ -43,4 +49,3 @@ try:  # pragma: no cover - test-only import path
     from ..api import _get_store as _get_store  # type: ignore
 except Exception:  # pragma: no cover - defensive
     pass
-
