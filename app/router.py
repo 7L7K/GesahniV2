@@ -115,8 +115,6 @@ async def route_prompt(
         if mv.startswith("gpt"):
             if mv not in ALLOWED_GPT_MODELS:
                 raise HTTPException(status_code=400, detail=f"Model '{mv}' not allowed")
-            if debug_route:
-                return _dry("gpt", mv)
             try:
                 return await _call_gpt_override(
                     mv, prompt, norm_prompt, session_id, user_id, rec, stream_cb
@@ -156,8 +154,6 @@ async def route_prompt(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="LLaMA backend unavailable",
                 )
-            if debug_route:
-                return _dry("llama", mv)
             return await _call_llama_override(
                 mv,
                 prompt,
