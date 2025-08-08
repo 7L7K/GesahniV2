@@ -38,3 +38,9 @@ __all__ = [
 
 ]
 
+# Re-export internal helper for tests that import module._get_store
+try:  # pragma: no cover - test-only import path
+    from ..api import _get_store as _get_store  # type: ignore
+except Exception:  # pragma: no cover - defensive
+    pass
+
