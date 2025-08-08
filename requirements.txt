@@ -100,3 +100,4 @@ websockets==15.0.1
 zipp==3.23.0
 pytest_asyncio
 apscheduler==3.10.4
+prometheus-client==0.20.0
