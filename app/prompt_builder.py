@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import cache
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import Any
 
 import logging
 
@@ -17,9 +18,18 @@ from .telemetry import log_record_var
 
 MAX_PROMPT_TOKENS = 8_000
 
-# Load static prompt core at import time
 _CORE_PATH = Path(__file__).parent / "prompts" / "prompt_core.txt"
-_PROMPT_CORE = _CORE_PATH.read_text(encoding="utf-8")
+
+
+@cache
+def _prompt_core() -> str:
+    """Return the static prompt template.
+
+    The underlying file is read once and cached for future calls.
+    """
+    return _CORE_PATH.read_text(encoding="utf-8")
+
+
 # note: if tiktoken is missing, token_utils.count_tokens will perform a
 # naive word-based count which is sufficient for tests.
 
@@ -40,7 +50,7 @@ class PromptBuilder:
         debug_info: str = "",
         top_k: int | None = None,
         **_: Any,
-    ) -> Tuple[str, int]:
+    ) -> tuple[str, int]:
         """Return a tuple of (prompt_str, prompt_tokens).
 
         Additional keyword arguments (e.g., ``temperature`` or ``top_p``)
@@ -56,11 +66,11 @@ class PromptBuilder:
         if rec:
             rec.embed_tokens = count_tokens(user_prompt)
             rec.rag_top_k = top_k
-        memories: List[str] = query_user_memories(user_id, user_prompt, k=top_k)[:3]
+        memories: list[str] = query_user_memories(user_id, user_prompt, k=top_k)[:3]
         while count_tokens("\n".join(memories)) > 55 and memories:
             memories.pop()
         dbg = debug_info if debug else ""
-        base_prompt = _PROMPT_CORE
+        base_prompt = _prompt_core()
         base_replacements = {
             "date_time": date_time,
             "conversation_summary": summary,
@@ -76,7 +86,7 @@ class PromptBuilder:
         # Token budgeting: remove summary first, then drop low-sim/oldest
         mem_list = list(memories)
         while True:
-            prompt = _PROMPT_CORE
+            prompt = _prompt_core()
             mem_text = "\n".join(mem_list)
             replacements = {
                 "date_time": date_time,
@@ -94,7 +104,7 @@ class PromptBuilder:
             if summary:
                 summary = ""
                 base_replacements["conversation_summary"] = ""
-                base_prompt = _PROMPT_CORE
+                base_prompt = _prompt_core()
                 for key, val in base_replacements.items():
                     base_prompt = base_prompt.replace(f"{{{{{key}}}}}", val)
                 base_tokens = count_tokens(base_prompt)
