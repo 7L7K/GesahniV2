@@ -9,14 +9,36 @@ try:
 except Exception:  # pragma: no cover - optional dependency
 
     class AsyncIOScheduler:  # minimal stub
+        """Fallback scheduler that simply queues jobs.
+
+        Jobs will never execute but are stored so callers can at least
+        acknowledge scheduling requests. This mirrors the minimal API of
+        ``apscheduler`` used by this project.
+        """
+
         def __init__(self):
             self.running = False
+            self.jobs: list[dict] = []
+            self.is_stub = True
 
         def start(self):
             self.running = True
 
-        def add_job(self, *a, **k):
-            pass
+        def add_job(self, func, trigger, **kwargs):  # pragma: no cover - simple
+            run_at = None
+            if trigger == "date":
+                if "run_date" in kwargs:
+                    run_at = kwargs["run_date"]
+                elif "seconds" in kwargs:
+                    run_at = datetime.now() + timedelta(seconds=kwargs["seconds"])
+            elif trigger == "interval":
+                run_at = datetime.now() + timedelta(**kwargs)
+            elif trigger == "cron":
+                run_at = "cron"
+            self.jobs.append(
+                {"func": func, "trigger": trigger, "kwargs": kwargs, "run_at": run_at}
+            )
+            return len(self.jobs) - 1
 
 
 from .base import Skill
@@ -47,7 +69,11 @@ class ReminderSkill(Skill):
     async def run(self, prompt: str, match: re.Match) -> str:
         if not scheduler.running:
             scheduler.start()
-
+        note = (
+            ""
+            if not getattr(scheduler, "is_stub", False)
+            else " (queued only; will not fire)"
+        )
         gd = match.groupdict()
         # 1) "tomorrow at ..." case
         if gd.get("when"):
@@ -65,7 +91,7 @@ class ReminderSkill(Skill):
                 run_dt = base.replace(hour=hr, minute=mn, second=0, microsecond=0)
                 task = gd["task"]
                 scheduler.add_job(lambda: None, "date", run_date=run_dt)
-                return f"Reminder set for {task} at {run_dt.strftime('%Y-%m-%d %I:%M %p')}."
+                return f"Reminder set for {task} at {run_dt.strftime('%Y-%m-%d %I:%M %p')}{note}."
         # 2) "in X minutes/hours" case
         if gd.get("amt") and gd.get("unit"):
             amt = int(gd["amt"])
@@ -73,7 +99,7 @@ class ReminderSkill(Skill):
             sec = amt * (60 if "minute" in unit else 3600 if "hour" in unit else 1)
             task = gd["task"]
             scheduler.add_job(lambda: None, "date", seconds=sec)
-            return f"Reminder set for {task} in {amt} {unit}."
+            return f"Reminder set for {task} in {amt} {unit}{note}."
         # 3) "every ..." case
         if gd.get("period"):
             period = gd["period"].lower()
@@ -86,10 +112,12 @@ class ReminderSkill(Skill):
                     else {"weeks": 1} if period == "week" else {"days": 30}
                 )
                 scheduler.add_job(lambda: None, "interval", **kwargs)
-                return f"Recurring reminder set for {task} every {period}."
+                return f"Recurring reminder set for {task} every {period}{note}."
             else:
                 # weekday cron
                 scheduler.add_job(lambda: None, "cron", day_of_week=period[:3])
-                return f"Recurring reminder set for {task} every {period.title()}."
+                return (
+                    f"Recurring reminder set for {task} every {period.title()}{note}."
+                )
         # Fallback
         return "Could not set reminder—please try a different phrasing."
