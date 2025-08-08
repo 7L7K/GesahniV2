@@ -153,6 +153,12 @@ class MemoryVectorStore(VectorStore):
         return mem_id
 
     def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
+        logger.info(
+            "query_user_memories start user_id=%s prompt=%s k=%s",
+            user_id,
+            prompt,
+            k,
+        )
         q_emb = embed_sync(prompt)
         res: List[Tuple[float, float, str]] = []
         for _mid, doc, emb, ts in self._user_memories.get(user_id, []):
@@ -160,7 +166,16 @@ class MemoryVectorStore(VectorStore):
             if dist <= self._dist_cutoff:
                 res.append((dist, -ts, doc))
         res.sort()
-        return [doc for _, _, doc in res[:k]]
+        top_items = res[:k]
+        docs_out = [doc for _, _, doc in top_items]
+        dists_out = [round(float(dist), 4) for dist, _, _ in top_items]
+        logger.info(
+            "query_user_memories end user_id=%s returned=%d dists=%s",
+            user_id,
+            len(docs_out),
+            dists_out,
+        )
+        return docs_out
 
     @property
     def qa_cache(self) -> _Collection:
