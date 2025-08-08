@@ -86,7 +86,7 @@ class ChromaVectorStore(VectorStore):
             base_cache = self._client.get_or_create_collection(
                 "qa_cache",
                 embedding_function=self._embedder,
-                metadata={"hnsw:space": "l2"},
+                metadata={"hnsw:space": "cosine"},
             )
         except TypeError:
             base_cache = self._client.get_or_create_collection(
@@ -97,7 +97,7 @@ class ChromaVectorStore(VectorStore):
             self._user_memories = self._client.get_or_create_collection(
                 "user_memories",
                 embedding_function=self._embedder,
-                metadata={"hnsw:space": "l2"},
+                metadata={"hnsw:space": "cosine"},
             )
         except TypeError:
             self._user_memories = self._client.get_or_create_collection(
