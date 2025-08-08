@@ -29,26 +29,58 @@ ollama run llama3
 Clone the repo and install dependencies:
 
 ```bash
-git clone <your-repo-url>
-cd your-project
+git clone https://github.com/your-org/GesahniV2.git && cd GesahniV2
 pip install -r requirements.txt
 cp .env.example .env
 ```
 
 ### 🔑 3. Configure Environment
+Set environment variables as needed:
 
-Update the copied `.env` with your credentials:
+| Var | Default | Required | Purpose |
+| --- | --- | --- | --- |
+| `OPENAI_API_KEY` | – | yes | OpenAI auth for GPT & Whisper |
+| `OPENAI_MODEL` | `gpt-4o` | no | Default GPT model |
+| `OPENAI_TRANSCRIBE_MODEL` | `whisper-1` | no | Async Whisper model |
+| `WHISPER_MODEL` | `whisper-1` | no | Sync Whisper model |
+| `ALLOWED_GPT_MODELS` | `gpt-4o,gpt-4,gpt-3.5-turbo` | no | Valid `/ask` model overrides |
+| `DEBUG` | – | no | Enable extra prompt debug info |
+| `DEBUG_MODEL_ROUTING` | – | no | Log model path without external calls |
+| `LOG_LEVEL` | `INFO` | no | Logging verbosity |
+| `FOLLOW_UPS_FILE` | `data/follow_ups.json` | no | Stored follow-up reminders |
+| `OLLAMA_URL` | – | yes | Ollama base URL |
+| `OLLAMA_MODEL` | `llama3:latest` | no | LLaMA model name |
+| `OLLAMA_FORCE_IPV6` | – | no | Force IPv6 for Ollama requests |
+| `LLAMA_MAX_STREAMS` | `2` | no | Max concurrent LLaMA streams |
+| `JWT_SECRET` | `change-me` | no | JWT secret for protected endpoints |
+| `JWT_EXPIRE_MINUTES` | `30` | no | Access token lifetime |
+| `JWT_REFRESH_EXPIRE_MINUTES` | `1440` | no | Refresh token lifetime |
+| `RATE_LIMIT_PER_MIN` | `60` | no | Requests per minute per IP |
+| `REDIS_URL` | `redis://localhost:6379/0` | no | RQ queue for async tasks |
+| `HISTORY_FILE` | `data/history.jsonl` | no | Request history log |
+| `CORS_ALLOW_ORIGINS` | `http://localhost:3000` | no | Allowed web origins |
+| `PORT` | `8000` | no | Server port when running `python app/main.py` |
+| `SESSIONS_DIR` | `sessions/` | no | Base directory for session media |
+| `ADMIN_TOKEN` | – | no | Required to read `/config` |
+| `SIM_THRESHOLD` | `0.90` | no | Vector similarity cutoff |
+| `HOME_ASSISTANT_URL` | `http://localhost:8123` | no | Home Assistant base URL |
+| `HOME_ASSISTANT_TOKEN` | – | yes | HA long-lived token |
+| `INTENT_THRESHOLD` | `0.7` | no | Intent confidence cutoff |
+| `LLAMA_EMBEDDINGS_MODEL` | – | yes* | Path to GGUF when using llama embeddings |
+| `EMBED_MODEL` | `text-embedding-3-small` | no | OpenAI embedding model |
+| `EMBEDDING_BACKEND` | `openai` | no | Embedding provider (`openai` or `llama`) |
+| `TRANSLATE_URL` | `http://localhost:5000` | no | Translation microservice |
+| `OPENWEATHER_API_KEY` | – | yes | Weather and forecast lookups |
+| `CITY_NAME` | `Detroit,US` | no | Default weather city |
+| `NOTES_DB` | `notes.db` | no | SQLite file for notes skill |
+| `CALENDAR_FILE` | `data/calendar.json` | no | Calendar events source |
+| `MAX_UPLOAD_BYTES` | `10485760` | no | Max upload size for session media |
+| `MEM_TOP_K` | `5` | no | Memories returned from vector store |
+| `DISABLE_QA_CACHE` | `false` | no | Skip semantic cache when set |
+| `VECTOR_STORE` | `chroma` | no | Vector store backend |
+| `USERS_DB` | `users.db` | no | SQLite path for auth users |
 
-```env
-OPENAI_API_KEY=your_openai_key
-HOME_ASSISTANT_URL=http://your-ha-instance
-HOME_ASSISTANT_TOKEN=your_long_lived_token
-JWT_SECRET=your_jwt_secret
-EMBEDDING_BACKEND=openai  # or "llama"
-# Required when using the LLaMA backend
-LLAMA_EMBEDDINGS_MODEL=/path/to/gguf
-GPT_SYSTEM_PROMPT="You are a helpful assistant."  # optional system prompt override
-```
+*Required only when `EMBEDDING_BACKEND=llama`.
 
 Set `GPT_SYSTEM_PROMPT` to tweak the assistant's default persona. For example:
 
@@ -68,8 +100,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ### 📦 Docker Deploy
 
 ```bash
-docker build -t smart-assistant .
-docker run -d -p 8000:8000 --env-file .env smart-assistant
+docker build -t gesahni .
+docker run -d -p 8000:8000 --env-file .env gesahni
 ```
 
 ### 🎥 Record a Session
@@ -89,11 +121,12 @@ python record_session.py --duration 5 --output ./sessions
 
 ## 🔐 Authentication
 
-Authenticate by POSTing to `/login` with a JSON body containing `username` and
-`password`. Valid credentials are supplied via the `LOGIN_USERS` environment
-variable as a JSON object mapping usernames to passwords. A successful login
-returns both an access token and a refresh token. Access tokens embed the user
-ID in the `sub` claim and expire after `JWT_EXPIRE_MINUTES` (default 30 minutes).
+User accounts are stored in a SQLite database (`users.db` by default, override
+with `USERS_DB`). Authenticate by POSTing to `/login` with a JSON body
+containing `username` and `password`. A successful login returns both an access
+token and a refresh token. Access tokens embed the user ID in the `sub` claim
+and expire after `JWT_EXPIRE_MINUTES` (default 30 minutes); refresh tokens
+expire after `JWT_REFRESH_EXPIRE_MINUTES` (default 1440 minutes).
 
 ```bash
 curl -X POST localhost:8000/login \
@@ -120,7 +153,11 @@ curl -X POST localhost:8000/logout -H "Authorization: Bearer <refresh_token>"
 
 * `/ask`: Send your prompt here.
 * `/upload`: upload audio for transcription.
+* `/sessions`: list captured sessions.
+* `/sessions/{id}/transcribe`: queue transcription for a session.
+* `/sessions/{id}/summarize`: queue summary generation.
 * `/transcribe/{session_id}` (POST/GET): start or fetch transcription.
+* `WS /transcribe`: stream audio for live transcription.
 * `/ha/entities`, `/ha/service`, `/ha/resolve`: Home Assistant helpers.
 * `/health` and `/status`: service status info.
 * `/config`: view config.
