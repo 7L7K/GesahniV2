@@ -3,6 +3,8 @@ import os
 import inspect
 from typing import Any, Awaitable, Callable
 
+import httpx
+
 from fastapi import Depends, HTTPException, status
 
 from .analytics import record
@@ -111,7 +113,7 @@ async def route_prompt(
                 return await _call_gpt_override(
                     mv, prompt, norm_prompt, session_id, user_id, rec, stream_cb
                 )
-            except Exception as e:
+            except (httpx.HTTPError, RuntimeError) as e:
                 logger.warning("GPT override failed: %s", e)
                 if llama_integration.LLAMA_HEALTHY:
                     fallback_built, fallback_pt = PromptBuilder.build(
@@ -135,7 +137,7 @@ async def route_prompt(
                     )
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="GPT backend unavailable",
+                    detail=f"GPT backend unavailable: {e}",
                 )
         # LLaMA override
         if mv.startswith("llama"):
