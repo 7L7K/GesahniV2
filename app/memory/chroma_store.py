@@ -82,13 +82,27 @@ class ChromaVectorStore(VectorStore):
 
         self._client = client
         self._embedder = _LengthEmbedder()
-        base_cache = self._client.get_or_create_collection(
-            "qa_cache", embedding_function=self._embedder
-        )
+        try:
+            base_cache = self._client.get_or_create_collection(
+                "qa_cache",
+                embedding_function=self._embedder,
+                metadata={"hnsw:space": "l2"},
+            )
+        except TypeError:
+            base_cache = self._client.get_or_create_collection(
+                "qa_cache", embedding_function=self._embedder
+            )
         self._cache = _ChromaCacheWrapper(base_cache)
-        self._user_memories = self._client.get_or_create_collection(
-            "user_memories", embedding_function=self._embedder
-        )
+        try:
+            self._user_memories = self._client.get_or_create_collection(
+                "user_memories",
+                embedding_function=self._embedder,
+                metadata={"hnsw:space": "l2"},
+            )
+        except TypeError:
+            self._user_memories = self._client.get_or_create_collection(
+                "user_memories", embedding_function=self._embedder
+            )
 
     def add_user_memory(self, user_id: str, memory: str) -> str:
         mem_id = str(uuid.uuid4())

@@ -46,8 +46,9 @@ def _cosine_similarity(a: Iterable[float], b: Iterable[float]) -> float:
 
 
 class _CollectionStub:
-    def __init__(self, embedding_function=None) -> None:
+    def __init__(self, embedding_function=None, metadata=None) -> None:
         self._embed = embedding_function or (lambda texts: [[0.0] * 3 for _ in texts])
+        self._space = (metadata or {}).get("hnsw:space", "cosine")
         self._store: dict[str, dict[str, Any]] = {}
 
     # --- Chroma surface ------------------------------------------------------
@@ -83,7 +84,12 @@ class _CollectionStub:
             for i, rec in self._store.items():
                 if where and any(rec["metadata"].get(k) != v for k, v in where.items()):
                     continue
-                dist = 1.0 - _cosine_similarity(q_emb, rec["embedding"])
+                if self._space == "l2":
+                    dist = math.sqrt(
+                        sum((x - y) ** 2 for x, y in zip(q_emb, rec["embedding"]))
+                    )
+                else:
+                    dist = 1.0 - _cosine_similarity(q_emb, rec["embedding"])
                 scored.append((dist, i, rec))
             scored.sort(key=lambda x: x[0])
             scored = scored[: n_results or len(scored)]
@@ -106,9 +112,9 @@ class _ClientStub:
     def __init__(self, path: str | None = None) -> None:
         self._cols: dict[str, _CollectionStub] = {}
 
-    def get_or_create_collection(self, name, *, embedding_function=None):
+    def get_or_create_collection(self, name, *, embedding_function=None, metadata=None):
         if name not in self._cols:
-            self._cols[name] = _CollectionStub(embedding_function)
+            self._cols[name] = _CollectionStub(embedding_function, metadata)
         return self._cols[name]
 
     def reset(self):
