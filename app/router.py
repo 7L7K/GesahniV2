@@ -21,6 +21,7 @@ except Exception:  # pragma: no cover - defensive
 from .memory import memgpt
 from .memory.vector_store import add_user_memory, cache_answer, lookup_cached_answer
 from .model_picker import pick_model
+from . import model_picker as model_picker_module
 from .prompt_builder import PromptBuilder
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from .skills.smalltalk_skill import SmalltalkSkill
@@ -85,12 +86,11 @@ async def route_prompt(
             rec.response = msg
         return msg
 
-    # Circuit breaker check: fail fast if LLaMA is unavailable
+    # Circuit breaker check: degrade to GPT if LLaMA is unavailable
     if llama_circuit_open:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="LLaMA circuit open",
-        )
+        llama_integration.LLAMA_HEALTHY = False
+        # keep model picker in sync so GPT is selected
+        model_picker_module.LLAMA_HEALTHY = False
 
     intent, priority = detect_intent(prompt)
 
@@ -442,7 +442,7 @@ async def _call_llama(
     ptoks: int,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     gen_opts: dict[str, Any] | None = None,
-): 
+):
     tokens: list[str] = []
     logger.debug(
         "LLaMA opts: temperature=%s top_p=%s",
