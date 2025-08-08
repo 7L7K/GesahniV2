@@ -40,7 +40,7 @@ def test_telemetry_logged(monkeypatch, tmp_path):
         prompt_builder.memgpt, "summarize_session", lambda sid, user_id=None: ""
     )
     monkeypatch.setattr(
-        prompt_builder, "query_user_memories", lambda uid, q, k=5: ["m1", "m2"]
+        prompt_builder, "safe_query_user_memories", lambda uid, q, k=5: ["m1", "m2"]
     )
     resp = client.post("/ask", json={"prompt": "hi"})
     assert resp.status_code == 200

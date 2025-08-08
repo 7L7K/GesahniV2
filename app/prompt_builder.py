@@ -12,7 +12,7 @@ from typing import Any, List
 from .token_utils import count_tokens
 from .memory import memgpt
 from .memory.env_utils import _get_mem_top_k
-from .memory.vector_store import query_user_memories
+from .memory.vector_store import safe_query_user_memories
 from .telemetry import log_record_var
 
 # ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ class PromptBuilder:
         top_k: int | str | None = None,
         **_: Any,
     ) -> tuple[str, int]:
-        """Return `(prompt_text, prompt_tokens)`.
+        """Return ``(prompt_text, prompt_tokens)``.
 
         Extra kwargs (e.g. `temperature`, `top_p`) are accepted for API
         parity and silently ignored.
@@ -102,7 +102,7 @@ class PromptBuilder:
         # ------------------------------------------------------------------
         # Memory lookup & trimming
         # ------------------------------------------------------------------
-        memories: List[str] = query_user_memories(user_id, user_prompt, k=k)
+        memories: List[str] = safe_query_user_memories(user_id, user_prompt, k=k)
         while count_tokens("\n".join(memories)) > 55 and memories:
             memories.pop()
 
@@ -111,6 +111,7 @@ class PromptBuilder:
         # ------------------------------------------------------------------
         dbg = debug_info if debug else ""
         core_template = _prompt_core()
+
         base_replacements = {
             "date_time": date_time,
             "conversation_summary": summary,
