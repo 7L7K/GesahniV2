@@ -6,7 +6,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from app import metrics
 from app.embeddings import embed_sync
@@ -77,20 +77,26 @@ class _Collection:
                 feedback=meta.get("feedback"),
             )
 
-    def get(
-        self,
-        *args,
-        ids: List[str] | None = None,
-        include: List[str] | None = None,
-        **kwargs,
-    ) -> Dict[str, List] | Any:
-        if args and isinstance(args[0], str):
-            key = args[0]
-            default = args[1] if len(args) > 1 else None
-            return {"ids": list(self._store)}.get(key, default)
+    def get_items(
+        self, ids: List[str] | None = None, include: List[str] | None = None
+    ) -> Dict[str, List]:
+        """Return selected items from the collection.
+
+        Args:
+            ids: Specific document identifiers to fetch. If ``None`` all items
+                are returned.
+            include: Optional list of fields to include. Supports
+                ``"metadatas"`` and ``"documents"``. When ``None`` both are
+                included.
+
+        Returns:
+            A dictionary containing the requested ``ids`` and any additional
+            data specified via ``include``.
+        """
 
         ids = ids or list(self._store)
-        metas, docs = [], []
+        metas: List[Dict | None] = []
+        docs: List[str | None] = []
         for i in ids:
             rec = self._store.get(i)
             metas.append(
@@ -105,12 +111,16 @@ class _Collection:
             docs.append(
                 rec.doc if rec and (include is None or "documents" in include) else None
             )
-        out = {"ids": ids}
+        out: Dict[str, List] = {"ids": ids}
         if include is None or "metadatas" in include:
             out["metadatas"] = metas
         if include is None or "documents" in include:
             out["documents"] = docs
         return out
+
+    def keys(self) -> List[str]:
+        """Return all document identifiers stored in the collection."""
+        return list(self._store)
 
     def delete(self, *, ids: List[str] | None = None) -> None:
         for i in ids or []:
@@ -212,4 +222,3 @@ class MemoryVectorStore(VectorStore):
 
 
 __all__ = ["VectorStore", "MemoryVectorStore"]
-
