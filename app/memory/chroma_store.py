@@ -28,8 +28,10 @@ class _LengthEmbedder:
 
     def __call__(self, input: List[str]) -> List[List[float]]:
         import numpy as np
-        return [np.asarray([float(len(_normalize(t)[1]))], dtype=np.float32) for t in input]
 
+        return [
+            np.asarray([float(len(_normalize(t)[1]))], dtype=np.float32) for t in input
+        ]
 
     def name(self) -> str:  # pragma: no cover - simple helper
         return "length-embedder"
@@ -80,13 +82,27 @@ class ChromaVectorStore(VectorStore):
 
         self._client = client
         self._embedder = _LengthEmbedder()
-        base_cache = self._client.get_or_create_collection(
-            "qa_cache", embedding_function=self._embedder
-        )
+        try:
+            base_cache = self._client.get_or_create_collection(
+                "qa_cache",
+                embedding_function=self._embedder,
+                metadata={"hnsw:space": "l2"},
+            )
+        except TypeError:
+            base_cache = self._client.get_or_create_collection(
+                "qa_cache", embedding_function=self._embedder
+            )
         self._cache = _ChromaCacheWrapper(base_cache)
-        self._user_memories = self._client.get_or_create_collection(
-            "user_memories", embedding_function=self._embedder
-        )
+        try:
+            self._user_memories = self._client.get_or_create_collection(
+                "user_memories",
+                embedding_function=self._embedder,
+                metadata={"hnsw:space": "l2"},
+            )
+        except TypeError:
+            self._user_memories = self._client.get_or_create_collection(
+                "user_memories", embedding_function=self._embedder
+            )
 
     def add_user_memory(self, user_id: str, memory: str) -> str:
         mem_id = str(uuid.uuid4())
@@ -140,19 +156,20 @@ class ChromaVectorStore(VectorStore):
         self, prompt: str, ttl_seconds: int = 86400
     ) -> Optional[str]:
         self._dist_cutoff = 1.0 - _get_sim_threshold()
-        hash_ = _normalize(prompt)[0]
+        hash_, norm = _normalize(prompt)
         if _env_flag("DISABLE_QA_CACHE"):
             logger.debug("QA cache disabled; miss for %s", hash_)
             return None
         res = self._cache.query(
-            query_texts=[prompt], n_results=1, include=["metadatas", "distances"]
+            query_texts=[norm], n_results=1, include=["metadatas", "documents"]
         )
         ids = res.get("ids", [[]])[0]
         if not ids:
             logger.debug("Cache miss for %s", hash_)
             return None
-        dist = float(res.get("distances", [[]])[0][0])
+        doc = res.get("documents", [[]])[0][0] or ""
         meta = res.get("metadatas", [[]])[0][0] or {}
+        dist = abs(len(doc) - len(norm)) / max(len(doc), len(norm), 1)
         if dist >= self._dist_cutoff:
             logger.debug("Cache miss for %s (dist=%.4f > cutoff)", hash_, dist)
             return None

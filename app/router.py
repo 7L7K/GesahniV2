@@ -290,6 +290,12 @@ async def route_prompt(
             gen_opts=gen_opts,
         )
 
+    if engine == "llama" and not llama_integration.LLAMA_HEALTHY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LLaMA circuit open",
+        )
+
     # Fallback GPT-4o
     if debug_route:
         return _dry("gpt", "gpt-4o")
@@ -470,7 +476,7 @@ async def _call_llama(
         (gen_opts or {}).get("top_p"),
     )
     try:
-        result = ask_llama(built_prompt, model, **(gen_opts or {}))
+        result = ask_llama(prompt=built_prompt, model=model, **(gen_opts or {}))
         if inspect.isasyncgen(result):
             async for tok in result:
                 tokens.append(tok)
@@ -484,6 +490,7 @@ async def _call_llama(
                 raise RuntimeError(str(result.get("error")))
             result_text = (result or "").strip()
     except Exception:
+        _mark_llama_unhealthy()
         fallback_model = os.getenv("OPENAI_MODEL", "gpt-4o")
         try:
             text = await _call_gpt(
