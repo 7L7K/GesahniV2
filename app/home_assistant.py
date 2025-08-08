@@ -22,10 +22,15 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # HTTP helpers
 # ---------------------------------------------------------------------------
-# Default headers; add Authorization if we actually have a token
-HEADERS: dict[str, str] = {"Content-Type": "application/json"}
-if HOME_ASSISTANT_TOKEN:
-    HEADERS["Authorization"] = f"Bearer {HOME_ASSISTANT_TOKEN}"
+
+
+def _headers() -> dict[str, str]:
+    """Build request headers using the current token."""
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if HOME_ASSISTANT_TOKEN:
+        headers["Authorization"] = f"Bearer {HOME_ASSISTANT_TOKEN}"
+    return headers
+
 
 # Room‑name synonyms so users can say “lounge” and we map → living room
 ROOM_SYNONYMS = {
@@ -66,7 +71,7 @@ async def _request(
     data, error = await json_request(
         method,
         url,
-        headers=HEADERS,
+        headers=_headers(),
         json=json,
         timeout=timeout,
     )
