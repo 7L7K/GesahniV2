@@ -41,6 +41,9 @@ ALLOWED_LLAMA_MODELS: set[str] = set(
 CATALOG = BUILTIN_CATALOG  # allows tests to monkey‑patch
 _SMALLTALK = SmalltalkSkill()
 
+# Mirror of llama_integration health flag so tests can adjust routing.
+LLAMA_HEALTHY: bool = True
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -442,7 +445,7 @@ async def _call_llama(
     ptoks: int,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     gen_opts: dict[str, Any] | None = None,
-): 
+):
     tokens: list[str] = []
     logger.debug(
         "LLaMA opts: temperature=%s top_p=%s",
@@ -479,7 +482,24 @@ async def _call_llama(
         await record("gpt", fallback=True)
         return text
     if not result_text or _low_conf(result_text):
-        raise HTTPException(status_code=503, detail="Low-confidence LLaMA response")
+        # Mark LLaMA unhealthy and fall back to GPT on empty or low-confidence replies
+        global LLAMA_HEALTHY
+        LLAMA_HEALTHY = False
+        llama_integration.LLAMA_HEALTHY = False
+        fallback_model = os.getenv("OPENAI_MODEL", "gpt-4o")
+        text = await _call_gpt(
+            prompt=prompt,
+            built_prompt=built_prompt,
+            model=fallback_model,
+            rec=rec,
+            norm_prompt=norm_prompt,
+            session_id=session_id,
+            user_id=user_id,
+            ptoks=ptoks,
+            stream_cb=stream_cb,
+        )
+        await record("gpt", fallback=True)
+        return text
     if rec:
         rec.engine_used = "llama"
         rec.model_name = model
