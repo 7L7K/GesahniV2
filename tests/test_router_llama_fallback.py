@@ -75,3 +75,53 @@ def test_gpt_override_failure_falls_back_to_llama(monkeypatch):
 
     result = asyncio.run(router.route_prompt("hi", "gpt-4", user_id="u"))
     assert result == "llama-ok"
+
+
+def test_empty_llama_response_falls_back_to_gpt(monkeypatch):
+    _setup_env()
+    from app import router, llama_integration
+
+    llama_integration.LLAMA_HEALTHY = True
+    router.LLAMA_HEALTHY = True
+
+    def fake_llama(**kwargs):
+        return ""
+
+    async def fake_gpt(**kwargs):
+        return "gpt-ok"
+
+    monkeypatch.setattr(router, "ask_llama", fake_llama)
+    monkeypatch.setattr(router, "_call_gpt", fake_gpt)
+    monkeypatch.setattr(router, "handle_command", lambda p: None)
+    monkeypatch.setattr(router, "lookup_cached_answer", lambda p: None)
+    monkeypatch.setattr(router, "pick_model", lambda p, i, t: ("llama", "llama3"))
+    monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
+
+    result = asyncio.run(router.route_prompt("hi", user_id="u"))
+    assert result == "gpt-ok"
+    assert llama_integration.LLAMA_HEALTHY is False
+
+
+def test_low_conf_llama_response_falls_back_to_gpt(monkeypatch):
+    _setup_env()
+    from app import router, llama_integration
+
+    llama_integration.LLAMA_HEALTHY = True
+    router.LLAMA_HEALTHY = True
+
+    def fake_llama(**kwargs):
+        return "I don't know"
+
+    async def fake_gpt(**kwargs):
+        return "gpt-ok"
+
+    monkeypatch.setattr(router, "ask_llama", fake_llama)
+    monkeypatch.setattr(router, "_call_gpt", fake_gpt)
+    monkeypatch.setattr(router, "handle_command", lambda p: None)
+    monkeypatch.setattr(router, "lookup_cached_answer", lambda p: None)
+    monkeypatch.setattr(router, "pick_model", lambda p, i, t: ("llama", "llama3"))
+    monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
+
+    result = asyncio.run(router.route_prompt("hi", user_id="u"))
+    assert result == "gpt-ok"
+    assert llama_integration.LLAMA_HEALTHY is False
