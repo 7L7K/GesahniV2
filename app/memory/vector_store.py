@@ -71,11 +71,13 @@ def _get_sim_threshold() -> float:
         return DEFAULT_SIM_THRESHOLD
     return value
 
+
 def _clean_meta(meta: dict[str, Any]) -> dict[str, Any]:
     """
     Replace any None metadata values with empty strings so ChromaDB upsert won't choke.
     """
     return {k: (v if v is not None else "") for k, v in meta.items()}
+
 
 # ---------------------------------------------------------------------------
 # Normalization & helpers
@@ -214,6 +216,47 @@ class _Collection:
                 for k, v in meta.items():
                     setattr(rec, k, v)
 
+    def query(
+        self,
+        *,
+        query_texts: List[str],
+        n_results: int = 1,
+        include: List[str] | None = None,
+        **_: Any,
+    ) -> Dict[str, List[List[Any]]]:
+        ids_out: List[List[str]] = []
+        dists_out: List[List[float]] = []
+        metas_out: List[List[Dict[str, Any]]] = []
+        for q in query_texts:
+            _, norm = _normalize(q)
+            q_emb = embed_sync(norm)
+            scored = [
+                (1.0 - _cosine_similarity(q_emb, rec.embedding), cid, rec)
+                for cid, rec in self._store.items()
+            ]
+            scored.sort(key=lambda t: t[0])
+            top = scored[:n_results]
+            ids_out.append([cid for _, cid, _ in top])
+            if include is None or "distances" in include:
+                dists_out.append([dist for dist, _, _ in top])
+            if include is None or "metadatas" in include:
+                metas_out.append(
+                    [
+                        {
+                            "answer": rec.answer,
+                            "timestamp": rec.timestamp,
+                            "feedback": rec.feedback,
+                        }
+                        for _, _, rec in top
+                    ]
+                )
+        result: Dict[str, List[List[Any]]] = {"ids": ids_out}
+        if include is None or "distances" in include:
+            result["distances"] = dists_out
+        if include is None or "metadatas" in include:
+            result["metadatas"] = metas_out
+        return result
+
 
 # ---------------------------------------------------------------------------
 # Abstract interface
@@ -233,12 +276,71 @@ class VectorStore:
     def close(self) -> None: ...
 
 
+class CacheMixin:
+    @property
+    def qa_cache(self) -> "ChromaCollection":
+        raise NotImplementedError
+
+    def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
+        if _env_flag("DISABLE_QA_CACHE"):
+            return
+        _, norm = _normalize(prompt)
+        raw_meta = {"answer": answer, "timestamp": time.time(), "feedback": None}
+        cleaned = _clean_meta(raw_meta)
+        self.qa_cache.upsert(
+            ids=[cache_id],
+            documents=[norm],
+            metadatas=[cleaned],
+        )
+
+    def lookup_cached_answer(
+        self, prompt: str, ttl_seconds: int = 86400
+    ) -> Optional[str]:
+        dist_cutoff = 1.0 - _get_sim_threshold()
+        hash_ = _normalized_hash(prompt)
+        if _env_flag("DISABLE_QA_CACHE"):
+            logger.debug("QA cache disabled; miss for %s", hash_)
+            return None
+        res = self.qa_cache.query(
+            query_texts=[prompt], n_results=1, include=["metadatas", "distances"]
+        )
+        ids = res.get("ids", [[]])[0]
+        if not ids:
+            logger.debug("Cache miss for %s", hash_)
+            return None
+        dist = float(res.get("distances", [[]])[0][0])
+        meta = res.get("metadatas", [[]])[0][0] or {}
+        if dist > dist_cutoff:
+            logger.debug("Cache miss for %s (dist=%.4f > cutoff)", hash_, dist)
+            return None
+        ts = float(meta.get("timestamp", 0))
+        if ttl_seconds and time.time() - ts > ttl_seconds:
+            logger.debug("Cache expired for %s", hash_)
+            self.qa_cache.delete(ids=[ids[0]])
+            return None
+        if meta.get("feedback") == "down":
+            logger.debug("Cache invalidated by feedback for %s", hash_)
+            self.qa_cache.delete(ids=[ids[0]])
+            return None
+        logger.debug("Cache hit for %s (dist=%.4f)", hash_, dist)
+        return meta.get("answer")
+
+    def record_feedback(self, prompt: str, feedback: str) -> None:
+        if _env_flag("DISABLE_QA_CACHE"):
+            return
+        cid = _normalized_hash(prompt)
+        self.qa_cache.update(ids=[cid], metadatas=[{"feedback": feedback}])
+        if feedback == "down":
+            logger.debug("Cache invalidated by feedback for %s", cid)
+            self.qa_cache.delete(ids=[cid])
+
+
 # ---------------------------------------------------------------------------
 # MemoryVectorStore
 # ---------------------------------------------------------------------------
 
 
-class MemoryVectorStore(VectorStore):
+class MemoryVectorStore(CacheMixin, VectorStore):
     def __init__(self) -> None:
         self._dist_cutoff = 1.0 - _get_sim_threshold()
         self._cache = _Collection()
@@ -268,58 +370,6 @@ class MemoryVectorStore(VectorStore):
     def qa_cache(self) -> ChromaCollection:
         return self._cache
 
-    def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
-        if _env_flag("DISABLE_QA_CACHE"):
-            return
-        _, norm = _normalize(prompt)
-        raw_meta = {"answer": answer, "timestamp": time.time(), "feedback": None}
-        cleaned = _clean_meta(raw_meta)
-        self._cache.upsert(
-            ids=[cache_id],
-            documents=[norm],
-            metadatas=[cleaned],
-        )
-
-
-    def lookup_cached_answer(
-        self, prompt: str, ttl_seconds: int = 86400
-    ) -> Optional[str]:
-        self._dist_cutoff = 1.0 - _get_sim_threshold()
-        hash_ = _normalized_hash(prompt)
-        if _env_flag("DISABLE_QA_CACHE"):
-            logger.debug("QA cache disabled; miss for %s", hash_)
-            return None
-        _, norm = _normalize(prompt)
-        q_emb = embed_sync(norm)
-        best = None
-        best_id = None
-        best_dist = None
-        for cid, rec in self._cache._store.items():
-            if rec.feedback == "down":
-                continue
-            dist = 1.0 - _cosine_similarity(q_emb, rec.embedding)
-            if dist <= self._dist_cutoff and (best_dist is None or dist < best_dist):
-                best, best_id, best_dist = rec, cid, dist
-        if not best:
-            logger.debug("Cache miss for %s", hash_)
-            return None
-        if ttl_seconds and time.time() - best.timestamp > ttl_seconds:
-            logger.debug("Cache expired for %s", hash_)
-            self._cache.delete(ids=[best_id])
-            return None
-        logger.debug("Cache hit for %s (dist=%.4f)", hash_, best_dist or -1.0)
-        return best.answer
-
-    def record_feedback(self, prompt: str, feedback: str) -> None:
-        if _env_flag("DISABLE_QA_CACHE"):
-            return
-        cid = _normalized_hash(prompt)
-        if feedback == "down":
-            logger.debug("Cache invalidated by feedback for %s", cid)
-            self._cache.delete(ids=[cid])
-        else:
-            self._cache.update(ids=[cid], metadatas=[{"feedback": feedback}])
-
     def close(self) -> None:  # pragma: no cover - trivial
         """No-op for compatibility with :class:`ChromaVectorStore`."""
         return
@@ -330,7 +380,7 @@ class MemoryVectorStore(VectorStore):
 # ---------------------------------------------------------------------------
 
 
-class ChromaVectorStore(VectorStore):
+class ChromaVectorStore(CacheMixin, VectorStore):
     def __init__(self) -> None:
         self._dist_cutoff = 1.0 - _get_sim_threshold()
 
@@ -363,7 +413,6 @@ class ChromaVectorStore(VectorStore):
         self._user_memories = self._client.get_or_create_collection(
             "user_memories", embedding_function=self._embedder
         )
-
 
     def add_user_memory(self, user_id: str, memory: str) -> str:
         mem_id = str(uuid.uuid4())
@@ -400,59 +449,6 @@ class ChromaVectorStore(VectorStore):
     @property
     def qa_cache(self) -> "ChromaCollection":
         return self._cache
-
-    def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
-        if _env_flag("DISABLE_QA_CACHE"):
-            return
-        _, norm = _normalize(prompt)
-        raw_meta = {"answer": answer, "timestamp": time.time(), "feedback": None}
-        cleaned = _clean_meta(raw_meta)
-        self._cache.upsert(
-            ids=[cache_id],
-            documents=[norm],
-            metadatas=[cleaned],
-        )
-
-    def lookup_cached_answer(
-        self, prompt: str, ttl_seconds: int = 86400
-    ) -> Optional[str]:
-        self._dist_cutoff = 1.0 - _get_sim_threshold()
-        hash_ = _normalized_hash(prompt)
-        if _env_flag("DISABLE_QA_CACHE"):
-            logger.debug("QA cache disabled; miss for %s", hash_)
-            return None
-        res = self._cache.query(
-            query_texts=[prompt], n_results=1, include=["metadatas", "distances"]
-        )
-        ids = res.get("ids", [[]])[0]
-        if not ids:
-            logger.debug("Cache miss for %s", hash_)
-            return None
-        dist = float(res.get("distances", [[]])[0][0])
-        meta = res.get("metadatas", [[]])[0][0] or {}
-        if dist > self._dist_cutoff:
-            logger.debug("Cache miss for %s (dist=%.4f > cutoff)", hash_, dist)
-            return None
-        ts = float(meta.get("timestamp", 0))
-        if ttl_seconds and time.time() - ts > ttl_seconds:
-            logger.debug("Cache expired for %s", hash_)
-            self._cache.delete(ids=[ids[0]])
-            return None
-        if meta.get("feedback") == "down":
-            logger.debug("Cache invalidated by feedback for %s", hash_)
-            self._cache.delete(ids=[ids[0]])
-            return None
-        logger.debug("Cache hit for %s (dist=%.4f)", hash_, dist)
-        return meta.get("answer")
-
-    def record_feedback(self, prompt: str, feedback: str) -> None:
-        if _env_flag("DISABLE_QA_CACHE"):
-            return
-        cid = _normalized_hash(prompt)
-        self._cache.update(ids=[cid], metadatas=[{"feedback": feedback}])
-        if feedback == "down":
-            logger.debug("Cache invalidated by feedback for %s", cid)
-            self._cache.delete(ids=[cid])
 
     def close(self) -> None:  # pragma: no cover - thin wrapper
         """Dispose of the underlying Chroma client."""
@@ -492,9 +488,11 @@ def _get_store() -> VectorStore:
     kind = os.getenv("VECTOR_STORE", "").lower()
     chroma_path = os.getenv("CHROMA_PATH", ".chroma_data")
     # Use MemoryVectorStore for test runs or explicit override
-    if kind in ("memory", "inmemory") or \
-       "PYTEST_CURRENT_TEST" in os.environ or \
-       "pytest" in sys.modules:
+    if (
+        kind in ("memory", "inmemory")
+        or "PYTEST_CURRENT_TEST" in os.environ
+        or "pytest" in sys.modules
+    ):
         logger.info("Using MemoryVectorStore (test mode or VECTOR_STORE=%s)", kind)
         return MemoryVectorStore()
     # Default: Try ChromaVectorStore, fallback to memory with big warning (never silently in prod)
@@ -509,9 +507,11 @@ def _get_store() -> VectorStore:
             raise  # Stop the app, don’t run “ghost mode” in prod
         logger.warning(
             "ChromaVectorStore unavailable at %s: %s; falling back to MemoryVectorStore",
-            chroma_path, exc,
+            chroma_path,
+            exc,
         )
         return MemoryVectorStore()
+
 
 _store: VectorStore = _get_store()
 
@@ -544,7 +544,9 @@ def cache_answer(*args, **kwargs) -> None:
         elif len(args) == 3:
             cache_id_val, prompt_val, answer_val = args  # legacy order
         else:
-            raise TypeError("cache_answer expects (prompt, answer) or (cache_id, prompt, answer)")
+            raise TypeError(
+                "cache_answer expects (prompt, answer) or (cache_id, prompt, answer)"
+            )
     cid = cache_id_val or _normalized_hash(prompt_val)
     _store.cache_answer(cid, prompt_val, answer_val)
 
@@ -564,6 +566,7 @@ def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> Optional[str]
 
 def record_feedback(prompt: str, feedback: str) -> None:
     return _store.record_feedback(prompt, feedback)
+
 
 class _QACacheProxy:
     """Proxy exposing the current QA cache collection.
@@ -614,6 +617,7 @@ __all__ = [
     "invalidate_cache",
     "close_store",
     "VectorStore",
+    "CacheMixin",
     "MemoryVectorStore",
     "ChromaVectorStore",
 ]
