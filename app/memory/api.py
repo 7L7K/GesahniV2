@@ -54,13 +54,18 @@ def add_user_memory(user_id: str, memory: str) -> str:
 def _coerce_k(k: int | str | None) -> int:
     """Return a positive integer ``k`` with a sensible default."""
 
+    raw = k
     if k is None:
-        return _get_mem_top_k()
-    try:
-        value = int(k)
-    except (TypeError, ValueError):
-        return _get_mem_top_k()
-    return value if value > 0 else _get_mem_top_k()
+        coerced = _get_mem_top_k()
+    else:
+        try:
+            value = int(k)
+        except (TypeError, ValueError):
+            coerced = _get_mem_top_k()
+        else:
+            coerced = value if value > 0 else _get_mem_top_k()
+    logger.debug("_coerce_k: raw=%r coerced=%d", raw, coerced)
+    return coerced
 
 
 def query_user_memories(
