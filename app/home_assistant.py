@@ -1,6 +1,7 @@
 import os
 import logging
 import re
+import time
 import json as json_module
 from dataclasses import dataclass
 from typing import Any, List, Optional
@@ -38,6 +39,11 @@ ROOM_SYNONYMS = {
     "kitchen": ["cook room"],
 }
 _SYN_TO_ROOM = {syn: room for room, syns in ROOM_SYNONYMS.items() for syn in syns}
+
+# Cache for /states results so resolve_entity doesn't spam the API.
+_STATES_CACHE: list[dict] | None = None
+_STATES_CACHE_EXP: float = 0.0
+_STATES_TTL = 1.0  # seconds
 
 
 @dataclass(slots=True)
@@ -93,13 +99,27 @@ async def _request(
 # Public API helpers
 # ---------------------------------------------------------------------------
 async def get_states() -> list[dict]:
-    """Return all HA entity states (empty list on failure)."""
+    """Return all HA entity states with a short lived cache."""
+    global _STATES_CACHE, _STATES_CACHE_EXP
+    now = time.monotonic()
+    if _STATES_CACHE is not None and now < _STATES_CACHE_EXP:
+        return _STATES_CACHE
     try:
         data = await _request("GET", "/states")
-        return data if isinstance(data, list) else []
+        _STATES_CACHE = data if isinstance(data, list) else []
+        _STATES_CACHE_EXP = now + _STATES_TTL
     except Exception as e:
         logger.warning("Failed to fetch states: %s", e)
-        return []
+        _STATES_CACHE = []
+        _STATES_CACHE_EXP = 0.0
+    return _STATES_CACHE
+
+
+def invalidate_states_cache() -> None:
+    """Clear cached HA states."""
+    global _STATES_CACHE, _STATES_CACHE_EXP
+    _STATES_CACHE = None
+    _STATES_CACHE_EXP = 0.0
 
 
 async def call_service(domain: str, service: str, data: dict) -> Any:
@@ -110,7 +130,9 @@ async def call_service(domain: str, service: str, data: dict) -> Any:
         ids = data.get("entity_id")
         if ids is not None:
             rec.entity_ids = [ids] if isinstance(ids, str) else list(ids)
-    return await _request("POST", f"/services/{domain}/{service}", json=data)
+    result = await _request("POST", f"/services/{domain}/{service}", json=data)
+    invalidate_states_cache()
+    return result
 
 
 async def turn_on(entity_id: str) -> Any:
