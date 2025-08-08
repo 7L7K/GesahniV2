@@ -27,6 +27,28 @@ _PROMPT_CORE = _CORE_PATH.read_text(encoding="utf-8")
 logger = logging.getLogger(__name__)
 
 
+def _coerce_k(value: int | str | None) -> int:
+    """Return a positive integer ``k`` for memory queries.
+
+    Falls back to :func:`_get_mem_top_k` when ``value`` is ``None`` or
+    cannot be interpreted as a positive integer.
+    """
+
+    if value is None:
+        return _get_mem_top_k()
+    try:
+        k = int(value)
+    except (TypeError, ValueError):
+        logger.warning("Invalid top_k %r; defaulting to %s", value, _get_mem_top_k())
+        return _get_mem_top_k()
+    if k <= 0:
+        logger.warning(
+            "top_k %d must be positive; defaulting to %s", k, _get_mem_top_k()
+        )
+        return _get_mem_top_k()
+    return k
+
+
 @dataclass
 class PromptBuilder:
     @staticmethod
@@ -52,11 +74,12 @@ class PromptBuilder:
         if top_k is None:
             top_k = _get_mem_top_k()
             logger.warning("top_k missing; defaulting to %s", top_k)
+        k = min(_coerce_k(top_k), 3)
         rec = log_record_var.get()
         if rec:
             rec.embed_tokens = count_tokens(user_prompt)
-            rec.rag_top_k = top_k
-        memories: List[str] = query_user_memories(user_id, user_prompt, k=top_k)[:3]
+            rec.rag_top_k = k
+        memories: List[str] = query_user_memories(user_id, user_prompt, k=k)
         while count_tokens("\n".join(memories)) > 55 and memories:
             memories.pop()
         dbg = debug_info if debug else ""
