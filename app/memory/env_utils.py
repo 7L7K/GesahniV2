@@ -22,6 +22,8 @@ def _env_flag(name: str) -> bool:
 
 DEFAULT_SIM_THRESHOLD = 0.90
 
+DEFAULT_MEM_TOP_K = 5
+
 
 def _get_sim_threshold() -> float:
     """Read the similarity threshold from the ``SIM_THRESHOLD`` env var."""
@@ -43,6 +45,29 @@ def _get_sim_threshold() -> float:
             DEFAULT_SIM_THRESHOLD,
         )
         return DEFAULT_SIM_THRESHOLD
+    return value
+
+
+def _get_mem_top_k() -> int:
+    """Read the ``MEM_TOP_K`` env var with a default of 5."""
+
+    raw = os.getenv("MEM_TOP_K", str(DEFAULT_MEM_TOP_K))
+    try:
+        value = int(raw)
+    except ValueError:  # pragma: no cover - defensive
+        logger.warning(
+            "Invalid MEM_TOP_K %r; falling back to %d",
+            raw,
+            DEFAULT_MEM_TOP_K,
+        )
+        return DEFAULT_MEM_TOP_K
+    if value <= 0:
+        logger.warning(
+            "MEM_TOP_K %d must be positive; falling back to %d",
+            value,
+            DEFAULT_MEM_TOP_K,
+        )
+        return DEFAULT_MEM_TOP_K
     return value
 
 
@@ -86,9 +111,10 @@ __all__ = [
     "_env_flag",
     "DEFAULT_SIM_THRESHOLD",
     "_get_sim_threshold",
+    "DEFAULT_MEM_TOP_K",
+    "_get_mem_top_k",
     "_clean_meta",
     "_normalize",
     "_normalized_hash",
     "_cosine_similarity",
 ]
-
