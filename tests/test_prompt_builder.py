@@ -46,8 +46,8 @@ sys.modules.setdefault(
     types.SimpleNamespace(EmbeddingFunction=object),
 )
 
-from app import prompt_builder
-from app.prompt_builder import PromptBuilder, MAX_PROMPT_TOKENS
+from app import prompt_builder  # noqa: E402
+from app.prompt_builder import PromptBuilder, MAX_PROMPT_TOKENS  # noqa: E402
 
 
 def test_prompt_builder_respects_token_limit(monkeypatch):
@@ -103,8 +103,8 @@ def test_prompt_builder_fills_all_fields(monkeypatch):
 def test_prompt_builder_drops_summary_before_memories(monkeypatch):
     monkeypatch.setattr(
         prompt_builder,
-        "_PROMPT_CORE",
-        "{{conversation_summary}} {{memories}} {{user_prompt}}",
+        "_prompt_core",
+        lambda: "{{conversation_summary}} {{memories}} {{user_prompt}}",
     )
     monkeypatch.setattr(prompt_builder, "count_tokens", lambda text: len(text))
     monkeypatch.setattr(prompt_builder, "MAX_PROMPT_TOKENS", 50)
