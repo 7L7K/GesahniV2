@@ -7,94 +7,121 @@ import os
 import sys
 from typing import List, Optional
 
+from app.telemetry import hash_user_id
+
 from .chroma_store import ChromaVectorStore
 from .env_utils import _get_mem_top_k, _normalized_hash
 from .memory_store import MemoryVectorStore, VectorStore
 
-
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Backend selection helpers
+# ---------------------------------------------------------------------------
+
 def _get_store() -> VectorStore:
-    """Return the configured vector store backend."""
+    """Return the configured vector store backend.
+
+    * ``VECTOR_STORE`` env-var controls the preferred backend.
+    * Falls back to an in-memory store automatically when running under pytest
+      or whenever the disk-backed Chroma store cannot be initialised.
+    """
 
     kind = os.getenv("VECTOR_STORE", "").lower()
     chroma_path = os.getenv("CHROMA_PATH", ".chroma_data")
+
     if (
         kind in ("memory", "inmemory")
         or "PYTEST_CURRENT_TEST" in os.environ
         or "pytest" in sys.modules
     ):
         logger.info("Using MemoryVectorStore (test mode or VECTOR_STORE=%s)", kind)
-        return MemoryVectorStore()
-    try:
-        if not chroma_path:
-            raise FileNotFoundError("CHROMA_PATH is empty")
-        logger.info("Initializing ChromaVectorStore at path: %s", chroma_path)
-        return ChromaVectorStore()
-    except Exception as exc:
-        if os.getenv("ENV", "").lower() == "production":
-            logger.error("FATAL: ChromaVectorStore failed in production: %s", exc)
-            raise
-        logger.warning(
-            "ChromaVectorStore unavailable at %s: %s; falling back to MemoryVectorStore",
-            chroma_path,
-            exc,
-        )
-        return MemoryVectorStore()
+        store: VectorStore = MemoryVectorStore()
+    else:
+        try:
+            if not chroma_path:
+                raise FileNotFoundError("CHROMA_PATH is empty")
+            logger.info("Initializing ChromaVectorStore at path: %s", chroma_path)
+            store = ChromaVectorStore()
+        except Exception as exc:
+            if os.getenv("ENV", "").lower() == "production":
+                # In production we bail hard so that mis-configured persistence
+                # layers don't silently fall back to in-memory.
+                logger.error("FATAL: ChromaVectorStore failed in production: %s", exc)
+                raise
+            logger.warning(
+                "ChromaVectorStore unavailable at %s: %s; falling back to MemoryVectorStore",
+                chroma_path,
+                exc,
+            )
+            store = MemoryVectorStore()
+
+    logger.debug("Vector store backend selected: %s", type(store).__name__)
+    return store
 
 
+# The singleton store instance used by every helper below.
 _store: VectorStore = _get_store()
 
 
+# ---------------------------------------------------------------------------
+# Public helpers
+# ---------------------------------------------------------------------------
+
 def add_user_memory(user_id: str, memory: str) -> str:
+    """Persist a single memory string for *user_id*."""
     return _store.add_user_memory(user_id, memory)
 
 
 def _coerce_k(k: int | str | None) -> int:
-    """Return a positive integer ``k`` with a sensible default."""
+    """Return a positive integer ``k`` with sane fall-backs.
 
+    Any falsy or invalid value is replaced by the project-wide default from
+    :func:`env_utils._get_mem_top_k`.
+    """
+
+    raw = k
     if k is None:
-        return _get_mem_top_k()
-    try:
-        value = int(k)
-    except (TypeError, ValueError):
-        return _get_mem_top_k()
-    return value if value > 0 else _get_mem_top_k()
+        result = _get_mem_top_k()
+    else:
+        try:
+            value = int(k)
+        except (TypeError, ValueError):
+            result = _get_mem_top_k()
+        else:
+            result = value if value > 0 else _get_mem_top_k()
+
+    logger.debug("_coerce_k: raw=%r resolved=%d", raw, result)
+    return result
 
 
 def query_user_memories(
     user_id: str, prompt: str, k: int | str | None = None
 ) -> List[str]:
+    """Retrieve up to *k* memories relevant to *prompt* for the given user."""
+
     k_int = _coerce_k(k)
-    return _store.query_user_memories(user_id, prompt, k_int)
+    logger.debug(
+        "query_user_memories args: user=%s prompt=%r k=%d",
+        hash_user_id(user_id),
+        prompt,
+        k_int,
+    )
+    res = _store.query_user_memories(user_id, prompt, k_int)
+    logger.debug("query_user_memories returned %d items", len(res))
+    return res
 
 
 def cache_answer(prompt: str, answer: str, cache_id: str | None = None) -> None:
-    """Cache an answer for the given prompt.
-
-    Parameters
-    ----------
-    prompt:
-        Normalized prompt text.
-    answer:
-        Response text to cache.
-    cache_id:
-        Optional explicit cache identifier. If omitted the identifier is
-        generated from a normalized hash of the prompt.
-    """
+    """Cache *answer* keyed by *prompt* (or explicit *cache_id*)."""
 
     cid = cache_id or _normalized_hash(prompt)
     _store.cache_answer(cid, prompt, answer)
 
 
 def cache_answer_legacy(*args) -> None:  # pragma: no cover - shim for callers
-    """Backward compatible wrapper for positional cache_answer usage.
-
-    This helper emits a ``DeprecationWarning`` and forwards to
-    :func:`cache_answer` using the new explicit signature. It will be removed
-    once all callers are migrated.
-    """
+    """Backward-compatibility wrapper for the old positional signature."""
 
     import warnings
 
@@ -114,15 +141,21 @@ def cache_answer_legacy(*args) -> None:  # pragma: no cover - shim for callers
 
 
 def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
+    """Return a cached answer **if** it is younger than *ttl_seconds*."""
+
     return _store.lookup_cached_answer(prompt, ttl_seconds)
 
 
 def record_feedback(prompt: str, feedback: str) -> None:
+    """Record human feedback for *prompt*."""
+
     return _store.record_feedback(prompt, feedback)
 
 
 class _QACacheProxy:
-    def __call__(self):
+    """Thin proxy so callers can treat ``qa_cache`` like a module-level var."""
+
+    def __call__(self):  # noqa: D401
         return _store.qa_cache
 
     def __getattr__(self, name):  # pragma: no cover - simple delegation
@@ -130,16 +163,20 @@ class _QACacheProxy:
 
 
 qa_cache = _QACacheProxy()
-_qa_cache = qa_cache
+_qa_cache = qa_cache  # legacy alias
 
 
 def invalidate_cache(prompt: str) -> None:
+    """Invalidate any cached answer that exactly matches *prompt*."""
+
     cid = _normalized_hash(prompt)
     logger.debug("Invalidating cache for %s", cid)
     _store.qa_cache.delete(ids=[cid])
 
 
 def close_store() -> None:
+    """Close and re-initialise the underlying store (used in tests)."""
+
     global _store
     if _store is not None:
         try:

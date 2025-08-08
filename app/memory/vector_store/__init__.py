@@ -1,11 +1,13 @@
-# app/memory/vector_store/__init__.py
-"""Compatibility wrapper re-exporting vector store API.
+"""Compatibility wrapper re-exporting vector-store API.
 
-Centralizes vector-store helpers so call sites import a single module.  
-Also hardens every retrieval path so *no* query can sneak a ``None`` into
-``VectorStore.query`` and crash the pipeline.
+This package-level ``__init__`` gives tests and call-sites a single import path
+(``app.memory.vector_store``) while hardening *all* RAG look-ups so a bad ``k``
+value can’t sneak through and blow up the real store implementation.
 """
 
+from __future__ import annotations
+
+import logging
 from typing import List, Union
 
 from ..api import (
@@ -29,40 +31,47 @@ from ..env_utils import (
     _normalized_hash as _normalized_hash,
 )
 
-# Public re-export so callers don’t depend on embeddings internals.
-embed_sync = _embed_sync
+logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Public re-exports
+# ---------------------------------------------------------------------------
+
+# Surface the sync embed helper so callers aren’t coupled to the embeddings
+# package’s private layout.
+embed_sync = _embed_sync  # noqa: N816 (keep camelCase to match original API)
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-
 def _coerce_k(k: Union[int, str, None]) -> int:
     """Return a sane positive ``int`` for ``k``.
 
-    * `None`, garbage, or failed casts fall back to the project default.
-    * Strings are coerced via ``int()``—if that fails, we still fall back.
+    Rules:
+    * ``None`` → project-wide default via :func:`_get_mem_top_k`.
+    * Strings are cast with ``int()``; failures or non-positive results fall
+      back to the default.
+    * Any other non-int type also falls back.
     """
+
+    raw = k
     if k is None:
-        return _get_mem_top_k()
-
-    if isinstance(k, str):
+        result = _get_mem_top_k()
+    else:
         try:
-            return int(k)
-        except ValueError:
-            return _get_mem_top_k()
+            value = int(k)  # handles str as well as float-like ints
+        except (TypeError, ValueError):
+            result = _get_mem_top_k()
+        else:
+            result = value if value > 0 else _get_mem_top_k()
 
-    if isinstance(k, int):
-        return k
-
-    return _get_mem_top_k()
-
+    logger.debug("_coerce_k: raw=%r → %d", raw, result)
+    return result
 
 # ---------------------------------------------------------------------------
 # Safer API surface
 # ---------------------------------------------------------------------------
-
 
 def query_user_memories(
     user_id: str,
@@ -71,6 +80,7 @@ def query_user_memories(
     k: Union[int, str, None] = None,
 ) -> List[str]:
     """Vector-store RAG lookup with bullet-proof ``k`` handling."""
+
     return _raw_query_user_memories(user_id, prompt, k=_coerce_k(k))
 
 
@@ -80,12 +90,20 @@ def safe_query_user_memories(
     *,
     k: Union[int, str, None] = None,
 ) -> List[str]:
-    """Alias kept for backward compatibility (tests import it)."""
-    return query_user_memories(user_id, prompt, k=k)
+    """Alias kept for backward compatibility (extra debug logging)."""
 
+    logger.debug(
+        "safe_query_user_memories(user_id=%s, prompt=%r, k=%r)",
+        user_id,
+        prompt,
+        k,
+    )
+    memories = query_user_memories(user_id, prompt, k=k)
+    logger.debug("→ returning %d memories", len(memories))
+    return memories
 
 # ---------------------------------------------------------------------------
-# Public re-exports
+# What we expose to the rest of the codebase
 # ---------------------------------------------------------------------------
 
 __all__ = [
@@ -110,10 +128,11 @@ __all__ = [
     "embed_sync",
 ]
 
-# Provide `_get_store` for tests that reach in.
+# Provide `_get_store` for tests that reach in (but keep it out of production
+# code by convention).
 try:  # pragma: no cover – test-only import path
     from ..api import _get_store as _get_store  # type: ignore
-except Exception:  # pragma: no cover – fallback
+except Exception:  # pragma: no cover – defensive
     _get_store = None
 else:
     __all__.append("_get_store")

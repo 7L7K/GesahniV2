@@ -42,20 +42,27 @@ def _coerce_k(value: int | str | None) -> int:
     Falls back to the project-wide default when the supplied value is
     missing or invalid.
     """
+    raw = value
     if value is None:
-        return _get_mem_top_k()
-
-    try:
-        k = int(value)
-    except (TypeError, ValueError):
-        logger.warning("Invalid top_k %r; defaulting to %s", value, _get_mem_top_k())
-        return _get_mem_top_k()
-
-    if k <= 0:
-        logger.warning("top_k %d must be positive; defaulting to %s", k, _get_mem_top_k())
-        return _get_mem_top_k()
-
-    return k
+        coerced = _get_mem_top_k()
+    else:
+        try:
+            k = int(value)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid top_k %r; defaulting to %s", value, _get_mem_top_k()
+            )
+            coerced = _get_mem_top_k()
+        else:
+            if k <= 0:
+                logger.warning(
+                    "top_k %d must be positive; defaulting to %s", k, _get_mem_top_k()
+                )
+                coerced = _get_mem_top_k()
+            else:
+                coerced = k
+    logger.debug("_coerce_k: raw=%r coerced=%d", raw, coerced)
+    return coerced
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +91,12 @@ class PromptBuilder:
         Extra kwargs (e.g. `temperature`, `top_p`) are accepted for API
         parity and silently ignored.
         """
+        logger.info(
+            "PromptBuilder.build entry user_id=%s top_k=%s prompt=%r",
+            user_id,
+            top_k,
+            user_prompt,
+        )
         # ------------------------------------------------------------------
         # Context collection
         # ------------------------------------------------------------------
@@ -103,6 +116,7 @@ class PromptBuilder:
         # Memory lookup & trimming
         # ------------------------------------------------------------------
         memories: List[str] = safe_query_user_memories(user_id, user_prompt, k=k)
+        logger.info("safe_query_user_memories returned %d memories", len(memories))
         while count_tokens("\n".join(memories)) > 55 and memories:
             memories.pop()
 
@@ -178,6 +192,11 @@ class PromptBuilder:
         if rec:
             rec.retrieval_count = len(mem_list)
 
+        logger.info(
+            "PromptBuilder.build exit tokens=%d memories=%d",
+            prompt_tokens,
+            len(mem_list),
+        )
         return prompt, prompt_tokens
 
 

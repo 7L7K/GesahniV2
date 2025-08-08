@@ -42,8 +42,8 @@ async def route_prompt(*args, **kwargs):
         res = await router.route_prompt(*args, **kwargs)
         logger.info("⬆️ main.route_prompt got res=%s", res)
         return res
-    except Exception as e:  # pragma: no cover - defensive
-        logger.error("💥 main.route_prompt bubbled exception: %s", e)
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("💥 main.route_prompt bubbled exception")
         raise
 
 
@@ -205,7 +205,12 @@ async def get_me(user_id: str = Depends(get_current_user_id)):
 
 @core_router.post("/ask")
 async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
-    logger.info("Received prompt: %s", req.prompt)
+    logger.info(
+        "ask entry user_id=%s prompt=%s model_override=%s",
+        user_id,
+        req.prompt,
+        req.model_override,
+    )
 
     queue: asyncio.Queue[str | None] = asyncio.Queue()
     status_code: int | None = None
@@ -227,14 +232,19 @@ async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
                 )
             else:  # Compatibility with tests that monkeypatch route_prompt
                 result = await route_prompt(req.prompt, req.model_override, user_id)
-            # If the backend didn't stream any tokens, emit the final result once
-            if not streamed_any and isinstance(result, str) and result:
-                await queue.put(result)
+            if streamed_any:
+                logger.info("ask success user_id=%s streamed=True", user_id)
+            else:
+                logger.info("ask success user_id=%s result=%s", user_id, result)
+                # If the backend didn't stream any tokens, emit the final result once
+                if isinstance(result, str) and result:
+                    await queue.put(result)
         except HTTPException as exc:
+            logger.exception("ask HTTPException user_id=%s", user_id)
             status_code = exc.status_code
             await queue.put(f"[error:{exc.detail}]")
-        except Exception as e:  # pragma: no cover - defensive
-            logger.exception("Error processing prompt: %s", e)
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("ask error user_id=%s", user_id)
             await queue.put("[error]")
         finally:
             await queue.put(None)
