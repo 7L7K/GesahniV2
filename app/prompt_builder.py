@@ -42,20 +42,27 @@ def _coerce_k(value: int | str | None) -> int:
     Falls back to the project-wide default when the supplied value is
     missing or invalid.
     """
+    raw = value
     if value is None:
-        return _get_mem_top_k()
-
-    try:
-        k = int(value)
-    except (TypeError, ValueError):
-        logger.warning("Invalid top_k %r; defaulting to %s", value, _get_mem_top_k())
-        return _get_mem_top_k()
-
-    if k <= 0:
-        logger.warning("top_k %d must be positive; defaulting to %s", k, _get_mem_top_k())
-        return _get_mem_top_k()
-
-    return k
+        coerced = _get_mem_top_k()
+    else:
+        try:
+            k = int(value)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid top_k %r; defaulting to %s", value, _get_mem_top_k()
+            )
+            coerced = _get_mem_top_k()
+        else:
+            if k <= 0:
+                logger.warning(
+                    "top_k %d must be positive; defaulting to %s", k, _get_mem_top_k()
+                )
+                coerced = _get_mem_top_k()
+            else:
+                coerced = k
+    logger.debug("_coerce_k: raw=%r coerced=%d", raw, coerced)
+    return coerced
 
 
 # ---------------------------------------------------------------------------
