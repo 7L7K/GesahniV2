@@ -80,7 +80,9 @@ async def route_prompt(
         rec.embed_tokens = tokens
         rec.user_id = user_id
     session_id = rec.session_id if rec and rec.session_id else "default"
-    debug_route = os.getenv("DEBUG_MODEL_ROUTING", "").lower() in {"1", "true", "yes"}
+    debug_route = model_override is None and os.getenv(
+        "DEBUG_MODEL_ROUTING", ""
+    ).lower() in {"1", "true", "yes"}
 
     def _dry(engine: str, model: str) -> str:
         msg = f"[dry-run] would call {engine} {model}"
@@ -107,8 +109,6 @@ async def route_prompt(
         if mv.startswith("gpt"):
             if mv not in ALLOWED_GPT_MODELS:
                 raise HTTPException(status_code=400, detail=f"Model '{mv}' not allowed")
-            if debug_route:
-                return _dry("gpt", mv)
             try:
                 return await _call_gpt_override(
                     mv, prompt, norm_prompt, session_id, user_id, rec, stream_cb
@@ -148,8 +148,6 @@ async def route_prompt(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="LLaMA backend unavailable",
                 )
-            if debug_route:
-                return _dry("llama", mv)
             return await _call_llama_override(
                 mv,
                 prompt,

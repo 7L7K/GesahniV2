@@ -4,13 +4,14 @@ import sys
 import shutil
 import tempfile
 import types
+import pytest
 
 # Ensure asynchronous tests have an event loop available and JWT auth works.
 os.environ.setdefault("JWT_SECRET", "secret")
 
 # Try to import chromadb, if not, use a stub
 try:
-    import chromadb
+    import chromadb  # noqa: F401
 except ImportError:
     # -----------------------------------------------------------------------
     # Minimal ``chromadb`` stub for diskless/offline testing
@@ -35,7 +36,9 @@ except ImportError:
             for q_emb in q_embs:
                 items = []
                 for i, rec in self._store.items():
-                    if where and any(rec["metadata"].get(k) != v for k, v in where.items()):
+                    if where and any(
+                        rec["metadata"].get(k) != v for k, v in where.items()
+                    ):
                         continue
                     dist = 1.0 - _cosine_similarity(q_emb, rec["embedding"])
                     items.append((dist, i, rec))
@@ -88,31 +91,48 @@ except ImportError:
         "chromadb.config", types.SimpleNamespace(Settings=type("Settings", (), {}))
     )
     sys.modules.setdefault("chromadb.utils", types.SimpleNamespace())
-    sys.modules.setdefault("chromadb.utils.embedding_functions", types.SimpleNamespace())
+    sys.modules.setdefault(
+        "chromadb.utils.embedding_functions", types.SimpleNamespace()
+    )
 
 # Use an isolated temporary directory for any on-disk Chroma data during tests
 _prev_chroma = os.environ.get("CHROMA_PATH")
 _tmp_chroma = tempfile.mkdtemp(prefix="chroma_test_")
 os.environ["CHROMA_PATH"] = _tmp_chroma
 
+
 def _ensure_openai_error() -> None:
     """Ensure ``openai.OpenAIError`` exists even if tests monkeypatch the module."""
     try:
         sys.modules.pop("openai", None)
         import openai  # type: ignore
+
         if not hasattr(openai, "OpenAIError"):
-            class OpenAIError(Exception): pass
+
+            class OpenAIError(Exception):
+                pass
+
             openai.OpenAIError = OpenAIError  # type: ignore[attr-defined]
     except Exception:
         pass
 
+
 # Run once at import time
 _ensure_openai_error()
+
 
 def pytest_collect_file(file_path, path, parent):
     _ensure_openai_error()
 
+
 pytest_plugins = ("pytest_asyncio",)
+
+
+@pytest.fixture(autouse=True)
+def _clear_debug_model_routing(monkeypatch) -> None:
+    """Ensure tests run with DEBUG_MODEL_ROUTING unset by default."""
+    monkeypatch.setenv("DEBUG_MODEL_ROUTING", "")
+
 
 def pytest_sessionfinish(session, exitstatus):
     shutil.rmtree(_tmp_chroma, ignore_errors=True)
