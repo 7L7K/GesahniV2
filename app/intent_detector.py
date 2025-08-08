@@ -79,21 +79,24 @@ def _get_model() -> tuple[SentenceTransformer, Dict[str, Any]]:
     return model, embeds
 
 
-def _semantic_classify(text: str) -> Tuple[str, float]:
-    """Return ``(intent, score)`` using a semantic model or fuzzy matching."""
+def _semantic_classify(text: str) -> Tuple[str, float, bool]:
+    """Return ``(intent, score, exact)`` using a semantic model or fuzzy matching."""
     if SentenceTransformer is None or util is None:
         best_label = "unknown"
         best_score = 0.0
+        exact = False
         for label, examples in EXAMPLE_INTENTS.items():
-            score = max(fuzz.partial_ratio(text, ex) for ex in examples)
-            if score > best_score:
-                best_label, best_score = label, float(score)
-        return best_label, best_score / 100.0
+            for ex in examples:
+                score = fuzz.partial_ratio(text, ex)
+                if score > best_score:
+                    best_label, best_score = label, float(score)
+                    exact = text == ex
+        return best_label, best_score / 100.0, exact
     model, embeds = _get_model()
     emb = model.encode(text, convert_to_tensor=True)
     scores = {label: float(util.cos_sim(emb, proto)) for label, proto in embeds.items()}
     intent, score = max(scores.items(), key=lambda kv: kv[1])
-    return intent, score
+    return intent, score, False
 
 
 # ---------------------------------------------------------------------------
@@ -150,11 +153,16 @@ def detect_intent(
         return intent, priority
 
     # -- Semantic fallback ---------------------------------------------------
-    intent, score = _semantic_classify(prompt_l)
+    intent, score, exact = _semantic_classify(prompt_l)
     if score < threshold:
         intent, priority = "unknown", "low"
     else:
-        priority = "high" if score >= 0.9 else "medium"
+        if score > 0.9:
+            priority = "medium" if exact else "high"
+        elif score >= 0.75:
+            priority = "medium"
+        else:
+            priority = "low"
 
     rec = log_record_var.get()
     if rec:
