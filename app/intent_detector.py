@@ -88,7 +88,10 @@ def _semantic_classify(text: str) -> Tuple[str, float]:
             score = max(fuzz.partial_ratio(text, ex) for ex in examples)
             if score > best_score:
                 best_label, best_score = label, float(score)
-        return best_label, best_score / 100.0
+        # Fuzzy scores are optimistic; scale them down so matches remain
+        # "medium" confidence rather than erroneously "high" when the
+        # sentence-transformers library isn't available.
+        return best_label, best_score / 120.0
     model, embeds = _get_model()
     emb = model.encode(text, convert_to_tensor=True)
     scores = {label: float(util.cos_sim(emb, proto)) for label, proto in embeds.items()}

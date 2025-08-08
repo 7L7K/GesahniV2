@@ -77,6 +77,7 @@ async def route_prompt(
         rec.embed_tokens = tokens
         rec.user_id = user_id
     session_id = rec.session_id if rec and rec.session_id else "default"
+    debug_prompt = os.getenv("DEBUG", "").lower() in {"1", "true", "yes"}
     debug_route = os.getenv("DEBUG_MODEL_ROUTING", "").lower() in {"1", "true", "yes"}
 
     def _dry(engine: str, model: str) -> str:
@@ -118,6 +119,7 @@ async def route_prompt(
                         prompt,
                         session_id=session_id,
                         user_id=user_id,
+                        debug=debug_prompt,
                         **gen_opts,
                     )
                     fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
@@ -216,7 +218,7 @@ async def route_prompt(
         session_id=session_id,
         user_id=user_id,
         custom_instructions=getattr(rec, "custom_instructions", ""),
-        debug=debug_route,
+        debug=debug_prompt,
         debug_info=getattr(rec, "debug_info", ""),
         **gen_opts,
     )
