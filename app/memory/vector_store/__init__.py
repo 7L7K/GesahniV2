@@ -27,6 +27,8 @@ from ..api import query_user_memories as _raw_query_user_memories
 from app.embeddings import embed_sync as _embed_sync
 from ..env_utils import (
     _get_mem_top_k as _get_mem_top_k,
+    _get_sim_threshold as _get_sim_threshold,
+    _cosine_similarity as _cosine_similarity,
     _normalize as _normalize,
     _normalized_hash as _normalized_hash,
 )
@@ -44,6 +46,7 @@ embed_sync = _embed_sync  # noqa: N816 (keep camelCase to match original API)
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _coerce_k(k: Union[int, str, None]) -> int:
     """Return a sane positive ``int`` for ``k``.
@@ -69,9 +72,23 @@ def _coerce_k(k: Union[int, str, None]) -> int:
     logger.debug("_coerce_k: raw=%r → %d", raw, result)
     return result
 
+
+def _get_cutoff() -> float:
+    """Return the distance cutoff derived from similarity threshold."""
+
+    return 1.0 - _get_sim_threshold()
+
+
+def _distance(prompt: str, memory: str) -> float:
+    """Return cosine distance between ``prompt`` and ``memory``."""
+
+    return 1.0 - _cosine_similarity(embed_sync(prompt), embed_sync(memory))
+
+
 # ---------------------------------------------------------------------------
 # Safer API surface
 # ---------------------------------------------------------------------------
+
 
 def query_user_memories(
     user_id: str,
@@ -80,8 +97,10 @@ def query_user_memories(
     k: Union[int, str, None] = None,
 ) -> List[str]:
     """Vector‑store RAG lookup with bullet‑proof ``k`` handling."""
-
-    return _raw_query_user_memories(user_id, prompt, k=_coerce_k(k))
+    safe_k = _coerce_k(k)
+    cutoff = _get_cutoff()
+    memories = _raw_query_user_memories(user_id, prompt, k=safe_k)
+    return [m for m in memories if _distance(prompt, m) <= cutoff]
 
 
 def safe_query_user_memories(
@@ -101,6 +120,7 @@ def safe_query_user_memories(
     memories = query_user_memories(user_id, prompt, k=k)
     logger.debug("→ returning %d memories", len(memories))
     return memories
+
 
 # ---------------------------------------------------------------------------
 # What we expose to the rest of the codebase
