@@ -31,11 +31,9 @@ logger = logging.getLogger(__name__)
 # embeddings module’s internal layout.
 embed_sync = _embed_sync
 
-
 # ---------------------------------------------------------------------------
 # Safe wrapper helpers
 # ---------------------------------------------------------------------------
-
 
 def _coerce_k(k: Union[int, str, None]) -> Optional[int]:
     """Coerce ``k`` to ``int`` or return ``None`` when invalid."""
