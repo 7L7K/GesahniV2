@@ -12,6 +12,39 @@ def _setup_env():
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
 
 
+def test_llama_circuit_open_routes_to_gpt(monkeypatch):
+    _setup_env()
+    from app import router, llama_integration
+
+    llama_integration.LLAMA_HEALTHY = True
+    router.llama_circuit_open = True
+
+    async def fake_gpt(**kwargs):
+        return "gpt-ok"
+
+    async def fail_llama(**kwargs):  # pragma: no cover - should not be called
+        raise RuntimeError("llama should not run")
+
+    called = {"pick": False}
+
+    def fake_pick(prompt, intent, tokens):
+        called["pick"] = True
+        return "gpt", "gpt-4"
+
+    monkeypatch.setattr(router, "_call_gpt", fake_gpt)
+    monkeypatch.setattr(router, "_call_llama", fail_llama)
+    monkeypatch.setattr(router, "handle_command", lambda p: None)
+    monkeypatch.setattr(router, "lookup_cached_answer", lambda p: None)
+    monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
+    monkeypatch.setattr(router, "pick_model", fake_pick)
+    monkeypatch.setattr(router.PromptBuilder, "build", lambda *a, **k: (a[0], 0))
+
+    result = asyncio.run(router.route_prompt("hi", user_id="u"))
+    assert result == "gpt-ok"
+    assert called["pick"]
+    assert not llama_integration.LLAMA_HEALTHY
+
+
 def test_gpt_failure_falls_back_to_llama(monkeypatch):
     _setup_env()
     from app import router, llama_integration
