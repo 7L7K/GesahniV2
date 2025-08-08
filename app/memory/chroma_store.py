@@ -6,7 +6,7 @@ import logging
 import os
 import time
 import uuid
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from app import metrics
 from app.telemetry import hash_user_id
@@ -29,6 +29,28 @@ class _LengthEmbedder:
 
     def name(self) -> str:  # pragma: no cover - simple helper
         return "length-embedder"
+
+
+class _ChromaCacheWrapper:
+    """Adapter exposing a minimal collection-like API for Chroma."""
+
+    def __init__(self, collection) -> None:  # type: ignore[no-untyped-def]
+        self._col = collection
+
+    def get_items(
+        self, ids: List[str] | None = None, include: List[str] | None = None
+    ) -> Dict[str, List]:
+        """Delegate to the underlying collection's ``get`` method."""
+
+        return self._col.get(ids=ids, include=include)
+
+    def keys(self) -> List[str]:
+        """Return all document identifiers from the collection."""
+
+        return self._col.get(include=[]).get("ids", [])
+
+    def __getattr__(self, name):  # pragma: no cover - simple delegation
+        return getattr(self._col, name)
 
 
 class ChromaVectorStore(VectorStore):
@@ -54,9 +76,10 @@ class ChromaVectorStore(VectorStore):
 
         self._client = client
         self._embedder = _LengthEmbedder()
-        self._cache = self._client.get_or_create_collection(
+        base_cache = self._client.get_or_create_collection(
             "qa_cache", embedding_function=self._embedder
         )
+        self._cache = _ChromaCacheWrapper(base_cache)
         self._user_memories = self._client.get_or_create_collection(
             "user_memories", embedding_function=self._embedder
         )
@@ -168,4 +191,3 @@ class ChromaVectorStore(VectorStore):
 
 
 __all__ = ["ChromaVectorStore"]
-
