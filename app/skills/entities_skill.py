@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import re
+import logging
 from .base import Skill
 from .. import home_assistant as ha
+
+logger = logging.getLogger(__name__)
 
 
 class EntitiesSkill(Skill):
@@ -34,7 +37,11 @@ class EntitiesSkill(Skill):
         start, end = (page - 1) * PAGE_SIZE, page * PAGE_SIZE
 
         # grab all HA states
-        states = await ha.get_states()
+        try:
+            states = await ha.get_states()
+        except ha.HomeAssistantAPIError as e:
+            logger.warning("entities fetch failed: %s", e)
+            return "Home Assistant unreachable."
 
         # narrow to requested domain
         domain_prefix = {"lights": "light.", "switches": "switch."}.get(kind, "")
