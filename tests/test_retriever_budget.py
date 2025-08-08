@@ -57,7 +57,7 @@ def test_retriever_budget(monkeypatch):
     # five memories ~10 tokens each
     mems = [f"memory {i} " * 5 for i in range(5)]
     monkeypatch.setattr(
-        prompt_builder, "query_user_memories", lambda uid, q, k=5: mems[:k]
+        prompt_builder, "safe_query_user_memories", lambda uid, q, k=5: mems[:k]
     )
 
     base_prompt, base_tokens = PromptBuilder.build("hi", top_k=0)

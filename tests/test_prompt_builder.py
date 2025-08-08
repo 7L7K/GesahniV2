@@ -56,7 +56,7 @@ def test_prompt_builder_respects_token_limit(monkeypatch):
         prompt_builder.memgpt, "summarize_session", lambda sid, user_id=None: big
     )
     monkeypatch.setattr(
-        prompt_builder, "query_user_memories", lambda uid, q, k=5: [big, big]
+        prompt_builder, "safe_query_user_memories", lambda uid, q, k=5: [big, big]
     )
 
     prompt, tokens = PromptBuilder.build("hi", session_id="s", user_id="u")
@@ -67,7 +67,9 @@ def test_prompt_builder_includes_user_prompt(monkeypatch):
     monkeypatch.setattr(
         prompt_builder.memgpt, "summarize_session", lambda sid, user_id=None: ""
     )
-    monkeypatch.setattr(prompt_builder, "query_user_memories", lambda uid, q, k=5: [])
+    monkeypatch.setattr(
+        prompt_builder, "safe_query_user_memories", lambda uid, q, k=5: []
+    )
     user_msg = "what is the weather?"
     prompt, _ = PromptBuilder.build(user_msg, session_id="s", user_id="u")
     assert user_msg in prompt
@@ -81,7 +83,7 @@ def test_prompt_builder_fills_all_fields(monkeypatch):
     )
     monkeypatch.setattr(
         prompt_builder,
-        "query_user_memories",
+        "safe_query_user_memories",
         lambda uid, q, k=5: ["memory1", "memory2"],
     )
     prompt, _ = PromptBuilder.build(
@@ -114,7 +116,7 @@ def test_prompt_builder_drops_summary_before_memories(monkeypatch):
         lambda sid, user_id=None: "S" * 40,
     )
     monkeypatch.setattr(
-        prompt_builder, "query_user_memories", lambda uid, q, k=5: ["M" * 30]
+        prompt_builder, "safe_query_user_memories", lambda uid, q, k=5: ["M" * 30]
     )
     prompt, _ = PromptBuilder.build("hi", session_id="s", user_id="u")
     assert "S" * 40 not in prompt
