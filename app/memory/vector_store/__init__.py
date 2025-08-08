@@ -1,7 +1,7 @@
-"""Compatibility wrapper re-exporting vector-store API.
+"""Compatibility wrapper re‑exporting vector‑store API.
 
-This package-level ``__init__`` gives tests and call-sites a single import path
-(``app.memory.vector_store``) while hardening *all* RAG look-ups so a bad ``k``
+This package‑level ``__init__`` gives tests and call‑sites a single import path
+(``app.memory.vector_store``) while hardening *all* RAG look‑ups so a bad ``k``
 value can’t sneak through and blow up the real store implementation.
 """
 
@@ -34,7 +34,7 @@ from ..env_utils import (
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Public re-exports
+# Public re‑exports
 # ---------------------------------------------------------------------------
 
 # Surface the sync embed helper so callers aren’t coupled to the embeddings
@@ -49,10 +49,10 @@ def _coerce_k(k: Union[int, str, None]) -> int:
     """Return a sane positive ``int`` for ``k``.
 
     Rules:
-    * ``None`` → project-wide default via :func:`_get_mem_top_k`.
-    * Strings are cast with ``int()``; failures or non-positive results fall
+    * ``None`` → project‑wide default via :func:`_get_mem_top_k`.
+    * Strings are cast with ``int()``; failures or non‑positive results fall
       back to the default.
-    * Any other non-int type also falls back.
+    * Any other non‑int type also falls back.
     """
 
     raw = k
@@ -60,7 +60,7 @@ def _coerce_k(k: Union[int, str, None]) -> int:
         result = _get_mem_top_k()
     else:
         try:
-            value = int(k)  # handles str as well as float-like ints
+            value = int(k)  # handles str as well as float‑like ints
         except (TypeError, ValueError):
             result = _get_mem_top_k()
         else:
@@ -79,7 +79,7 @@ def query_user_memories(
     *,
     k: Union[int, str, None] = None,
 ) -> List[str]:
-    """Vector-store RAG lookup with bullet-proof ``k`` handling."""
+    """Vector‑store RAG lookup with bullet‑proof ``k`` handling."""
 
     return _raw_query_user_memories(user_id, prompt, k=_coerce_k(k))
 
@@ -130,7 +130,7 @@ __all__ = [
 
 # Provide `_get_store` for tests that reach in (but keep it out of production
 # code by convention).
-try:  # pragma: no cover – test-only import path
+try:  # pragma: no cover – test‑only import path
     from ..api import _get_store as _get_store  # type: ignore
 except Exception:  # pragma: no cover – defensive
     _get_store = None
