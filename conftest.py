@@ -4,27 +4,15 @@ import sys
 import shutil
 import tempfile
 import types
+import pytest
 
-# Ensure asynchronous tests have an event loop available and JWT auth works.
 os.environ.setdefault("JWT_SECRET", "secret")
-# Disable debug model routing unless a test explicitly enables it.
 os.environ.setdefault("DEBUG_MODEL_ROUTING", "0")
 
-# -----------------------------------------------------------------------
-# Always register a ``chromadb`` stub so tests don't depend on the real
-# library. If ``chromadb`` is installed, import it and then override the
-# modules with the stub.
-# -----------------------------------------------------------------------
-try:  # pragma: no cover
-    import chromadb  # type: ignore  # noqa: F401
-except Exception:  # pragma: no cover
-    pass
-
-
+# --- Always stub chromadb so tests never hit disk or real DB ---
 def _cosine_similarity(a, b):
     denom = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(x * x for x in b))
     return sum(x * y for x, y in zip(a, b)) / denom if denom else 0.0
-
 
 class _CollectionStub:
     def __init__(self, embedding_function=None):
@@ -73,7 +61,6 @@ class _CollectionStub:
             if i in self._store:
                 self._store[i]["metadata"].update(meta)
 
-
 class _ClientStub:
     def __init__(self, path=None):
         self._cols = {}
@@ -90,38 +77,38 @@ class _ClientStub:
 
     close = reset
 
-
 chromadb_stub = types.SimpleNamespace(PersistentClient=_ClientStub)
 sys.modules["chromadb"] = chromadb_stub
-sys.modules["chromadb.config"] = types.SimpleNamespace(
-    Settings=type("Settings", (), {})
-)
+sys.modules["chromadb.config"] = types.SimpleNamespace(Settings=type("Settings", (), {}))
 sys.modules["chromadb.utils"] = types.SimpleNamespace()
 sys.modules["chromadb.utils.embedding_functions"] = types.SimpleNamespace()
 
-# Use an isolated temporary directory for any on-disk Chroma data during tests
+# --- Use a temp dir for Chroma test data, always clean up after ---
 _prev_chroma = os.environ.get("CHROMA_PATH")
 _tmp_chroma = tempfile.mkdtemp(prefix="chroma_test_")
 os.environ["CHROMA_PATH"] = _tmp_chroma
 
 def _ensure_openai_error() -> None:
-    """Ensure ``openai.OpenAIError`` exists even if tests monkeypatch the module."""
+    """Ensure openai.OpenAIError exists even if openai is monkeypatched or not installed."""
     try:
         sys.modules.pop("openai", None)
         import openai  # type: ignore
         if not hasattr(openai, "OpenAIError"):
             class OpenAIError(Exception): pass
-            openai.OpenAIError = OpenAIError  # type: ignore[attr-defined]
+            openai.OpenAIError = OpenAIError
     except Exception:
         pass
 
-# Run once at import time
 _ensure_openai_error()
 
 def pytest_collect_file(file_path, path, parent):
     _ensure_openai_error()
 
 pytest_plugins = ("pytest_asyncio",)
+
+@pytest.fixture(autouse=True)
+def _clear_debug_model_routing(monkeypatch) -> None:
+    monkeypatch.setenv("DEBUG_MODEL_ROUTING", "")
 
 def pytest_sessionfinish(session, exitstatus):
     shutil.rmtree(_tmp_chroma, ignore_errors=True)
