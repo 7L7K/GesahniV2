@@ -5,6 +5,8 @@ import types
 import builtins
 from typing import Any
 
+import httpx
+
 from fastapi import HTTPException
 import pytest  # noqa: E402
 
@@ -17,24 +19,30 @@ sys.modules.setdefault(
 sys.modules.setdefault("chromadb", types.SimpleNamespace(PersistentClient=object))
 sys.modules.setdefault("aiosqlite", types.SimpleNamespace(connect=lambda *a, **k: None))
 
+
 # --- Metadata Cleaner ---
 def clean_metadata(meta):
     return {k: (v if v is not None else "") for k, v in meta.items()} if meta else {}
+
 
 # --- Mock Embeddings/OpenAI/AsyncOpenAI ---
 class _Emb:
     def create(self, *a, **k):
         return types.SimpleNamespace(data=[types.SimpleNamespace(embedding=[0.0])])
 
+
 class _OpenAI:
     def __init__(self, *a, **k):
         self.embeddings = _Emb()
 
+
 class _ChatCompletionStream:
     def __aiter__(self):
         return self
+
     async def __anext__(self):
         raise StopAsyncIteration
+
 
 class _ChatCompletions:
     async def create(self, *a, **k):
@@ -51,18 +59,25 @@ class _ChatCompletions:
             usage=types.SimpleNamespace(prompt_tokens=0, completion_tokens=0),
         )
 
+
 class _AsyncOpenAI:
     def __init__(self, *a, **k):
         self.chat = types.SimpleNamespace(completions=_ChatCompletions())
         self.embeddings = _Emb()
-    async def close(self): pass
 
-class _OpenAIError(Exception): pass
+    async def close(self):
+        pass
+
+
+class _OpenAIError(Exception):
+    pass
+
 
 builtins.AsyncOpenAI = _AsyncOpenAI
 sys.modules["openai"] = types.SimpleNamespace(
     OpenAI=_OpenAI, AsyncOpenAI=_AsyncOpenAI, OpenAIError=_OpenAIError
 )
+
 
 # --- Patch MemGPT & VectorStore Internals Globally ---
 @pytest.fixture(autouse=True)
@@ -71,14 +86,19 @@ def patch_memgpt_and_vector(monkeypatch):
     from app.memory import vector_store
 
     # Patch MemGPT and any memory routines to pure no-op for tests
-    monkeypatch.setattr(router, "memgpt", types.SimpleNamespace(store_interaction=lambda *a, **k: None))
+    monkeypatch.setattr(
+        router, "memgpt", types.SimpleNamespace(store_interaction=lambda *a, **k: None)
+    )
     monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
-    monkeypatch.setattr(router, "cache_answer", lambda prompt, answer, cache_id=None: None)
+    monkeypatch.setattr(
+        router, "cache_answer", lambda prompt, answer, cache_id=None: None
+    )
     # Patch all vector store clearing for compatibility
     if hasattr(vector_store, "clear_cache"):
         monkeypatch.setattr(vector_store, "clear_cache", lambda: None)
     elif hasattr(vector_store, "_cache"):
         monkeypatch.setattr(vector_store._cache, "delete", lambda **kwargs: None)
+
 
 # --- TESTS ---
 def test_router_fallback_metrics_updated(monkeypatch):
@@ -117,6 +137,7 @@ def test_router_fallback_metrics_updated(monkeypatch):
     assert m["gpt"] == 1
     assert m["fallback"] == 1
 
+
 def test_gpt_override(monkeypatch):
     os.environ["OLLAMA_URL"] = "http://x"
     os.environ["OLLAMA_MODEL"] = "llama3"
@@ -124,7 +145,7 @@ def test_gpt_override(monkeypatch):
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     from app import router, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = True
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
 
     async def fake_gpt(prompt, model=None, system=None, **kwargs):
         return model, 0, 0, 0.0
@@ -133,6 +154,7 @@ def test_gpt_override(monkeypatch):
     monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
     result = asyncio.run(router.route_prompt("hello world", "gpt-4", user_id="u"))
     assert result == "gpt-4"
+
 
 def test_gpt_override_invalid(monkeypatch):
     os.environ["OLLAMA_URL"] = "http://x"
@@ -144,6 +166,51 @@ def test_gpt_override_invalid(monkeypatch):
     monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
     with pytest.raises(HTTPException):
         asyncio.run(router.route_prompt("hello world", "gpt-3", user_id="u"))
+
+
+def test_gpt_override_http_error_falls_back(monkeypatch):
+    os.environ["OLLAMA_URL"] = "http://x"
+    os.environ["OLLAMA_MODEL"] = "llama3"
+    os.environ["HOME_ASSISTANT_URL"] = "http://ha"
+    os.environ["HOME_ASSISTANT_TOKEN"] = "token"
+    from app import router, llama_integration
+
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
+
+    async def fake_gpt(*a, **k):
+        raise httpx.HTTPError("boom")
+
+    async def fake_llama(**kwargs):
+        return "llama-ok"
+
+    monkeypatch.setattr(router, "ask_gpt", fake_gpt)
+    monkeypatch.setattr(router, "_call_llama", fake_llama)
+    monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
+
+    result = asyncio.run(router.route_prompt("hi", "gpt-4", user_id="u"))
+    assert result == "llama-ok"
+
+
+def test_gpt_override_runtime_error_detail(monkeypatch):
+    os.environ["OLLAMA_URL"] = "http://x"
+    os.environ["OLLAMA_MODEL"] = "llama3"
+    os.environ["HOME_ASSISTANT_URL"] = "http://ha"
+    os.environ["HOME_ASSISTANT_TOKEN"] = "token"
+    from app import router, llama_integration
+
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
+
+    async def fake_gpt(*a, **k):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(router, "ask_gpt", fake_gpt)
+    monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(router.route_prompt("hi", "gpt-4", user_id="u"))
+    assert exc.value.status_code == 503
+    assert "kaboom" in exc.value.detail
+
 
 def test_complexity_checks(monkeypatch):
     os.environ["OLLAMA_URL"] = "http://x"
@@ -169,6 +236,7 @@ def test_complexity_checks(monkeypatch):
     kw_prompt = "please analyze this"
     assert asyncio.run(router.route_prompt(kw_prompt, user_id="u")) == "gpt"
 
+
 def test_skill_metrics(monkeypatch):
     os.environ["OLLAMA_URL"] = "http://x"
     os.environ["OLLAMA_MODEL"] = "llama3"
@@ -178,6 +246,7 @@ def test_skill_metrics(monkeypatch):
 
     class DummySkill:
         name = "dummy"
+
         async def handle(self, prompt):
             return "done"
 
@@ -199,6 +268,7 @@ def test_skill_metrics(monkeypatch):
     assert m["gpt"] == 0
     assert m["llama"] == 0
 
+
 def test_debug_env_toggle(monkeypatch):
     os.environ["OLLAMA_URL"] = "http://x"
     os.environ["OLLAMA_MODEL"] = "llama3"
@@ -210,13 +280,18 @@ def test_debug_env_toggle(monkeypatch):
         return "ok", 0, 0, 0.0
 
     monkeypatch.setattr(router, "ask_gpt", fake_gpt)
-    async def handle_cmd(prompt): return None
+
+    async def handle_cmd(prompt):
+        return None
+
     monkeypatch.setattr(router, "handle_command", handle_cmd)
     monkeypatch.setattr(router, "lookup_cached_answer", lambda p: None)
     router.LLAMA_HEALTHY = False
     monkeypatch.setattr(router.memgpt, "store_interaction", lambda *a, **k: None)
     monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
-    monkeypatch.setattr(router, "cache_answer", lambda prompt, answer, cache_id=None: None)
+    monkeypatch.setattr(
+        router, "cache_answer", lambda prompt, answer, cache_id=None: None
+    )
 
     flags = []
 
@@ -233,6 +308,7 @@ def test_debug_env_toggle(monkeypatch):
 
     assert flags == [False, True]
 
+
 def test_llama_circuit_open(monkeypatch):
     os.environ["OLLAMA_URL"] = "http://x"
     os.environ["OLLAMA_MODEL"] = "llama3"
@@ -246,6 +322,7 @@ def test_llama_circuit_open(monkeypatch):
         asyncio.run(router.route_prompt("hi", user_id="u"))
     assert exc.value.status_code == 503
 
+
 def test_generation_options_passthrough(monkeypatch):
     os.environ["OLLAMA_URL"] = "http://x"
     os.environ["OLLAMA_MODEL"] = "llama3"
@@ -254,7 +331,10 @@ def test_generation_options_passthrough(monkeypatch):
     from app import router
 
     monkeypatch.setattr(router, "llama_circuit_open", False)
-    async def _hc(p): return None
+
+    async def _hc(p):
+        return None
+
     monkeypatch.setattr(router, "handle_command", _hc)
     monkeypatch.setattr(router, "lookup_cached_answer", lambda p: None)
     monkeypatch.setattr(router, "pick_model", lambda *a, **k: ("llama", "llama3"))
@@ -262,7 +342,9 @@ def test_generation_options_passthrough(monkeypatch):
     router.LLAMA_HEALTHY = True
     monkeypatch.setattr(router.memgpt, "store_interaction", lambda *a, **k: None)
     monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
-    monkeypatch.setattr(router, "cache_answer", lambda prompt, answer, cache_id=None: None)
+    monkeypatch.setattr(
+        router, "cache_answer", lambda prompt, answer, cache_id=None: None
+    )
 
     captured: dict[str, Any] = {}
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import re
 from functools import lru_cache
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any, Dict, Iterable, Tuple, Literal
 
 from rapidfuzz import fuzz
 
@@ -101,13 +101,20 @@ def _semantic_classify(text: str) -> Tuple[str, float]:
 # ---------------------------------------------------------------------------
 
 
-def detect_intent(prompt: str, threshold: float = DEFAULT_THRESHOLD) -> tuple[str, str]:
-    """Classify *prompt* returning ``(intent_category, confidence)``.
+Priority = Literal["low", "medium", "high"]
 
-    Heuristics short‑circuit obvious greetings and control requests.  When these
-    fail, a lightweight SBERT classifier assigns the prompt to the closest
-    prototype intent.  ``threshold`` controls how confident the semantic match
-    must be to be considered a real intent; below that it is marked ``unknown``.
+
+def detect_intent(
+    prompt: str, threshold: float = DEFAULT_THRESHOLD
+) -> tuple[str, Priority]:
+    """Classify *prompt* returning ``(intent_category, priority)``.
+
+    ``priority`` is derived from the underlying confidence score and is one of
+    ``"low"``, ``"medium"``, or ``"high"``. Heuristics short‑circuit obvious
+    greetings and control requests. When those fail, a lightweight SBERT
+    classifier assigns the prompt to the closest prototype intent. ``threshold``
+    controls how confident the semantic match must be to be considered a real
+    intent; below that it is marked ``unknown``.
     """
 
     prompt_l = prompt.lower().strip()
@@ -115,42 +122,42 @@ def detect_intent(prompt: str, threshold: float = DEFAULT_THRESHOLD) -> tuple[st
     # -- Greeting heuristic --------------------------------------------------
     if any(fuzz.partial_ratio(prompt_l, g) >= 80 for g in GREETINGS):
         score = 1.0
-        intent, level = "smalltalk", "low"
+        intent, priority = "smalltalk", "low"
         rec = log_record_var.get()
         if rec:
             rec.intent = intent
             rec.intent_confidence = score
-        return intent, level
+        return intent, priority
 
     # -- Control heuristic ---------------------------------------------------
     if CONTROL_RE.search(prompt_l):
         score = 1.0
-        intent, level = "control", "high"
+        intent, priority = "control", "high"
         rec = log_record_var.get()
         if rec:
             rec.intent = intent
             rec.intent_confidence = score
-        return intent, level
+        return intent, priority
 
     # Single-word prompts that aren't greetings are likely noise
     if len(prompt_l.split()) == 1:
         score = 0.0
-        intent, level = "unknown", "low"
+        intent, priority = "unknown", "low"
         rec = log_record_var.get()
         if rec:
             rec.intent = intent
             rec.intent_confidence = score
-        return intent, level
+        return intent, priority
 
     # -- Semantic fallback ---------------------------------------------------
     intent, score = _semantic_classify(prompt_l)
     if score < threshold:
-        intent, level = "unknown", "low"
+        intent, priority = "unknown", "low"
     else:
-        level = "high" if score >= 0.9 else "medium"
+        priority = "high" if score >= 0.9 else "medium"
 
     rec = log_record_var.get()
     if rec:
         rec.intent = intent
         rec.intent_confidence = float(score)
-    return intent, level
+    return intent, priority

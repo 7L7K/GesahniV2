@@ -1,11 +1,17 @@
 from __future__ import annotations
-import re, asyncio, difflib
+
+import asyncio
+import difflib
+import logging
+import re
+
 from .base import Skill
 from .. import home_assistant as ha
 
 # cache to avoid hitting HA on every call
 _LIGHT_MAP: dict[str, str] | None = None
 _LIGHT_LOCK = asyncio.Lock()
+logger = logging.getLogger(__name__)
 
 
 async def _build_light_map() -> dict[str, str]:
@@ -15,7 +21,11 @@ async def _build_light_map() -> dict[str, str]:
         if _LIGHT_MAP is not None:
             return _LIGHT_MAP
 
-        entities = await ha.get_states()
+        try:
+            entities = await ha.get_states()
+        except ha.HomeAssistantAPIError as e:
+            logger.warning("light map fetch failed: %s", e)
+            return {}
         _LIGHT_MAP = {
             e["attributes"].get("friendly_name", e["entity_id"]).lower(): e["entity_id"]
             for e in entities
