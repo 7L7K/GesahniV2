@@ -32,7 +32,9 @@ def test_call_gpt(monkeypatch):
         router, "add_user_memory", lambda *a, **k: calls.setdefault("mem_add", True)
     )
     monkeypatch.setattr(
-        router, "cache_answer", lambda *a, **k: calls.setdefault("cache", True)
+        router,
+        "cache_answer",
+        lambda prompt, answer, cache_id=None: calls.setdefault("cache", True),
     )
 
     rec = make_record("hello")
@@ -83,7 +85,9 @@ def test_call_llama_success(monkeypatch):
         router, "add_user_memory", lambda *a, **k: calls.setdefault("mem_add", True)
     )
     monkeypatch.setattr(
-        router, "cache_answer", lambda *a, **k: calls.setdefault("cache", True)
+        router,
+        "cache_answer",
+        lambda prompt, answer, cache_id=None: calls.setdefault("cache", True),
     )
 
     rec = make_record("hi")
@@ -129,7 +133,7 @@ def test_call_llama_fallback(monkeypatch):
     monkeypatch.setattr(router, "record", fake_record)
     monkeypatch.setattr(router.memgpt, "store_interaction", lambda *a, **k: None)
     monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
-    monkeypatch.setattr(router, "cache_answer", lambda *a, **k: None)
+    monkeypatch.setattr(router, "cache_answer", lambda prompt, answer, cache_id=None: None)
 
     rec = make_record("fallback")
     result = asyncio.run(
