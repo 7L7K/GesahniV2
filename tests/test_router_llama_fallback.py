@@ -16,7 +16,7 @@ def test_llama_circuit_open_routes_to_gpt(monkeypatch):
     _setup_env()
     from app import router, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = True
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     router.llama_circuit_open = True
 
     async def fake_gpt(**kwargs):
@@ -49,8 +49,8 @@ def test_gpt_failure_falls_back_to_llama(monkeypatch):
     _setup_env()
     from app import router, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = True
-    router.LLAMA_HEALTHY = True
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
+    monkeypatch.setattr(router, "LLAMA_HEALTHY", True)
 
     async def fail_gpt(**kwargs):
         raise RuntimeError("boom")
@@ -73,8 +73,8 @@ def test_gpt_failure_raises_when_llama_unhealthy(monkeypatch):
     _setup_env()
     from app import router, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = False
-    router.LLAMA_HEALTHY = False
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
+    monkeypatch.setattr(router, "LLAMA_HEALTHY", False)
 
     async def fail_gpt(**kwargs):
         raise RuntimeError("boom")
@@ -93,8 +93,8 @@ def test_gpt_override_failure_falls_back_to_llama(monkeypatch):
     _setup_env()
     from app import router, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = True
-    router.LLAMA_HEALTHY = True
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
+    monkeypatch.setattr(router, "LLAMA_HEALTHY", True)
 
     async def fail_override(*args, **kwargs):
         raise RuntimeError("boom")
@@ -114,8 +114,8 @@ def test_empty_llama_response_falls_back_to_gpt(monkeypatch):
     _setup_env()
     from app import router, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = True
-    router.LLAMA_HEALTHY = True
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
+    monkeypatch.setattr(router, "LLAMA_HEALTHY", True)
 
     def fake_llama(**kwargs):
         return ""
@@ -139,8 +139,8 @@ def test_low_conf_llama_response_falls_back_to_gpt(monkeypatch):
     _setup_env()
     from app import router, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = True
-    router.LLAMA_HEALTHY = True
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
+    monkeypatch.setattr(router, "LLAMA_HEALTHY", True)
 
     def fake_llama(**kwargs):
         return "I don't know"
