@@ -5,8 +5,7 @@ import pytest
 
 def _clear_cache(vector_store):
     """Helper to remove all items from the QA cache."""
-    cache = vector_store.qa_cache()    # call it
-    ids = cache.get("ids", [])
+    ids = vector_store.qa_cache.keys()
 
     if ids:
         vector_store.qa_cache.delete(ids=ids)
@@ -82,13 +81,13 @@ def test_record_feedback_preserves_metadata():
     cache_id, _ = vector_store._normalize(prompt)
     vector_store.cache_answer(prompt, answer)
 
-    meta_before = vector_store.qa_cache.get(ids=[cache_id], include=["metadatas"])[
-        "metadatas"
-    ][0]
+    meta_before = vector_store.qa_cache.get_items(
+        ids=[cache_id], include=["metadatas"]
+    )["metadatas"][0]
 
     vector_store.record_feedback(prompt, "up")
 
-    meta_after = vector_store.qa_cache.get(ids=[cache_id], include=["metadatas"])[
+    meta_after = vector_store.qa_cache.get_items(ids=[cache_id], include=["metadatas"])[
         "metadatas"
     ][0]
 
