@@ -58,14 +58,14 @@ def setup_cache(monkeypatch):
 
 def test_semantic_cache_hit_case_insensitive(setup_cache):
     router, vector_store = setup_cache
-    vector_store.cache_answer("Hello World", "cached")
+    vector_store.cache_answer(prompt="Hello World", answer="cached")
     result = asyncio.run(router.route_prompt("HELLO world", user_id="u"))
     assert result == "cached"
 
 
 def test_semantic_cache_hit_whitespace_insensitive(setup_cache):
     router, vector_store = setup_cache
-    vector_store.cache_answer("Hello World", "cached")
+    vector_store.cache_answer(prompt="Hello World", answer="cached")
     result = asyncio.run(router.route_prompt("   hello world   ", user_id="u"))
     assert result == "cached"
 
@@ -80,7 +80,7 @@ def test_record_feedback_preserves_metadata():
     answer = "bar"
     # we use the normalized hash as the cache key
     cache_id, _ = vector_store._normalize(prompt)
-    vector_store.cache_answer(prompt, answer)
+    vector_store.cache_answer(prompt=prompt, answer=answer)
 
     meta_before = vector_store.qa_cache.get(ids=[cache_id], include=["metadatas"])[
         "metadatas"

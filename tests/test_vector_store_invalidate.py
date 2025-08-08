@@ -8,7 +8,7 @@ def test_invalidate_cache_clears_entry():
     prompt = "Fancy “quotes”—and dashes"
     answer = "cached"
     cache_id = vector_store._normalized_hash(prompt)
-    vector_store.cache_answer(cache_id, prompt, answer)
+    vector_store.cache_answer(prompt, answer, cache_id=cache_id)
     assert vector_store.lookup_cached_answer(prompt) == answer
 
     # Invalidate using a variant that normalizes to the same text
