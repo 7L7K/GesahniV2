@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
-from app.intent_detector import detect_intent
+from app.intent_detector import Priority, detect_intent
 
 
 @pytest.mark.parametrize(
@@ -17,5 +17,5 @@ from app.intent_detector import detect_intent
         ("asdasdasd", ("unknown", "low")),
     ],
 )
-def test_detect_intent_cases(text, expected):
+def test_detect_intent_cases(text: str, expected: tuple[str, Priority]) -> None:
     assert detect_intent(text) == expected
