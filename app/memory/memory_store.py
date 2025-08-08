@@ -153,6 +153,7 @@ class MemoryVectorStore(VectorStore):
         return mem_id
 
     def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
+        self._dist_cutoff = 1.0 - _get_sim_threshold()
         logger.info(
             "query_user_memories start user_id=%s prompt=%s k=%s",
             user_id,
