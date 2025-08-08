@@ -15,7 +15,7 @@ while getopts "H:M:" opt; do
 done
 
 # Make request; capture HTTP status code.
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$HOST/api/generate" \
+STATUS=$(curl -4 -s -o /dev/null -w "%{http_code}" -X POST "$HOST/api/generate" \
   -H 'Content-Type: application/json' \
   -d "{\"model\":\"$MODEL\",\"prompt\":\"hi\"}") || STATUS=000
 
