@@ -1,6 +1,7 @@
 import logging
 import os
 import inspect
+import re
 from typing import Any, Awaitable, Callable
 
 from fastapi import Depends, HTTPException, status
@@ -51,13 +52,19 @@ LLAMA_HEALTHY: bool = True
 
 
 def _low_conf(resp: str) -> bool:
-    import re
-
     if not resp.strip():
         return True
     if re.search(r"\b(i don't know|i am not sure|not sure|cannot help)\b", resp, re.I):
         return True
     return False
+
+
+def _redact_sensitive(text: str) -> str:
+    text = re.sub(r"sk-[A-Za-z0-9]{16,}", "sk-[redacted]", text)
+    for name, val in os.environ.items():
+        if val and any(k in name.upper() for k in ("KEY", "TOKEN", "SECRET")):
+            text = text.replace(val, "[redacted]")
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +142,7 @@ async def route_prompt(
                     )
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="GPT backend unavailable",
+                    detail=f"GPT backend unavailable: {_redact_sensitive(str(e))}",
                 )
         # LLaMA override
         if mv.startswith("llama"):
@@ -255,7 +262,7 @@ async def route_prompt(
                 )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="GPT backend unavailable",
+                detail=f"GPT backend unavailable: {_redact_sensitive(str(e))}",
             )
 
     if engine == "llama" and llama_integration.LLAMA_HEALTHY:
@@ -307,7 +314,7 @@ async def route_prompt(
             )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GPT backend unavailable",
+            detail=f"GPT backend unavailable: {_redact_sensitive(str(e))}",
         )
 
 

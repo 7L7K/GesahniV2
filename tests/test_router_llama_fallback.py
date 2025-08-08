@@ -10,6 +10,7 @@ def _setup_env():
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
+    os.environ["OPENAI_API_KEY"] = "sk-0123456789abcdef0123456789abcdef"
 
 
 def test_llama_circuit_open_routes_to_gpt(monkeypatch):
@@ -77,7 +78,7 @@ def test_gpt_failure_raises_when_llama_unhealthy(monkeypatch):
     router.LLAMA_HEALTHY = False
 
     async def fail_gpt(**kwargs):
-        raise RuntimeError("boom")
+        raise RuntimeError(f"boom {os.environ['OPENAI_API_KEY']}")
 
     monkeypatch.setattr(router, "_call_gpt", fail_gpt)
     monkeypatch.setattr(router, "handle_command", lambda p: None)
@@ -85,8 +86,12 @@ def test_gpt_failure_raises_when_llama_unhealthy(monkeypatch):
     monkeypatch.setattr(router, "pick_model", lambda p, i, t: ("gpt", "gpt-4"))
     monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
 
-    with pytest.raises(HTTPException):
+    with pytest.raises(HTTPException) as exc:
         asyncio.run(router.route_prompt("hi", user_id="u"))
+    assert (
+        exc.value.detail
+        == "GPT backend unavailable: boom sk-[redacted]"
+    )
 
 
 def test_gpt_override_failure_falls_back_to_llama(monkeypatch):
