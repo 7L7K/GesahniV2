@@ -84,6 +84,12 @@ class PromptBuilder:
         Extra kwargs (e.g. `temperature`, `top_p`) are accepted for API
         parity and silently ignored.
         """
+        logger.info(
+            "PromptBuilder.build entry user_id=%s top_k=%s prompt=%r",
+            user_id,
+            top_k,
+            user_prompt,
+        )
         # ------------------------------------------------------------------
         # Context collection
         # ------------------------------------------------------------------
@@ -103,6 +109,7 @@ class PromptBuilder:
         # Memory lookup & trimming
         # ------------------------------------------------------------------
         memories: List[str] = safe_query_user_memories(user_id, user_prompt, k=k)
+        logger.info("safe_query_user_memories returned %d memories", len(memories))
         while count_tokens("\n".join(memories)) > 55 and memories:
             memories.pop()
 
@@ -178,6 +185,11 @@ class PromptBuilder:
         if rec:
             rec.retrieval_count = len(mem_list)
 
+        logger.info(
+            "PromptBuilder.build exit tokens=%d memories=%d",
+            prompt_tokens,
+            len(mem_list),
+        )
         return prompt, prompt_tokens
 
 
