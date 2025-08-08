@@ -290,6 +290,12 @@ async def route_prompt(
             gen_opts=gen_opts,
         )
 
+    if engine == "llama" and not llama_integration.LLAMA_HEALTHY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LLaMA circuit open",
+        )
+
     # Fallback GPT-4o
     if debug_route:
         return _dry("gpt", "gpt-4o")

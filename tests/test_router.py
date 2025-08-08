@@ -314,13 +314,20 @@ def test_llama_circuit_open(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    from app import router
+    from app import router, llama_integration
 
-    monkeypatch.setattr(router, "llama_circuit_open", True)
+    monkeypatch.setattr(router, "llama_circuit_open", False)
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
+    monkeypatch.setattr(router, "handle_command", lambda p: None)
+    monkeypatch.setattr(router, "lookup_cached_answer", lambda p: None)
+    monkeypatch.setattr(router, "pick_model", lambda *a, **k: ("llama", "llama3"))
+    monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
+    monkeypatch.setattr(router.PromptBuilder, "build", lambda *a, **k: (a[0], 0))
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(router.route_prompt("hi", user_id="u"))
     assert exc.value.status_code == 503
+    assert exc.value.detail == "LLaMA circuit open"
 
 
 def test_generation_options_passthrough(monkeypatch):
