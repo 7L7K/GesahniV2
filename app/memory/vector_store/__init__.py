@@ -25,40 +25,45 @@ from ..api import (
 from app.embeddings import embed_sync as _embed_sync
 from ..env_utils import _normalize as _normalize, _normalized_hash as _normalized_hash
 
-
 logger = logging.getLogger(__name__)
 
 # Public re-export of sync embed helper so callers stay decoupled from the
 # embeddings module’s internal layout.
 embed_sync = _embed_sync
 
-
 # ---------------------------------------------------------------------------
 # Safe wrapper helpers
 # ---------------------------------------------------------------------------
 
-
 def _coerce_k(k: Union[int, str, None]) -> Optional[int]:
     """Coerce ``k`` to ``int`` or return ``None`` when invalid."""
-
+    raw = k
     if k is None:
-        result: Optional[int] = None
+        coerced = None
     elif isinstance(k, str):
         try:
-            result = int(k)
+            coerced = int(k)
         except ValueError:
-            result = None
+            coerced = None
     else:
-        result = k if isinstance(k, int) else None
-    logger.debug("Coerced k=%r -> %s", k, result)
-    return result
+        coerced = k if isinstance(k, int) else None
+    logger.debug("_coerce_k: raw=%r coerced=%r", raw, coerced)
+    return coerced
 
 
 def safe_query_user_memories(
     user_id: str, prompt: str, *, k: Union[int, str, None] = None
 ) -> List[str]:
     """Thin wrapper around :func:`query_user_memories` that sanitizes ``k``."""
-    return query_user_memories(user_id, prompt, k=_coerce_k(k))
+    logger.debug(
+        "safe_query_user_memories called with user_id=%s prompt=%r k=%r",
+        user_id,
+        prompt,
+        k,
+    )
+    memories = query_user_memories(user_id, prompt, k=_coerce_k(k))
+    logger.debug("safe_query_user_memories returning %d memories", len(memories))
+    return memories
 
 
 # ---------------------------------------------------------------------------
