@@ -51,11 +51,13 @@ LLAMA_HEALTHY: bool = True
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _mark_llama_unhealthy() -> None:
     """Flip the shared health flag so the picker knows LLaMA is down."""
     global LLAMA_HEALTHY
     LLAMA_HEALTHY = False
     llama_integration.LLAMA_HEALTHY = False
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -82,168 +84,229 @@ async def route_prompt(
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     **gen_opts: Any,
 ) -> Any:
-    rec = log_record_var.get()
-    norm_prompt = prompt.lower().strip()
-    tokens = count_tokens(prompt)
-    if rec:
-        rec.prompt = prompt
-        rec.embed_tokens = tokens
-        rec.user_id = user_id
-    session_id = rec.session_id if rec and rec.session_id else "default"
-    # Honor both DEBUG_MODEL_ROUTING and DEBUG envs
-    debug_route = (
-        os.getenv("DEBUG_MODEL_ROUTING", "").lower() in {"1", "true", "yes"}
-        or os.getenv("DEBUG", "").lower() in {"1", "true", "yes"}
+    logger.debug(
+        "route_prompt start prompt=%r model_override=%s user_id=%s",
+        prompt,
+        model_override,
+        user_id,
     )
-
-    def _dry(engine: str, model: str) -> str:
-        # Normalise llama model label to omit ":latest" suffix for stable test output
-        label = model.split(":")[0] if engine == "llama" else model
-        msg = f"[dry-run] would call {engine} {label}"
-        logger.info(msg)
+    rec = None
+    result = None
+    try:
+        rec = log_record_var.get()
+        norm_prompt = prompt.lower().strip()
+        tokens = count_tokens(prompt)
         if rec:
-            rec.engine_used = engine
-            rec.model_name = label
-            rec.response = msg
-        return msg
+            rec.prompt = prompt
+            rec.embed_tokens = tokens
+            rec.user_id = user_id
+        session_id = rec.session_id if rec and rec.session_id else "default"
+        # Honor both DEBUG_MODEL_ROUTING and DEBUG envs
+        debug_route = os.getenv("DEBUG_MODEL_ROUTING", "").lower() in {
+            "1",
+            "true",
+            "yes",
+        } or os.getenv("DEBUG", "").lower() in {"1", "true", "yes"}
 
-    # Circuit breaker check: degrade to GPT if LLaMA is unavailable
-    if llama_circuit_open:
-        _mark_llama_unhealthy()
-        # keep model picker in sync so GPT is selected
-        model_picker_module.LLAMA_HEALTHY = False
+        def _dry(engine: str, model: str) -> str:
+            # Normalise llama model label to omit ":latest" suffix for stable test output
+            label = model.split(":")[0] if engine == "llama" else model
+            msg = f"[dry-run] would call {engine} {label}"
+            logger.info(msg)
+            if rec:
+                rec.engine_used = engine
+                rec.model_name = label
+                rec.response = msg
+            return msg
 
-    intent, priority = detect_intent(prompt)
-    # If the LLaMA circuit is open, bypass all skills to force model path
-    bypass_skills = bool(llama_circuit_open)
+        # Circuit breaker check: degrade to GPT if LLaMA is unavailable
+        if llama_circuit_open:
+            _mark_llama_unhealthy()
+            # keep model picker in sync so GPT is selected
+            model_picker_module.LLAMA_HEALTHY = False
 
-    # 1️⃣ Explicit override (bypass skills like smalltalk)
-    if model_override:
-        mv = model_override.strip()
-        logger.info("🔀 Model override requested → %s", mv)
-        # GPT override
-        if mv.startswith("gpt"):
-            if mv not in ALLOWED_GPT_MODELS:
-                raise HTTPException(status_code=400, detail=f"Model '{mv}' not allowed")
-            try:
-                return await _call_gpt_override(
-                    mv, prompt, norm_prompt, session_id, user_id, rec, stream_cb
-                )
-            except (httpx.HTTPError, RuntimeError) as e:
-                logger.warning("GPT override failed: %s", e)
-                if llama_integration.LLAMA_HEALTHY:
-                    fallback_built, fallback_pt = PromptBuilder.build(
-                        prompt,
-                        session_id=session_id,
-                        user_id=user_id,
-                        **gen_opts,
+        intent, priority = detect_intent(prompt)
+        # If the LLaMA circuit is open, bypass all skills to force model path
+        bypass_skills = bool(llama_circuit_open)
+
+        # 1️⃣ Explicit override (bypass skills like smalltalk)
+        if model_override:
+            mv = model_override.strip()
+            logger.info("🔀 Model override requested → %s", mv)
+            # GPT override
+            if mv.startswith("gpt"):
+                if mv not in ALLOWED_GPT_MODELS:
+                    raise HTTPException(
+                        status_code=400, detail=f"Model '{mv}' not allowed"
                     )
+                try:
+                    result = await _call_gpt_override(
+                        mv, prompt, norm_prompt, session_id, user_id, rec, stream_cb
+                    )
+                    return result
+                except (httpx.HTTPError, RuntimeError) as e:
+                    logger.warning("GPT override failed: %s", e)
+                    if llama_integration.LLAMA_HEALTHY:
+                        fallback_built, fallback_pt = PromptBuilder.build(
+                            prompt,
+                            session_id=session_id,
+                            user_id=user_id,
+                            **gen_opts,
+                        )
+                        fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
+                        result = await _call_llama(
+                            prompt=prompt,
+                            built_prompt=fallback_built,
+                            model=fallback_model,
+                            rec=rec,
+                            norm_prompt=norm_prompt,
+                            session_id=session_id,
+                            user_id=user_id,
+                            ptoks=fallback_pt,
+                            stream_cb=stream_cb,
+                            gen_opts=gen_opts,
+                        )
+                        return result
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=f"GPT backend unavailable: {e}",
+                    )
+            # LLaMA override
+            if mv.startswith("llama"):
+                if ALLOWED_LLAMA_MODELS and mv not in ALLOWED_LLAMA_MODELS:
+                    raise HTTPException(
+                        status_code=400, detail=f"Model '{mv}' not allowed"
+                    )
+                if not llama_integration.LLAMA_HEALTHY:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail="LLaMA backend unavailable",
+                    )
+                result = await _call_llama_override(
+                    mv,
+                    prompt,
+                    norm_prompt,
+                    session_id,
+                    user_id,
+                    rec,
+                    stream_cb,
+                    gen_opts,
+                )
+                return result
+            raise HTTPException(
+                status_code=400, detail=f"Unknown or disallowed model '{mv}'"
+            )
+
+        # Cache check should happen before smalltalk so cached answers short‑circuit
+        cached = lookup_cached_answer(norm_prompt)
+        if cached is not None:
+            if rec:
+                rec.cache_hit = True
+            result = await _finalise("cache", prompt, cached, rec)
+            return result
+
+        if not bypass_skills and intent == "smalltalk":
+            try:
+                skill_resp = await _SMALLTALK.handle(prompt)
+            except Exception:
+                skill_resp = None
+            if skill_resp is not None:
+                if rec:
+                    rec.engine_used = "skill"
+                    rec.response = str(skill_resp)
+                await append_history(prompt, "skill", str(skill_resp))
+                await record("done", source="skill")
+                result = skill_resp
+                return result
+
+        skip_skills = intent == "chat" and priority == "high"
+
+        # 2️⃣ Built‑in skills
+        if not skip_skills and not bypass_skills:
+            for entry in CATALOG:
+                if isinstance(entry, tuple) and len(entry) == 2:
+                    keywords, SkillClass = entry
+                    if any(kw in prompt for kw in keywords):
+                        result = await _run_skill(prompt, SkillClass, rec)
+                        return result
+            skill_resp = await check_builtin_skills(prompt)
+            if skill_resp is not None:
+                result = await _finalise("skill", prompt, skill_resp, rec)
+                return result
+
+        # 3️⃣ Home‑Assistant
+        ha_resp = handle_command(prompt)
+        if inspect.isawaitable(ha_resp):
+            ha_resp = await ha_resp
+        if ha_resp is not None:
+            result = await _finalise("ha", prompt, ha_resp.message, rec)
+            return result
+
+        # 4️⃣ Cache (secondary check in case routing above changed state)
+        cached = lookup_cached_answer(norm_prompt)
+        if cached is not None:
+            if rec:
+                rec.cache_hit = True
+            result = await _finalise("cache", prompt, cached, rec)
+            return result
+
+        # 5️⃣ Automatic selection
+        engine, model_name = pick_model(prompt, intent, tokens)
+        built_prompt, ptoks = PromptBuilder.build(
+            prompt,
+            session_id=session_id,
+            user_id=user_id,
+            custom_instructions=getattr(rec, "custom_instructions", ""),
+            debug=debug_route,
+            debug_info=getattr(rec, "debug_info", ""),
+            **gen_opts,
+        )
+        if rec:
+            rec.prompt_tokens = ptoks
+
+        if engine == "gpt":
+            if debug_route:
+                result = _dry("gpt", model_name)
+                return result
+            try:
+                result = await _call_gpt(
+                    prompt=prompt,
+                    built_prompt=built_prompt,
+                    model=model_name,
+                    rec=rec,
+                    norm_prompt=norm_prompt,
+                    session_id=session_id,
+                    user_id=user_id,
+                    ptoks=ptoks,
+                    stream_cb=stream_cb,
+                )
+                return result
+            except Exception as e:
+                logger.warning("GPT call failed: %s", e)
+                if llama_integration.LLAMA_HEALTHY:
                     fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
-                    return await _call_llama(
+                    result = await _call_llama(
                         prompt=prompt,
-                        built_prompt=fallback_built,
+                        built_prompt=built_prompt,
                         model=fallback_model,
                         rec=rec,
                         norm_prompt=norm_prompt,
                         session_id=session_id,
                         user_id=user_id,
-                        ptoks=fallback_pt,
+                        ptoks=ptoks,
                         stream_cb=stream_cb,
-                        gen_opts=gen_opts,
                     )
+                    return result
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail=f"GPT backend unavailable: {e}",
+                    detail="GPT backend unavailable",
                 )
-        # LLaMA override
-        if mv.startswith("llama"):
-            if ALLOWED_LLAMA_MODELS and mv not in ALLOWED_LLAMA_MODELS:
-                raise HTTPException(status_code=400, detail=f"Model '{mv}' not allowed")
-            if not llama_integration.LLAMA_HEALTHY:
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="LLaMA backend unavailable",
-                )
-            return await _call_llama_override(
-                mv,
-                prompt,
-                norm_prompt,
-                session_id,
-                user_id,
-                rec,
-                stream_cb,
-                gen_opts,
-            )
-        raise HTTPException(
-            status_code=400, detail=f"Unknown or disallowed model '{mv}'"
-        )
 
-    # Cache check should happen before smalltalk so cached answers short‑circuit
-    cached = lookup_cached_answer(norm_prompt)
-    if cached is not None:
-        if rec:
-            rec.cache_hit = True
-        return await _finalise("cache", prompt, cached, rec)
-
-    if not bypass_skills and intent == "smalltalk":
-        try:
-            skill_resp = await _SMALLTALK.handle(prompt)
-        except Exception:
-            skill_resp = None
-        if skill_resp is not None:
-            if rec:
-                rec.engine_used = "skill"
-                rec.response = str(skill_resp)
-            await append_history(prompt, "skill", str(skill_resp))
-            await record("done", source="skill")
-            return skill_resp
-
-    skip_skills = intent == "chat" and priority == "high"
-
-    # 2️⃣ Built‑in skills
-    if not skip_skills and not bypass_skills:
-        for entry in CATALOG:
-            if isinstance(entry, tuple) and len(entry) == 2:
-                keywords, SkillClass = entry
-                if any(kw in prompt for kw in keywords):
-                    return await _run_skill(prompt, SkillClass, rec)
-        skill_resp = await check_builtin_skills(prompt)
-        if skill_resp is not None:
-            return await _finalise("skill", prompt, skill_resp, rec)
-
-    # 3️⃣ Home‑Assistant
-    ha_resp = handle_command(prompt)
-    if inspect.isawaitable(ha_resp):
-        ha_resp = await ha_resp
-    if ha_resp is not None:
-        return await _finalise("ha", prompt, ha_resp.message, rec)
-
-    # 4️⃣ Cache (secondary check in case routing above changed state)
-    cached = lookup_cached_answer(norm_prompt)
-    if cached is not None:
-        if rec:
-            rec.cache_hit = True
-        return await _finalise("cache", prompt, cached, rec)
-
-    # 5️⃣ Automatic selection
-    engine, model_name = pick_model(prompt, intent, tokens)
-    built_prompt, ptoks = PromptBuilder.build(
-        prompt,
-        session_id=session_id,
-        user_id=user_id,
-        custom_instructions=getattr(rec, "custom_instructions", ""),
-        debug=debug_route,
-        debug_info=getattr(rec, "debug_info", ""),
-        **gen_opts,
-    )
-    if rec:
-        rec.prompt_tokens = ptoks
-
-    if engine == "gpt":
-        if debug_route:
-            return _dry("gpt", model_name)
-        try:
-            return await _call_gpt(
+        if engine == "llama" and (LLAMA_HEALTHY or llama_integration.LLAMA_HEALTHY):
+            if debug_route:
+                result = _dry("llama", model_name)
+                return result
+            result = await _call_llama(
                 prompt=prompt,
                 built_prompt=built_prompt,
                 model=model_name,
@@ -253,12 +316,38 @@ async def route_prompt(
                 user_id=user_id,
                 ptoks=ptoks,
                 stream_cb=stream_cb,
+                gen_opts=gen_opts,
             )
+            return result
+
+        if engine == "llama" and not llama_integration.LLAMA_HEALTHY:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="LLaMA circuit open",
+            )
+
+        # Fallback GPT-4o
+        if debug_route:
+            result = _dry("gpt", "gpt-4o")
+            return result
+        try:
+            result = await _call_gpt(
+                prompt=prompt,
+                built_prompt=built_prompt,
+                model="gpt-4o",
+                rec=rec,
+                norm_prompt=norm_prompt,
+                session_id=session_id,
+                user_id=user_id,
+                ptoks=ptoks,
+                stream_cb=stream_cb,
+            )
+            return result
         except Exception as e:
-            logger.warning("GPT call failed: %s", e)
+            logger.warning("GPT fallback failed: %s", e)
             if llama_integration.LLAMA_HEALTHY:
                 fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
-                return await _call_llama(
+                result = await _call_llama(
                     prompt=prompt,
                     built_prompt=built_prompt,
                     model=fallback_model,
@@ -268,69 +357,26 @@ async def route_prompt(
                     user_id=user_id,
                     ptoks=ptoks,
                     stream_cb=stream_cb,
+                    gen_opts=gen_opts,
                 )
+                return result
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="GPT backend unavailable",
             )
-
-    if engine == "llama" and (LLAMA_HEALTHY or llama_integration.LLAMA_HEALTHY):
-        if debug_route:
-            return _dry("llama", model_name)
-        return await _call_llama(
-            prompt=prompt,
-            built_prompt=built_prompt,
-            model=model_name,
-            rec=rec,
-            norm_prompt=norm_prompt,
-            session_id=session_id,
-            user_id=user_id,
-            ptoks=ptoks,
-            stream_cb=stream_cb,
-            gen_opts=gen_opts,
-        )
-
-    if engine == "llama" and not llama_integration.LLAMA_HEALTHY:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="LLaMA circuit open",
-        )
-
-    # Fallback GPT-4o
-    if debug_route:
-        return _dry("gpt", "gpt-4o")
-    try:
-        return await _call_gpt(
-            prompt=prompt,
-            built_prompt=built_prompt,
-            model="gpt-4o",
-            rec=rec,
-            norm_prompt=norm_prompt,
-            session_id=session_id,
-            user_id=user_id,
-            ptoks=ptoks,
-            stream_cb=stream_cb,
-        )
-    except Exception as e:
-        logger.warning("GPT fallback failed: %s", e)
-        if llama_integration.LLAMA_HEALTHY:
-            fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
-            return await _call_llama(
-                prompt=prompt,
-                built_prompt=built_prompt,
-                model=fallback_model,
-                rec=rec,
-                norm_prompt=norm_prompt,
-                session_id=session_id,
-                user_id=user_id,
-                ptoks=ptoks,
-                stream_cb=stream_cb,
-                gen_opts=gen_opts,
+    except Exception:
+        logger.exception("route_prompt failed")
+        raise
+    finally:
+        if result is not None:
+            engine = rec.engine_used if rec else None
+            model = getattr(rec, "model_name", None) if rec else None
+            logger.debug(
+                "route_prompt result engine=%s model=%s result=%s",
+                engine,
+                model,
+                result,
             )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GPT backend unavailable",
-        )
 
 
 # -------------------------------
@@ -430,30 +476,38 @@ async def _call_gpt(
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     fallback: bool = False,
 ):
+    logger.debug(
+        "_call_gpt start prompt=%r model=%s user_id=%s", prompt, model, user_id
+    )
     try:
-        text, pt, ct, cost = await ask_gpt(
-            built_prompt,
-            model,
-            SYSTEM_PROMPT,
-            stream=bool(stream_cb),
-            on_token=stream_cb,
-        )
-    except TypeError:
-        text, pt, ct, cost = await ask_gpt(built_prompt, model, SYSTEM_PROMPT)
-    if rec:
-        rec.engine_used = "gpt"
-        rec.model_name = model
-        rec.prompt_tokens = pt
-        rec.completion_tokens = ct
-        rec.cost_usd = cost
-        rec.response = text
-    memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
-    add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
-    try:
-        cache_answer(prompt=norm_prompt, answer=text)
-    except Exception as e:  # pragma: no cover
-        logger.warning("QA cache store failed (gpt): %s", e)
-    return await _finalise("gpt", prompt, text, rec, fallback=fallback)
+        try:
+            text, pt, ct, cost = await ask_gpt(
+                built_prompt,
+                model,
+                SYSTEM_PROMPT,
+                stream=bool(stream_cb),
+                on_token=stream_cb,
+            )
+        except TypeError:
+            text, pt, ct, cost = await ask_gpt(built_prompt, model, SYSTEM_PROMPT)
+        if rec:
+            rec.engine_used = "gpt"
+            rec.model_name = model
+            rec.prompt_tokens = pt
+            rec.completion_tokens = ct
+            rec.cost_usd = cost
+            rec.response = text
+        memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
+        add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
+        try:
+            cache_answer(prompt=norm_prompt, answer=text)
+        except Exception as e:  # pragma: no cover
+            logger.warning("QA cache store failed (gpt): %s", e)
+        logger.debug("_call_gpt result model=%s result=%s", model, text)
+        return await _finalise("gpt", prompt, text, rec, fallback=fallback)
+    except Exception:
+        logger.exception("_call_gpt failure")
+        raise
 
 
 async def _call_llama(
@@ -469,6 +523,9 @@ async def _call_llama(
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     gen_opts: dict[str, Any] | None = None,
 ):
+    logger.debug(
+        "_call_llama start prompt=%r model=%s user_id=%s", prompt, model, user_id
+    )
     tokens: list[str] = []
     logger.debug(
         "LLaMA opts: temperature=%s top_p=%s",
@@ -505,58 +562,81 @@ async def _call_llama(
                 stream_cb=stream_cb,
                 fallback=True,
             )
+            logger.debug(
+                "_call_llama fallback result model=%s result=%s", fallback_model, text
+            )
             return text
         except Exception:
+            logger.exception("_call_llama fallback to GPT failed")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="GPT backend unavailable",
             )
-    if not result_text or _low_conf(result_text):
-        # Mark LLaMA unhealthy and fall back to GPT on empty or low-confidence replies
-        _mark_llama_unhealthy()
-        fallback_model = os.getenv("OPENAI_MODEL", "gpt-4o")
-        try:
-            text = await _call_gpt(
-                prompt=prompt,
-                built_prompt=built_prompt,
-                model=fallback_model,
-                rec=rec,
-                norm_prompt=norm_prompt,
-                session_id=session_id,
-                user_id=user_id,
-                ptoks=ptoks,
-                stream_cb=stream_cb,
-                fallback=True,
-            )
-            return text
-        except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="GPT backend unavailable",
-            )
-    if rec:
-        rec.engine_used = "llama"
-        rec.model_name = model
-        rec.prompt_tokens = ptoks
-        rec.response = result_text
-    memgpt.store_interaction(
-        prompt, result_text, session_id=session_id, user_id=user_id
-    )
-    add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
     try:
-        cache_answer(prompt=norm_prompt, answer=result_text)
-    except Exception as e:  # pragma: no cover
-        logger.warning("QA cache store failed (llama): %s", e)
-    return await _finalise("llama", prompt, result_text, rec)
+        if not result_text or _low_conf(result_text):
+            # Mark LLaMA unhealthy and fall back to GPT on empty or low-confidence replies
+            _mark_llama_unhealthy()
+            fallback_model = os.getenv("OPENAI_MODEL", "gpt-4o")
+            try:
+                text = await _call_gpt(
+                    prompt=prompt,
+                    built_prompt=built_prompt,
+                    model=fallback_model,
+                    rec=rec,
+                    norm_prompt=norm_prompt,
+                    session_id=session_id,
+                    user_id=user_id,
+                    ptoks=ptoks,
+                    stream_cb=stream_cb,
+                    fallback=True,
+                )
+                logger.debug(
+                    "_call_llama low-conf fallback model=%s result=%s",
+                    fallback_model,
+                    text,
+                )
+                return text
+            except Exception:
+                logger.exception("_call_llama low-conf fallback to GPT failed")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="GPT backend unavailable",
+                )
+        if rec:
+            rec.engine_used = "llama"
+            rec.model_name = model
+            rec.prompt_tokens = ptoks
+            rec.response = result_text
+        memgpt.store_interaction(
+            prompt, result_text, session_id=session_id, user_id=user_id
+        )
+        add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
+        try:
+            cache_answer(prompt=norm_prompt, answer=result_text)
+        except Exception as e:  # pragma: no cover
+            logger.warning("QA cache store failed (llama): %s", e)
+        logger.debug("_call_llama result model=%s result=%s", model, result_text)
+        return await _finalise("llama", prompt, result_text, rec)
+    except Exception:
+        logger.exception("_call_llama failure")
+        raise
 
 
-async def _finalise(engine: str, prompt: str, text: str, rec, *, fallback: bool = False):
-    if rec:
-        rec.engine_used = engine
-        rec.response = text
-    await append_history(prompt, engine, text)
-    await record(engine, fallback=fallback)
-    return text
+async def _finalise(
+    engine: str, prompt: str, text: str, rec, *, fallback: bool = False
+):
+    logger.debug("_finalise start engine=%s prompt=%r", engine, prompt)
+    try:
+        if rec:
+            rec.engine_used = engine
+            rec.response = text
+        await append_history(prompt, engine, text)
+        await record(engine, fallback=fallback)
+        logger.debug("_finalise result engine=%s text=%s", engine, text)
+        return text
+    except Exception:
+        logger.exception("_finalise failure")
+        raise
 
 
 async def _run_skill(prompt: str, SkillClass, rec):
