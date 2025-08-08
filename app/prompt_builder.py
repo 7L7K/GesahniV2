@@ -23,17 +23,15 @@ _PROMPT_CORE = _CORE_PATH.read_text(encoding="utf-8")
 # note: if tiktoken is missing, token_utils.count_tokens will perform a
 # naive word-based count which is sufficient for tests.
 
-
 logger = logging.getLogger(__name__)
 
 
 def _coerce_k(value: int | str | None) -> int:
-    """Return a positive integer ``k`` for memory queries.
+    """Return a positive integer `k` for memory queries.
 
-    Falls back to :func:`_get_mem_top_k` when ``value`` is ``None`` or
+    Falls back to :func:`_get_mem_top_k` when `value` is None or
     cannot be interpreted as a positive integer.
     """
-
     if value is None:
         return _get_mem_top_k()
     try:
@@ -60,30 +58,38 @@ class PromptBuilder:
         custom_instructions: str = "",
         debug: bool = False,
         debug_info: str = "",
-        top_k: int | None = None,
+        top_k: int | str | None = None,
         **_: Any,
     ) -> Tuple[str, int]:
         """Return a tuple of (prompt_str, prompt_tokens).
 
-        Additional keyword arguments (e.g., ``temperature`` or ``top_p``)
+        Additional keyword arguments (e.g., `temperature` or `top_p`)
         are accepted for compatibility with generation options and are
         currently ignored by the builder.
         """
+        # timestamp
         date_time = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
+
+        # summarize recent conversation
         summary = memgpt.summarize_session(session_id, user_id=user_id) or ""
-        if top_k is None:
-            top_k = _get_mem_top_k()
-            logger.warning("top_k missing; defaulting to %s", top_k)
-        k = min(_coerce_k(top_k), 3)
+
+        # sanitize and coerce top_k for memory lookup
+        k = _coerce_k(top_k)
+
+        # record telemetry
         rec = log_record_var.get()
         if rec:
             rec.embed_tokens = count_tokens(user_prompt)
             rec.rag_top_k = k
+
+        # fetch and trim memories
         memories: List[str] = query_user_memories(user_id, user_prompt, k=k)
+        # trim so that memories blob itself stays under a small token budget
         while count_tokens("\n".join(memories)) > 55 and memories:
             memories.pop()
+
+        # assemble base prompt with core + placeholders
         dbg = debug_info if debug else ""
-        base_prompt = _PROMPT_CORE
         base_replacements = {
             "date_time": date_time,
             "conversation_summary": summary,
@@ -92,12 +98,13 @@ class PromptBuilder:
             "user_prompt": user_prompt,
             "debug_info": dbg,
         }
+        base_prompt = _PROMPT_CORE
         for key, val in base_replacements.items():
             base_prompt = base_prompt.replace(f"{{{{{key}}}}}", val)
         base_tokens = count_tokens(base_prompt)
 
-        # Token budgeting: remove summary first, then drop low-sim/oldest
-        mem_list = list(memories)
+        # budget overall prompt tokens, popping summary then oldest memories
+        mem_list = memories.copy()
         while True:
             prompt = _PROMPT_CORE
             mem_text = "\n".join(mem_list)
@@ -111,23 +118,28 @@ class PromptBuilder:
             }
             for key, val in replacements.items():
                 prompt = prompt.replace(f"{{{{{key}}}}}", val)
+
             prompt_tokens = count_tokens(prompt)
+            # stop trimming when within both the max and the delta budget
             if prompt_tokens <= MAX_PROMPT_TOKENS and prompt_tokens - base_tokens <= 75:
                 break
+
+            # drop summary first, then oldest memory entries
             if summary:
                 summary = ""
-                base_replacements["conversation_summary"] = ""
-                base_prompt = _PROMPT_CORE
-                for key, val in base_replacements.items():
-                    base_prompt = base_prompt.replace(f"{{{{{key}}}}}", val)
-                base_tokens = count_tokens(base_prompt)
+                base_tokens = count_tokens(
+                    _PROMPT_CORE.replace("{{conversation_summary}}", "")
+                )
                 continue
             if mem_list:
                 mem_list.pop()
                 continue
             break
+
+        # finalize telemetry count
         if rec:
             rec.retrieval_count = len(mem_list)
+
         return prompt, prompt_tokens
 
 
