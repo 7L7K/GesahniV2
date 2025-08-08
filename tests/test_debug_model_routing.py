@@ -34,7 +34,7 @@ def test_dry_run_llama_path(monkeypatch, caplog):
     _setup_env(monkeypatch)
     from app import router, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = True
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     _common_patches(monkeypatch, router)
     monkeypatch.setattr(router, "ask_llama", _fail)
     monkeypatch.setattr(router, "ask_gpt", _fail)
@@ -50,7 +50,7 @@ def test_dry_run_gpt_fallback(monkeypatch, caplog):
     _setup_env(monkeypatch)
     from app import router, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = False
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
     _common_patches(monkeypatch, router)
     monkeypatch.setattr(router, "ask_llama", _fail)
     monkeypatch.setattr(router, "ask_gpt", _fail)
