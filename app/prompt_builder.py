@@ -12,7 +12,7 @@ import logging
 from .token_utils import count_tokens
 from .memory import memgpt
 from .memory.env_utils import _get_mem_top_k
-from .memory.vector_store import query_user_memories
+from .memory.vector_store import safe_query_user_memories
 from .telemetry import log_record_var
 
 MAX_PROMPT_TOKENS = 8_000
@@ -56,7 +56,9 @@ class PromptBuilder:
         if rec:
             rec.embed_tokens = count_tokens(user_prompt)
             rec.rag_top_k = top_k
-        memories: List[str] = query_user_memories(user_id, user_prompt, k=top_k)[:3]
+        memories: List[str] = safe_query_user_memories(user_id, user_prompt, k=top_k)[
+            :3
+        ]
         while count_tokens("\n".join(memories)) > 55 and memories:
             memories.pop()
         dbg = debug_info if debug else ""
