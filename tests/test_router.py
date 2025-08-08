@@ -108,7 +108,7 @@ def test_router_fallback_metrics_updated(monkeypatch):
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     from app import router, analytics, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = True
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
 
     async def fake_llama(prompt, model=None):
         return {"error": "timeout", "llm_used": "llama3"}
@@ -219,7 +219,7 @@ def test_complexity_checks(monkeypatch):
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     from app import router, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = True
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
 
     async def fake_gpt(prompt, model=None, system=None, **kwargs):
         return "gpt", 0, 0, 0.0
@@ -286,7 +286,7 @@ def test_debug_env_toggle(monkeypatch):
 
     monkeypatch.setattr(router, "handle_command", handle_cmd)
     monkeypatch.setattr(router, "lookup_cached_answer", lambda p: None)
-    router.LLAMA_HEALTHY = False
+    monkeypatch.setattr(router, "LLAMA_HEALTHY", False)
     monkeypatch.setattr(router.memgpt, "store_interaction", lambda *a, **k: None)
     monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
     monkeypatch.setattr(
@@ -314,13 +314,20 @@ def test_llama_circuit_open(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    from app import router
+    from app import router, llama_integration
 
-    monkeypatch.setattr(router, "llama_circuit_open", True)
+    monkeypatch.setattr(router, "llama_circuit_open", False)
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
+    monkeypatch.setattr(router, "handle_command", lambda p: None)
+    monkeypatch.setattr(router, "lookup_cached_answer", lambda p: None)
+    monkeypatch.setattr(router, "pick_model", lambda *a, **k: ("llama", "llama3"))
+    monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
+    monkeypatch.setattr(router.PromptBuilder, "build", lambda *a, **k: (a[0], 0))
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(router.route_prompt("hi", user_id="u"))
     assert exc.value.status_code == 503
+    assert exc.value.detail == "LLaMA circuit open"
 
 
 def test_generation_options_passthrough(monkeypatch):
@@ -339,7 +346,7 @@ def test_generation_options_passthrough(monkeypatch):
     monkeypatch.setattr(router, "lookup_cached_answer", lambda p: None)
     monkeypatch.setattr(router, "pick_model", lambda *a, **k: ("llama", "llama3"))
     monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
-    router.LLAMA_HEALTHY = True
+    monkeypatch.setattr(router, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(router.memgpt, "store_interaction", lambda *a, **k: None)
     monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
     monkeypatch.setattr(

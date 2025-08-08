@@ -16,7 +16,7 @@ def test_llama_override(monkeypatch):
     _setup_env()
     from app import router, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = True
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
 
     async def fake_llama(prompt, model=None):
         for tok in ["ok"]:
@@ -33,7 +33,7 @@ def test_cache_hit(monkeypatch):
     from app import router, llama_integration
     from app.memory import vector_store
 
-    llama_integration.LLAMA_HEALTHY = False
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
 
     async def fake_gpt(prompt, model=None, system=None):
         return "cached", 0, 0, 0.0
@@ -64,7 +64,7 @@ def test_low_conf_rejection(monkeypatch):
     _setup_env()
     from app import router, llama_integration
 
-    llama_integration.LLAMA_HEALTHY = True
+    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
 
     async def low_conf(prompt, model=None):
         for tok in ["I don't know"]:
