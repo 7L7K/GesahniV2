@@ -8,7 +8,7 @@ import sys
 from typing import List, Optional
 
 from .chroma_store import ChromaVectorStore
-from .env_utils import _normalized_hash
+from .env_utils import _get_mem_top_k, _normalized_hash
 from .memory_store import MemoryVectorStore, VectorStore
 
 
@@ -20,9 +20,11 @@ def _get_store() -> VectorStore:
 
     kind = os.getenv("VECTOR_STORE", "").lower()
     chroma_path = os.getenv("CHROMA_PATH", ".chroma_data")
-    if kind in ("memory", "inmemory") or \
-       "PYTEST_CURRENT_TEST" in os.environ or \
-       "pytest" in sys.modules:
+    if (
+        kind in ("memory", "inmemory")
+        or "PYTEST_CURRENT_TEST" in os.environ
+        or "pytest" in sys.modules
+    ):
         logger.info("Using MemoryVectorStore (test mode or VECTOR_STORE=%s)", kind)
         return MemoryVectorStore()
     try:
@@ -49,7 +51,10 @@ def add_user_memory(user_id: str, memory: str) -> str:
     return _store.add_user_memory(user_id, memory)
 
 
-def query_user_memories(user_id: str, prompt: str, k: int = 5) -> List[str]:
+def query_user_memories(user_id: str, prompt: str, k: int | None = None) -> List[str]:
+    if k is None:
+        k = _get_mem_top_k()
+    assert isinstance(k, int), "k must be int"
     return _store.query_user_memories(user_id, prompt, k)
 
 
@@ -145,4 +150,3 @@ __all__ = [
     "MemoryVectorStore",
     "ChromaVectorStore",
 ]
-
