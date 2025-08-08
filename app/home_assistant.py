@@ -42,6 +42,10 @@ class CommandResult:
     data: dict | None = None
 
 
+class HomeAssistantAPIError(Exception):
+    """Raised when a Home Assistant API call fails."""
+
+
 def _redact(obj: Any) -> Any:
     """Recursively replace any access_token values with [redacted]."""
     if isinstance(obj, dict):
@@ -88,13 +92,16 @@ async def _request(
 # Public API helpers
 # ---------------------------------------------------------------------------
 async def get_states() -> list[dict]:
-    """Return all HA entity states (empty list on failure)."""
+    """Return all HA entity states or raise ``HomeAssistantAPIError``."""
     try:
         data = await _request("GET", "/states")
-        return data if isinstance(data, list) else []
-    except Exception as e:
+    except Exception as e:  # pragma: no cover - network layer
         logger.warning("Failed to fetch states: %s", e)
-        return []
+        raise HomeAssistantAPIError(str(e)) from e
+
+    if not isinstance(data, list):
+        raise HomeAssistantAPIError("invalid_response")
+    return data
 
 
 async def call_service(domain: str, service: str, data: dict) -> Any:
@@ -139,7 +146,11 @@ async def startup_check() -> None:
 # ---------------------------------------------------------------------------
 async def resolve_entity(name: str) -> List[str]:
     """Return entity IDs that match the given name or its synonyms."""
-    states = await get_states()
+    try:
+        states = await get_states()
+    except HomeAssistantAPIError as e:
+        logger.warning("resolve_entity failed: %s", e)
+        return []
     target = _SYN_TO_ROOM.get(name.lower(), name.lower())
 
     # exact match first
