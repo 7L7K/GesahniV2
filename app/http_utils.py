@@ -9,6 +9,23 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+def _initialize_http_logging() -> None:
+    """Configure third-party HTTP libraries to reduce noisy logs.
+
+    At import time we bump ``httpx`` and ``httpcore`` loggers to ``INFO`` if they
+    would otherwise emit DEBUG output. This ensures the adjustment happens once
+    and avoids touching logger levels during normal request execution.
+    """
+
+    if logging.getLogger("httpx").level < logging.INFO:
+        logging.getLogger("httpx").setLevel(logging.INFO)
+    if logging.getLogger("httpcore").level < logging.INFO:
+        logging.getLogger("httpcore").setLevel(logging.INFO)
+
+
+_initialize_http_logging()
+
+
 def log_exceptions(module: str):
     """Decorator to log exceptions for async functions."""
 
@@ -44,12 +61,6 @@ async def json_request(
                 httpx_module = getattr(llama_module, "httpx", httpx_module)
             except Exception:  # pragma: no cover - fallback if import fails
                 pass
-            # Quiet noisy httpx DEBUG logs unless explicitly enabled
-            if logging.getLogger("httpx").level < logging.INFO:
-                logging.getLogger("httpx").setLevel(logging.INFO)
-            if logging.getLogger("httpcore").level < logging.INFO:
-                logging.getLogger("httpcore").setLevel(logging.INFO)
-
             async with httpx_module.AsyncClient() as client:
                 if hasattr(client, "request"):
                     resp = await client.request(method, url, **kwargs)
