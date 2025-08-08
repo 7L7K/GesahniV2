@@ -27,5 +27,6 @@ def test_threshold_out_of_range(monkeypatch, caplog):
     monkeypatch.setenv("SIM_THRESHOLD", "5")
     with caplog.at_level("WARNING"):
         store = ChromaVectorStore()
-    assert store._dist_cutoff == 1.0 - 0.90
+    # Out-of-range values are clamped to 1.0
+    assert store._dist_cutoff == 0.0
     assert "SIM_THRESHOLD" in caplog.text

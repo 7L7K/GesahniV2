@@ -20,9 +20,9 @@ def _env_flag(name: str) -> bool:
     return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-DEFAULT_SIM_THRESHOLD = 0.90
+DEFAULT_SIM_THRESHOLD = 0.24
 
-DEFAULT_MEM_TOP_K = 5
+DEFAULT_MEM_TOP_K = 3
 
 
 def _get_sim_threshold() -> float:
@@ -39,17 +39,18 @@ def _get_sim_threshold() -> float:
         )
         return DEFAULT_SIM_THRESHOLD
     if not 0.0 <= value <= 1.0:
+        clamped = min(max(value, 0.0), 1.0)
         logger.warning(
-            "SIM_THRESHOLD %.2f out of range [0, 1]; falling back to %.2f",
+            "SIM_THRESHOLD %.2f out of range [0, 1]; clamped to %.2f",
             value,
-            DEFAULT_SIM_THRESHOLD,
+            clamped,
         )
-        return DEFAULT_SIM_THRESHOLD
+        return clamped
     return value
 
 
 def _get_mem_top_k() -> int:
-    """Read the ``MEM_TOP_K`` env var with a default of 5."""
+    """Read the ``MEM_TOP_K`` env var with sane bounds."""
 
     raw = os.getenv("MEM_TOP_K", str(DEFAULT_MEM_TOP_K))
     try:
@@ -61,13 +62,14 @@ def _get_mem_top_k() -> int:
             DEFAULT_MEM_TOP_K,
         )
         return DEFAULT_MEM_TOP_K
-    if value <= 0:
+    if value < 1 or value > 10:
+        clamped = min(max(value, 1), 10)
         logger.warning(
-            "MEM_TOP_K %d must be positive; falling back to %d",
+            "MEM_TOP_K %d out of range [1, 10]; clamped to %d",
             value,
-            DEFAULT_MEM_TOP_K,
+            clamped,
         )
-        return DEFAULT_MEM_TOP_K
+        return clamped
     return value
 
 

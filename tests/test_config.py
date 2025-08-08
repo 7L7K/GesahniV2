@@ -17,7 +17,7 @@ def setup_app(monkeypatch):
 
     os.environ["OPENAI_API_KEY"] = "key"
     os.environ["OPENAI_MODEL"] = "gpt"
-    os.environ["SIM_THRESHOLD"] = "0.90"
+    os.environ["SIM_THRESHOLD"] = "0.24"
     import app.home_assistant as home_assistant
     import app.llama_integration as llama_integration
     import app.status as status
@@ -31,9 +31,11 @@ def setup_app(monkeypatch):
     monkeypatch.setattr(llama_integration, "startup_check", lambda: None)
     return main
 
+
 def test_key():
     print("👀 OPENAI_API_KEY =", os.getenv("OPENAI_API_KEY"))
     assert os.getenv("OPENAI_API_KEY", "").startswith("sk-")
+
 
 def test_config_forbidden(monkeypatch):
     main = setup_app(monkeypatch)
@@ -64,4 +66,4 @@ def test_config_env_reload(monkeypatch):
     assert resp.json()["DEBUG"] == "1"
     env.unlink()
     data = resp.json()
-    assert data["SIM_THRESHOLD"] == "0.90"
+    assert data["SIM_THRESHOLD"] == "0.24"
