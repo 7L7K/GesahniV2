@@ -58,17 +58,20 @@ MODEL_PRICING = {
 
 
 def get_client() -> AsyncOpenAI:
-    """Return a fresh ``AsyncOpenAI`` client for each call.
+    """Return a cached ``AsyncOpenAI`` client, creating one if needed.
 
-    Tests often monkeypatch the ``openai`` module; re-instantiating the client
-    avoids cross-test leakage from previously created instances.
+    Prior versions of this helper always instantiated a new client which left
+    open HTTP connections behind.  We now reuse a module-level singleton to
+    avoid leaking resources.  Tests that need isolation can still call
+    ``close_client`` to reset the cache.
     """
 
     global _client
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY not set")
-    _client = AsyncOpenAI(api_key=api_key)
+    if _client is None:
+        _client = AsyncOpenAI(api_key=api_key)
     return _client
 
 

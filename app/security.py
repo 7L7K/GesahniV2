@@ -39,7 +39,7 @@ def _bucket_rate_limit(
     """Increment ``key`` in ``bucket`` and enforce ``limit`` within ``period``."""
 
     now = time.time()
-    reset = bucket.get("_reset", now)
+    reset = bucket.setdefault("_reset", now)
     if now - reset >= period:
         bucket.clear()
         bucket["_reset"] = now
