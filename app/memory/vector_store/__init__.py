@@ -14,6 +14,10 @@ from ..api import (
     query_user_memories,
     record_feedback,
 )
+from app.embeddings import embed_sync as _embed_sync
+from ..env_utils import _normalize as _normalize, _normalized_hash as _normalized_hash
+embed_sync = _embed_sync
+
 
 __all__ = [
     "add_user_memory",
@@ -28,5 +32,9 @@ __all__ = [
     "VectorStore",
     "MemoryVectorStore",
     "ChromaVectorStore",
+    "_normalize",
+    "_normalized_hash",
+    "embed_sync",
+
 ]
 

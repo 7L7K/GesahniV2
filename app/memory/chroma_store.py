@@ -25,7 +25,9 @@ logger = logging.getLogger(__name__)
 
 class _LengthEmbedder:
     def __call__(self, input: List[str]) -> List[List[float]]:
-        return [[float(len(_normalize(t)[1]))] for t in input]
+        import numpy as np
+        return [np.asarray([float(len(_normalize(t)[1]))], dtype=np.float32) for t in input]
+
 
     def name(self) -> str:  # pragma: no cover - simple helper
         return "length-embedder"

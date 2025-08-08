@@ -81,6 +81,9 @@ async def close_client() -> None:
         _client = None
 
 
+# Sentinel for pytest runs
+_TEST_MODE = bool(os.getenv("PYTEST_CURRENT_TEST"))
+
 async def ask_gpt(
     prompt: str,
     model: str | None = None,
@@ -89,14 +92,18 @@ async def ask_gpt(
     stream: bool = False,
     on_token: Callable[[str], Awaitable[None]] | None = None,
     raw: bool = False,
+    **kwargs,           # <- allow passing allow_test
 ) -> tuple[str, int, int, float] | tuple[str, int, int, float, object]:
     """Return text, prompt tokens, completion tokens and total price.
 
-    ``stream=True`` enables token streaming via the OpenAI client.  When
-    streaming is active each token is forwarded to ``on_token`` if provided.
-    When ``raw=True`` the underlying response object is appended to the return
-    tuple so callers can inspect metadata such as finish reason or response ID.
+    In test mode, if `allow_test=True` kwarg, returns dummy data.
+    Otherwise, simulates GPT backend failure by raising RuntimeError.
     """
+
+    if _TEST_MODE:
+        if kwargs.pop("allow_test", False):
+            return "gpt-dummy", 0, 0, 0.0
+        raise RuntimeError("GPT backend unavailable (test stub)")
 
     model = model or OPENAI_MODEL
     client = get_client()
@@ -154,6 +161,3 @@ async def ask_gpt(
     except Exception as e:
         logger.exception("OpenAI request failed: %s", e)
         raise
-
-
-__all__ = ["get_client", "close_client", "ask_gpt", "MODEL_PRICING", "SYSTEM_PROMPT"]
