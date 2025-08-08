@@ -7,6 +7,8 @@ import types
 
 # Ensure asynchronous tests have an event loop available and JWT auth works.
 os.environ.setdefault("JWT_SECRET", "secret")
+# Disable debug model routing unless a test explicitly enables it.
+os.environ.setdefault("DEBUG_MODEL_ROUTING", "0")
 
 # Try to import chromadb, if not, use a stub
 try:
