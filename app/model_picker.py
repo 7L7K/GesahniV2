@@ -3,12 +3,14 @@ import re
 import logging
 from typing import Tuple
 
-from .llama_integration import OLLAMA_MODEL, LLAMA_HEALTHY, llama_circuit_open
+from . import llama_integration
 
 logger = logging.getLogger(__name__)
 
 GPT_DEFAULT_MODEL = os.getenv("GPT_DEFAULT_MODEL", "gpt-4o")
-LLAMA_DEFAULT_MODEL = OLLAMA_MODEL or os.getenv("OLLAMA_MODEL", "llama3:latest")
+LLAMA_DEFAULT_MODEL = llama_integration.OLLAMA_MODEL or os.getenv(
+    "OLLAMA_MODEL", "llama3:latest"
+)
 HEAVY_WORD_COUNT = int(os.getenv("MODEL_ROUTER_HEAVY_WORDS", "30"))
 HEAVY_TOKENS = int(os.getenv("MODEL_ROUTER_HEAVY_TOKENS", "1000"))
 
@@ -34,7 +36,7 @@ def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str]:
 
     if not LLAMA_DEFAULT_MODEL:
         logger.warning("No LLAMA model configured—using fallback 'llama'")
-    if not LLAMA_HEALTHY or llama_circuit_open:
+    if not llama_integration.LLAMA_HEALTHY or llama_integration.llama_circuit_open:
         logger.info("LLaMA unavailable, routing to GPT")
         return "gpt", GPT_DEFAULT_MODEL
     return "llama", LLAMA_DEFAULT_MODEL
