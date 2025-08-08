@@ -46,7 +46,7 @@ def test_cache_hit(monkeypatch):
     monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
 
     try:
-        vector_store.qa_cache.delete(ids=vector_store._qa_cache.get()["ids"])
+        vector_store.qa_cache.delete(ids=vector_store.qa_cache.keys())
         first = asyncio.run(router.route_prompt("hi", user_id="u"))
         assert first == "cached"
 
