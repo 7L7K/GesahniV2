@@ -62,7 +62,6 @@ Set environment variables as needed:
 | `PORT` | `8000` | no | Server port when running `python app/main.py` |
 | `SESSIONS_DIR` | `sessions/` | no | Base directory for session media |
 | `ADMIN_TOKEN` | – | no | Required to read `/config` |
-| `SIM_THRESHOLD` | `0.90` | no | Vector similarity cutoff |
 | `HOME_ASSISTANT_URL` | `http://localhost:8123` | no | Home Assistant base URL |
 | `HOME_ASSISTANT_TOKEN` | – | yes | HA long-lived token |
 | `INTENT_THRESHOLD` | `0.7` | no | Intent confidence cutoff |
@@ -75,7 +74,8 @@ Set environment variables as needed:
 | `NOTES_DB` | `notes.db` | no | SQLite file for notes skill |
 | `CALENDAR_FILE` | `data/calendar.json` | no | Calendar events source |
 | `MAX_UPLOAD_BYTES` | `10485760` | no | Max upload size for session media |
-| `MEM_TOP_K` | `5` | no | Memories returned from vector store |
+| `SIM_THRESHOLD` | `0.24` | no | Vector similarity cutoff |
+| `MEM_TOP_K` | `3` | no | Memories returned from vector store |
 | `DISABLE_QA_CACHE` | `false` | no | Skip semantic cache when set |
 | `VECTOR_STORE` | `chroma` | no | Vector store backend |
 | `USERS_DB` | `users.db` | no | SQLite path for auth users |
