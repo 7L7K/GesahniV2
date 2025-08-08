@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import cache
 from pathlib import Path
-from typing import Any, List, Tuple
-
-import logging
+from typing import Any, List
 
 from .token_utils import count_tokens
 from .memory import memgpt
@@ -15,40 +15,58 @@ from .memory.env_utils import _get_mem_top_k
 from .memory.vector_store import query_user_memories
 from .telemetry import log_record_var
 
-MAX_PROMPT_TOKENS = 8_000
+# ---------------------------------------------------------------------------
+# Constants & globals
+# ---------------------------------------------------------------------------
 
-# Load static prompt core at import time
+MAX_PROMPT_TOKENS = 8_000
 _CORE_PATH = Path(__file__).parent / "prompts" / "prompt_core.txt"
-_PROMPT_CORE = _CORE_PATH.read_text(encoding="utf-8")
-# note: if tiktoken is missing, token_utils.count_tokens will perform a
-# naive word-based count which is sufficient for tests.
 
 logger = logging.getLogger(__name__)
 
 
-def _coerce_k(value: int | str | None) -> int:
-    """Return a positive integer `k` for memory queries.
+@cache
+def _prompt_core() -> str:
+    """Load and cache the static prompt template."""
+    return _CORE_PATH.read_text(encoding="utf-8")
 
-    Falls back to :func:`_get_mem_top_k` when `value` is None or
-    cannot be interpreted as a positive integer.
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _coerce_k(value: int | str | None) -> int:
+    """Return a positive integer `k` for memory retrieval.
+
+    Falls back to the project-wide default when the supplied value is
+    missing or invalid.
     """
     if value is None:
         return _get_mem_top_k()
+
     try:
         k = int(value)
     except (TypeError, ValueError):
         logger.warning("Invalid top_k %r; defaulting to %s", value, _get_mem_top_k())
         return _get_mem_top_k()
+
     if k <= 0:
-        logger.warning(
-            "top_k %d must be positive; defaulting to %s", k, _get_mem_top_k()
-        )
+        logger.warning("top_k %d must be positive; defaulting to %s", k, _get_mem_top_k())
         return _get_mem_top_k()
+
     return k
+
+
+# ---------------------------------------------------------------------------
+# PromptBuilder
+# ---------------------------------------------------------------------------
 
 
 @dataclass
 class PromptBuilder:
+    """High-level utility for assembling an LLM prompt and returning its length."""
+
     @staticmethod
     def build(
         user_prompt: str,
@@ -60,36 +78,39 @@ class PromptBuilder:
         debug_info: str = "",
         top_k: int | str | None = None,
         **_: Any,
-    ) -> Tuple[str, int]:
-        """Return a tuple of (prompt_str, prompt_tokens).
+    ) -> tuple[str, int]:
+        """Return `(prompt_text, prompt_tokens)`.
 
-        Additional keyword arguments (e.g., `temperature` or `top_p`)
-        are accepted for compatibility with generation options and are
-        currently ignored by the builder.
+        Extra kwargs (e.g. `temperature`, `top_p`) are accepted for API
+        parity and silently ignored.
         """
-        # timestamp
+        # ------------------------------------------------------------------
+        # Context collection
+        # ------------------------------------------------------------------
         date_time = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
-
-        # summarize recent conversation
         summary = memgpt.summarize_session(session_id, user_id=user_id) or ""
-
-        # sanitize and coerce top_k for memory lookup
         k = _coerce_k(top_k)
 
-        # record telemetry
+        # ------------------------------------------------------------------
+        # Telemetry
+        # ------------------------------------------------------------------
         rec = log_record_var.get()
         if rec:
             rec.embed_tokens = count_tokens(user_prompt)
             rec.rag_top_k = k
 
-        # fetch and trim memories
+        # ------------------------------------------------------------------
+        # Memory lookup & trimming
+        # ------------------------------------------------------------------
         memories: List[str] = query_user_memories(user_id, user_prompt, k=k)
-        # trim so that memories blob itself stays under a small token budget
         while count_tokens("\n".join(memories)) > 55 and memories:
             memories.pop()
 
-        # assemble base prompt with core + placeholders
+        # ------------------------------------------------------------------
+        # Core prompt assembly
+        # ------------------------------------------------------------------
         dbg = debug_info if debug else ""
+        core_template = _prompt_core()
         base_replacements = {
             "date_time": date_time,
             "conversation_summary": summary,
@@ -98,16 +119,21 @@ class PromptBuilder:
             "user_prompt": user_prompt,
             "debug_info": dbg,
         }
-        base_prompt = _PROMPT_CORE
+
+        base_prompt = core_template
         for key, val in base_replacements.items():
             base_prompt = base_prompt.replace(f"{{{{{key}}}}}", val)
-        base_tokens = count_tokens(base_prompt)
 
-        # budget overall prompt tokens, popping summary then oldest memories
+        base_tokens = count_tokens(base_prompt)
         mem_list = memories.copy()
+
+        # ------------------------------------------------------------------
+        # Token-budget loop
+        # ------------------------------------------------------------------
         while True:
-            prompt = _PROMPT_CORE
+            prompt = core_template
             mem_text = "\n".join(mem_list)
+
             replacements = {
                 "date_time": date_time,
                 "conversation_summary": summary,
@@ -120,23 +146,34 @@ class PromptBuilder:
                 prompt = prompt.replace(f"{{{{{key}}}}}", val)
 
             prompt_tokens = count_tokens(prompt)
-            # stop trimming when within both the max and the delta budget
-            if prompt_tokens <= MAX_PROMPT_TOKENS and prompt_tokens - base_tokens <= 75:
+
+            fits_budget = (
+                prompt_tokens <= MAX_PROMPT_TOKENS
+                and prompt_tokens - base_tokens <= 75
+            )
+            if fits_budget:
                 break
 
-            # drop summary first, then oldest memory entries
+            # Budget overflow: drop summary first, then memories
             if summary:
                 summary = ""
-                base_tokens = count_tokens(
-                    _PROMPT_CORE.replace("{{conversation_summary}}", "")
-                )
+                base_replacements["conversation_summary"] = ""
+                base_prompt = core_template
+                for key, val in base_replacements.items():
+                    base_prompt = base_prompt.replace(f"{{{{{key}}}}}", val)
+                base_tokens = count_tokens(base_prompt)
                 continue
+
             if mem_list:
                 mem_list.pop()
                 continue
+
+            # Nothing left to trim
             break
 
-        # finalize telemetry count
+        # ------------------------------------------------------------------
+        # Final telemetry
+        # ------------------------------------------------------------------
         if rec:
             rec.retrieval_count = len(mem_list)
 
