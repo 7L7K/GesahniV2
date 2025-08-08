@@ -5,6 +5,7 @@ Tests rely on these re-exports to avoid heavy dependencies, and it keeps the
 door open for swapping providers later without touching call sites.
 """
 
+import logging
 from typing import List, Optional, Union
 
 from ..api import (
@@ -24,6 +25,9 @@ from ..api import (
 from app.embeddings import embed_sync as _embed_sync
 from ..env_utils import _normalize as _normalize, _normalized_hash as _normalized_hash
 
+
+logger = logging.getLogger(__name__)
+
 # Public re-export of sync embed helper so callers stay decoupled from the
 # embeddings module’s internal layout.
 embed_sync = _embed_sync
@@ -36,14 +40,18 @@ embed_sync = _embed_sync
 
 def _coerce_k(k: Union[int, str, None]) -> Optional[int]:
     """Coerce ``k`` to ``int`` or return ``None`` when invalid."""
+
     if k is None:
-        return None
-    if isinstance(k, str):
+        result: Optional[int] = None
+    elif isinstance(k, str):
         try:
-            return int(k)
+            result = int(k)
         except ValueError:
-            return None
-    return k if isinstance(k, int) else None
+            result = None
+    else:
+        result = k if isinstance(k, int) else None
+    logger.debug("Coerced k=%r -> %s", k, result)
+    return result
 
 
 def safe_query_user_memories(

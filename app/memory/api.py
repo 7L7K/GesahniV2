@@ -7,6 +7,8 @@ import os
 import sys
 from typing import List, Optional
 
+from app.telemetry import hash_user_id
+
 from .chroma_store import ChromaVectorStore
 from .env_utils import _get_mem_top_k, _normalized_hash
 from .memory_store import MemoryVectorStore, VectorStore
@@ -26,22 +28,25 @@ def _get_store() -> VectorStore:
         or "pytest" in sys.modules
     ):
         logger.info("Using MemoryVectorStore (test mode or VECTOR_STORE=%s)", kind)
-        return MemoryVectorStore()
-    try:
-        if not chroma_path:
-            raise FileNotFoundError("CHROMA_PATH is empty")
-        logger.info("Initializing ChromaVectorStore at path: %s", chroma_path)
-        return ChromaVectorStore()
-    except Exception as exc:
-        if os.getenv("ENV", "").lower() == "production":
-            logger.error("FATAL: ChromaVectorStore failed in production: %s", exc)
-            raise
-        logger.warning(
-            "ChromaVectorStore unavailable at %s: %s; falling back to MemoryVectorStore",
-            chroma_path,
-            exc,
-        )
-        return MemoryVectorStore()
+        store: VectorStore = MemoryVectorStore()
+    else:
+        try:
+            if not chroma_path:
+                raise FileNotFoundError("CHROMA_PATH is empty")
+            logger.info("Initializing ChromaVectorStore at path: %s", chroma_path)
+            store = ChromaVectorStore()
+        except Exception as exc:
+            if os.getenv("ENV", "").lower() == "production":
+                logger.error("FATAL: ChromaVectorStore failed in production: %s", exc)
+                raise
+            logger.warning(
+                "ChromaVectorStore unavailable at %s: %s; falling back to MemoryVectorStore",
+                chroma_path,
+                exc,
+            )
+            store = MemoryVectorStore()
+    logger.debug("Vector store backend selected: %s", type(store).__name__)
+    return store
 
 
 _store: VectorStore = _get_store()
@@ -55,19 +60,31 @@ def _coerce_k(k: int | str | None) -> int:
     """Return a positive integer ``k`` with a sensible default."""
 
     if k is None:
-        return _get_mem_top_k()
-    try:
-        value = int(k)
-    except (TypeError, ValueError):
-        return _get_mem_top_k()
-    return value if value > 0 else _get_mem_top_k()
+        result = _get_mem_top_k()
+    else:
+        try:
+            value = int(k)
+        except (TypeError, ValueError):
+            result = _get_mem_top_k()
+        else:
+            result = value if value > 0 else _get_mem_top_k()
+    logger.debug("Coerced k=%r -> %d", k, result)
+    return result
 
 
 def query_user_memories(
     user_id: str, prompt: str, k: int | str | None = None
 ) -> List[str]:
     k_int = _coerce_k(k)
-    return _store.query_user_memories(user_id, prompt, k_int)
+    logger.debug(
+        "query_user_memories args: user=%s prompt=%r k=%d",
+        hash_user_id(user_id),
+        prompt,
+        k_int,
+    )
+    res = _store.query_user_memories(user_id, prompt, k_int)
+    logger.debug("query_user_memories returned %d items", len(res))
+    return res
 
 
 def cache_answer(prompt: str, answer: str, cache_id: str | None = None) -> None:
