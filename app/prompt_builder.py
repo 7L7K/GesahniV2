@@ -27,6 +27,15 @@ _PROMPT_CORE = _CORE_PATH.read_text(encoding="utf-8")
 logger = logging.getLogger(__name__)
 
 
+def _coerce_k(val: int | str | None, default: int = 5) -> int:
+    """Return a positive integer for ``val`` or ``default`` when invalid."""
+    try:
+        k = int(val) if val is not None else default
+    except (TypeError, ValueError):
+        return default
+    return k if k > 0 else default
+
+
 @dataclass
 class PromptBuilder:
     @staticmethod
@@ -38,7 +47,7 @@ class PromptBuilder:
         custom_instructions: str = "",
         debug: bool = False,
         debug_info: str = "",
-        top_k: int | None = None,
+        top_k: int | str | None = None,
         **_: Any,
     ) -> Tuple[str, int]:
         """Return a tuple of (prompt_str, prompt_tokens).
@@ -50,8 +59,10 @@ class PromptBuilder:
         date_time = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
         summary = memgpt.summarize_session(session_id, user_id=user_id) or ""
         if top_k is None:
-            top_k = _get_mem_top_k()
+            top_k = _coerce_k(_get_mem_top_k())
             logger.warning("top_k missing; defaulting to %s", top_k)
+        else:
+            top_k = _coerce_k(top_k)
         rec = log_record_var.get()
         if rec:
             rec.embed_tokens = count_tokens(user_prompt)
