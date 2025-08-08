@@ -51,11 +51,23 @@ def add_user_memory(user_id: str, memory: str) -> str:
     return _store.add_user_memory(user_id, memory)
 
 
-def query_user_memories(user_id: str, prompt: str, k: int | None = None) -> List[str]:
+def _coerce_k(k: int | str | None) -> int:
+    """Return a positive integer ``k`` with a sensible default."""
+
     if k is None:
-        k = _get_mem_top_k()
-    assert isinstance(k, int), "k must be int"
-    return _store.query_user_memories(user_id, prompt, k)
+        return _get_mem_top_k()
+    try:
+        value = int(k)
+    except (TypeError, ValueError):
+        return _get_mem_top_k()
+    return value if value > 0 else _get_mem_top_k()
+
+
+def query_user_memories(
+    user_id: str, prompt: str, k: int | str | None = None
+) -> List[str]:
+    k_int = _coerce_k(k)
+    return _store.query_user_memories(user_id, prompt, k_int)
 
 
 def cache_answer(prompt: str, answer: str, cache_id: str | None = None) -> None:

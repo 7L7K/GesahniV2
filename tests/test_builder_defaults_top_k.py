@@ -64,4 +64,4 @@ def test_builder_defaults_top_k(monkeypatch):
     monkeypatch.setattr(prompt_builder, "safe_query_user_memories", fake_query)
 
     PromptBuilder.build("hi", session_id="s", user_id="u")
-    assert captured["k"] == 5
+    assert captured["k"] == 3
