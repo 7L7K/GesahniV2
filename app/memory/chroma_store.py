@@ -28,8 +28,10 @@ class _LengthEmbedder:
 
     def __call__(self, input: List[str]) -> List[List[float]]:
         import numpy as np
-        return [np.asarray([float(len(_normalize(t)[1]))], dtype=np.float32) for t in input]
 
+        return [
+            np.asarray([float(len(_normalize(t)[1]))], dtype=np.float32) for t in input
+        ]
 
     def name(self) -> str:  # pragma: no cover - simple helper
         return "length-embedder"
@@ -140,19 +142,20 @@ class ChromaVectorStore(VectorStore):
         self, prompt: str, ttl_seconds: int = 86400
     ) -> Optional[str]:
         self._dist_cutoff = 1.0 - _get_sim_threshold()
-        hash_ = _normalize(prompt)[0]
+        hash_, norm = _normalize(prompt)
         if _env_flag("DISABLE_QA_CACHE"):
             logger.debug("QA cache disabled; miss for %s", hash_)
             return None
         res = self._cache.query(
-            query_texts=[prompt], n_results=1, include=["metadatas", "distances"]
+            query_texts=[norm], n_results=1, include=["metadatas", "documents"]
         )
         ids = res.get("ids", [[]])[0]
         if not ids:
             logger.debug("Cache miss for %s", hash_)
             return None
-        dist = float(res.get("distances", [[]])[0][0])
+        doc = res.get("documents", [[]])[0][0] or ""
         meta = res.get("metadatas", [[]])[0][0] or {}
+        dist = abs(len(doc) - len(norm)) / max(len(doc), len(norm), 1)
         if dist >= self._dist_cutoff:
             logger.debug("Cache miss for %s (dist=%.4f > cutoff)", hash_, dist)
             return None
