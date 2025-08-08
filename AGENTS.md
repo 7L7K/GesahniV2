@@ -36,6 +36,7 @@ POST | `/capture/tags` | Queue tag extraction
 GET | `/capture/status/{id}` | Fetch session metadata
 GET | `/search/sessions` | Search stored sessions
 GET | `/sessions` | List sessions by status
+POST | `/sessions/{id}/transcribe` | Queue session transcription
 POST | `/sessions/{id}/summarize` | Queue session summary
 WS | `/transcribe` | Stream audio chunks for live transcription
 POST | `/intent-test` | Echo prompt for intent debugging
@@ -96,20 +97,28 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `OPENAI_TRANSCRIBE_MODEL` | `whisper-1` | no | Async Whisper model |
 | `WHISPER_MODEL` | `whisper-1` | no | Sync Whisper model |
 | `ALLOWED_GPT_MODELS` | `gpt-4o,gpt-4,gpt-3.5-turbo` | no | Valid `/ask` model overrides |
-| `DEBUG` | – | no | Enable extra prompt debug info |
 | `DEBUG_MODEL_ROUTING` | – | no | Log model path without external calls |
 | `LOG_LEVEL` | `INFO` | no | Logging verbosity |
 | `FOLLOW_UPS_FILE` | `data/follow_ups.json` | no | Stored follow-up reminders |
-| `OLLAMA_URL` | `http://localhost:11434` | no | Ollama base URL |
-| `OLLAMA_MODEL` | – | yes | LLaMA model name |
+| `OLLAMA_URL` | – | yes | Ollama base URL |
+| `OLLAMA_MODEL` | `llama3:latest` | no | LLaMA model name |
+| `LLAMA_MAX_STREAMS` | `2` | no | Max concurrent Ollama requests |
+| `ALLOWED_LLAMA_MODELS` | `llama3:latest,llama3` | no | Valid `/ask` LLaMA overrides |
 | `JWT_SECRET` | – | no | JWT secret for protected endpoints |
+| `API_TOKEN` | – | no | Static token for legacy clients |
+| `JWT_EXPIRE_MINUTES` | `30` | no | Access token expiry minutes |
+| `JWT_REFRESH_EXPIRE_MINUTES` | `1440` | no | Refresh token expiry minutes |
 | `RATE_LIMIT_PER_MIN` | `60` | no | Requests per minute per IP |
-| `REDIS_URL` | `redis://localhost:6379/0` | no | RQ queue for async tasks |
+| `REDIS_URL` | – | yes | RQ queue for async tasks |
 | `HISTORY_FILE` | `data/history.jsonl` | no | Request history log |
 | `CORS_ALLOW_ORIGINS` | `http://localhost:3000` | no | Allowed web origins |
 | `PORT` | `8000` | no | Server port when running `python app/main.py` |
 | `SESSIONS_DIR` | `sessions/` | no | Base directory for session media |
 | `ADMIN_TOKEN` | – | no | Required to read `/config` |
+| `INTENT_THRESHOLD` | `0.7` | no | Intent classification cutoff |
+| `SBERT_MODEL` | `sentence-transformers/paraphrase-MiniLM-L3-v2` | no | Intent detection model |
+| `MODEL_ROUTER_HEAVY_WORDS` | `30` | no | Word count to trigger heavy model |
+| `MODEL_ROUTER_HEAVY_TOKENS` | `1000` | no | Token count to trigger heavy model |
 | `SIM_THRESHOLD` | `0.90` | no | Vector similarity cutoff |
 | `HOME_ASSISTANT_URL` | `http://localhost:8123` | no | Home Assistant base URL |
 | `HOME_ASSISTANT_TOKEN` | – | yes | HA long-lived token |
@@ -122,7 +131,6 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `NOTES_DB` | `notes.db` | no | SQLite file for notes skill |
 | `CALENDAR_FILE` | `data/calendar.json` | no | Calendar events source |
 | `MAX_UPLOAD_BYTES` | `10485760` | no | Max upload size for session media |
-| `MEM_TOP_K` | `5` | no | Memories returned from vector store |
 | `DISABLE_QA_CACHE` | `false` | no | Skip semantic cache when set |
 | `VECTOR_STORE` | `chroma` | no | Vector store backend |
 
