@@ -119,7 +119,7 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `SBERT_MODEL` | `sentence-transformers/paraphrase-MiniLM-L3-v2` | no | Intent detection model |
 | `MODEL_ROUTER_HEAVY_WORDS` | `30` | no | Word count to trigger heavy model |
 | `MODEL_ROUTER_HEAVY_TOKENS` | `1000` | no | Token count to trigger heavy model |
-| `SIM_THRESHOLD` | `0.90` | no | Vector similarity cutoff |
+| `SIM_THRESHOLD` | `0.24` | no | Vector similarity cutoff |
 | `HOME_ASSISTANT_URL` | `http://localhost:8123` | no | Home Assistant base URL |
 | `HOME_ASSISTANT_TOKEN` | – | yes | HA long-lived token |
 | `LLAMA_EMBEDDINGS_MODEL` | – | yes* | Path to GGUF when using llama embeddings |
