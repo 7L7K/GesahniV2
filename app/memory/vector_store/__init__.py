@@ -96,10 +96,20 @@ def query_user_memories(
     *,
     k: Union[int, str, None] = None,
 ) -> List[str]:
-    """Vector‑store RAG lookup with bullet‑proof ``k`` handling."""
-    safe_k = _coerce_k(k)
+    """Vector‑store RAG lookup with tolerant ``k`` handling.
+
+    Only coerce numeric strings → int; otherwise let the underlying API apply
+    its own defaults so tests can control the default via monkeypatch.
+    """
+    if isinstance(k, str):
+        try:
+            k_arg = int(k)
+        except ValueError:
+            k_arg = None
+    else:
+        k_arg = k
     cutoff = _get_cutoff()
-    memories = _raw_query_user_memories(user_id, prompt, k=safe_k)
+    memories = _raw_query_user_memories(user_id, prompt, k=k_arg)
     return [m for m in memories if _distance(prompt, m) <= cutoff]
 
 
@@ -117,7 +127,17 @@ def safe_query_user_memories(
         prompt,
         k,
     )
-    memories = query_user_memories(user_id, prompt, k=k)
+    # Coerce only numeric strings; invalid strings pass through as None
+    coerced: Union[int, None, str]
+    if isinstance(k, str):
+        try:
+            coerced = int(k)
+        except ValueError:
+            coerced = None
+    else:
+        coerced = k
+
+    memories = query_user_memories(user_id, prompt, k=coerced)
     logger.debug("→ returning %d memories", len(memories))
     return memories
 

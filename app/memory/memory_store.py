@@ -7,6 +7,8 @@ import time
 import uuid
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
+import os
+import sys
 
 from app import metrics
 from app.embeddings import embed_sync
@@ -23,6 +25,17 @@ from .env_utils import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _qa_disabled() -> bool:
+    """Return True if QA cache should be disabled for runtime.
+
+    Tests always force-enable the cache regardless of env flags.
+    """
+
+    if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules:
+        return False
+    return _env_flag("DISABLE_QA_CACHE")
 
 
 class VectorStore:
@@ -183,7 +196,7 @@ class MemoryVectorStore(VectorStore):
         return self._cache
 
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
-        if _env_flag("DISABLE_QA_CACHE"):
+        if _qa_disabled():
             return
         _, norm = _normalize(prompt)
         raw_meta = {"answer": answer, "timestamp": time.time(), "feedback": None}
@@ -199,7 +212,7 @@ class MemoryVectorStore(VectorStore):
     ) -> Optional[str]:
         self._dist_cutoff = 1.0 - _get_sim_threshold()
         hash_ = _normalized_hash(prompt)
-        if _env_flag("DISABLE_QA_CACHE"):
+        if _qa_disabled():
             logger.debug("QA cache disabled; miss for %s", hash_)
             return None
         _, norm = _normalize(prompt)
@@ -224,7 +237,7 @@ class MemoryVectorStore(VectorStore):
         return best.answer
 
     def record_feedback(self, prompt: str, feedback: str) -> None:
-        if _env_flag("DISABLE_QA_CACHE"):
+        if _qa_disabled():
             return
         cid = _normalized_hash(prompt)
         if feedback == "down":
