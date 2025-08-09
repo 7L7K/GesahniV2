@@ -277,6 +277,30 @@ class MemGPT:
 
             self._save()
 
+    # ------------------------------------------------------------------
+    # Admin helpers
+    # ------------------------------------------------------------------
+    def delete_by_hash(self, hash_value: str) -> bool:
+        """Delete a memory (pinned or episodic) by its stored hash.
+
+        Returns True when something was removed.
+        """
+
+        removed = False
+        with self._lock:
+            for store in (self._data, self._pin_store):
+                for sid, interactions in list(store.items()):
+                    kept: List[Dict[str, Any]] = []
+                    for item in interactions:
+                        if str(item.get("hash")) == str(hash_value):
+                            removed = True
+                            continue
+                        kept.append(item)
+                    store[sid] = kept
+        if removed:
+            self._save()
+        return removed
+
 
 # Reusable singleton ---------------------------------------------------------
 memgpt = MemGPT()

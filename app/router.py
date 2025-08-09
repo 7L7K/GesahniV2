@@ -352,6 +352,10 @@ async def route_prompt(
         if inspect.isawaitable(ha_resp):
             ha_resp = await ha_resp
         if ha_resp is not None:
+            # If HA indicates confirmation required, surface that explicitly
+            if getattr(ha_resp, "message", "") == "confirm_required":
+                result = await _finalise("ha", prompt, "This action requires confirmation. Say 'confirm' to proceed.", rec)
+                return result
             result = await _finalise("ha", prompt, ha_resp.message, rec)
             return result
 
@@ -398,6 +402,9 @@ async def route_prompt(
         if inspect.isawaitable(ha_resp):
             ha_resp = await ha_resp
         if ha_resp is not None:
+            if getattr(ha_resp, "message", "") == "confirm_required":
+                result = await _finalise("ha", prompt, "This action requires confirmation. Say 'confirm' to proceed.", rec)
+                return result
             result = await _finalise("ha", prompt, ha_resp.message, rec)
             return result
 

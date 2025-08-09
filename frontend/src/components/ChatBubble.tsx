@@ -4,6 +4,7 @@ import { Bot, User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import { useMemo } from "react";
 
 export default function ChatBubble({
   role,
@@ -16,7 +17,7 @@ export default function ChatBubble({
 }) {
   const isUser = role === "user";
   // Extract sources block and build id -> snippet map for hover tooltips
-  const idToSnippet = React.useMemo(() => {
+  const idToSnippet = useMemo(() => {
     const map: Record<string, string> = {};
     const m = text.match(/```sources\n([\s\S]*?)```/i);
     if (m) {
@@ -32,7 +33,7 @@ export default function ChatBubble({
     return map;
   }, [text]);
 
-  const enhanced = React.useMemo(() => {
+  const enhanced = useMemo(() => {
     const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     return text.replace(/\[#chunk:([a-f0-9]{6,})\]/gi, (_m, id: string) => {
       const tip = idToSnippet[id] || `Source chunk ${id}`;
@@ -40,7 +41,7 @@ export default function ChatBubble({
     });
   }, [text, idToSnippet]);
 
-  const display = React.useMemo(() => {
+  const display = useMemo(() => {
     // Remove the sources block from display; it's only used for tooltips
     return enhanced.replace(/```sources[\s\S]*?```/gi, "").trim();
   }, [enhanced]);

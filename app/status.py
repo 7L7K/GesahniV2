@@ -6,7 +6,7 @@ from .deps.user import get_current_user_id
 
 from app.home_assistant import _request
 from .llama_integration import get_status as llama_get_status
-from .analytics import get_metrics, cache_hit_rate
+from .analytics import get_metrics, cache_hit_rate, get_top_skills
 from .memory.api import _store as _vector_store_instance  # type: ignore
 from .memory.memory_store import MemoryVectorStore
 from .memory.chroma_store import ChromaVectorStore  # type: ignore
@@ -157,6 +157,18 @@ async def full_status(user_id: str = Depends(get_current_user_id)) -> dict:
         out["budget_today"] = {"tokens": 0.0, "minutes": 0.0}
         out["limits"] = {"max_tokens": 0, "max_minutes": 0.0}
     return out
+
+
+@router.get("/admin/metrics")
+async def admin_metrics(token: str | None = Query(default=None), user_id: str = Depends(get_current_user_id)) -> dict:
+    if ADMIN_TOKEN and token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="forbidden")
+    m = get_metrics()
+    return {
+        "metrics": m,
+        "cache_hit_rate": cache_hit_rate(),
+        "top_skills": get_top_skills(10),
+    }
 
 
 @router.get("/admin/router/decisions")

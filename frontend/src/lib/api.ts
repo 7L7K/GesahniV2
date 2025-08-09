@@ -172,6 +172,12 @@ export async function getBudget(): Promise<{ tokens_used: number; minutes_used: 
   return res.json();
 }
 
+export async function getDecisions(limit = 200): Promise<{ items: any[] }> {
+  const res = await apiFetch(`/v1/admin/router/decisions?limit=${limit}`, { method: 'GET' });
+  if (!res.ok) throw new Error('decisions_failed');
+  return res.json();
+}
+
 export async function login(username: string, password: string) {
   const res = await apiFetch('/v1/login', {
     method: 'POST',

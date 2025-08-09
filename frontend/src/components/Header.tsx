@@ -49,7 +49,10 @@ export default function Header() {
                 </div>
                 <div className="flex items-center gap-2">
                     {authed && (
-                        <Link href="/capture" className="text-sm hover:underline">Capture</Link>
+                        <>
+                            <Link href="/capture" className="text-sm hover:underline">Capture</Link>
+                            <Link href="/admin" className="text-sm hover:underline">Admin</Link>
+                        </>
                     )}
                     {!authed ? (
                         <Link href={`/login?next=${encodeURIComponent(pathname || '/')}`} className="text-sm hover:underline">Login</Link>
