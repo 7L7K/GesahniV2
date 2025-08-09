@@ -14,6 +14,10 @@ module.exports = {
         destination: 'http://localhost:8000/capture/:path*',
       },
       {
+        source: '/v1/:path*',
+        destination: 'http://localhost:8000/v1/:path*',
+      },
+      {
         source: '/capture/start',
         destination: 'http://localhost:8000/capture/start',
       },

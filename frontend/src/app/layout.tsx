@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "next-themes";
 import ThemeToggle from "@/components/ThemeToggle";
+import Link from "next/link";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,9 +43,11 @@ export default function RootLayout({
             <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="h-6 w-6 rounded bg-primary" />
-                <span className="font-semibold tracking-tight">Gesahni</span>
+                <Link href="/" className="font-semibold tracking-tight">Gesahni</Link>
               </div>
               <div className="flex items-center gap-2">
+                <Link href="/capture" className="text-sm hover:underline">Capture</Link>
+                <Link href="/login" className="text-sm hover:underline">Login</Link>
                 <ThemeToggle />
               </div>
             </div>

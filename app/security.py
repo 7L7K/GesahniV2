@@ -108,17 +108,39 @@ async def rate_limit(request: Request) -> None:
 
 
 async def verify_ws(ws: WebSocket) -> None:
-    """JWT validation for WebSocket connections."""
+    """JWT validation for WebSocket connections.
+
+    Accepts either an ``Authorization: Bearer <token>`` header or a
+    ``?token=...``/``?access_token=...`` query parameter for browser clients
+    that cannot set custom headers during the WebSocket handshake.
+    When validated, the decoded payload is attached to ``ws.state.jwt_payload``
+    and ``ws.state.user_id`` is set if present in the token.
+    """
 
     jwt_secret = os.getenv("JWT_SECRET")
     if not jwt_secret:
         return
+
+    # 1) Prefer Authorization header if present
     auth = ws.headers.get("Authorization")
-    if not auth or not auth.startswith("Bearer "):
+    token = None
+    if auth and auth.startswith("Bearer "):
+        token = auth.split(" ", 1)[1]
+
+    # 2) Fallback to query string for browsers
+    if not token:
+        qp = ws.query_params
+        token = qp.get("token") or qp.get("access_token")
+
+    if not token:
         raise WebSocketException(code=1008)
-    token = auth.split(" ", 1)[1]
+
     try:
-        jwt.decode(token, jwt_secret, algorithms=["HS256"])
+        payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
+        ws.state.jwt_payload = payload
+        uid = payload.get("user_id") or payload.get("sub")
+        if uid:
+            ws.state.user_id = uid
     except jwt.PyJWTError:
         raise WebSocketException(code=1008)
 
