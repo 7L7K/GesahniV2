@@ -10,6 +10,12 @@ from fastapi import Depends, HTTPException, status
 from .analytics import record
 from .deps.user import get_current_user_id
 from .gpt_client import SYSTEM_PROMPT, ask_gpt
+from .model_router import (
+    route_text,
+    compose_cache_id,
+    run_with_self_check,
+    load_system_prompt,
+)
 from .history import append_history
 from .home_assistant import handle_command
 from .intent_detector import detect_intent
@@ -21,10 +27,17 @@ try:  # pragma: no cover - fall back if circuit flag missing
 except Exception:  # pragma: no cover - defensive
     llama_circuit_open = False  # type: ignore
 from .memory import memgpt
-from .memory.vector_store import add_user_memory, cache_answer, lookup_cached_answer
+from .memory.vector_store import (
+    add_user_memory,
+    cache_answer,
+    lookup_cached_answer,
+    qa_cache,
+)
 from .model_picker import pick_model
 from . import model_picker as model_picker_module
 from .prompt_builder import PromptBuilder
+from .memory.vector_store import safe_query_user_memories
+from .memory.env_utils import _get_mem_top_k
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from .skills.smalltalk_skill import SmalltalkSkill
 from .telemetry import log_record_var
@@ -121,12 +134,13 @@ async def route_prompt(
             rec.embed_tokens = tokens
             rec.user_id = user_id
         session_id = rec.session_id if rec and rec.session_id else "default"
-        # Honor both DEBUG_MODEL_ROUTING and DEBUG envs
+        # Separate flags: DEBUG_MODEL_ROUTING triggers dry-run; DEBUG toggles PromptBuilder debug
         debug_route = os.getenv("DEBUG_MODEL_ROUTING", "").lower() in {
             "1",
             "true",
             "yes",
-        } or os.getenv("DEBUG", "").lower() in {"1", "true", "yes"}
+        }
+        builder_debug = os.getenv("DEBUG", "").lower() in {"1", "true", "yes"}
 
         def _dry(engine: str, model: str) -> str:
             # Normalise llama model label to omit ":latest" suffix for stable test output
@@ -139,21 +153,33 @@ async def route_prompt(
                 rec.response = msg
             return msg
 
-        # Keep router health flag in sync with underlying integration
+        # Keep router health flag in sync with underlying integration so tests that
+        # patch llama_integration propagate here.
         global LLAMA_HEALTHY
         LLAMA_HEALTHY = bool(llama_integration.LLAMA_HEALTHY)
 
-        # Circuit breaker check: degrade to GPT if LLaMA is unavailable
+        # Circuit breaker flag may be toggled globally; ensure picker stays in sync
         if llama_circuit_open:
             _mark_llama_unhealthy()
             # keep model picker in sync so GPT is selected
-            model_picker_module.LLAMA_HEALTHY = False
+            try:
+                model_picker_module.LLAMA_HEALTHY = False  # type: ignore[attr-defined]
+            except Exception:
+                pass
 
         # Guard against empty/whitespace prompts
         if not prompt or not prompt.strip():
             raise HTTPException(status_code=400, detail="empty_prompt")
 
         intent, priority = detect_intent(prompt)
+        # Debug dry-run path: skip external calls and just report selection
+        if debug_route:
+            engine, model = ("gpt", "gpt-4o")
+            if llama_integration.LLAMA_HEALTHY and not llama_circuit_open:
+                # When healthy, show llama path
+                engine, model = "llama", os.getenv("OLLAMA_MODEL", "llama3").split(":")[0]
+            msg = _dry(engine, model)
+            return msg
         # If the LLaMA circuit is open, bypass all skills to force model path
         bypass_skills = bool(llama_circuit_open)
 
@@ -240,7 +266,15 @@ async def route_prompt(
                 result = skill_resp
                 return result
 
-        # Then consult QA cache to short‑circuit repeat questions
+        # Then consult Home Assistant first when command-like; else QA cache
+        # (maintains prior behavior where commands win over cache)
+        ha_resp = handle_command(prompt)
+        if inspect.isawaitable(ha_resp):
+            ha_resp = await ha_resp
+        if ha_resp is not None:
+            result = await _finalise("ha", prompt, ha_resp.message, rec)
+            return result
+
         cached = lookup_cached_answer(norm_prompt)
         if cached is not None:
             if rec:
@@ -263,7 +297,7 @@ async def route_prompt(
                 result = await _finalise("skill", prompt, skill_resp, rec)
                 return result
 
-        # 3️⃣ Home‑Assistant
+        # 3️⃣ Home‑Assistant (second chance if earlier routing changed state)
         ha_resp = handle_command(prompt)
         if inspect.isawaitable(ha_resp):
             ha_resp = await ha_resp
@@ -279,20 +313,105 @@ async def route_prompt(
             result = await _finalise("cache", prompt, cached, rec)
             return result
 
-        # 5️⃣ Automatic selection
-        engine, model_name = pick_model(prompt, intent, tokens)
+        # 5️⃣ Deterministic selection (gpt-5-nano baseline)
         built_prompt, ptoks = PromptBuilder.build(
             prompt,
             session_id=session_id,
             user_id=user_id,
             custom_instructions=getattr(rec, "custom_instructions", ""),
-            debug=debug_route,
+            debug=builder_debug,
             debug_info=getattr(rec, "debug_info", ""),
             **gen_opts,
         )
         if rec:
             rec.prompt_tokens = ptoks
 
+        # In debug routing mode, short-circuit to a fixed GPT-4o dry-run when LLaMA is unhealthy
+        if debug_route and not (LLAMA_HEALTHY or llama_integration.LLAMA_HEALTHY):
+            result = _dry("gpt", "gpt-4o")
+            return result
+
+        # Determine model deterministically
+        # We treat any RAG memories as part of retrieved context, but PromptBuilder
+        # only returns the final built prompt; we approximate retrieved token count
+        # as the difference between built and user prompt tokens where possible.
+        retrieved_tokens = max(0, ptoks - count_tokens(prompt))
+        if rec:
+            rec.retrieved_tokens = retrieved_tokens
+
+        det_enabled = os.getenv("DETERMINISTIC_ROUTER", "").lower() in {"1", "true", "yes"}
+        if det_enabled:
+            decision = route_text(
+                user_prompt=prompt,
+                prompt_tokens=tokens,
+                retrieved_docs=None,
+                intent=intent,
+            )
+            if rec:
+                rec.route_reason = decision.reason
+
+            # Select system prompt overrides (granny/computer modes) when provided
+            sys_mode = getattr(rec, "system_mode", None) if rec else None
+            system_prompt = load_system_prompt(sys_mode) or SYSTEM_PROMPT
+
+            # Retrieve current memories to include in cache segregation key
+            try:
+                k = _get_mem_top_k()
+            except Exception:
+                k = 3
+            mem_docs = safe_query_user_memories(user_id, prompt, k=k)
+            if rec:
+                from .memory.env_utils import _normalized_hash
+
+                rec.rag_doc_ids = [_normalized_hash(m) for m in mem_docs]
+                rec.retrieval_count = len(mem_docs)
+                rec.prompt_hash = __import__("app.memory.env_utils", fromlist=["_normalized_hash"])._normalized_hash(norm_prompt)
+
+            # Compose deterministic cache key: {model, prompt_hash, topk_ids}
+            cache_key = compose_cache_id(decision.model, norm_prompt, mem_docs)
+            try:
+                cached = lookup_cached_answer(cache_key)
+            except TypeError:
+                cached = None
+            if cached is not None:
+                if rec:
+                    rec.cache_hit = True
+                result = await _finalise("gpt", prompt, cached, rec)
+                return result
+
+            # Call with self-check escalation policy
+            text, final_model, reason, score, pt, ct, cost, escalated = await run_with_self_check(
+                ask_func=ask_gpt,
+                model=decision.model,
+                user_prompt=built_prompt,
+                system_prompt=system_prompt,
+                retrieved_docs=mem_docs,
+                on_token=stream_cb,
+                stream=bool(stream_cb),
+                allow_test=True if os.getenv("PYTEST_CURRENT_TEST") else False,
+            )
+            if rec:
+                rec.model_name = final_model
+                rec.self_check_score = score
+                rec.escalated = escalated
+                rec.prompt_tokens = pt
+                rec.completion_tokens = ct
+                rec.cost_usd = cost
+                rec.response = text
+
+            # Persist cache with composed key to prevent cross-model contamination
+            try:
+                cache_answer(prompt=cache_key, answer=text)
+            except Exception:
+                pass
+            return await _finalise("gpt", prompt, text, rec)
+
+        # Legacy probabilistic routing (default when flag disabled)
+        if debug_route and llama_integration.LLAMA_HEALTHY:
+            # Preserve existing dry-run behavior when LLaMA healthy
+            result = _dry("llama", os.getenv("OLLAMA_MODEL", "llama3").split(":")[0])
+            return result
+        engine, model_name = pick_model(prompt, intent, tokens)
         if engine == "gpt":
             if debug_route:
                 result = _dry("gpt", model_name)
@@ -331,7 +450,7 @@ async def route_prompt(
                     detail="GPT backend unavailable",
                 )
 
-        if engine == "llama" and (LLAMA_HEALTHY or llama_integration.LLAMA_HEALTHY):
+        if engine == "llama" and llama_integration.LLAMA_HEALTHY:
             if debug_route:
                 result = _dry("llama", model_name)
                 return result

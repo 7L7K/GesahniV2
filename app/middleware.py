@@ -129,7 +129,26 @@ async def trace_request(request: Request, call_next):
         if isinstance(response, Response):
             response.headers["X-Request-ID"] = rec.req_id
 
-        await append_history(rec)
+        # Attach a compact logging meta for downstream log formatters and history
+        meta = {
+            "model_used": rec.model_name,
+            "reason": rec.route_reason,
+            "tokens_in": rec.prompt_tokens,
+            "tokens_out": rec.completion_tokens,
+            "retrieved_tokens": rec.retrieved_tokens,
+            "latency_ms": rec.latency_ms,
+            "self_check": rec.self_check_score,
+            "escalated": rec.escalated,
+            "cache_hit": rec.cache_hit,
+        }
+        try:
+            # log via std logging for live dashboards then persist in history
+            import logging
+
+            logging.getLogger(__name__).info("request_summary", extra={"meta": meta})
+        except Exception:
+            pass
+        await append_history({**rec.model_dump(exclude_none=True), **{"meta": meta}})
         log_record_var.reset(token_rec)
         req_id_var.reset(token_req)
     return response

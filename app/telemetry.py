@@ -65,5 +65,12 @@ class LogRecord(BaseModel):
     retrieval_count: Optional[int] = None
     cache_hit: Optional[bool] = None
 
+    # deterministic routing / observability
+    route_reason: Optional[str] = None
+    retrieved_tokens: Optional[int] = None
+    self_check_score: Optional[float] = None
+    escalated: Optional[bool] = None
+    prompt_hash: Optional[str] = None
+
 
 log_record_var: ContextVar[LogRecord | None] = ContextVar("log_record", default=None)

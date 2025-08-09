@@ -1,3 +1,16 @@
+### Deterministic Model Router
+
+- A new module `app/model_router.py` implements deterministic routing across text and vision with self-check escalation.
+- Thresholds live in `router_rules.yaml` (hot-reloaded):
+  - MAX_SHORT_PROMPT_TOKENS=240
+  - RAG_LONG_CONTEXT_THRESHOLD=6000
+  - DOC_LONG_REPLY_TARGET=900
+  - OPS_MAX_FILES_SIMPLE=2
+  - SELF_CHECK_FAIL_THRESHOLD=0.60
+  - MAX_RETRIES_PER_REQUEST=1
+- Enable with env: `DETERMINISTIC_ROUTER=1`.
+- System prompts: `app/prompts/granny_mode.txt` and `app/prompts/computer_mode.txt`.
+
 # GesahniV2
 # 🦙✨ LLaMA-GPT Smart Assistant (with Home Assistant Integration)
 

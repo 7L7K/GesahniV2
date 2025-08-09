@@ -139,7 +139,7 @@ export default function Page() {
         <section className="flex-1 overflow-y-auto py-4">
           {!authed && (
             <div className="mb-4 rounded-lg border p-4 text-sm">
-              <p className="mb-2">You're not signed in. Please sign in to enable full features.</p>
+              <p className="mb-2">You&apos;re not signed in. Please sign in to enable full features.</p>
               <a
                 href="/login"
                 className="inline-flex items-center rounded bg-primary px-3 py-1 text-primary-foreground hover:opacity-90"

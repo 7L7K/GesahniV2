@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { getToken, wsUrl } from '@/lib/api';
+import { getToken, wsUrl, apiFetch } from '@/lib/api';
+import { useRouter } from 'next/navigation';
 
 // Determine supported mime types for media recording
 // (defaults will be refined once the component mounts)
@@ -18,6 +19,7 @@ export default function CaptureMode() {
   const sessionIdRef = useRef<string | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const videoChunks = useRef<Blob[]>([]);
+  const router = useRouter();
 
   const [captionText, setCaptionText] = useState('');
   const [recording, setRecording] = useState(false);
@@ -85,8 +87,28 @@ export default function CaptureMode() {
   }, []);
 
   useEffect(() => {
+    // Hard guard: require token client-side; if missing, bounce to login
+    if (!getToken()) {
+      document.cookie = 'auth:hint=0; path=/; max-age=300';
+      router.replace('/login?next=%2Fcapture');
+      return;
+    }
     setupStream();
-  }, [setupStream]);
+    return () => {
+      try {
+        audioRecorder.current?.stop();
+      } catch { }
+      try {
+        videoRecorder.current?.stop();
+      } catch { }
+      try {
+        wsRef.current?.close();
+      } catch { }
+      try {
+        streamRef.current?.getTracks().forEach(t => t.stop());
+      } catch { }
+    };
+  }, [setupStream, router]);
 
   const startRecording = useCallback(async () => {
     if (!streamRef.current) {
@@ -95,7 +117,7 @@ export default function CaptureMode() {
     }
     console.log('startRecording: initiating session');
     try {
-      const res = await fetch('/capture/start', { method: 'POST', headers: { ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) } });
+      const res = await apiFetch('/v1/capture/start', { method: 'POST' });
       if (!res.ok) throw new Error('start failed');
       const data = await res.json();
       sessionIdRef.current = data.session_id;
@@ -182,10 +204,7 @@ export default function CaptureMode() {
     );
 
     try {
-      const headers: Record<string, string> = {};
-      const tok = getToken();
-      if (tok) headers['Authorization'] = `Bearer ${tok}`;
-      await fetch('/capture/save', { method: 'POST', body: form, headers });
+      await apiFetch('/v1/capture/save', { method: 'POST', body: form });
       console.log('stopRecording: capture saved');
     } catch (err) {
       console.error('failed to save capture', err);
