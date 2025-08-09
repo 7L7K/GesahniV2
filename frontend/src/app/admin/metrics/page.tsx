@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/src/lib/api";
+import { apiFetch } from "@/lib/api";
 
 type MetricResp = { metrics: Record<string, number>; cache_hit_rate: number; top_skills: [string, number][] };
 
