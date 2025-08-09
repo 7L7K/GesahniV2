@@ -8,6 +8,7 @@ from difflib import SequenceMatcher
 from typing import Any, List, Optional
 
 from .http_utils import json_request, log_exceptions
+from . import analytics as _analytics
 from . import alias_store
 
 from .telemetry import log_record_var
@@ -114,6 +115,11 @@ async def _request(
     )
 
     if error:
+        try:
+            # best-effort metric on HA failures
+            await _analytics.record_ha_failure()
+        except Exception:
+            pass
         raise RuntimeError(error)
     return data
 
