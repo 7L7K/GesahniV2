@@ -51,9 +51,11 @@ def _get_store() -> VectorStore:
                 logger.error("FATAL: ChromaVectorStore failed in production: %s", exc)
                 raise
             logger.warning(
-                "ChromaVectorStore unavailable at %s: %s; falling back to MemoryVectorStore",
+                "ChromaVectorStore unavailable at %s (%s: %s); falling back to MemoryVectorStore",
                 chroma_path,
+                type(exc).__name__,
                 exc,
+                exc_info=True,
             )
             store = MemoryVectorStore()
 

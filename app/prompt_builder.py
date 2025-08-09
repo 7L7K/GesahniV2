@@ -42,27 +42,37 @@ def _coerce_k(value: int | str | None) -> int:
     Falls back to the project-wide default when the supplied value is
     missing or invalid.
     """
+    # Import here to avoid any potential circular imports in test contexts
+    from app.memory import api as memory_api  # local import
+
+    def _fallback_default() -> int:
+        try:
+            return int(memory_api._get_mem_top_k())
+        except Exception:
+            # Last-resort fallback to 3 if environment is misconfigured in tests
+            return 3
+
     raw = value
     if value is None:
-        coerced = _get_mem_top_k()
+        coerced = _fallback_default()
     else:
         try:
-            k = int(value)
+            k_int = int(value)
         except (TypeError, ValueError):
-            logger.warning(
-                "Invalid top_k %r; defaulting to %s", value, _get_mem_top_k()
-            )
-            coerced = _get_mem_top_k()
+            logger.warning("Invalid top_k %r; defaulting to %s", value, _fallback_default())
+            coerced = _fallback_default()
         else:
-            if k <= 0:
+            if k_int <= 0:
                 logger.warning(
-                    "top_k %d must be positive; defaulting to %s", k, _get_mem_top_k()
+                    "top_k %d must be positive; defaulting to %s",
+                    k_int,
+                    _fallback_default(),
                 )
-                coerced = _get_mem_top_k()
+                coerced = _fallback_default()
             else:
-                coerced = k
+                coerced = k_int
     logger.debug("_coerce_k: raw=%r coerced=%d", raw, coerced)
-    return coerced
+    return int(coerced)
 
 
 # ---------------------------------------------------------------------------

@@ -119,6 +119,10 @@ async def route_prompt(
                 rec.response = msg
             return msg
 
+        # Keep router health flag in sync with underlying integration
+        global LLAMA_HEALTHY
+        LLAMA_HEALTHY = bool(llama_integration.LLAMA_HEALTHY)
+
         # Circuit breaker check: degrade to GPT if LLaMA is unavailable
         if llama_circuit_open:
             _mark_llama_unhealthy()
