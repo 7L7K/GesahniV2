@@ -5,6 +5,7 @@ import re
 import httpx
 
 from .base import Skill
+from ..telemetry import log_record_var
 
 TRANSLATE_URL = os.getenv("TRANSLATE_URL", "http://localhost:5000")
 
@@ -26,7 +27,11 @@ class TranslateSkill(Skill):
                 )
                 resp.raise_for_status()
                 data = resp.json()
-            return data.get("translatedText", "")
+            result = data.get("translatedText", "")
+            rec = log_record_var.get()
+            if rec is not None:
+                rec.route_reason = (rec.route_reason or "") + "|force_llama_translate"
+            return result
         det = match.group("det")
         async with httpx.AsyncClient() as client:
             resp = await client.post(f"{TRANSLATE_URL}/detect", json={"q": det})

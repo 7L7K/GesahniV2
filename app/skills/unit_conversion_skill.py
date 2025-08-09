@@ -4,6 +4,7 @@ import re
 from typing import Callable, Dict, Tuple
 
 from .base import Skill
+from ..telemetry import log_record_var
 
 
 # simple conversion functions
@@ -66,4 +67,7 @@ class UnitConversionSkill(Skill):
         if not func:
             return "Conversion not supported."
         result = func(amount)
+        rec = log_record_var.get()
+        if rec is not None:
+            rec.route_reason = (rec.route_reason or "") + "|force_llama_convert"
         return f"{amount:g} {from_unit}{'' if amount==1 else 's'} is {result:.2f} {to_unit}{'' if result==1 else 's'}."

@@ -32,7 +32,13 @@ except Exception:  # pragma: no cover - import-time guard
             raise RuntimeError("openai package not installed")
 
 
-from .metrics import REQUEST_COST, REQUEST_COUNT, REQUEST_LATENCY
+from .metrics import (
+    REQUEST_COST,
+    REQUEST_COUNT,
+    REQUEST_LATENCY,
+    MODEL_LATENCY_SECONDS,
+)
+from .model_params import for_openai
 from .telemetry import log_record_var
 
 if TYPE_CHECKING:  # pragma: no cover - only for type checkers
@@ -136,7 +142,7 @@ async def ask_gpt(
     stream: bool = False,
     on_token: Callable[[str], Awaitable[None]] | None = None,
     raw: bool = False,
-    **kwargs,           # <- allow passing allow_test
+    **kwargs,           # <- allow passing allow_test and gen params
 ) -> tuple[str, int, int, float] | tuple[str, int, int, float, object]:
     """Return text, prompt tokens, completion tokens and total price.
 
@@ -158,9 +164,14 @@ async def ask_gpt(
 
     start = time.perf_counter()
     try:
+        # Extract generation parameters from kwargs and map for provider
+        gen_params = for_openai(kwargs)
+        # Remove keys not accepted directly by OpenAI client to avoid TypeErrors
+        # We'll pass only recognized args to the API call; others are ignored
+        openai_kwargs = {k: v for k, v in gen_params.items() if v is not None}
         if stream:
             resp_stream = await client.chat.completions.create(
-                model=model, messages=messages, stream=True
+                model=model, messages=messages, stream=True, **openai_kwargs
             )
             chunks: list[str] = []
             final = None
@@ -176,7 +187,9 @@ async def ask_gpt(
             resp = final
             text = "".join(chunks).strip()
         else:
-            resp = await client.chat.completions.create(model=model, messages=messages)
+            resp = await client.chat.completions.create(
+                model=model, messages=messages, **openai_kwargs
+            )
             text = resp.choices[0].message.content.strip()
             if on_token:
                 await on_token(text)
@@ -197,6 +210,7 @@ async def ask_gpt(
         duration = time.perf_counter() - start
         REQUEST_COUNT.labels("ask_gpt", "chat", model).inc()
         REQUEST_LATENCY.labels("ask_gpt", "chat", model).observe(duration)
+        MODEL_LATENCY_SECONDS.labels(model).observe(duration)
         REQUEST_COST.labels("ask_gpt", "chat", model).observe(cost)
 
         if raw:

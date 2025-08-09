@@ -21,6 +21,12 @@ from .home_assistant import handle_command
 from .intent_detector import detect_intent
 import app.llama_integration as llama_integration
 from .llama_integration import ask_llama
+# Optional prompt clamp to enforce token budgets; ignore if module absent
+try:  # pragma: no cover - optional
+    from .token_budgeter import clamp_prompt
+except Exception:  # pragma: no cover - fallback when module missing
+    def clamp_prompt(text: str, *_args, **_kwargs) -> str:
+        return text
 
 try:  # pragma: no cover - fall back if circuit flag missing
     from .llama_integration import llama_circuit_open  # type: ignore
@@ -32,6 +38,7 @@ from .memory.vector_store import (
     cache_answer,
     lookup_cached_answer,
     qa_cache,
+    get_last_cache_similarity,
 )
 from .model_picker import pick_model
 from . import model_picker as model_picker_module
@@ -41,9 +48,21 @@ from .memory.env_utils import _get_mem_top_k
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from .skills.smalltalk_skill import SmalltalkSkill
 from .telemetry import log_record_var
+from .decisions import add_trace_event
 from .token_utils import count_tokens
 from .embeddings import embed_sync as _embed
 from .memory.env_utils import _cosine_similarity as _cos, _normalized_hash as _nh
+from . import budget as _budget
+from . import analytics as _analytics
+# Optional proactive engine hooks; ignore import errors in tests
+try:  # pragma: no cover - optional
+    from .proactive_engine import maybe_curiosity_prompt, handle_user_reply
+except Exception:  # pragma: no cover - fallback stubs
+    async def maybe_curiosity_prompt(*_a, **_k):
+        return None
+
+    def handle_user_reply(*_a, **_k):
+        return None
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +228,13 @@ async def route_prompt(
             raise HTTPException(status_code=400, detail="empty_prompt")
 
         intent, priority = detect_intent(prompt)
+        # Token budgeter: clamp excess input per intent
+        prompt = clamp_prompt(prompt, intent)
+        if rec:
+            try:
+                add_trace_event(rec.req_id, "intent_detected", intent=intent, priority=priority)
+            except Exception:
+                pass
         # Debug dry-run path: skip external calls and just report selection
         if debug_route:
             engine, model = ("gpt", "gpt-4o")
@@ -331,10 +357,19 @@ async def route_prompt(
 
         cached = lookup_cached_answer(norm_prompt)
         if cached is not None:
+            try:
+                await _analytics.record_cache_lookup(True)
+            except Exception:
+                pass
             if rec:
                 rec.cache_hit = True
             result = await _finalise("cache", prompt, cached, rec)
             return result
+        else:
+            try:
+                await _analytics.record_cache_lookup(False)
+            except Exception:
+                pass
 
         skip_skills = intent == "chat" and priority == "high"
 
@@ -350,6 +385,13 @@ async def route_prompt(
             if skill_resp is not None:
                 result = await _finalise("skill", prompt, skill_resp, rec)
                 return result
+
+        # Intercept simple profile replies to curiosity prompts: "key: value"
+        if ":" in prompt and intent == "chat":
+            try:
+                handle_user_reply(user_id, prompt)
+            except Exception:
+                pass
 
         # 3️⃣ Home‑Assistant (second chance if earlier routing changed state)
         ha_resp = handle_command(prompt)
@@ -411,6 +453,10 @@ async def route_prompt(
             )
             if rec:
                 rec.route_reason = decision.reason
+                try:
+                    add_trace_event(rec.req_id, "deterministic_route", model=decision.model, reason=decision.reason)
+                except Exception:
+                    pass
 
             # Select system prompt profile: mode override → default file/env
             sys_mode = getattr(rec, "system_mode", None) if rec else None
@@ -436,10 +482,20 @@ async def route_prompt(
             except TypeError:
                 cached = None
             if cached is not None:
+                try:
+                    await _analytics.record_cache_lookup(True)
+                except Exception:
+                    pass
                 if rec:
                     rec.cache_hit = True
+                    rec.cache_similarity = 1.0
                 result = await _finalise("gpt", prompt, cached, rec)
                 return result
+            else:
+                try:
+                    await _analytics.record_cache_lookup(False)
+                except Exception:
+                    pass
 
             # Call with self-check escalation policy (budget-aware)
             try:
@@ -466,6 +522,10 @@ async def route_prompt(
                 rec.completion_tokens = ct
                 rec.cost_usd = cost
                 rec.response = text
+                try:
+                    add_trace_event(rec.req_id, "model_called", model=final_model, self_check=score, escalated=escalated)
+                except Exception:
+                    pass
 
             # Persist cache with composed key to prevent cross-model contamination
             try:
@@ -482,6 +542,13 @@ async def route_prompt(
                 if final_model == "gpt-5-nano" and rec and (hash(rec.req_id) % 20 == 0):
                     import asyncio as _asyncio
                     _asyncio.create_task(_run_shadow(built_prompt, system_prompt, text))
+            except Exception:
+                pass
+            # Optional curiosity loop: if confidence < tau or missing profile keys
+            try:
+                c_prompt = await maybe_curiosity_prompt(user_id, score)
+                if c_prompt and stream_cb is None:
+                    text = f"{text}\n\n{c_prompt}"
             except Exception:
                 pass
             # Answer provenance: append [#chunk:ID] tags where applicable

@@ -46,6 +46,16 @@ LLAMA_LATENCY = Histogram(
     "Latency of LLaMA generations in milliseconds",
 )
 
+# Router decision counts by rule/reason label
+ROUTER_DECISION = Counter(
+    "router_decision_total", "Routing decisions made", ["rule"]
+)
+
+# Model latency seconds (enables p50/p95 per model in Grafana)
+MODEL_LATENCY_SECONDS = Histogram(
+    "model_latency_seconds", "LLM model call latency (seconds)", ["model"]
+)
+
 # Counter for user memory additions
 USER_MEMORY_ADDS = Counter(
     "user_memory_add_total",

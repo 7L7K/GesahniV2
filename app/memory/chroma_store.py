@@ -312,6 +312,34 @@ class ChromaVectorStore(VectorStore):
         )
         return docs_out
 
+    # -----------------------------
+    # Admin helpers
+    # -----------------------------
+    def list_user_memories(self, user_id: str) -> List[dict]:  # type: ignore[override]
+        try:
+            res = self._user_memories.get(
+                where={"user_id": user_id}, include=["ids", "documents", "metadatas"]
+            )
+        except Exception:
+            # Fallback to query with broad limit
+            res = self._user_memories.query(
+                query_texts=["*"], where={"user_id": user_id}, n_results=1000, include=["ids", "documents", "metadatas"]
+            )
+        ids = (res.get("ids") or [[]])[0]
+        docs = (res.get("documents") or [[]])[0]
+        metas = (res.get("metadatas") or [[{}]])[0]
+        out: List[dict] = []
+        for i, d, m in zip(ids, docs, metas):
+            out.append({"id": i, "text": d, "meta": m or {}})
+        return out
+
+    def delete_user_memory(self, user_id: str, mem_id: str) -> bool:  # type: ignore[override]
+        try:
+            self._user_memories.delete(ids=[mem_id])
+            return True
+        except Exception:
+            return False
+
     @property
     def qa_cache(self):  # type: ignore[override]
         return self._cache

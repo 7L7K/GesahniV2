@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { isAuthed, logout } from '@/lib/api';
+import { isAuthed, logout, getBudget } from '@/lib/api';
 import { usePathname, useRouter } from 'next/navigation';
 
 export default function Header() {
@@ -25,11 +25,14 @@ export default function Header() {
     };
 
     const [localMode, setLocalMode] = useState(false);
+    const [nearCap, setNearCap] = useState(false);
     useEffect(() => {
         // Heuristic: server can set a cookie X-Local-Mode=1 via a middleware in offline mode.
         if (typeof document !== 'undefined') {
             setLocalMode(/X-Local-Mode=1/.test(document.cookie));
         }
+        // Fetch budget hint for banner
+        getBudget().then(b => setNearCap(Boolean(b.near_cap))).catch(() => setNearCap(false));
     }, [pathname]);
 
     return (
@@ -56,6 +59,11 @@ export default function Header() {
                     <ThemeToggle />
                 </div>
             </div>
+            {nearCap && (
+                <div className="mx-auto max-w-3xl px-4 py-1 text-[12px] bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100">
+                    You’re nearing your daily budget. Responses may be shorter or use LLaMA.
+                </div>
+            )}
         </header>
     );
 }

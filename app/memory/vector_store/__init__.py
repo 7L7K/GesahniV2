@@ -25,6 +25,7 @@ from ..api import (
 )
 from ..api import query_user_memories as _raw_query_user_memories
 from app.embeddings import embed_sync as _embed_sync
+from ..memory_store import _get_last_similarity as _get_last_similarity  # type: ignore
 from ..env_utils import (
     _get_mem_top_k as _get_mem_top_k,
     _get_sim_threshold as _get_sim_threshold,
@@ -147,6 +148,23 @@ def safe_query_user_memories(
     return memories
 
 
+# Expose last similarity when using MemoryVectorStore for UI debugging
+try:
+    from ..memory_store import _get_last_similarity as get_last_cache_similarity  # type: ignore
+except Exception:  # pragma: no cover - fallback
+    def get_last_cache_similarity() -> float | None:  # type: ignore
+        return None
+
+
+def get_last_cache_similarity() -> float | None:
+    """Return similarity score of the most recent QA cache hit (if available)."""
+
+    try:
+        return _get_last_similarity()
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # What we expose to the rest of the codebase
 # ---------------------------------------------------------------------------
@@ -163,6 +181,7 @@ __all__ = [
     "qa_cache",
     "invalidate_cache",
     "close_store",
+    "get_last_cache_similarity",
     # Store classes
     "VectorStore",
     "MemoryVectorStore",

@@ -71,6 +71,8 @@ class LogRecord(BaseModel):
     self_check_score: Optional[float] = None
     escalated: Optional[bool] = None
     prompt_hash: Optional[str] = None
+    cache_similarity: Optional[float] = None
+    route_trace: Optional[list] = None
 
 
 log_record_var: ContextVar[LogRecord | None] = ContextVar("log_record", default=None)

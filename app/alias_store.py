@@ -47,3 +47,15 @@ async def set(name: str, entity_id: str) -> None:
 async def get_all() -> dict[str, str]:
     async with _LOCK:
         return await _load()
+
+
+async def delete(name: str) -> None:
+    async with _LOCK:
+        data = await _load()
+        key = name.lower().strip()
+        if key in data:
+            data.pop(key, None)
+            tmp_path = _PATH.with_suffix(".json.tmp")
+            async with aiofiles.open(tmp_path, "w") as f:
+                await f.write(json.dumps(data, indent=2))
+            tmp_path.replace(_PATH)

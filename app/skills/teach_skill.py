@@ -3,6 +3,7 @@ import re
 from .base import Skill
 from .. import home_assistant as ha
 from .. import alias_store
+from ..telemetry import log_record_var
 
 
 class TeachSkill(Skill):
@@ -15,4 +16,7 @@ class TeachSkill(Skill):
             raise ValueError("entity not found")
         entity = results[0]
         await alias_store.set(alias, entity)
+        rec = log_record_var.get()
+        if rec is not None:
+            rec.route_reason = (rec.route_reason or "") + "|alias_saved"
         return f"Got it – when you say “{alias}” I’ll use {entity}."

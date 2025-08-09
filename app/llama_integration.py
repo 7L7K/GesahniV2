@@ -13,7 +13,8 @@ from tenacity import AsyncRetrying, stop_after_attempt, wait_random_exponential
 from .deps.scheduler import scheduler, start as scheduler_start
 from .logging_config import req_id_var
 from .http_utils import json_request, log_exceptions
-from .metrics import LLAMA_LATENCY, LLAMA_TOKENS
+from .metrics import LLAMA_LATENCY, LLAMA_TOKENS, MODEL_LATENCY_SECONDS
+from .model_params import for_ollama
 
 # ---- ENV --------------------------------------------------------------------
 # Default to local Ollama to avoid import-time crashes when env isn’t set.
@@ -199,9 +200,9 @@ async def ask_llama(
 
     # -- Streaming generator ----------------------------------------------
     url = f"{OLLAMA_URL}/api/generate"
+    # Normalize generation params for Ollama and include defaults
     options: Dict[str, Any] = {"num_ctx": 2048}
-    if gen_opts:
-        options.update(gen_opts)
+    options.update(for_ollama(gen_opts))
     payload = {"model": model, "prompt": prompt, "stream": True, "options": options}
 
     async def _generator() -> AsyncIterator[str]:
@@ -254,9 +255,15 @@ async def ask_llama(
                     return
 
         # Record Prometheus metrics
-        LLAMA_TOKENS.labels(direction="prompt").inc(prompt_tokens)
-        LLAMA_TOKENS.labels(direction="completion").inc(completion_tokens)
-        LLAMA_LATENCY.observe((time.monotonic() - start_time) * 1000)
+                    LLAMA_TOKENS.labels(direction="prompt").inc(prompt_tokens)
+                    LLAMA_TOKENS.labels(direction="completion").inc(completion_tokens)
+        elapsed = time.monotonic() - start_time
+        LLAMA_LATENCY.observe(elapsed * 1000)
+        try:
+            model_label = (model or OLLAMA_MODEL).split(":")[0]
+            MODEL_LATENCY_SECONDS.labels(model_label).observe(elapsed)
+        except Exception:
+            pass
 
     # Return generator to caller (always!)
     return _generator()

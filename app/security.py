@@ -12,6 +12,9 @@ import asyncio
 import os
 import time
 from typing import Dict, List
+import hmac
+import hashlib
+from fastapi import Header
 
 import jwt
 from fastapi import HTTPException, Request, WebSocket, WebSocketException
@@ -20,14 +23,22 @@ JWT_SECRET: str | None = None  # backwards compat; actual value read from env
 API_TOKEN = os.getenv("API_TOKEN")
 RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MIN", "60"))
 _window = 60.0
+RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "10"))
+_burst_window = float(os.getenv("RATE_LIMIT_BURST_WINDOW", "10"))
 _lock = asyncio.Lock()
 
 # Per-user counters used by the HTTP and WS middleware -----------------------
 http_requests: Dict[str, int] = {}
 ws_requests: Dict[str, int] = {}
+# Additional short-window buckets for burst allowances
+http_burst: Dict[str, int] = {}
+ws_burst: Dict[str, int] = {}
 # Backwards-compatible aliases expected by some tests
 _http_requests = http_requests
 _ws_requests = ws_requests
+# Back-compat exports for tests if needed
+_http_burst = http_burst
+_ws_burst = ws_burst
 
 # Legacy per-IP store for the deprecated helper below -----------------------
 _requests: Dict[str, List[float]] = {}
@@ -46,6 +57,15 @@ def _bucket_rate_limit(
     count = bucket.get(key, 0) + 1
     bucket[key] = count
     return count <= limit
+
+
+def _bucket_retry_after(bucket: Dict[str, int], period: float) -> int:
+    """Return seconds until this bucket resets (rounded up)."""
+
+    now = time.time()
+    reset = float(bucket.get("_reset", now))
+    remaining = (reset + period) - now
+    return int(max(0, int(remaining + 0.999)))
 
 
 async def _apply_rate_limit(key: str, record: bool = True) -> bool:
@@ -87,7 +107,11 @@ async def verify_token(request: Request) -> None:
 
 
 async def rate_limit(request: Request) -> None:
-    """Rate limit requests per authenticated user (or IP when unauthenticated)."""
+    """Rate limit requests per authenticated user (or IP when unauthenticated).
+
+    When the limit is exceeded, we attach a short-lived Retry-After hint via the
+    raised HTTPException's detail so the caller can read a suggested wait time.
+    """
 
     # Prefer explicit user_id set by deps; otherwise pull from JWT payload
     key = getattr(request.state, "user_id", None)
@@ -102,9 +126,18 @@ async def rate_limit(request: Request) -> None:
         else:
             key = request.client.host if request.client else "anon"
     async with _lock:
-        ok = _bucket_rate_limit(key, _http_requests, RATE_LIMIT, _window)
-    if not ok:
-        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+        ok_long = _bucket_rate_limit(key, _http_requests, RATE_LIMIT, _window)
+        ok_b = _bucket_rate_limit(key, http_burst, RATE_LIMIT_BURST, _burst_window)
+        retry_long = _bucket_retry_after(_http_requests, _window)
+        retry_b = _bucket_retry_after(http_burst, _burst_window)
+    if not (ok_long and ok_b):
+        # Include Retry-After header for clients; also JSON detail for compatibility
+        retry_after = retry_b if not ok_b else retry_long
+        raise HTTPException(
+            status_code=429,
+            detail={"error": "rate_limited", "retry_after": retry_after},
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 async def verify_ws(ws: WebSocket) -> None:
@@ -160,9 +193,119 @@ async def rate_limit_ws(ws: WebSocket) -> None:
         else:
             key = ws.client.host if ws.client else "anon"
     async with _lock:
-        ok = _bucket_rate_limit(key, _ws_requests, RATE_LIMIT, _window)
-    if not ok:
+        ok_long = _bucket_rate_limit(key, _ws_requests, RATE_LIMIT, _window)
+        ok_b = _bucket_rate_limit(key, ws_burst, RATE_LIMIT_BURST, _burst_window)
+    if not (ok_long and ok_b):
         raise WebSocketException(code=1013)
+
+
+# ---------------------------------------------------------------------------
+# Nonce helpers for state-changing routes
+# ---------------------------------------------------------------------------
+
+_nonce_ttl = int(os.getenv("NONCE_TTL_SECONDS", "120"))
+_nonce_store: Dict[str, float] = {}
+
+
+async def require_nonce(request: Request) -> None:
+    """Enforce a one-time nonce for state-changing requests.
+
+    Header: X-Nonce: <random-string>
+    Enabled when REQUIRE_NONCE env is truthy.
+    """
+
+    if os.getenv("REQUIRE_NONCE", "0").lower() not in {"1", "true", "yes"}:
+        return
+    nonce = request.headers.get("X-Nonce")
+    if not nonce:
+        raise HTTPException(status_code=400, detail="missing_nonce")
+    now = time.time()
+    async with _lock:
+        # prune expired
+        expired = [n for n, ts in list(_nonce_store.items()) if now - ts > _nonce_ttl]
+        for n in expired:
+            _nonce_store.pop(n, None)
+        if nonce in _nonce_store:
+            raise HTTPException(status_code=409, detail="nonce_reused")
+        _nonce_store[nonce] = now
+
+
+# ---------------------------------------------------------------------------
+# Webhook signing/verification (e.g., HA callbacks)
+# ---------------------------------------------------------------------------
+
+def _load_webhook_secrets() -> List[str]:
+    # Allow multiple secrets for rotation via env or file
+    secrets: List[str] = []
+    env_val = os.getenv("HA_WEBHOOK_SECRETS", "")
+    if env_val:
+        secrets.extend([s.strip() for s in env_val.split(",") if s.strip()])
+    try:
+        from pathlib import Path
+
+        path = Path(os.getenv("HA_WEBHOOK_SECRET_FILE", "data/ha_webhook_secret.txt"))
+        if path.exists():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                s = line.strip()
+                if s:
+                    secrets.append(s)
+    except Exception:
+        pass
+    # Legacy single env
+    single = os.getenv("HA_WEBHOOK_SECRET")
+    if single:
+        secrets.append(single)
+    # dedupe while preserving order
+    seen: Dict[str, None] = {}
+    out: List[str] = []
+    for s in secrets:
+        if s not in seen:
+            seen[s] = None
+            out.append(s)
+    return out
+
+
+def sign_webhook(body: bytes, secret: str) -> str:
+    return hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+
+
+async def verify_webhook(request: Request, x_signature: str | None = Header(default=None)) -> bytes:
+    """Verify webhook signature and return the raw body.
+
+    Expects hex HMAC-SHA256 in X-Signature header.
+    """
+
+    body = await request.body()
+    secrets = _load_webhook_secrets()
+    if not secrets:
+        raise HTTPException(status_code=500, detail="webhook_secret_missing")
+    sig = (x_signature or "").strip().lower()
+    for s in secrets:
+        calc = sign_webhook(body, s)
+        if hmac.compare_digest(calc.lower(), sig):
+            return body
+    raise HTTPException(status_code=401, detail="invalid_signature")
+
+
+def rotate_webhook_secret() -> str:
+    """Generate and persist a new webhook secret in the optional secret file.
+
+    Returns the new secret; callers must distribute it to senders.
+    """
+
+    import secrets as _secrets
+    from pathlib import Path
+
+    new = _secrets.token_hex(16)
+    path = Path(os.getenv("HA_WEBHOOK_SECRET_FILE", "data/ha_webhook_secret.txt"))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        existing = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+        contents = "\n".join([new] + [line.strip() for line in existing if line.strip()]) + "\n"
+        path.write_text(contents, encoding="utf-8")
+    except Exception:
+        pass
+    return new
 
 
 __all__ = [
@@ -170,6 +313,9 @@ __all__ = [
     "rate_limit",
     "verify_ws",
     "rate_limit_ws",
+    "require_nonce",
+    "verify_webhook",
+    "rotate_webhook_secret",
     "_apply_rate_limit",
     "_http_requests",
     "_ws_requests",

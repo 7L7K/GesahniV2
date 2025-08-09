@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime
 from pathlib import Path
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from .telemetry import LogRecord
 
@@ -104,3 +104,43 @@ async def append_history(
             logger.debug("history_write_ok", extra={"meta": record})
         except Exception:
             logger.exception("Failed to append history")
+
+ 
+async def get_record_by_req_id(req_id: str) -> Optional[dict[str, Any]]:
+    """Return the most recent history record with the given request id.
+
+    Supports both JSONL (newline-delimited objects) and a single JSON array file.
+    Returns None when not found or on read/parse errors.
+    """
+    try:
+        file_path = Path(HISTORY_FILE)
+        if not file_path.exists():
+            return None
+        text = file_path.read_text(encoding="utf-8")
+        if not text:
+            return None
+        # JSON array file
+        if file_path.suffix == ".json":
+            try:
+                data = json.loads(text)
+                if isinstance(data, list):
+                    for obj in reversed(data):
+                        if isinstance(obj, dict) and obj.get("req_id") == req_id:
+                            return obj
+                return None
+            except Exception:
+                return None
+        # JSONL file
+        for line in reversed(text.splitlines()):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except Exception:
+                continue
+            if isinstance(obj, dict) and obj.get("req_id") == req_id:
+                return obj
+        return None
+    except Exception:
+        return None

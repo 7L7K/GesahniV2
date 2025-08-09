@@ -6,7 +6,12 @@
     {
       "title": "Request Latency (95th)",
       "type": "timeseries",
-      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(app_request_latency_seconds_bucket[5m])) by (le))",
@@ -15,9 +20,34 @@
       ]
     },
     {
+      "title": "Model Latency p50/p95",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(model_latency_seconds_bucket[5m])) by (le, model))",
+          "legendFormat": "{{model}} p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(model_latency_seconds_bucket[5m])) by (le, model))",
+          "legendFormat": "{{model}} p95"
+        }
+      ]
+    },
+    {
       "title": "Cache Hit Rate",
       "type": "timeseries",
-      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
           "expr": "sum(rate(app_request_total{engine=\"cache\"}[5m])) / sum(rate(app_request_total[5m]))",
@@ -28,7 +58,12 @@
     {
       "title": "Request Cost",
       "type": "timeseries",
-      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
           "expr": "sum(rate(app_request_cost_usd_sum[5m]))",
@@ -39,11 +74,32 @@
     {
       "title": "Request Volume",
       "type": "timeseries",
-      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
       "targets": [
         {
           "expr": "sum(rate(app_request_total[5m]))",
           "legendFormat": "req/s"
+        }
+      ]
+    },
+    {
+      "title": "Router Decisions",
+      "type": "bargauge",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(router_decision_total[5m])) by (rule)",
+          "legendFormat": "{{rule}}"
         }
       ]
     }
