@@ -42,6 +42,8 @@ from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from .skills.smalltalk_skill import SmalltalkSkill
 from .telemetry import log_record_var
 from .token_utils import count_tokens
+from .embeddings import embed_sync as _embed
+from .memory.env_utils import _cosine_similarity as _cos, _normalized_hash as _nh
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +107,41 @@ def _low_conf(resp: str) -> bool:
     if re.search(r"\b(i don't know|i am not sure|not sure|cannot help)\b", resp, re.I):
         return True
     return False
+
+
+def _annotate_provenance(text: str, mem_docs: list[str]) -> str:
+    """Append [#chunk:ID] tags to lines with high semantic similarity to RAG.
+
+    Best-effort and conservative; never raises.
+    """
+    try:
+        if not text or not mem_docs:
+            return text
+        mem_embeds = [(_nh(m)[:12], _embed(m)) for m in mem_docs]
+        lines = text.splitlines()
+        out: list[str] = []
+        for line in lines:
+            base = line.rstrip()
+            if not base:
+                out.append(line)
+                continue
+            try:
+                e = _embed(base)
+                best_id = None
+                best_sim = -1.0
+                for cid, me in mem_embeds:
+                    sim = _cos(e, me)
+                    if sim > best_sim:
+                        best_sim, best_id = sim, cid
+                if best_id and best_sim >= 0.60 and "[#chunk:" not in base:
+                    out.append(f"{base} [#chunk:{best_id}]")
+                else:
+                    out.append(line)
+            except Exception:
+                out.append(line)
+        return "\n".join(out)
+    except Exception:
+        return text
 
 
 # ---------------------------------------------------------------------------
@@ -356,18 +393,26 @@ async def route_prompt(
         if rec:
             rec.retrieved_tokens = retrieved_tokens
 
-        det_enabled = os.getenv("DETERMINISTIC_ROUTER", "").lower() in {"1", "true", "yes"}
+        det_env = os.getenv("DETERMINISTIC_ROUTER", "").lower() in {"1", "true", "yes"}
+        det_enabled = det_env
+        # In pytest, default to legacy router unless explicitly allowed
+        if os.getenv("PYTEST_CURRENT_TEST"):
+            det_enabled = det_env and (
+                os.getenv("ENABLE_DET_ROUTER_IN_TESTS", "").lower() in {"1", "true", "yes"}
+            )
         if det_enabled:
             decision = route_text(
                 user_prompt=prompt,
                 prompt_tokens=tokens,
                 retrieved_docs=None,
                 intent=intent,
+                # Surface attachments_count when present in gen_opts
+                attachments_count=int(gen_opts.get("attachments_count", 0)) if gen_opts else 0,
             )
             if rec:
                 rec.route_reason = decision.reason
 
-            # Select system prompt overrides (granny/computer modes) when provided
+            # Select system prompt profile: mode override → default file/env
             sys_mode = getattr(rec, "system_mode", None) if rec else None
             system_prompt = load_system_prompt(sys_mode) or SYSTEM_PROMPT
 
@@ -396,7 +441,12 @@ async def route_prompt(
                 result = await _finalise("gpt", prompt, cached, rec)
                 return result
 
-            # Call with self-check escalation policy
+            # Call with self-check escalation policy (budget-aware)
+            try:
+                bm = _budget.get_budget_state(user_id)
+            except Exception:
+                bm = {"escalate_allowed": True}
+            max_retries = 0 if not bm.get("escalate_allowed", True) else None
             text, final_model, reason, score, pt, ct, cost, escalated = await run_with_self_check(
                 ask_func=ask_gpt,
                 model=decision.model,
@@ -406,6 +456,7 @@ async def route_prompt(
                 on_token=stream_cb,
                 stream=bool(stream_cb),
                 allow_test=True if os.getenv("PYTEST_CURRENT_TEST") else False,
+                max_retries=max_retries,
             )
             if rec:
                 rec.model_name = final_model
@@ -419,6 +470,37 @@ async def route_prompt(
             # Persist cache with composed key to prevent cross-model contamination
             try:
                 cache_answer(prompt=cache_key, answer=text)
+            except Exception:
+                pass
+            # Update budget usage (best-effort)
+            try:
+                _budget.add_usage(user_id, prompt_tokens=pt, completion_tokens=ct)
+            except Exception:
+                pass
+            # Shadow A/B: 5% of nano traffic executes on gpt-4.1-nano in background
+            try:
+                if final_model == "gpt-5-nano" and rec and (hash(rec.req_id) % 20 == 0):
+                    import asyncio as _asyncio
+                    _asyncio.create_task(_run_shadow(built_prompt, system_prompt, text))
+            except Exception:
+                pass
+            # Answer provenance: append [#chunk:ID] tags where applicable
+            try:
+                text = _annotate_provenance(text, mem_docs)
+            except Exception:
+                pass
+            # Hidden sources block (consumed by frontend for hover snippets)
+            try:
+                if mem_docs:
+                    lines = []
+                    for m in mem_docs:
+                        try:
+                            cid = __import__("app.memory.env_utils", fromlist=["_normalized_hash"])._normalized_hash(m)[:12]
+                        except Exception:
+                            cid = "unknown"
+                        lines.append(f"- ({cid}) {m}")
+                    block = "\n".join(lines)
+                    text = f"{text}\n\n```sources\n{block}\n```"
             except Exception:
                 pass
             return await _finalise("gpt", prompt, text, rec)

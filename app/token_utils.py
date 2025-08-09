@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 try:  # pragma: no cover - optional dependency
     import tiktoken
 
@@ -20,7 +22,16 @@ def count_tokens(text: str) -> int:
 
     if _ENCODING is not None:
         return len(_ENCODING.encode(text))
-    return len(text.split())
+    # Fallback heuristic: approximate tokens for both spaced and unspaced text
+    if not text:
+        return 0
+    # If there are spaces, use word count with a multiplier
+    if any(ch.isspace() for ch in text):
+        words = len(text.split())
+        # Roughly 0.75 tokens per short English word; bound to at least words
+        return max(words, int(math.ceil(words * 0.75)))
+    # No spaces (e.g., long loremipsum) — assume ~4 chars/token
+    return int(math.ceil(len(text) / 4.0))
 
 
 __all__ = ["count_tokens"]

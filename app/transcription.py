@@ -43,8 +43,13 @@ def get_whisper_client() -> OpenAI:
     if _client is None:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise RuntimeError("OPENAI_API_KEY not set")
-        _client = OpenAI(api_key=api_key)
+            # Offline local mode: use a stub that raises quickly; callers catch and pivot
+            class _Stub(OpenAI):  # type: ignore
+                def __init__(self, *a, **k):
+                    pass
+            _client = _Stub()  # type: ignore
+        else:
+            _client = OpenAI(api_key=api_key)
     return _client
 
 
@@ -78,6 +83,9 @@ async def transcribe_file(path: str, model: str | None = None) -> str:
     except OpenAIError as e:
         logger.debug("transcribe_file openai error: %s", e)
         raise RuntimeError(f"Whisper API error: {e}") from e
+    except RuntimeError as e:
+        # If client is a stub (no API key), indicate offline mode for caller
+        raise RuntimeError("offline_whisper_unavailable") from e
     except Exception as e:
         logger.debug("transcribe_file error: %s", e)
         raise RuntimeError(f"Failed to read or send {path!r}: {e}") from e

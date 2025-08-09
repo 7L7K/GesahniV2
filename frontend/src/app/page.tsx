@@ -26,7 +26,7 @@ export default function Page() {
     createInitialMessage(),
   ]);
   const [loading, setLoading] = useState(false);
-  const [model, setModel] = useState('llama3');
+  const [model, setModel] = useState('gpt-4o');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Hydrate from localStorage on mount

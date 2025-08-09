@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from pathlib import Path
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
@@ -40,8 +41,45 @@ if TYPE_CHECKING:  # pragma: no cover - only for type checkers
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
-# Temporary system prompt to prime the assistant
-SYSTEM_PROMPT = os.getenv("GPT_SYSTEM_PROMPT", "You are a helpful assistant.")
+# Map internal router aliases to real OpenAI model ids.
+# These aliases are used by the deterministic router and tests but may not
+# correspond to public API model names. Normalize them here so the OpenAI
+# client always receives a valid model identifier.
+_MODEL_ALIASES = {
+    # Baseline lightweight models / aliases
+    "gpt-5-nano": os.getenv("GPT_BASELINE_MODEL", "gpt-4o-mini"),
+    "gpt-4.1-nano": os.getenv("GPT_BASELINE_MODEL", "gpt-4o-mini"),
+    # Mid-tier chat quality
+    "gpt-5-mini": os.getenv("GPT_MID_MODEL", "gpt-4o"),
+    # Reasoning burst
+    "o1-mini": os.getenv("GPT_REASONING_MODEL", "o1-mini"),
+    # Pass-through for omni-mini naming
+    "o4-mini": "o4-mini",
+}
+
+def _normalize_model_name(name: str | None) -> str:
+    base = (name or OPENAI_MODEL).strip()
+    return _MODEL_ALIASES.get(base, base)
+
+def _load_default_system_prompt() -> str:
+    """Load the default system prompt from prompts/system_default.txt.
+
+    Falls back to a compact, hard-coded persona when the file is missing.
+    """
+    try:
+        path = Path(__file__).parent / "prompts" / "system_default.txt"
+        text = path.read_text(encoding="utf-8").strip()
+        return text or "You are Gesahni — a concise personal AI teammate. Be brief. Bullets over paragraphs. Ask at most one clarifying question."
+    except Exception:
+        return (
+            "You are Gesahni — a concise personal AI teammate. Be brief. "
+            "Bullets over paragraphs. Ask at most one clarifying question."
+        )
+
+
+# Temporary system prompt to prime the assistant. Prefer env override, else file.
+_ENV_SYSTEM = os.getenv("GPT_SYSTEM_PROMPT", "").strip()
+SYSTEM_PROMPT = _ENV_SYSTEM if _ENV_SYSTEM else _load_default_system_prompt()
 
 logger = logging.getLogger(__name__)
 _client: AsyncOpenAI | None = None
@@ -51,6 +89,9 @@ _client: AsyncOpenAI | None = None
 MODEL_PRICING = {
     "gpt-4o": 0.005,
     "gpt-4o-mini": 0.00015,
+    "gpt-5-mini": 0.00025,
+    "o1-mini": 0.0020,  # approx
+    "o4-mini": 0.0015,  # approximate; used for internal accounting only
     "gpt-4": 0.03,
     "gpt-3.5-turbo": 0.0005,
     "gpt-3.5-turbo-instruct": 0.0015,
@@ -108,7 +149,7 @@ async def ask_gpt(
             return "gpt-dummy", 0, 0, 0.0
         raise RuntimeError("GPT backend unavailable (test stub)")
 
-    model = model or OPENAI_MODEL
+    model = _normalize_model_name(model)
     client = get_client()
     messages: list[dict[str, str]] = []
     if system:

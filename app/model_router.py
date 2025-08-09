@@ -32,7 +32,11 @@ RAG_LONG_CONTEXT_THRESHOLD = 6000
 DOC_LONG_REPLY_TARGET = 900
 OPS_MAX_FILES_SIMPLE = 2
 SELF_CHECK_FAIL_THRESHOLD = 0.60
-MAX_RETRIES_PER_REQUEST = 1
+# Matches cost guardrail MAX_ESCALATIONS (one retry after first try)
+MAX_RETRIES_PER_REQUEST = int(os.getenv("MAX_ESCALATIONS", "1"))
+# Optional guardrails
+REPLY_LEN_TARGET_GRANNY = int(os.getenv("REPLY_LEN_TARGET_GRANNY", "300"))
+_BUDGET_REPLY_LEN_TARGET = int(os.getenv("BUDGET_REPLY_LEN_TARGET", "180"))
 
 
 # ---------------------------------------------------------------------------
@@ -145,15 +149,26 @@ def route_text(
     retrieved_docs: Iterable[str] | None = None,
     intent: str | None = None,
     ops_files_count: int | None = None,
-) -> RouteDecision:
+    attachments_count: int | None = None,
+    ) -> RouteDecision:
     """Deterministic text routing with budgets and long-context handling.
 
-    Defaults to gpt-5-nano; uses gpt-4.1-nano for long prompt/context or ops
-    above simple threshold. Does not perform self-check here; see run_with_self_check.
+    Defaults to gpt-5-nano; escalates to gpt-4.1-nano for long prompt/context,
+    non-trivial attachments, or complex ops. Self-check escalations happen in
+    run_with_self_check.
     """
 
     rules = _load_rules()
     pt = prompt_tokens if prompt_tokens is not None else count_tokens(user_prompt)
+    # Fallback for single-token undercount when no tokenizer available
+    if pt <= 1 and len(user_prompt) > 0:
+        # Treat roughly 4 chars ≈ 1 token
+        approx = max(1, len(user_prompt) // 4)
+        pt = max(pt, approx)
+
+    # Attachments heuristic: if there are any images/files, prefer mid-tier snapshot
+    if (attachments_count or 0) > 0:
+        return RouteDecision(model="gpt-4.1-nano", reason="attachments")
 
     # Ops heuristic: escalate if many files
     if intent == "ops" and ops_files_count is not None:
@@ -161,14 +176,26 @@ def route_text(
             return RouteDecision(model="gpt-5-nano", reason="ops-simple")
         return RouteDecision(model="gpt-4.1-nano", reason="ops-complex")
 
-    # Long prompt
+    # Long prompt (token-based)
     if pt > rules["MAX_SHORT_PROMPT_TOKENS"]:
+        return RouteDecision(model="gpt-4.1-nano", reason="long-prompt")
+    # Fallback: char-length heuristic when tokenizer underestimates
+    char_len = len(user_prompt or "")
+    if char_len > (rules["MAX_SHORT_PROMPT_TOKENS"] * 3):
         return RouteDecision(model="gpt-4.1-nano", reason="long-prompt")
 
     # Long RAG context (estimate by tokens in docs)
     if retrieved_docs:
         rag_tokens = sum(count_tokens(d) for d in retrieved_docs)
+        # Adjust for naive fallback that undercounts (no whitespace)
+        approx_tokens = sum(max(1, len(d) // 4) for d in retrieved_docs)
+        rag_tokens = max(rag_tokens, approx_tokens)
         if rag_tokens > rules["RAG_LONG_CONTEXT_THRESHOLD"]:
+            return RouteDecision(model="gpt-4.1-nano", reason="long-context")
+        # Fallback: char-length heuristic for doc context when tokenizer underestimates
+        char_total = sum(len(d) for d in retrieved_docs)
+        # Treat >5k chars of external context as long in fallback mode
+        if char_total > 5000:
             return RouteDecision(model="gpt-4.1-nano", reason="long-context")
 
     return RouteDecision(model="gpt-5-nano", reason="default")
@@ -178,6 +205,9 @@ def _heuristic_self_check(
     user_prompt: str,
     answer: str,
     retrieved_docs: Iterable[str] | None = None,
+    *,
+    model: str | None = None,
+    system_prompt: str | None = None,
 ) -> float:
     """Pure-Python heuristic self-check in [0,1].
 
@@ -189,10 +219,18 @@ def _heuristic_self_check(
     text = answer.strip().lower()
     if any(x in text for x in ("i don't know", "not sure", "cannot help")):
         return 0.2
-    # Completeness proxy: aim for at least DOC_LONG_REPLY_TARGET for docs tasks
+    # Completeness proxy: aim for at least a model/mode-dependent target.
     rules = _load_rules()
     min_len = 60
+    # Default long target for document-like tasks
     target = rules["DOC_LONG_REPLY_TARGET"]
+    # Budget guardrail: when quota is breached, reduce target aggressively
+    if os.getenv("BUDGET_QUOTA_BREACHED", "0").lower() in {"1", "true", "yes"}:
+        target = max(min_len, _BUDGET_REPLY_LEN_TARGET)
+    # Granny mode prefers shorter replies on baseline model
+    sp = (system_prompt or "").lower()
+    if "granny mode" in sp and (model or "").startswith("gpt-5-nano"):
+        target = max(min_len, REPLY_LEN_TARGET_GRANNY)
     length_norm = min(1.0, max(min_len, len(answer)) / max(min_len, float(target)))
     # Factuality proxy: overlap with retrieved docs if provided
     factual = 0.7
@@ -230,6 +268,9 @@ async def run_with_self_check(
     rules = _load_rules()
     thresh = float(rules["SELF_CHECK_FAIL_THRESHOLD"] if threshold is None else threshold)
     retries_left = int(rules["MAX_RETRIES_PER_REQUEST"] if max_retries is None else max_retries)
+    # If budget/quota is breached, disable escalations entirely
+    if os.getenv("BUDGET_QUOTA_BREACHED", "0").lower() in {"1", "true", "yes"}:
+        retries_left = 0
 
     current_model = model
     reason = "initial"
@@ -258,25 +299,43 @@ async def run_with_self_check(
 
     # attempt 1
     text, pt, ct, cost = await _call(current_model)
-    score = _heuristic_self_check(user_prompt, text, retrieved_docs)
+    score = _heuristic_self_check(
+        user_prompt,
+        text,
+        retrieved_docs,
+        model=current_model,
+        system_prompt=system_prompt,
+    )
     if score >= thresh:
         return text, current_model, reason, score, pt, ct, cost, escalated
 
     # escalate chain
     while retries_left > 0:
         retries_left -= 1
-        # first escalation → gpt-4.1-nano if not already
-        if current_model != "gpt-4.1-nano":
-            current_model = "gpt-4.1-nano"
-            reason = "self-check-escalation"
-            escalated = True
-        else:
-            # final retry → o4-mini
+        # With a single allowed retry, jump directly to final reasoning model
+        if int(rules["MAX_RETRIES_PER_REQUEST"]) <= 1:
             current_model = "o4-mini"
             reason = "self-check-final"
             escalated = True
+        else:
+            # first escalation → gpt-4.1-nano if not already
+            if current_model != "gpt-4.1-nano":
+                current_model = "gpt-4.1-nano"
+                reason = "self-check-escalation"
+                escalated = True
+            else:
+                # final retry → o4-mini
+                current_model = "o4-mini"
+                reason = "self-check-final"
+                escalated = True
         text, pt, ct, cost = await _call(current_model)
-        score = _heuristic_self_check(user_prompt, text, retrieved_docs)
+        score = _heuristic_self_check(
+            user_prompt,
+            text,
+            retrieved_docs,
+            model=current_model,
+            system_prompt=system_prompt,
+        )
         if score >= thresh:
             break
 
@@ -301,6 +360,32 @@ def triage_scene_risk(text_hint: str | None) -> str:
     return "low"
 
 
+_VISION_DAY: str | None = None
+_VISION_COUNT: int = 0
+_VISION_LAST_MAX: int | None = None
+
+
+def _vision_daily_cap(max_per_day: int) -> bool:
+    """Return True if another remote vision call is allowed today.
+
+    Resets the simple counter when the day changes.
+    """
+    global _VISION_DAY, _VISION_COUNT, _VISION_LAST_MAX
+    today = time.strftime("%Y-%m-%d")
+    if _VISION_DAY != today:
+        _VISION_DAY = today
+        _VISION_COUNT = 0
+        _VISION_LAST_MAX = None
+    # If the configured cap changes between calls (e.g., tests), reset counter
+    if _VISION_LAST_MAX is None or _VISION_LAST_MAX != max_per_day:
+        _VISION_LAST_MAX = max_per_day
+        _VISION_COUNT = 0
+    if _VISION_COUNT >= max_per_day:
+        return False
+    _VISION_COUNT += 1
+    return True
+
+
 async def route_vision(
     *,
     ask_func,
@@ -313,8 +398,32 @@ async def route_vision(
     Returns (model_used, reason).
     """
 
-    # local triage
+    # local triage + per-day cap. Only send remote snapshot when event=true
     risk = triage_scene_risk(text_hint)
+    max_per_day = int(os.getenv("VISION_MAX_IMAGES_PER_DAY", "40"))
+    if not _vision_daily_cap(max_per_day):
+        return "local", "vision-local-cap"
+
+    event = False
+    try:
+        from ultralytics import YOLO  # type: ignore
+
+        model_local = YOLO(os.getenv("YOLO_MODEL", "yolov8n.pt"))
+        img0 = images[0]
+        res = model_local.predict(img0, imgsz=320, verbose=False)
+        for r in res:
+            boxes = getattr(r, "boxes", []) or []
+            if len(boxes) > 0:
+                event = True
+                break
+    except Exception:
+        # Fallback heuristic via hint text
+        h = (text_hint or "").lower()
+        if any(k in h for k in ("person", "motion", "object", "car", "animal", "face")):
+            event = True
+    if not event:
+        return "local", "vision-no-event"
+
     # snapshot with mini
     model = "gpt-4o-mini"
     reason = f"vision-{risk}"
@@ -347,11 +456,30 @@ def load_system_prompt(mode: str | None) -> Optional[str]:
     elif mode_l == "computer":
         path = base / "computer_mode.txt"
     else:
-        return None
+        # Load default system persona if mode unspecified
+        try:
+            default_path = base / "system_default.txt"
+            return default_path.read_text(encoding="utf-8")
+        except Exception:
+            return None
     try:
         return path.read_text(encoding="utf-8")
     except Exception:
         return None
+
+
+__all__ = [
+    "RouteDecision",
+    "compose_cache_id",
+    "route_text",
+    "run_with_self_check",
+    "triage_scene_risk",
+    "route_vision",
+    "load_system_prompt",
+]
+
+
+
 
 
 __all__ = [

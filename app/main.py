@@ -245,6 +245,14 @@ async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
                 # If the backend didn't stream any tokens, emit the final result once
                 if isinstance(result, str) and result:
                     await queue.put(result)
+            # If we are in local fallback, hint UI via cookie
+            try:
+                from .llama_integration import LLAMA_HEALTHY as _LL_OK
+                if not _LL_OK and not os.getenv("OPENAI_API_KEY"):
+                    # First token will prompt cookie via middleware; nothing to do here
+                    pass
+            except Exception:
+                pass
         except HTTPException as exc:
             logger.exception("ask HTTPException user_id=%s", user_id)
             status_code = exc.status_code

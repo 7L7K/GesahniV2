@@ -14,8 +14,14 @@ from app.telemetry import hash_user_id
 
 try:  # pragma: no cover - optional dependency
     import chromadb
+    try:
+        # Newer Chroma exposes first‑class embedding functions with config
+        from chromadb.utils import embedding_functions as chroma_ef  # type: ignore
+    except Exception:  # pragma: no cover - tolerate older versions
+        chroma_ef = None  # type: ignore
 except ImportError:  # pragma: no cover - optional dependency
     chromadb = None
+    chroma_ef = None  # type: ignore
 
 from .env_utils import _clean_meta, _env_flag, _get_sim_threshold, _normalize
 from .memory_store import VectorStore
@@ -157,14 +163,25 @@ class ChromaVectorStore(VectorStore):
         # Choose collection embedder: length (default) or OpenAI
         embed_kind = os.getenv("CHROMA_EMBEDDER", "length").strip().lower()
         if embed_kind == "openai":
-            try:
+            # Prefer Chroma's native embedding function to ensure the collection
+            # is created with a proper configuration that includes a `_type` key.
+            if chroma_ef is not None and hasattr(chroma_ef, "OpenAIEmbeddingFunction"):
+                try:
+                    self._embedder = chroma_ef.OpenAIEmbeddingFunction(  # type: ignore[attr-defined]
+                        api_key=os.getenv("OPENAI_API_KEY", ""),
+                        model_name=os.getenv("EMBED_MODEL", "text-embedding-3-small"),
+                    )
+                    logger.info("Chroma embedder selected: chroma.openai (%s)", os.getenv("EMBED_MODEL", "text-embedding-3-small"))
+                except Exception as e:  # pragma: no cover - defensive
+                    logger.warning(
+                        "Chroma OpenAIEmbeddingFunction failed (%s); using local OpenAI embedder",
+                        e,
+                    )
+                    self._embedder = _OpenAIEmbedder()
+            else:
+                # Fallback to local sync embedder (works with older Chroma)
                 self._embedder = _OpenAIEmbedder()
-                logger.info("Chroma embedder selected: openai")
-            except Exception as e:  # pragma: no cover - defensive
-                logger.warning(
-                    "OpenAI embedder unavailable (%s); falling back to length", e
-                )
-                self._embedder = _LengthEmbedder()
+                logger.info("Chroma embedder selected: openai (local)")
         else:
             self._embedder = _LengthEmbedder()
             logger.info("Chroma embedder selected: length")
