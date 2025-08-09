@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from typing import List, Optional
+import time
 
 from app.telemetry import hash_user_id
 
@@ -116,10 +117,31 @@ def query_user_memories(
 
 
 def cache_answer(prompt: str, answer: str, cache_id: str | None = None) -> None:
-    """Cache *answer* keyed by *prompt* (or explicit *cache_id*)."""
+    """Cache *answer* keyed by *prompt* (or explicit *cache_id*).
 
-    cid = cache_id or _normalized_hash(prompt)
-    _store.cache_answer(cid, prompt, answer)
+    When ``prompt`` looks like a composed deterministic cache id (``vN|...|``),
+    we store under that exact id and mark the stored document with a special
+    ``__cid__`` prefix to avoid accidental semantic matches in similarity-based
+    lookups.
+    """
+
+    # Detect deterministic cache id style: v<digits>|...
+    is_cid = (
+        cache_id is None
+        and isinstance(prompt, str)
+        and "|" in prompt
+        and prompt.lower().startswith("v")
+    )
+    if cache_id:
+        cid = cache_id
+        doc = prompt
+    elif is_cid:
+        cid = prompt
+        doc = f"__cid__:{prompt}"
+    else:
+        cid = _normalized_hash(prompt)
+        doc = prompt
+    _store.cache_answer(cid, doc, answer)
 
 
 def cache_answer_legacy(*args) -> None:  # pragma: no cover - shim for callers
@@ -143,7 +165,38 @@ def cache_answer_legacy(*args) -> None:  # pragma: no cover - shim for callers
 
 
 def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
-    """Return a cached answer **if** it is younger than *ttl_seconds*."""
+    """Return a cached answer.
+
+    If *prompt* looks like a deterministic cache id (e.g. "v1|…|…|"), perform
+    an exact id lookup via the backing ``qa_cache`` to avoid semantic bleeding
+    across models. Otherwise, fallback to the vector similarity lookup.
+    """
+
+    # Fast path: exact id style (vN|...|...|)
+    is_cid = isinstance(prompt, str) and "|" in prompt and prompt[:2].lower().startswith("v")
+    if is_cid:
+        try:
+            res = _store.qa_cache.get_items(ids=[prompt], include=["metadatas"])  # type: ignore[attr-defined]
+            metas = (res.get("metadatas") or [None])[0] or {}
+            ts = float(metas.get("timestamp", 0) or 0)
+            if ttl_seconds and ts and (time.time() - ts > ttl_seconds):  # type: ignore[name-defined]
+                # best-effort invalidate via collection
+                try:
+                    _store.qa_cache.delete(ids=[prompt])  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+                return None
+            if metas.get("feedback") == "down":
+                try:
+                    _store.qa_cache.delete(ids=[prompt])  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+                return None
+            ans = metas.get("answer")
+            return ans if isinstance(ans, str) else None
+        except Exception:
+            # Fall back to similarity path on any collection mismatch
+            pass
 
     return _store.lookup_cached_answer(prompt, ttl_seconds)
 

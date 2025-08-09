@@ -215,6 +215,20 @@ class MemoryVectorStore(VectorStore):
         if _qa_disabled():
             logger.debug("QA cache disabled; miss for %s", hash_)
             return None
+        # Exact-ID path for composed cache keys (prevent cross-model hits)
+        if "|" in prompt and prompt.startswith("v1|"):
+            rec = self._cache._store.get(prompt)
+            if not rec:
+                logger.debug("Cache miss for %s", hash_)
+                return None
+            if ttl_seconds and time.time() - rec.timestamp > ttl_seconds:
+                logger.debug("Cache expired for %s", hash_)
+                self._cache.delete(ids=[prompt])
+                return None
+            logger.debug("Cache hit for %s (exact id)", hash_)
+            return rec.answer
+
+        # Fuzzy path for natural-language prompts. Skip records backed by composed IDs.
         _, norm = _normalize(prompt)
         q_emb = embed_sync(norm)
         best = None
@@ -222,6 +236,9 @@ class MemoryVectorStore(VectorStore):
         best_dist = None
         for cid, rec in self._cache._store.items():
             if rec.feedback == "down":
+                continue
+            # Ignore composed-id entries when querying by plain prompt
+            if "|" in cid and cid.startswith("v1|"):
                 continue
             dist = 1.0 - _cosine_similarity(q_emb, rec.embedding)
             if dist <= self._dist_cutoff and (best_dist is None or dist < best_dist):

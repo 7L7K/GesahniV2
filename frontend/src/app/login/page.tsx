@@ -1,15 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { login, register } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function LoginPage() {
+function LoginPageInner() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [mode, setMode] = useState<'login' | 'register'>('login');
     const [error, setError] = useState<string>('');
     const [loading, setLoading] = useState(false);
+    const router = useRouter();
+    const params = useSearchParams();
+    const next = params.get('next') || '/';
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -22,7 +26,8 @@ export default function LoginPage() {
                 await register(username, password);
                 await login(username, password);
             }
-            window.location.href = '/';
+            document.cookie = `auth:hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
+            router.replace(next);
         } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
         } finally {
@@ -72,6 +77,14 @@ export default function LoginPage() {
                 </div>
             </div>
         </main>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={<main className="mx-auto max-w-md px-4 py-10"><div className="text-sm text-muted-foreground">Loading…</div></main>}>
+            <LoginPageInner />
+        </Suspense>
     );
 }
 

@@ -14,6 +14,7 @@ from .user_store import user_store
 
 # Configuration
 DB_PATH = os.getenv("USERS_DB", "users.db")
+AUTH_TABLE = os.getenv("AUTH_TABLE", "auth_users")
 ALGORITHM = "HS256"
 SECRET_KEY = os.getenv("JWT_SECRET", "change-me")
 EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
@@ -52,18 +53,31 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
-# Ensure user table exists
+# Ensure auth table exists and migrate legacy schemas
 async def _ensure_table() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
+        # Create dedicated auth table to avoid collision with analytics 'users'
         await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
+            f"""
+            CREATE TABLE IF NOT EXISTS {AUTH_TABLE} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL
             )
             """
         )
+        # Best-effort migration from any legacy 'users' table that had username/password_hash
+        try:
+            src_cols = []
+            async with db.execute("PRAGMA table_info(users)") as cur:
+                async for row in cur:
+                    src_cols.append(str(row[1]))
+            if {"username", "password_hash"}.issubset(set(src_cols)):
+                await db.execute(
+                    f"INSERT OR IGNORE INTO {AUTH_TABLE} (username, password_hash) SELECT username, password_hash FROM users"
+                )
+        except Exception:
+            pass
         await db.commit()
 
 
@@ -75,7 +89,7 @@ async def register(req: RegisterRequest, user_id: str = Depends(get_current_user
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                f"INSERT INTO {AUTH_TABLE} (username, password_hash) VALUES (?, ?)",
                 (req.username, hashed),
             )
             await db.commit()
@@ -92,7 +106,7 @@ async def login(
     await _ensure_table()
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT password_hash FROM users WHERE username = ?",
+            f"SELECT password_hash FROM {AUTH_TABLE} WHERE username = ?",
             (req.username,),
         ) as cursor:
             row = await cursor.fetchone()
