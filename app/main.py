@@ -232,11 +232,15 @@ class ServiceRequest(BaseModel):
     data: dict | None = None
 
 
+class DeleteMemoryRequest(BaseModel):
+    id: str
+
+
 core_router = APIRouter(tags=["core"])
-protected_router = APIRouter(dependencies=[Depends(verify_token)])
+protected_router = APIRouter(dependencies=[Depends(verify_token), Depends(rate_limit)])
 # Scoped routers
 admin_router = APIRouter(dependencies=[Depends(verify_token), Depends(rate_limit), Depends(require_scope("admin"))], tags=["admin"])
-ha_router = APIRouter(dependencies=[Depends(verify_token), Depends(require_scope("ha"))], tags=["home-assistant"])
+ha_router = APIRouter(dependencies=[Depends(verify_token), Depends(rate_limit), Depends(require_scope("ha"))], tags=["home-assistant"])
 ws_router = APIRouter(
     dependencies=[Depends(verify_ws), Depends(rate_limit_ws)], tags=["sessions"]
 )
@@ -261,6 +265,43 @@ async def ha_webhook(request: Request, user_id: str = Depends(get_current_user_i
         data = {}
     _on_ha_event(data if isinstance(data, dict) else {})
     return {"status": "ok"}
+
+
+# Memory export/delete --------------------------------------------------------
+
+@core_router.get("/memories/export")
+async def export_memories(user_id: str = Depends(get_current_user_id)):
+    out = {"profile": [], "episodic": []}
+    try:
+        # Episodic via vector store listing when available
+        from .memory.api import _store as _vs  # type: ignore
+
+        if hasattr(_vs, "list_user_memories"):
+            out["episodic"] = _vs.list_user_memories(user_id)  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    # Profile via pinned memgpt store (best-effort)
+    try:
+        from .memory.memgpt import memgpt
+
+        out["profile"] = memgpt.list_pins()  # type: ignore
+    except Exception:
+        pass
+    return out
+
+
+@core_router.delete("/memories/{mem_id}")
+async def delete_memory(mem_id: str, user_id: str = Depends(get_current_user_id)):
+    try:
+        from .memory.api import _store as _vs  # type: ignore
+
+        if hasattr(_vs, "delete_user_memory"):
+            ok = _vs.delete_user_memory(user_id, mem_id)  # type: ignore[attr-defined]
+            if ok:
+                return {"status": "deleted"}
+    except Exception:
+        pass
+    raise HTTPException(status_code=404, detail="memory_not_found")
 
 
 @core_router.get("/me")
