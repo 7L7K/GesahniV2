@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { getToken, wsUrl } from '@/lib/api';
 
 // Determine supported mime types for media recording
 // (defaults will be refined once the component mounts)
@@ -34,13 +35,13 @@ export default function CaptureMode() {
       const aMime = MediaRecorder.isTypeSupported('audio/webm; codecs=opus')
         ? 'audio/webm; codecs=opus'
         : MediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : 'audio/mp4';
+          ? 'audio/webm'
+          : 'audio/mp4';
       const vMime = MediaRecorder.isTypeSupported('video/mp4; codecs="avc1.42E01E"')
         ? 'video/mp4; codecs="avc1.42E01E"'
         : MediaRecorder.isTypeSupported('video/mp4')
-        ? 'video/mp4'
-        : 'video/webm';
+          ? 'video/mp4'
+          : 'video/webm';
       setAudioMime(aMime);
       setVideoMime(vMime);
 
@@ -94,7 +95,7 @@ export default function CaptureMode() {
     }
     console.log('startRecording: initiating session');
     try {
-      const res = await fetch('/capture/start', { method: 'POST' });
+      const res = await fetch('/capture/start', { method: 'POST', headers: { ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) } });
       if (!res.ok) throw new Error('start failed');
       const data = await res.json();
       sessionIdRef.current = data.session_id;
@@ -104,7 +105,7 @@ export default function CaptureMode() {
       setError('Failed to start recording.');
       return;
     }
-    const ws = new WebSocket(`ws://${window.location.hostname}:8000/transcribe`);
+    const ws = new WebSocket(wsUrl('/v1/transcribe'));
     ws.onopen = () => console.log('ws: opened');
     ws.onclose = () => console.log('ws: closed');
     ws.onerror = (e) => console.error('ws: error', e);
@@ -181,7 +182,10 @@ export default function CaptureMode() {
     );
 
     try {
-      await fetch('/capture/save', { method: 'POST', body: form });
+      const headers: Record<string, string> = {};
+      const tok = getToken();
+      if (tok) headers['Authorization'] = `Bearer ${tok}`;
+      await fetch('/capture/save', { method: 'POST', body: form, headers });
       console.log('stopRecording: capture saved');
     } catch (err) {
       console.error('failed to save capture', err);

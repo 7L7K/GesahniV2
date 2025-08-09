@@ -5,7 +5,7 @@ import ChatBubble from '../components/ChatBubble';
 import LoadingBubble from '../components/LoadingBubble';
 import InputBar from '../components/InputBar';
 import { Button } from '@/components/ui/button';
-import { sendPrompt } from '@/lib/api';
+import { sendPrompt, getToken } from '@/lib/api';
 
 interface ChatMessage {
   id: string;
@@ -15,6 +15,7 @@ interface ChatMessage {
 }
 
 export default function Page() {
+  const [authed, setAuthed] = useState<boolean>(false);
   const createInitialMessage = (): ChatMessage => ({
     id: crypto.randomUUID(),
     role: 'assistant',
@@ -31,6 +32,7 @@ export default function Page() {
   // Hydrate from localStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      setAuthed(Boolean(getToken()));
       const stored = localStorage.getItem('chat-history');
       if (stored) {
         try {
@@ -135,6 +137,17 @@ export default function Page() {
       <div className="flex h-full flex-col">
         {/* chat scroll area */}
         <section className="flex-1 overflow-y-auto py-4">
+          {!authed && (
+            <div className="mb-4 rounded-lg border p-4 text-sm">
+              <p className="mb-2">You're not signed in. Please sign in to enable full features.</p>
+              <a
+                href="/login"
+                className="inline-flex items-center rounded bg-primary px-3 py-1 text-primary-foreground hover:opacity-90"
+              >
+                Go to Login
+              </a>
+            </div>
+          )}
           {messages.map(m =>
             m.loading ? (
               <LoadingBubble key={m.id} />
