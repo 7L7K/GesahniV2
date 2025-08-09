@@ -9,6 +9,7 @@
   - SELF_CHECK_FAIL_THRESHOLD=0.60
   - MAX_RETRIES_PER_REQUEST=1
 - Enable with env: `DETERMINISTIC_ROUTER=1`.
+- Override rules file location with env: `ROUTER_RULES_PATH=router_rules.yaml`.
 - System prompts: `app/prompts/granny_mode.txt` and `app/prompts/computer_mode.txt`.
 
 # GesahniV2
@@ -47,6 +48,12 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
+Alternatively, a convenience script is provided:
+
+```bash
+bash app/setup.sh
+```
+
 ### 🔑 3. Configure Environment
 Set environment variables as needed:
 
@@ -57,11 +64,12 @@ Set environment variables as needed:
 | `OPENAI_TRANSCRIBE_MODEL` | `whisper-1` | no | Async Whisper model |
 | `WHISPER_MODEL` | `whisper-1` | no | Sync Whisper model |
 | `ALLOWED_GPT_MODELS` | `gpt-4o,gpt-4,gpt-3.5-turbo` | no | Valid `/ask` model overrides |
+| `ALLOWED_LLAMA_MODELS` | `llama3:latest,llama3` | no | Valid `/ask` LLaMA overrides |
 | `DEBUG` | – | no | Enable extra prompt debug info |
 | `DEBUG_MODEL_ROUTING` | – | no | Log model path without external calls |
 | `LOG_LEVEL` | `INFO` | no | Logging verbosity |
 | `FOLLOW_UPS_FILE` | `data/follow_ups.json` | no | Stored follow-up reminders |
-| `OLLAMA_URL` | – | yes | Ollama base URL |
+| `OLLAMA_URL` | `http://localhost:11434` | no | Ollama base URL |
 | `OLLAMA_MODEL` | `llama3:latest` | no | LLaMA model name |
 | `OLLAMA_FORCE_IPV6` | – | no | Force IPv6 for Ollama requests |
 | `LLAMA_MAX_STREAMS` | `2` | no | Max concurrent LLaMA streams |
@@ -69,7 +77,8 @@ Set environment variables as needed:
 | `JWT_EXPIRE_MINUTES` | `30` | no | Access token lifetime |
 | `JWT_REFRESH_EXPIRE_MINUTES` | `1440` | no | Refresh token lifetime |
 | `RATE_LIMIT_PER_MIN` | `60` | no | Requests per minute per IP |
-| `REDIS_URL` | `redis://localhost:6379/0` | no | RQ queue for async tasks |
+| `API_TOKEN` | – | no | Static token for legacy clients |
+| `REDIS_URL` | `redis://localhost:6379/0` | no | RQ queue for async tasks (optional; falls back to threads) |
 | `HISTORY_FILE` | `data/history.jsonl` | no | Request history log |
 | `CORS_ALLOW_ORIGINS` | `http://localhost:3000` | no | Allowed web origins |
 | `PORT` | `8000` | no | Server port when running `python app/main.py` |
@@ -81,6 +90,7 @@ Set environment variables as needed:
 | `LLAMA_EMBEDDINGS_MODEL` | – | yes* | Path to GGUF when using llama embeddings |
 | `EMBED_MODEL` | `text-embedding-3-small` | no | OpenAI embedding model |
 | `EMBEDDING_BACKEND` | `openai` | no | Embedding provider (`openai` or `llama`) |
+| `ROUTER_RULES_PATH` | `router_rules.yaml` | no | Path to deterministic router rules |
 | `TRANSLATE_URL` | `http://localhost:5000` | no | Translation microservice |
 | `OPENWEATHER_API_KEY` | – | yes | Weather and forecast lookups |
 | `CITY_NAME` | `Detroit,US` | no | Default weather city |
@@ -91,6 +101,7 @@ Set environment variables as needed:
 | `MEM_TOP_K` | `3` | no | Memories returned from vector store |
 | `DISABLE_QA_CACHE` | `false` | no | Skip semantic cache when set |
 | `VECTOR_STORE` | `chroma` | no | Vector store backend |
+| `CHROMA_PATH` | `.chroma_data` | no | ChromaDB storage directory |
 | `USERS_DB` | `users.db` | no | SQLite path for auth users |
 
 *Required only when `EMBEDDING_BACKEND=llama`.
@@ -110,7 +121,9 @@ Start FastAPI:
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### 📦 Docker Deploy
+### 📦 Docker
+
+This repository does not currently ship a Dockerfile. If you add one, a typical workflow is:
 
 ```bash
 docker build -t gesahni .
@@ -173,8 +186,11 @@ curl -X POST localhost:8000/logout -H "Authorization: Bearer <refresh_token>"
 * `WS /transcribe`: stream audio for live transcription.
 * `/ha/entities`, `/ha/service`, `/ha/resolve`: Home Assistant helpers.
 * `/health` and `/status`: service status info.
+* `/healthz`: unauthenticated health probe.
 * `/config`: view config.
 * `/intent-test`: debug your prompt intent.
+
+Note: all endpoints are also available under the `/v1` prefix.
 
 ## Skills
 
@@ -243,10 +259,5 @@ token usage. Missing fields default to `null`.
 
 Made by the King, for the King. Let's run it! 🚀🔥
 
-## Compliance
-| Spec Bullet | Patch Lines |
-|-------------|-------------|
-| 2 | app/router.py L4, app/main.py L9 |
-| 4 | app/llama_integration.py L51-L74 |
-| 5 | app/router.py L36-L41 |
-| 7 | tests/test_imports.py L1-L9, tests/test_no_basicconfig.py L1-L10 |
+### Contributing
+See `CONTRIBUTING.md` for development workflow, testing, and PR guidelines.

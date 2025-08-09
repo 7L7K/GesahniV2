@@ -25,4 +25,4 @@
 
 ---
 
-> **Last updated:** 2025‑08‑08 — Use this doc to log future decisions, tweaks, and lessons learned.
+> **Last updated:** 2025‑08‑09 — Use this doc to log future decisions, tweaks, and lessons learned.

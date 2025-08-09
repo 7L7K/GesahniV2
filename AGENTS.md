@@ -16,6 +16,7 @@ Home Assistant to answer questions and automate your home.
 | Agent | Location | Entrypoint | Purpose |
 | --- | --- | --- | --- |
 | RouterAgent | `app/router.py` | `route_prompt` | Decide between skills, Home Assistant, LLaMA, or GPT. |
+| DeterministicRouter | `app/model_router.py` | `route_text`, `run_with_self_check` | Deterministic routing with YAML‑tuned thresholds and self‑check escalation. |
 | LLaMAAgent | `app/llama_integration.py` | `ask_llama` | Query local Ollama with retries; env: `OLLAMA_URL`, `OLLAMA_MODEL`. |
 | GPTAgent | `app/gpt_client.py` | `ask_gpt` | Call OpenAI chat API; env: `OPENAI_API_KEY`, `OPENAI_MODEL`. |
 | HomeAssistantAgent | `app/home_assistant.py` | `handle_command` | Parse on/off commands and call HA REST API. |
@@ -28,6 +29,7 @@ Home Assistant to answer questions and automate your home.
 ## HTTP Endpoints
 Method | Path | Handler
 --- | --- | ---
+GET | `/me` | Authenticated user info and stats
 POST | `/ask` | Route prompt through skills and LLMs
 POST | `/upload` | Save raw audio upload
 POST | `/capture/start` | Begin capture session
@@ -46,6 +48,7 @@ GET | `/ha/resolve` | Resolve friendly name to entity ID
 POST | `/transcribe/{id}` | Transcribe saved session
 GET | `/transcribe/{id}` | Retrieve transcript
 GET | `/health` | Basic heartbeat
+GET | `/healthz` | Unauthenticated probe (for orchestration)
 GET | `/config` | Dump environment (requires `ADMIN_TOKEN`)
 GET | `/ha_status` | Home Assistant health check
 GET | `/llama_status` | Ollama health check
@@ -100,7 +103,7 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `DEBUG_MODEL_ROUTING` | – | no | Log model path without external calls |
 | `LOG_LEVEL` | `INFO` | no | Logging verbosity |
 | `FOLLOW_UPS_FILE` | `data/follow_ups.json` | no | Stored follow-up reminders |
-| `OLLAMA_URL` | – | yes | Ollama base URL |
+| `OLLAMA_URL` | `http://localhost:11434` | no | Ollama base URL |
 | `OLLAMA_MODEL` | `llama3:latest` | no | LLaMA model name |
 | `LLAMA_MAX_STREAMS` | `2` | no | Max concurrent Ollama requests |
 | `ALLOWED_LLAMA_MODELS` | `llama3:latest,llama3` | no | Valid `/ask` LLaMA overrides |
@@ -109,7 +112,7 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `JWT_EXPIRE_MINUTES` | `30` | no | Access token expiry minutes |
 | `JWT_REFRESH_EXPIRE_MINUTES` | `1440` | no | Refresh token expiry minutes |
 | `RATE_LIMIT_PER_MIN` | `60` | no | Requests per minute per IP |
-| `REDIS_URL` | – | yes | RQ queue for async tasks |
+| `REDIS_URL` | `redis://localhost:6379/0` | no | RQ queue for async tasks (optional; falls back to threads) |
 | `HISTORY_FILE` | `data/history.jsonl` | no | Request history log |
 | `CORS_ALLOW_ORIGINS` | `http://localhost:3000` | no | Allowed web origins |
 | `PORT` | `8000` | no | Server port when running `python app/main.py` |
@@ -125,6 +128,10 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `LLAMA_EMBEDDINGS_MODEL` | – | yes* | Path to GGUF when using llama embeddings |
 | `EMBED_MODEL` | `text-embedding-3-small` | no | OpenAI embedding model |
 | `EMBEDDING_BACKEND` | `openai` | no | Embedding provider (`openai` or `llama`) |
+| `DETERMINISTIC_ROUTER` | `0` | no | Enable deterministic router (`1` to enable) |
+| `ROUTER_RULES_PATH` | `router_rules.yaml` | no | Path to YAML rules for deterministic router |
+| `MEM_TOP_K` | `3` | no | Max memories returned from vector store |
+| `CHROMA_PATH` | `.chroma_data` | no | ChromaDB storage directory |
 | `TRANSLATE_URL` | `http://localhost:5000` | no | Translation microservice |
 | `OPENWEATHER_API_KEY` | – | yes | Weather and forecast lookups |
 | `CITY_NAME` | `Detroit,US` | no | Default weather city |
@@ -156,12 +163,7 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
    ```
 
 ## Testing & Validation
-Run before committing:
-```bash
-pytest -q
-ruff check .
-black --check .
-```
+See `CONTRIBUTING.md` for the full development workflow, including tests and linting.
 
 ## Model Routing Rules
 - Accept `model_override` from frontend POST body.
@@ -175,22 +177,8 @@ black --check .
 - Add tests under `tests/` covering positive and negative cases.
 - Run formatting, lint, and test commands above.
 
-## Contribution / PR Template
-```
-### Problem
-Explain the issue.
-
-### Solution
-Describe your change.
-
-### Tests
-`pytest -q`
-`ruff check .`
-`black --check .`
-
-### Risk
-Note any edge cases or follow-up work.
-```
+## Contributing
+Please read `CONTRIBUTING.md` for contribution guidelines and the PR checklist.
 
 ## Request Flow
 ```mermaid

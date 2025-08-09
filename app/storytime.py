@@ -1,0 +1,203 @@
+"""Storytime helpers: JSONL transcript logging and nightly summarization.
+
+This module provides lightweight primitives to:
+- Append streaming transcript lines into date-scoped JSONL files under a
+  configurable ``STORIES_DIR``
+- Run a simple nightly summarization job that batches lines into chunks,
+  asks the LLM for short summaries, and stores those summaries as user
+  memories for future recall via the vector store
+
+All functionality degrades gracefully when optional dependencies (APScheduler)
+are missing. The design avoids introducing new runtime requirements for tests.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Iterable, List, Optional
+
+from .gpt_client import ask_gpt
+from .memory.vector_store import add_user_memory
+from .token_utils import count_tokens
+
+
+logger = logging.getLogger(__name__)
+
+
+# Base directory for story transcripts (JSONL per day/session)
+STORIES_DIR = Path(os.getenv("STORIES_DIR", Path(__file__).parent.parent / "stories"))
+STORIES_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _story_path(session_id: str, *, when: Optional[datetime] = None) -> Path:
+    d = (when or datetime.now(timezone.utc)).strftime("%Y-%m-%d")
+    return STORIES_DIR / f"{d}-{session_id}.jsonl"
+
+
+def append_transcript_line(
+    *,
+    session_id: str,
+    text: str,
+    user_id: Optional[str] = None,
+    speaker: str = "user",
+    confidence: Optional[float] = None,
+) -> None:
+    """Append a single JSON line to the story file for ``session_id``.
+
+    Fields: ``ts``, ``session_id``, ``user_id``, ``speaker``, ``confidence``, ``text``.
+    """
+
+    rec = {
+        "ts": _utc_now_iso(),
+        "session_id": session_id,
+        "user_id": user_id or "anon",
+        "speaker": speaker,
+        "confidence": confidence,
+        "text": text,
+    }
+    path = _story_path(session_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    logger.debug("storytime append: %s", path.name)
+
+
+@dataclass
+class _Chunk:
+    user_id: str
+    session_id: str
+    text: str
+
+
+def _load_lines(path: Path) -> List[dict]:
+    lines: List[dict] = []
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            for raw in fh:
+                try:
+                    lines.append(json.loads(raw))
+                except Exception:
+                    continue
+    except FileNotFoundError:
+        return []
+    return lines
+
+
+def _chunk_story_lines(lines: List[dict], target_tokens: int = 800) -> List[_Chunk]:
+    """Group consecutive lines into chunks around ``target_tokens``."""
+
+    chunks: List[_Chunk] = []
+    buf: List[str] = []
+    session_id = (lines[0].get("session_id") if lines else "unknown") or "unknown"
+    user_id = (lines[0].get("user_id") if lines else "anon") or "anon"
+    for line in lines:
+        txt = str(line.get("text") or "").strip()
+        if not txt:
+            continue
+        if not buf:
+            buf.append(txt)
+            continue
+        tentative = " ".join(buf + [txt])
+        if count_tokens(tentative) > target_tokens:
+            chunks.append(_Chunk(user_id=user_id, session_id=session_id, text=" ".join(buf)))
+            buf = [txt]
+        else:
+            buf.append(txt)
+    if buf:
+        chunks.append(_Chunk(user_id=user_id, session_id=session_id, text=" ".join(buf)))
+    return chunks
+
+
+def _summarize_text_sync(text: str) -> str:
+    """Summarize text synchronously via ask_gpt using asyncio.run."""
+
+    prompt = (
+        "Summarize the following conversation snippet into 2-3 concise bullet points, "
+        "keeping dates/names if present.\n\n" + text
+    )
+    try:
+        summary, _, _, _ = asyncio.run(ask_gpt(prompt))
+    except Exception as e:
+        logger.warning("storytime summarize failed: %s", e)
+        return ""
+    return (summary or "").strip()
+
+
+def summarize_stories_once() -> int:
+    """Summarize all story files for today and store summaries as memories.
+
+    Returns number of summaries written.
+    """
+
+    written = 0
+    for path in STORIES_DIR.glob("*.jsonl"):
+        lines = _load_lines(path)
+        if not lines:
+            continue
+        chunks = _chunk_story_lines(lines)
+        for ch in chunks:
+            summary = _summarize_text_sync(ch.text)
+            if not summary:
+                continue
+            try:
+                add_user_memory(ch.user_id, summary)
+                written += 1
+            except Exception:
+                # Do not fail the whole job if vector store is unavailable
+                logger.debug("add_user_memory failed for %s", ch.user_id, exc_info=True)
+    logger.info("storytime summarize: wrote %d summaries", written)
+    return written
+
+
+def schedule_nightly_jobs() -> None:
+    """Schedule the nightly summarization job when APScheduler is available."""
+
+    try:
+        from .deps import scheduler as sched_mod
+    except Exception:
+        logger.debug("scheduler module unavailable; skipping storytime jobs")
+        return
+
+    scheduler = getattr(sched_mod, "scheduler", None)
+    if scheduler is None or not hasattr(scheduler, "add_job"):
+        logger.debug("AsyncIOScheduler missing; cannot schedule storytime jobs")
+        return
+
+    # Start if not running
+    try:
+        sched_mod.start()
+    except Exception:
+        pass
+
+    try:
+        scheduler.add_job(
+            summarize_stories_once,
+            trigger="cron",
+            hour=2,
+            minute=0,
+            id="storytime_summarize_nightly",
+            replace_existing=True,
+        )
+        logger.info("Scheduled nightly storytime summarization at 02:00")
+    except Exception:
+        logger.debug("Failed to schedule storytime summarization", exc_info=True)
+
+
+__all__ = [
+    "STORIES_DIR",
+    "append_transcript_line",
+    "summarize_stories_once",
+    "schedule_nightly_jobs",
+]
+
+

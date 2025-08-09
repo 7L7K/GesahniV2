@@ -61,6 +61,14 @@ EXAMPLE_INTENTS: Dict[str, list[str]] = {
         "can you amuse me?",
     ],
     "control": ["turn on the light", "switch off the fan"],
+    # recall_story maps queries to search past transcripts/memories
+    "recall_story": [
+        "what did grandma say", 
+        "recall the story about", 
+        "remind me what we discussed", 
+        "what did i say yesterday",
+        "what did we talk about last time",
+    ],
     "smalltalk": ["hello", "hi there"],
     "unknown": ["asdfgh", "lorem ipsum"],
 }
@@ -141,6 +149,14 @@ def detect_intent(
             rec.intent = intent
             rec.intent_confidence = score
         return intent, priority
+
+    # Recall heuristic: simple phrase triggers for story recall
+    if any(k in prompt_l for k in ("what did i say", "what did we talk", "recall", "remember")):
+        rec = log_record_var.get()
+        if rec:
+            rec.intent = "recall_story"
+            rec.intent_confidence = 0.9
+        return "recall_story", "medium"
 
     # Single-word prompts that aren't greetings are likely noise
     if len(prompt_l.split()) == 1:

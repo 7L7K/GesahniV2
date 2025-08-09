@@ -241,48 +241,198 @@ export default function CaptureMode() {
   }
 
   return (
-    <div className="h-full flex flex-col gap-2">
-      <div className="grid grid-cols-2 h-full">
-        <video ref={camRef} autoPlay muted className="rounded-lg shadow" />
-        <div className="p-4 overflow-y-auto">
-          <p className="whisper-caption whitespace-pre-wrap">{captionText}</p>
-          {showIndicator && <p className="text-sm text-gray-500">Transcribing…</p>}
+    <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Header */}
+      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">G</span>
+            </div>
+            <h1 className="text-xl font-semibold text-gray-800">Gesahni Capture</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <div className={`w-2 h-2 rounded-full ${recording ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`}></div>
+              <span>{recording ? 'Live' : 'Ready'}</span>
+            </div>
+          </div>
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <Button onClick={startRecording} disabled={recording} variant="default">
-          ▶️ Start Recording
-        </Button>
-        <Button onClick={pauseRecording} disabled={!recording} variant="secondary">
-          ⏸️ Pause Recording
-        </Button>
-        <Button onClick={stopRecording} disabled={!recording} variant="destructive">
-          ⏹️ Stop & Save
-        </Button>
-        <Button onClick={newQuestion} variant="default">
-          🔄 New Question
-        </Button>
-        <div className="ml-4 w-24 h-2 bg-gray-300">
-          <div
-            className="h-full bg-green-500"
-            style={{ width: `${Math.min(volume * 100, 100)}%` }}
-          />
+
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-6 p-6">
+        {/* Video section */}
+        <div className="flex-1 relative group">
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl bg-black">
+            <video
+              ref={camRef}
+              autoPlay
+              muted
+              className="w-full h-full object-cover"
+              style={{ minHeight: '400px', maxHeight: '600px' }}
+            />
+
+            {/* Video overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+            {/* Recording indicator */}
+            {recording && (
+              <div className="absolute top-4 right-4 flex items-center gap-2 bg-red-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-full shadow-lg">
+                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium">Recording</span>
+                <div className="w-1 h-1 bg-white rounded-full animate-ping"></div>
+              </div>
+            )}
+
+            {/* Video controls overlay */}
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <div className="bg-black/50 backdrop-blur-sm rounded-full p-2">
+                <div className="w-6 h-6 bg-white rounded-full"></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Audio level indicator */}
+          <div className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-sm rounded-full p-3">
+            <div className="w-16 h-16 relative">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                <path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.2)"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                  strokeDasharray={`${volume * 100}, 100`}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-2 h-2 bg-white rounded-full"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Transcription section */}
+        <div className="flex-1 flex flex-col">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 h-full min-h-[400px] lg:min-h-[500px] border border-gray-200/50">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                Live Transcription
+              </h3>
+              {captionText && (
+                <button
+                  onClick={newQuestion}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {captionText ? (
+                <div className="space-y-3">
+                  {captionText.split('\n').map((line, index) => (
+                    <p key={index} className="text-gray-700 leading-relaxed text-lg">
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <span className="text-2xl">🎤</span>
+                  </div>
+                  <p className="text-gray-500 text-lg mb-2">Ready to capture your thoughts</p>
+                  <p className="text-gray-400 text-sm">Start recording to see live transcription</p>
+                </div>
+              )}
+
+              {showIndicator && (
+                <div className="flex items-center gap-3 mt-4 p-3 bg-blue-50 rounded-lg">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
+                  <span className="text-blue-700 font-medium">Processing audio...</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-      <div className="mt-2 p-2 bg-gray-100 text-xs rounded">
-        <pre>
-          {JSON.stringify(
-            {
-              sessionId: sessionIdRef.current,
-              recording,
-              audioChunks: audioChunks.current.length,
-              videoChunks: videoChunks.current.length,
-              error,
-            },
-            null,
-            2,
-          )}
-        </pre>
+
+      {/* Smart controls section */}
+      <div className="bg-white/90 backdrop-blur-sm border-t border-gray-200/50 p-6">
+        <div className="max-w-6xl mx-auto">
+          {/* Main recording control */}
+          <div className="flex justify-center mb-6">
+            <div className="relative">
+              {!recording ? (
+                <button
+                  onClick={startRecording}
+                  className="group relative w-20 h-20 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full shadow-2xl hover:shadow-green-500/25 transition-all duration-300 hover:scale-105 flex items-center justify-center"
+                >
+                  <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
+                    <div className="w-0 h-0 border-l-[12px] border-l-white border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent ml-1"></div>
+                  </div>
+                  <div className="absolute inset-0 rounded-full bg-white/20 animate-ping"></div>
+                </button>
+              ) : (
+                <button
+                  onClick={stopRecording}
+                  className="group relative w-20 h-20 bg-gradient-to-r from-red-500 to-pink-600 rounded-full shadow-2xl hover:shadow-red-500/25 transition-all duration-300 hover:scale-105 flex items-center justify-center"
+                >
+                  <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
+                    <div className="w-4 h-4 bg-red-500 rounded-sm"></div>
+                  </div>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Secondary controls */}
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={pauseRecording}
+              disabled={!recording}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${recording
+                  ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : 'bg-gray-50 text-gray-400 cursor-not-allowed'
+                }`}
+            >
+              <span>⏸️</span>
+              Pause
+            </button>
+
+            <button
+              onClick={newQuestion}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium transition-all duration-200"
+            >
+              <span>🔄</span>
+              New Session
+            </button>
+          </div>
+
+          {/* Smart hints */}
+          <div className="mt-6 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-full">
+              <span className="text-gray-400">💡</span>
+              <span className="text-sm text-gray-600">
+                Press <kbd className="px-2 py-1 bg-white rounded text-xs font-mono shadow-sm">Space</kbd> to toggle recording
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
