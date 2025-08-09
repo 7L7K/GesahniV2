@@ -60,6 +60,7 @@ a {
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
   }
+
   .dark {
     --background: 20 14.3% 4.1%;
     --foreground: 60 9.1% 97.8%;
@@ -94,7 +95,22 @@ a {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* prose tweaks for markdown in bubbles */
+.prose :where(p):not(:where([class~="not-prose"] *)) {
+  margin: 0.25rem 0;
+}
+
+.prose :where(ul, ol):not(:where([class~="not-prose"] *)) {
+  margin: 0.25rem 0 0.25rem 1.25rem;
+}
+
+.prose pre {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
 }

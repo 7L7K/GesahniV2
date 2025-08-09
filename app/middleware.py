@@ -1,6 +1,7 @@
 import uuid
 import asyncio
 import time
+import os
 from hashlib import sha256
 from typing import Set
 
@@ -27,19 +28,44 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
 
 class DedupMiddleware(BaseHTTPMiddleware):
-    """Reject requests with a repeated ``X-Request-ID`` header."""
+    """Reject requests with a repeated ``X-Request-ID`` header.
+
+    To avoid unbounded memory growth, seen IDs are retained only for a short
+    time‑to‑live and optionally capped by a maximum set size. Configure via:
+      • ``DEDUP_TTL_SECONDS`` (default: 60)
+      • ``DEDUP_MAX_ENTRIES`` (default: 10000)
+    """
 
     def __init__(self, app):
         super().__init__(app)
-        self._seen: Set[str] = set()
+        # Map of request id -> last seen monotonic timestamp
+        self._seen: dict[str, float] = {}
+        self._ttl: float = float(os.getenv("DEDUP_TTL_SECONDS", "60"))
+        self._max_entries: int = int(os.getenv("DEDUP_MAX_ENTRIES", "10000"))
 
     async def dispatch(self, request: Request, call_next):
+        now = time.monotonic()
+        # Prune expired ids
+        if self._seen:
+            expired = [rid for rid, ts in self._seen.items() if now - ts > self._ttl]
+            for rid in expired:
+                self._seen.pop(rid, None)
+
         req_id = request.headers.get("X-Request-ID")
         if req_id and req_id in self._seen:
             return Response("Duplicate request", status_code=409)
+
         response = await call_next(request)
+
         if req_id:
-            self._seen.add(req_id)
+            self._seen[req_id] = now
+            # Soft cap: if we exceed max entries, keep only the newest half
+            if len(self._seen) > self._max_entries:
+                # Sort by timestamp descending and keep the most recent half
+                keep = sorted(self._seen.items(), key=lambda kv: kv[1], reverse=True)[
+                    : max(1, self._max_entries // 2)
+                ]
+                self._seen = dict(keep)
         return response
 
 

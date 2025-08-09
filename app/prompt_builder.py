@@ -20,6 +20,8 @@ from .telemetry import log_record_var
 # ---------------------------------------------------------------------------
 
 MAX_PROMPT_TOKENS = 8_000
+# Hard cap on number of memory lines to include to respect retriever budget
+RETRIEVER_MAX_MEM_LINES = 3
 _CORE_PATH = Path(__file__).parent / "prompts" / "prompt_core.txt"
 
 logger = logging.getLogger(__name__)
@@ -126,6 +128,9 @@ class PromptBuilder:
         # Memory lookup & trimming
         # ------------------------------------------------------------------
         memories: List[str] = safe_query_user_memories(user_id, user_prompt, k=k)
+        # Enforce a conservative retriever budget regardless of requested k
+        if len(memories) > RETRIEVER_MAX_MEM_LINES:
+            memories = memories[:RETRIEVER_MAX_MEM_LINES]
         logger.info("safe_query_user_memories returned %d memories", len(memories))
         while count_tokens("\n".join(memories)) > 55 and memories:
             memories.pop()

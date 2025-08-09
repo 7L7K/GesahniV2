@@ -243,19 +243,27 @@ async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
             logger.exception("ask HTTPException user_id=%s", user_id)
             status_code = exc.status_code
             await queue.put(f"[error:{exc.detail}]")
-        except Exception:  # pragma: no cover - defensive
+        except Exception as e:  # pragma: no cover - defensive
+            # Ensure HTTP status reflects failure and propagate a useful error token
             logger.exception("ask error user_id=%s", user_id)
-            await queue.put("[error]")
+            status_code = 500
+            # Include exception type to avoid empty messages like "Exception()"
+            detail = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+            await queue.put(f"[error:{detail}]")
         finally:
             await queue.put(None)
 
+    # Producer task emits tokens into the queue without blocking response start
     asyncio.create_task(_producer())
 
     first_chunk = await queue.get()
 
     async def _streamer():
-        if first_chunk is not None:
-            yield first_chunk
+        # If producer signalled end immediately (e.g. empty result), exit cleanly
+        if first_chunk is None:
+            return
+        # Otherwise stream first chunk and continue until sentinel
+        yield first_chunk
         while True:
             chunk = await queue.get()
             if chunk is None:

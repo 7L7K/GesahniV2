@@ -20,7 +20,11 @@ class JsonFormatter(logging.Formatter):
         }
         if hasattr(record, "meta"):
             payload["meta"] = record.meta
-        return json.dumps(payload)
+        try:
+            return json.dumps(payload, ensure_ascii=False)
+        except Exception:
+            # Fallback to plain message if payload has unserialisable types
+            return payload.get("msg", "")
 
 
 class RequestIdFilter(logging.Filter):

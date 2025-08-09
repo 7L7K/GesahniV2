@@ -16,11 +16,9 @@ from .http_utils import json_request, log_exceptions
 from .metrics import LLAMA_LATENCY, LLAMA_TOKENS
 
 # ---- ENV --------------------------------------------------------------------
-OLLAMA_URL   = os.getenv("OLLAMA_URL")                    # required
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:latest") # export me!
-
-if not OLLAMA_URL:
-    raise RuntimeError("Set OLLAMA_URL, e.g. http://100.106.146.111:11434")
+# Default to local Ollama to avoid import-time crashes when env isn’t set.
+OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:latest")
 
 # Force IPv4 resolution for the Ollama host (Tailscale compatibility)
 def _force_ipv4_base(url: str) -> str:
@@ -77,6 +75,11 @@ async def _check_and_set_flag() -> None:
     """Attempt a tiny generation and update ``LLAMA_HEALTHY`` accordingly."""
     global LLAMA_HEALTHY
     try:
+        if not OLLAMA_MODEL:
+            # No model configured yet; mark unhealthy without doing a network call
+            LLAMA_HEALTHY = False
+            logger.warning("OLLAMA_MODEL not set – skipping health check")
+            return
         data, err = await json_request(
             "POST",
             f"{OLLAMA_URL}/api/generate",

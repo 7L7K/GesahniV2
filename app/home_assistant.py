@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, List, Optional
 
 from .http_utils import json_request, log_exceptions
+from . import alias_store
 
 from .telemetry import log_record_var
 
@@ -35,10 +36,14 @@ def _headers() -> dict[str, str]:
 
 # Room‑name synonyms so users can say “lounge” and we map → living room
 ROOM_SYNONYMS = {
-    "living room": ["lounge", "den"],
+    "living room": ["lounge", "den", "livingroom"],
     "kitchen": ["cook room"],
+    "bedroom": ["master", "primary"],
 }
-_SYN_TO_ROOM = {syn: room for room, syns in ROOM_SYNONYMS.items() for syn in syns}
+_SYN_TO_ROOM = {
+    **{room: room for room in ROOM_SYNONYMS},
+    **{syn: room for room, syns in ROOM_SYNONYMS.items() for syn in syns},
+}
 
 # Cache for /states results so resolve_entity doesn't spam the API.
 _STATES_CACHE: list[dict] | None = None
@@ -113,7 +118,12 @@ async def get_states() -> list[dict]:
         _STATES_CACHE = data if isinstance(data, list) else []
         _STATES_CACHE_EXP = now + _STATES_TTL
     except Exception as e:
-        logger.warning("Failed to fetch states: %s (last cache exp: %.2f, now: %.2f)", e, _STATES_CACHE_EXP, now)
+        logger.warning(
+            "Failed to fetch states: %s (last cache exp: %.2f, now: %.2f)",
+            e,
+            _STATES_CACHE_EXP,
+            now,
+        )
         _STATES_CACHE = []
         _STATES_CACHE_EXP = 0.0
     return _STATES_CACHE
@@ -169,39 +179,124 @@ async def startup_check() -> None:
 # Prompt‑style command parser (very lightweight)
 # ---------------------------------------------------------------------------
 async def resolve_entity(name: str) -> List[str]:
-    """Return entity IDs that match the given name or its synonyms."""
+    """Return entity IDs that match the given name, alias, or its synonyms.
+
+    Resolution order:
+    1) Exact alias match from alias_store (user-taught nicknames)
+    2) Exact match on entity_id or friendly_name (case-insensitive)
+    3) Synonym/room normalization then exact match
+    4) Substring fallback on entity_id/friendly_name
+    5) Domain plural to domain mapping (e.g. "lights" -> domain "light.*")
+    """
+    normalized = name.strip().lower()
+    try:
+        # Check saved aliases first
+        alias = await alias_store.get(normalized)
+        if alias:
+            return [alias]
+    except Exception as e:
+        logger.debug("alias lookup failed: %s", e)
+
     try:
         states = await get_states()
     except HomeAssistantAPIError as e:
         logger.warning("resolve_entity failed: %s", e)
         return []
-    target = _SYN_TO_ROOM.get(name.lower(), name.lower())
 
-    # exact match first
+    # 2) Exact entity_id or friendly_name match
     for st in states:
         eid = st.get("entity_id", "")
         friendly = st.get("attributes", {}).get("friendly_name", "")
-        if target == eid.lower() or target == friendly.lower():
+        if normalized == eid.lower() or normalized == friendly.lower():
             return [eid]
 
-    # substring fallback
+    # 3) Synonym normalization then exact match
+    target = _SYN_TO_ROOM.get(normalized, normalized)
+    if target != normalized:
+        for st in states:
+            eid = st.get("entity_id", "")
+            friendly = st.get("attributes", {}).get("friendly_name", "")
+            if target == eid.lower() or target == friendly.lower():
+                return [eid]
+
+    # 4) Substring fallback
     matches: List[str] = []
     for st in states:
         eid = st.get("entity_id", "")
         friendly = st.get("attributes", {}).get("friendly_name", "")
         if target in eid.lower() or target in friendly.lower():
             matches.append(eid)
-    return matches
+
+    # 5) Domain collection resolution (e.g., "lights" -> all light entities)
+    if not matches:
+        plural_to_domain = {
+            "lights": "light",
+            "switches": "switch",
+            "fans": "fan",
+            "covers": "cover",
+            "scripts": "script",
+            "scenes": "scene",
+        }
+        domain = plural_to_domain.get(target)
+        if domain:
+            matches = [st.get("entity_id", "") for st in states if st.get("entity_id", "").startswith(domain + ".")]
+
+    return [m for m in matches if m]
 
 
 async def handle_command(prompt: str) -> Optional[CommandResult]:
-    """Parse simple "ha: turn on X" commands and execute them."""
+    """Parse HA control commands and execute them.
+
+    Supports:
+      - "turn on/off <name>"
+      - "toggle <name>"
+      - "set <name> brightness <0-100>" (lights)
+    """
+    text = prompt.strip()
+    # toggle
+    m = re.match(r"^(?:ha[:]?)?\s*toggle\s+(.+)$", text, re.I)
+    if m:
+        name = m.group(1).strip()
+        entities = await resolve_entity(name)
+        if not entities:
+            return CommandResult(False, "entity_not_found", {"name": name})
+        if len(entities) > 1:
+            return CommandResult(False, "confirm_required", {"entities": entities})
+        eid = entities[0]
+        domain = eid.split(".")[0]
+        try:
+            await call_service(domain, "toggle", {"entity_id": eid})
+            return CommandResult(True, f"Toggled {eid}")
+        except Exception as e:
+            logger.exception("Failed to toggle %s: %s", eid, e)
+            return CommandResult(False, "command_failed")
+
+    # set brightness
     m = re.match(
-        r"^(?:ha[:]?)?\s*(?:turn|switch)\s+(on|off)\s+(.+)$", prompt.strip(), re.I
+        r"^(?:ha[:]?)?\s*set\s+(.+?)\s+brightness\s+(\d{1,3})\s*%?$",
+        text,
+        re.I,
     )
+    if m:
+        name, bright_str = m.group(1).strip(), m.group(2)
+        level = max(0, min(100, int(bright_str)))
+        entities = await resolve_entity(name)
+        if not entities:
+            return CommandResult(False, "entity_not_found", {"name": name})
+        if len(entities) > 1:
+            return CommandResult(False, "confirm_required", {"entities": entities})
+        eid = entities[0]
+        try:
+            await call_service("light", "turn_on", {"entity_id": eid, "brightness_pct": level})
+            return CommandResult(True, f"Set {eid} brightness to {level}%")
+        except Exception as e:
+            logger.exception("Failed to set brightness for %s: %s", eid, e)
+            return CommandResult(False, "command_failed")
+
+    # turn on/off
+    m = re.match(r"^(?:ha[:]?)?\s*(?:turn|switch)\s+(on|off)\s+(.+)$", text, re.I)
     if not m:
         return None
-
     action, name = m.group(1).lower(), m.group(2).strip()
     entities = await resolve_entity(name)
     if not entities:

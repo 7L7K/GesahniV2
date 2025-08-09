@@ -43,9 +43,10 @@ export default function Page() {
                 typeof m.content === 'string' &&
                 (m.role === 'user' || m.role === 'assistant'))
               .map((m) => ({
-                ...m,
                 id: m.id ?? crypto.randomUUID(),
-                role: m.role as 'user' | 'assistant'
+                role: m.role as 'user' | 'assistant',
+                content: m.content as string,
+                loading: Boolean(m.loading),
               }));
             setMessages(validMessages);
           } else {
@@ -130,38 +131,42 @@ export default function Page() {
   };
 
   return (
-    <main className="flex flex-col h-screen bg-muted/50">
-      {/* chat scroll area */}
-      <section className="flex-1 overflow-y-auto p-4">
-        {messages.map(m =>
-          m.loading ? (
-            <LoadingBubble key={m.id} />
-          ) : (
-            <ChatBubble key={m.id} role={m.role} text={m.content} />
-          )
-        )}
-        <div ref={bottomRef} />
-      </section>
+    <main className="mx-auto h-[calc(100vh-56px)] max-w-3xl px-4">
+      <div className="flex h-full flex-col">
+        {/* chat scroll area */}
+        <section className="flex-1 overflow-y-auto py-4">
+          {messages.map(m =>
+            m.loading ? (
+              <LoadingBubble key={m.id} />
+            ) : (
+              <ChatBubble key={m.id} role={m.role} text={m.content} />
+            )
+          )}
+          <div ref={bottomRef} />
+        </section>
 
-      {/* input pinned bottom */}
-      <footer className="sticky bottom-0 w-full border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-2xl mx-auto p-4 space-y-2">
-          <InputBar
-            onSend={handleSend}
-            loading={loading}
-            model={model}
-            onModelChange={setModel}
-          />
-          <Button
-            onClick={clearHistory}
-            variant="ghost"
-            size="sm"
-            className="text-xs"
-          >
-            Clear history
-          </Button>
-        </div>
-      </footer>
+        {/* input pinned bottom */}
+        <footer className="sticky bottom-0 w-full border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="mx-auto max-w-2xl py-4">
+            <InputBar
+              onSend={handleSend}
+              loading={loading}
+              model={model}
+              onModelChange={setModel}
+            />
+            <div className="mt-2 flex justify-end">
+              <Button
+                onClick={clearHistory}
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+              >
+                Clear history
+              </Button>
+            </div>
+          </div>
+        </footer>
+      </div>
     </main>
   );
 }
