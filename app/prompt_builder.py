@@ -11,9 +11,10 @@ from typing import Any, List
 
 from .token_utils import count_tokens
 from .memory import memgpt
-from .memory.env_utils import _get_mem_top_k
+from .memory.env_utils import _get_mem_top_k, _normalized_hash
 from .memory.vector_store import safe_query_user_memories
 from .telemetry import log_record_var
+import os
 
 # ---------------------------------------------------------------------------
 # Constants & globals
@@ -162,6 +163,7 @@ class PromptBuilder:
         # ------------------------------------------------------------------
         while True:
             prompt = core_template
+            # Render retrieved memories as raw lines to preserve tests' expectations
             mem_text = "\n".join(mem_list)
 
             replacements = {
@@ -212,6 +214,12 @@ class PromptBuilder:
             prompt_tokens,
             len(mem_list),
         )
+        # Optional prompt logging for debugging/dev only
+        if os.getenv("LOG_BUILT_PROMPTS", "").lower() in {"1", "true", "yes"}:
+            try:
+                logger.debug("BUILT_PROMPT:: %s", prompt)
+            except Exception:
+                pass
         return prompt, prompt_tokens
 
 

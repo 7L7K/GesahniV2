@@ -128,6 +128,14 @@ async def trace_request(request: Request, call_next):
 
         if isinstance(response, Response):
             response.headers["X-Request-ID"] = rec.req_id
+            # Offline mode badge for UI: set a cookie when local fallback is in use
+            try:
+                from .llama_integration import LLAMA_HEALTHY as _LL_OK
+                local_mode = (not _LL_OK) and (os.getenv("OPENAI_API_KEY", "") == "")
+                if local_mode:
+                    response.set_cookie("X-Local-Mode", "1", max_age=600, path="/")
+            except Exception:
+                pass
 
         # Attach a compact logging meta for downstream log formatters and history
         meta = {

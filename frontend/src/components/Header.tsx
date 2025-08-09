@@ -24,12 +24,25 @@ export default function Header() {
         router.push('/');
     };
 
+    const [localMode, setLocalMode] = useState(false);
+    useEffect(() => {
+        // Heuristic: server can set a cookie X-Local-Mode=1 via a middleware in offline mode.
+        if (typeof document !== 'undefined') {
+            setLocalMode(/X-Local-Mode=1/.test(document.cookie));
+        }
+    }, [pathname]);
+
     return (
         <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <div className="h-6 w-6 rounded bg-primary" />
                     <Link href="/" className="font-semibold tracking-tight">Gesahni</Link>
+                    {localMode && (
+                        <span className="ml-2 text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 bg-yellow-500/20 text-yellow-900 dark:text-yellow-200">
+                            Local mode
+                        </span>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     {authed && (
