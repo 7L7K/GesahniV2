@@ -59,6 +59,26 @@ def _mark_llama_unhealthy() -> None:
     llama_integration.LLAMA_HEALTHY = False
 
 
+def _fact_from_qa(question: str, answer: str) -> str:
+    """Return a compact, one-line fact from a Q/A pair.
+
+    Heuristic: prefer a single-sentence paraphrase. Fall back to trimmed answer.
+    """
+    q = (question or "").strip().replace("\n", " ")
+    a = (answer or "").strip().replace("\n", " ")
+    if not q or not a:
+        return a or q
+    # If the answer looks like a clean sentence, keep first sentence.
+    for sep in [". ", "? ", "! "]:
+        if sep in a:
+            a = a.split(sep, 1)[0].strip().rstrip(".?!")
+            break
+    # Build a simple fact string. Keep it short.
+    if len(a) <= 140:
+        return a
+    # If too long, summarize minimally using a hard cap.
+    return (a[:137] + "...") if len(a) > 140 else a
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -201,14 +221,7 @@ async def route_prompt(
                 status_code=400, detail=f"Unknown or disallowed model '{mv}'"
             )
 
-        # Cache check should happen before smalltalk so cached answers short‑circuit
-        cached = lookup_cached_answer(norm_prompt)
-        if cached is not None:
-            if rec:
-                rec.cache_hit = True
-            result = await _finalise("cache", prompt, cached, rec)
-            return result
-
+        # Smalltalk should take precedence over QA cache for greetings
         if not bypass_skills and intent == "smalltalk":
             try:
                 skill_resp = await _SMALLTALK.handle(prompt)
@@ -222,6 +235,14 @@ async def route_prompt(
                 await record("done", source="skill")
                 result = skill_resp
                 return result
+
+        # Then consult QA cache to short‑circuit repeat questions
+        cached = lookup_cached_answer(norm_prompt)
+        if cached is not None:
+            if rec:
+                rec.cache_hit = True
+            result = await _finalise("cache", prompt, cached, rec)
+            return result
 
         skip_skills = intent == "chat" and priority == "high"
 
@@ -412,7 +433,7 @@ async def _call_gpt_override(
     await append_history(prompt, "gpt", text)
     await record("gpt", source="override")
     memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
-    add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
+    add_user_memory(user_id, _fact_from_qa(prompt, text))
     try:
         cache_answer(prompt=norm_prompt, answer=text)
     except Exception as e:  # pragma: no cover
@@ -459,7 +480,7 @@ async def _call_llama_override(
     memgpt.store_interaction(
         prompt, result_text, session_id=session_id, user_id=user_id
     )
-    add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
+    add_user_memory(user_id, _fact_from_qa(prompt, result_text))
     try:
         cache_answer(prompt=norm_prompt, answer=result_text)
     except Exception as e:  # pragma: no cover
@@ -502,7 +523,8 @@ async def _call_gpt(
             rec.cost_usd = cost
             rec.response = text
         memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
-        add_user_memory(user_id, f"Q: {prompt}\nA: {text}")
+        # Store concise, fact-like memory derived from the exchange
+        add_user_memory(user_id, _fact_from_qa(prompt, text))
         try:
             cache_answer(prompt=norm_prompt, answer=text)
         except Exception as e:  # pragma: no cover
@@ -614,7 +636,7 @@ async def _call_llama(
         memgpt.store_interaction(
             prompt, result_text, session_id=session_id, user_id=user_id
         )
-        add_user_memory(user_id, f"Q: {prompt}\nA: {result_text}")
+        add_user_memory(user_id, _fact_from_qa(prompt, result_text))
         try:
             cache_answer(prompt=norm_prompt, answer=result_text)
         except Exception as e:  # pragma: no cover

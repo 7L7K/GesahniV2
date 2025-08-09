@@ -92,8 +92,27 @@ def _embed_openai_sync(text: str, ttl_bucket: int) -> List[float]:
     """Return an embedding using the OpenAI sync client."""
     client = get_openai_client()
     model = os.getenv("EMBED_MODEL", "text-embedding-3-small")
-    resp = client.embeddings.create(model=model, input=text)
-    return resp.data[0].embedding  # type: ignore[return-value]
+    # Explicitly request float encoding to avoid base64 payloads returned by newer SDKs
+    resp = client.embeddings.create(
+        model=model,
+        input=text,
+        encoding_format="float",
+    )
+    embedding = resp.data[0].embedding
+    # Defensive: if a base64 string is ever returned, decode to float32
+    if isinstance(embedding, str):  # pragma: no cover - safety hatch
+        try:
+            try:
+                import pybase64 as base64  # type: ignore
+            except Exception:  # fallback to stdlib
+                import base64  # type: ignore
+            raw = base64.b64decode(embedding)
+            vec = np.frombuffer(raw, dtype=np.float32).astype("float32").tolist()
+            return vec
+        except Exception:
+            # Re-raise with context so callers see a clear error
+            raise RuntimeError("Unexpected base64 embedding format from OpenAI API")
+    return embedding  # type: ignore[return-value]
 
 
 async def _embed_openai(text: str) -> List[float]:

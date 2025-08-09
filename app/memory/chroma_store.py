@@ -78,6 +78,23 @@ class _LengthEmbedder:
         return "length-embedder"
 
 
+class _OpenAIEmbedder:
+    """Embedding function that uses app.embeddings.embed_sync.
+
+    This stays synchronous to match Chroma's embedding_function contract.
+    """
+
+    _type = "OpenAIEmbedder"
+
+    def __call__(self, input: List[str]) -> List[List[float]]:  # type: ignore[override]
+        from app.embeddings import embed_sync
+
+        return [embed_sync(t) for t in input]
+
+    def name(self) -> str:  # pragma: no cover - simple helper
+        return "openai-embedder"
+
+
 class _ChromaCacheWrapper:
     """Adapter exposing a minimal collection-like API for Chroma."""
 
@@ -115,6 +132,8 @@ class ChromaVectorStore(VectorStore):
         self._dist_cutoff = 1.0 - _get_sim_threshold()
 
         use_cloud = os.getenv("VECTOR_STORE", "local").lower() == "cloud"
+        self._is_local = not use_cloud
+        self._path: Optional[str] = None
 
         if use_cloud:
             from chromadb import CloudClient
@@ -126,13 +145,29 @@ class ChromaVectorStore(VectorStore):
             )
         else:
             path = os.getenv("CHROMA_PATH", ".chroma_data")
+            # Ensure directory exists unless misconfigured (e.g., path is a file)
             os.makedirs(path, exist_ok=True)
             from chromadb import PersistentClient
 
             client = PersistentClient(path=path)
+            self._path = path
 
         self._client = client
-        self._embedder = _LengthEmbedder()
+
+        # Choose collection embedder: length (default) or OpenAI
+        embed_kind = os.getenv("CHROMA_EMBEDDER", "length").strip().lower()
+        if embed_kind == "openai":
+            try:
+                self._embedder = _OpenAIEmbedder()
+                logger.info("Chroma embedder selected: openai")
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning(
+                    "OpenAI embedder unavailable (%s); falling back to length", e
+                )
+                self._embedder = _LengthEmbedder()
+        else:
+            self._embedder = _LengthEmbedder()
+            logger.info("Chroma embedder selected: length")
 
         # Gate QA cache collection behind env flag so it cannot block startup
         # Disable QA cache only outside tests
@@ -144,16 +179,7 @@ class ChromaVectorStore(VectorStore):
         if disable_qa:
             self._cache = _NoopCache()
         else:
-            try:
-                base_cache = self._client.get_or_create_collection(
-                    "qa_cache",
-                    embedding_function=self._embedder,
-                    metadata={"hnsw:space": "cosine"},
-                )
-            except TypeError:
-                base_cache = self._client.get_or_create_collection(
-                    "qa_cache", embedding_function=self._embedder
-                )
+            base_cache = self._create_collection_safely("qa_cache")
             self._cache = _ChromaCacheWrapper(base_cache)
 
             # Optional: self-heal corrupt QA cache in non-prod when asked
@@ -187,15 +213,23 @@ class ChromaVectorStore(VectorStore):
                             "qa_cache", embedding_function=self._embedder
                         )
                     self._cache = _ChromaCacheWrapper(base_cache)
+        self._user_memories = self._create_collection_safely("user_memories")
+
+    def _create_collection_safely(self, name: str):  # type: ignore[no-untyped-def]
+        """Create or load a collection, handling minor API differences.
+
+        Newer Chroma versions accept ``metadata`` for distance config; older
+        ones do not. We try the modern signature first and fall back.
+        """
         try:
-            self._user_memories = self._client.get_or_create_collection(
-                "user_memories",
+            return self._client.get_or_create_collection(  # type: ignore[attr-defined]
+                name,
                 embedding_function=self._embedder,
                 metadata={"hnsw:space": "cosine"},
             )
         except TypeError:
-            self._user_memories = self._client.get_or_create_collection(
-                "user_memories", embedding_function=self._embedder
+            return self._client.get_or_create_collection(  # type: ignore[attr-defined]
+                name, embedding_function=self._embedder
             )
 
     def add_user_memory(self, user_id: str, memory: str) -> str:
@@ -226,18 +260,29 @@ class ChromaVectorStore(VectorStore):
             n_results=k,
             include=["documents", "distances", "metadatas"],
         )
-        docs = res.get("documents", "[[]]")[0]
-        metas = res.get("metadatas", "[[]]")[0]
+        docs = (res.get("documents") or [[" "]])[0]
+        metas = (res.get("metadatas") or [[{}]])[0]
+        dvals = (res.get("distances") or [[None]])[0]
         items: List[Tuple[float, float, str]] = []
-        for doc, meta in zip(docs, metas):
+        use_length = (
+            not hasattr(self, "_embedder") or isinstance(self._embedder, _LengthEmbedder)
+        )
+        for idx in range(min(len(docs), len(metas))):
+            doc = docs[idx]
+            meta = metas[idx] or {}
             if not doc:
                 continue
-            # For 1-D length embeddings, use absolute length difference ratio
-            dist = abs(len(doc) - len(norm_prompt)) / max(len(doc), len(norm_prompt), 1)
-            # Exclude very dissimilar (high distance) items to match tests that
-            # expect unrelated items to be filtered when SIM_THRESHOLD is high.
-            if dist <= self._dist_cutoff and dist < 0.5:
-                items.append((float(dist), -float(meta.get("ts", 0)), doc))
+            if use_length:
+                # For length embedder, ignore Chroma distances and use length-ratio distance
+                dist = abs(len(doc) - len(norm_prompt)) / max(len(doc), len(norm_prompt), 1)
+                gate_ok = dist < 0.5
+            else:
+                dist_val = dvals[idx] if idx < len(dvals) else None
+                dist = float(dist_val) if dist_val is not None else 1.0
+                gate_ok = True
+            # Apply global cutoff and optional length gate
+            if dist <= self._dist_cutoff and gate_ok:
+                items.append((float(dist), -float(meta.get("ts", 0) or 0.0), doc))
         items.sort()
         top_items = items[:k]
         docs_out = [doc for _, _, doc in top_items]
@@ -283,7 +328,7 @@ class ChromaVectorStore(VectorStore):
             logger.debug("QA cache disabled; miss for %s", hash_)
             return None
         res = self._cache.query(
-            query_texts=[norm], n_results=1, include=["metadatas", "documents"]
+            query_texts=[norm], n_results=1, include=["metadatas", "documents", "distances"]
         )
         ids = res.get("ids", [[]])[0]
         if not ids:
@@ -292,8 +337,15 @@ class ChromaVectorStore(VectorStore):
         doc = res.get("documents", [[]])[0][0] or ""
         meta_raw = res.get("metadatas", [[]])
         meta = _normalize_meta(meta_raw[0][0] if meta_raw and meta_raw[0] else {})
-        # For LengthEmbedder, use absolute length diff ratio as distance
-        dist = abs(len(doc) - len(norm)) / max(len(doc), len(norm), 1)
+        dvals = res.get("distances", [[None]])[0]
+        # For length embedder, compute distance from length ratio, not Chroma distance
+        use_length = (
+            not hasattr(self, "_embedder") or isinstance(self._embedder, _LengthEmbedder)
+        )
+        if use_length:
+            dist = abs(len(doc) - len(norm)) / max(len(doc), len(norm), 1)
+        else:
+            dist = float(dvals[0]) if dvals and dvals[0] is not None else 1.0
         if dist >= self._dist_cutoff:
             logger.debug("Cache miss for %s (dist=%.4f > cutoff)", hash_, dist)
             return None
