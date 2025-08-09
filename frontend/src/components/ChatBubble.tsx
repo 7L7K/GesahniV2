@@ -4,7 +4,7 @@ import { Bot, User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 
 export default function ChatBubble({
   role,

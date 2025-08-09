@@ -1,6 +1,7 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type Decision = {
     req_id: string
@@ -36,86 +37,86 @@ export default function AdminPage() {
     }, [])
 
     return (
-        <main className="mx-auto max-w-5xl px-4 py-6">
-            <h1 className="text-xl font-semibold mb-4">Router Decisions</h1>
-            {err && <p className="text-sm text-red-600">{err}</p>}
-            <div className="overflow-x-auto rounded border">
-                <table className="min-w-full text-sm">
-                    <thead className="bg-muted/50">
-                        <tr>
-                            <th className="px-2 py-1 text-left">Time</th>
-                            <th className="px-2 py-1 text-left">Req</th>
-                            <th className="px-2 py-1 text-left">Engine</th>
-                            <th className="px-2 py-1 text-left">Model</th>
-                            <th className="px-2 py-1 text-left">Reason</th>
-                            <th className="px-2 py-1 text-right">Latency</th>
-                            <th className="px-2 py-1 text-right">Cache</th>
-                            <th className="px-2 py-1 text-right">SelfChk</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {items.map((d) => (
-                            <tr key={d.req_id} className="border-t">
-                                <td className="px-2 py-1">{d.timestamp?.replace('T', ' ').slice(0, 19) || '-'}</td>
-                                <td className="px-2 py-1 font-mono text-[11px]">{d.req_id.slice(0, 8)}</td>
-                                <td className="px-2 py-1">{d.engine || '-'}</td>
-                                <td className="px-2 py-1">{d.model || '-'}</td>
-                                <td className="px-2 py-1">{d.route_reason || '-'}</td>
-                                <td className="px-2 py-1 text-right">{d.latency_ms ?? '-'}</td>
-                                <td className="px-2 py-1 text-right">{d.cache_hit ? (d.cache_similarity?.toFixed?.(2) ?? 'hit') : '-'}</td>
-                                <td className="px-2 py-1 text-right">{d.self_check ? d.self_check.toFixed(2) : '-'}</td>
+        <main className="mx-auto max-w-5xl px-4 py-6 space-y-8">
+            <section>
+                <h1 className="text-xl font-semibold mb-4">Router Decisions</h1>
+                {err && <p className="text-sm text-red-600">{err}</p>}
+                <div className="overflow-x-auto rounded border">
+                    <table className="min-w-full text-sm">
+                        <thead className="bg-muted/50">
+                            <tr>
+                                <th className="px-2 py-1 text-left">Time</th>
+                                <th className="px-2 py-1 text-left">Req</th>
+                                <th className="px-2 py-1 text-left">Engine</th>
+                                <th className="px-2 py-1 text-left">Model</th>
+                                <th className="px-2 py-1 text-left">Reason</th>
+                                <th className="px-2 py-1 text-right">Latency</th>
+                                <th className="px-2 py-1 text-right">Cache</th>
+                                <th className="px-2 py-1 text-right">SelfChk</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            {items.map((d) => (
+                                <tr key={d.req_id} className="border-t">
+                                    <td className="px-2 py-1">{d.timestamp?.replace('T', ' ').slice(0, 19) || '-'}</td>
+                                    <td className="px-2 py-1 font-mono text-[11px]">{d.req_id.slice(0, 8)}</td>
+                                    <td className="px-2 py-1">{d.engine || '-'}</td>
+                                    <td className="px-2 py-1">{d.model || '-'}</td>
+                                    <td className="px-2 py-1">{d.route_reason || '-'}</td>
+                                    <td className="px-2 py-1 text-right">{d.latency_ms ?? '-'}</td>
+                                    <td className="px-2 py-1 text-right">{d.cache_hit ? (d.cache_similarity?.toFixed?.(2) ?? 'hit') : '-'}</td>
+                                    <td className="px-2 py-1 text-right">{d.self_check ? d.self_check.toFixed(2) : '-'}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section>
+                <h2 className="text-xl font-medium mb-2">Daily self-review</h2>
+                {/* Fetch via apiFetch to align with auth and base URL handling */}
+                <SelfReview />
+            </section>
         </main>
-    )
+    );
 }
 
-"use client";
-
-import { useEffect, useState } from "react";
-import { apiFetch } from "@/src/lib/api";
-
-type ErrItem = { timestamp: string; level: string; component: string; msg: string };
-
-export default function AdminPage() {
-    const [errors, setErrors] = useState<ErrItem[]>([]);
-    const [review, setReview] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const [err, setErr] = useState<string | null>(null);
+function SelfReview() {
+    const [errors, setErrors] = useState<{ timestamp: string; level: string; component: string; msg: string }[]>([])
+    const [review, setReview] = useState<any>(null)
+    const [loading, setLoading] = useState(true)
+    const [err, setErr] = useState<string | null>(null)
 
     useEffect(() => {
         async function load() {
-            setLoading(true);
-            setErr(null);
+            setLoading(true)
+            setErr(null)
             try {
                 const [eRes, rRes] = await Promise.all([
-                    apiFetch("/v1/admin/errors"),
-                    apiFetch("/v1/admin/self_review"),
-                ]);
-                const eBody = await eRes.json();
-                const rBody = await rRes.json();
-                setErrors((eBody?.errors || []) as ErrItem[]);
-                setReview(rBody || {});
+                    apiFetch('/v1/admin/errors'),
+                    apiFetch('/v1/admin/self_review'),
+                ])
+                const eBody = await eRes.json()
+                const rBody = await rRes.json()
+                setErrors((eBody?.errors || []) as any[])
+                setReview(rBody || {})
             } catch (e: any) {
-                setErr(e?.message || "Failed to load");
+                setErr(e?.message || 'Failed to load')
             } finally {
-                setLoading(false);
+                setLoading(false)
             }
         }
-        load();
-    }, []);
+        load()
+    }, [])
 
     return (
-        <div className="mx-auto max-w-5xl p-6 space-y-8">
-            <h1 className="text-2xl font-semibold">Admin Dashboard</h1>
+        <div className="space-y-6">
             {loading && <div>Loading…</div>}
             {err && <div className="text-red-600">{err}</div>}
 
-            <section>
-                <h2 className="text-xl font-medium mb-2">Last 50 errors</h2>
+            <div>
+                <h3 className="text-lg font-medium mb-2">Last 50 errors</h3>
                 <div className="rounded border divide-y bg-white dark:bg-zinc-900">
                     {(errors || []).map((e, idx) => (
                         <div key={idx} className="p-3 text-sm flex gap-3">
@@ -127,16 +128,14 @@ export default function AdminPage() {
                     ))}
                     {!errors?.length && <div className="p-3 text-sm text-zinc-500">No recent errors.</div>}
                 </div>
-            </section>
+            </div>
 
-            <section>
-                <h2 className="text-xl font-medium mb-2">Daily self-review</h2>
+            <div>
+                <h3 className="text-lg font-medium mb-2">Self-review</h3>
                 <pre className="text-sm rounded bg-zinc-50 dark:bg-zinc-950 p-3 overflow-auto">
                     {JSON.stringify(review, null, 2)}
                 </pre>
-            </section>
+            </div>
         </div>
-    );
+    )
 }
-
-
