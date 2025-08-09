@@ -1,6 +1,8 @@
 // src/components/ChatBubble.tsx
-import { cn } from "@/lib/utils"; // if you have a clsx helper
+import { cn } from "@/lib/utils";
 import { Bot, User } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function ChatBubble({
   role,
@@ -19,17 +21,21 @@ export default function ChatBubble({
           <Bot className="size-5" />
         </div>
       )}
-      <p
+      <div
         className={cn(
-          "rounded-2xl px-4 py-2 max-w-[75%] text-sm leading-relaxed",
+          "rounded-2xl px-4 py-2 max-w-[75%] text-sm leading-relaxed prose prose-sm dark:prose-invert prose-pre:bg-muted/70 prose-pre:text-foreground",
           ghost && "opacity-60 italic",
           isUser
-            ? "bg-primary text-primary-foreground"
+            ? "bg-primary text-primary-foreground prose-invert"
             : "bg-card text-card-foreground"
         )}
       >
-        {text}
-      </p>
+        {isUser ? (
+          <p className="m-0 whitespace-pre-wrap">{text}</p>
+        ) : (
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+        )}
+      </div>
       {isUser && (
         <div className="shrink-0 mt-1 text-primary">
           <User className="size-5" />

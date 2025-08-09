@@ -89,7 +89,12 @@ async def verify_token(request: Request) -> None:
 async def rate_limit(request: Request) -> None:
     """Rate limit requests per authenticated user (or IP when unauthenticated)."""
 
+    # Prefer explicit user_id set by deps; otherwise pull from JWT payload
     key = getattr(request.state, "user_id", None)
+    if not key:
+        payload = getattr(request.state, "jwt_payload", None)
+        if isinstance(payload, dict):
+            key = payload.get("user_id") or payload.get("sub")
     if not key:
         ip = request.headers.get("X-Forwarded-For")
         if ip:
@@ -97,7 +102,7 @@ async def rate_limit(request: Request) -> None:
         else:
             key = request.client.host if request.client else "anon"
     async with _lock:
-        ok = _bucket_rate_limit(key, http_requests, RATE_LIMIT, _window)
+        ok = _bucket_rate_limit(key, _http_requests, RATE_LIMIT, _window)
     if not ok:
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
@@ -123,13 +128,17 @@ async def rate_limit_ws(ws: WebSocket) -> None:
 
     key = getattr(ws.state, "user_id", None)
     if not key:
+        payload = getattr(ws.state, "jwt_payload", None)
+        if isinstance(payload, dict):
+            key = payload.get("user_id") or payload.get("sub")
+    if not key:
         ip = ws.headers.get("X-Forwarded-For")
         if ip:
             key = ip.split(",")[0].strip()
         else:
             key = ws.client.host if ws.client else "anon"
     async with _lock:
-        ok = _bucket_rate_limit(key, ws_requests, RATE_LIMIT, _window)
+        ok = _bucket_rate_limit(key, _ws_requests, RATE_LIMIT, _window)
     if not ok:
         raise WebSocketException(code=1013)
 

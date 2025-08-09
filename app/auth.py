@@ -105,6 +105,7 @@ async def login(
     jti = uuid4().hex
     access_payload = {
         "sub": req.username,
+        "user_id": req.username,
         "exp": expire,
         "jti": jti,
         "type": "access",
@@ -116,6 +117,7 @@ async def login(
     refresh_jti = uuid4().hex
     refresh_payload = {
         "sub": req.username,
+        "user_id": req.username,
         "exp": refresh_expire,
         "jti": refresh_jti,
         "type": "refresh",
@@ -157,6 +159,7 @@ async def refresh(req: RefreshRequest) -> TokenResponse:
     new_jti = uuid4().hex
     access_payload = {
         "sub": username,
+        "user_id": username,
         "exp": expire,
         "jti": new_jti,
         "type": "access",
@@ -168,6 +171,7 @@ async def refresh(req: RefreshRequest) -> TokenResponse:
     refresh_jti = uuid4().hex
     refresh_payload = {
         "sub": username,
+        "user_id": username,
         "exp": refresh_expire,
         "jti": refresh_jti,
         "type": "refresh",

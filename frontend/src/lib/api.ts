@@ -22,10 +22,8 @@ export async function sendPrompt(
 
   if (!res.ok) {
     const body = isJson ? await res.json() : await res.text();
-    const message =
-      typeof body === 'string'
-        ? body
-        : body.error || body.message || body.detail || JSON.stringify(body);
+    const raw = typeof body === 'string' ? body : (body.error || body.message || body.detail || JSON.stringify(body));
+    const message = (raw || '').toString().trim() || res.statusText || `HTTP ${res.status}`;
     throw new Error(`Request failed: ${res.status} - ${message}`);
   }
 
@@ -47,7 +45,8 @@ export async function sendPrompt(
     if (done) break;
     const chunk = decoder.decode(value, { stream: true });
     if (chunk.startsWith('[error')) {
-      throw new Error(chunk.replace(/\[error:?|\]$/g, ''));
+      const msg = chunk.replace(/\[error:?|\]$/g, '').trim() || 'Unknown error';
+      throw new Error(msg);
     }
     result += chunk;
     onToken?.(chunk);

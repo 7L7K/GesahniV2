@@ -2,7 +2,7 @@
 import { Send } from "lucide-react";
 import { useState, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import TextareaAutosize from "react-textarea-autosize";
 
 export default function InputBar({
   onSend,
@@ -38,27 +38,52 @@ export default function InputBar({
   };
 
   return (
-    <div className="flex gap-2 items-end">
-      <select
-        value={model}
-        onChange={(e) => onModelChange(e.target.value)}
-        className="border border-input rounded-md px-2 py-1 text-sm bg-background"
-      >
-        <option value="llama3">llama3</option>
-        <option value="gpt-4o">gpt-4o</option>
-      </select>
-      <Textarea
-        value={text}
-        onChange={e => setText(e.target.value)}
-        onKeyDown={handleKey}
-        placeholder="Type a message…"
-        className="flex-1 resize-none"
-        rows={1}
-        disabled={loading}
-      />
-      <Button onClick={() => { void send(); }} disabled={loading || !text.trim()} size="icon">
-        <Send className="size-4" />
-      </Button>
+    <div className="flex flex-col gap-2">
+      <div className="inline-flex w-full items-center justify-between rounded-lg border bg-background p-1">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onModelChange('llama3')}
+            className={
+              model === 'llama3'
+                ? 'rounded-md px-3 py-1.5 text-xs bg-primary text-primary-foreground'
+                : 'rounded-md px-3 py-1.5 text-xs hover:bg-accent'
+            }
+          >
+            llama3
+          </button>
+          <button
+            type="button"
+            onClick={() => onModelChange('gpt-4o')}
+            className={
+              model === 'gpt-4o'
+                ? 'rounded-md px-3 py-1.5 text-xs bg-primary text-primary-foreground'
+                : 'rounded-md px-3 py-1.5 text-xs hover:bg-accent'
+            }
+          >
+            gpt-4o
+          </button>
+        </div>
+        <div className="text-[10px] text-muted-foreground px-2">Shift+Enter for newline</div>
+      </div>
+
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <TextareaAutosize
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="Type a message…"
+            className="w-full min-h-[40px] max-h-40 resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            minRows={1}
+            maxRows={8}
+            disabled={loading}
+          />
+        </div>
+        <Button onClick={() => { void send(); }} disabled={loading || !text.trim()} size="icon">
+          <Send className="size-4" />
+        </Button>
+      </div>
     </div>
   );
 }

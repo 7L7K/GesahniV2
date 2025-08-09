@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # Constants / Config
 # ---------------------------------------------------------------------------
 ALLOWED_GPT_MODELS: set[str] = set(
-    os.getenv("ALLOWED_GPT_MODELS", "gpt-4o,gpt-4,gpt-3.5-turbo").split(",")
+    filter(None, os.getenv("ALLOWED_GPT_MODELS", "gpt-4o,gpt-4,gpt-3.5-turbo").split(","))
 )
 ALLOWED_LLAMA_MODELS: set[str] = set(
     filter(None, os.getenv("ALLOWED_LLAMA_MODELS", "llama3:latest,llama3").split(","))
@@ -148,6 +148,10 @@ async def route_prompt(
             _mark_llama_unhealthy()
             # keep model picker in sync so GPT is selected
             model_picker_module.LLAMA_HEALTHY = False
+
+        # Guard against empty/whitespace prompts
+        if not prompt or not prompt.strip():
+            raise HTTPException(status_code=400, detail="empty_prompt")
 
         intent, priority = detect_intent(prompt)
         # If the LLaMA circuit is open, bypass all skills to force model path
@@ -461,7 +465,11 @@ async def _call_llama_override(
         (gen_opts or {}).get("top_p"),
     )
     try:
-        async for tok in ask_llama(built, model, **(gen_opts or {})):
+        try:
+            agen = ask_llama(built, model, **(gen_opts or {}))
+        except TypeError:
+            agen = ask_llama(built, model, gen_opts=gen_opts)
+        async for tok in agen:
             tokens.append(tok)
             if stream_cb:
                 await stream_cb(tok)
@@ -559,7 +567,10 @@ async def _call_llama(
         (gen_opts or {}).get("top_p"),
     )
     try:
-        result = ask_llama(prompt=built_prompt, model=model, **(gen_opts or {}))
+        try:
+            result = ask_llama(built_prompt, model, **(gen_opts or {}))
+        except TypeError:
+            result = ask_llama(built_prompt, model, gen_opts=gen_opts)
         if inspect.isasyncgen(result):
             async for tok in result:
                 tokens.append(tok)

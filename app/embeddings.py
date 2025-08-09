@@ -93,11 +93,16 @@ def _embed_openai_sync(text: str, ttl_bucket: int) -> List[float]:
     client = get_openai_client()
     model = os.getenv("EMBED_MODEL", "text-embedding-3-small")
     # Explicitly request float encoding to avoid base64 payloads returned by newer SDKs
-    resp = client.embeddings.create(
-        model=model,
-        input=text,
-        encoding_format="float",
-    )
+    # Fall back to legacy signature for older clients/stubs that don't accept encoding_format
+    try:
+        resp = client.embeddings.create(
+            model=model,
+            input=text,
+            encoding_format="float",
+        )
+    except TypeError:
+        # Older clients (or unit test stubs) may not support encoding_format
+        resp = client.embeddings.create(model=model, input=text)
     embedding = resp.data[0].embedding
     # Defensive: if a base64 string is ever returned, decode to float32
     if isinstance(embedding, str):  # pragma: no cover - safety hatch

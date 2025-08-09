@@ -137,7 +137,12 @@ def safe_query_user_memories(
     else:
         coerced = k
 
-    memories = query_user_memories(user_id, prompt, k=coerced)
+    try:
+        memories = query_user_memories(user_id, prompt, k=coerced)
+    except Exception as e:  # pragma: no cover - defensive guardrail
+        # Never allow RAG lookup failures to break routing; degrade gracefully.
+        logger.warning("safe_query_user_memories failed: %s", e, exc_info=True)
+        memories = []
     logger.debug("→ returning %d memories", len(memories))
     return memories
 
