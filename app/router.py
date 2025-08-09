@@ -963,4 +963,10 @@ async def _finalise(
 
 async def _run_skill(prompt: str, SkillClass, rec):
     skill_resp = await SkillClass().handle(prompt)
+    try:
+        from . import analytics as _analytics
+
+        await _analytics.record_skill(getattr(SkillClass, "__name__", str(SkillClass)))
+    except Exception:
+        pass
     return await _finalise("skill", prompt, str(skill_resp), rec)
