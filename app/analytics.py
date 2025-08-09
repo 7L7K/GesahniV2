@@ -1,6 +1,6 @@
 import asyncio
 import math
-from typing import Dict
+from typing import Dict, List, Tuple
 
 _metrics = {
     "total": 0,
@@ -11,6 +11,10 @@ _metrics = {
     "transcribe_ms": 0,
     "transcribe_count": 0,
     "transcribe_errors": 0,
+    # Proactive/admin extras
+    "cache_hits": 0,
+    "cache_lookups": 0,
+    "ha_failures": 0,
 }
 _lock = asyncio.Lock()
 
@@ -59,3 +63,40 @@ def latency_p95() -> int:
     samples = sorted(_latency_samples)
     idx = math.ceil(0.95 * len(samples)) - 1
     return samples[idx]
+
+
+# -----------------------------
+# Admin insight helpers
+# -----------------------------
+
+_skill_counts: Dict[str, int] = {}
+
+
+async def record_skill(name: str) -> None:
+    async with _lock:
+        _skill_counts[name] = _skill_counts.get(name, 0) + 1
+
+
+def get_top_skills(n: int = 10) -> List[Tuple[str, int]]:
+    items = sorted(_skill_counts.items(), key=lambda kv: kv[1], reverse=True)
+    return items[:n]
+
+
+async def record_cache_lookup(hit: bool) -> None:
+    async with _lock:
+        _metrics["cache_lookups"] += 1
+        if hit:
+            _metrics["cache_hits"] += 1
+
+
+def cache_hit_rate() -> float:
+    lookups = _metrics.get("cache_lookups", 0)
+    hits = _metrics.get("cache_hits", 0)
+    if lookups == 0:
+        return 0.0
+    return round(100.0 * hits / max(1, lookups), 2)
+
+
+async def record_ha_failure() -> None:
+    async with _lock:
+        _metrics["ha_failures"] += 1

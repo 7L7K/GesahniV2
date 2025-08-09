@@ -98,13 +98,17 @@ export async function sendPrompt(
   modelOverride: string,
   onToken?: (chunk: string) => void,
 ): Promise<string> {
+  // Prefer SSE to minimize TTFB for first token
+  const headers: HeadersInit = { 'Accept': 'text/event-stream' };
   const res = await apiFetch('/v1/ask', {
     method: 'POST',
+    headers,
     body: JSON.stringify({ prompt, model_override: modelOverride }),
   });
 
   const contentType = res.headers.get('content-type') || '';
   const isJson = contentType.includes('application/json');
+  const isSse = contentType.includes('text/event-stream');
 
   if (!res.ok) {
     const body = isJson ? await res.json().catch(() => null) : await res.text().catch(() => '');
@@ -123,18 +127,49 @@ export async function sendPrompt(
 
   const decoder = new TextDecoder();
   let result = '';
+  let buffer = '';
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
-    const chunk = decoder.decode(value, { stream: true });
-    if (chunk.startsWith('[error')) {
-      const msg = chunk.replace(/\[error:?|\]$/g, '').trim() || 'Unknown error';
-      throw new Error(msg);
+    const chunkRaw = decoder.decode(value, { stream: true });
+    buffer += chunkRaw;
+
+    if (isSse) {
+      // Parse simple SSE: lines starting with 'data: '
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const event = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        for (const line of event.split('\n')) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data.startsWith('[error')) {
+              const msg = data.replace(/\[error:?|\]$/g, '').trim() || 'Unknown error';
+              throw new Error(msg);
+            }
+            result += data;
+            onToken?.(data);
+          }
+        }
+      }
+    } else {
+      // Plain text streaming
+      const chunk = chunkRaw;
+      if (chunk.startsWith('[error')) {
+        const msg = chunk.replace(/\[error:?|\]$/g, '').trim() || 'Unknown error';
+        throw new Error(msg);
+      }
+      result += chunk;
+      onToken?.(chunk);
     }
-    result += chunk;
-    onToken?.(chunk);
   }
   return result;
+}
+
+export async function getBudget(): Promise<{ tokens_used: number; minutes_used: number; reply_len_target: string; escalate_allowed: boolean; near_cap: boolean }> {
+  const res = await apiFetch('/v1/status/budget', { method: 'GET' });
+  if (!res.ok) throw new Error('budget_failed');
+  return res.json();
 }
 
 export async function login(username: string, password: string) {

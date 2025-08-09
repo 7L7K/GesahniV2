@@ -6,6 +6,7 @@ import httpx
 import logging
 
 from .base import Skill
+from ..telemetry import log_record_var
 
 log = logging.getLogger(__name__)
 
@@ -59,4 +60,7 @@ class CurrencySkill(Skill):
         except Exception:
             log.exception("Currency conversion failed")
             return "Currency conversion failed."
+        rec = log_record_var.get()
+        if rec is not None:
+            rec.route_reason = (rec.route_reason or "") + "|force_llama_currency"
         return f"{amount:.2f} {from_code} is {result:.2f} {to_code}."

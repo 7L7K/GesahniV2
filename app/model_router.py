@@ -20,6 +20,7 @@ except Exception:  # pragma: no cover - fallback parser
     yaml = None  # type: ignore
 
 from .token_utils import count_tokens
+from .metrics import ROUTER_DECISION
 from .memory.vector_store import _normalized_hash as normalized_hash
 
 
@@ -168,20 +169,25 @@ def route_text(
 
     # Attachments heuristic: if there are any images/files, prefer mid-tier snapshot
     if (attachments_count or 0) > 0:
+        ROUTER_DECISION.labels("attachments").inc()
         return RouteDecision(model="gpt-4.1-nano", reason="attachments")
 
     # Ops heuristic: escalate if many files
     if intent == "ops" and ops_files_count is not None:
         if ops_files_count <= rules["OPS_MAX_FILES_SIMPLE"]:
+            ROUTER_DECISION.labels("ops-simple").inc()
             return RouteDecision(model="gpt-5-nano", reason="ops-simple")
+        ROUTER_DECISION.labels("ops-complex").inc()
         return RouteDecision(model="gpt-4.1-nano", reason="ops-complex")
 
     # Long prompt (token-based)
     if pt > rules["MAX_SHORT_PROMPT_TOKENS"]:
+        ROUTER_DECISION.labels("long-prompt").inc()
         return RouteDecision(model="gpt-4.1-nano", reason="long-prompt")
     # Fallback: char-length heuristic when tokenizer underestimates
     char_len = len(user_prompt or "")
     if char_len > (rules["MAX_SHORT_PROMPT_TOKENS"] * 3):
+        ROUTER_DECISION.labels("long-prompt").inc()
         return RouteDecision(model="gpt-4.1-nano", reason="long-prompt")
 
     # Long RAG context (estimate by tokens in docs)
@@ -191,13 +197,16 @@ def route_text(
         approx_tokens = sum(max(1, len(d) // 4) for d in retrieved_docs)
         rag_tokens = max(rag_tokens, approx_tokens)
         if rag_tokens > rules["RAG_LONG_CONTEXT_THRESHOLD"]:
+            ROUTER_DECISION.labels("long-context").inc()
             return RouteDecision(model="gpt-4.1-nano", reason="long-context")
         # Fallback: char-length heuristic for doc context when tokenizer underestimates
         char_total = sum(len(d) for d in retrieved_docs)
         # Treat >5k chars of external context as long in fallback mode
         if char_total > 5000:
+            ROUTER_DECISION.labels("long-context").inc()
             return RouteDecision(model="gpt-4.1-nano", reason="long-context")
 
+    ROUTER_DECISION.labels("default").inc()
     return RouteDecision(model="gpt-5-nano", reason="default")
 
 
@@ -267,7 +276,8 @@ async def run_with_self_check(
 
     rules = _load_rules()
     thresh = float(rules["SELF_CHECK_FAIL_THRESHOLD"] if threshold is None else threshold)
-    retries_left = int(rules["MAX_RETRIES_PER_REQUEST"] if max_retries is None else max_retries)
+    effective_max = int(rules["MAX_RETRIES_PER_REQUEST"] if max_retries is None else max_retries)
+    retries_left = int(effective_max)
     # If budget/quota is breached, disable escalations entirely
     if os.getenv("BUDGET_QUOTA_BREACHED", "0").lower() in {"1", "true", "yes"}:
         retries_left = 0
@@ -312,10 +322,14 @@ async def run_with_self_check(
     # escalate chain
     while retries_left > 0:
         retries_left -= 1
-        # With a single allowed retry, jump directly to final reasoning model
-        if int(rules["MAX_RETRIES_PER_REQUEST"]) <= 1:
-            current_model = "o4-mini"
-            reason = "self-check-final"
+        # With a single allowed retry, prefer mid-tier unless threshold demands final
+        if int(effective_max) <= 1:
+            if thresh >= 0.8:
+                current_model = "o4-mini"
+                reason = "self-check-final"
+            else:
+                current_model = "gpt-4.1-nano"
+                reason = "self-check-escalation"
             escalated = True
         else:
             # first escalation → gpt-4.1-nano if not already
@@ -398,29 +412,13 @@ async def route_vision(
     Returns (model_used, reason).
     """
 
-    # local triage + per-day cap. Only send remote snapshot when event=true
+    # local triage + per-day cap; treat any provided image or hint as an event
     risk = triage_scene_risk(text_hint)
     max_per_day = int(os.getenv("VISION_MAX_IMAGES_PER_DAY", "40"))
     if not _vision_daily_cap(max_per_day):
         return "local", "vision-local-cap"
 
-    event = False
-    try:
-        from ultralytics import YOLO  # type: ignore
-
-        model_local = YOLO(os.getenv("YOLO_MODEL", "yolov8n.pt"))
-        img0 = images[0]
-        res = model_local.predict(img0, imgsz=320, verbose=False)
-        for r in res:
-            boxes = getattr(r, "boxes", []) or []
-            if len(boxes) > 0:
-                event = True
-                break
-    except Exception:
-        # Fallback heuristic via hint text
-        h = (text_hint or "").lower()
-        if any(k in h for k in ("person", "motion", "object", "car", "animal", "face")):
-            event = True
+    event = bool(images or text_hint)
     if not event:
         return "local", "vision-no-event"
 

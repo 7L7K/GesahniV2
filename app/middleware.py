@@ -10,6 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from .logging_config import req_id_var
 from .telemetry import LogRecord, log_record_var, utc_now
+from .decisions import add_decision, add_trace_event
 from .history import append_history
 from .analytics import record_latency, latency_p95
 from .user_store import user_store
@@ -141,6 +142,7 @@ async def trace_request(request: Request, call_next):
         meta = {
             "model_used": rec.model_name,
             "reason": rec.route_reason,
+            "rule": rec.route_reason,  # duplicate for dashboard filters
             "tokens_in": rec.prompt_tokens,
             "tokens_out": rec.completion_tokens,
             "retrieved_tokens": rec.retrieved_tokens,
@@ -156,7 +158,19 @@ async def trace_request(request: Request, call_next):
             logging.getLogger(__name__).info("request_summary", extra={"meta": meta})
         except Exception:
             pass
-        await append_history({**rec.model_dump(exclude_none=True), **{"meta": meta}})
+        # Persist structured history
+        full = {**rec.model_dump(exclude_none=True), **{"meta": meta}}
+        await append_history(full)
+        # Also store a compact decision record for admin UI and explain endpoint
+        try:
+            add_decision(full)
+        except Exception:
+            pass
+        # Ensure at least a minimal trace exists
+        try:
+            add_trace_event(rec.req_id, "request_end", status=rec.status, latency_ms=rec.latency_ms)
+        except Exception:
+            pass
         log_record_var.reset(token_rec)
         req_id_var.reset(token_req)
     return response

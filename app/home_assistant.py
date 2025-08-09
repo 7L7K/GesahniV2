@@ -4,12 +4,15 @@ import re
 import time
 import json as json_module
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from typing import Any, List, Optional
 
 from .http_utils import json_request, log_exceptions
 from . import alias_store
 
 from .telemetry import log_record_var
+from .audit import append_audit
+from .policy import moderation_precheck
 
 # ---------------------------------------------------------------------------
 # Environment & Defaults
@@ -49,6 +52,17 @@ _SYN_TO_ROOM = {
 _STATES_CACHE: list[dict] | None = None
 _STATES_CACHE_EXP: float = 0.0
 _STATES_TTL = 1.0  # seconds
+
+# Service capabilities registry
+_SERVICES_REGISTRY: dict[str, set[str]] = {}
+_SERVICES_SCHEMA: dict[tuple[str, str], set[str]] = {}
+
+# Risky actions that require explicit confirmation
+_RISKY_ACTIONS: set[tuple[str, str]] = {
+    ("lock", "unlock"),
+    ("alarm_control_panel", "alarm_disarm"),
+    ("cover", "open_cover"),
+}
 
 
 @dataclass(slots=True)
@@ -136,8 +150,93 @@ def invalidate_states_cache() -> None:
     _STATES_CACHE_EXP = 0.0
 
 
+async def refresh_services_registry() -> None:
+    """Fetch Home Assistant services and cache capabilities per domain/service.
+
+    Populates:
+      - _SERVICES_REGISTRY: {domain -> {service, ...}}
+      - _SERVICES_SCHEMA: {(domain, service) -> {field, ...}}
+    """
+    global _SERVICES_REGISTRY, _SERVICES_SCHEMA
+    try:
+        data = await _request("GET", "/services")
+        registry: dict[str, set[str]] = {}
+        schema: dict[tuple[str, str], set[str]] = {}
+        if isinstance(data, list):
+            for dom in data:
+                domain = dom.get("domain")
+                services = dom.get("services", {}) or {}
+                if not isinstance(services, dict):
+                    continue
+                registry.setdefault(domain, set())
+                for svc_name, info in services.items():
+                    registry[domain].add(svc_name)
+                    fields = set((info or {}).get("fields", {}).keys())
+                    schema[(domain, svc_name)] = fields
+        _SERVICES_REGISTRY = registry
+        _SERVICES_SCHEMA = schema
+        logger.info("HA services registry loaded: %d domains", len(_SERVICES_REGISTRY))
+    except Exception as e:  # pragma: no cover - best effort
+        logger.debug("Failed to refresh services registry: %s", e)
+
+
+def is_service_available(domain: str, service: str) -> bool:
+    services = _SERVICES_REGISTRY.get(domain)
+    return bool(services and service in services)
+
+
+def validate_service_call(domain: str, service: str, data: dict | None) -> None:
+    """Best-effort validation against cached capabilities.
+
+    When HA_STRICT_SERVICES=1 and a registry is loaded, raise on unknown services
+    or unexpected payload keys. Otherwise, this is a no-op.
+    """
+    strict = os.getenv("HA_STRICT_SERVICES", "").lower() in {"1", "true", "yes"}
+    if not strict:
+        return
+    if not _SERVICES_REGISTRY:
+        return
+    if not is_service_available(domain, service):
+        raise HomeAssistantAPIError(f"Service not available: {domain}.{service}")
+    allowed = _SERVICES_SCHEMA.get((domain, service))
+    if allowed is not None and data:
+        extra = set(data.keys()) - allowed
+        # entity_id is commonly allowed implicitly by HA even if absent in schema
+        extra.discard("entity_id")
+        if extra:
+            raise HomeAssistantAPIError(
+                f"Unexpected fields for {domain}.{service}: {sorted(extra)}"
+            )
+
+
+def requires_confirmation(domain: str, service: str) -> bool:
+    return (domain, service) in _RISKY_ACTIONS
+
+
 async def call_service(domain: str, service: str, data: dict) -> Any:
     """Call an HA service and pipe basic telemetry into the log record var."""
+    # Best-effort moderation pre-check for model-generated actions
+    action_text = f"{domain}.{service} {data}"
+    if not moderation_precheck(action_text):
+        raise RuntimeError("action_blocked_by_policy")
+    try:
+        validate_service_call(domain, service, data)
+    except Exception as e:
+        logger.warning("HA service validation failed: %s", e)
+        if os.getenv("HA_STRICT_SERVICES", "").lower() in {"1", "true", "yes"}:
+            raise
+    # Enforce confirmation for risky actions unless BYPASS_CONFIRM is enabled
+    if requires_confirmation(domain, service) and not (
+        os.getenv("BYPASS_CONFIRM", "").lower() in {"1", "true", "yes"}
+    ):
+        confirm = False
+        # accept common keys for confirmation flags
+        for key in ("confirm", "__confirm__", "requires_confirm_ack"):
+            if isinstance(data, dict) and data.get(key) in (True, 1, "1", "true", "yes"):
+                confirm = True
+                break
+        if not confirm:
+            raise HomeAssistantAPIError("confirm_required")
     rec = log_record_var.get()
     if rec is not None:
         rec.ha_service_called = f"{domain}.{service}"
@@ -146,6 +245,16 @@ async def call_service(domain: str, service: str, data: dict) -> Any:
             rec.entity_ids = [ids] if isinstance(ids, str) else list(ids)
     result = await _request("POST", f"/services/{domain}/{service}", json=data)
     invalidate_states_cache()
+    try:
+        rec = log_record_var.get()
+        uid = getattr(rec, "user_id", None)
+        append_audit(
+            "ha_service",
+            user_id_hashed=uid,
+            data={"service": f"{domain}.{service}", "entity_id": data.get("entity_id")},
+        )
+    except Exception:
+        pass
     return result
 
 
@@ -170,6 +279,7 @@ async def startup_check() -> None:
 
     try:
         await _request("GET", "/states")
+        await refresh_services_registry()
         logger.info("Connected to Home Assistant successfully")
     except Exception as e:
         logger.warning("Home Assistant unreachable: %s", e)
@@ -244,6 +354,21 @@ async def resolve_entity(name: str) -> List[str]:
     return [m for m in matches if m]
 
 
+def _best_fuzzy_match(target: str, states: list[dict]) -> tuple[str | None, float]:
+    """Return the best entity_id and confidence ratio [0,1] for a fuzzy match."""
+    best_id: str | None = None
+    best_score: float = 0.0
+    t = target.strip().lower()
+    for st in states:
+        eid = st.get("entity_id", "")
+        friendly = (st.get("attributes", {}) or {}).get("friendly_name", "")
+        cand = friendly or eid
+        score = SequenceMatcher(a=t, b=str(cand).lower()).ratio()
+        if score > best_score:
+            best_score, best_id = score, eid
+    return best_id, best_score
+
+
 async def handle_command(prompt: str) -> Optional[CommandResult]:
     """Parse HA control commands and execute them.
 
@@ -259,7 +384,17 @@ async def handle_command(prompt: str) -> Optional[CommandResult]:
         name = m.group(1).strip()
         entities = await resolve_entity(name)
         if not entities:
-            return CommandResult(False, "entity_not_found", {"name": name})
+            # Try fuzzy
+            states = await get_states()
+            eid, score = _best_fuzzy_match(name, states)
+            rec = log_record_var.get()
+            if rec is not None:
+                rec.match_confidence = float(score)
+            if not eid:
+                return CommandResult(False, "entity_not_found", {"name": name})
+            if score < 0.8:
+                return CommandResult(False, "confirm_required", {"entities": [eid], "confidence": score})
+            entities = [eid]
         if len(entities) > 1:
             return CommandResult(False, "confirm_required", {"entities": entities})
         eid = entities[0]
@@ -282,7 +417,16 @@ async def handle_command(prompt: str) -> Optional[CommandResult]:
         level = max(0, min(100, int(bright_str)))
         entities = await resolve_entity(name)
         if not entities:
-            return CommandResult(False, "entity_not_found", {"name": name})
+            states = await get_states()
+            eid, score = _best_fuzzy_match(name, states)
+            rec = log_record_var.get()
+            if rec is not None:
+                rec.match_confidence = float(score)
+            if not eid:
+                return CommandResult(False, "entity_not_found", {"name": name})
+            if score < 0.8:
+                return CommandResult(False, "confirm_required", {"entities": [eid], "confidence": score})
+            entities = [eid]
         if len(entities) > 1:
             return CommandResult(False, "confirm_required", {"entities": entities})
         eid = entities[0]
@@ -300,7 +444,16 @@ async def handle_command(prompt: str) -> Optional[CommandResult]:
     action, name = m.group(1).lower(), m.group(2).strip()
     entities = await resolve_entity(name)
     if not entities:
-        return CommandResult(False, "entity_not_found", {"name": name})
+        states = await get_states()
+        eid, score = _best_fuzzy_match(name, states)
+        rec = log_record_var.get()
+        if rec is not None:
+            rec.match_confidence = float(score)
+        if not eid:
+            return CommandResult(False, "entity_not_found", {"name": name})
+        if score < 0.8:
+            return CommandResult(False, "confirm_required", {"entities": [eid], "confidence": score})
+        entities = [eid]
     if len(entities) > 1:
         return CommandResult(False, "confirm_required", {"entities": entities})
 

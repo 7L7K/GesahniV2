@@ -47,6 +47,10 @@ class VectorStore:
         self, user_id: str, prompt: str, k: int = 5
     ) -> List[str]: ...
 
+    def list_user_memories(self, user_id: str) -> List[Dict]: ...
+
+    def delete_user_memory(self, user_id: str, mem_id: str) -> bool: ...
+
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None: ...
 
     def lookup_cached_answer(
@@ -191,6 +195,23 @@ class MemoryVectorStore(VectorStore):
         )
         return docs_out
 
+    def list_user_memories(self, user_id: str) -> List[Dict]:
+        items: List[Dict] = []
+        for mid, doc, _emb, ts in list(self._user_memories.get(user_id, [])):
+            items.append({"id": mid, "text": doc, "ts": ts})
+        return items
+
+    def delete_user_memory(self, user_id: str, mem_id: str) -> bool:
+        arr = self._user_memories.get(user_id, [])
+        if not arr:
+            return False
+        before = len(arr)
+        arr = [t for t in arr if t[0] != mem_id]
+        if len(arr) != before:
+            self._user_memories[user_id] = arr
+            return True
+        return False
+
     @property
     def qa_cache(self) -> _Collection:
         return self._cache
@@ -210,6 +231,8 @@ class MemoryVectorStore(VectorStore):
     def lookup_cached_answer(
         self, prompt: str, ttl_seconds: int = 86400
     ) -> Optional[str]:
+        # Track last similarity for UI provenance
+        global _LAST_SIMILARITY  # type: ignore[assignment]
         self._dist_cutoff = 1.0 - _get_sim_threshold()
         hash_ = _normalized_hash(prompt)
         if _qa_disabled():
@@ -226,6 +249,10 @@ class MemoryVectorStore(VectorStore):
                 self._cache.delete(ids=[prompt])
                 return None
             logger.debug("Cache hit for %s (exact id)", hash_)
+            try:
+                _LAST_SIMILARITY = 1.0  # exact id implies exact match
+            except Exception:
+                pass
             return rec.answer
 
         # Fuzzy path for natural-language prompts. Skip records backed by composed IDs.
@@ -251,6 +278,10 @@ class MemoryVectorStore(VectorStore):
             self._cache.delete(ids=[best_id])
             return None
         logger.debug("Cache hit for %s (dist=%.4f)", hash_, best_dist or -1.0)
+        try:
+            _LAST_SIMILARITY = max(0.0, min(1.0, 1.0 - float(best_dist or 0.0)))
+        except Exception:
+            pass
         return best.answer
 
     def record_feedback(self, prompt: str, feedback: str) -> None:
@@ -268,3 +299,9 @@ class MemoryVectorStore(VectorStore):
 
 
 __all__ = ["VectorStore", "MemoryVectorStore"]
+
+# Module-level last similarity for UI provenance (MemoryVectorStore only)
+_LAST_SIMILARITY: float | None = None
+
+def _get_last_similarity() -> float | None:
+    return _LAST_SIMILARITY

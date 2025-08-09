@@ -54,16 +54,42 @@ from .home_assistant import (
     resolve_entity,
     startup_check as ha_startup,
 )
+from .alias_store import get_all as alias_all, set as alias_set, delete as alias_delete
+from .history import get_record_by_req_id
 from .llama_integration import startup_check as llama_startup
-from .logging_config import configure_logging
+from .logging_config import configure_logging, get_last_errors
 from .status import router as status_router
 from .auth import router as auth_router
+from .decisions import get_recent as decisions_recent, get_explain as decisions_get
 from .transcription import (
     TranscriptionStream,
     close_whisper_client,
     transcribe_file,
 )
 from .storytime import schedule_nightly_jobs, append_transcript_line
+try:
+    from .proactive_engine import get_self_review as _get_self_review  # type: ignore
+except Exception:  # pragma: no cover - optional
+    def _get_self_review():  # type: ignore
+        return None
+# Optional proactive engine hooks (disabled in tests if unavailable)
+def proactive_startup():
+    try:
+        from .proactive_engine import startup as _start
+        _start()
+    except Exception:
+        return None
+def _set_presence(*args, **kwargs):  # type: ignore
+    return None
+def _on_ha_event(*args, **kwargs):  # type: ignore
+    return None
+try:
+    from .deps.scopes import require_scope
+except Exception:  # pragma: no cover - optional
+    def require_scope(scope: str):  # type: ignore
+        async def _noop(*args, **kwargs):
+            return None
+        return _noop
 from .middleware import DedupMiddleware, reload_env_middleware, trace_request
 from .session_manager import (
     SESSIONS_DIR,
@@ -75,7 +101,15 @@ from .session_manager import (
 )
 from .session_store import SessionStatus, list_sessions as list_session_store
 from .tasks import enqueue_summary, enqueue_transcription
-from .security import rate_limit, rate_limit_ws, verify_token, verify_ws
+from .security import rate_limit, rate_limit_ws, verify_token, verify_ws, verify_webhook, require_nonce
+# ensure optional import does not crash in test environment
+try:
+    from .proactive_engine import set_presence, on_ha_event
+except Exception:  # pragma: no cover - optional
+    def set_presence(*args, **kwargs):  # type: ignore
+        return None
+    def on_ha_event(*args, **kwargs):  # type: ignore
+        return None
 
 
 def _anon_user_id(auth_header: str | None) -> str:
@@ -115,6 +149,10 @@ async def lifespan(app: FastAPI):
             schedule_nightly_jobs()
         except Exception:
             logger.debug("schedule_nightly_jobs failed", exc_info=True)
+        try:
+            proactive_startup()
+        except Exception:
+            logger.debug("proactive_startup failed", exc_info=True)
         yield
     finally:
         for func in (close_client, close_whisper_client):
@@ -195,10 +233,34 @@ class ServiceRequest(BaseModel):
 
 
 core_router = APIRouter(tags=["core"])
-protected_router = APIRouter(dependencies=[Depends(verify_token), Depends(rate_limit)])
+protected_router = APIRouter(dependencies=[Depends(verify_token)])
+# Scoped routers
+admin_router = APIRouter(dependencies=[Depends(verify_token), Depends(rate_limit), Depends(require_scope("admin"))], tags=["admin"])
+ha_router = APIRouter(dependencies=[Depends(verify_token), Depends(require_scope("ha"))], tags=["home-assistant"])
 ws_router = APIRouter(
     dependencies=[Depends(verify_ws), Depends(rate_limit_ws)], tags=["sessions"]
 )
+@core_router.post("/presence")
+async def presence(present: bool = True, user_id: str = Depends(get_current_user_id)):
+    _set_presence(user_id, bool(present))
+    return {"status": "ok"}
+
+
+@core_router.post("/ha/webhook")
+async def ha_webhook(request: Request, user_id: str = Depends(get_current_user_id)):
+    # Verify signature and dispatch event
+    try:
+        body = await verify_webhook(request)  # type: ignore[arg-type]
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="bad_request")
+    try:
+        data = json.loads(body.decode("utf-8")) if isinstance(body, (bytes, bytearray)) else {}
+    except Exception:
+        data = {}
+    _on_ha_event(data if isinstance(data, dict) else {})
+    return {"status": "ok"}
 
 
 @core_router.get("/me")
@@ -210,7 +272,7 @@ async def get_me(user_id: str = Depends(get_current_user_id)):
 
 
 @core_router.post("/ask")
-async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
+async def ask(req: AskRequest, request: Request, user_id: str = Depends(get_current_user_id)):
     logger.info(
         "ask entry user_id=%s prompt=%s model_override=%s",
         user_id,
@@ -284,9 +346,24 @@ async def ask(req: AskRequest, user_id: str = Depends(get_current_user_id)):
                 break
             yield chunk
 
-    return StreamingResponse(
-        _streamer(), media_type="text/plain", status_code=status_code or 200
+    # Negotiate basic streaming transport: SSE if requested via Accept, else text/plain
+    accept = request.headers.get("accept", "")
+    media_type = (
+        "text/event-stream"
+        if ("text/event-stream" in accept or os.getenv("FORCE_SSE", "").lower() in {"1", "true", "yes"})
+        else "text/plain"
     )
+
+    async def _sse_wrapper(gen):
+        async for chunk in gen:
+            # Minimal SSE framing
+            yield f"data: {chunk}\n\n"
+
+    generator = _streamer()
+    if media_type == "text/event-stream":
+        generator = _sse_wrapper(generator)
+
+    return StreamingResponse(generator, media_type=media_type, status_code=status_code or 200)
 
 
 @protected_router.post("/upload", tags=["sessions"])
@@ -427,9 +504,45 @@ async def websocket_storytime(
 async def intent_test(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     logger.info("Intent test for: %s", req.prompt)
     return {"intent": "test", "prompt": req.prompt}
+# Router decisions admin + explain endpoints
+@core_router.get("/explain")
+async def explain_route(req_id: str, user_id: str = Depends(get_current_user_id)):
+    data = decisions_get(req_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="not_found")
+    return data
 
 
-@protected_router.get("/ha/entities", tags=["home-assistant"])
+@core_router.get("/admin/router/decisions")
+async def list_router_decisions(limit: int = 500, user_id: str = Depends(get_current_user_id)):
+    return {"items": decisions_recent(limit)}
+
+
+# Nickname table CRUD (aliases)
+@core_router.get("/ha/aliases")
+async def list_aliases(user_id: str = Depends(get_current_user_id)):
+    return await alias_all()
+
+
+class AliasBody(BaseModel):
+    name: str
+    entity_id: str
+
+
+@core_router.post("/ha/aliases")
+async def create_alias(body: AliasBody, user_id: str = Depends(get_current_user_id)):
+    await alias_set(body.name, body.entity_id)
+    return {"status": "ok"}
+
+
+@core_router.delete("/ha/aliases")
+async def delete_alias(name: str, user_id: str = Depends(get_current_user_id)):
+    await alias_delete(name)
+    return {"status": "ok"}
+
+
+
+@ha_router.get("/ha/entities")
 async def ha_entities(user_id: str = Depends(get_current_user_id)):
     try:
         return await get_states()
@@ -438,8 +551,8 @@ async def ha_entities(user_id: str = Depends(get_current_user_id)):
         raise HTTPException(status_code=500, detail="Home Assistant error")
 
 
-@protected_router.post("/ha/service", tags=["home-assistant"])
-async def ha_service(req: ServiceRequest, user_id: str = Depends(get_current_user_id)):
+@ha_router.post("/ha/service")
+async def ha_service(req: ServiceRequest, user_id: str = Depends(get_current_user_id), _nonce: None = Depends(require_nonce)):
     try:
         resp = await call_service(req.domain, req.service, req.data or {})
         return resp or {"status": "ok"}
@@ -448,7 +561,35 @@ async def ha_service(req: ServiceRequest, user_id: str = Depends(get_current_use
         raise HTTPException(status_code=500, detail="Home Assistant error")
 
 
-@protected_router.get("/ha/resolve", tags=["home-assistant"])
+# Signed HA webhook -----------------------------------------------------------
+
+class WebhookAck(BaseModel):
+    status: str = "ok"
+
+
+@ha_router.post("/ha/webhook", response_model=WebhookAck)
+async def ha_webhook(request: Request):
+    _ = await verify_webhook(request)
+    return WebhookAck()
+
+
+# Admin dashboard -------------------------------------------------------------
+
+@core_router.get("/admin/errors")
+async def admin_errors(limit: int = 50, user_id: str = Depends(get_current_user_id)):
+    return {"errors": get_last_errors(limit)}
+
+
+@core_router.get("/admin/self_review")
+async def admin_self_review(user_id: str = Depends(get_current_user_id)):
+    try:
+        res = _get_self_review()
+        return res or {"status": "unavailable"}
+    except Exception:
+        return {"status": "unavailable"}
+
+
+@ha_router.get("/ha/resolve")
 async def ha_resolve(name: str, user_id: str = Depends(get_current_user_id)):
     try:
         entity = await resolve_entity(name)
@@ -460,6 +601,53 @@ async def ha_resolve(name: str, user_id: str = Depends(get_current_user_id)):
     except Exception as e:
         logger.exception("HA resolve error: %s", e)
         raise HTTPException(status_code=500, detail="Home Assistant error")
+
+
+@core_router.get("/explain_route")
+async def explain_route(req_id: str, user_id: str = Depends(get_current_user_id)):
+    """Return a compact breadcrumb trail describing how a request was handled."""
+    record = await get_record_by_req_id(req_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="request_not_found")
+
+    parts: list[str] = []
+    # Skill
+    skill = record.get("matched_skill") or None
+    if skill:
+        parts.append(f"skill={skill}")
+    # HA call
+    ha_call = record.get("ha_service_called")
+    if ha_call:
+        ents = record.get("entity_ids") or []
+        parts.append(f"ha={ha_call}{(' ' + ','.join(ents)) if ents else ''}")
+    # Cache
+    if record.get("cache_hit"):
+        parts.append("cache=hit")
+    # Router / model
+    reason = record.get("route_reason") or None
+    model = record.get("model_name") or None
+    engine = record.get("engine_used") or None
+    if reason:
+        parts.append(f"route={reason}")
+    if engine:
+        parts.append(f"engine={engine}")
+    if model:
+        parts.append(f"model={model}")
+    # Self-check
+    sc = record.get("self_check_score")
+    if sc is not None:
+        try:
+            parts.append(f"self_check={float(sc):.2f}")
+        except Exception:
+            parts.append(f"self_check={sc}")
+    if record.get("escalated"):
+        parts.append("escalated=true")
+    # Latency
+    lat = record.get("latency_ms")
+    if isinstance(lat, int):
+        parts.append(f"latency={lat}ms")
+
+    return {"req_id": req_id, "breadcrumb": " | ".join(parts), "meta": record.get("meta")}
 
 
 async def _background_transcribe(session_id: str) -> None:
@@ -499,6 +687,10 @@ app.include_router(core_router, prefix="/v1")
 app.include_router(core_router, include_in_schema=False)
 app.include_router(protected_router, prefix="/v1")
 app.include_router(protected_router, include_in_schema=False)
+app.include_router(ha_router, prefix="/v1")
+app.include_router(ha_router, include_in_schema=False)
+app.include_router(admin_router, prefix="/v1")
+app.include_router(admin_router, include_in_schema=False)
 app.include_router(ws_router, prefix="/v1")
 app.include_router(ws_router, include_in_schema=False)
 app.include_router(status_router, prefix="/v1")

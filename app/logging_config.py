@@ -4,9 +4,14 @@ import os
 import sys
 from datetime import datetime
 from contextvars import ContextVar
+from typing import List, Dict, Any
 
 # Exposed so other modules can set/request ids
 req_id_var: ContextVar[str] = ContextVar("req_id", default="-")
+
+# Lightweight in-process error ring buffer for admin dashboard
+_ERRORS: List[Dict[str, Any]] = []
+_MAX_ERRORS = 200
 
 
 class JsonFormatter(logging.Formatter):
@@ -34,6 +39,25 @@ class RequestIdFilter(logging.Filter):
         return True
 
 
+class _ErrorBufferHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover - IO free
+        try:
+            if record.levelno < logging.ERROR:
+                return
+            item = {
+                "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "level": record.levelname,
+                "component": record.name,
+                "msg": record.getMessage(),
+            }
+            _ERRORS.append(item)
+            if len(_ERRORS) > _MAX_ERRORS:
+                # keep newest
+                del _ERRORS[: max(1, len(_ERRORS) - _MAX_ERRORS)]
+        except Exception:
+            pass
+
+
 def configure_logging() -> None:
     """
     Call once at app startup.
@@ -45,7 +69,7 @@ def configure_logging() -> None:
     handler.setFormatter(JsonFormatter())
 
     root = logging.getLogger()
-    root.handlers = [handler]  # blow away default handlers
+    root.handlers = [handler, _ErrorBufferHandler()]  # blow away default handlers, add buffer
     root.setLevel(level)
     root.filters = [RequestIdFilter()]
 
@@ -53,3 +77,8 @@ def configure_logging() -> None:
     if level != "DEBUG":
         for noisy in ("httpx", "httpcore", "apscheduler"):
             logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+def get_last_errors(n: int = 50) -> List[Dict[str, Any]]:
+    # Return newest-last list
+    return _ERRORS[-n:]

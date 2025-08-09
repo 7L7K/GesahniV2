@@ -42,8 +42,29 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 from .base import Skill
+from pathlib import Path
+import json
+import os
 
 scheduler = AsyncIOScheduler()
+
+# Simple persistent ledger of scheduled reminders (best-effort)
+_REMINDERS_PATH = Path(os.getenv("REMINDERS_STORE", "data/reminders.json"))
+
+
+def _persist_reminder(entry: dict) -> None:
+    try:
+        _REMINDERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        existing: list = []
+        if _REMINDERS_PATH.exists():
+            try:
+                existing = json.loads(_REMINDERS_PATH.read_text(encoding="utf-8") or "[]")
+            except Exception:
+                existing = []
+        existing.append(entry)
+        _REMINDERS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:  # pragma: no cover - best effort
+        pass
 
 
 class ReminderSkill(Skill):
@@ -91,6 +112,7 @@ class ReminderSkill(Skill):
                 run_dt = base.replace(hour=hr, minute=mn, second=0, microsecond=0)
                 task = gd["task"]
                 scheduler.add_job(lambda: None, "date", run_date=run_dt)
+                _persist_reminder({"type": "date", "task": task, "when": run_dt.isoformat()})
                 return f"Reminder set for {task} at {run_dt.strftime('%Y-%m-%d %I:%M %p')}{note}."
         # 2) "in X minutes/hours" case
         if gd.get("amt") and gd.get("unit"):
@@ -99,6 +121,7 @@ class ReminderSkill(Skill):
             sec = amt * (60 if "minute" in unit else 3600 if "hour" in unit else 1)
             task = gd["task"]
             scheduler.add_job(lambda: None, "date", seconds=sec)
+            _persist_reminder({"type": "delay", "task": task, "seconds": sec})
             return f"Reminder set for {task} in {amt} {unit}{note}."
         # 3) "every ..." case
         if gd.get("period"):
@@ -112,10 +135,12 @@ class ReminderSkill(Skill):
                     else {"weeks": 1} if period == "week" else {"days": 30}
                 )
                 scheduler.add_job(lambda: None, "interval", **kwargs)
+                _persist_reminder({"type": "interval", "task": task, **kwargs})
                 return f"Recurring reminder set for {task} every {period}{note}."
             else:
                 # weekday cron
                 scheduler.add_job(lambda: None, "cron", day_of_week=period[:3])
+                _persist_reminder({"type": "cron", "task": task, "day_of_week": period[:3]})
                 return (
                     f"Recurring reminder set for {task} every {period.title()}{note}."
                 )

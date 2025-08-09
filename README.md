@@ -213,6 +213,8 @@ curl -X POST localhost:8000/ask -d '{"prompt":"turn off kitchen lights"}'
 * **Context-Aware Memory**: Remembers recent prompts.
 * **Dynamic Entity Resolution**: Smartly matches your commands to HA entities.
 * **Robust Fail-safes**: Seamless fallbacks (LLaMA → GPT, graceful HA errors).
+* **Proactive Engine v1**: Presence/webhook inputs, curiosity loop, APScheduler self‑tasks (e.g., unlock notifications and auto‑lock), hourly profile persistence.
+* **Security & Policy**: Per‑route scopes (`/admin/*`, `/ha/*`), nonce guard for state changes, signed webhooks with rotation helpers, deny‑list moderation on HA actions, dual‑bucket rate limits with Retry‑After.
 
 ## 📈 Future Enhancements
 

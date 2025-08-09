@@ -1,6 +1,7 @@
 from __future__ import annotations
 import re
 from .base import Skill
+from ..telemetry import log_record_var
 
 
 class MathSkill(Skill):
@@ -32,16 +33,28 @@ class MathSkill(Skill):
                 res = a - b
             if res.is_integer():
                 res = int(res)
-            return str(res)
+            result = str(res)
+            rec = log_record_var.get()
+            if rec is not None:
+                rec.route_reason = (rec.route_reason or "") + "|force_llama_math"
+            return result
         if "pct" in d and d["pct"]:
             pct = float(d["pct"])
             of = float(d["of"])
             res = of * (pct / 100.0)
-            return str(round(res, 2))
+            result = str(round(res, 2))
+            rec = log_record_var.get()
+            if rec is not None:
+                rec.route_reason = (rec.route_reason or "") + "|force_llama_math"
+            return result
         if "val" in d:
             val = float(d["val"])
             places = int(d["places"])
-            return str(round(val, places))
+            result = str(round(val, places))
+            rec = log_record_var.get()
+            if rec is not None:
+                rec.route_reason = (rec.route_reason or "") + "|force_llama_math"
+            return result
         return "Could not compute"
 
     async def handle(self, prompt: str) -> str:
