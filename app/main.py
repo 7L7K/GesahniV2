@@ -63,6 +63,7 @@ from .transcription import (
     close_whisper_client,
     transcribe_file,
 )
+from .storytime import schedule_nightly_jobs, append_transcript_line
 from .middleware import DedupMiddleware, reload_env_middleware, trace_request
 from .session_manager import (
     SESSIONS_DIR,
@@ -109,6 +110,11 @@ async def lifespan(app: FastAPI):
     try:
         await llama_startup()
         await ha_startup()
+        # Schedule nightly jobs (no-op if scheduler unavailable)
+        try:
+            schedule_nightly_jobs()
+        except Exception:
+            logger.debug("schedule_nightly_jobs failed", exc_info=True)
         yield
     finally:
         for func in (close_client, close_whisper_client):
@@ -378,6 +384,34 @@ async def websocket_transcribe(
     user_id: str = Depends(get_current_user_id),
 ):
     stream = TranscriptionStream(ws, transcribe_file)
+    await stream.process()
+
+
+@ws_router.websocket("/storytime")
+async def websocket_storytime(
+    ws: WebSocket, user_id: str = Depends(get_current_user_id)
+):
+    """Storytime streaming: audio → Whisper transcription with JSONL logging.
+
+    Uses the same streaming mechanics as ``/transcribe`` but appends each
+    incremental transcript chunk to `stories/` for later summarization.
+    """
+
+    stream = TranscriptionStream(ws, transcribe_file)
+
+    async def _transcribe_and_log(path: str) -> str:
+        text = await transcribe_file(path)
+        if text and text.strip():
+            try:
+                append_transcript_line(
+                    session_id=stream.session_id, text=text, user_id=user_id, speaker="user"
+                )
+            except Exception:
+                logger.debug("append_transcript_line failed", exc_info=True)
+        return text
+
+    # Inject our wrapper after we know the session_id
+    stream.transcribe = _transcribe_and_log  # type: ignore[assignment]
     await stream.process()
 
 

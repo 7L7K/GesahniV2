@@ -66,19 +66,56 @@ async def _ensure_table() -> None:
             )
             """
         )
-        # Best-effort migration from any legacy 'users' table that had username/password_hash
+        # Compatibility: create a minimal 'users' table if absent so tests can read it
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE,
+                password_hash TEXT
+            )
+            """
+        )
+        # Best-effort migration from any legacy 'users' projections
         try:
-            src_cols = []
-            async with db.execute("PRAGMA table_info(users)") as cur:
-                async for row in cur:
-                    src_cols.append(str(row[1]))
-            if {"username", "password_hash"}.issubset(set(src_cols)):
-                await db.execute(
-                    f"INSERT OR IGNORE INTO {AUTH_TABLE} (username, password_hash) SELECT username, password_hash FROM users"
-                )
+            await db.execute(
+                f"INSERT OR IGNORE INTO {AUTH_TABLE} (username, password_hash) SELECT username, password_hash FROM users WHERE username IS NOT NULL AND password_hash IS NOT NULL"
+            )
         except Exception:
             pass
         await db.commit()
+
+async def _fetch_password_hash(db: aiosqlite.Connection, username: str) -> str | None:
+    """Return stored password hash for the given username.
+
+    Tries the dedicated auth table first; then falls back to a legacy
+    analytics-style ``users`` table where the identifier column is ``user_id``.
+    """
+    # 1) Preferred: dedicated auth table
+    try:
+        async with db.execute(
+            f"SELECT password_hash FROM {AUTH_TABLE} WHERE username = ?",
+            (username,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        if row and row[0]:
+            return str(row[0])
+    except Exception:
+        pass
+
+    # 2) Fallback: legacy users table with user_id column
+    try:
+        async with db.execute(
+            "SELECT password_hash FROM users WHERE user_id = ?",
+            (username,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        if row and row[0]:
+            return str(row[0])
+    except Exception:
+        pass
+
+    return None
 
 
 # Register endpoint
@@ -88,10 +125,29 @@ async def register(req: RegisterRequest, user_id: str = Depends(get_current_user
     hashed = pwd_context.hash(req.password)
     try:
         async with aiosqlite.connect(DB_PATH) as db:
+            # Insert into auth table
             await db.execute(
                 f"INSERT INTO {AUTH_TABLE} (username, password_hash) VALUES (?, ?)",
                 (req.username, hashed),
             )
+            # Also mirror into 'users' table for compatibility
+            try:
+                cols: list[str] = []
+                async with db.execute("PRAGMA table_info(users)") as cur:
+                    async for row in cur:
+                        cols.append(str(row[1]))
+                if {"username", "password_hash"}.issubset(set(cols)):
+                    await db.execute(
+                        "INSERT OR IGNORE INTO users (username, password_hash) VALUES (?, ?)",
+                        (req.username, hashed),
+                    )
+                elif {"user_id", "password_hash", "login_count", "request_count"}.issubset(set(cols)):
+                    await db.execute(
+                        "INSERT OR IGNORE INTO users (user_id, password_hash, login_count, request_count) VALUES (?, ?, 0, 0)",
+                        (req.username, hashed),
+                    )
+            except Exception:
+                pass
             await db.commit()
     except aiosqlite.IntegrityError:
         raise HTTPException(status_code=400, detail="username_taken")
@@ -105,13 +161,10 @@ async def login(
 ) -> TokenResponse:
     await _ensure_table()
     async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(
-            f"SELECT password_hash FROM {AUTH_TABLE} WHERE username = ?",
-            (req.username,),
-        ) as cursor:
-            row = await cursor.fetchone()
+        # Try both auth table and legacy users table
+        hashed = await _fetch_password_hash(db, req.username)
 
-    if not row or not pwd_context.verify(req.password, row[0]):
+    if not hashed or not pwd_context.verify(req.password, hashed):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     # Create access token

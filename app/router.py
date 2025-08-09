@@ -266,6 +266,23 @@ async def route_prompt(
                 result = skill_resp
                 return result
 
+        # Handle story recall intent early: search vector store memories
+        if intent == "recall_story":
+            try:
+                # use a slightly larger k for recall but still within budget
+                from .memory.env_utils import _get_mem_top_k
+
+                k = max(3, min(10, _get_mem_top_k() * 2))
+            except Exception:
+                k = 5
+            mems = safe_query_user_memories(user_id, prompt, k=k)
+            if mems:
+                snippet = "\n".join(f"- {m}" for m in mems[:5])
+                text = f"Here are the most relevant past notes I found:\n{snippet}"
+                result = await _finalise("memory", prompt, text, rec)
+                return result
+            # fall through if nothing found
+
         # Then consult Home Assistant first when command-like; else QA cache
         # (maintains prior behavior where commands win over cache)
         ha_resp = handle_command(prompt)

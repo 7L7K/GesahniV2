@@ -58,7 +58,10 @@ export async function apiFetch(
 ): Promise<Response> {
   const { auth = true, headers, ...rest } = init;
   const isAbsolute = /^(?:https?:)?\/\//i.test(path);
-  const url = isAbsolute ? path : `${API_URL}${path}`;
+  const isBrowser = typeof window !== 'undefined';
+  // In the browser, prefer relative URLs so Next.js rewrites proxy to the API without CORS.
+  // On the server (SSR/node), use the explicit API base.
+  const url = isAbsolute ? path : (isBrowser ? path : `${API_URL}${path}`);
 
   const mergedHeaders: HeadersInit = {
     ...(headers || {}),
