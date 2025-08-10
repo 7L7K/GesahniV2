@@ -49,6 +49,8 @@ class LogRecord(BaseModel):
     model_name: Optional[str] = None
     prompt_tokens: Optional[int] = None
     completion_tokens: Optional[int] = None
+    prompt_cost_usd: Optional[float] = None
+    completion_cost_usd: Optional[float] = None
     cost_usd: Optional[float] = None
 
     # home assistant audit
