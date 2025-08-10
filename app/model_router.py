@@ -22,6 +22,7 @@ except Exception:  # pragma: no cover - fallback parser
 from .token_utils import count_tokens
 from .metrics import ROUTER_DECISION
 from .memory.vector_store import _normalized_hash as normalized_hash
+from .model_config import GPT_BASELINE_MODEL, GPT_MID_MODEL, GPT_HEAVY_MODEL
 
 
 # ---------------------------------------------------------------------------
@@ -325,7 +326,7 @@ async def run_with_self_check(
         # With a single allowed retry, prefer mid-tier unless threshold demands final
         if int(effective_max) <= 1:
             if thresh >= 0.8:
-                current_model = "o4-mini"
+                current_model = GPT_HEAVY_MODEL
                 reason = "self-check-final"
             else:
                 current_model = "gpt-4.1-nano"
@@ -338,8 +339,8 @@ async def run_with_self_check(
                 reason = "self-check-escalation"
                 escalated = True
             else:
-                # final retry → o4-mini
-                current_model = "o4-mini"
+                # final retry → heavy model
+                current_model = GPT_HEAVY_MODEL
                 reason = "self-check-final"
                 escalated = True
         text, pt, ct, cost = await _call(current_model)
@@ -423,14 +424,14 @@ async def route_vision(
         return "local", "vision-no-event"
 
     # snapshot with mini
-    model = "gpt-4o-mini"
+    model = GPT_BASELINE_MODEL
     reason = f"vision-{risk}"
     # We do not actually call a vision API in tests; caller provides ask_func stub
     _ = await ask_func("<vision prompt>", model, None, allow_test=allow_test)
 
     # optional safety retry
     if risk == "high":
-        model = "gpt-4o"
+        model = GPT_MID_MODEL
         reason = "vision-safety"
         _ = await ask_func("<vision prompt>", model, None, allow_test=allow_test)
     return model, reason
