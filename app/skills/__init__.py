@@ -20,6 +20,7 @@ from .cover_skill import CoverSkill
 from .fan_skill import FanSkill
 from .notify_skill import NotifySkill
 from .search_skill import SearchSkill
+from .traffic_skill import TrafficSkill
 from .translate_skill import TranslateSkill
 from .news_skill import NewsSkill
 from .joke_skill import JokeSkill
@@ -55,6 +56,7 @@ SKILL_CLASSES: list[type] = [
     FanSkill,
     NotifySkill,
     SearchSkill,
+    TrafficSkill,
     TranslateSkill,
     NewsSkill,
     JokeSkill,
