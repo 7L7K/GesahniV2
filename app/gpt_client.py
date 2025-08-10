@@ -18,7 +18,8 @@ import logging
 import os
 import time
 from pathlib import Path
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, AsyncIterator
+import asyncio
 from typing import TYPE_CHECKING
 
 try:  # pragma: no cover - exercised indirectly
@@ -68,9 +69,11 @@ _MODEL_ALIASES = {
     GPT_HEAVY_MODEL: GPT_HEAVY_MODEL,
 }
 
+
 def _normalize_model_name(name: str | None) -> str:
     base = (name or OPENAI_MODEL).strip()
     return _MODEL_ALIASES.get(base, base)
+
 
 def _load_default_system_prompt() -> str:
     """Load the default system prompt from prompts/system_default.txt.
@@ -80,7 +83,10 @@ def _load_default_system_prompt() -> str:
     try:
         path = Path(__file__).parent / "prompts" / "system_default.txt"
         text = path.read_text(encoding="utf-8").strip()
-        return text or "You are Gesahni — a concise personal AI teammate. Be brief. Bullets over paragraphs. Ask at most one clarifying question."
+        return (
+            text
+            or "You are Gesahni — a concise personal AI teammate. Be brief. Bullets over paragraphs. Ask at most one clarifying question."
+        )
     except Exception:
         return (
             "You are Gesahni — a concise personal AI teammate. Be brief. "
@@ -139,6 +145,7 @@ async def close_client() -> None:
 # Sentinel for pytest runs
 _TEST_MODE = bool(os.getenv("PYTEST_CURRENT_TEST"))
 
+
 async def ask_gpt(
     prompt: str,
     model: str | None = None,
@@ -147,7 +154,7 @@ async def ask_gpt(
     stream: bool = False,
     on_token: Callable[[str], Awaitable[None]] | None = None,
     raw: bool = False,
-    **kwargs,           # <- allow passing allow_test and gen params
+    **kwargs,  # <- allow passing allow_test and gen params
 ) -> tuple[str, int, int, float] | tuple[str, int, int, float, object]:
     """Return text, prompt tokens, completion tokens and total price.
 
@@ -224,3 +231,44 @@ async def ask_gpt(
     except Exception as e:
         logger.exception("OpenAI request failed: %s", e)
         raise
+
+
+async def stream_gpt(
+    prompt: str,
+    model: str | None = None,
+    system: str | None = None,
+    **kwargs,
+) -> AsyncIterator[str]:
+    """Yield GPT tokens as they are produced.
+
+    This helper wraps :func:`ask_gpt` and exposes the token stream as an async
+    iterator which is convenient for voice adapters like ``PipecatSession``.
+    Additional keyword arguments are forwarded to :func:`ask_gpt`.
+    """
+
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    async def _on_token(token: str) -> None:
+        await queue.put(token)
+
+    async def _runner() -> None:
+        await ask_gpt(
+            prompt,
+            model=model,
+            system=system,
+            stream=True,
+            on_token=_on_token,
+            **kwargs,
+        )
+        await queue.put(None)
+
+    asyncio.create_task(_runner())
+
+    while True:
+        tok = await queue.get()
+        if tok is None:
+            break
+        yield tok
+
+
+__all__ = ["ask_gpt", "stream_gpt", "SYSTEM_PROMPT"]

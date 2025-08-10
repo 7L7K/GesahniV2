@@ -10,12 +10,12 @@ import json
 import logging
 import os
 import uuid
-from pathlib import Path
-from typing import Awaitable, Callable
+from typing import AsyncIterator
 
 from fastapi import HTTPException, WebSocket
 
-from .session_manager import SESSIONS_DIR
+from .adapters.voice.pipecat_adapter import PipecatSession
+from .transcribe import has_speech
 
 try:  # pragma: no cover - executed when openai is available
     from openai import AsyncClient as OpenAI
@@ -47,6 +47,7 @@ def get_whisper_client() -> OpenAI:
             class _Stub(OpenAI):  # type: ignore
                 def __init__(self, *a, **k):
                     pass
+
             _client = _Stub()  # type: ignore
         else:
             _client = OpenAI(api_key=api_key)
@@ -101,72 +102,47 @@ async def transcribe_file(path: str, model: str | None = None) -> str:
 class TranscriptionStream:
     """Handle live transcription over a WebSocket."""
 
-    def __init__(
-        self,
-        ws: WebSocket,
-        transcribe_func: Callable[[str], Awaitable[str]] = transcribe_file,
-    ) -> None:
-        """Initialize the stream with a websocket and transcriber."""
-
+    def __init__(self, ws: WebSocket) -> None:
         self.ws = ws
-        self.transcribe = transcribe_func
         self.session_id = uuid.uuid4().hex
-        self.full_text = ""
-        self.audio_path = Path(SESSIONS_DIR) / self.session_id / "stream.wav"
-        self.audio_path.parent.mkdir(parents=True, exist_ok=True)
 
-    async def process(self) -> None:
-        await self.ws.accept()
-        # initial handshake
-        try:
-            msg = await self.ws.receive()
-        except RuntimeError:
-            return
-
-        # skip initial metadata if present
-        if "text" in msg and msg["text"]:
-            try:
-                json.loads(msg["text"])
-            except Exception:
-                await self.ws.send_json({"error": "invalid metadata"})
-                await self.ws.close()
-                return
+    async def _iter_audio(self, first_msg: dict) -> AsyncIterator[bytes]:
+        msg = first_msg
+        if msg.get("bytes") and has_speech(msg["bytes"]):
+            yield msg["bytes"]
+        while True:
             try:
                 msg = await self.ws.receive()
             except RuntimeError:
                 return
+            if msg.get("type") == "websocket.disconnect":
+                return
+            if "text" in msg and msg["text"] == "end":
+                return
+            chunk = msg.get("bytes")
+            if chunk and has_speech(chunk):
+                yield chunk
 
-        tmp = self.audio_path.with_suffix(".part")
-        with open(self.audio_path, "ab") as fh:
-            while True:
-                # catch disconnects
-                try:
-                    msg = await self.ws.receive()
-                except RuntimeError:
-                    break
-
-                if msg.get("type") == "websocket.disconnect":
-                    break
-                if "text" in msg and msg["text"] == "end":
-                    break
-
-                chunk = msg.get("bytes")
-                if not chunk:
-                    continue
-
-                fh.write(chunk)
-                tmp.write_bytes(chunk)
-                try:
-                    text = await self.transcribe(str(tmp))
-                    self.full_text += (" " if self.full_text else "") + text
-                    await self.ws.send_json(
-                        {
-                            "text": self.full_text,
-                            "session_id": self.session_id,
-                        }
-                    )
-                except Exception as e:
-                    await self.ws.send_json({"error": str(e)})
-                finally:
-                    if tmp.exists():
-                        tmp.unlink()
+    async def process(self) -> None:
+        await self.ws.accept()
+        try:
+            msg = await self.ws.receive()
+        except RuntimeError:
+            return
+        if "text" in msg and msg["text"]:
+            try:
+                json.loads(msg["text"])
+                msg = await self.ws.receive()
+            except Exception:
+                await self.ws.send_json({"error": "invalid metadata"})
+                await self.ws.close()
+                return
+        session = PipecatSession()
+        await session.start()
+        try:
+            async for text in session.stream(self._iter_audio(msg)):
+                await self.ws.send_json({"text": text, "session_id": self.session_id})
+        except Exception as e:  # pragma: no cover - best effort
+            await self.ws.send_json({"error": str(e)})
+        finally:
+            await session.stop()
