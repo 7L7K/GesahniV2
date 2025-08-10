@@ -102,6 +102,8 @@ Set environment variables as needed:
 | `DISABLE_QA_CACHE` | `false` | no | Skip semantic cache when set |
 | `VECTOR_STORE` | `chroma` | no | Vector store backend |
 | `CHROMA_PATH` | `.chroma_data` | no | ChromaDB storage directory |
+| `RAGFLOW_URL` | `http://localhost:8001` | no | Base URL for RAGFlow server |
+| `RAGFLOW_COLLECTION` | `demo` | no | Default RAGFlow collection name |
 | `USERS_DB` | `users.db` | no | SQLite path for auth users |
 
 *Required only when `EMBEDDING_BACKEND=llama`.
