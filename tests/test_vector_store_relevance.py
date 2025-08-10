@@ -1,5 +1,5 @@
 import pytest
-from app.memory.vector_store import ChromaVectorStore, MemoryVectorStore
+from app.memory.api import ChromaVectorStore, MemoryVectorStore
 
 
 @pytest.mark.parametrize("store_cls", [MemoryVectorStore, ChromaVectorStore])
