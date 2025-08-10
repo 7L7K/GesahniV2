@@ -49,6 +49,9 @@ def base_defaults() -> Dict[str, Any]:
     # Omit by default unless explicitly set via GEN_MAX_TOKENS.
     max_tokens_env = os.getenv("GEN_MAX_TOKENS", "").strip()
     max_tokens_val = int(max_tokens_env) if max_tokens_env else None
+    # Allow env to specify modern param name directly
+    max_completion_env = os.getenv("GEN_MAX_COMPLETION_TOKENS", "").strip()
+    max_completion_val = int(max_completion_env) if max_completion_env else None
     return {
         # Slightly lower temperature and top_p favour faster, more deterministic
         # generations which benefits low-latency voice pipelines.
@@ -57,6 +60,7 @@ def base_defaults() -> Dict[str, Any]:
         # Default to None; caller/env can opt-in to set an explicit cap
         "max_tokens": max_tokens_val,
         "stop": _env_list("GEN_STOP"),
+        "max_completion_tokens": max_completion_val,
     }
 
 
@@ -97,13 +101,14 @@ def for_openai(overrides: Mapping[str, Any] | None = None) -> Dict[str, Any]:
         "temperature": mp.get("temperature"),
         "top_p": mp.get("top_p"),
     }
-    # Only include max_tokens when explicitly set; newer models require
-    # 'max_completion_tokens' instead. Callers can pass that via overrides.
-    if mp.get("max_tokens") is not None:
-        out["max_tokens"] = mp.get("max_tokens")
-    # Support new param name pass-through if provided by caller/env
+    # Prefer the newer OpenAI parameter name. If callers provide the legacy
+    # 'max_tokens' (via env or overrides), map it to 'max_completion_tokens'.
+    # Never include 'max_tokens' in OpenAI requests to avoid 400 errors on
+    # newer models.
     if mp.get("max_completion_tokens") is not None:
         out["max_completion_tokens"] = mp.get("max_completion_tokens")
+    elif mp.get("max_tokens") is not None:
+        out["max_completion_tokens"] = mp.get("max_tokens")
     if mp.get("stop"):
         out["stop"] = mp["stop"]
     # Drop unknown keys to avoid TypeError in SDK
