@@ -1,6 +1,7 @@
 import logging
 import os
 import inspect
+from dataclasses import asdict
 from typing import Any, Awaitable, Callable
 
 import httpx
@@ -37,14 +38,11 @@ from .memory.vector_store import (
     add_user_memory,
     cache_answer,
     lookup_cached_answer,
-    qa_cache,
-    get_last_cache_similarity,
 )
 from .model_picker import pick_model
 from . import model_picker as model_picker_module
 from .prompt_builder import PromptBuilder
 from .memory.vector_store import safe_query_user_memories
-from .memory.env_utils import _get_mem_top_k
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from .skills.smalltalk_skill import SmalltalkSkill
 from .telemetry import log_record_var
@@ -461,7 +459,7 @@ async def route_prompt(
             if rec:
                 rec.route_reason = decision.reason
                 try:
-                    add_trace_event(rec.req_id, "deterministic_route", model=decision.model, reason=decision.reason)
+                    add_trace_event(rec.req_id, "deterministic_route", **asdict(decision))
                 except Exception:
                     pass
 
@@ -471,6 +469,8 @@ async def route_prompt(
 
             # Retrieve current memories to include in cache segregation key
             try:
+                from .memory.env_utils import _get_mem_top_k
+
                 k = _get_mem_top_k()
             except Exception:
                 k = 3
@@ -521,6 +521,12 @@ async def route_prompt(
                 allow_test=True if os.getenv("PYTEST_CURRENT_TEST") else False,
                 max_retries=max_retries,
             )
+            logger.debug(
+                "run_with_self_check result model=%s score=%.3f escalated=%s",
+                final_model,
+                score,
+                escalated,
+            )
             if rec:
                 rec.model_name = final_model
                 rec.self_check_score = score
@@ -548,7 +554,7 @@ async def route_prompt(
             try:
                 if final_model == "gpt-5-nano" and rec and (hash(rec.req_id) % 20 == 0):
                     import asyncio as _asyncio
-                    _asyncio.create_task(_run_shadow(built_prompt, system_prompt, text))
+                    _asyncio.create_task(_run_shadow(built_prompt, system_prompt, text))  # noqa: F821
             except Exception:
                 pass
             # Optional curiosity loop: if confidence < tau or missing profile keys
