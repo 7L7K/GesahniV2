@@ -216,6 +216,15 @@ curl -X POST localhost:8000/ask -d '{"prompt":"turn off kitchen lights"}'
 * **Proactive Engine v1**: Presence/webhook inputs, curiosity loop, APScheduler self‑tasks (e.g., unlock notifications and auto‑lock), hourly profile persistence.
 * **Security & Policy**: Per‑route scopes (`/admin/*`, `/ha/*`), nonce guard for state changes, signed webhooks with rotation helpers, deny‑list moderation on HA actions, dual‑bucket rate limits with Retry‑After.
 
+### Embedding Flow
+
+Memories and provenance tags rely on embeddings to gauge similarity:
+
+1. `EMBEDDING_BACKEND` chooses between OpenAI and local LLaMA models using `EMBED_MODEL` or `LLAMA_EMBEDDINGS_MODEL`.
+2. When a reply is generated, `_annotate_provenance` embeds each memory chunk and every response line via `embed_sync`.
+3. Cosine similarity compares response lines to stored memories. Lines with similarity ≥0.60 gain a `[#chunk:ID]` tag.
+4. These tags make it clear which memories influenced an answer and power the semantic cache.
+
 ## 📈 Future Enhancements
 
 * Voice Activation (Porcupine/Vosk)
