@@ -1,1 +1,20 @@
-{}
+{
+  "anon": {
+    "name": "algevon",
+    "email": "havenotseen@gmail.com",
+    "timezone": "America/Detroit",
+    "language": "en",
+    "communication_style": "technical",
+    "interests": [
+      "Technology",
+      "Travel",
+      "Environment"
+    ],
+    "occupation": "yo momma",
+    "home_location": "Detroit",
+    "preferred_model": "auto",
+    "calendar_integration": true,
+    "gmail_integration": true,
+    "onboarding_completed": true
+  }
+}

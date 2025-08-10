@@ -32,11 +32,18 @@ function LoginPageInner() {
         setError('');
         setLoading(true);
         try {
+            const uname = username.trim().toLowerCase();
+            if (!/^[a-z0-9_.-]{3,64}$/.test(uname)) {
+                throw new Error('Invalid username. Use 3-64 chars: a-z, 0-9, _, ., -');
+            }
+            if (password.trim().length < 6) {
+                throw new Error('Password too short');
+            }
             if (mode === 'login') {
-                await login(username, password);
+                await login(uname, password);
             } else {
-                await register(username, password);
-                await login(username, password);
+                await register(uname, password);
+                await login(uname, password);
             }
             document.cookie = `auth:hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
             router.replace(next);

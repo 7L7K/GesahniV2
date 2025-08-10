@@ -768,8 +768,6 @@ app.include_router(core_router, prefix="/v1")
 app.include_router(core_router, include_in_schema=False)
 app.include_router(protected_router, prefix="/v1")
 app.include_router(protected_router, include_in_schema=False)
-app.include_router(ha_router, prefix="/v1")
-app.include_router(ha_router, include_in_schema=False)
 app.include_router(admin_router, prefix="/v1")
 app.include_router(admin_router, include_in_schema=False)
 app.include_router(ws_router, prefix="/v1")
@@ -784,6 +782,28 @@ if google_router is not None:
     # Provide both versioned and unversioned, under /google to match redirect defaults
     app.include_router(google_router, prefix="/v1/google")
     app.include_router(google_router, prefix="/google", include_in_schema=False)
+
+# New modular routers for HA and profile/admin
+try:
+    from .api.ha import router as ha_api_router
+    app.include_router(ha_api_router, prefix="/v1")
+    app.include_router(ha_api_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.profile import router as profile_router
+    app.include_router(profile_router, prefix="/v1")
+    app.include_router(profile_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.admin import router as admin_api_router
+    app.include_router(admin_api_router, prefix="/v1")
+    app.include_router(admin_api_router, include_in_schema=False)
+except Exception:
+    pass
 
 
 
