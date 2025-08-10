@@ -87,6 +87,18 @@ def test_route_text_ops_branches():
     assert d_complex.reason == "ops-complex"
 
 
+def test_route_text_keyword_escalates():
+    d = route_text(user_prompt="please summarize this", intent="chat")
+    assert d.model == "gpt-4.1-nano"
+    assert d.reason == "keyword"
+
+
+def test_route_text_heavy_intent_escalates():
+    d = route_text(user_prompt="hi", intent="analysis")
+    assert d.model == "gpt-4.1-nano"
+    assert d.reason == "heavy-intent"
+
+
 def test_route_vision_cap(monkeypatch):
     # Force a tiny cap via env; verify local-only after cap
     monkeypatch.setenv("VISION_MAX_IMAGES_PER_DAY", "1")
