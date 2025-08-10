@@ -133,7 +133,7 @@ class PromptBuilder:
         if len(memories) > RETRIEVER_MAX_MEM_LINES:
             memories = memories[:RETRIEVER_MAX_MEM_LINES]
         logger.info("safe_query_user_memories returned %d memories", len(memories))
-        while count_tokens("\n".join(memories)) > 55 and memories:
+        while count_tokens("\n".join(memories)) > 120 and memories:
             memories.pop()
 
         # ------------------------------------------------------------------
