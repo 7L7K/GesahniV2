@@ -2,13 +2,14 @@ from __future__ import annotations
 import base64, email.utils
 from typing import Optional, List
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
 from .db import SessionLocal, GoogleToken, init_db
 from .oauth import build_auth_url, exchange_code, creds_to_record, record_to_creds
 from .services import gmail_service, calendar_service
 from .config import validate_config
+from ...deps.user import get_current_user_id
 
 router = APIRouter()
 
@@ -17,25 +18,19 @@ def _startup():
     validate_config()
     init_db()
 
-# TODO: replace with your real auth/session
-def _current_user_id(req: Request) -> str:
-    return "anon"
-
 @router.get("/auth/url")
-def get_auth_url(request: Request):
-    uid = _current_user_id(request)
-    url, _state = build_auth_url(uid)
+def get_auth_url(user_id: str = Depends(get_current_user_id)):
+    url, _state = build_auth_url(user_id)
     return {"auth_url": url}
 
 @router.get("/oauth/callback")
-def oauth_callback(code: str, state: str, request: Request):
-    uid = _current_user_id(request)
+def oauth_callback(code: str, state: str, user_id: str = Depends(get_current_user_id)):
     creds = exchange_code(code, state)
     data = creds_to_record(creds)
     with SessionLocal() as s:
-        row = s.get(GoogleToken, uid)
+        row = s.get(GoogleToken, user_id)
         if row is None:
-            row = GoogleToken(user_id=uid, **data)
+            row = GoogleToken(user_id=user_id, **data)
             s.add(row)
         else:
             for k, v in data.items():
@@ -50,10 +45,9 @@ class SendEmailIn(BaseModel):
     from_alias: Optional[str] = None  # e.g., "King <me@gmail.com>"
 
 @router.post("/gmail/send")
-def gmail_send(payload: SendEmailIn, request: Request):
-    uid = _current_user_id(request)
+def gmail_send(payload: SendEmailIn, user_id: str = Depends(get_current_user_id)):
     with SessionLocal() as s:
-        row = s.get(GoogleToken, uid)
+        row = s.get(GoogleToken, user_id)
         if not row:
             raise HTTPException(400, "No Google account linked")
         creds = record_to_creds(row)
@@ -84,10 +78,9 @@ class CreateEventIn(BaseModel):
     location: Optional[str] = None
 
 @router.post("/calendar/create")
-def calendar_create(evt: CreateEventIn, request: Request):
-    uid = _current_user_id(request)
+def calendar_create(evt: CreateEventIn, user_id: str = Depends(get_current_user_id)):
     with SessionLocal() as s:
-        row = s.get(GoogleToken, uid)
+        row = s.get(GoogleToken, user_id)
         if not row:
             raise HTTPException(400, "No Google account linked")
         creds = record_to_creds(row)
@@ -108,10 +101,9 @@ def calendar_create(evt: CreateEventIn, request: Request):
         return {"id": created.get("id"), "htmlLink": created.get("htmlLink")}
 
 @router.get("/status")
-def google_status(request: Request):
-    uid = _current_user_id(request)
+def google_status(user_id: str = Depends(get_current_user_id)):
     with SessionLocal() as s:
-        row = s.get(GoogleToken, uid)
+        row = s.get(GoogleToken, user_id)
         if not row:
             return {"linked": False}
         return {

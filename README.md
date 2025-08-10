@@ -191,6 +191,7 @@ curl -X POST localhost:8000/logout -H "Authorization: Bearer <refresh_token>"
 * `/healthz`: unauthenticated health probe.
 * `/config`: view config.
 * `/intent-test`: debug your prompt intent.
+* Google integration endpoints such as `/google/auth/url`, `/google/oauth/callback`, `/google/gmail/send`, and `/google/calendar/create` require an authenticated user session. OAuth credentials are stored per user.
 
 Note: all endpoints are also available under the `/v1` prefix.
 
