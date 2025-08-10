@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import os
 import time
-import json
 from dataclasses import dataclass
+import logging
 from pathlib import Path
-from typing import Any, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Iterable, List, Optional, Tuple
 
 try:  # pragma: no cover - optional
     import yaml  # type: ignore
@@ -22,6 +22,9 @@ except Exception:  # pragma: no cover - fallback parser
 from .token_utils import count_tokens
 from .metrics import ROUTER_DECISION
 from .memory.vector_store import _normalized_hash as normalized_hash
+
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +132,10 @@ class RouteDecision:
     escalated: bool = False
     attempts: int = 0
     self_check: float | None = None
+    prompt_tokens: int | None = None
+    rag_tokens: int | None = None
+    attachments_count: int | None = None
+    ops_files_count: int | None = None
 
 
 def compose_cache_id(model: str, prompt: str, topk_docs: Iterable[str] | None) -> str:
@@ -161,34 +168,54 @@ def route_text(
 
     rules = _load_rules()
     pt = prompt_tokens if prompt_tokens is not None else count_tokens(user_prompt)
+    rag_tokens: int | None = None
     # Fallback for single-token undercount when no tokenizer available
     if pt <= 1 and len(user_prompt) > 0:
         # Treat roughly 4 chars ≈ 1 token
         approx = max(1, len(user_prompt) // 4)
         pt = max(pt, approx)
 
+    def _decision(model: str, reason: str) -> RouteDecision:
+        decision = RouteDecision(
+            model=model,
+            reason=reason,
+            prompt_tokens=pt,
+            rag_tokens=rag_tokens,
+            attachments_count=attachments_count,
+            ops_files_count=ops_files_count,
+        )
+        logger.debug(
+            "route_text decision rule=%s prompt_tokens=%s rag_tokens=%s attachments=%s ops_files=%s",
+            reason,
+            pt,
+            rag_tokens,
+            attachments_count,
+            ops_files_count,
+        )
+        return decision
+
     # Attachments heuristic: if there are any images/files, prefer mid-tier snapshot
     if (attachments_count or 0) > 0:
         ROUTER_DECISION.labels("attachments").inc()
-        return RouteDecision(model="gpt-4.1-nano", reason="attachments")
+        return _decision("gpt-4.1-nano", "attachments")
 
     # Ops heuristic: escalate if many files
     if intent == "ops" and ops_files_count is not None:
         if ops_files_count <= rules["OPS_MAX_FILES_SIMPLE"]:
             ROUTER_DECISION.labels("ops-simple").inc()
-            return RouteDecision(model="gpt-5-nano", reason="ops-simple")
+            return _decision("gpt-5-nano", "ops-simple")
         ROUTER_DECISION.labels("ops-complex").inc()
-        return RouteDecision(model="gpt-4.1-nano", reason="ops-complex")
+        return _decision("gpt-4.1-nano", "ops-complex")
 
     # Long prompt (token-based)
     if pt > rules["MAX_SHORT_PROMPT_TOKENS"]:
         ROUTER_DECISION.labels("long-prompt").inc()
-        return RouteDecision(model="gpt-4.1-nano", reason="long-prompt")
+        return _decision("gpt-4.1-nano", "long-prompt")
     # Fallback: char-length heuristic when tokenizer underestimates
     char_len = len(user_prompt or "")
     if char_len > (rules["MAX_SHORT_PROMPT_TOKENS"] * 3):
         ROUTER_DECISION.labels("long-prompt").inc()
-        return RouteDecision(model="gpt-4.1-nano", reason="long-prompt")
+        return _decision("gpt-4.1-nano", "long-prompt")
 
     # Long RAG context (estimate by tokens in docs)
     if retrieved_docs:
@@ -198,16 +225,16 @@ def route_text(
         rag_tokens = max(rag_tokens, approx_tokens)
         if rag_tokens > rules["RAG_LONG_CONTEXT_THRESHOLD"]:
             ROUTER_DECISION.labels("long-context").inc()
-            return RouteDecision(model="gpt-4.1-nano", reason="long-context")
+            return _decision("gpt-4.1-nano", "long-context")
         # Fallback: char-length heuristic for doc context when tokenizer underestimates
         char_total = sum(len(d) for d in retrieved_docs)
         # Treat >5k chars of external context as long in fallback mode
         if char_total > 5000:
             ROUTER_DECISION.labels("long-context").inc()
-            return RouteDecision(model="gpt-4.1-nano", reason="long-context")
+            return _decision("gpt-4.1-nano", "long-context")
 
     ROUTER_DECISION.labels("default").inc()
-    return RouteDecision(model="gpt-5-nano", reason="default")
+    return _decision("gpt-5-nano", "default")
 
 
 def _heuristic_self_check(
