@@ -11,6 +11,7 @@ from .timer_skill import TimerSkill
 from .math_skill import MathSkill
 from .unit_conversion_skill import UnitConversionSkill
 from .currency_skill import CurrencySkill
+from .stock_skill import StockSkill
 from .calendar_skill import CalendarSkill
 from .teach_skill import TeachSkill  # “my bedroom is Hija room”
 from .entities_skill import EntitiesSkill  # “list all lights”
@@ -46,6 +47,7 @@ SKILL_CLASSES: list[type] = [
     MathSkill,
     UnitConversionSkill,
     CurrencySkill,
+    StockSkill,
     CalendarSkill,
     TeachSkill,
     EntitiesSkill,
