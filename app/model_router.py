@@ -22,6 +22,7 @@ except Exception:  # pragma: no cover - fallback parser
 from .token_utils import count_tokens
 from .metrics import ROUTER_DECISION
 from .memory.vector_store import _normalized_hash as normalized_hash
+from .model_picker import KEYWORDS, HEAVY_INTENTS
 from .model_config import GPT_BASELINE_MODEL, GPT_MID_MODEL, GPT_HEAVY_MODEL
 
 logger = logging.getLogger(__name__)
@@ -224,6 +225,15 @@ def route_text(
         if char_total > 5000:
             ROUTER_DECISION.labels("long-context").inc()
             return _decision("gpt-4.1-nano", "long-context")
+
+    # Keyword or intent-based escalation
+    prompt_lc = (user_prompt or "").lower()
+    if intent and intent in HEAVY_INTENTS:
+        ROUTER_DECISION.labels("heavy-intent").inc()
+        return RouteDecision(model="gpt-4.1-nano", reason="heavy-intent")
+    if any(k in prompt_lc for k in KEYWORDS):
+        ROUTER_DECISION.labels("keyword").inc()
+        return RouteDecision(model="gpt-4.1-nano", reason="keyword")
 
     ROUTER_DECISION.labels("default").inc()
     return _decision("gpt-5-nano", "default")
