@@ -1,12 +1,12 @@
 """Embedding utilities supporting OpenAI and local LLaMA backends.
 
 This module exposes a single :func:`embed` coroutine which returns a vector of
-floats for a given input text.  The backend is selected via the
-``EMBEDDING_BACKEND`` environment variable and can either be ``"openai"`` or
-``"llama"``.
+floats for a given input text. The backend is selected via the
+``EMBEDDING_BACKEND`` environment variable and can be ``"openai"``,
+``"llama"``, or ``"stub"``.
 
 When using the LLaMA backend a local ``gguf`` model path must be supplied via
-``LLAMA_EMBEDDINGS_MODEL``.  The embeddings for LLaMA are produced using
+``LLAMA_EMBEDDINGS_MODEL``. The embeddings for LLaMA are produced using
 ``llama-cpp-python`` which executes synchronously and is therefore dispatched to
 ``asyncio``'s default executor.
 
@@ -17,59 +17,56 @@ repeated embedding calls.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import logging
 import os
 import time
-import logging
 from functools import lru_cache
-from typing import List, Dict, TYPE_CHECKING
-import hashlib
-import numpy as np   # <- new
+from typing import Dict, List, TYPE_CHECKING
 
-
+import numpy as np
 
 if TYPE_CHECKING:  # pragma: no cover - for type checkers only
     from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Globals & config
+# ---------------------------------------------------------------------------
 
+_TTL = 24 * 60 * 60  # seconds, for OpenAI sync cache bucket
 _llama_model = None
 
-def embed_sync(text: str) -> List[float]:
-    """Synchronous helper used by vector stores.
-
-    • In CI / pytest we short-circuit to a deterministic local vector so no
-      network calls ever happen.
-    """
-    if os.getenv("PYTEST_CURRENT_TEST") or \
-       os.getenv("VECTOR_STORE", "").lower() in {"memory", "inmemory"}:
-        # 8-dim “thumbprint” to keep semantic-cache tests meaningful
-        h = hashlib.sha256(text.encode()).digest()
-        return np.frombuffer(h[:32], dtype=np.uint8).astype("float32")\
-                 .reshape(8, 4).mean(axis=1).tolist()
-
-    bucket = int(time.time() // _TTL)
-    return _embed_openai_sync(text, bucket)
-
-
-def get_openai_client() -> "OpenAI":
-    """Return a synchronous OpenAI client.
-
-    The client is instantiated on each call to avoid cross-test pollution when
-    the ``openai`` module is monkey-patched. The overhead is negligible for the
-    lightweight test embeddings used in this project.
-    """
-
-    from openai import OpenAI  # type: ignore
-
-    return OpenAI()
-
-
-try:  # pragma: no cover - import guarded for optional dependency
+# Optional dependency
+try:  # pragma: no cover
     from llama_cpp import Llama  # type: ignore
-except Exception:  # pragma: no cover - if library not installed
+except Exception:  # pragma: no cover
     Llama = None  # type: ignore
 
+
+# ---------------------------------------------------------------------------
+# Deterministic stub (for tests / in-memory stores)
+# ---------------------------------------------------------------------------
+
+def _embed_stub(text: str) -> List[float]:
+    """Return a deterministic local embedding used for tests and in-memory stores.
+
+    8-dim “thumbprint” keeps semantic-cache tests meaningful without external calls.
+    """
+    h = hashlib.sha256(text.encode()).digest()
+    return (
+        np.frombuffer(h[:32], dtype=np.uint8)
+        .astype("float32")
+        .reshape(8, 4)
+        .mean(axis=1)
+        .tolist()
+    )
+
+
+# ---------------------------------------------------------------------------
+# LLaMA backend (sync init, run in executor)
+# ---------------------------------------------------------------------------
 
 def _get_llama_model():
     """Lazily instantiate and cache the LLaMA model for embeddings."""
@@ -84,39 +81,43 @@ def _get_llama_model():
     return _llama_model
 
 
-_TTL = 24 * 60 * 60
+def _reset_llama_model_for_tests():  # pragma: no cover - test helper
+    global _llama_model
+    _llama_model = None
+
+
+# ---------------------------------------------------------------------------
+# OpenAI backend (sync path with TTL cache)
+# ---------------------------------------------------------------------------
+
+def get_openai_client() -> "OpenAI":
+    """Return a synchronous OpenAI client (instantiate per call for test isolation)."""
+    from openai import OpenAI  # type: ignore
+    return OpenAI()
 
 
 @lru_cache(maxsize=5_000)
 def _embed_openai_sync(text: str, ttl_bucket: int) -> List[float]:
-    """Return an embedding using the OpenAI sync client."""
+    """Return an embedding using the OpenAI sync client (cached by TTL bucket)."""
     client = get_openai_client()
     model = os.getenv("EMBED_MODEL", "text-embedding-3-small")
-    # Explicitly request float encoding to avoid base64 payloads returned by newer SDKs
-    # Fall back to legacy signature for older clients/stubs that don't accept encoding_format
     try:
-        resp = client.embeddings.create(
-            model=model,
-            input=text,
-            encoding_format="float",
-        )
+        resp = client.embeddings.create(model=model, input=text, encoding_format="float")
     except TypeError:
-        # Older clients (or unit test stubs) may not support encoding_format
+        # Older SDKs / stubs that don't accept encoding_format
         resp = client.embeddings.create(model=model, input=text)
+
     embedding = resp.data[0].embedding
-    # Defensive: if a base64 string is ever returned, decode to float32
-    if isinstance(embedding, str):  # pragma: no cover - safety hatch
+    if isinstance(embedding, str):  # pragma: no cover - safety hatch for base64
         try:
             try:
                 import pybase64 as base64  # type: ignore
-            except Exception:  # fallback to stdlib
+            except Exception:
                 import base64  # type: ignore
             raw = base64.b64decode(embedding)
-            vec = np.frombuffer(raw, dtype=np.float32).astype("float32").tolist()
-            return vec
-        except Exception:
-            # Re-raise with context so callers see a clear error
-            raise RuntimeError("Unexpected base64 embedding format from OpenAI API")
+            return np.frombuffer(raw, dtype=np.float32).astype("float32").tolist()
+        except Exception as e:
+            raise RuntimeError("Unexpected base64 embedding format from OpenAI API") from e
     return embedding  # type: ignore[return-value]
 
 
@@ -138,29 +139,74 @@ async def _embed_llama(text: str) -> List[float]:
     return await loop.run_in_executor(None, _run)
 
 
-async def embed(text: str) -> List[float]:
-    """Return an embedding vector for ``text``.
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
-    The backend is chosen according to the ``EMBEDDING_BACKEND`` environment
-    variable which defaults to ``"openai"``.
-    """
-
+def embed_sync(text: str) -> List[float]:
+    """Synchronous helper used by vector stores."""
     backend = os.getenv("EMBEDDING_BACKEND", "openai").lower()
+
+    # In CI/pytest or when using in-memory vector store, force stub to avoid network.
+    if backend != "stub" and (
+        os.getenv("PYTEST_CURRENT_TEST")
+        or os.getenv("VECTOR_STORE", "").lower() in {"memory", "inmemory"}
+    ):
+        backend = "stub"
+
+    model = (
+        os.getenv("EMBED_MODEL", "text-embedding-3-small")
+        if backend == "openai"
+        else os.getenv("LLAMA_EMBEDDINGS_MODEL", "")
+    )
+    logger.debug("embed_sync backend=%s model=%s", backend, model)
+
+    if backend == "stub":
+        return _embed_stub(text)
+    if backend == "openai":
+        bucket = int(time.time() // _TTL)
+        return _embed_openai_sync(text, bucket)
+    if backend == "llama":
+        result = _get_llama_model().create_embedding(text)
+        return result["data"][0]["embedding"]
+    raise ValueError(f"Unsupported EMBEDDING_BACKEND: {backend}")
+
+
+async def embed(text: str) -> List[float]:
+    """Return an embedding vector for ``text`` (async).
+
+    Backend chosen by ``EMBEDDING_BACKEND`` (default: ``openai``).
+    """
+    backend = os.getenv("EMBEDDING_BACKEND", "openai").lower()
+
+    # Mirror sync behavior for tests / memory store
+    if backend != "stub" and (
+        os.getenv("PYTEST_CURRENT_TEST")
+        or os.getenv("VECTOR_STORE", "").lower() in {"memory", "inmemory"}
+    ):
+        backend = "stub"
+
+    model = (
+        os.getenv("EMBED_MODEL", "text-embedding-3-small")
+        if backend == "openai"
+        else os.getenv("LLAMA_EMBEDDINGS_MODEL", "")
+    )
+    logger.debug("embed backend=%s model=%s", backend, model)
+
     if backend == "openai":
         return await _embed_openai(text)
     if backend == "llama":
         return await _embed_llama(text)
+    if backend == "stub":
+        return _embed_stub(text)
     raise ValueError(f"Unsupported EMBEDDING_BACKEND: {backend}")
 
 
-async def benchmark(
-    text: str, iterations: int = 10, user_id: str | None = None
-) -> Dict[str, float]:
-    """Run ``embed`` ``iterations`` times and log latency and throughput.
+async def benchmark(text: str, iterations: int = 10, user_id: str | None = None) -> Dict[str, float]:
+    """Run ``embed`` ``iterations`` times and log latency & throughput.
 
     ``user_id`` is accepted for interface parity but is not used.
     """
-
     start = time.perf_counter()
     for _ in range(iterations):
         await embed(text)

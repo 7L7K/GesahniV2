@@ -8,6 +8,11 @@ from app.model_router import (
     triage_scene_risk,
     route_vision,
 )
+from app.model_config import (
+    GPT_BASELINE_MODEL,
+    GPT_MID_MODEL,
+    GPT_HEAVY_MODEL,
+)
 
 
 class Dummy:
@@ -20,7 +25,7 @@ async def fake_ask(prompt, model, system, **kwargs):
         return "not sure", 10, 2, 0.0
     if model == "gpt-4.1-nano":
         return "because this is adequate answer with details", 20, 5, 0.0
-    if model == "o4-mini":
+    if model == GPT_HEAVY_MODEL:
         return "therefore final safety-level explanation sufficient", 30, 7, 0.0
     return "ok", 1, 1, 0.0
 
@@ -59,7 +64,7 @@ def test_run_with_self_check_escalates_then_passes():
             max_retries=1,
         )
     )
-    assert model in {"gpt-4.1-nano", "o4-mini"}
+    assert model in {"gpt-4.1-nano", GPT_HEAVY_MODEL}
     assert escalated is True
     assert score >= 0.0
 
@@ -87,6 +92,18 @@ def test_route_text_ops_branches():
     assert d_complex.reason == "ops-complex"
 
 
+def test_route_text_keyword_escalates():
+    d = route_text(user_prompt="please summarize this", intent="chat")
+    assert d.model == "gpt-4.1-nano"
+    assert d.reason == "keyword"
+
+
+def test_route_text_heavy_intent_escalates():
+    d = route_text(user_prompt="hi", intent="analysis")
+    assert d.model == "gpt-4.1-nano"
+    assert d.reason == "heavy-intent"
+
+
 def test_route_vision_cap(monkeypatch):
     # Force a tiny cap via env; verify local-only after cap
     monkeypatch.setenv("VISION_MAX_IMAGES_PER_DAY", "1")
@@ -103,7 +120,7 @@ def test_route_vision_cap(monkeypatch):
 
     # first call allowed → remote mini
     model, reason = asyncio.run(route_vision(ask_func=ask_stub, images=[b"img"], text_hint="person", allow_test=True))
-    assert model in {"gpt-4o-mini", "gpt-4o"}
+    assert model in {GPT_BASELINE_MODEL, GPT_MID_MODEL}
     # second call blocked → local
     model2, reason2 = asyncio.run(route_vision(ask_func=ask_stub, images=[b"img"], text_hint="person", allow_test=True))
     assert model2 == "local"

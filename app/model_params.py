@@ -46,9 +46,12 @@ def base_defaults() -> Dict[str, Any]:
     """
 
     return {
-        "temperature": _env_float("GEN_TEMPERATURE", 0.2),
-        "top_p": _env_float("GEN_TOP_P", 0.95),
-        "max_tokens": _env_int("GEN_MAX_TOKENS", 512),
+        # Slightly lower temperature and top_p favour faster, more deterministic
+        # generations which benefits low-latency voice pipelines.
+        "temperature": _env_float("GEN_TEMPERATURE", 0.1),
+        "top_p": _env_float("GEN_TOP_P", 0.9),
+        # Cap output length for snappier responses; callers can override via env.
+        "max_tokens": _env_int("GEN_MAX_TOKENS", 256),
         "stop": _env_list("GEN_STOP"),
     }
 
@@ -115,7 +118,11 @@ def for_ollama(overrides: Mapping[str, Any] | None = None) -> Dict[str, Any]:
     if mp.get("stop"):
         out["stop"] = mp["stop"]
     # Allow caller to pass additional Ollama-specific options
-    extras = {k: v for k, v in mp.items() if k not in {"temperature", "top_p", "max_tokens", "stop"}}
+    extras = {
+        k: v
+        for k, v in mp.items()
+        if k not in {"temperature", "top_p", "max_tokens", "stop"}
+    }
     out.update(extras)
     # Remove None values for clean payloads
     return {k: v for k, v in out.items() if v is not None}
@@ -127,5 +134,3 @@ __all__ = [
     "for_openai",
     "for_ollama",
 ]
-
-

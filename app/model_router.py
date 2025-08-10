@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import os
 import time
-import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Iterable, List, Optional, Tuple
 
 try:  # pragma: no cover - optional
     import yaml  # type: ignore
@@ -22,7 +22,10 @@ except Exception:  # pragma: no cover - fallback parser
 from .token_utils import count_tokens
 from .metrics import ROUTER_DECISION
 from .memory.vector_store import _normalized_hash as normalized_hash
+from .model_picker import KEYWORDS, HEAVY_INTENTS
+from .model_config import GPT_BASELINE_MODEL, GPT_MID_MODEL, GPT_HEAVY_MODEL
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Defaults (also mirrored in router_rules.yaml)
@@ -39,7 +42,6 @@ MAX_RETRIES_PER_REQUEST = int(os.getenv("MAX_ESCALATIONS", "1"))
 REPLY_LEN_TARGET_GRANNY = int(os.getenv("REPLY_LEN_TARGET_GRANNY", "300"))
 _BUDGET_REPLY_LEN_TARGET = int(os.getenv("BUDGET_REPLY_LEN_TARGET", "180"))
 
-
 # ---------------------------------------------------------------------------
 # Hot-reloadable rules
 # ---------------------------------------------------------------------------
@@ -54,7 +56,6 @@ def _load_rules() -> dict[str, Any]:
 
     The file is re-read if its mtime changes between calls.
     """
-
     global _RULES_MTIME, _LOADED_RULES
     try:
         st = _RULES_PATH.stat()
@@ -75,7 +76,6 @@ def _load_rules() -> dict[str, Any]:
     if _LOADED_RULES is not None and _RULES_MTIME == mtime:
         return _LOADED_RULES
 
-    # Re-read
     try:
         if yaml is None:
             raise RuntimeError("pyyaml not installed")
@@ -104,7 +104,6 @@ def _load_rules() -> dict[str, Any]:
         _RULES_MTIME = mtime
         return rules
     except Exception:
-        # On parse error, keep previous if any, else defaults
         if _LOADED_RULES is None:
             _LOADED_RULES = {
                 "MAX_SHORT_PROMPT_TOKENS": MAX_SHORT_PROMPT_TOKENS,
@@ -116,11 +115,9 @@ def _load_rules() -> dict[str, Any]:
             }
         return _LOADED_RULES
 
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
-
 
 @dataclass
 class RouteDecision:
@@ -129,19 +126,20 @@ class RouteDecision:
     escalated: bool = False
     attempts: int = 0
     self_check: float | None = None
+    prompt_tokens: int | None = None
+    rag_tokens: int | None = None
+    attachments_count: int | None = None
+    ops_files_count: int | None = None
 
 
 def compose_cache_id(model: str, prompt: str, topk_docs: Iterable[str] | None) -> str:
-    """Return cache id combining {model, prompt_hash, topk_ids} as required.
+    """Return cache id combining {model, prompt_hash, topk_ids}.
 
     topk_docs are hashed individually using the project-normalized hash.
     """
-
     prompt_h = normalized_hash(prompt)
     topk = ",".join(sorted(normalized_hash(doc) for doc in (topk_docs or [])))
-    # Include version tag to allow future evolution without cross-contamination
     return f"v1|{model}|{prompt_h}|{topk}"
-
 
 def route_text(
     *,
@@ -151,64 +149,94 @@ def route_text(
     intent: str | None = None,
     ops_files_count: int | None = None,
     attachments_count: int | None = None,
-    ) -> RouteDecision:
+) -> RouteDecision:
     """Deterministic text routing with budgets and long-context handling.
 
     Defaults to gpt-5-nano; escalates to gpt-4.1-nano for long prompt/context,
     non-trivial attachments, or complex ops. Self-check escalations happen in
     run_with_self_check.
     """
-
     rules = _load_rules()
+
+    # token count with fallback
     pt = prompt_tokens if prompt_tokens is not None else count_tokens(user_prompt)
-    # Fallback for single-token undercount when no tokenizer available
     if pt <= 1 and len(user_prompt) > 0:
-        # Treat roughly 4 chars ≈ 1 token
-        approx = max(1, len(user_prompt) // 4)
+        approx = max(1, len(user_prompt) // 4)  # ~4 chars ≈ 1 token
         pt = max(pt, approx)
 
-    # Attachments heuristic: if there are any images/files, prefer mid-tier snapshot
+    # pre-compute rag_tokens if any docs provided so logging is stable
+    rag_tokens: int | None = None
+    if retrieved_docs:
+        rag_tokens = sum(count_tokens(d) for d in retrieved_docs)
+        approx_tokens = sum(max(1, len(d) // 4) for d in retrieved_docs)
+        rag_tokens = max(rag_tokens, approx_tokens)
+
+    def _decision(model: str, reason: str) -> RouteDecision:
+        decision = RouteDecision(
+            model=model,
+            reason=reason,
+            prompt_tokens=pt,
+            rag_tokens=rag_tokens,
+            attachments_count=attachments_count,
+            ops_files_count=ops_files_count,
+        )
+        logger.debug(
+            "route_text decision rule=%s model=%s prompt_tokens=%s rag_tokens=%s attachments=%s ops_files=%s",
+            reason,
+            model,
+            pt,
+            rag_tokens,
+            attachments_count,
+            ops_files_count,
+        )
+        return decision
+
+    # Attachments heuristic: any images/files → mid-tier snapshot
     if (attachments_count or 0) > 0:
         ROUTER_DECISION.labels("attachments").inc()
-        return RouteDecision(model="gpt-4.1-nano", reason="attachments")
+        return _decision("gpt-4.1-nano", "attachments")
 
     # Ops heuristic: escalate if many files
     if intent == "ops" and ops_files_count is not None:
         if ops_files_count <= rules["OPS_MAX_FILES_SIMPLE"]:
             ROUTER_DECISION.labels("ops-simple").inc()
-            return RouteDecision(model="gpt-5-nano", reason="ops-simple")
+            return _decision("gpt-5-nano", "ops-simple")
         ROUTER_DECISION.labels("ops-complex").inc()
-        return RouteDecision(model="gpt-4.1-nano", reason="ops-complex")
+        return _decision("gpt-4.1-nano", "ops-complex")
 
     # Long prompt (token-based)
     if pt > rules["MAX_SHORT_PROMPT_TOKENS"]:
         ROUTER_DECISION.labels("long-prompt").inc()
-        return RouteDecision(model="gpt-4.1-nano", reason="long-prompt")
+        return _decision("gpt-4.1-nano", "long-prompt")
+
     # Fallback: char-length heuristic when tokenizer underestimates
     char_len = len(user_prompt or "")
     if char_len > (rules["MAX_SHORT_PROMPT_TOKENS"] * 3):
         ROUTER_DECISION.labels("long-prompt").inc()
-        return RouteDecision(model="gpt-4.1-nano", reason="long-prompt")
+        return _decision("gpt-4.1-nano", "long-prompt")
 
-    # Long RAG context (estimate by tokens in docs)
-    if retrieved_docs:
-        rag_tokens = sum(count_tokens(d) for d in retrieved_docs)
-        # Adjust for naive fallback that undercounts (no whitespace)
-        approx_tokens = sum(max(1, len(d) // 4) for d in retrieved_docs)
-        rag_tokens = max(rag_tokens, approx_tokens)
+    # Long RAG context
+    if rag_tokens is not None:
         if rag_tokens > rules["RAG_LONG_CONTEXT_THRESHOLD"]:
             ROUTER_DECISION.labels("long-context").inc()
-            return RouteDecision(model="gpt-4.1-nano", reason="long-context")
-        # Fallback: char-length heuristic for doc context when tokenizer underestimates
-        char_total = sum(len(d) for d in retrieved_docs)
-        # Treat >5k chars of external context as long in fallback mode
+            return _decision("gpt-4.1-nano", "long-context")
+        # Fallback: char-length heuristic for doc context
+        char_total = sum(len(d) for d in retrieved_docs or [])
         if char_total > 5000:
             ROUTER_DECISION.labels("long-context").inc()
-            return RouteDecision(model="gpt-4.1-nano", reason="long-context")
+            return _decision("gpt-4.1-nano", "long-context")
+
+    # Keyword or intent-based escalation
+    prompt_lc = (user_prompt or "").lower()
+    if intent and intent in HEAVY_INTENTS:
+        ROUTER_DECISION.labels("heavy-intent").inc()
+        return RouteDecision(model="gpt-4.1-nano", reason="heavy-intent")
+    if any(k in prompt_lc for k in KEYWORDS):
+        ROUTER_DECISION.labels("keyword").inc()
+        return RouteDecision(model="gpt-4.1-nano", reason="keyword")
 
     ROUTER_DECISION.labels("default").inc()
-    return RouteDecision(model="gpt-5-nano", reason="default")
-
+    return _decision("gpt-5-nano", "default")
 
 def _heuristic_self_check(
     user_prompt: str,
@@ -222,26 +250,28 @@ def _heuristic_self_check(
 
     This provides deterministic scoring in tests without network calls.
     """
-
     if not answer or not answer.strip():
         return 0.0
     text = answer.strip().lower()
     if any(x in text for x in ("i don't know", "not sure", "cannot help")):
         return 0.2
-    # Completeness proxy: aim for at least a model/mode-dependent target.
+
     rules = _load_rules()
     min_len = 60
-    # Default long target for document-like tasks
     target = rules["DOC_LONG_REPLY_TARGET"]
-    # Budget guardrail: when quota is breached, reduce target aggressively
+
+    # Budget guardrail
     if os.getenv("BUDGET_QUOTA_BREACHED", "0").lower() in {"1", "true", "yes"}:
         target = max(min_len, _BUDGET_REPLY_LEN_TARGET)
+
     # Granny mode prefers shorter replies on baseline model
     sp = (system_prompt or "").lower()
     if "granny mode" in sp and (model or "").startswith("gpt-5-nano"):
         target = max(min_len, REPLY_LEN_TARGET_GRANNY)
+
     length_norm = min(1.0, max(min_len, len(answer)) / max(min_len, float(target)))
-    # Factuality proxy: overlap with retrieved docs if provided
+
+    # Factuality proxy via overlap
     factual = 0.7
     if retrieved_docs:
         src = " ".join(retrieved_docs).lower()
@@ -250,11 +280,10 @@ def _heuristic_self_check(
             if token.isalpha() and token in src:
                 overlap += 1
         factual = min(1.0, 0.4 + overlap / 50.0)
-    # Reasoning proxy: presence of because/therefore/so suggests structure
+
     reasoning = 0.6 + (0.2 if any(k in text for k in ("because", "therefore", "so")) else 0)
     score = max(0.0, min(1.0, 0.25 * length_norm + 0.45 * factual + 0.30 * reasoning))
     return float(score)
-
 
 async def run_with_self_check(
     *,
@@ -273,11 +302,11 @@ async def run_with_self_check(
 
     Returns: (text, final_model, reason, self_check, prompt_tokens, completion_tokens, cost, escalated)
     """
-
     rules = _load_rules()
     thresh = float(rules["SELF_CHECK_FAIL_THRESHOLD"] if threshold is None else threshold)
     effective_max = int(rules["MAX_RETRIES_PER_REQUEST"] if max_retries is None else max_retries)
     retries_left = int(effective_max)
+
     # If budget/quota is breached, disable escalations entirely
     if os.getenv("BUDGET_QUOTA_BREACHED", "0").lower() in {"1", "true", "yes"}:
         retries_left = 0
@@ -286,10 +315,7 @@ async def run_with_self_check(
     reason = "initial"
     escalated = False
 
-    # Wrapper around ask_func to standardize return
     async def _call(m: str) -> Tuple[str, int, int, float]:
-        # ask_func must be compatible with gpt_client.ask_gpt signature
-        # Be tolerant of older stubs that don't accept streaming kwargs.
         try:
             text, pt, ct, cost = await ask_func(
                 user_prompt,
@@ -300,21 +326,13 @@ async def run_with_self_check(
                 allow_test=allow_test,
             )
         except TypeError:
-            text, pt, ct, cost = await ask_func(
-                user_prompt,
-                m,
-                system_prompt,
-            )
+            text, pt, ct, cost = await ask_func(user_prompt, m, system_prompt)
         return text, pt, ct, cost
 
     # attempt 1
     text, pt, ct, cost = await _call(current_model)
     score = _heuristic_self_check(
-        user_prompt,
-        text,
-        retrieved_docs,
-        model=current_model,
-        system_prompt=system_prompt,
+        user_prompt, text, retrieved_docs, model=current_model, system_prompt=system_prompt
     )
     if score >= thresh:
         return text, current_model, reason, score, pt, ct, cost, escalated
@@ -322,48 +340,39 @@ async def run_with_self_check(
     # escalate chain
     while retries_left > 0:
         retries_left -= 1
-        # With a single allowed retry, prefer mid-tier unless threshold demands final
         if int(effective_max) <= 1:
             if thresh >= 0.8:
-                current_model = "o4-mini"
+                current_model = GPT_HEAVY_MODEL
                 reason = "self-check-final"
             else:
                 current_model = "gpt-4.1-nano"
                 reason = "self-check-escalation"
             escalated = True
         else:
-            # first escalation → gpt-4.1-nano if not already
             if current_model != "gpt-4.1-nano":
                 current_model = "gpt-4.1-nano"
                 reason = "self-check-escalation"
                 escalated = True
             else:
-                # final retry → o4-mini
-                current_model = "o4-mini"
+                current_model = GPT_HEAVY_MODEL
                 reason = "self-check-final"
                 escalated = True
+
         text, pt, ct, cost = await _call(current_model)
         score = _heuristic_self_check(
-            user_prompt,
-            text,
-            retrieved_docs,
-            model=current_model,
-            system_prompt=system_prompt,
+            user_prompt, text, retrieved_docs, model=current_model, system_prompt=system_prompt
         )
         if score >= thresh:
             break
 
     return text, current_model, reason, score, pt, ct, cost, escalated
 
-
 # ---------------------------------------------------------------------------
 # Vision routing
 # ---------------------------------------------------------------------------
 
-
 def triage_scene_risk(text_hint: str | None) -> str:
     """Return simple risk category for a scene from an optional text hint."""
-
     if not text_hint:
         return "low"
     t = text_hint.lower()
@@ -373,24 +382,18 @@ def triage_scene_risk(text_hint: str | None) -> str:
         return "medium"
     return "low"
 
-
 _VISION_DAY: str | None = None
 _VISION_COUNT: int = 0
 _VISION_LAST_MAX: int | None = None
 
-
 def _vision_daily_cap(max_per_day: int) -> bool:
-    """Return True if another remote vision call is allowed today.
-
-    Resets the simple counter when the day changes.
-    """
+    """Return True if another remote vision call is allowed today."""
     global _VISION_DAY, _VISION_COUNT, _VISION_LAST_MAX
     today = time.strftime("%Y-%m-%d")
     if _VISION_DAY != today:
         _VISION_DAY = today
         _VISION_COUNT = 0
         _VISION_LAST_MAX = None
-    # If the configured cap changes between calls (e.g., tests), reset counter
     if _VISION_LAST_MAX is None or _VISION_LAST_MAX != max_per_day:
         _VISION_LAST_MAX = max_per_day
         _VISION_COUNT = 0
@@ -398,7 +401,6 @@ def _vision_daily_cap(max_per_day: int) -> bool:
         return False
     _VISION_COUNT += 1
     return True
-
 
 async def route_vision(
     *,
@@ -411,8 +413,6 @@ async def route_vision(
 
     Returns (model_used, reason).
     """
-
-    # local triage + per-day cap; treat any provided image or hint as an event
     risk = triage_scene_risk(text_hint)
     max_per_day = int(os.getenv("VISION_MAX_IMAGES_PER_DAY", "40"))
     if not _vision_daily_cap(max_per_day):
@@ -422,31 +422,25 @@ async def route_vision(
     if not event:
         return "local", "vision-no-event"
 
-    # snapshot with mini
-    model = "gpt-4o-mini"
+    model = GPT_BASELINE_MODEL
     reason = f"vision-{risk}"
-    # We do not actually call a vision API in tests; caller provides ask_func stub
     _ = await ask_func("<vision prompt>", model, None, allow_test=allow_test)
 
-    # optional safety retry
     if risk == "high":
-        model = "gpt-4o"
+        model = GPT_MID_MODEL
         reason = "vision-safety"
         _ = await ask_func("<vision prompt>", model, None, allow_test=allow_test)
     return model, reason
 
-
 # ---------------------------------------------------------------------------
 # System prompts
 # ---------------------------------------------------------------------------
-
 
 def load_system_prompt(mode: str | None) -> Optional[str]:
     """Return system prompt text for Granny Mode or Computer Mode.
 
     Falls back to None when mode is unrecognized.
     """
-
     mode_l = (mode or "").strip().lower()
     base = Path(__file__).parent / "prompts"
     if mode_l == "granny":
@@ -454,7 +448,6 @@ def load_system_prompt(mode: str | None) -> Optional[str]:
     elif mode_l == "computer":
         path = base / "computer_mode.txt"
     else:
-        # Load default system persona if mode unspecified
         try:
             default_path = base / "system_default.txt"
             return default_path.read_text(encoding="utf-8")
@@ -465,7 +458,6 @@ def load_system_prompt(mode: str | None) -> Optional[str]:
     except Exception:
         return None
 
-
 __all__ = [
     "RouteDecision",
     "compose_cache_id",
@@ -475,19 +467,3 @@ __all__ = [
     "route_vision",
     "load_system_prompt",
 ]
-
-
-
-
-
-__all__ = [
-    "RouteDecision",
-    "compose_cache_id",
-    "route_text",
-    "run_with_self_check",
-    "triage_scene_risk",
-    "route_vision",
-    "load_system_prompt",
-]
-
-
