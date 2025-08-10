@@ -51,6 +51,7 @@ export default function Header() {
                     {authed && (
                         <>
                             <Link href="/capture" className="text-sm hover:underline">Capture</Link>
+                            <Link href="/settings" className="text-sm hover:underline">Settings</Link>
                             <Link href="/admin" className="text-sm hover:underline">Admin</Link>
                         </>
                     )}

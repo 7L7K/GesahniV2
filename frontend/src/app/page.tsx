@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import ChatBubble from '../components/ChatBubble';
 import LoadingBubble from '../components/LoadingBubble';
 import InputBar from '../components/InputBar';
@@ -15,6 +16,7 @@ interface ChatMessage {
 }
 
 export default function Page() {
+  const router = useRouter();
   const [authed, setAuthed] = useState<boolean>(false);
   const createInitialMessage = (): ChatMessage => ({
     id: crypto.randomUUID(),
@@ -66,6 +68,27 @@ export default function Page() {
       }
     }
   }, []);
+
+  // Check onboarding status
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      if (authed) {
+        try {
+          const { getOnboardingStatus } = await import('@/lib/api');
+          const status = await getOnboardingStatus();
+          if (!status.completed) {
+            router.push('/onboarding');
+          }
+        } catch (error) {
+          console.error('Failed to check onboarding status:', error);
+          // If there's an error, assume onboarding is needed
+          router.push('/onboarding');
+        }
+      }
+    };
+
+    checkOnboarding();
+  }, [authed, router]);
 
   // Persist messages after each update & auto‑scroll
   useEffect(() => {

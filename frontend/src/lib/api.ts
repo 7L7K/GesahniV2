@@ -172,7 +172,7 @@ export async function getBudget(): Promise<{ tokens_used: number; minutes_used: 
   return res.json();
 }
 
-export async function getDecisions(limit = 200): Promise<{ items: any[] }> {
+export async function getDecisions(limit = 200): Promise<{ items: unknown[] }> {
   const res = await apiFetch(`/v1/admin/router/decisions?limit=${limit}`, { method: 'GET' });
   if (!res.ok) throw new Error('decisions_failed');
   return res.json();
@@ -225,4 +225,58 @@ export function wsUrl(path: string): string {
   if (!token) return `${base}${path}`;
   const sep = path.includes('?') ? '&' : '?';
   return `${base}${path}${sep}access_token=${encodeURIComponent(token)}`;
+}
+
+// Profile and Onboarding API
+export interface UserProfile {
+  name?: string;
+  email?: string;
+  timezone?: string;
+  language?: string;
+  communication_style?: string;
+  interests?: string[];
+  occupation?: string;
+  home_location?: string;
+  preferred_model?: string;
+  notification_preferences?: Record<string, unknown>;
+  calendar_integration?: boolean;
+  gmail_integration?: boolean;
+  onboarding_completed?: boolean;
+}
+
+export interface OnboardingStatus {
+  completed: boolean;
+  steps: Array<{
+    step: string;
+    completed: boolean;
+    data: Record<string, unknown> | null;
+  }>;
+  current_step: number;
+}
+
+export async function getProfile(): Promise<UserProfile> {
+  const res = await apiFetch('/v1/profile', { method: 'GET' });
+  if (!res.ok) throw new Error('Failed to get profile');
+  return res.json();
+}
+
+export async function updateProfile(profile: Partial<UserProfile>): Promise<{ status: string; message: string }> {
+  const res = await apiFetch('/v1/profile', {
+    method: 'POST',
+    body: JSON.stringify(profile),
+  });
+  if (!res.ok) throw new Error('Failed to update profile');
+  return res.json();
+}
+
+export async function getOnboardingStatus(): Promise<OnboardingStatus> {
+  const res = await apiFetch('/v1/onboarding/status', { method: 'GET' });
+  if (!res.ok) throw new Error('Failed to get onboarding status');
+  return res.json();
+}
+
+export async function completeOnboarding(): Promise<{ status: string; message: string }> {
+  const res = await apiFetch('/v1/onboarding/complete', { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to complete onboarding');
+  return res.json();
 }
