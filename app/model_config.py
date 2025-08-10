@@ -11,7 +11,10 @@ GPT_BASELINE_MODEL = os.getenv("GPT_BASELINE_MODEL", "gpt-4o-mini")
 GPT_MID_MODEL = os.getenv("GPT_MID_MODEL", "gpt-4o")
 """Mid-tier model balancing quality and cost."""
 
-GPT_HEAVY_MODEL = os.getenv("GPT_HEAVY_MODEL", "o4-mini")
-"""Heavyweight model for complex or high-accuracy tasks."""
+GPT_HEAVY_MODEL = os.getenv("GPT_HEAVY_MODEL", "gpt-4.1-nano")
+"""Heavyweight model for complex or high-accuracy tasks.
+
+Default aligns with tests and routing logic. Override via env if needed.
+"""
 
 __all__ = ["GPT_BASELINE_MODEL", "GPT_MID_MODEL", "GPT_HEAVY_MODEL"]

@@ -28,7 +28,8 @@ export default function Page() {
     createInitialMessage(),
   ]);
   const [loading, setLoading] = useState(false);
-  const [model, setModel] = useState('gpt-4o');
+  // 'auto' lets the backend route to skills/LLM; user can still force a model
+  const [model, setModel] = useState('auto');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Hydrate from localStorage on mount

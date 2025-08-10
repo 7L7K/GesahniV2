@@ -22,7 +22,7 @@ def test_upload_saves_file(tmp_path, monkeypatch):
     token = jwt.encode({"user_id": "tester"}, "secret", algorithm="HS256")
     headers = {"Authorization": f"Bearer {token}"}
     resp = client.post(
-        "/upload", files={"file": ("foo.wav", data, "audio/wav")}, headers=headers
+        "/v1/upload", files={"file": ("foo.wav", data, "audio/wav")}, headers=headers
     )
     assert resp.status_code == 200
     sid = resp.json()["session_id"]

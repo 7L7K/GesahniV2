@@ -43,6 +43,17 @@ export default function InputBar({
         <div className="flex items-center gap-1">
           <button
             type="button"
+            onClick={() => onModelChange('auto')}
+            className={
+              model === 'auto'
+                ? 'rounded-md px-3 py-1.5 text-xs bg-primary text-primary-foreground'
+                : 'rounded-md px-3 py-1.5 text-xs hover:bg-accent'
+            }
+          >
+            auto
+          </button>
+          <button
+            type="button"
             onClick={() => onModelChange('llama3')}
             className={
               model === 'llama3'

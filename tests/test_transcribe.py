@@ -27,7 +27,7 @@ def test_transcribe_post_and_file_created(monkeypatch, tmp_path):
 
     main = setup_app(monkeypatch, tmp_path, fake_transcribe)
     client = TestClient(main.app)
-    resp = client.post("/transcribe/123")
+    resp = client.post("/v1/transcribe/123")
     assert resp.status_code == 200
     assert resp.json() == {"status": "accepted"}
     transcript = tmp_path / "123" / "transcript.txt"
@@ -40,6 +40,6 @@ def test_transcribe_get(monkeypatch, tmp_path):
     session.mkdir()
     (session / "transcript.txt").write_text("hi")
     client = TestClient(main.app)
-    resp = client.get("/transcribe/abc")
+    resp = client.get("/v1/transcribe/abc")
     assert resp.status_code == 200
     assert resp.json() == {"text": "hi"}

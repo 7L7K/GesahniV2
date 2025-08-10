@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, useState } from 'react';
-import { login, register } from '@/lib/api';
+import { Suspense, useEffect, useState } from 'react';
+import { login, register, setTokens, apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -14,6 +14,18 @@ function LoginPageInner() {
     const router = useRouter();
     const params = useSearchParams();
     const next = params.get('next') || '/';
+
+    // Handle Google OAuth redirect carrying tokens in query
+    useEffect(() => {
+        const access = params.get('access_token');
+        const refresh = params.get('refresh_token') || undefined;
+        if (access) {
+            setTokens(access, refresh);
+            document.cookie = `auth:hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
+            router.replace(next);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -68,6 +80,24 @@ function LoginPageInner() {
                         {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
                     </Button>
                 </form>
+                <div className="my-4 text-center text-xs text-muted-foreground">or</div>
+                <Button
+                    variant="outline"
+                    className="w-full"
+                    type="button"
+                    onClick={async () => {
+                        try {
+                            const res = await apiFetch(`/v1/google/auth/login_url?next=${encodeURIComponent(next)}`, { auth: false });
+                            if (!res.ok) throw new Error('Failed to start Google login');
+                            const { auth_url } = await res.json();
+                            window.location.href = auth_url;
+                        } catch (err) {
+                            setError(err instanceof Error ? err.message : String(err));
+                        }
+                    }}
+                >
+                    Continue with Google
+                </Button>
                 <div className="mt-4 text-center text-sm">
                     {mode === 'login' ? (
                         <button className="underline" onClick={() => setMode('register')}>Need an account? Register</button>

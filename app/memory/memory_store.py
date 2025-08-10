@@ -74,6 +74,8 @@ class _CacheRecord:
 class _Collection:
     def __init__(self) -> None:
         self._store: Dict[str, _CacheRecord] = {}
+        # Optional TTL for entries (seconds); 0 disables TTL eviction on read
+        self._ttl_seconds: float = float(os.getenv("QA_CACHE_TTL_SECONDS", "86400"))
 
     def upsert(
         self,
@@ -110,6 +112,13 @@ class _Collection:
             A dictionary containing the requested ``ids`` and any additional
             data specified via ``include``.
         """
+
+        # Evict expired items lazily on read when TTL enabled
+        now = time.time()
+        if self._ttl_seconds > 0:
+            expired = [i for i, rec in list(self._store.items()) if now - rec.timestamp > self._ttl_seconds]
+            for i in expired:
+                self._store.pop(i, None)
 
         ids = ids or list(self._store)
         metas: List[Dict | None] = []

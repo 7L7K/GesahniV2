@@ -120,7 +120,14 @@ async def _request(
             await _analytics.record_ha_failure()
         except Exception:
             pass
-        raise RuntimeError(error)
+        # Map low-level errors to a stable taxonomy for callers
+        if error == "auth_error":
+            raise HomeAssistantAPIError("unauthorized")
+        if error == "not_found":
+            raise HomeAssistantAPIError("not_found")
+        if error in {"network_error", "unknown_error"}:
+            raise HomeAssistantAPIError("timeout")
+        raise HomeAssistantAPIError(error)
     return data
 
 

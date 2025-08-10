@@ -1,0 +1,157 @@
+from __future__ import annotations
+
+import asyncio
+import inspect
+import logging
+import os
+from importlib import import_module
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field, ConfigDict
+
+from app.deps.user import get_current_user_id
+
+
+logger = logging.getLogger(__name__)
+
+
+class AskRequest(BaseModel):
+    prompt: str
+    model_override: str | None = Field(None, alias="model")
+
+    # Pydantic v2 config: allow both alias ("model") and field name ("model_override")
+    model_config = ConfigDict(validate_by_name=True, validate_by_alias=True)
+
+
+router = APIRouter(tags=["core"])
+
+
+@router.post("/ask")
+async def ask(
+    req: AskRequest, request: Request, user_id: str = Depends(get_current_user_id)
+):
+    logger.info(
+        "ask entry user_id=%s prompt=%s model_override=%s",
+        user_id,
+        req.prompt,
+        req.model_override,
+    )
+
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+    status_code: int | None = None
+
+    streamed_any: bool = False
+
+    async def _stream_cb(token: str) -> None:
+        nonlocal streamed_any
+        streamed_any = True
+        await queue.put(token)
+
+    async def _producer() -> None:
+        nonlocal status_code
+        try:
+            # Lazily import to respect tests that monkeypatch app.main.route_prompt
+            main_mod = import_module("app.main")
+            route_prompt = getattr(main_mod, "route_prompt")
+            params = inspect.signature(route_prompt).parameters
+            if "stream_cb" in params:
+                result = await route_prompt(
+                    req.prompt, req.model_override, user_id, stream_cb=_stream_cb
+                )
+            else:  # Compatibility with tests that monkeypatch route_prompt
+                result = await route_prompt(req.prompt, req.model_override, user_id)
+            if streamed_any:
+                logger.info("ask success user_id=%s streamed=True", user_id)
+            else:
+                logger.info("ask success user_id=%s result=%s", user_id, result)
+                # If the backend didn't stream any tokens, emit the final result once
+                if isinstance(result, str) and result:
+                    await queue.put(result)
+            # If we are in local fallback, hint UI via cookie
+            try:
+                from app.llama_integration import LLAMA_HEALTHY as _LL_OK
+
+                if not _LL_OK and not os.getenv("OPENAI_API_KEY"):
+                    # First token will prompt cookie via middleware; nothing to do here
+                    pass
+            except Exception:
+                pass
+        except HTTPException as exc:
+            logger.exception("ask HTTPException user_id=%s", user_id)
+            status_code = exc.status_code
+            await queue.put(f"[error:{exc.detail}]")
+        except Exception as e:  # pragma: no cover - defensive
+            # Ensure HTTP status reflects failure and propagate a useful error token
+            logger.exception("ask error user_id=%s", user_id)
+            status_code = 500
+            # Include exception type to avoid empty messages like "Exception()"
+            detail = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+            await queue.put(f"[error:{detail}]")
+        finally:
+            await queue.put(None)
+
+    # Producer task emits tokens into the queue without blocking response start
+    producer_task = asyncio.create_task(_producer())
+
+    first_chunk = await queue.get()
+
+    async def _streamer():
+        try:
+            # If producer signalled end immediately (e.g. empty result), exit cleanly
+            if first_chunk is None:
+                return
+            # Otherwise stream first chunk and continue until sentinel
+            yield first_chunk
+            while True:
+                chunk = await queue.get()
+                if chunk is None:
+                    break
+                yield chunk
+        except asyncio.CancelledError:
+            # Client disconnected; cancel producer and stop cleanly
+            if not producer_task.done():
+                producer_task.cancel()
+                try:
+                    await producer_task
+                except Exception:
+                    pass
+            raise
+        finally:
+            # Ensure producer is cleaned up when stream finishes for any reason
+            if not producer_task.done():
+                producer_task.cancel()
+                try:
+                    await producer_task
+                except Exception:
+                    pass
+
+    # Negotiate basic streaming transport: SSE if requested via Accept, else text/plain
+    accept = request.headers.get("accept", "")
+    media_type = (
+        "text/event-stream"
+        if (
+            "text/event-stream" in accept
+            or os.getenv("FORCE_SSE", "").lower() in {"1", "true", "yes"}
+        )
+        else "text/plain"
+    )
+
+    async def _sse_wrapper(gen):
+        try:
+            async for chunk in gen:
+                # Minimal SSE framing
+                yield f"data: {chunk}\n\n"
+        except asyncio.CancelledError:
+            # Propagate cancellation to underlying generator cleanup
+            raise
+
+    generator = _streamer()
+    if media_type == "text/event-stream":
+        generator = _sse_wrapper(generator)
+
+    return StreamingResponse(
+        generator, media_type=media_type, status_code=status_code or 200
+    )
+
+
