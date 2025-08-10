@@ -2,8 +2,8 @@
 
 This module exposes a single :func:`embed` coroutine which returns a vector of
 floats for a given input text.  The backend is selected via the
-``EMBEDDING_BACKEND`` environment variable and can either be ``"openai"`` or
-``"llama"``.
+``EMBEDDING_BACKEND`` environment variable and can be ``"openai"``,
+``"llama"``, or ``"stub"``.
 
 When using the LLaMA backend a local ``gguf`` model path must be supplied via
 ``LLAMA_EMBEDDINGS_MODEL``.  The embeddings for LLaMA are produced using
@@ -23,7 +23,7 @@ import logging
 from functools import lru_cache
 from typing import List, Dict, TYPE_CHECKING
 import hashlib
-import numpy as np   # <- new
+import numpy as np
 
 
 
@@ -35,21 +35,43 @@ logger = logging.getLogger(__name__)
 
 _llama_model = None
 
+
+def _embed_stub(text: str) -> List[float]:
+    """Return a deterministic local embedding used for tests and in‑memory stores."""
+
+    # 8-dim “thumbprint” to keep semantic-cache tests meaningful
+    h = hashlib.sha256(text.encode()).digest()
+    return (
+        np.frombuffer(h[:32], dtype=np.uint8)
+        .astype("float32")
+        .reshape(8, 4)
+        .mean(axis=1)
+        .tolist()
+    )
+
+
 def embed_sync(text: str) -> List[float]:
-    """Synchronous helper used by vector stores.
+    """Synchronous helper used by vector stores."""
 
-    • In CI / pytest we short-circuit to a deterministic local vector so no
-      network calls ever happen.
-    """
-    if os.getenv("PYTEST_CURRENT_TEST") or \
-       os.getenv("VECTOR_STORE", "").lower() in {"memory", "inmemory"}:
-        # 8-dim “thumbprint” to keep semantic-cache tests meaningful
-        h = hashlib.sha256(text.encode()).digest()
-        return np.frombuffer(h[:32], dtype=np.uint8).astype("float32")\
-                 .reshape(8, 4).mean(axis=1).tolist()
+    backend = os.getenv("EMBEDDING_BACKEND", "openai").lower()
+    if backend != "stub" and (
+        os.getenv("PYTEST_CURRENT_TEST")
+        or os.getenv("VECTOR_STORE", "").lower() in {"memory", "inmemory"}
+    ):
+        backend = "stub"
 
-    bucket = int(time.time() // _TTL)
-    return _embed_openai_sync(text, bucket)
+    logger.debug("Embedding backend: %s", backend)
+
+    if backend == "stub":
+        return _embed_stub(text)
+    if backend == "openai":
+        bucket = int(time.time() // _TTL)
+        return _embed_openai_sync(text, bucket)
+    if backend == "llama":
+        model = _get_llama_model()
+        result = model.create_embedding(text)
+        return result["data"][0]["embedding"]
+    raise ValueError(f"Unsupported EMBEDDING_BACKEND: {backend}")
 
 
 def get_openai_client() -> "OpenAI":
@@ -146,10 +168,13 @@ async def embed(text: str) -> List[float]:
     """
 
     backend = os.getenv("EMBEDDING_BACKEND", "openai").lower()
+    logger.debug("Embedding backend: %s", backend)
     if backend == "openai":
         return await _embed_openai(text)
     if backend == "llama":
         return await _embed_llama(text)
+    if backend == "stub":
+        return _embed_stub(text)
     raise ValueError(f"Unsupported EMBEDDING_BACKEND: {backend}")
 
 
