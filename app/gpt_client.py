@@ -40,12 +40,17 @@ from .metrics import (
 )
 from .model_params import for_openai
 from .telemetry import log_record_var
+from .model_config import (
+    GPT_BASELINE_MODEL,
+    GPT_MID_MODEL,
+    GPT_HEAVY_MODEL,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - only for type checkers
     from openai import AsyncOpenAI
 
 
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", GPT_MID_MODEL)
 
 # Map internal router aliases to real OpenAI model ids.
 # These aliases are used by the deterministic router and tests but may not
@@ -53,14 +58,14 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 # client always receives a valid model identifier.
 _MODEL_ALIASES = {
     # Baseline lightweight models / aliases
-    "gpt-5-nano": os.getenv("GPT_BASELINE_MODEL", "gpt-4o-mini"),
-    "gpt-4.1-nano": os.getenv("GPT_BASELINE_MODEL", "gpt-4o-mini"),
+    "gpt-5-nano": GPT_BASELINE_MODEL,
+    "gpt-4.1-nano": GPT_MID_MODEL,
     # Mid-tier chat quality
-    "gpt-5-mini": os.getenv("GPT_MID_MODEL", "gpt-4o"),
+    "gpt-5-mini": GPT_MID_MODEL,
     # Reasoning burst
     "o1-mini": os.getenv("GPT_REASONING_MODEL", "o1-mini"),
-    # Pass-through for omni-mini naming
-    "o4-mini": "o4-mini",
+    # Heavy model alias
+    GPT_HEAVY_MODEL: GPT_HEAVY_MODEL,
 }
 
 def _normalize_model_name(name: str | None) -> str:
