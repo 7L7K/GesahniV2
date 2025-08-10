@@ -521,6 +521,12 @@ async def route_prompt(
                 allow_test=True if os.getenv("PYTEST_CURRENT_TEST") else False,
                 max_retries=max_retries,
             )
+            logger.debug(
+                "run_with_self_check result model=%s score=%.3f escalated=%s",
+                final_model,
+                score,
+                escalated,
+            )
             if rec:
                 rec.model_name = final_model
                 rec.self_check_score = score
