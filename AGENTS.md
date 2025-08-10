@@ -132,6 +132,8 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `ROUTER_RULES_PATH` | `router_rules.yaml` | no | Path to YAML rules for deterministic router |
 | `MEM_TOP_K` | `3` | no | Max memories returned from vector store |
 | `CHROMA_PATH` | `.chroma_data` | no | ChromaDB storage directory |
+| `RAGFLOW_URL` | `http://localhost:8001` | no | Base URL for RAGFlow server |
+| `RAGFLOW_COLLECTION` | `demo` | no | Default RAGFlow collection name |
 | `TRANSLATE_URL` | `http://localhost:5000` | no | Translation microservice |
 | `OPENWEATHER_API_KEY` | – | yes | Weather and forecast lookups |
 | `CITY_NAME` | `Detroit,US` | no | Default weather city |

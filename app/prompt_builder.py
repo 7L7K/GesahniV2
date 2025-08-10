@@ -11,7 +11,7 @@ from typing import Any, List
 
 from .token_utils import count_tokens
 from .memory import memgpt
-from .memory.env_utils import _get_mem_top_k, _normalized_hash
+from .memory.env_utils import _normalized_hash
 from .memory.vector_store import safe_query_user_memories
 from .telemetry import log_record_var
 import os
@@ -97,6 +97,9 @@ class PromptBuilder:
         debug: bool = False,
         debug_info: str = "",
         top_k: int | str | None = None,
+        rag_client: Any | None = None,
+        rag_collection: str | None = None,
+        rag_k: int | None = None,
         **_: Any,
     ) -> tuple[str, int]:
         """Return ``(prompt_text, prompt_tokens)``.
@@ -116,6 +119,30 @@ class PromptBuilder:
         date_time = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
         summary = memgpt.summarize_session(session_id, user_id=user_id) or ""
         k = _coerce_k(top_k)
+
+        rag_docs: List[dict] = []
+        sources_text = ""
+        if rag_client:
+            try:
+                coll = rag_collection or os.getenv("RAGFLOW_COLLECTION", "default")
+                rk = _coerce_k(rag_k or k)
+                rag_docs = rag_client.query(user_prompt, collection=coll, k=rk)
+            except Exception as e:  # pragma: no cover - network failures
+                logger.warning("RAG query failed in PromptBuilder: %s", e)
+            if rag_docs:
+                blocks: List[str] = []
+                for doc in rag_docs:
+                    header = doc.get("source", "")
+                    loc = doc.get("loc") or ""
+                    if loc:
+                        header = f"{header}#{loc}" if header else loc
+                    text = doc.get("text", "")
+                    blocks.append(f"```{header}\n{text}\n```")
+                sources_text = "\n".join(blocks)
+                rec_local = log_record_var.get()
+                if rec_local:
+                    rec_local.rag_doc_ids = [_normalized_hash(d.get("text", "")) for d in rag_docs]
+                    rec_local.rag_top_k = rk
 
         # ------------------------------------------------------------------
         # Telemetry
@@ -206,6 +233,10 @@ class PromptBuilder:
         # ------------------------------------------------------------------
         # Final telemetry
         # ------------------------------------------------------------------
+        if sources_text:
+            prompt = f"{prompt}\n\nSOURCES\n{sources_text}"
+            prompt_tokens = count_tokens(prompt)
+
         if rec:
             rec.retrieval_count = len(mem_list)
 
