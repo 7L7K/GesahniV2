@@ -1,8 +1,10 @@
-import os, sys
+import os
+import sys
+import asyncio
+import logging
+import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-import asyncio
 
 
 class DummyOpenAIEmbeddings:
@@ -77,3 +79,25 @@ def test_benchmark(monkeypatch):
 
     metrics = asyncio.run(embeddings.benchmark("x", iterations=5))
     assert "latency" in metrics and "throughput" in metrics
+
+
+@pytest.mark.parametrize("backend", ["openai", "llama", "stub"])
+def test_embedding_backend_logged(monkeypatch, caplog, backend):
+    from app import embeddings
+
+    caplog.set_level(logging.DEBUG)
+    if backend == "openai":
+        monkeypatch.setenv("EMBEDDING_BACKEND", "openai")
+        monkeypatch.setattr(embeddings, "get_openai_client", lambda: DummyOpenAIClient())
+        asyncio.run(embeddings.embed("hi"))
+    elif backend == "llama":
+        monkeypatch.setenv("EMBEDDING_BACKEND", "llama")
+        monkeypatch.setenv("LLAMA_EMBEDDINGS_MODEL", "/tmp/model.gguf")
+        monkeypatch.setattr(embeddings, "Llama", lambda *a, **k: DummyLlama())
+        embeddings._llama_model = None
+        asyncio.run(embeddings.embed("hi"))
+    else:
+        monkeypatch.setenv("EMBEDDING_BACKEND", "stub")
+        embeddings.embed_sync("hi")
+
+    assert f"Embedding backend: {backend}" in caplog.text
