@@ -35,6 +35,7 @@ from .climate_skill import ClimateSkill
 from .vacuum_skill import VacuumSkill
 from .notes_skill import NotesSkill
 from .status_skill import StatusSkill
+from .sports_skill import SportsSkill
 
 # Preserve class order but avoid duplicates when this module reloads
 SKILL_CLASSES: list[type] = [
@@ -72,6 +73,7 @@ SKILL_CLASSES: list[type] = [
     VacuumSkill,
     NotesSkill,
     StatusSkill,
+    SportsSkill,
 ]
 
 _base.SKILLS.clear()
