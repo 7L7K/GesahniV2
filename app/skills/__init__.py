@@ -8,6 +8,7 @@ from .weather_skill import WeatherSkill
 from .forecast_skill import ForecastSkill
 from .reminder_skill import ReminderSkill
 from .timer_skill import TimerSkill
+from .alarm_skill import AlarmSkill
 from .math_skill import MathSkill
 from .unit_conversion_skill import UnitConversionSkill
 from .currency_skill import CurrencySkill
@@ -43,6 +44,7 @@ SKILL_CLASSES: list[type] = [
     ForecastSkill,
     ReminderSkill,
     TimerSkill,
+    AlarmSkill,
     MathSkill,
     UnitConversionSkill,
     CurrencySkill,
