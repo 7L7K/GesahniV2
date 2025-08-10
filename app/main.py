@@ -67,29 +67,44 @@ from .transcription import (
     transcribe_file,
 )
 from .storytime import schedule_nightly_jobs, append_transcript_line
+
 try:
     from .proactive_engine import get_self_review as _get_self_review  # type: ignore
 except Exception:  # pragma: no cover - optional
+
     def _get_self_review():  # type: ignore
         return None
+
+
 # Optional proactive engine hooks (disabled in tests if unavailable)
 def proactive_startup():
     try:
         from .proactive_engine import startup as _start
+
         _start()
     except Exception:
         return None
+
+
 def _set_presence(*args, **kwargs):  # type: ignore
     return None
+
+
 def _on_ha_event(*args, **kwargs):  # type: ignore
     return None
+
+
 try:
     from .deps.scopes import require_scope
 except Exception:  # pragma: no cover - optional
+
     def require_scope(scope: str):  # type: ignore
         async def _noop(*args, **kwargs):
             return None
+
         return _noop
+
+
 from .middleware import DedupMiddleware, reload_env_middleware, trace_request
 from .session_manager import (
     SESSIONS_DIR,
@@ -101,13 +116,23 @@ from .session_manager import (
 )
 from .session_store import SessionStatus, list_sessions as list_session_store
 from .tasks import enqueue_summary, enqueue_transcription
-from .security import rate_limit, rate_limit_ws, verify_token, verify_ws, verify_webhook, require_nonce
+from .security import (
+    rate_limit,
+    rate_limit_ws,
+    verify_token,
+    verify_ws,
+    verify_webhook,
+    require_nonce,
+)
+
 # ensure optional import does not crash in test environment
 try:
     from .proactive_engine import set_presence, on_ha_event
 except Exception:  # pragma: no cover - optional
+
     def set_presence(*args, **kwargs):  # type: ignore
         return None
+
     def on_ha_event(*args, **kwargs):  # type: ignore
         return None
 
@@ -239,11 +264,27 @@ class DeleteMemoryRequest(BaseModel):
 core_router = APIRouter(tags=["core"])
 protected_router = APIRouter(dependencies=[Depends(verify_token), Depends(rate_limit)])
 # Scoped routers
-admin_router = APIRouter(dependencies=[Depends(verify_token), Depends(rate_limit), Depends(require_scope("admin"))], tags=["admin"])
-ha_router = APIRouter(dependencies=[Depends(verify_token), Depends(rate_limit), Depends(require_scope("ha"))], tags=["home-assistant"])
+admin_router = APIRouter(
+    dependencies=[
+        Depends(verify_token),
+        Depends(rate_limit),
+        Depends(require_scope("admin")),
+    ],
+    tags=["admin"],
+)
+ha_router = APIRouter(
+    dependencies=[
+        Depends(verify_token),
+        Depends(rate_limit),
+        Depends(require_scope("ha")),
+    ],
+    tags=["home-assistant"],
+)
 ws_router = APIRouter(
     dependencies=[Depends(verify_ws), Depends(rate_limit_ws)], tags=["sessions"]
 )
+
+
 @core_router.post("/presence")
 async def presence(present: bool = True, user_id: str = Depends(get_current_user_id)):
     _set_presence(user_id, bool(present))
@@ -260,7 +301,11 @@ async def ha_webhook(request: Request, user_id: str = Depends(get_current_user_i
     except Exception:
         raise HTTPException(status_code=400, detail="bad_request")
     try:
-        data = json.loads(body.decode("utf-8")) if isinstance(body, (bytes, bytearray)) else {}
+        data = (
+            json.loads(body.decode("utf-8"))
+            if isinstance(body, (bytes, bytearray))
+            else {}
+        )
     except Exception:
         data = {}
     _on_ha_event(data if isinstance(data, dict) else {})
@@ -268,6 +313,7 @@ async def ha_webhook(request: Request, user_id: str = Depends(get_current_user_i
 
 
 # Memory export/delete --------------------------------------------------------
+
 
 @core_router.get("/memories/export")
 async def export_memories(user_id: str = Depends(get_current_user_id)):
@@ -313,7 +359,9 @@ async def get_me(user_id: str = Depends(get_current_user_id)):
 
 
 @core_router.post("/ask")
-async def ask(req: AskRequest, request: Request, user_id: str = Depends(get_current_user_id)):
+async def ask(
+    req: AskRequest, request: Request, user_id: str = Depends(get_current_user_id)
+):
     logger.info(
         "ask entry user_id=%s prompt=%s model_override=%s",
         user_id,
@@ -351,6 +399,7 @@ async def ask(req: AskRequest, request: Request, user_id: str = Depends(get_curr
             # If we are in local fallback, hint UI via cookie
             try:
                 from .llama_integration import LLAMA_HEALTHY as _LL_OK
+
                 if not _LL_OK and not os.getenv("OPENAI_API_KEY"):
                     # First token will prompt cookie via middleware; nothing to do here
                     pass
@@ -391,7 +440,10 @@ async def ask(req: AskRequest, request: Request, user_id: str = Depends(get_curr
     accept = request.headers.get("accept", "")
     media_type = (
         "text/event-stream"
-        if ("text/event-stream" in accept or os.getenv("FORCE_SSE", "").lower() in {"1", "true", "yes"})
+        if (
+            "text/event-stream" in accept
+            or os.getenv("FORCE_SSE", "").lower() in {"1", "true", "yes"}
+        )
         else "text/plain"
     )
 
@@ -404,7 +456,9 @@ async def ask(req: AskRequest, request: Request, user_id: str = Depends(get_curr
     if media_type == "text/event-stream":
         generator = _sse_wrapper(generator)
 
-    return StreamingResponse(generator, media_type=media_type, status_code=status_code or 200)
+    return StreamingResponse(
+        generator, media_type=media_type, status_code=status_code or 200
+    )
 
 
 @protected_router.post("/upload", tags=["sessions"])
@@ -509,7 +563,7 @@ async def websocket_transcribe(
     ws: WebSocket,
     user_id: str = Depends(get_current_user_id),
 ):
-    stream = TranscriptionStream(ws, transcribe_file)
+    stream = TranscriptionStream(ws)
     await stream.process()
 
 
@@ -523,14 +577,17 @@ async def websocket_storytime(
     incremental transcript chunk to `stories/` for later summarization.
     """
 
-    stream = TranscriptionStream(ws, transcribe_file)
+    stream = TranscriptionStream(ws)
 
     async def _transcribe_and_log(path: str) -> str:
         text = await transcribe_file(path)
         if text and text.strip():
             try:
                 append_transcript_line(
-                    session_id=stream.session_id, text=text, user_id=user_id, speaker="user"
+                    session_id=stream.session_id,
+                    text=text,
+                    user_id=user_id,
+                    speaker="user",
                 )
             except Exception:
                 logger.debug("append_transcript_line failed", exc_info=True)
@@ -545,6 +602,8 @@ async def websocket_storytime(
 async def intent_test(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     logger.info("Intent test for: %s", req.prompt)
     return {"intent": "test", "prompt": req.prompt}
+
+
 # Router decisions admin + explain endpoints
 @core_router.get("/explain")
 async def explain_route(req_id: str, user_id: str = Depends(get_current_user_id)):
@@ -555,7 +614,9 @@ async def explain_route(req_id: str, user_id: str = Depends(get_current_user_id)
 
 
 @core_router.get("/admin/router/decisions")
-async def list_router_decisions(limit: int = 500, user_id: str = Depends(get_current_user_id)):
+async def list_router_decisions(
+    limit: int = 500, user_id: str = Depends(get_current_user_id)
+):
     return {"items": decisions_recent(limit)}
 
 
@@ -582,7 +643,6 @@ async def delete_alias(name: str, user_id: str = Depends(get_current_user_id)):
     return {"status": "ok"}
 
 
-
 @ha_router.get("/ha/entities")
 async def ha_entities(user_id: str = Depends(get_current_user_id)):
     try:
@@ -593,7 +653,11 @@ async def ha_entities(user_id: str = Depends(get_current_user_id)):
 
 
 @ha_router.post("/ha/service")
-async def ha_service(req: ServiceRequest, user_id: str = Depends(get_current_user_id), _nonce: None = Depends(require_nonce)):
+async def ha_service(
+    req: ServiceRequest,
+    user_id: str = Depends(get_current_user_id),
+    _nonce: None = Depends(require_nonce),
+):
     try:
         resp = await call_service(req.domain, req.service, req.data or {})
         return resp or {"status": "ok"}
@@ -603,6 +667,7 @@ async def ha_service(req: ServiceRequest, user_id: str = Depends(get_current_use
 
 
 # Signed HA webhook -----------------------------------------------------------
+
 
 class WebhookAck(BaseModel):
     status: str = "ok"
@@ -615,6 +680,7 @@ async def ha_webhook(request: Request):
 
 
 # Admin dashboard -------------------------------------------------------------
+
 
 @core_router.get("/admin/errors")
 async def admin_errors(limit: int = 50, user_id: str = Depends(get_current_user_id)):
@@ -688,7 +754,11 @@ async def explain_route(req_id: str, user_id: str = Depends(get_current_user_id)
     if isinstance(lat, int):
         parts.append(f"latency={lat}ms")
 
-    return {"req_id": req_id, "breadcrumb": " | ".join(parts), "meta": record.get("meta")}
+    return {
+        "req_id": req_id,
+        "breadcrumb": " | ".join(parts),
+        "meta": record.get("meta"),
+    }
 
 
 async def _background_transcribe(session_id: str) -> None:
