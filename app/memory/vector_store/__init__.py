@@ -8,13 +8,13 @@ value can’t sneak through and blow up the real store implementation.
 from __future__ import annotations
 
 import logging
+import re
 from typing import List, Union
 
 from ..api import (
     ChromaVectorStore,
     MemoryVectorStore,
     VectorStore,
-    add_user_memory,
     cache_answer,
     cache_answer_legacy,
     close_store,
@@ -23,7 +23,7 @@ from ..api import (
     qa_cache,
     record_feedback,
 )
-from ..api import query_user_memories as _raw_query_user_memories
+from app.adapters.memory import mem
 from app.embeddings import embed_sync as _embed_sync
 from ..memory_store import _get_last_similarity as _get_last_similarity  # type: ignore
 from ..env_utils import (
@@ -91,11 +91,18 @@ def _distance(prompt: str, memory: str) -> float:
 # ---------------------------------------------------------------------------
 
 
+def add_user_memory(user_id: str, memory: str) -> str:
+    """Persist a single memory via the configured backend."""
+
+    return mem.add(user_id, memory)
+
+
 def query_user_memories(
     user_id: str,
     prompt: str,
     *,
     k: Union[int, str, None] = None,
+    filters: dict | None = None,
 ) -> List[str]:
     """Vector‑store RAG lookup with tolerant ``k`` handling.
 
@@ -109,9 +116,16 @@ def query_user_memories(
             k_arg = None
     else:
         k_arg = k
+
+    k_int = _coerce_k(k_arg)
+    docs = mem.search(user_id, prompt, k=k_int, filters=filters)
     cutoff = _get_cutoff()
-    memories = _raw_query_user_memories(user_id, prompt, k=k_arg)
-    return [m for m in memories if _distance(prompt, m) <= cutoff]
+    out: List[str] = []
+    for d in docs:
+        text = d.get("text") if isinstance(d, dict) else str(d)
+        if _distance(prompt, text) <= cutoff:
+            out.append(text)
+    return out
 
 
 def safe_query_user_memories(
@@ -138,8 +152,23 @@ def safe_query_user_memories(
     else:
         coerced = k
 
+    filters: dict[str, str] = {}
+    person = re.search(r"person:([^\s]+)", prompt)
+    topic = re.search(r"topic:([^\s]+)", prompt)
+    date = re.search(r"date:([^\s]+)", prompt)
+    if person:
+        filters["person"] = person.group(1)
+    if topic:
+        filters["topic"] = topic.group(1)
+    if date:
+        filters["date"] = date.group(1)
+
+    memories: List[str] = []
     try:
-        memories = query_user_memories(user_id, prompt, k=coerced)
+        if filters:
+            memories = query_user_memories(user_id, "", k=coerced, filters=filters)
+        if not memories:
+            memories = query_user_memories(user_id, prompt, k=coerced)
     except Exception as e:  # pragma: no cover - defensive guardrail
         # Never allow RAG lookup failures to break routing; degrade gracefully.
         logger.warning("safe_query_user_memories failed: %s", e, exc_info=True)

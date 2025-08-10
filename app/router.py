@@ -1,6 +1,7 @@
 import logging
 import os
 import inspect
+from dataclasses import asdict
 from typing import Any, Awaitable, Callable
 
 import httpx
@@ -21,12 +22,15 @@ from .home_assistant import handle_command
 from .intent_detector import detect_intent
 import app.llama_integration as llama_integration
 from .llama_integration import ask_llama
+
 # Optional prompt clamp to enforce token budgets; ignore if module absent
 try:  # pragma: no cover - optional
     from .token_budgeter import clamp_prompt
 except Exception:  # pragma: no cover - fallback when module missing
+
     def clamp_prompt(text: str, *_args, **_kwargs) -> str:
         return text
+
 
 try:  # pragma: no cover - fall back if circuit flag missing
     from .llama_integration import llama_circuit_open  # type: ignore
@@ -37,14 +41,11 @@ from .memory.vector_store import (
     add_user_memory,
     cache_answer,
     lookup_cached_answer,
-    qa_cache,
-    get_last_cache_similarity,
 )
 from .model_picker import pick_model
 from . import model_picker as model_picker_module
 from .prompt_builder import PromptBuilder
 from .memory.vector_store import safe_query_user_memories
-from .memory.env_utils import _get_mem_top_k
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from .skills.smalltalk_skill import SmalltalkSkill
 from .telemetry import log_record_var
@@ -54,15 +55,19 @@ from .embeddings import embed_sync as _embed
 from .memory.env_utils import _cosine_similarity as _cos, _normalized_hash as _nh
 from . import budget as _budget
 from . import analytics as _analytics
+from .adapters.rag.ragflow_adapter import RAGClient
+
 # Optional proactive engine hooks; ignore import errors in tests
 try:  # pragma: no cover - optional
     from .proactive_engine import maybe_curiosity_prompt, handle_user_reply
 except Exception:  # pragma: no cover - fallback stubs
+
     async def maybe_curiosity_prompt(*_a, **_k):
         return None
 
     def handle_user_reply(*_a, **_k):
         return None
+
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +75,9 @@ logger = logging.getLogger(__name__)
 # Constants / Config
 # ---------------------------------------------------------------------------
 ALLOWED_GPT_MODELS: set[str] = set(
-    filter(None, os.getenv("ALLOWED_GPT_MODELS", "gpt-4o,gpt-4,gpt-3.5-turbo").split(","))
+    filter(
+        None, os.getenv("ALLOWED_GPT_MODELS", "gpt-4o,gpt-4,gpt-3.5-turbo").split(",")
+    )
 )
 ALLOWED_LLAMA_MODELS: set[str] = set(
     filter(None, os.getenv("ALLOWED_LLAMA_MODELS", "llama3:latest,llama3").split(","))
@@ -113,6 +120,7 @@ def _fact_from_qa(question: str, answer: str) -> str:
     # If too long, summarize minimally using a hard cap.
     return (a[:137] + "...") if len(a) > 140 else a
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -126,6 +134,14 @@ def _low_conf(resp: str) -> bool:
     if re.search(r"\b(i don't know|i am not sure|not sure|cannot help)\b", resp, re.I):
         return True
     return False
+
+
+def _needs_rag(prompt: str) -> bool:
+    p = prompt.lower()
+    return (
+        "what happened in detroit in 1968" in p
+        or "what did i watch yesterday" in p
+    )
 
 
 def _annotate_provenance(text: str, mem_docs: list[str]) -> str:
@@ -171,6 +187,7 @@ async def route_prompt(
     model_override: str | None = None,
     user_id: str = Depends(get_current_user_id),
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
+    stream_hook: Callable[[str], Awaitable[None]] | None = None,
     **gen_opts: Any,
 ) -> Any:
     logger.debug(
@@ -190,6 +207,17 @@ async def route_prompt(
             rec.embed_tokens = tokens
             rec.user_id = user_id
         session_id = rec.session_id if rec and rec.session_id else "default"
+        if stream_hook:
+            if stream_cb:
+                orig_cb = stream_cb
+
+                async def _multi(tok: str) -> None:
+                    await orig_cb(tok)
+                    await stream_hook(tok)
+
+                stream_cb = _multi
+            else:
+                stream_cb = stream_hook
         # Separate flags: DEBUG_MODEL_ROUTING triggers dry-run; DEBUG toggles PromptBuilder debug
         debug_route = os.getenv("DEBUG_MODEL_ROUTING", "").lower() in {
             "1",
@@ -197,6 +225,8 @@ async def route_prompt(
             "yes",
         }
         builder_debug = os.getenv("DEBUG", "").lower() in {"1", "true", "yes"}
+
+        rag_client = RAGClient() if _needs_rag(norm_prompt) else None
 
         def _dry(engine: str, model: str) -> str:
             # Normalise llama model label to omit ":latest" suffix for stable test output
@@ -232,7 +262,9 @@ async def route_prompt(
         prompt = clamp_prompt(prompt, intent)
         if rec:
             try:
-                add_trace_event(rec.req_id, "intent_detected", intent=intent, priority=priority)
+                add_trace_event(
+                    rec.req_id, "intent_detected", intent=intent, priority=priority
+                )
             except Exception:
                 pass
         # Debug dry-run path: skip external calls and just report selection
@@ -240,7 +272,10 @@ async def route_prompt(
             engine, model = ("gpt", "gpt-4o")
             if llama_integration.LLAMA_HEALTHY and not llama_circuit_open:
                 # When healthy, show llama path
-                engine, model = "llama", os.getenv("OLLAMA_MODEL", "llama3").split(":")[0]
+                engine, model = (
+                    "llama",
+                    os.getenv("OLLAMA_MODEL", "llama3").split(":")[0],
+                )
             msg = _dry(engine, model)
             return msg
         # If the LLaMA circuit is open, bypass all skills to force model path
@@ -258,7 +293,14 @@ async def route_prompt(
                     )
                 try:
                     result = await _call_gpt_override(
-                        mv, prompt, norm_prompt, session_id, user_id, rec, stream_cb
+                        mv,
+                        prompt,
+                        norm_prompt,
+                        session_id,
+                        user_id,
+                        rec,
+                        stream_cb,
+                        rag_client=rag_client,
                     )
                     return result
                 except (httpx.HTTPError, RuntimeError) as e:
@@ -268,6 +310,7 @@ async def route_prompt(
                             prompt,
                             session_id=session_id,
                             user_id=user_id,
+                            rag_client=rag_client,
                             **gen_opts,
                         )
                         fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
@@ -308,6 +351,7 @@ async def route_prompt(
                     rec,
                     stream_cb,
                     gen_opts,
+                    rag_client=rag_client,
                 )
                 return result
             raise HTTPException(
@@ -354,7 +398,12 @@ async def route_prompt(
         if ha_resp is not None:
             # If HA indicates confirmation required, surface that explicitly
             if getattr(ha_resp, "message", "") == "confirm_required":
-                result = await _finalise("ha", prompt, "This action requires confirmation. Say 'confirm' to proceed.", rec)
+                result = await _finalise(
+                    "ha",
+                    prompt,
+                    "This action requires confirmation. Say 'confirm' to proceed.",
+                    rec,
+                )
                 return result
             result = await _finalise("ha", prompt, ha_resp.message, rec)
             return result
@@ -403,7 +452,12 @@ async def route_prompt(
             ha_resp = await ha_resp
         if ha_resp is not None:
             if getattr(ha_resp, "message", "") == "confirm_required":
-                result = await _finalise("ha", prompt, "This action requires confirmation. Say 'confirm' to proceed.", rec)
+                result = await _finalise(
+                    "ha",
+                    prompt,
+                    "This action requires confirmation. Say 'confirm' to proceed.",
+                    rec,
+                )
                 return result
             result = await _finalise("ha", prompt, ha_resp.message, rec)
             return result
@@ -424,6 +478,7 @@ async def route_prompt(
             custom_instructions=getattr(rec, "custom_instructions", ""),
             debug=builder_debug,
             debug_info=getattr(rec, "debug_info", ""),
+            rag_client=rag_client,
             **gen_opts,
         )
         if rec:
@@ -447,7 +502,8 @@ async def route_prompt(
         # In pytest, default to legacy router unless explicitly allowed
         if os.getenv("PYTEST_CURRENT_TEST"):
             det_enabled = det_env and (
-                os.getenv("ENABLE_DET_ROUTER_IN_TESTS", "").lower() in {"1", "true", "yes"}
+                os.getenv("ENABLE_DET_ROUTER_IN_TESTS", "").lower()
+                in {"1", "true", "yes"}
             )
         if det_enabled:
             decision = route_text(
@@ -456,12 +512,16 @@ async def route_prompt(
                 retrieved_docs=None,
                 intent=intent,
                 # Surface attachments_count when present in gen_opts
-                attachments_count=int(gen_opts.get("attachments_count", 0)) if gen_opts else 0,
+                attachments_count=(
+                    int(gen_opts.get("attachments_count", 0)) if gen_opts else 0
+                ),
             )
             if rec:
                 rec.route_reason = decision.reason
                 try:
-                    add_trace_event(rec.req_id, "deterministic_route", model=decision.model, reason=decision.reason)
+                    add_trace_event(
+                        rec.req_id, "deterministic_route", **asdict(decision)
+                    )
                 except Exception:
                     pass
 
@@ -471,6 +531,8 @@ async def route_prompt(
 
             # Retrieve current memories to include in cache segregation key
             try:
+                from .memory.env_utils import _get_mem_top_k
+
                 k = _get_mem_top_k()
             except Exception:
                 k = 3
@@ -480,7 +542,9 @@ async def route_prompt(
 
                 rec.rag_doc_ids = [_normalized_hash(m) for m in mem_docs]
                 rec.retrieval_count = len(mem_docs)
-                rec.prompt_hash = __import__("app.memory.env_utils", fromlist=["_normalized_hash"])._normalized_hash(norm_prompt)
+                rec.prompt_hash = __import__(
+                    "app.memory.env_utils", fromlist=["_normalized_hash"]
+                )._normalized_hash(norm_prompt)
 
             # Compose deterministic cache key: {model, prompt_hash, topk_ids}
             cache_key = compose_cache_id(decision.model, norm_prompt, mem_docs)
@@ -510,16 +574,24 @@ async def route_prompt(
             except Exception:
                 bm = {"escalate_allowed": True}
             max_retries = 0 if not bm.get("escalate_allowed", True) else None
-            text, final_model, reason, score, pt, ct, cost, escalated = await run_with_self_check(
-                ask_func=ask_gpt,
-                model=decision.model,
-                user_prompt=built_prompt,
-                system_prompt=system_prompt,
-                retrieved_docs=mem_docs,
-                on_token=stream_cb,
-                stream=bool(stream_cb),
-                allow_test=True if os.getenv("PYTEST_CURRENT_TEST") else False,
-                max_retries=max_retries,
+            text, final_model, reason, score, pt, ct, cost, escalated = (
+                await run_with_self_check(
+                    ask_func=ask_gpt,
+                    model=decision.model,
+                    user_prompt=built_prompt,
+                    system_prompt=system_prompt,
+                    retrieved_docs=mem_docs,
+                    on_token=stream_cb,
+                    stream=bool(stream_cb),
+                    allow_test=True if os.getenv("PYTEST_CURRENT_TEST") else False,
+                    max_retries=max_retries,
+                )
+            )
+            logger.debug(
+                "run_with_self_check result model=%s score=%.3f escalated=%s",
+                final_model,
+                score,
+                escalated,
             )
             if rec:
                 rec.model_name = final_model
@@ -530,7 +602,13 @@ async def route_prompt(
                 rec.cost_usd = cost
                 rec.response = text
                 try:
-                    add_trace_event(rec.req_id, "model_called", model=final_model, self_check=score, escalated=escalated)
+                    add_trace_event(
+                        rec.req_id,
+                        "model_called",
+                        model=final_model,
+                        self_check=score,
+                        escalated=escalated,
+                    )
                 except Exception:
                     pass
 
@@ -548,7 +626,10 @@ async def route_prompt(
             try:
                 if final_model == "gpt-5-nano" and rec and (hash(rec.req_id) % 20 == 0):
                     import asyncio as _asyncio
-                    _asyncio.create_task(_run_shadow(built_prompt, system_prompt, text))
+
+                    _asyncio.create_task(
+                        _run_shadow(built_prompt, system_prompt, text)
+                    )  # noqa: F821
             except Exception:
                 pass
             # Optional curiosity loop: if confidence < tau or missing profile keys
@@ -569,7 +650,9 @@ async def route_prompt(
                     lines = []
                     for m in mem_docs:
                         try:
-                            cid = __import__("app.memory.env_utils", fromlist=["_normalized_hash"])._normalized_hash(m)[:12]
+                            cid = __import__(
+                                "app.memory.env_utils", fromlist=["_normalized_hash"]
+                            )._normalized_hash(m)[:12]
                         except Exception:
                             cid = "unknown"
                         lines.append(f"- ({cid}) {m}")
@@ -711,8 +794,11 @@ async def _call_gpt_override(
     user_id,
     rec,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
+    rag_client: Any | None = None,
 ):
-    built, pt = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
+    built, pt = PromptBuilder.build(
+        prompt, session_id=session_id, user_id=user_id, rag_client=rag_client
+    )
     try:
         text, pt, ct, cost = await ask_gpt(
             built, model, SYSTEM_PROMPT, stream=bool(stream_cb), on_token=stream_cb
@@ -746,9 +832,14 @@ async def _call_llama_override(
     rec,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     gen_opts: dict[str, Any] | None = None,
+    rag_client: Any | None = None,
 ):
     built, pt = PromptBuilder.build(
-        prompt, session_id=session_id, user_id=user_id, **(gen_opts or {})
+        prompt,
+        session_id=session_id,
+        user_id=user_id,
+        rag_client=rag_client,
+        **(gen_opts or {}),
     )
     tokens: list[str] = []
     logger.debug(

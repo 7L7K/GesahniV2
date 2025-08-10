@@ -102,6 +102,8 @@ Set environment variables as needed:
 | `DISABLE_QA_CACHE` | `false` | no | Skip semantic cache when set |
 | `VECTOR_STORE` | `chroma` | no | Vector store backend |
 | `CHROMA_PATH` | `.chroma_data` | no | ChromaDB storage directory |
+| `RAGFLOW_URL` | `http://localhost:8001` | no | Base URL for RAGFlow server |
+| `RAGFLOW_COLLECTION` | `demo` | no | Default RAGFlow collection name |
 | `USERS_DB` | `users.db` | no | SQLite path for auth users |
 
 *Required only when `EMBEDDING_BACKEND=llama`.
@@ -215,6 +217,15 @@ curl -X POST localhost:8000/ask -d '{"prompt":"turn off kitchen lights"}'
 * **Robust Fail-safes**: Seamless fallbacks (LLaMA → GPT, graceful HA errors).
 * **Proactive Engine v1**: Presence/webhook inputs, curiosity loop, APScheduler self‑tasks (e.g., unlock notifications and auto‑lock), hourly profile persistence.
 * **Security & Policy**: Per‑route scopes (`/admin/*`, `/ha/*`), nonce guard for state changes, signed webhooks with rotation helpers, deny‑list moderation on HA actions, dual‑bucket rate limits with Retry‑After.
+
+### Embedding Flow
+
+Memories and provenance tags rely on embeddings to gauge similarity:
+
+1. `EMBEDDING_BACKEND` chooses between OpenAI and local LLaMA models using `EMBED_MODEL` or `LLAMA_EMBEDDINGS_MODEL`.
+2. When a reply is generated, `_annotate_provenance` embeds each memory chunk and every response line via `embed_sync`.
+3. Cosine similarity compares response lines to stored memories. Lines with similarity ≥0.60 gain a `[#chunk:ID]` tag.
+4. These tags make it clear which memories influenced an answer and power the semantic cache.
 
 ## 📈 Future Enhancements
 
