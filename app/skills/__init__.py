@@ -24,6 +24,7 @@ from .translate_skill import TranslateSkill
 from .news_skill import NewsSkill
 from .joke_skill import JokeSkill
 from .dictionary_skill import DictionarySkill
+from .stock_price_skill import StockPriceSkill
 from .recipe_skill import RecipeSkill
 from .lights_skill import LightsSkill
 from .door_lock_skill import DoorLockSkill
@@ -59,6 +60,7 @@ SKILL_CLASSES: list[type] = [
     NewsSkill,
     JokeSkill,
     DictionarySkill,
+    StockPriceSkill,
     RecipeSkill,
     LightsSkill,
     DoorLockSkill,

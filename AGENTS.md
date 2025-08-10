@@ -133,6 +133,7 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `MEM_TOP_K` | `3` | no | Max memories returned from vector store |
 | `CHROMA_PATH` | `.chroma_data` | no | ChromaDB storage directory |
 | `TRANSLATE_URL` | `http://localhost:5000` | no | Translation microservice |
+| `ALPHAVANTAGE_API_KEY` | – | yes | Stock price lookups |
 | `OPENWEATHER_API_KEY` | – | yes | Weather and forecast lookups |
 | `CITY_NAME` | `Detroit,US` | no | Default weather city |
 | `NOTES_DB` | `notes.db` | no | SQLite file for notes skill |
