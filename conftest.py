@@ -186,7 +186,25 @@ def _isolate_debug_and_flags(monkeypatch):
     router.LLAMA_HEALTHY = True
     model_picker.LLAMA_HEALTHY = True
 
-    # Tell application code we’re inside pytest (if you want to gate features)
+    # Reset vector store to ensure test isolation
+    try:
+        from app.memory.api import close_store
+        close_store()
+    except Exception:
+        pass  # Ignore if vector store not available
+
+    # Reset rate-limiter buckets (HTTP & WS) between tests
+    try:
+        import app.security as security
+        security.http_requests.clear()
+        security.ws_requests.clear()
+        security.http_burst.clear()
+        security.ws_burst.clear()
+        security._requests.clear()
+    except Exception:
+        pass
+
+    # Tell application code we're inside pytest (if you want to gate features)
     monkeypatch.setenv("PYTEST_RUNNING", "1")
     yield
 

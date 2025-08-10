@@ -8,11 +8,9 @@ from .weather_skill import WeatherSkill
 from .forecast_skill import ForecastSkill
 from .reminder_skill import ReminderSkill
 from .timer_skill import TimerSkill
-from .alarm_skill import AlarmSkill
 from .math_skill import MathSkill
 from .unit_conversion_skill import UnitConversionSkill
 from .currency_skill import CurrencySkill
-from .stock_skill import StockSkill
 from .calendar_skill import CalendarSkill
 from .teach_skill import TeachSkill  # “my bedroom is Hija room”
 from .entities_skill import EntitiesSkill  # “list all lights”
@@ -22,7 +20,6 @@ from .cover_skill import CoverSkill
 from .fan_skill import FanSkill
 from .notify_skill import NotifySkill
 from .search_skill import SearchSkill
-from .traffic_skill import TrafficSkill
 from .translate_skill import TranslateSkill
 from .news_skill import NewsSkill
 from .joke_skill import JokeSkill
@@ -36,7 +33,7 @@ from .climate_skill import ClimateSkill
 from .vacuum_skill import VacuumSkill
 from .notes_skill import NotesSkill
 from .status_skill import StatusSkill
-from .sports_skill import SportsSkill
+ 
 
 # Preserve class order but avoid duplicates when this module reloads
 SKILL_CLASSES: list[type] = [
@@ -47,11 +44,9 @@ SKILL_CLASSES: list[type] = [
     ForecastSkill,
     ReminderSkill,
     TimerSkill,
-    AlarmSkill,
     MathSkill,
     UnitConversionSkill,
     CurrencySkill,
-    StockSkill,
     CalendarSkill,
     TeachSkill,
     EntitiesSkill,
@@ -61,7 +56,6 @@ SKILL_CLASSES: list[type] = [
     FanSkill,
     NotifySkill,
     SearchSkill,
-    TrafficSkill,
     TranslateSkill,
     NewsSkill,
     JokeSkill,
@@ -75,7 +69,6 @@ SKILL_CLASSES: list[type] = [
     VacuumSkill,
     NotesSkill,
     StatusSkill,
-    SportsSkill,
 ]
 
 _base.SKILLS.clear()

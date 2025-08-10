@@ -4,42 +4,75 @@ import sys
 import importlib.util
 import types
 from pathlib import Path
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-
-import httpx
+import pytest
 
 repo_root = Path(__file__).resolve().parents[2]
-app_pkg = types.ModuleType("app")
-app_pkg.__path__ = [str(repo_root / "app")]
-sys.modules["app"] = app_pkg
-skills_pkg = types.ModuleType("app.skills")
-skills_pkg.__path__ = [str(repo_root / "app" / "skills")]
-sys.modules["app.skills"] = skills_pkg
 
-router_stub = types.ModuleType("app.router")
-router_stub.llama_circuit_open = False
-router_stub.LLAMA_HEALTHY = True
-sys.modules["app.router"] = router_stub
-model_picker_stub = types.ModuleType("app.model_picker")
-model_picker_stub.LLAMA_HEALTHY = True
-sys.modules["app.model_picker"] = model_picker_stub
 
-llama_stub = types.ModuleType("app.llama_integration")
-llama_stub.LLAMA_HEALTHY = True
-sys.modules["app.llama_integration"] = llama_stub
+@pytest.fixture(autouse=True)
+def _isolate_module_stubs():
+    """Temporarily stub minimal app modules needed for dynamic import of the skill.
 
-base_path = repo_root / "app" / "skills" / "base.py"
-base_spec = importlib.util.spec_from_file_location("app.skills.base", base_path)
-base_module = importlib.util.module_from_spec(base_spec)
-base_spec.loader.exec_module(base_module)
-sys.modules["app.skills.base"] = base_module
+    Restores any modified sys.modules entries after the test to avoid leaking
+    state into unrelated tests.
+    """
+    original_modules = {}
+    target_names = [
+        "app",
+        "app.skills",
+        "app.router",
+        "app.model_picker",
+        "app.llama_integration",
+    ]
+    for name in target_names:
+        if name in sys.modules:
+            original_modules[name] = sys.modules[name]
 
-sports_path = repo_root / "app" / "skills" / "sports_skill.py"
-sports_spec = importlib.util.spec_from_file_location("app.skills.sports_skill", sports_path)
-sports_module = importlib.util.module_from_spec(sports_spec)
-sports_spec.loader.exec_module(sports_module)
-SportsSkill = sports_module.SportsSkill
+    # Create minimal package shells
+    app_pkg = types.ModuleType("app")
+    app_pkg.__path__ = [str(repo_root / "app")]
+    sys.modules["app"] = app_pkg
+
+    skills_pkg = types.ModuleType("app.skills")
+    skills_pkg.__path__ = [str(repo_root / "app" / "skills")]
+    sys.modules["app.skills"] = skills_pkg
+
+    router_stub = types.ModuleType("app.router")
+    router_stub.llama_circuit_open = False
+    router_stub.LLAMA_HEALTHY = True
+    sys.modules["app.router"] = router_stub
+
+    model_picker_stub = types.ModuleType("app.model_picker")
+    model_picker_stub.LLAMA_HEALTHY = True
+    sys.modules["app.model_picker"] = model_picker_stub
+
+    llama_stub = types.ModuleType("app.llama_integration")
+    llama_stub.LLAMA_HEALTHY = True
+    sys.modules["app.llama_integration"] = llama_stub
+
+    try:
+        yield
+    finally:
+        # Restore originals or remove stubs
+        for name in target_names:
+            if name in original_modules:
+                sys.modules[name] = original_modules[name]
+            elif name in sys.modules:
+                del sys.modules[name]
+
+
+def _load_skill_class():
+    base_path = repo_root / "app" / "skills" / "base.py"
+    base_spec = importlib.util.spec_from_file_location("app.skills.base", base_path)
+    base_module = importlib.util.module_from_spec(base_spec)
+    base_spec.loader.exec_module(base_module)  # type: ignore[union-attr]
+    sys.modules["app.skills.base"] = base_module
+
+    sports_path = repo_root / "app" / "skills" / "sports_skill.py"
+    sports_spec = importlib.util.spec_from_file_location("app.skills.sports_skill", sports_path)
+    sports_module = importlib.util.module_from_spec(sports_spec)
+    sports_spec.loader.exec_module(sports_module)  # type: ignore[union-attr]
+    return sports_module.SportsSkill
 
 
 class FakeResponse:
@@ -71,6 +104,8 @@ class FakeClient:
 
 
 def test_did_team_win(monkeypatch):
+    import httpx
+
     responses = [
         FakeResponse({"teams": [{"idTeam": "1", "strTeam": "Example FC"}]}),
         FakeResponse(
@@ -87,6 +122,7 @@ def test_did_team_win(monkeypatch):
         ),
     ]
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: FakeClient(responses))
+    SportsSkill = _load_skill_class()
     skill = SportsSkill()
     m = skill.match("did the Example FC win")
     out = asyncio.run(skill.run("did the Example FC win", m))
@@ -95,6 +131,8 @@ def test_did_team_win(monkeypatch):
 
 
 def test_next_game(monkeypatch):
+    import httpx
+
     responses = [
         FakeResponse({"teams": [{"idTeam": "1", "strTeam": "Example FC"}]}),
         FakeResponse(
@@ -111,6 +149,7 @@ def test_next_game(monkeypatch):
         ),
     ]
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: FakeClient(responses))
+    SportsSkill = _load_skill_class()
     skill = SportsSkill()
     m = skill.match("next game for Example FC")
     out = asyncio.run(skill.run("next game for Example FC", m))
