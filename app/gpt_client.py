@@ -101,17 +101,18 @@ SYSTEM_PROMPT = _ENV_SYSTEM if _ENV_SYSTEM else _load_default_system_prompt()
 logger = logging.getLogger(__name__)
 _client: AsyncOpenAI | None = None
 
-# price in USD per 1k input tokens (OpenAI pricing as of 2024-07-18)
+# price in USD per 1k tokens (OpenAI pricing as of 2024-07-18)
+# Separate rates for input and output tokens
 # Source: https://openai.com/pricing
 MODEL_PRICING = {
-    "gpt-4o": 0.005,
-    "gpt-4o-mini": 0.00015,
-    "gpt-5-mini": 0.00025,
-    "o1-mini": 0.0020,  # approx
-    "o4-mini": 0.0015,  # approximate; used for internal accounting only
-    "gpt-4": 0.03,
-    "gpt-3.5-turbo": 0.0005,
-    "gpt-3.5-turbo-instruct": 0.0015,
+    "gpt-4o": {"in": 0.005, "out": 0.015},
+    "gpt-4o-mini": {"in": 0.00015, "out": 0.0006},
+    "gpt-5-mini": {"in": 0.00025, "out": 0.00025},
+    "o1-mini": {"in": 0.0020, "out": 0.0020},  # approx
+    "o4-mini": {"in": 0.0015, "out": 0.0015},  # internal accounting
+    "gpt-4": {"in": 0.03, "out": 0.06},
+    "gpt-3.5-turbo": {"in": 0.0005, "out": 0.0015},
+    "gpt-3.5-turbo-instruct": {"in": 0.0015, "out": 0.0015},
 }
 
 
@@ -208,8 +209,15 @@ async def ask_gpt(
         usage = getattr(resp, "usage", None) or {}
         pt = int(getattr(usage, "prompt_tokens", 0))
         ct = int(getattr(usage, "completion_tokens", 0))
-        unit_price = MODEL_PRICING.get(model, 0.0)
-        cost = unit_price * (pt + ct) / 1000
+        pricing = MODEL_PRICING.get(model, {"in": 0.0, "out": 0.0})
+        if isinstance(pricing, dict):
+            in_rate = float(pricing.get("in", 0.0))
+            out_rate = float(pricing.get("out", 0.0))
+        else:  # pragma: no cover - backward compatibility
+            in_rate = out_rate = float(pricing)
+        in_cost = in_rate * pt / 1000
+        out_cost = out_rate * ct / 1000
+        cost = in_cost + out_cost
 
         # telemetry & metrics
         rec = log_record_var.get()
@@ -217,13 +225,17 @@ async def ask_gpt(
             rec.model_name = model
             rec.prompt_tokens = pt
             rec.completion_tokens = ct
+            rec.prompt_cost_usd = in_cost
+            rec.completion_cost_usd = out_cost
             rec.cost_usd = cost
 
         duration = time.perf_counter() - start
         REQUEST_COUNT.labels("ask_gpt", "chat", model).inc()
         REQUEST_LATENCY.labels("ask_gpt", "chat", model).observe(duration)
         MODEL_LATENCY_SECONDS.labels(model).observe(duration)
-        REQUEST_COST.labels("ask_gpt", "chat", model).observe(cost)
+        REQUEST_COST.labels("ask_gpt", "chat", model, "prompt").observe(in_cost)
+        REQUEST_COST.labels("ask_gpt", "chat", model, "completion").observe(out_cost)
+        REQUEST_COST.labels("ask_gpt", "chat", model, "total").observe(cost)
 
         if raw:
             return text, pt, ct, cost, resp
