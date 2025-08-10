@@ -78,6 +78,16 @@ def _coerce_k(value: int | str | None) -> int:
     return int(coerced)
 
 
+# Backwards-compatibility shim for tests that patch `_get_mem_top_k` directly on
+# this module. They expect it to exist at module level. Delegate to memory.api.
+def _get_mem_top_k() -> int:  # pragma: no cover - thin wrapper
+    try:
+        from app.memory import api as memory_api
+        return int(memory_api._get_mem_top_k())
+    except Exception:
+        return 3
+
+
 # ---------------------------------------------------------------------------
 # PromptBuilder
 # ---------------------------------------------------------------------------

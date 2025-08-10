@@ -2,7 +2,7 @@
 import pytest
 import sys
 print("DEBUG sys.path[0]:", sys.path[0])
-from app.vector_store import ChromaVectorStore
+from app.memory.chroma_store import ChromaVectorStore
 
 
 @pytest.fixture
