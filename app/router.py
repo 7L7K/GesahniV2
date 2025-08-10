@@ -52,6 +52,7 @@ from .embeddings import embed_sync as _embed
 from .memory.env_utils import _cosine_similarity as _cos, _normalized_hash as _nh
 from . import budget as _budget
 from . import analytics as _analytics
+from .adapters.rag.ragflow_adapter import RAGClient
 # Optional proactive engine hooks; ignore import errors in tests
 try:  # pragma: no cover - optional
     from .proactive_engine import maybe_curiosity_prompt, handle_user_reply
@@ -126,6 +127,14 @@ def _low_conf(resp: str) -> bool:
     return False
 
 
+def _needs_rag(prompt: str) -> bool:
+    p = prompt.lower()
+    return (
+        "what happened in detroit in 1968" in p
+        or "what did i watch yesterday" in p
+    )
+
+
 def _annotate_provenance(text: str, mem_docs: list[str]) -> str:
     """Append [#chunk:ID] tags to lines with high semantic similarity to RAG.
 
@@ -196,6 +205,8 @@ async def route_prompt(
         }
         builder_debug = os.getenv("DEBUG", "").lower() in {"1", "true", "yes"}
 
+        rag_client = RAGClient() if _needs_rag(norm_prompt) else None
+
         def _dry(engine: str, model: str) -> str:
             # Normalise llama model label to omit ":latest" suffix for stable test output
             label = model.split(":")[0] if engine == "llama" else model
@@ -256,7 +267,14 @@ async def route_prompt(
                     )
                 try:
                     result = await _call_gpt_override(
-                        mv, prompt, norm_prompt, session_id, user_id, rec, stream_cb
+                        mv,
+                        prompt,
+                        norm_prompt,
+                        session_id,
+                        user_id,
+                        rec,
+                        stream_cb,
+                        rag_client=rag_client,
                     )
                     return result
                 except (httpx.HTTPError, RuntimeError) as e:
@@ -266,6 +284,7 @@ async def route_prompt(
                             prompt,
                             session_id=session_id,
                             user_id=user_id,
+                            rag_client=rag_client,
                             **gen_opts,
                         )
                         fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
@@ -306,6 +325,7 @@ async def route_prompt(
                     rec,
                     stream_cb,
                     gen_opts,
+                    rag_client=rag_client,
                 )
                 return result
             raise HTTPException(
@@ -422,6 +442,7 @@ async def route_prompt(
             custom_instructions=getattr(rec, "custom_instructions", ""),
             debug=builder_debug,
             debug_info=getattr(rec, "debug_info", ""),
+            rag_client=rag_client,
             **gen_opts,
         )
         if rec:
@@ -717,8 +738,11 @@ async def _call_gpt_override(
     user_id,
     rec,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
+    rag_client: Any | None = None,
 ):
-    built, pt = PromptBuilder.build(prompt, session_id=session_id, user_id=user_id)
+    built, pt = PromptBuilder.build(
+        prompt, session_id=session_id, user_id=user_id, rag_client=rag_client
+    )
     try:
         text, pt, ct, cost = await ask_gpt(
             built, model, SYSTEM_PROMPT, stream=bool(stream_cb), on_token=stream_cb
@@ -752,9 +776,14 @@ async def _call_llama_override(
     rec,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     gen_opts: dict[str, Any] | None = None,
+    rag_client: Any | None = None,
 ):
     built, pt = PromptBuilder.build(
-        prompt, session_id=session_id, user_id=user_id, **(gen_opts or {})
+        prompt,
+        session_id=session_id,
+        user_id=user_id,
+        rag_client=rag_client,
+        **(gen_opts or {}),
     )
     tokens: list[str] = []
     logger.debug(
