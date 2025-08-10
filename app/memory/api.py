@@ -5,17 +5,37 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import List, Optional
 import time
+from typing import List, Optional
 
 from app.telemetry import hash_user_id
 
-from .chroma_store import ChromaVectorStore
+# ---------------------------------------------------------------------------
+# Export real ChromaVectorStore if available, but ALWAYS define the symbol
+# so "from app.memory.api import ChromaVectorStore" never fails during
+# pytest collection or when Chroma deps are missing.
+# ---------------------------------------------------------------------------
+try:
+    from .chroma_store import ChromaVectorStore  # real implementation
+    _CHROMA_IMPORT_ERROR: Exception | None = None
+except Exception as _e:  # pragma: no cover - exercised only when chroma not importable
+    _CHROMA_IMPORT_ERROR = _e
+
+    class ChromaVectorStore:  # type: ignore
+        """Sentinel implementation that preserves the symbol for imports.
+
+        Instantiation will raise with the original import error, but test
+        collection and `from ... import ChromaVectorStore` won’t explode.
+        """
+        AVAILABLE = False
+
+        def __init__(self, *a, **kw) -> None:
+            raise RuntimeError(f"ChromaVectorStore unavailable: {_CHROMA_IMPORT_ERROR!r}")
+
 from .env_utils import _get_mem_top_k, _normalized_hash
 from .memory_store import MemoryVectorStore, VectorStore
 
 logger = logging.getLogger(__name__)
-
 
 # ---------------------------------------------------------------------------
 # Backend selection helpers
@@ -28,7 +48,6 @@ def _get_store() -> VectorStore:
     * Falls back to an in-memory store automatically when running under pytest
       or whenever the disk-backed Chroma store cannot be initialised.
     """
-
     kind = os.getenv("VECTOR_STORE", "").lower()
     chroma_path = os.getenv("CHROMA_PATH", ".chroma_data")
 
@@ -67,7 +86,6 @@ def _get_store() -> VectorStore:
 # The singleton store instance used by every helper below.
 _store: VectorStore = _get_store()
 
-
 # ---------------------------------------------------------------------------
 # Public helpers
 # ---------------------------------------------------------------------------
@@ -83,7 +101,6 @@ def _coerce_k(k: int | str | None) -> int:
     Any falsy or invalid value is replaced by the project-wide default from
     :func:`env_utils._get_mem_top_k`.
     """
-
     raw = k
     if k is None:
         result = _get_mem_top_k()
@@ -103,7 +120,6 @@ def query_user_memories(
     user_id: str, prompt: str, k: int | str | None = None
 ) -> List[str]:
     """Retrieve up to *k* memories relevant to *prompt* for the given user."""
-
     k_int = _coerce_k(k)
     logger.debug(
         "query_user_memories args: user=%s prompt=%r k=%d",
@@ -124,7 +140,6 @@ def cache_answer(prompt: str, answer: str, cache_id: str | None = None) -> None:
     ``__cid__`` prefix to avoid accidental semantic matches in similarity-based
     lookups.
     """
-
     # Detect deterministic cache id style: v<digits>|...
     is_cid = (
         cache_id is None
@@ -146,7 +161,6 @@ def cache_answer(prompt: str, answer: str, cache_id: str | None = None) -> None:
 
 def cache_answer_legacy(*args) -> None:  # pragma: no cover - shim for callers
     """Backward-compatibility wrapper for the old positional signature."""
-
     import warnings
 
     warnings.warn(
@@ -171,7 +185,6 @@ def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> Optional[str]
     an exact id lookup via the backing ``qa_cache`` to avoid semantic bleeding
     across models. Otherwise, fallback to the vector similarity lookup.
     """
-
     # Fast path: exact id style (vN|...|...|)
     is_cid = isinstance(prompt, str) and "|" in prompt and prompt[:2].lower().startswith("v")
     if is_cid:
@@ -203,13 +216,11 @@ def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> Optional[str]
 
 def record_feedback(prompt: str, feedback: str) -> None:
     """Record human feedback for *prompt*."""
-
     return _store.record_feedback(prompt, feedback)
 
 
 class _QACacheProxy:
     """Thin proxy so callers can treat ``qa_cache`` like a module-level var."""
-
     def __call__(self):  # noqa: D401
         return _store.qa_cache
 
@@ -223,7 +234,6 @@ _qa_cache = qa_cache  # legacy alias
 
 def invalidate_cache(prompt: str) -> None:
     """Invalidate any cached answer that exactly matches *prompt*."""
-
     cid = _normalized_hash(prompt)
     logger.debug("Invalidating cache for %s", cid)
     _store.qa_cache.delete(ids=[cid])
@@ -231,7 +241,6 @@ def invalidate_cache(prompt: str) -> None:
 
 def close_store() -> None:
     """Close and re-initialise the underlying store (used in tests)."""
-
     global _store
     if _store is not None:
         try:
@@ -241,6 +250,7 @@ def close_store() -> None:
 
 
 __all__ = [
+    # helpers
     "add_user_memory",
     "query_user_memories",
     "cache_answer",
@@ -250,6 +260,7 @@ __all__ = [
     "qa_cache",
     "invalidate_cache",
     "close_store",
+    # types/backends
     "VectorStore",
     "MemoryVectorStore",
     "ChromaVectorStore",
