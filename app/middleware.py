@@ -3,7 +3,6 @@ import asyncio
 import time
 import os
 from hashlib import sha256
-from typing import Set
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -122,9 +121,17 @@ async def trace_request(request: Request, call_next):
         metrics.REQUEST_LATENCY.labels(
             request.url.path, request.method, engine
         ).observe(rec.latency_ms / 1000)
+        if rec.prompt_cost_usd:
+            metrics.REQUEST_COST.labels(
+                request.url.path, request.method, engine, "prompt"
+            ).observe(rec.prompt_cost_usd)
+        if rec.completion_cost_usd:
+            metrics.REQUEST_COST.labels(
+                request.url.path, request.method, engine, "completion"
+            ).observe(rec.completion_cost_usd)
         if rec.cost_usd:
             metrics.REQUEST_COST.labels(
-                request.url.path, request.method, engine
+                request.url.path, request.method, engine, "total"
             ).observe(rec.cost_usd)
 
         if isinstance(response, Response):

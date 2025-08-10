@@ -34,7 +34,7 @@ REQUEST_LATENCY = Histogram(
 REQUEST_COST = Histogram(
     "app_request_cost_usd",
     "Request cost in USD",
-    ["endpoint", "method", "engine"],
+    ["endpoint", "method", "engine", "segment"],
 )
 
 # Counter for LLaMA prompt/completion tokens
