@@ -41,6 +41,13 @@ def embed_sync(text: str) -> List[float]:
     • In CI / pytest we short-circuit to a deterministic local vector so no
       network calls ever happen.
     """
+    backend = os.getenv("EMBEDDING_BACKEND", "openai").lower()
+    model = (
+        os.getenv("EMBED_MODEL", "text-embedding-3-small")
+        if backend == "openai"
+        else os.getenv("LLAMA_EMBEDDINGS_MODEL", "")
+    )
+    logger.debug("embed_sync backend=%s model=%s", backend, model)
     if os.getenv("PYTEST_CURRENT_TEST") or \
        os.getenv("VECTOR_STORE", "").lower() in {"memory", "inmemory"}:
         # 8-dim “thumbprint” to keep semantic-cache tests meaningful
@@ -146,6 +153,12 @@ async def embed(text: str) -> List[float]:
     """
 
     backend = os.getenv("EMBEDDING_BACKEND", "openai").lower()
+    model = (
+        os.getenv("EMBED_MODEL", "text-embedding-3-small")
+        if backend == "openai"
+        else os.getenv("LLAMA_EMBEDDINGS_MODEL", "")
+    )
+    logger.debug("embed backend=%s model=%s", backend, model)
     if backend == "openai":
         return await _embed_openai(text)
     if backend == "llama":
