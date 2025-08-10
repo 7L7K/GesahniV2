@@ -1,6 +1,9 @@
 import os
 import logging
-import audioop
+try:  # pragma: no cover - import may be deprecated in future runtimes
+    import audioop  # type: ignore
+except Exception:  # pragma: no cover - fallback for environments without audioop
+    audioop = None  # type: ignore
 
 try:  # pragma: no cover - exercised when openai is installed
     import openai
@@ -45,6 +48,8 @@ def has_speech(chunk: bytes, threshold: int = VAD_ENERGY_THRESHOLD) -> bool:
     if not chunk:
         return False
     try:
+        if audioop is None:
+            return True
         rms = audioop.rms(chunk, 2)  # assume 16-bit samples
     except Exception:
         return True

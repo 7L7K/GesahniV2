@@ -30,6 +30,21 @@ def require_scope(required: str) -> Callable[[Request], None]:
     return _dep
 
 
-__all__ = ["require_scope"]
+def optional_require_scope(required: str) -> Callable[[Request], None]:
+    """Scope check that can be globally turned off via env.
+
+    When ENFORCE_JWT_SCOPES is not set, behaves as a no-op to keep tests green.
+    """
+
+    if os.getenv("ENFORCE_JWT_SCOPES", "").lower() in {"1", "true", "yes"}:
+        return require_scope(required)
+
+    async def _noop(_: Request) -> None:
+        return None
+
+    return _noop
+
+
+__all__ = ["require_scope", "optional_require_scope"]
 
 

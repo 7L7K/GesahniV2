@@ -21,6 +21,10 @@ from .model_params import for_ollama
 OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:latest")
 
+# Health-check timeout (seconds). Remote or cold models may take longer than
+# 10s to answer a minimal generation. Allow override via env.
+HEALTH_TIMEOUT: float = float(os.getenv("OLLAMA_HEALTH_TIMEOUT", "60.0"))
+
 # Force IPv4 resolution for the Ollama host (Tailscale compatibility)
 def _force_ipv4_base(url: str) -> str:
     try:
@@ -81,11 +85,18 @@ async def _check_and_set_flag() -> None:
             LLAMA_HEALTHY = False
             logger.warning("OLLAMA_MODEL not set – skipping health check")
             return
+        # Use minimal generation to keep health checks snappy over slow links
+        payload = {
+            "model": OLLAMA_MODEL,
+            "prompt": "ping",
+            "stream": False,
+            "options": {"num_predict": 1},
+        }
         data, err = await json_request(
             "POST",
             f"{OLLAMA_URL}/api/generate",
-            json={"model": OLLAMA_MODEL, "prompt": "ping", "stream": False},
-            timeout=10.0,
+            json=payload,
+            timeout=HEALTH_TIMEOUT,
         )
         # ---- PATCH: check if models returned but not present ----
         # Simulate what test expects (returns models list, not including selected)

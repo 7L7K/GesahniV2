@@ -100,10 +100,15 @@ export async function sendPrompt(
 ): Promise<string> {
   // Prefer SSE to minimize TTFB for first token
   const headers: HeadersInit = { 'Accept': 'text/event-stream' };
+  // Only include model_override when not using automatic routing
+  const payload: Record<string, unknown> = { prompt };
+  if (modelOverride && modelOverride !== 'auto') {
+    payload.model_override = modelOverride;
+  }
   const res = await apiFetch('/v1/ask', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ prompt, model_override: modelOverride }),
+    body: JSON.stringify(payload),
   });
 
   const contentType = res.headers.get('content-type') || '';

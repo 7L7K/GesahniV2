@@ -1,12 +1,23 @@
 from __future__ import annotations
 import json, time, base64, hmac, hashlib
-from datetime import datetime, timezone
-from typing import Optional, Dict, Tuple, List
+from datetime import datetime, timezone, timedelta
+from typing import Optional, Dict, Tuple, List, Any
 
 from fastapi import HTTPException
-from google_auth_oauthlib.flow import Flow
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
+
+# Optional Google libraries ----------------------------------------------------
+try:  # pragma: no cover - import varies by environment
+    from google_auth_oauthlib.flow import Flow as _Flow  # type: ignore
+    from google.oauth2.credentials import Credentials as _Credentials  # type: ignore
+    from google.auth.transport.requests import Request as _Request  # type: ignore
+    _GOOGLE_AVAILABLE = True
+except Exception:  # pragma: no cover - optional dependency
+    _Flow = None
+    _Credentials = None
+    _Request = None
+    _GOOGLE_AVAILABLE = False
+
+from urllib.parse import urlencode
 
 from .config import (
     GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI,
@@ -45,53 +56,116 @@ def _verify_state(state: str) -> Dict:
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid state")
 
-def create_flow(scopes: Optional[List[str]] = None) -> Flow:
-    return Flow.from_client_config(
+def create_flow(scopes: Optional[List[str]] = None):
+    """Return a google-auth ``Flow`` when libraries are available.
+
+    Raises HTTPException when unavailable so callers can degrade gracefully.
+    """
+    if not _GOOGLE_AVAILABLE or _Flow is None:  # pragma: no cover - env-dependent
+        raise HTTPException(status_code=501, detail="google oauth client unavailable")
+    return _Flow.from_client_config(
         CLIENT_CONFIG,
         scopes=scopes or GOOGLE_SCOPES,
         redirect_uri=GOOGLE_REDIRECT_URI,
     )
 
-def build_auth_url(user_id: str, scopes: Optional[List[str]] = None) -> Tuple[str, str]:
-    flow = create_flow(scopes)
-    # Uses PKCE automatically; request offline for refresh_token; force prompt to ensure we get it.
-    auth_url, g_state = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        prompt="consent",
-    )
-    signed = _sign_state({"uid": user_id, "g": g_state})
-    # replace google state with our signed state (flow expects any opaque string)
-    if "state=" in auth_url:
-        auth_url = auth_url.replace(f"state={g_state}", f"state={signed}")
-    return auth_url, signed
+def build_auth_url(
+    user_id: str,
+    scopes: Optional[List[str]] = None,
+    extra_state: Optional[Dict] = None,
+) -> Tuple[str, str]:
+    """Return an OAuth authorization URL and our signed state.
 
-def exchange_code(code: str, signed_state: str) -> Credentials:
+    Uses the official Flow when available; otherwise constructs the URL
+    manually so tests and lightweight environments work without heavy deps.
+    """
+    requested_scopes = scopes or GOOGLE_SCOPES
+    # Compose our signed state first
+    state_payload: Dict[str, Any] = {"uid": user_id}
+    if extra_state:
+        state_payload.update(extra_state)
+    signed = _sign_state(state_payload)
+
+    if _GOOGLE_AVAILABLE and _Flow is not None:  # pragma: no cover - env-dependent
+        flow = _Flow.from_client_config(
+            CLIENT_CONFIG, scopes=requested_scopes, redirect_uri=GOOGLE_REDIRECT_URI
+        )
+        auth_url, _ = flow.authorization_url(
+            access_type="offline",
+            include_granted_scopes="true",
+            prompt="consent",
+            state=signed,  # use our state directly
+        )
+        return auth_url, signed
+
+    # Manual construction fallback
+    q = urlencode(
+        {
+            "client_id": GOOGLE_CLIENT_ID,
+            "redirect_uri": GOOGLE_REDIRECT_URI,
+            "response_type": "code",
+            "scope": " ".join(requested_scopes),
+            "access_type": "offline",
+            "include_granted_scopes": "true",
+            "prompt": "consent",
+            "state": signed,
+        }
+    )
+    return f"https://accounts.google.com/o/oauth2/v2/auth?{q}", signed
+
+def exchange_code(code: str, signed_state: str):
     # Validate CSRF state we sent earlier
     _ = _verify_state(signed_state)
+    if not _GOOGLE_AVAILABLE or _Flow is None:  # pragma: no cover - env-dependent
+        # Environments without google libraries should override this function in tests
+        raise HTTPException(status_code=501, detail="google oauth exchange unavailable")
     flow = create_flow()
-    # This fetches token using the PKCE code_verifier managed internally
     flow.fetch_token(code=code)
     return flow.credentials
 
-def refresh_if_needed(creds: Credentials) -> Credentials:
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
+def refresh_if_needed(creds: Any) -> Any:
+    try:
+        expired = getattr(creds, "expired", False)
+        has_refresh = getattr(creds, "refresh_token", None)
+        if expired and has_refresh and _GOOGLE_AVAILABLE and _Request is not None:  # pragma: no cover
+            creds.refresh(_Request())
+    except Exception:
+        pass
     return creds
 
-def creds_to_record(creds: Credentials) -> dict:
-    return {
-        "access_token": creds.token,
-        "refresh_token": creds.refresh_token,
-        "token_uri": creds.token_uri,
-        "client_id": creds.client_id,
-        "client_secret": creds.client_secret,
-        "scopes": " ".join(creds.scopes or []),
-        "expiry": datetime.fromtimestamp(creds.expiry.timestamp(), tz=timezone.utc),
-    }
+def creds_to_record(creds: Any) -> dict:
+    # Robustly convert creds into a serializable record, tolerating stubs
+    try:
+        scopes = getattr(creds, "scopes", None) or []
+        if isinstance(scopes, str):
+            scopes = scopes.split()
+        expiry = getattr(creds, "expiry", None)
+        if expiry is None:
+            expiry_dt = datetime.now(timezone.utc) + timedelta(hours=1)
+        elif isinstance(expiry, datetime):
+            expiry_dt = expiry if expiry.tzinfo else expiry.replace(tzinfo=timezone.utc)
+        else:
+            # objects with .timestamp()
+            try:
+                expiry_dt = datetime.fromtimestamp(expiry.timestamp(), tz=timezone.utc)  # type: ignore[arg-type]
+            except Exception:
+                expiry_dt = datetime.now(timezone.utc) + timedelta(hours=1)
+        return {
+            "access_token": getattr(creds, "token", None),
+            "refresh_token": getattr(creds, "refresh_token", None),
+            "token_uri": getattr(creds, "token_uri", "https://oauth2.googleapis.com/token"),
+            "client_id": getattr(creds, "client_id", GOOGLE_CLIENT_ID),
+            "client_secret": getattr(creds, "client_secret", GOOGLE_CLIENT_SECRET),
+            "scopes": " ".join(scopes),
+            "expiry": expiry_dt,
+        }
+    except Exception as e:  # pragma: no cover - defensive
+        raise HTTPException(status_code=400, detail=f"bad_credentials_object: {e}")
 
-def record_to_creds(record) -> Credentials:
-    return Credentials(
+def record_to_creds(record):
+    if not _GOOGLE_AVAILABLE or _Credentials is None:  # pragma: no cover - env-dependent
+        raise HTTPException(status_code=501, detail="google credentials unavailable")
+    return _Credentials(
         token=record.access_token,
         refresh_token=record.refresh_token,
         token_uri=record.token_uri,

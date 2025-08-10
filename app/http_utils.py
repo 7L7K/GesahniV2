@@ -80,6 +80,10 @@ async def json_request(
                 await asyncio.sleep(delay)
                 delay *= 2
                 continue
+            if status in (401, 403):
+                return None, "auth_error"
+            if status == 404:
+                return None, "not_found"
             return None, "http_error"
         except httpx.RequestError as e:
             logger.warning("Network error for %s: %s", url, e)

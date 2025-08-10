@@ -89,6 +89,32 @@ _SMALLTALK = SmalltalkSkill()
 LLAMA_HEALTHY: bool = True
 
 # ---------------------------------------------------------------------------
+# Per-user LLaMA circuit breaker (local to router)
+# ---------------------------------------------------------------------------
+_USER_CB_THRESHOLD = int(os.getenv("LLAMA_USER_CB_THRESHOLD", "3"))
+_USER_CB_COOLDOWN = float(os.getenv("LLAMA_USER_CB_COOLDOWN", "120"))
+_llama_user_failures: dict[str, tuple[int, float]] = {}
+
+def _user_circuit_open(user_id: str) -> bool:
+    rec = _llama_user_failures.get(user_id)
+    if not rec:
+        return False
+    count, last_ts = rec
+    if count >= _USER_CB_THRESHOLD and (time := __import__("time")).time() - last_ts < _USER_CB_COOLDOWN:
+        return True
+    return False
+
+def _user_cb_record_failure(user_id: str) -> None:
+    t = (__import__("time").time())
+    count, _ = _llama_user_failures.get(user_id, (0, 0.0))
+    if t - _ >= _USER_CB_COOLDOWN:
+        count = 0
+    _llama_user_failures[user_id] = (count + 1, t)
+
+def _user_cb_reset(user_id: str) -> None:
+    _llama_user_failures.pop(user_id, None)
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
@@ -470,6 +496,17 @@ async def route_prompt(
             result = await _finalise("cache", prompt, cached, rec)
             return result
 
+        # 5️⃣ Planning pass (cheap) → Action pass (heavy)
+        # First build the plan (lightweight), then execute action with carry-over.
+        # The planning prompt is intentionally concise and non-streaming.
+        plan_text = None
+        try:
+            plan_prompt = f"Plan task briefly (max 3 bullets) before answering.\nTask: {prompt}"
+            # Keep planning pass cheap: small model, short output
+            plan_text, _pt, _ct, _ = await ask_gpt(plan_prompt, "gpt-5-nano", SYSTEM_PROMPT, stream=False)
+        except Exception:
+            plan_text = None
+
         # 5️⃣ Deterministic selection (gpt-5-nano baseline)
         built_prompt, ptoks = PromptBuilder.build(
             prompt,
@@ -477,7 +514,8 @@ async def route_prompt(
             user_id=user_id,
             custom_instructions=getattr(rec, "custom_instructions", ""),
             debug=builder_debug,
-            debug_info=getattr(rec, "debug_info", ""),
+            # Carry-over plan tokens as debug info for visibility/telemetry
+            debug_info=(getattr(rec, "debug_info", "") + (f"\nPLAN:\n{plan_text}" if plan_text else "")).strip(),
             rag_client=rag_client,
             **gen_opts,
         )
@@ -490,9 +528,15 @@ async def route_prompt(
             return result
 
         # Determine model deterministically
-        # We treat any RAG memories as part of retrieved context, but PromptBuilder
-        # only returns the final built prompt; we approximate retrieved token count
-        # as the difference between built and user prompt tokens where possible.
+        # Retrieve current memories explicitly and feed into deterministic router
+        try:
+            from .memory.env_utils import _get_mem_top_k
+
+            k = _get_mem_top_k()
+        except Exception:
+            k = 3
+        mem_docs = safe_query_user_memories(user_id, prompt, k=k)
+        # Track retrieval metrics (token approximation kept for telemetry)
         retrieved_tokens = max(0, ptoks - count_tokens(prompt))
         if rec:
             rec.retrieved_tokens = retrieved_tokens
@@ -509,7 +553,7 @@ async def route_prompt(
             decision = route_text(
                 user_prompt=prompt,
                 prompt_tokens=tokens,
-                retrieved_docs=None,
+                retrieved_docs=mem_docs,
                 intent=intent,
                 # Surface attachments_count when present in gen_opts
                 attachments_count=(
@@ -529,14 +573,6 @@ async def route_prompt(
             sys_mode = getattr(rec, "system_mode", None) if rec else None
             system_prompt = load_system_prompt(sys_mode) or SYSTEM_PROMPT
 
-            # Retrieve current memories to include in cache segregation key
-            try:
-                from .memory.env_utils import _get_mem_top_k
-
-                k = _get_mem_top_k()
-            except Exception:
-                k = 3
-            mem_docs = safe_query_user_memories(user_id, prompt, k=k)
             if rec:
                 from .memory.env_utils import _normalized_hash
 
@@ -707,10 +743,30 @@ async def route_prompt(
                 )
 
         if engine == "llama" and llama_integration.LLAMA_HEALTHY:
+            # Per-user circuit: short-circuit to GPT if this user has a hot breaker
+            if _user_circuit_open(user_id):
+                # Execute GPT directly and return
+                try:
+                    result = await _call_gpt(
+                        prompt=prompt,
+                        built_prompt=built_prompt,
+                        model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+                        rec=rec,
+                        norm_prompt=norm_prompt,
+                        session_id=session_id,
+                        user_id=user_id,
+                        ptoks=ptoks,
+                        stream_cb=stream_cb,
+                    )
+                    return result
+                except Exception:
+                    # If GPT fails, fall back to attempting llama once
+                    pass
             if debug_route:
                 result = _dry("llama", model_name)
                 return result
-            result = await _call_llama(
+            try:
+                result = await _call_llama(
                 prompt=prompt,
                 built_prompt=built_prompt,
                 model=model_name,
@@ -721,8 +777,14 @@ async def route_prompt(
                 ptoks=ptoks,
                 stream_cb=stream_cb,
                 gen_opts=gen_opts,
-            )
-            return result
+                )
+                # success: reset per-user breaker
+                _user_cb_reset(user_id)
+                return result
+            except HTTPException:
+                # mark failure and re-raise
+                _user_cb_record_failure(user_id)
+                raise
 
         if engine == "llama" and not llama_integration.LLAMA_HEALTHY:
             raise HTTPException(
