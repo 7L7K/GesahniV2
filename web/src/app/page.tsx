@@ -30,6 +30,11 @@ export default function Home() {
                     <Button variant="primary">Save</Button>
                 </div>
             </section>
+            <div style={{ marginTop: "var(--space-6)" }}>
+                <a href="/tv" style={{ background: "#000", color: "#fff", padding: "12px 16px", borderRadius: 8, textDecoration: "none" }}>
+                    Open Granny Mode TV
+                </a>
+            </div>
             <Chat />
         </div>
     );

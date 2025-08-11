@@ -2,6 +2,7 @@
 import { Send } from "lucide-react";
 import { useState, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { ModelSelector } from "@/components/ModelSelector";
 import TextareaAutosize from "react-textarea-autosize";
 
 export default function InputBar({
@@ -40,41 +41,7 @@ export default function InputBar({
   return (
     <div className="flex flex-col gap-2">
       <div className="inline-flex w-full items-center justify-between rounded-xl border bg-background p-1">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onModelChange('auto')}
-            className={
-              model === 'auto'
-                ? 'rounded-md px-3 py-1.5 text-xs bg-primary text-primary-foreground shadow-sm'
-                : 'rounded-md px-3 py-1.5 text-xs hover:bg-accent'
-            }
-          >
-            auto
-          </button>
-          <button
-            type="button"
-            onClick={() => onModelChange('llama3')}
-            className={
-              model === 'llama3'
-                ? 'rounded-md px-3 py-1.5 text-xs bg-primary text-primary-foreground shadow-sm'
-                : 'rounded-md px-3 py-1.5 text-xs hover:bg-accent'
-            }
-          >
-            llama3
-          </button>
-          <button
-            type="button"
-            onClick={() => onModelChange('gpt-4o')}
-            className={
-              model === 'gpt-4o'
-                ? 'rounded-md px-3 py-1.5 text-xs bg-primary text-primary-foreground shadow-sm'
-                : 'rounded-md px-3 py-1.5 text-xs hover:bg-accent'
-            }
-          >
-            gpt-4o
-          </button>
-        </div>
+        <ModelSelector value={model} onChange={onModelChange} />
         <div className="text-[10px] text-muted-foreground px-2">Shift+Enter for newline</div>
       </div>
 

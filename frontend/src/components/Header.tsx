@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { isAuthed, logout, getBudget } from '@/lib/api';
+import { getToken, clearTokens, getBudget } from '@/lib/api';
 import { usePathname, useRouter } from 'next/navigation';
 
 export default function Header() {
@@ -13,16 +13,16 @@ export default function Header() {
     const pathname = usePathname();
 
     useEffect(() => {
-        setAuthed(isAuthed());
-    }, [pathname]);
+        setAuthed(Boolean(getToken()))
+    }, [pathname])
 
     const doLogout = async () => {
-        await logout();
-        setAuthed(false);
-        // Hint server components that we are logged out
-        document.cookie = 'auth:hint=0; path=/; max-age=300';
-        router.push('/');
-    };
+        try { clearTokens() } finally {
+            setAuthed(false)
+            document.cookie = 'auth:hint=0; path=/; max-age=300'
+            router.push('/')
+        }
+    }
 
     const [localMode, setLocalMode] = useState(false);
     const [nearCap, setNearCap] = useState(false);

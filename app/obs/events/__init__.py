@@ -1,3 +1,13 @@
+"""Event emitters for Granny Mode."""
+
+
+def voice_stage_event(stage: str, ms: int) -> None:
+    _ = (stage, ms)
+
+
+def skill_latency(skill: str, ms: int) -> None:
+    _ = (skill, ms)
+
 from __future__ import annotations
 
 from typing import Any, Dict
