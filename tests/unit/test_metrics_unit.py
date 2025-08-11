@@ -47,7 +47,8 @@ def test_latency_stats_and_top_skills():
         await metrics.record_skill("a")
         await metrics.record_skill("b")
 
-    asyncio.get_event_loop().run_until_complete(_run())
+    import asyncio
+    asyncio.run(_run())
 
     p95 = metrics.latency_p95()
     assert isinstance(p95, int) and p95 >= 50

@@ -28,6 +28,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ConfigDict
 
 from .deps.scheduler import shutdown as scheduler_shutdown
@@ -212,6 +213,14 @@ app.middleware("http")(trace_request)
 from .middleware import silent_refresh_middleware
 app.middleware("http")(silent_refresh_middleware)
 app.middleware("http")(reload_env_middleware)
+
+# Optional static mount for TV shared photos
+try:
+    _tv_dir = os.getenv("TV_PHOTOS_DIR", "data/shared_photos")
+    if _tv_dir:
+        app.mount("/shared_photos", StaticFiles(directory=_tv_dir), name="shared_photos")
+except Exception:
+    pass
 
 if os.getenv("PROMETHEUS_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}:
     try:  # pragma: no cover - optional dependency
@@ -566,6 +575,11 @@ class UserProfile(BaseModel):
     calendar_integration: bool = False
     gmail_integration: bool = False
     onboarding_completed: bool = False
+    # Accessibility and voice preferences (Stage 1 onboarding)
+    speech_rate: float | None = None          # 0.8..1.2 (1.0 = normal)
+    input_mode: str | None = None             # "voice" | "touch" | "both"
+    font_scale: float | None = None           # 0.9..1.4
+    wake_word_enabled: bool = False
 
 
 class OnboardingStep(BaseModel):
@@ -599,6 +613,17 @@ async def get_onboarding_status(user_id: str = Depends(get_current_user_id)):
     steps = [
         {"step": "welcome", "completed": True, "data": None},
         {"step": "basic_info", "completed": bool(profile.get("name")), "data": {"name": profile.get("name")}},
+        # Stage 1 immediate device preferences
+        {
+            "step": "device_prefs",
+            "completed": bool(profile.get("speech_rate") and profile.get("font_scale")),
+            "data": {
+                "speech_rate": profile.get("speech_rate"),
+                "input_mode": profile.get("input_mode"),
+                "font_scale": profile.get("font_scale"),
+                "wake_word_enabled": profile.get("wake_word_enabled"),
+            },
+        },
         {"step": "preferences", "completed": bool(profile.get("communication_style")), "data": {"communication_style": profile.get("communication_style")}},
         {"step": "integrations", "completed": bool(profile.get("calendar_integration") or profile.get("gmail_integration")), "data": {"calendar": profile.get("calendar_integration"), "gmail": profile.get("gmail_integration")}},
         {"step": "complete", "completed": profile.get("onboarding_completed", False), "data": None}
@@ -802,6 +827,13 @@ except Exception:
     pass
 
 try:
+    from .api.reminders import router as reminders_router
+    app.include_router(reminders_router, prefix="/v1")
+    app.include_router(reminders_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
     # Mount dev/simple cookie auth only when explicitly enabled
     if os.getenv("DEV_SIMPLE_AUTH", "0").strip().lower() in {"1", "true", "yes", "on"}:
         from .api.auth import router as auth_router
@@ -872,6 +904,13 @@ try:
     from .api.skills import router as skills_router
     app.include_router(skills_router, prefix="/v1")
     app.include_router(skills_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.tv import router as tv_router
+    app.include_router(tv_router, prefix="/v1")
+    app.include_router(tv_router, include_in_schema=False)
 except Exception:
     pass
 

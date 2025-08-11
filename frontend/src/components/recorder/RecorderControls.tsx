@@ -22,6 +22,7 @@ export function RecorderControls() {
                 </button>
             )}
             <button onClick={rec.pause} disabled={!recording} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${recording ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-gray-50 text-gray-400 cursor-not-allowed'}`}>⏸️ Pause</button>
+            <button onClick={rec.toggleMute} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${rec.muted ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>{rec.muted ? '🔇 Muted' : '🔊 Mute'}</button>
             <button onClick={rec.reset} className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-all duration-200">🗑️ Reset</button>
         </div>
     );

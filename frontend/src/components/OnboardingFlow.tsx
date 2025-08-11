@@ -7,6 +7,7 @@ import BasicInfoStep from './onboarding/BasicInfoStep';
 import PreferencesStep from './onboarding/PreferencesStep';
 import IntegrationsStep from './onboarding/IntegrationsStep';
 import CompleteStep from './onboarding/CompleteStep';
+import DevicePrefsStep from './onboarding/DevicePrefsStep';
 
 interface OnboardingFlowProps {
     onboardingStatus: OnboardingStatus | null;
@@ -16,6 +17,7 @@ interface OnboardingFlowProps {
 const STEPS = [
     { id: 'welcome', component: WelcomeStep },
     { id: 'basic_info', component: BasicInfoStep },
+    { id: 'device_prefs', component: DevicePrefsStep },
     { id: 'preferences', component: PreferencesStep },
     { id: 'integrations', component: IntegrationsStep },
     { id: 'complete', component: CompleteStep },

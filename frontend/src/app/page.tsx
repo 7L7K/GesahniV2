@@ -132,6 +132,15 @@ export default function Page() {
           ),
         );
       });
+      // Simple confirm UX: detect the explicit confirm prompt and surface Yes/No
+      if (typeof full === 'string' && /Did you want weather\? \[Yes\/No\]/i.test(full)) {
+        const yesId = crypto.randomUUID();
+        setMessages(prev => ([
+          ...prev,
+          { id: crypto.randomUUID(), role: 'assistant', content: 'Did you want weather? [Yes/No]' },
+          { id: yesId, role: 'assistant', content: 'Tap Yes to proceed or No to clarify.' },
+        ]));
+      }
       // Ensure final content is set even if the backend didn't stream tokens
       if (typeof full === 'string') {
         setMessages(prev =>

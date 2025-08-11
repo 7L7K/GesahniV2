@@ -18,3 +18,9 @@ async def device_status() -> dict:
     return {"online": True}
 
 
+@router.post("/alert")
+async def raise_alert(kind: str = "help", note: str | None = None) -> dict:
+    # Placeholder for escalation channel (SMS/call/webhook)
+    return {"status": "accepted", "kind": kind, "note": note}
+
+

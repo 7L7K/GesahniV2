@@ -48,6 +48,7 @@ export default function Header() {
                     )}
                 </div>
                 <nav className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <Link href="/tv" className="hover:text-foreground">TV</Link>
                     {authed && (
                         <>
                             <Link href="/capture" className="hover:text-foreground">Capture</Link>

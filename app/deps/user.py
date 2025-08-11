@@ -44,6 +44,9 @@ def get_current_user_id(
 
     secret = JWT_SECRET or os.getenv("JWT_SECRET")
     require_jwt = os.getenv("REQUIRE_JWT", "1").strip().lower() in {"1", "true", "yes", "on"}
+    # In tests, allow anonymous without a secret to avoid 500s
+    if not secret and (os.getenv("ENV", "").lower() == "test" or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").lower() in {"1", "true", "yes", "on"}):
+        secret = None
     if token and secret:
         try:
             payload = jwt.decode(token, secret, algorithms=["HS256"])

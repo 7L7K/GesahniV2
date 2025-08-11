@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from app.deps.user import get_current_user_id
 from app.otel_utils import start_span, get_trace_id_hex
+from app.policy import moderation_precheck
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,9 @@ async def ask(
     async def _producer() -> None:
         nonlocal status_code
         try:
+            # Safety: block obviously destructive phrases locally; conversational scam cues are handled in router with a warning
+            if not moderation_precheck(req.prompt, extra_phrases=[]):
+                raise HTTPException(status_code=400, detail="blocked_by_policy")
             # If auth is required for /ask, enforce JWT now
             if _require_auth_for_ask():
                 await verify_token(request)

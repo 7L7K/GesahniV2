@@ -285,6 +285,46 @@ export type UserProfile = {
   calendar_integration?: boolean;
   gmail_integration?: boolean;
   onboarding_completed?: boolean;
+  // Stage 1 device prefs
+  speech_rate?: number;
+  input_mode?: "voice" | "touch" | "both";
+  font_scale?: number;
+  wake_word_enabled?: boolean;
 };
+
+// Profile & Onboarding API ----------------------------------------------------
+export type OnboardingStatus = {
+  completed: boolean;
+  steps: { step: string; completed: boolean; data?: Record<string, unknown> | null }[];
+  current_step: number;
+};
+
+export async function getOnboardingStatus(): Promise<OnboardingStatus> {
+  const res = await apiFetch("/v1/onboarding/status", { method: "GET" });
+  if (!res.ok) throw new Error("onboarding_status_failed");
+  return res.json();
+}
+
+export async function completeOnboarding(): Promise<void> {
+  const res = await apiFetch("/v1/onboarding/complete", { method: "POST" });
+  if (!res.ok) throw new Error("onboarding_complete_failed");
+}
+
+export async function updateProfile(profile: Partial<UserProfile>): Promise<void> {
+  const res = await apiFetch("/v1/profile", { method: "POST", body: JSON.stringify(profile) });
+  if (!res.ok) throw new Error("profile_update_failed");
+}
+
+export function useProfile() {
+  return useQuery<UserProfile, Error>({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const res = await apiFetch("/v1/profile", { method: "GET" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+}
 
 

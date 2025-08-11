@@ -84,6 +84,11 @@ def get_top_skills(n: int = 10) -> List[Tuple[str, int]]:
 
 async def record_cache_lookup(hit: bool) -> None:
     async with _lock:
+        # Ensure keys exist in case tests or earlier code mutated _metrics
+        if "cache_lookups" not in _metrics:
+            _metrics["cache_lookups"] = 0
+        if "cache_hits" not in _metrics:
+            _metrics["cache_hits"] = 0
         _metrics["cache_lookups"] += 1
         if hit:
             _metrics["cache_hits"] += 1

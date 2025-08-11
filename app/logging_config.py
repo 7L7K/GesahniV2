@@ -65,8 +65,13 @@ def configure_logging() -> None:
     """
     level = os.getenv("LOG_LEVEL", "INFO").upper()
 
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(JsonFormatter())
+    # In tests, prefer a memory/null handler to avoid I/O on closed streams
+    is_test = os.getenv("ENV", "").lower() == "test"
+    if is_test:
+        handler = logging.NullHandler()
+    else:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(JsonFormatter())
 
     root = logging.getLogger()
     root.handlers = [handler, _ErrorBufferHandler()]  # blow away default handlers, add buffer
