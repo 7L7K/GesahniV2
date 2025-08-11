@@ -14,10 +14,13 @@ export interface RecorderExports {
     state: RecorderState;
     volume: number;
     captionText: string;
+    muted: boolean;
     start: () => Promise<void>;
     pause: () => void;
     stop: () => Promise<void>;
     reset: () => void;
+    toggleMute: () => void;
+    setMuted: (b: boolean) => void;
     media: { stream: MediaStream | null; videoEl: React.RefObject<HTMLVideoElement> };
 }
 
@@ -35,6 +38,7 @@ export function useRecorder(): RecorderExports {
     const [state, setState] = useState<RecorderState>({ status: "idle" });
     const [volume, setVolume] = useState(0);
     const [captionText, setCaptionText] = useState("");
+    const [muted, setMuted] = useState<boolean>(false);
     const [audioMime, setAudioMime] = useState<string>("");
     const [videoMime, setVideoMime] = useState<string>("");
 
@@ -130,7 +134,7 @@ export function useRecorder(): RecorderExports {
         audioRecorder.current.ondataavailable = (e) => {
             if (e.data.size) {
                 audioChunks.current.push(e.data);
-                if (ws.readyState === WebSocket.OPEN) {
+                if (!muted && ws.readyState === WebSocket.OPEN) {
                     ws.send(e.data);
                     lastSend.current = Date.now();
                 }
@@ -189,10 +193,13 @@ export function useRecorder(): RecorderExports {
         state,
         volume,
         captionText,
+        muted,
         start,
         pause,
         stop,
         reset,
+        toggleMute: () => setMuted(m => !m),
+        setMuted,
         media: { stream: streamRef.current, videoEl: camRef },
     };
 }

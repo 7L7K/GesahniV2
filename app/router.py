@@ -50,6 +50,7 @@ from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from .skills.smalltalk_skill import SmalltalkSkill
 from .telemetry import log_record_var
 from .otel_utils import start_span, set_error
+from .memory.profile_store import profile_store
 try:  # optional: new retrieval pipeline
     from .retrieval.pipeline import run_pipeline as _run_retrieval_pipeline
 except Exception:  # pragma: no cover
@@ -289,6 +290,31 @@ async def route_prompt(
 
         with start_span("router.decide") as _span_decide:
             intent, priority = detect_intent(prompt)
+        # If intent is unknown/low confidence, ask a quick confirmation question
+        if intent == "unknown":
+            # Suggest likely high-level intents conservatively
+            confirm_text = "Did you want weather? [Yes/No]"
+            if rec:
+                rec.engine_used = "confirm"
+                rec.response = confirm_text
+            await append_history(prompt, "confirm", confirm_text)
+            return confirm_text
+
+        # Scam guard heuristic: warn when conversation includes common scam cues
+        try:
+            p = norm_prompt
+            if any(k in p for k in ("bank info", "gift card", "urgent money", "wire money")):
+                warn = (
+                    "I’m concerned this might be a scam. Avoid sharing bank info or buying gift cards. "
+                    "Would you like me to loop in your family? [Yes/No]"
+                )
+                if rec:
+                    rec.engine_used = "safety"
+                    rec.response = warn
+                await append_history(prompt, "safety", warn)
+                return warn
+        except Exception:
+            pass
         # Token budgeter: clamp excess input per intent
         prompt = clamp_prompt(prompt, intent)
         if rec:
@@ -513,11 +539,26 @@ async def route_prompt(
             plan_text = None
 
         # 5️⃣ Deterministic selection (gpt-5-nano baseline)
+        # Apply runtime tone/voice settings from profile (e.g., speed, style)
+        try:
+            prof = profile_store.get(user_id)
+            custom = getattr(rec, "custom_instructions", "") if rec else ""
+            pace = prof.get("speech_rate")
+            tone = prof.get("communication_style")
+            addl = []
+            if pace:
+                addl.append(f"Speak at {float(pace):.2f}x pace with clear pauses.")
+            if tone:
+                addl.append(f"Tone: {tone}.")
+            extra_instr = (custom + ("\n" + " ".join(addl) if addl else "")).strip()
+        except Exception:
+            extra_instr = getattr(rec, "custom_instructions", "") if rec else ""
+
         built_prompt, ptoks = PromptBuilder.build(
             prompt,
             session_id=session_id,
             user_id=user_id,
-            custom_instructions=getattr(rec, "custom_instructions", ""),
+            custom_instructions=extra_instr,
             debug=builder_debug,
             # Carry-over plan tokens as debug info for visibility/telemetry
             debug_info=(getattr(rec, "debug_info", "") + (f"\nPLAN:\n{plan_text}" if plan_text else "")).strip(),

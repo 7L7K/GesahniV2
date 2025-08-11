@@ -23,8 +23,12 @@ def transcribe_with_fallback(file_path: str, *, prefer_offline: bool = True) -> 
         return ""
     try:
         import asyncio
-
-        return asyncio.get_event_loop().run_until_complete(cloud_transcribe(file_path))
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(cloud_transcribe(file_path))
+        else:
+            return loop.run_until_complete(cloud_transcribe(file_path))
     except Exception:
         return ""
 

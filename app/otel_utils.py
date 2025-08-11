@@ -60,10 +60,20 @@ def set_error(span: Any, exc: BaseException) -> None:
     try:
         if span is None:
             return
+        # Record exception and mark error on span in a way that survives older SDKs
         if hasattr(span, "record_exception"):
             span.record_exception(exc)
-        if Status and StatusCode:
-            span.set_status(Status(StatusCode.ERROR))  # type: ignore
+        # Standard error attributes for filters
+        if hasattr(span, "set_attribute"):
+            try:
+                span.set_attribute("error", True)
+            except Exception:
+                pass
+        if Status and StatusCode and hasattr(span, "set_status"):
+            try:
+                span.set_status(Status(StatusCode.ERROR))  # type: ignore
+            except Exception:
+                pass
         span.set_attribute("exception.type", type(exc).__name__)
         span.set_attribute("exception.message", str(exc))
     except Exception:  # pragma: no cover
