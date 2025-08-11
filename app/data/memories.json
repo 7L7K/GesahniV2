@@ -258,6 +258,20 @@
       "tags": [],
       "timestamp": 1754804229.743613,
       "hash": "c1ca306444a7490813b56a151bf18f118eb9735a543d723083f5d6c08cae9385"
+    },
+    {
+      "prompt": "how far is dtw from u of m",
+      "answer": "- DTW (Detroit Metropolitan Airport) is approximately 20 miles (32 km) from the University of Michigan.\n- Travel time: about 25-30 minutes by car, depending on traffic.\n- Exact distance and time may vary based on specific locations and routes.\n\nWould you like directions or transportation options?",
+      "tags": [],
+      "timestamp": 1754868658.768661,
+      "hash": "350f502ac242aa5309648cf72e360aaeaa89eaf8bad09a2f099155d36017311c"
+    },
+    {
+      "prompt": "do x",
+      "answer": "ok",
+      "tags": [],
+      "timestamp": 1754868942.314185,
+      "hash": "7d030588231db7c6b7d482c0d61ab7999804650f8d6d17e12cec2bd930d76073"
     }
   ]
 }

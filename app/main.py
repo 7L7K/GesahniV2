@@ -805,6 +805,34 @@ try:
 except Exception:
     pass
 
+try:
+    from .api.history import router as history_router
+    app.include_router(history_router, prefix="/v1")
+    app.include_router(history_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.status_plus import router as status_plus_router
+    app.include_router(status_plus_router, prefix="/v1")
+    app.include_router(status_plus_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.rag import router as rag_router
+    app.include_router(rag_router, prefix="/v1")
+    app.include_router(rag_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.skills import router as skills_router
+    app.include_router(skills_router, prefix="/v1")
+    app.include_router(skills_router, include_in_schema=False)
+except Exception:
+    pass
+
 
 
 if __name__ == "__main__":

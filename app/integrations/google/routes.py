@@ -50,7 +50,13 @@ def get_login_url(request: Request, next: str = "/"):
     return {"auth_url": url}
 
 @router.get("/oauth/callback")
-def oauth_callback(code: str, state: str, request: Request):
+def oauth_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
+):
     # Ensure tables exist even if startup hook didn't fire (e.g., tests)
     try:
         init_db()
@@ -60,8 +66,65 @@ def oauth_callback(code: str, state: str, request: Request):
         validate_config()
     except Exception:
         pass
+    # If Google returned an error, redirect back to app with a friendly message
+    app_url = os.getenv("APP_URL", "http://localhost:3000")
+    if error:
+        from urllib.parse import urlencode
+
+        msg = error_description or error
+        query = urlencode({
+            "oauth": "google",
+            "error": msg,
+            "next": request.query_params.get("next") or "/",
+        })
+        return RedirectResponse(url=f"{app_url}/login?{query}")
+
+    # Require both code and state for token exchange; otherwise bounce with error
+    if not state:
+        from urllib.parse import urlencode
+
+        query = urlencode({
+            "oauth": "google",
+            "error": "missing_state",
+            "next": request.query_params.get("next") or "/",
+        })
+        return RedirectResponse(url=f"{app_url}/login?{query}")
+
+    if not code:
+        from urllib.parse import urlencode
+
+        query = urlencode({
+            "oauth": "google",
+            "error": "missing_code",
+            "next": request.query_params.get("next") or "/",
+        })
+        return RedirectResponse(url=f"{app_url}/login?{query}")
+
     # Complete OAuth exchange
-    creds = oauth.exchange_code(code, state)
+    try:
+        creds = oauth.exchange_code(code, state)
+    except HTTPException as e:
+        from urllib.parse import urlencode
+        msg = (e.detail if isinstance(e.detail, str) else "oauth_exchange_failed") if hasattr(e, "detail") else "oauth_exchange_failed"
+        if e.status_code == 501:
+            msg = "google_oauth_unavailable"
+        query = urlencode({
+            "oauth": "google",
+            "error": msg,
+            "next": request.query_params.get("next") or "/",
+        })
+        return RedirectResponse(url=f"{app_url}/login?{query}")
+    except Exception as e:
+        from urllib.parse import urlencode
+
+        # Normalise error message for safety
+        msg = str(getattr(e, "args", [""])[0] or "oauth_exchange_failed")
+        query = urlencode({
+            "oauth": "google",
+            "error": msg,
+            "next": request.query_params.get("next") or "/",
+        })
+        return RedirectResponse(url=f"{app_url}/login?{query}")
 
     # Persist credentials under a user once we know the user id
     # Determine if this is a login flow by decoding our signed state
@@ -118,7 +181,6 @@ def oauth_callback(code: str, state: str, request: Request):
         s.commit()
 
     # If this was initiated as a sign-in, mint our app tokens and redirect to app
-    app_url = os.getenv("APP_URL", "http://localhost:3000")
     # Redirect when explicit login was requested, or when we resolved an email via OIDC
     if login_requested or email:
         from datetime import datetime, timedelta
