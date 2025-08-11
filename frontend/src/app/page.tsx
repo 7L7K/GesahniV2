@@ -157,16 +157,18 @@ export default function Page() {
   };
 
   return (
-    <main className="mx-auto h-[calc(100vh-56px)] max-w-3xl px-4">
-      <div className="flex h-full flex-col">
+    <main className="mx-auto max-w-3xl px-4">
+      <div className="flex min-h-[calc(100vh-56px)] flex-col">
         {/* chat scroll area */}
-        <section className="flex-1 overflow-y-auto py-4">
+        <section className="flex-1 overflow-y-auto py-6">
           {!authed && (
-            <div className="mb-4 rounded-lg border p-4 text-sm">
-              <p className="mb-2">You&apos;re not signed in. Please sign in to enable full features.</p>
+            <div className="mb-4 rounded-xl border p-4 text-sm bg-card/50">
+              <p className="mb-2">
+                You&apos;re not signed in. Please sign in to enable full features.
+              </p>
               <a
                 href="/login"
-                className="inline-flex items-center rounded bg-primary px-3 py-1 text-primary-foreground hover:opacity-90"
+                className="inline-flex items-center rounded-md bg-primary px-3 py-1 text-primary-foreground hover:opacity-90"
               >
                 Go to Login
               </a>

@@ -4,9 +4,16 @@ import json
 from pathlib import Path
 from threading import RLock
 from textwrap import shorten
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 import hashlib
 import time
+import os
+import re
+
+try:  # optional, avoid import-time failures in tests
+    from app.embeddings import embed_sync as _embed_sync
+except Exception:  # pragma: no cover - allow running without embeddings backend
+    _embed_sync = None  # type: ignore
 
 
 def jaro_winkler_similarity(s1: str, s2: str) -> float:
@@ -118,6 +125,91 @@ class MemGPT:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+    def write_claim(
+        self,
+        *,
+        session_id: str,
+        user_id: str | None,
+        claim_text: str,
+        evidence_links: List[str] | None,
+        claim_type: str,
+        entities: List[str] | List[Dict[str, Any]] | None,
+        confidence: float,
+        horizon_days: Optional[float] = None,
+        pinned: bool = False,
+    ) -> Optional[str]:
+        """Governed write of a claim with contract fields and hygiene.
+
+        Returns claim checksum on success, None when gated or deduped away.
+        """
+
+        now = time.time()
+        links = [l for l in (evidence_links or []) if isinstance(l, str) and l.strip()]
+
+        redacted_text, redactions = self._redact_pii(claim_text)
+        checksum = hashlib.sha256(redacted_text.encode("utf-8")).hexdigest()
+        simhash = self._simhash(redacted_text)
+        norm_entities = self._normalize_entities(entities)
+        importance = self._importance_score(redacted_text, norm_entities, links)
+        novelty = self._novelty_score(redacted_text, user_id)
+
+        thr_novelty = float(os.getenv("MEMGPT_NOVELTY_THRESHOLD", "0.25"))
+        thr_importance = float(os.getenv("MEMGPT_IMPORTANCE_THRESHOLD", "0.50"))
+        if not pinned and not (novelty >= thr_novelty and importance >= thr_importance):
+            return None
+
+        if self._is_duplicate(checksum=checksum, simhash=simhash, text=redacted_text, user_id=user_id):
+            return None
+
+        horizon = float(horizon_days) if horizon_days is not None else self._default_horizon_days(claim_type)
+        decay_at = now + max(1.0, horizon * 24.0 * 3600.0)
+
+        record = {
+            "kind": "claim",
+            "user_id": user_id,
+            "session_id": session_id,
+            "text": redacted_text,
+            "evidence": links,
+            "type": claim_type,
+            "entities": norm_entities,
+            "confidence": float(max(0.0, min(1.0, confidence))),
+            "horizon_days": float(horizon),
+            "decay_at": float(decay_at),
+            "checksum": checksum,
+            "simhash": simhash,
+            # store mapping out-of-band; keep empty object for schema stability
+            "redactions": {},
+            "quality": 1.0,
+            "importance": float(importance),
+            "novelty": float(novelty),
+            "pinned": bool(pinned),
+            "timestamp": now,
+        }
+
+        # Persist redaction map separately so the main store has no raw PII
+        try:
+            from app.redaction import store_redaction_map
+            store_redaction_map("memgpt_claim", checksum, redactions)
+        except Exception:
+            pass
+        # Audit when content is pinned
+        try:
+            if pinned:
+                from app.audit import append_audit
+                from app.telemetry import hash_user_id
+                append_audit(
+                    "pin_claim",
+                    user_id_hashed=hash_user_id(user_id or ""),
+                    data={"session_id": session_id, "checksum": checksum, "type": claim_type},
+                )
+        except Exception:
+            pass
+
+        with self._lock:
+            bucket = self._pin_store.setdefault(session_id, []) if pinned else self._data.setdefault(session_id, [])
+            bucket.append(record)
+            self._save()
+        return checksum
     def store_interaction(
         self,
         prompt: str,
@@ -134,6 +226,19 @@ class MemGPT:
 
         entry_hash = hashlib.sha256((prompt + answer).encode("utf-8")).hexdigest()
         now = time.time()
+
+        # Redact prompt/answer before storage and persist mapping out-of-band
+        try:
+            from app.redaction import redact_pii, store_redaction_map
+            rp, mp = redact_pii(prompt)
+            ra, ma = redact_pii(answer)
+            prompt, answer = rp, ra
+            merged = {}
+            merged.update(mp)
+            merged.update(ma)
+            store_redaction_map("memgpt_interaction", entry_hash, merged)
+        except Exception:
+            pass
 
         with self._lock:
             is_pinned = "pin" in (tags or [])
@@ -163,6 +268,19 @@ class MemGPT:
             )
 
             self._save()
+
+        # Audit pin
+        try:
+            if is_pinned:
+                from app.audit import append_audit
+                from app.telemetry import hash_user_id
+                append_audit(
+                    "pin_interaction",
+                    user_id_hashed=hash_user_id(user_id or ""),
+                    data={"session_id": session_id, "hash": entry_hash},
+                )
+        except Exception:
+            pass
 
     def summarize_session(self, session_id: str, user_id: str | None = None) -> str:
         """Return a condensed representation of a session's interactions."""
@@ -230,25 +348,24 @@ class MemGPT:
         return results
 
     def nightly_maintenance(self) -> None:
-        """Deduplicate, purge stale entries and summarize old sessions."""
+        """Deduplicate, apply decay/rollups to claims, purge stale entries, summarize old sessions."""
 
         now = time.time()
         with self._lock:
             for sid, interactions in list(self._data.items()):
                 seen: set[str] = set()
                 kept: List[Dict[str, Any]] = []
+                claims_buffer: List[Dict[str, Any]] = []
                 for item in interactions:
                     if "pin" in item.get("tags", []):
                         kept.append(item)
                         continue
-                    h = (
-                        item.get("hash")
-                        or hashlib.sha256(
-                            (item.get("prompt", "") + item.get("answer", "")).encode(
-                                "utf-8"
-                            )
-                        ).hexdigest()
-                    )
+                    if item.get("kind") == "claim":
+                        claims_buffer.append(item)
+                        continue
+                    h = item.get("hash") or hashlib.sha256(
+                        (item.get("prompt", "") + item.get("answer", "")).encode("utf-8")
+                    ).hexdigest()
                     item["hash"] = h
                     if h in seen:
                         continue
@@ -257,6 +374,11 @@ class MemGPT:
                     if now - ts > self.ttl_seconds:
                         continue
                     kept.append(item)
+
+                # Apply decay and rollups on claims
+                decayed, rollups, tombstoned = self._decay_and_rollup_claims(claims_buffer, now)
+                kept.extend(decayed)
+                kept.extend(rollups)
 
                 if not kept:
                     summary = self.summarize_session(sid)
@@ -276,6 +398,206 @@ class MemGPT:
                 self._data[sid] = kept
 
             self._save()
+
+    # ----------------------- Governance helpers ------------------------
+    def _normalize_entities(self, entities: List[str] | List[Dict[str, Any]] | None) -> List[str]:
+        out: List[str] = []
+        for e in entities or []:
+            if isinstance(e, str):
+                name = e.strip()
+            elif isinstance(e, dict):
+                name = str(e.get("name") or e.get("id") or "").strip()
+            else:
+                name = ""
+            if name:
+                out.append(name)
+        return out[:10]
+
+    def _default_horizon_days(self, claim_type: str) -> float:
+        table = {
+            "event": float(os.getenv("MEMGPT_HORIZON_EVENT_DAYS", "30")),
+            "fact": float(os.getenv("MEMGPT_HORIZON_FACT_DAYS", "365")),
+            "preference": float(os.getenv("MEMGPT_HORIZON_PREF_DAYS", "180")),
+        }
+        return float(table.get(claim_type.lower(), float(os.getenv("MEMGPT_HORIZON_DEFAULT_DAYS", "90"))))
+
+    def _redact_pii(self, text: str) -> Tuple[str, Dict[str, str]]:
+        redactions: Dict[str, str] = {}
+        counter = {"EMAIL": 0, "PHONE": 0, "SSN": 0}
+
+        def repl(kind: str, value: str) -> str:
+            counter[kind] += 1
+            key = f"[PII_{kind}_{counter[kind]}]"
+            redactions[key] = value
+            return key
+
+        # crude patterns; reversible via mapping
+        email_re = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+        phone_re = re.compile(r"\b(?:\+?\d{1,3}[\s-]?)?(?:\(\d{3}\)|\d{3})[\s-]?\d{3}[\s-]?\d{4}\b")
+        ssn_re = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+
+        t = email_re.sub(lambda m: repl("EMAIL", m.group(0)), text)
+        t = phone_re.sub(lambda m: repl("PHONE", m.group(0)), t)
+        t = ssn_re.sub(lambda m: repl("SSN", m.group(0)), t)
+        return t, redactions
+
+    def _simhash(self, text: str, bits: int = 64) -> int:
+        tokens = re.findall(r"[a-z0-9]+", text.lower())
+        vec = [0] * bits
+        for tok in tokens:
+            h = int(hashlib.md5(tok.encode("utf-8")).hexdigest(), 16)
+            for i in range(bits):
+                bit = 1 if (h >> i) & 1 else -1
+                vec[i] += bit
+        out = 0
+        for i, v in enumerate(vec):
+            if v > 0:
+                out |= (1 << i)
+        return out
+
+    def _hamming(self, a: int, b: int) -> int:
+        x = a ^ b
+        cnt = 0
+        while x:
+            x &= x - 1
+            cnt += 1
+        return cnt
+
+    def _cosine_sim(self, a: str, b: str) -> float:
+        if _embed_sync is None:
+            return jaro_winkler_similarity(a, b)
+        va = _embed_sync(a)
+        vb = _embed_sync(b)
+        num = sum(x * y for x, y in zip(va, vb))
+        na = (sum(x * x for x in va) ** 0.5) or 1.0
+        nb = (sum(y * y for y in vb) ** 0.5) or 1.0
+        return float(num / (na * nb))
+
+    def _novelty_score(self, text: str, user_id: Optional[str]) -> float:
+        corpus: List[str] = []
+        for store in (self._data, self._pin_store):
+            for interactions in store.values():
+                for item in interactions:
+                    if item.get("kind") == "claim" and (user_id is None or item.get("user_id") == user_id):
+                        corpus.append(item.get("text", ""))
+        if not corpus:
+            return 1.0
+        max_sim = 0.0
+        for t in corpus[-100:]:
+            max_sim = max(max_sim, self._cosine_sim(text, t))
+        return float(max(0.0, 1.0 - max_sim))
+
+    def _importance_score(self, text: str, entities: List[str], links: List[str]) -> float:
+        score = 0.0
+        score += 0.2 if len(text) >= 40 else 0.0
+        score += min(0.4, 0.1 * len(entities))
+        score += min(0.4, 0.2 * len(links))
+        if any(k in text.lower() for k in ("deadline", "due", "meeting", "invoice", "api", "error")):
+            score += 0.2
+        return float(min(1.0, score))
+
+    def _is_duplicate(self, *, checksum: str, simhash: int, text: str, user_id: Optional[str]) -> bool:
+        max_hamming = int(os.getenv("MEMGPT_SIMHASH_HAMMING_MAX", "3"))
+        max_cosine = float(os.getenv("MEMGPT_COSINE_DUP_MAX", "0.90"))
+        for store in (self._data, self._pin_store):
+            for interactions in store.values():
+                for item in interactions:
+                    if item.get("kind") != "claim":
+                        continue
+                    if user_id is not None and item.get("user_id") != user_id:
+                        continue
+                    if item.get("checksum") == checksum:
+                        return True
+                    try:
+                        sh = int(item.get("simhash"))
+                        if self._hamming(simhash, sh) <= max_hamming:
+                            return True
+                    except Exception:
+                        pass
+                    t = item.get("text", "")
+                    if t and self._cosine_sim(text, t) >= max_cosine:
+                        return True
+        return False
+
+    def _decay_and_rollup_claims(self, claims: List[Dict[str, Any]], now: float) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[str]]:
+        decayed: List[Dict[str, Any]] = []
+        rollups: List[Dict[str, Any]] = []
+        tombstoned_ids: List[str] = []
+
+        decay_factor = float(os.getenv("MEMGPT_DECAY_FACTOR", "0.7"))
+        rollup_min_cluster = int(os.getenv("MEMGPT_ROLLUP_MIN_CLUSTER", "3"))
+        rollup_importance_max = float(os.getenv("MEMGPT_ROLLUP_IMPORTANCE_MAX", "0.3"))
+        rollup_window_days = float(os.getenv("MEMGPT_ROLLUP_WINDOW_DAYS", "30"))
+        window_sec = rollup_window_days * 24.0 * 3600.0
+
+        active: List[Dict[str, Any]] = []
+        for c in claims:
+            if c.get("tombstoned"):
+                continue
+            ts = float(c.get("timestamp", now))
+            if now - ts > self.ttl_seconds and not c.get("pinned", False):
+                continue
+            da = float(c.get("decay_at", 0) or 0.0)
+            if da and now >= da and not c.get("pinned", False):
+                q = float(c.get("quality", 1.0)) * decay_factor
+                c["quality"] = max(0.0, q)
+            active.append(c)
+        decayed.extend(active)
+
+        # Rollup low-importance crumbs within window by entity/topic
+        crumbs = [c for c in active if float(c.get("importance", 0.0)) <= rollup_importance_max and (now - float(c.get("timestamp", now)) <= window_sec) and not c.get("pinned", False)]
+        clusters: Dict[str, List[Dict[str, Any]]] = {}
+        for c in crumbs:
+            ents = c.get("entities") or []
+            topic = (ents[0] if isinstance(ents, list) and ents else (c.get("type") or "misc")).lower()
+            clusters.setdefault(topic, []).append(c)
+
+        for topic, items in list(clusters.items()):
+            if len(items) < rollup_min_cluster:
+                continue
+            summary = self._summarize_cluster(items, topic)
+            backrefs = [ci.get("checksum") for ci in items if ci.get("checksum")]
+            checksum = hashlib.sha256((summary + topic).encode("utf-8")).hexdigest()
+            rollup_record = {
+                "kind": "claim",
+                "user_id": items[0].get("user_id"),
+                "session_id": items[0].get("session_id"),
+                "text": summary,
+                "evidence": [],
+                "type": f"rollup:{topic}",
+                "entities": list({topic}),
+                "confidence": 0.6,
+                "horizon_days": self._default_horizon_days("fact"),
+                "decay_at": now + self._default_horizon_days("fact") * 24 * 3600,
+                "checksum": checksum,
+                "simhash": self._simhash(summary),
+                "redactions": {},
+                "quality": 1.0,
+                "importance": 0.5,
+                "novelty": 1.0,
+                "pinned": False,
+                "timestamp": now,
+                "backrefs": backrefs,
+            }
+            rollups.append(rollup_record)
+            for it in items:
+                it["tombstoned"] = True
+                tombstoned_ids.append(str(it.get("checksum")))
+
+        # Keep non-tombstoned claims
+        decayed = [c for c in decayed if not c.get("tombstoned")]
+        return decayed, rollups, tombstoned_ids
+
+    def _summarize_cluster(self, items: List[Dict[str, Any]], topic: str) -> str:
+        parts: List[str] = []
+        for it in items[:5]:
+            txt = it.get("text", "").strip().replace("\n", " ")
+            parts.append(shorten(txt, width=120, placeholder="..."))
+        uniq = []
+        for p in parts:
+            if p not in uniq:
+                uniq.append(p)
+        return f"Summary about {topic}: " + " | ".join(uniq)
 
     # ------------------------------------------------------------------
     # Admin helpers

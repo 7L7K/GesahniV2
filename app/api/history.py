@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from app.deps.user import get_current_user_id
 from app.history import HISTORY_FILE
+from app.deps.scopes import optional_require_scope
 
 router = APIRouter(tags=["history"])
 
@@ -40,4 +41,25 @@ async def recent_history(
                 break
     return {"items": list(reversed(items[-limit:]))}
 
+
+@router.post("/history/pin", dependencies=[Depends(optional_require_scope("pin"))])
+async def pin_interaction(
+    session_id: str,
+    hash_value: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Pin an interaction by hash into the pinned store (requires 'pin' scope when scopes enforced)."""
+    try:
+        from app.memory.memgpt import memgpt
+        # Best-effort: iterate recent store and find by hash
+        items = memgpt.retrieve_relevant_memories(hash_value)
+        if not items:
+            raise HTTPException(status_code=404, detail="not_found")
+        item = items[0]
+        memgpt.store_interaction(item.get("prompt", ""), item.get("answer", ""), session_id, user_id=user_id, tags=["pin"])
+        return {"status": "pinned"}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="error")
 

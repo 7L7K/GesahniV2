@@ -47,21 +47,21 @@ export default function Header() {
                         </span>
                     )}
                 </div>
-                <div className="flex items-center gap-2">
+                <nav className="flex items-center gap-3 text-sm text-muted-foreground">
                     {authed && (
                         <>
-                            <Link href="/capture" className="text-sm hover:underline">Capture</Link>
-                            <Link href="/settings" className="text-sm hover:underline">Settings</Link>
-                            <Link href="/admin" className="text-sm hover:underline">Admin</Link>
+                            <Link href="/capture" className="hover:text-foreground">Capture</Link>
+                            <Link href="/settings" className="hover:text-foreground">Settings</Link>
+                            <Link href="/admin" className="hover:text-foreground">Admin</Link>
                         </>
                     )}
                     {!authed ? (
-                        <Link href={`/login?next=${encodeURIComponent(pathname || '/')}`} className="text-sm hover:underline">Login</Link>
+                        <Link href={`/login?next=${encodeURIComponent(pathname || '/')}`} className="hover:text-foreground">Login</Link>
                     ) : (
                         <Button size="sm" variant="ghost" onClick={doLogout}>Logout</Button>
                     )}
                     <ThemeToggle />
-                </div>
+                </nav>
             </div>
             {nearCap && (
                 <div className="mx-auto max-w-3xl px-4 py-1 text-[12px] bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100">

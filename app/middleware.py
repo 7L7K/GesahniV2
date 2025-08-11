@@ -6,12 +6,14 @@ from hashlib import sha256
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
+import jwt
 
 from .logging_config import req_id_var
 from .telemetry import LogRecord, log_record_var, utc_now
 from .decisions import add_decision, add_trace_event
 from .history import append_history
 from .analytics import record_latency, latency_p95
+from .otel_utils import get_trace_id_hex, observe_with_exemplar
 from .user_store import user_store
 from .env_utils import load_env
 from . import metrics
@@ -119,9 +121,18 @@ async def trace_request(request: Request, call_next):
 
         engine = rec.engine_used or "unknown"
         metrics.REQUEST_COUNT.labels(request.url.path, request.method, engine).inc()
-        metrics.REQUEST_LATENCY.labels(
-            request.url.path, request.method, engine
-        ).observe(rec.latency_ms / 1000)
+        # Observe with exemplar when possible to jump from Grafana to trace
+        try:
+            trace_id = get_trace_id_hex()
+            observe_with_exemplar(
+                metrics.REQUEST_LATENCY.labels(request.url.path, request.method, engine),
+                rec.latency_ms / 1000,
+                exemplar_labels={"trace_id": trace_id} if trace_id else None,
+            )
+        except Exception:
+            metrics.REQUEST_LATENCY.labels(
+                request.url.path, request.method, engine
+            ).observe(rec.latency_ms / 1000)
         if rec.prompt_cost_usd:
             metrics.REQUEST_COST.labels(
                 request.url.path, request.method, engine, "prompt"
@@ -137,6 +148,13 @@ async def trace_request(request: Request, call_next):
 
         if isinstance(response, Response):
             response.headers["X-Request-ID"] = rec.req_id
+            # Security headers (phase 6): HSTS and basic CSP
+            try:
+                if request.url.scheme == "https":
+                    response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+                response.headers.setdefault("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'")
+            except Exception:
+                pass
             # Offline mode badge for UI: set a cookie when local fallback is in use
             try:
                 from .llama_integration import LLAMA_HEALTHY as _LL_OK
@@ -194,6 +212,62 @@ async def trace_request(request: Request, call_next):
         req_id_var.reset(token_req)
     return response
 
+
+async def silent_refresh_middleware(request: Request, call_next):
+    """Rotate access_token cookie server-side when nearing expiry.
+
+    Controlled via env:
+      - JWT_SECRET: required to decode/encode
+      - JWT_ACCESS_TTL_SECONDS: lifetime of new tokens (default 14d)
+      - ACCESS_REFRESH_THRESHOLD_SECONDS: refresh when exp - now < threshold (default 3600s)
+    """
+    response: Response | None = None
+    try:
+        response = await call_next(request)
+    finally:
+        try:
+            token = request.cookies.get("access_token")
+            secret = os.getenv("JWT_SECRET")
+            if not token or not secret:
+                return response
+            # Decode without verification of exp first to compute remaining window
+            try:
+                payload = jwt.decode(token, secret, algorithms=["HS256"])
+            except jwt.ExpiredSignatureError:
+                payload = None
+            except jwt.PyJWTError:
+                payload = None
+            if not payload:
+                return response
+            now = int(time.time())
+            exp = int(payload.get("exp", 0))
+            threshold = int(os.getenv("ACCESS_REFRESH_THRESHOLD_SECONDS", "3600"))
+            if exp - now <= threshold:
+                # rotate
+                user_id = str(payload.get("user_id") or "")
+                if not user_id:
+                    return response
+                lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))
+                new_payload = {"user_id": user_id, "iat": now, "exp": now + lifetime}
+                new_token = jwt.encode(new_payload, secret, algorithm="HS256")
+                cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes"}
+                cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+                # Ensure response exists
+                if response is None:
+                    response = Response()
+                response.set_cookie(
+                    key="access_token",
+                    value=new_token,
+                    httponly=True,
+                    secure=cookie_secure,
+                    samesite=cookie_samesite,
+                    max_age=lifetime,
+                    path="/",
+                )
+        except Exception:
+            # best-effort; never fail request due to refresh
+            pass
+        return response
 
 async def reload_env_middleware(request: Request, call_next):
     load_env()

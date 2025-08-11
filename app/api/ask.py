@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ConfigDict
 
 from app.deps.user import get_current_user_id
+from app.otel_utils import start_span, get_trace_id_hex
 
 
 logger = logging.getLogger(__name__)
@@ -24,12 +25,22 @@ class AskRequest(BaseModel):
     model_config = ConfigDict(validate_by_name=True, validate_by_alias=True)
 
 
-router = APIRouter(tags=["core"])
+from app.security import rate_limit, verify_token
 
 
-@router.post("/ask")
+router = APIRouter(tags=["core"])  # dependency added per-route to allow env gate
+
+
+# Enforce auth/rate-limit with env gates
+def _require_auth_for_ask() -> bool:
+    return os.getenv("REQUIRE_AUTH_FOR_ASK", "1").strip().lower() in {"1", "true", "yes", "on"}
+
+
+@router.post("/ask", dependencies=[Depends(rate_limit)])
 async def ask(
-    req: AskRequest, request: Request, user_id: str = Depends(get_current_user_id)
+    req: AskRequest,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
 ):
     logger.info(
         "ask entry user_id=%s prompt=%s model_override=%s",
@@ -51,6 +62,10 @@ async def ask(
     async def _producer() -> None:
         nonlocal status_code
         try:
+            # If auth is required for /ask, enforce JWT now
+            if _require_auth_for_ask():
+                await verify_token(request)
+                # rate_limit applied via route dependency; keep explicit header snapshot behavior
             # Lazily import to respect tests that monkeypatch app.main.route_prompt
             main_mod = import_module("app.main")
             route_prompt = getattr(main_mod, "route_prompt")
@@ -92,6 +107,13 @@ async def ask(
             await queue.put(None)
 
     # Producer task emits tokens into the queue without blocking response start
+    # Root span for this request
+    attrs = {
+        "user_id": user_id,
+        "ip": request.headers.get("X-Forwarded-For") or (request.client.host if request.client else ""),
+        "route": "/v1/ask",
+    }
+    span_ctx = start_span("ask.request", attrs)
     producer_task = asyncio.create_task(_producer())
 
     first_chunk = await queue.get()
@@ -150,8 +172,33 @@ async def ask(
     if media_type == "text/event-stream":
         generator = _sse_wrapper(generator)
 
-    return StreamingResponse(
+    resp = StreamingResponse(
         generator, media_type=media_type, status_code=status_code or 200
     )
+    # Expose trace id for correlation
+    try:
+        tid = get_trace_id_hex()
+        if tid:
+            resp.headers["X-Trace-ID"] = tid
+    except Exception:
+        pass
+    # Close span when response finishes (best-effort for streaming)
+    try:
+        span = span_ctx.__enter__()  # type: ignore
+        @resp.background
+        async def _finish_span():  # type: ignore
+            try:
+                pass
+            finally:
+                try:
+                    span_ctx.__exit__(None, None, None)  # type: ignore
+                except Exception:
+                    pass
+    except Exception:
+        try:
+            span_ctx.__exit__(None, None, None)  # type: ignore
+        except Exception:
+            pass
+    return resp
 
 

@@ -174,7 +174,8 @@ def pytest_sessionfinish(session, exitstatus):
 @pytest.fixture(autouse=True)
 def _isolate_debug_and_flags(monkeypatch):
     # Clear debug envs so route_prompt never enters dry-run unless a test asks
-    for var in ("DEBUG", "DEBUG_MODEL_ROUTING"):
+    # Also reset retrieval pipeline flags between tests to avoid leakage
+    for var in ("DEBUG", "DEBUG_MODEL_ROUTING", "USE_RETRIEVAL_PIPELINE"):
         monkeypatch.delenv(var, raising=False)
         monkeypatch.setenv(var, "0")
 

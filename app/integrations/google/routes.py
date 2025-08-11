@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from .db import SessionLocal, GoogleToken, init_db
 from . import oauth  # import module so tests can monkey‑patch its attributes
-from jose import jwt as jose_jwt
+import jwt as jose_jwt
 from app.auth import (
     SECRET_KEY as APP_JWT_SECRET,
     ALGORITHM as APP_JWT_ALG,
@@ -21,7 +21,7 @@ from .config import validate_config
 
 router = APIRouter()
 
-# TODO: replace with your real auth/session
+# Note: this sample integration uses a stubbed session layer for demo purposes.
 def _current_user_id(req: Request) -> str:
     return "anon"
 

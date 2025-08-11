@@ -54,7 +54,7 @@ export default function ChatBubble({
       )}
       <div
         className={cn(
-          "rounded-2xl px-4 py-2 max-w-[75%] text-sm leading-relaxed prose prose-sm dark:prose-invert prose-pre:bg-muted/70 prose-pre:text-foreground",
+          "rounded-2xl px-4 py-2 max-w-[75%] text-sm leading-relaxed prose prose-sm dark:prose-invert prose-pre:bg-muted/70 prose-pre:text-foreground shadow-sm",
           ghost && "opacity-60 italic",
           isUser
             ? "bg-primary text-primary-foreground prose-invert"

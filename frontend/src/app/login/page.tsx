@@ -70,14 +70,14 @@ function LoginPageInner() {
 
     return (
         <main className="mx-auto max-w-md px-4 py-10">
-            <div className="rounded-xl border bg-card p-6 shadow">
+            <div className="rounded-2xl border bg-card p-6 shadow-sm">
                 <h1 className="mb-6 text-xl font-semibold">{mode === 'login' ? 'Sign in' : 'Create account'}</h1>
                 <form onSubmit={submit} className="space-y-4">
                     <div>
                         <label htmlFor="username" className="mb-1 block text-sm">Username</label>
                         <input
                             id="username"
-                            className="w-full rounded border px-3 py-2"
+                            className="w-full rounded-md border px-3 py-2"
                             value={username}
                             onChange={e => setUsername(e.target.value)}
                             required
@@ -89,7 +89,7 @@ function LoginPageInner() {
                         <input
                             id="password"
                             type="password"
-                            className="w-full rounded border px-3 py-2"
+                            className="w-full rounded-md border px-3 py-2"
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             required

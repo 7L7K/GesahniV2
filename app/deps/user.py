@@ -31,13 +31,16 @@ def get_current_user_id(
 
     user_id = ""
 
-    # 2) Try JWT-based user_id
+    # 2) Try JWT-based user_id (Authorization bearer or http-only cookie)
     auth_header = None
     if target:
         auth_header = target.headers.get("Authorization")
     token = None
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ", 1)[1]
+    # Cookie fallback so browser sessions persist without sending headers
+    if token is None and request is not None:
+        token = request.cookies.get("access_token")
 
     secret = JWT_SECRET or os.getenv("JWT_SECRET")
     if token and secret:

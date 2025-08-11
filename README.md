@@ -100,8 +100,14 @@ Set environment variables as needed:
 | `SIM_THRESHOLD` | `0.24` | no | Vector similarity cutoff |
 | `MEM_TOP_K` | `3` | no | Memories returned from vector store |
 | `DISABLE_QA_CACHE` | `false` | no | Skip semantic cache when set |
-| `VECTOR_STORE` | `chroma` | no | Vector store backend |
+| `VECTOR_STORE` | `chroma` | no | Vector store backend (`memory`, `chroma`, `qdrant`, or `dual`) |
 | `CHROMA_PATH` | `.chroma_data` | no | ChromaDB storage directory |
+| `QDRANT_URL` | – | no | Qdrant base URL |
+| `QDRANT_API_KEY` | – | no | Qdrant API key |
+| `QDRANT_COLLECTION` | `kb:default` | no | Default Qdrant collection for pipelines |
+| `EMBED_DIM` | `1536` | no | Embedding vector dimension used for Qdrant collections |
+| `VECTOR_DUAL_WRITE_BOTH` | `0` | no | When `VECTOR_STORE=dual`, mirror writes to Chroma |
+| `VECTOR_DUAL_QA_WRITE_BOTH` | `0` | no | When `VECTOR_STORE=dual`, mirror QA cache writes to Chroma |
 | `RAGFLOW_URL` | `http://localhost:8001` | no | Base URL for RAGFlow server |
 | `RAGFLOW_COLLECTION` | `demo` | no | Default RAGFlow collection name |
 | `USERS_DB` | `users.db` | no | SQLite path for auth users |
@@ -248,6 +254,33 @@ Remove a stored response from the semantic cache using the CLI:
 
 ```bash
 python -m app.vector_store invalidate "your original prompt"
+```
+
+### 🔄 Migrate from Chroma to Qdrant (Phase 9)
+
+Safe, reversible migration path with dual-read bake period:
+
+1. Inventory Chroma collections:
+```bash
+python -m app.jobs.migrate_chroma_to_qdrant inventory
+```
+2. Export counts (optional):
+```bash
+python -m app.jobs.migrate_chroma_to_qdrant export
+```
+3. Migrate data to Qdrant (re-embeds as needed, preserves checksums):
+```bash
+python -m app.jobs.migrate_chroma_to_qdrant migrate
+```
+4. Enable dual-read for a week to compare traces:
+```bash
+export VECTOR_STORE=dual
+export VECTOR_DUAL_WRITE_BOTH=1
+export VECTOR_DUAL_QA_WRITE_BOTH=1
+```
+5. After bake period, switch to Qdrant and retire Chroma:
+```bash
+export VECTOR_STORE=qdrant
 ```
 
 ## Event Log

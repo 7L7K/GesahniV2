@@ -11,6 +11,7 @@ from typing import Any, List
 from fastapi import UploadFile, HTTPException
 
 from .history import append_history
+from .redaction import redact_and_store
 from .telemetry import LogRecord
 from .analytics import record_session as analytics_record_session
 from .session_store import (
@@ -114,7 +115,8 @@ async def save_session(
 
     tags = tags or []
     if transcript is not None:
-        (session_dir / "transcript.txt").write_text(transcript, encoding="utf-8")
+        safe_text = redact_and_store("transcript", session_id, transcript)
+        (session_dir / "transcript.txt").write_text(safe_text, encoding="utf-8")
         meta["status"] = SessionStatus.TRANSCRIBED.value
     if tags:
         meta["tags"] = tags

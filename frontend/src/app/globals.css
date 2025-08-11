@@ -58,7 +58,18 @@ a {
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
+    --radius: 0.75rem;
+
+    /* spacing + motion tokens */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --easing-standard: cubic-bezier(0.2, 0.0, 0, 1);
+    --duration-fast: 150ms;
+    --duration-normal: 250ms;
   }
 
   .dark {
@@ -113,4 +124,20 @@ a {
 .prose pre {
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
+}
+
+/* subtle background grid (dark only) */
+.dark .bg-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 0);
+  background-size: 16px 16px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

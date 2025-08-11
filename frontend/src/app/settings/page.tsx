@@ -2,30 +2,22 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getProfile, updateProfile, UserProfile } from '@/lib/api';
+import { updateProfile, UserProfile, useProfile } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 
 function SettingsPageInner() {
     const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [loading, setLoading] = useState(true);
+    const { data, isLoading, error } = useProfile();
     const [saving, setSaving] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
-        const loadProfile = async () => {
-            try {
-                const data = await getProfile();
-                setProfile(data);
-            } catch (error) {
-                console.error('Failed to load profile:', error);
-                router.push('/login');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        loadProfile();
-    }, [router]);
+        if (error) {
+            console.error('Failed to load profile:', error);
+            router.push('/login');
+        }
+        if (data) setProfile(data);
+    }, [router, data, error]);
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -49,7 +41,7 @@ function SettingsPageInner() {
         }
     };
 
-    if (loading) {
+    if (isLoading) {
         return (
             <main className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
