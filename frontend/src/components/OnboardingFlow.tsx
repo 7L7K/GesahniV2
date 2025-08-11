@@ -27,33 +27,50 @@ export default function OnboardingFlow({ onboardingStatus, onComplete }: Onboard
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
     const [profile, setProfile] = useState<Partial<UserProfile>>({});
     const [loading, setLoading] = useState(false);
+    // Note: we intentionally avoid fetching profile here to keep this component
+    // framework-agnostic for tests (no QueryClientProvider requirement).
 
     useEffect(() => {
-        if (onboardingStatus) {
-            // Find the first incomplete step
-            const firstIncompleteIndex = onboardingStatus.steps.findIndex(step => !step.completed);
-            setCurrentStepIndex(firstIncompleteIndex >= 0 ? firstIncompleteIndex : STEPS.length - 1);
+        if (!onboardingStatus) {
+            setCurrentStepIndex(0);
+            return;
         }
+        const explicit = Number(onboardingStatus.current_step);
+        if (!Number.isNaN(explicit) && explicit >= 0 && explicit < STEPS.length) {
+            setCurrentStepIndex(explicit);
+            return;
+        }
+        const firstIncompleteIndex = onboardingStatus.steps.findIndex(step => !step.completed);
+        setCurrentStepIndex(firstIncompleteIndex >= 0 ? firstIncompleteIndex : 0);
     }, [onboardingStatus]);
 
     const handleNext = async (stepData?: Partial<UserProfile>) => {
-        if (stepData) {
-            setProfile(prev => ({ ...prev, ...stepData }));
+        const nextProfile = stepData ? { ...profile, ...stepData } : { ...profile };
+        setProfile(nextProfile);
+
+        // Persist incremental progress when data provided
+        try {
+            if (stepData && Object.keys(stepData).length > 0) {
+                await updateProfile(nextProfile);
+            }
+        } catch (err) {
+            console.error('Failed to save step data:', err);
         }
 
         if (currentStepIndex < STEPS.length - 1) {
             setCurrentStepIndex(prev => prev + 1);
-        } else {
-            // Complete onboarding
-            setLoading(true);
-            try {
-                await updateProfile(profile);
-                await completeOnboarding();
-                onComplete();
-            } catch (error) {
-                console.error('Failed to complete onboarding:', error);
-                setLoading(false);
-            }
+            return;
+        }
+
+        // Complete onboarding on final step
+        setLoading(true);
+        try {
+            await updateProfile(nextProfile);
+            await completeOnboarding();
+            onComplete();
+        } catch (error) {
+            console.error('Failed to complete onboarding:', error);
+            setLoading(false);
         }
     };
 

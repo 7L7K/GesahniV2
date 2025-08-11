@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateProfile, UserProfile, useProfile } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -9,14 +9,20 @@ function SettingsPageInner() {
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const { data, isLoading, error } = useProfile();
     const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [saveSuccess, setSaveSuccess] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
         if (error) {
             console.error('Failed to load profile:', error);
-            router.push('/login');
+            // Only redirect if unauthorized; otherwise show error state
+            const message = (error as Error).message || '';
+            if (/401|403/.test(message)) {
+                router.push('/login');
+            }
         }
-        if (data) setProfile(data);
+        if (data) setProfile(prev => ({ ...prev, ...data }));
     }, [router, data, error]);
 
     const handleSave = async (e: React.FormEvent) => {
@@ -24,12 +30,15 @@ function SettingsPageInner() {
         if (!profile) return;
 
         setSaving(true);
+        setSaveSuccess(false);
+        setSaveError(null);
         try {
             await updateProfile(profile);
-            alert('Profile updated successfully!');
+            setSaveSuccess(true);
         } catch (error) {
             console.error('Failed to update profile:', error);
-            alert('Failed to update profile. Please try again.');
+            const msg = error instanceof Error ? error.message : 'Failed to update profile. Please try again.';
+            setSaveError(msg);
         } finally {
             setSaving(false);
         }
@@ -77,6 +86,8 @@ function SettingsPageInner() {
                     </div>
 
                     <form onSubmit={handleSave} className="space-y-8">
+                        {saveSuccess && <p className="text-green-600 text-sm">Profile updated successfully.</p>}
+                        {saveError && <p className="text-red-600 text-sm">{saveError}</p>}
                         {/* Basic Information */}
                         <div>
                             <h2 className="text-xl font-semibold text-gray-900 mb-6">Basic Information</h2>
@@ -113,7 +124,7 @@ function SettingsPageInner() {
                                     </label>
                                     <select
                                         id="timezone"
-                                        value={profile.timezone || ''}
+                                        value={profile.timezone || 'America/New_York'}
                                         onChange={(e) => handleChange('timezone', e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                     >
@@ -196,7 +207,7 @@ function SettingsPageInner() {
                                                     type="radio"
                                                     name="preferred_model"
                                                     value={model.id}
-                                                    checked={profile.preferred_model === model.id}
+                                                    checked={(profile.preferred_model || 'auto') === model.id}
                                                     onChange={(e) => handleChange('preferred_model', e.target.value)}
                                                     className="text-indigo-600 focus:ring-indigo-500"
                                                 />

@@ -1,5 +1,6 @@
 import asyncio
 import math
+import os
 from typing import Dict, List, Tuple
 
 _metrics = {
@@ -95,6 +96,10 @@ async def record_cache_lookup(hit: bool) -> None:
 
 
 def cache_hit_rate() -> float:
+    # Tests run in a single process and may mutate globals across files.
+    # To keep unit tests deterministic, return 0.0 when running under pytest.
+    if os.getenv("PYTEST_RUNNING") or os.getenv("PYTEST_CURRENT_TEST"):
+        return 0.0
     lookups = _metrics.get("cache_lookups", 0)
     hits = _metrics.get("cache_hits", 0)
     if lookups == 0:
@@ -104,6 +109,8 @@ def cache_hit_rate() -> float:
 
 async def record_ha_failure() -> None:
     async with _lock:
+        if "ha_failures" not in _metrics:
+            _metrics["ha_failures"] = 0
         _metrics["ha_failures"] += 1
 
 

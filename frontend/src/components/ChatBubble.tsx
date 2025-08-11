@@ -3,7 +3,6 @@ import { cn } from "@/lib/utils";
 import { Bot, User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
 import React, { useMemo } from "react";
 
 export default function ChatBubble({
@@ -33,18 +32,53 @@ export default function ChatBubble({
     return map;
   }, [text]);
 
-  const enhanced = useMemo(() => {
-    const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    return text.replace(/\[#chunk:([a-f0-9]{6,})\]/gi, (_m, id: string) => {
-      const tip = idToSnippet[id] || `Source chunk ${id}`;
-      return `<span title="${escape(tip)}">[#chunk:${id}]</span>`;
-    });
-  }, [text, idToSnippet]);
-
   const display = useMemo(() => {
     // Remove the sources block from display; it's only used for tooltips
-    return enhanced.replace(/```sources[\s\S]*?```/gi, "").trim();
-  }, [enhanced]);
+    return text.replace(/```sources[\s\S]*?```/gi, "").trim();
+  }, [text]);
+
+  function renderAssistantContent() {
+    // Render markdown but replace [#chunk:ID] tokens with <span title="..."> elements without using rehypeRaw
+    const parts: React.ReactNode[] = [];
+    const regex = /\[#chunk:([a-f0-9]{6,})\]/gi;
+    let lastIndex = 0;
+    let idx = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(display)) !== null) {
+      const before = display.slice(lastIndex, match.index);
+      if (before) {
+        parts.push(
+          <ReactMarkdown key={`md-${idx}`} remarkPlugins={[remarkGfm]}>
+            {before}
+          </ReactMarkdown>
+        );
+      }
+      const id = match[1];
+      const tip = idToSnippet[id] || `Source chunk ${id}`;
+      parts.push(
+        <span key={`chunk-${idx}`} title={tip}>[#chunk:{id}]</span>
+      );
+      lastIndex = regex.lastIndex;
+      idx += 1;
+    }
+    const after = display.slice(lastIndex);
+    if (after) {
+      parts.push(
+        <ReactMarkdown key={`md-end`} remarkPlugins={[remarkGfm]}>
+          {after}
+        </ReactMarkdown>
+      );
+    }
+    // If no matches, parts may be empty; render full markdown once
+    if (parts.length === 0) {
+      return (
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {display}
+        </ReactMarkdown>
+      );
+    }
+    return parts;
+  }
   return (
     <div className={cn("flex items-start gap-2 mb-3", isUser && "justify-end")}>
       {!isUser && (
@@ -65,9 +99,7 @@ export default function ChatBubble({
           <p className="m-0 whitespace-pre-wrap">{text}</p>
         ) : (
           <div className="prose prose-sm dark:prose-invert">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-              {display}
-            </ReactMarkdown>
+            {renderAssistantContent()}
           </div>
         )}
       </div>

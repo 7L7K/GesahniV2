@@ -15,12 +15,17 @@ export interface RecorderExports {
     volume: number;
     captionText: string;
     muted: boolean;
+    wsOpen: boolean;
+    elapsedMs: number;
     start: () => Promise<void>;
     pause: () => void;
     stop: () => Promise<void>;
     reset: () => void;
     toggleMute: () => void;
     setMuted: (b: boolean) => void;
+    setDevices: (ids: { audio?: string; video?: string }) => void;
+    audioOnly: boolean;
+    setAudioOnly: (b: boolean) => void;
     media: { stream: MediaStream | null; videoEl: React.RefObject<HTMLVideoElement> };
 }
 
@@ -41,6 +46,11 @@ export function useRecorder(): RecorderExports {
     const [muted, setMuted] = useState<boolean>(false);
     const [audioMime, setAudioMime] = useState<string>("");
     const [videoMime, setVideoMime] = useState<string>("");
+    const [wsOpen, setWsOpen] = useState<boolean>(false);
+    const [elapsedMs, setElapsedMs] = useState<number>(0);
+    const [audioOnly, setAudioOnly] = useState<boolean>(false);
+    const [deviceIds, setDeviceIds] = useState<{ audio?: string; video?: string }>({});
+    const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     useEffect(() => {
         if (typeof MediaRecorder !== "undefined") {
@@ -61,7 +71,10 @@ export function useRecorder(): RecorderExports {
 
     const setupStream = useCallback(async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: deviceIds.audio ? { deviceId: { exact: deviceIds.audio } as any } : true,
+                video: deviceIds.video ? { deviceId: { exact: deviceIds.video } as any } : true,
+            } as MediaStreamConstraints);
             streamRef.current = stream;
             if (camRef.current) camRef.current.srcObject = stream;
             const AudioCtx =
@@ -86,7 +99,7 @@ export function useRecorder(): RecorderExports {
         } catch (e) {
             setState({ status: "error", message: "Please allow camera and microphone access." });
         }
-    }, []);
+    }, [deviceIds.audio, deviceIds.video]);
 
     useEffect(() => {
         setupStream();
@@ -115,6 +128,8 @@ export function useRecorder(): RecorderExports {
             return;
         }
         const ws = new WebSocket(wsUrl("/v1/transcribe"));
+        setWsOpen(false);
+        ws.onopen = () => setWsOpen(true);
         ws.onmessage = (e) => {
             try {
                 const msg = JSON.parse(String(e.data || ""));
@@ -125,6 +140,7 @@ export function useRecorder(): RecorderExports {
                 if (text) setCaptionText(text);
             }
         };
+        ws.onclose = () => setWsOpen(false);
         wsRef.current = ws;
 
         audioChunks.current = [];
@@ -144,6 +160,11 @@ export function useRecorder(): RecorderExports {
         audioRecorder.current.start(9000);
         videoRecorder.current.start();
         setState({ status: "recording", sessionId: sessionId! });
+        // start elapsed timer
+        if (tickRef.current) clearInterval(tickRef.current);
+        const started = Date.now();
+        setElapsedMs(0);
+        tickRef.current = setInterval(() => setElapsedMs(Date.now() - started), 1000);
     }, [audioMime, videoMime, setupStream]);
 
     const pause = useCallback(() => {
@@ -151,6 +172,7 @@ export function useRecorder(): RecorderExports {
         videoRecorder.current?.pause();
         wsRef.current?.close();
         setState((s) => (s.status === "recording" ? { status: "idle" } : s));
+        if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
     }, []);
 
     const stop = useCallback(async () => {
@@ -180,6 +202,8 @@ export function useRecorder(): RecorderExports {
             return;
         }
         setState({ status: "idle" });
+        if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+        setElapsedMs(0);
     }, [state, audioMime, videoMime, captionText]);
 
     const reset = useCallback(() => {
@@ -187,6 +211,8 @@ export function useRecorder(): RecorderExports {
         audioChunks.current = [];
         videoChunks.current = [];
         setState({ status: "idle" });
+        if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+        setElapsedMs(0);
     }, []);
 
     return {
@@ -194,12 +220,17 @@ export function useRecorder(): RecorderExports {
         volume,
         captionText,
         muted,
+        wsOpen,
+        elapsedMs,
         start,
         pause,
         stop,
         reset,
         toggleMute: () => setMuted(m => !m),
         setMuted,
+        setDevices: (ids) => setDeviceIds(ids),
+        audioOnly,
+        setAudioOnly,
         media: { stream: streamRef.current, videoEl: camRef },
     };
 }

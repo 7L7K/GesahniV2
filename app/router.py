@@ -290,9 +290,9 @@ async def route_prompt(
 
         with start_span("router.decide") as _span_decide:
             intent, priority = detect_intent(prompt)
-        # If intent is unknown/low confidence, ask a quick confirmation question
-        if intent == "unknown":
-            # Suggest likely high-level intents conservatively
+        # If intent is unknown/low confidence, optionally ask a quick confirmation
+        # Disabled by default; enable with ENABLE_UNKNOWN_INTENT_CONFIRM=1
+        if intent == "unknown" and os.getenv("ENABLE_UNKNOWN_INTENT_CONFIRM", "0").lower() in {"1", "true", "yes"}:
             confirm_text = "Did you want weather? [Yes/No]"
             if rec:
                 rec.engine_used = "confirm"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouterDecisions, apiFetch } from "@/lib/api";
 
 type Decision = {
@@ -17,7 +17,10 @@ type Decision = {
 }
 
 export default function AdminPage() {
-    const { data, isLoading, error } = useRouterDecisions(50)
+    const token = useMemo(() => process.env.NEXT_PUBLIC_ADMIN_TOKEN || '', [])
+    const [filters, setFilters] = useState<{ engine?: string; model?: string; cache_hit?: string; escalated?: string; q?: string }>({})
+    const [cursor, setCursor] = useState<number | null>(0)
+    const { data, isLoading, error } = useRouterDecisions(token, 20, { ...filters, cursor: cursor ?? 0 })
     const items: Decision[] = (data?.items as Decision[]) || []
 
     return (
@@ -26,6 +29,26 @@ export default function AdminPage() {
                 <h1 className="text-xl font-semibold mb-4">Router Decisions</h1>
                 {error && <p className="text-sm text-red-600">{error.message}</p>}
                 {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+                <div className="flex flex-wrap gap-2 mb-3 items-end">
+                    <select className="border rounded px-2 py-1 text-sm" value={filters.engine || ''} onChange={(e) => { setCursor(0); setFilters({ ...filters, engine: e.target.value || undefined }) }}>
+                        <option value="">Engine: Any</option>
+                        <option value="gpt">gpt</option>
+                        <option value="llama">llama</option>
+                    </select>
+                    <input className="border rounded px-2 py-1 text-sm" placeholder="Model contains" value={filters.model || ''} onChange={(e) => { setCursor(0); setFilters({ ...filters, model: e.target.value || undefined }) }} />
+                    <select className="border rounded px-2 py-1 text-sm" value={filters.cache_hit || ''} onChange={(e) => { setCursor(0); setFilters({ ...filters, cache_hit: e.target.value || undefined }) }}>
+                        <option value="">Cache: Any</option>
+                        <option value="true">Cache: hit</option>
+                        <option value="false">Cache: miss</option>
+                    </select>
+                    <select className="border rounded px-2 py-1 text-sm" value={filters.escalated || ''} onChange={(e) => { setCursor(0); setFilters({ ...filters, escalated: e.target.value || undefined }) }}>
+                        <option value="">Escalated: Any</option>
+                        <option value="true">Escalated</option>
+                        <option value="false">Not escalated</option>
+                    </select>
+                    <input className="border rounded px-2 py-1 text-sm" placeholder="Reason contains" value={filters.q || ''} onChange={(e) => { setCursor(0); setFilters({ ...filters, q: e.target.value || undefined }) }} />
+                    <button className="ml-auto border rounded px-3 py-1 text-sm" onClick={() => { setFilters({}); setCursor(0) }}>Clear</button>
+                </div>
                 <div className="overflow-x-auto rounded border">
                     <table className="min-w-full text-sm">
                         <thead className="bg-muted/50">
@@ -59,6 +82,11 @@ export default function AdminPage() {
                         </tbody>
                     </table>
                 </div>
+                <div className="flex items-center gap-2 mt-2">
+                    <button disabled={!data?.next_cursor} className="border rounded px-2 py-1 text-sm disabled:opacity-50" onClick={() => setCursor(data?.next_cursor ?? null)}>Next</button>
+                    <button disabled={!cursor} className="border rounded px-2 py-1 text-sm disabled:opacity-50" onClick={() => setCursor(0)}>First</button>
+                    <div className="text-xs text-muted-foreground ml-auto">{items.length} / {data?.total ?? 0}</div>
+                </div>
             </section>
 
             <section>
@@ -75,15 +103,17 @@ function SelfReview() {
     const [review, setReview] = useState<Review>(null)
     const [loading, setLoading] = useState(true)
     const [err, setErr] = useState<string | null>(null)
+    const token = useMemo(() => process.env.NEXT_PUBLIC_ADMIN_TOKEN || '', [])
 
     useEffect(() => {
         async function load() {
             setLoading(true)
             setErr(null)
             try {
+                const qs = `?token=${encodeURIComponent(token || '')}`
                 const [eRes, rRes] = await Promise.all([
-                    apiFetch('/v1/admin/errors'),
-                    apiFetch('/v1/admin/self_review'),
+                    apiFetch(`/v1/admin/errors${qs}`),
+                    apiFetch(`/v1/admin/self_review${qs}`),
                 ])
                 const eBody = (await eRes.json()) as unknown
                 const rBody = (await rRes.json()) as unknown

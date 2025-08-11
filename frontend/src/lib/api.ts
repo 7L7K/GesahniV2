@@ -19,12 +19,18 @@ export function setTokens(access: string, refresh?: string) {
   if (typeof window === "undefined") return;
   localStorage.setItem("auth:access_token", access);
   if (refresh) localStorage.setItem("auth:refresh_token", refresh);
+  try {
+    window.dispatchEvent(new Event("auth:tokens_set"));
+  } catch { }
 }
 
 export function clearTokens() {
   if (typeof window === "undefined") return;
   localStorage.removeItem("auth:access_token");
   localStorage.removeItem("auth:refresh_token");
+  try {
+    window.dispatchEvent(new Event("auth:tokens_cleared"));
+  } catch { }
 }
 
 export function isAuthed(): boolean {
@@ -36,9 +42,9 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function tryRefresh(): Promise<boolean> {
+async function tryRefresh(): Promise<Response | null> {
   const refresh = getRefreshToken();
-  if (!refresh) return false;
+  if (!refresh) return null;
   try {
     const base = API_URL || (typeof window !== "undefined" ? "" : "http://localhost:8000");
     const res = await fetch(`${base}/v1/refresh`, {
@@ -46,12 +52,15 @@ async function tryRefresh(): Promise<boolean> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refresh }),
     });
-    if (!res.ok) return false;
-    const body = (await res.json()) as { access_token?: string; refresh_token?: string };
-    if (body.access_token) setTokens(body.access_token, body.refresh_token);
-    return Boolean(body.access_token);
+    if (res.ok) {
+      try {
+        const body = (await res.json()) as { access_token?: string; refresh_token?: string };
+        if (body.access_token) setTokens(body.access_token, body.refresh_token);
+      } catch { /* ignore parse */ }
+    }
+    return res;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -68,25 +77,31 @@ export async function apiFetch(
 
   const mergedHeaders: HeadersInit = { ...(headers || {}) };
   const isFormData = rest.body instanceof FormData;
-  if (!isFormData && !("Content-Type" in (mergedHeaders as Record<string, string>))) {
+  const hasMethodBody = rest.method && /^(POST|PUT|PATCH|DELETE)$/i.test(rest.method);
+  const hasBody = hasMethodBody && typeof rest.body !== "undefined" && rest.body !== null;
+  // Only set Content-Type if we are sending a body and it was not provided
+  if (hasBody && !isFormData && !("Content-Type" in (mergedHeaders as Record<string, string>))) {
     (mergedHeaders as Record<string, string>)["Content-Type"] = "application/json";
   }
   if (auth) Object.assign(mergedHeaders as Record<string, string>, authHeaders());
 
   let res = await fetch(url, { ...rest, headers: mergedHeaders });
   if (res.status === 401 && auth) {
-    const refreshed = await tryRefresh();
-    if (refreshed) {
+    const refreshRes = await tryRefresh();
+    if (refreshRes && refreshRes.ok) {
       const retryHeaders: HeadersInit = { ...(headers || {}), ...(authHeaders() as Record<string, string>) };
-      if (!isFormData && !("Content-Type" in (retryHeaders as Record<string, string>))) {
+      const retryHasBody = hasMethodBody && typeof rest.body !== "undefined" && rest.body !== null;
+      if (retryHasBody && !isFormData && !("Content-Type" in (retryHeaders as Record<string, string>))) {
         (retryHeaders as Record<string, string>)["Content-Type"] = "application/json";
       }
       res = await fetch(url, { ...rest, headers: retryHeaders });
     } else {
-      // Hard logout on failed refresh
       clearTokens();
       if (typeof document !== "undefined") {
         document.cookie = "auth:hint=0; path=/; max-age=300";
+      }
+      if (refreshRes) {
+        res = refreshRes; // propagate refresh response (e.g., 400)
       }
     }
   }
@@ -235,23 +250,33 @@ export function useAdminMetrics(token: string) {
   });
 }
 
-export function useRouterDecisions(limit = 50) {
-  return useQuery<{ items: any[] }, Error>({
-    queryKey: ["router_decisions", limit],
+export function useRouterDecisions(
+  token: string,
+  limit = 50,
+  params: Record<string, unknown> = {},
+  opts?: { refetchMs?: number | false; enabled?: boolean }
+) {
+  return useQuery<{ items: any[]; total: number; next_cursor: number | null }, Error>({
+    queryKey: ["router_decisions", token, limit, params],
     queryFn: async () => {
-      const res = await apiFetch(`/v1/admin/router/decisions?limit=${limit}`);
+      const usp = new URLSearchParams({ limit: String(limit), token: token || "" });
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== "") usp.set(k, String(v));
+      }
+      const res = await apiFetch(`/v1/admin/router/decisions?${usp.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
-    refetchInterval: 4_000,
+    refetchInterval: opts?.refetchMs === false ? false : (opts?.refetchMs ?? 4_000),
+    enabled: opts?.enabled !== false,
   });
 }
 
-export function useAdminErrors() {
+export function useAdminErrors(token: string) {
   return useQuery<{ errors: { timestamp: string; level: string; component: string; msg: string }[] }, Error>({
-    queryKey: ["admin_errors"],
+    queryKey: ["admin_errors", token],
     queryFn: async () => {
-      const res = await apiFetch(`/v1/admin/errors`);
+      const res = await apiFetch(`/v1/admin/errors?token=${encodeURIComponent(token || "")}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
@@ -259,11 +284,11 @@ export function useAdminErrors() {
   });
 }
 
-export function useSelfReview() {
+export function useSelfReview(token: string) {
   return useQuery<Record<string, unknown> | { status: string }, Error>({
-    queryKey: ["self_review"],
+    queryKey: ["self_review", token],
     queryFn: async () => {
-      const res = await apiFetch(`/v1/admin/self_review`);
+      const res = await apiFetch(`/v1/admin/self_review?token=${encodeURIComponent(token || "")}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },

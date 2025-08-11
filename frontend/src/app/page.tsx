@@ -18,25 +18,48 @@ interface ChatMessage {
 export default function Page() {
   const router = useRouter();
   const [authed, setAuthed] = useState<boolean>(false);
+  const [isOnline, setIsOnline] = useState<boolean>(true);
   const createInitialMessage = (): ChatMessage => ({
     id: crypto.randomUUID(),
     role: 'assistant',
     content: "Hey King, what’s good?",
   });
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    createInitialMessage(),
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   // 'auto' lets the backend route to skills/LLM; user can still force a model
   const [model, setModel] = useState('auto');
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Hydrate from localStorage on mount
+  // Helpers: scope storage keys per user id for privacy
+  const getScopedKey = (base: string): string => {
+    try {
+      const token = getToken();
+      if (!token) return `${base}:guest`;
+      const parts = token.split('.')
+      if (parts.length >= 2 && typeof window !== 'undefined') {
+        const json = JSON.parse(atob(parts[1]));
+        const sub = json?.sub || json?.user_id || json?.uid || 'anon';
+        return `${base}:${String(sub)}`;
+      }
+      return `${base}:anon`;
+    } catch {
+      return `${base}:anon`;
+    }
+  };
+  const historyKey = getScopedKey('chat-history');
+  const modelKey = getScopedKey('selected-model');
+
+  // Hydrate from localStorage on mount; if none, seed with initial assistant msg
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setAuthed(Boolean(getToken()));
-      const stored = localStorage.getItem('chat-history');
+      setIsOnline(navigator.onLine);
+      const onUp = () => setIsOnline(true);
+      const onDown = () => setIsOnline(false);
+      window.addEventListener('online', onUp);
+      window.addEventListener('offline', onDown);
+      const stored = localStorage.getItem(historyKey);
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
@@ -53,24 +76,30 @@ export default function Page() {
                 content: m.content as string,
                 loading: Boolean(m.loading),
               }));
-            setMessages(validMessages);
+            setMessages(validMessages.length > 0 ? validMessages.slice(-100) : [createInitialMessage()]);
           } else {
             setMessages([createInitialMessage()]);
           }
         } catch {
           setMessages([createInitialMessage()]);
         }
+      } else {
+        setMessages([createInitialMessage()]);
       }
 
       // Also hydrate the model selection
-      const storedModel = localStorage.getItem('selected-model');
+      const storedModel = localStorage.getItem(modelKey);
       if (storedModel) {
         setModel(storedModel);
+      }
+      return () => {
+        window.removeEventListener('online', onUp);
+        window.removeEventListener('offline', onDown);
       }
     }
   }, []);
 
-  // Check onboarding status
+  // Check onboarding status when authed
   useEffect(() => {
     const checkOnboarding = async () => {
       if (authed) {
@@ -91,11 +120,23 @@ export default function Page() {
     checkOnboarding();
   }, [authed, router]);
 
+  // React to auth token changes (login/logout in other tabs)
+  useEffect(() => {
+    const onSet = () => setAuthed(Boolean(getToken()));
+    const onClear = () => setAuthed(Boolean(getToken()));
+    window.addEventListener('auth:tokens_set', onSet);
+    window.addEventListener('auth:tokens_cleared', onClear);
+    return () => {
+      window.removeEventListener('auth:tokens_set', onSet);
+      window.removeEventListener('auth:tokens_cleared', onClear);
+    };
+  }, []);
+
   // Persist messages after each update & auto‑scroll
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(
-        'chat-history',
+        historyKey,
         JSON.stringify(messages.filter(m => !m.loading).slice(-100)),
       );
     }
@@ -105,12 +146,27 @@ export default function Page() {
   // Persist model selection
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('selected-model', model);
+      localStorage.setItem(modelKey, model);
     }
   }, [model]);
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
+    if (!authed) {
+      // Prevent sending when unauthenticated
+      setMessages(prev => ([
+        ...prev,
+        { id: crypto.randomUUID(), role: 'assistant', content: 'Please sign in to chat.', loading: false },
+      ]));
+      return;
+    }
+    if (!isOnline) {
+      setMessages(prev => ([
+        ...prev,
+        { id: crypto.randomUUID(), role: 'assistant', content: 'You are offline. I will send this when you are back online.', loading: false },
+      ]));
+      return;
+    }
 
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text };
     const assistantId = crypto.randomUUID();
@@ -132,15 +188,6 @@ export default function Page() {
           ),
         );
       });
-      // Simple confirm UX: detect the explicit confirm prompt and surface Yes/No
-      if (typeof full === 'string' && /Did you want weather\? \[Yes\/No\]/i.test(full)) {
-        const yesId = crypto.randomUUID();
-        setMessages(prev => ([
-          ...prev,
-          { id: crypto.randomUUID(), role: 'assistant', content: 'Did you want weather? [Yes/No]' },
-          { id: yesId, role: 'assistant', content: 'Tap Yes to proceed or No to clarify.' },
-        ]));
-      }
       // Ensure final content is set even if the backend didn't stream tokens
       if (typeof full === 'string') {
         setMessages(prev =>
@@ -201,6 +248,7 @@ export default function Page() {
               loading={loading}
               model={model}
               onModelChange={setModel}
+              authed={authed}
             />
             <div className="mt-2 flex justify-end">
               <Button

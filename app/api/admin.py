@@ -6,11 +6,22 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.deps.user import get_current_user_id
 from app.deps.scopes import optional_require_scope
 from app.status import _admin_token
-from app.analytics import get_metrics, cache_hit_rate, get_top_skills
+from app.analytics import (
+    get_metrics,
+    cache_hit_rate,
+    get_top_skills,
+    latency_p95,
+)
 from app.decisions import get_recent as decisions_recent, get_explain as decisions_get
 from app.config_runtime import get_config
 from app.jobs.qdrant_lifecycle import bootstrap_collection as _q_bootstrap, collection_stats as _q_stats
 from app.jobs.migrate_chroma_to_qdrant import main as _migrate_cli  # type: ignore
+from app.logging_config import get_last_errors
+try:
+    from app.proactive_engine import get_self_review as _get_self_review  # type: ignore
+except Exception:  # pragma: no cover - optional
+    def _get_self_review():  # type: ignore
+        return None
 try:
     from app.admin.routes import router as admin_inspect_router
 except Exception:
@@ -44,17 +55,71 @@ async def admin_metrics(
 ) -> dict:
     _check_admin(token)
     m = get_metrics()
-    return {"metrics": m, "cache_hit_rate": cache_hit_rate(), "top_skills": get_top_skills(10)}
+    # Derived fields that are useful in dashboards
+    transcribe_count = max(0, int(m.get("transcribe_count", 0)))
+    transcribe_errors = max(0, int(m.get("transcribe_errors", 0)))
+    transcribe_error_rate = (
+        round(100.0 * transcribe_errors / transcribe_count, 2) if transcribe_count else 0.0
+    )
+    out = {
+        "metrics": m,
+        "cache_hit_rate": cache_hit_rate(),
+        "latency_p95_ms": latency_p95(),
+        "transcribe_error_rate": transcribe_error_rate,
+        "top_skills": get_top_skills(10),
+    }
+    return out
 
 
 @router.get("/admin/router/decisions")
 async def admin_router_decisions(
     limit: int = Query(default=500, ge=1, le=1000),
+    cursor: int = Query(default=0, ge=0),
+    engine: str | None = Query(default=None, description="Filter by engine (gpt|llama|...)"),
+    model: str | None = Query(default=None, description="Filter by model name contains"),
+    cache_hit: bool | None = Query(default=None),
+    escalated: bool | None = Query(default=None),
+    intent: str | None = Query(default=None),
+    q: str | None = Query(default=None, description="Substring match in route_reason"),
+    since: str | None = Query(default=None, description="ISO timestamp lower bound (inclusive)"),
     token: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
+    from datetime import datetime
     _check_admin(token)
-    return {"items": decisions_recent(limit)}
+    items = decisions_recent(1000)
+    # Apply filters
+    if engine:
+        items = [it for it in items if (it.get("engine") or "").lower() == engine.lower()]
+    if model:
+        s = model.lower()
+        items = [it for it in items if s in (it.get("model") or "").lower()]
+    if cache_hit is not None:
+        items = [it for it in items if bool(it.get("cache_hit")) == cache_hit]
+    if escalated is not None:
+        items = [it for it in items if bool(it.get("escalated")) == escalated]
+    if intent:
+        s = intent.lower()
+        items = [it for it in items if s in (it.get("intent") or "").lower()]
+    if q:
+        s = q.lower()
+        items = [it for it in items if s in (it.get("route_reason") or "").lower()]
+    if since:
+        try:
+            t0 = datetime.fromisoformat(since)
+            def _parse(ts: str | None):
+                try:
+                    return datetime.fromisoformat(ts) if ts else None
+                except Exception:
+                    return None
+            items = [it for it in items if (_parse(it.get("timestamp")) or t0) >= t0]
+        except Exception:
+            # ignore bad since parameter
+            pass
+    total = len(items)
+    sliced = items[cursor: cursor + limit]
+    next_cursor = cursor + len(sliced) if (cursor + len(sliced)) < total else None
+    return {"items": sliced, "total": total, "next_cursor": next_cursor}
 
 
 @router.get("/admin/retrieval/last")
@@ -101,6 +166,29 @@ async def admin_config(
     data["store"]["qdrant_collection"] = _os.getenv("QDRANT_COLLECTION", data["store"].get("qdrant_collection", "kb:default"))
     data["store"]["active_collection"] = data["store"]["qdrant_collection"]
     return data
+
+
+@router.get("/admin/errors")
+async def admin_errors(
+    limit: int = Query(default=50, ge=1, le=500),
+    token: str | None = Query(default=None),
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
+    _check_admin(token)
+    return {"errors": get_last_errors(limit)}
+
+
+@router.get("/admin/self_review")
+async def admin_self_review(
+    token: str | None = Query(default=None),
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
+    _check_admin(token)
+    try:
+        res = _get_self_review()
+        return res or {"status": "unavailable"}
+    except Exception:
+        return {"status": "unavailable"}
 
 
 @router.post("/admin/vector_store/bootstrap")

@@ -11,9 +11,24 @@ export function LiveTranscript({ text, onClear }: { text: string; onClear: () =>
                     </div>
                     Listening…
                 </h3>
-                {text && (
-                    <button onClick={onClear} className="text-sm text-blue-600 hover:text-blue-700 font-medium">Clear</button>
-                )}
+                <div className="flex items-center gap-3">
+                    {text && (
+                        <button onClick={onClear} className="text-sm text-blue-600 hover:text-blue-700 font-medium">Clear</button>
+                    )}
+                    {text && (
+                        <button
+                            onClick={() => navigator.clipboard?.writeText(text).catch(() => { })}
+                            className="text-sm text-gray-600 hover:text-gray-800"
+                        >Copy</button>
+                    )}
+                    {text && (
+                        <a
+                            download="transcript.txt"
+                            href={`data:text/plain;charset=utf-8,${encodeURIComponent(text)}`}
+                            className="text-sm text-gray-600 hover:text-gray-800"
+                        >Download</a>
+                    )}
+                </div>
             </div>
             <div className="flex-1 overflow-y-auto">
                 {text ? (

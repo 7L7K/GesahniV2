@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { setTokens, apiFetch } from '@/lib/api';
+import { sanitizeNextPath } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -13,7 +14,7 @@ function LoginPageInner() {
     const [loading, setLoading] = useState(false);
     const router = useRouter();
     const params = useSearchParams();
-    const next = params.get('next') || '/';
+    const next = sanitizeNextPath(params.get('next'), '/');
 
     // Handle Google OAuth redirect carrying tokens in query
     useEffect(() => {
@@ -36,7 +37,8 @@ function LoginPageInner() {
             if (!/^[a-z0-9_.-]{3,64}$/.test(uname)) {
                 throw new Error('Invalid username. Use 3-64 chars: a-z, 0-9, _, ., -');
             }
-            if (password.trim().length < 6) {
+            // Require minimum 8 characters for stronger default security
+            if (password.trim().length < 8) {
                 throw new Error('Password too short');
             }
             // Use direct API calls since we simplified api lib
@@ -66,8 +68,8 @@ function LoginPageInner() {
             // Normalize common backend errors for nicer UX
             if (/invalid_username/i.test(msg)) {
                 setError('Invalid username. Use 3–64 chars: a-z, 0-9, _, ., -');
-            } else if (/weak_password/i.test(msg)) {
-                setError('Password is too weak. Use at least 8 characters with letters and numbers.');
+            } else if (/weak_password|too short/i.test(msg)) {
+                setError('Password is too weak. Use at least 8 characters.');
             } else if (/username_taken/i.test(msg)) {
                 setError('That username is already taken.');
             } else if (/invalid credentials/i.test(msg)) {
@@ -125,7 +127,11 @@ function LoginPageInner() {
                             const res = await apiFetch(`/v1/google/auth/login_url?next=${encodeURIComponent(next)}`, { auth: false });
                             if (!res.ok) throw new Error('Failed to start Google login');
                             const { auth_url } = await res.json();
-                            window.location.href = auth_url;
+                            if (typeof window !== 'undefined' && typeof window.location?.assign === 'function') {
+                                window.location.assign(auth_url);
+                            } else {
+                                (window as any).location.href = auth_url;
+                            }
                         } catch (err) {
                             const msg = err instanceof Error ? err.message : String(err);
                             setError(msg || 'Google sign-in is temporarily unavailable.');
