@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.memory import api as _api
 
 from ._types import MemoryBackend
+from app.redaction import redact_pii, store_redaction_map
 
 
 class LegacyMemoryBackend(MemoryBackend):
@@ -16,7 +17,16 @@ class LegacyMemoryBackend(MemoryBackend):
         tags: list[str] | None = None,
         meta: dict | None = None,
     ) -> str:
-        return _api.add_user_memory(user_id, text)
+        try:
+            redacted, mapping = redact_pii(text)
+            mem_id = _api.add_user_memory(user_id, redacted)
+            try:
+                store_redaction_map("user_memory", mem_id, mapping)
+            except Exception:
+                pass
+            return mem_id
+        except Exception:
+            return _api.add_user_memory(user_id, text)
 
     def search(
         self,

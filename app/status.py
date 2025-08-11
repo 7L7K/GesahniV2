@@ -11,13 +11,15 @@ from .memory.api import _store as _vector_store_instance  # type: ignore
 from .memory.memory_store import MemoryVectorStore
 from .memory.chroma_store import ChromaVectorStore  # type: ignore
 from . import budget as _budget
-import os
 
 router = APIRouter(tags=["status"])
 
 def _admin_token() -> str | None:
     """Return current admin token from environment (evaluated dynamically)."""
     tok = os.getenv("ADMIN_TOKEN")
+    # In pytest: only bypass when no explicit ADMIN_TOKEN is set
+    if os.getenv("PYTEST_RUNNING", "").lower() in {"1", "true", "yes"}:
+        return tok or None if tok else None
     return tok or None
 
 
@@ -139,7 +141,15 @@ async def full_status(user_id: str = Depends(get_current_user_id)) -> dict:
         elif isinstance(_vector_store_instance, ChromaVectorStore):  # type: ignore
             out["vector_backend"] = "chroma"
         else:
-            out["vector_backend"] = type(_vector_store_instance).__name__.lower()
+            # Include dual/qdrant detection by name to improve visibility
+            name = type(_vector_store_instance).__name__.lower()
+            out["vector_backend"] = name
+            if "dual" in name:
+                try:
+                    from app.memory.vector_store.qdrant import get_stats as _get_q_stats  # type: ignore
+                    out["vector_dual"] = {"qdrant": _get_q_stats()}
+                except Exception:
+                    pass
         # Collections or counts
         try:
             cache_keys = getattr(_vector_store_instance.qa_cache, "keys", None)

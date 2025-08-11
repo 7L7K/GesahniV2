@@ -65,7 +65,20 @@ def _distance(prompt: str, memory: str) -> float:
 def add_user_memory(user_id: str, memory: str) -> str:
     # Lazy import to avoid side-effects during pytest collection
     from app.adapters.memory import mem
-    return mem.add(user_id, memory)
+    try:
+        # Redact before storage and persist map out-of-band
+        from app.redaction import redact_pii, store_redaction_map
+
+        redacted, mapping = redact_pii(memory)
+        mem_id = mem.add(user_id, redacted)
+        try:
+            store_redaction_map("user_memory", mem_id, mapping)
+        except Exception:
+            pass
+        return mem_id
+    except Exception:
+        # Fallback to raw store if redaction utility is unavailable
+        return mem.add(user_id, memory)
 
 def query_user_memories(
     user_id: str,

@@ -1,5 +1,17 @@
-"""Memory utilities for GesahniV2."""
+"""Memory utilities for GesahniV2.
 
-from .memgpt import MemGPT, memgpt
+This package exposes `MemGPT` from the legacy flat module as well as the new
+namespaced `app.memory.memgpt` package to keep imports stable.
+"""
+
+try:
+    # Prefer the new namespaced package if available
+    from .memgpt import memgpt as memgpt  # type: ignore
+    from .memgpt import MemGPT as MemGPT  # type: ignore
+except Exception:  # pragma: no cover - fallback to legacy flat module
+    from . import memgpt as _legacy
+
+    MemGPT = _legacy.MemGPT  # type: ignore
+    memgpt = _legacy.memgpt  # type: ignore
 
 __all__ = ["MemGPT", "memgpt"]

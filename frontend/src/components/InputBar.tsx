@@ -39,14 +39,14 @@ export default function InputBar({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="inline-flex w-full items-center justify-between rounded-lg border bg-background p-1">
+      <div className="inline-flex w-full items-center justify-between rounded-xl border bg-background p-1">
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => onModelChange('auto')}
             className={
               model === 'auto'
-                ? 'rounded-md px-3 py-1.5 text-xs bg-primary text-primary-foreground'
+                ? 'rounded-md px-3 py-1.5 text-xs bg-primary text-primary-foreground shadow-sm'
                 : 'rounded-md px-3 py-1.5 text-xs hover:bg-accent'
             }
           >
@@ -57,7 +57,7 @@ export default function InputBar({
             onClick={() => onModelChange('llama3')}
             className={
               model === 'llama3'
-                ? 'rounded-md px-3 py-1.5 text-xs bg-primary text-primary-foreground'
+                ? 'rounded-md px-3 py-1.5 text-xs bg-primary text-primary-foreground shadow-sm'
                 : 'rounded-md px-3 py-1.5 text-xs hover:bg-accent'
             }
           >
@@ -68,7 +68,7 @@ export default function InputBar({
             onClick={() => onModelChange('gpt-4o')}
             className={
               model === 'gpt-4o'
-                ? 'rounded-md px-3 py-1.5 text-xs bg-primary text-primary-foreground'
+                ? 'rounded-md px-3 py-1.5 text-xs bg-primary text-primary-foreground shadow-sm'
                 : 'rounded-md px-3 py-1.5 text-xs hover:bg-accent'
             }
           >
@@ -91,7 +91,7 @@ export default function InputBar({
             disabled={loading}
           />
         </div>
-        <Button onClick={() => { void send(); }} disabled={loading || !text.trim()} size="icon">
+        <Button onClick={() => { void send(); }} disabled={loading || !text.trim()} size="icon" className="shadow-sm">
           <Send className="size-4" />
         </Button>
       </div>

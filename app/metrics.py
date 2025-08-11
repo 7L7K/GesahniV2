@@ -62,3 +62,10 @@ USER_MEMORY_ADDS = Counter(
     "Number of user memories added",
     ["store", "user"],
 )
+
+# Counter for dual-read fallback hits (observability during migration)
+VECTOR_FALLBACK_READS = Counter(
+    "vector_fallback_reads_total",
+    "Dual-read fallback hits to secondary store",
+    ["area"],  # memory | qa
+)

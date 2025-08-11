@@ -192,49 +192,52 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="GesahniV2", lifespan=lifespan, openapi_tags=tags_metadata)
 
-# CORS middleware
+# CORS middleware with stricter defaults
 _cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "false").strip().lower() in {"1", "true", "yes", "on"}
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.add_middleware(DedupMiddleware)
 app.middleware("http")(trace_request)
+from .middleware import silent_refresh_middleware
+app.middleware("http")(silent_refresh_middleware)
 app.middleware("http")(reload_env_middleware)
 
-try:  # pragma: no cover - optional dependency
-    from prometheus_client import make_asgi_app
-except Exception:  # pragma: no cover - executed when dependency missing
-    from starlette.responses import Response
+if os.getenv("PROMETHEUS_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}:
+    try:  # pragma: no cover - optional dependency
+        from prometheus_client import make_asgi_app
+    except Exception:  # pragma: no cover - executed when dependency missing
+        from starlette.responses import Response
 
-    def make_asgi_app():
-        async def _app(scope, receive, send):
-            if scope.get("type") != "http":
-                raise RuntimeError("metrics endpoint only supports HTTP")
-            try:
-                from . import metrics  # type: ignore
+        def make_asgi_app():
+            async def _app(scope, receive, send):
+                if scope.get("type") != "http":
+                    raise RuntimeError("metrics endpoint only supports HTTP")
+                try:
+                    from . import metrics  # type: ignore
 
-                parts = [
-                    f"{metrics.REQUEST_COUNT.name} {metrics.REQUEST_COUNT.value}",
-                    f"{metrics.REQUEST_LATENCY.name} {metrics.REQUEST_LATENCY.value}",
-                    f"{metrics.REQUEST_COST.name} {metrics.REQUEST_COST.value}",
-                    f"{metrics.LLAMA_TOKENS.name} {metrics.LLAMA_TOKENS.value}",
-                    f"{metrics.LLAMA_LATENCY.name} {metrics.LLAMA_LATENCY.value}",
-                ]
-                body = ("\n".join(parts) + "\n").encode()
-            except Exception:
-                body = b""
-            response = Response(content=body, media_type="text/plain; version=0.0.4")
-            await response(scope, receive, send)
+                    parts = [
+                        f"{metrics.REQUEST_COUNT.name} {metrics.REQUEST_COUNT.value}",
+                        f"{metrics.REQUEST_LATENCY.name} {metrics.REQUEST_LATENCY.value}",
+                        f"{metrics.REQUEST_COST.name} {metrics.REQUEST_COST.value}",
+                        f"{metrics.LLAMA_TOKENS.name} {metrics.LLAMA_TOKENS.value}",
+                        f"{metrics.LLAMA_LATENCY.name} {metrics.LLAMA_LATENCY.value}",
+                    ]
+                    body = ("\n".join(parts) + "\n").encode()
+                except Exception:
+                    body = b""
+                response = Response(content=body, media_type="text/plain; version=0.0.4")
+                await response(scope, receive, send)
 
-        return _app
+            return _app
 
-
-app.mount("/metrics", make_asgi_app())
+    app.mount("/metrics", make_asgi_app())
 
 
 @app.get("/healthz", tags=["status"])
@@ -792,6 +795,15 @@ except Exception:
     pass
 
 try:
+    # Mount dev/simple cookie auth only when explicitly enabled
+    if os.getenv("DEV_SIMPLE_AUTH", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        from .api.auth import router as auth_router
+        app.include_router(auth_router, prefix="/v1")
+        app.include_router(auth_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
     from .api.profile import router as profile_router
     app.include_router(profile_router, prefix="/v1")
     app.include_router(profile_router, include_in_schema=False)
@@ -802,6 +814,29 @@ try:
     from .api.admin import router as admin_api_router
     app.include_router(admin_api_router, prefix="/v1")
     app.include_router(admin_api_router, include_in_schema=False)
+except Exception:
+    pass
+
+# Admin-inspect routes are included via app.api.admin router if available
+
+try:
+    from .api.admin_ui import router as admin_ui_router
+    app.include_router(admin_ui_router, prefix="/v1")
+    app.include_router(admin_ui_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.me import router as me_router
+    app.include_router(me_router, prefix="/v1")
+    app.include_router(me_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.models import router as models_router
+    app.include_router(models_router, prefix="/v1")
+    app.include_router(models_router, include_in_schema=False)
 except Exception:
     pass
 

@@ -17,7 +17,7 @@ import hashlib
 from fastapi import Header
 
 import jwt
-from fastapi import HTTPException, Request, WebSocket, WebSocketException
+from fastapi import HTTPException, Request, WebSocket, WebSocketException, Depends
 
 JWT_SECRET: str | None = None  # backwards compat; actual value read from env
 API_TOKEN = os.getenv("API_TOKEN")
@@ -93,7 +93,12 @@ async def verify_token(request: Request) -> None:
     """Validate Authorization header as a JWT if a secret is configured."""
 
     jwt_secret = os.getenv("JWT_SECRET")
+    require_jwt = os.getenv("REQUIRE_JWT", "1").strip().lower() in {"1", "true", "yes", "on"}
     if not jwt_secret:
+        # Fail-closed when required
+        if require_jwt:
+            raise HTTPException(status_code=500, detail="missing_jwt_secret")
+        # Otherwise operate in pass-through mode (dev/test)
         return
     auth = request.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):

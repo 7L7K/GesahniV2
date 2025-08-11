@@ -26,3 +26,16 @@
 ---
 
 > **Last updated:** 2025‑08‑09 — Use this doc to log future decisions, tweaks, and lessons learned.
+
+### 2025‑08‑11 Security & Compliance
+- PII redaction before storage:
+  - Vector store `add_user_memory` now redacts and stores substitution maps under `data/redactions/user_memory/<id>.json`.
+  - `MemGPT.store_interaction` and `MemGPT.write_claim` redact content; maps are stored out‑of‑band.
+  - Session transcripts are redacted before writing to `transcript.txt` and `stories/*.jsonl`.
+- RBAC:
+  - Admin endpoints require `admin` scope when JWT scopes are enforced (`ENFORCE_JWT_SCOPES=1`).
+  - Pin writeback endpoint `/v1/history/pin` requires `pin` scope.
+- Audit:
+  - Audit log records who pinned what (`pin_interaction`, `pin_claim`).
+- Backups:
+  - New `POST /v1/admin/backup` produces AES‑256‑CBC encrypted archive. See `app/README_BACKUPS.md`.

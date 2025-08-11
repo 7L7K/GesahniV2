@@ -16,5 +16,10 @@
     "calendar_integration": true,
     "gmail_integration": true,
     "onboarding_completed": true
+  },
+  "havenotseen@gmail.com": {
+    "calendar_integration": false,
+    "gmail_integration": false,
+    "onboarding_completed": true
   }
 }

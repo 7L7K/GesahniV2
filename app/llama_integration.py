@@ -265,9 +265,9 @@ async def ask_llama(
                     # Error? Just stop iterating, don't yield junk.
                     return
 
-        # Record Prometheus metrics
-                    LLAMA_TOKENS.labels(direction="prompt").inc(prompt_tokens)
-                    LLAMA_TOKENS.labels(direction="completion").inc(completion_tokens)
+        # Record Prometheus metrics after streaming completes
+        LLAMA_TOKENS.labels(direction="prompt").inc(prompt_tokens)
+        LLAMA_TOKENS.labels(direction="completion").inc(completion_tokens)
         elapsed = time.monotonic() - start_time
         LLAMA_LATENCY.observe(elapsed * 1000)
         try:

@@ -13,6 +13,8 @@ from .token_utils import count_tokens
 from .memory import memgpt
 from .memory.env_utils import _normalized_hash
 from .memory.vector_store import safe_query_user_memories
+from .retrieval import run_retrieval, why_logs
+from .config_runtime import get_config
 from .telemetry import log_record_var
 import os
 
@@ -165,7 +167,35 @@ class PromptBuilder:
         # ------------------------------------------------------------------
         # Memory lookup & trimming
         # ------------------------------------------------------------------
-        memories: List[str] = safe_query_user_memories(user_id, user_prompt, k=k)
+        # Prefer modular retrieval pipeline when enabled; fallback to legacy
+        use_pipeline = os.getenv("USE_RETRIEVAL_PIPELINE", "0").lower() in {"1", "true", "yes"}
+        if use_pipeline:
+            cfg = get_config()
+            try:
+                # Preferred: new pipeline signature
+                from app.retrieval.pipeline import run_pipeline as _run_pipeline  # type: ignore
+                coll = os.getenv("QDRANT_COLLECTION") or "kb:default"
+                memories, trace = _run_pipeline(
+                    user_id=user_id,
+                    query=user_prompt,
+                    intent="chat",
+                    collection=coll,
+                    explain=True,
+                )
+                # Trim to final top-k from runtime config
+                memories = memories[: int(getattr(cfg.retrieval, "topk_final", 3))]
+            except Exception:
+                # Fallback: legacy helper with k parameter
+                memories, trace = run_retrieval(user_prompt, user_id, k=min(k, cfg.retrieval.topk_final))
+            rec = log_record_var.get()
+            if rec:
+                # store short why-logs summary
+                try:
+                    rec.route_trace = (rec.route_trace or []) + [why_logs(trace)]
+                except Exception:
+                    pass
+        else:
+            memories = safe_query_user_memories(user_id, user_prompt, k=k)
         # Enforce a conservative retriever budget regardless of requested k
         if len(memories) > RETRIEVER_MAX_MEM_LINES:
             memories = memories[:RETRIEVER_MAX_MEM_LINES]

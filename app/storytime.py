@@ -24,6 +24,7 @@ from typing import Iterable, List, Optional
 
 from .gpt_client import ask_gpt
 from .memory.vector_store import add_user_memory
+from .redaction import redact_and_store
 from .token_utils import count_tokens
 
 
@@ -57,13 +58,16 @@ def append_transcript_line(
     Fields: ``ts``, ``session_id``, ``user_id``, ``speaker``, ``confidence``, ``text``.
     """
 
+    # Redact and store mapping per session to keep transcripts safe at rest
+    safe_text = redact_and_store("transcript", session_id, text)
+
     rec = {
         "ts": _utc_now_iso(),
         "session_id": session_id,
         "user_id": user_id or "anon",
         "speaker": speaker,
         "confidence": confidence,
-        "text": text,
+        "text": safe_text,
     }
     path = _story_path(session_id)
     path.parent.mkdir(parents=True, exist_ok=True)

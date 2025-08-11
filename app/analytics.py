@@ -100,3 +100,8 @@ def cache_hit_rate() -> float:
 async def record_ha_failure() -> None:
     async with _lock:
         _metrics["ha_failures"] += 1
+
+
+def get_latency_samples() -> List[int]:
+    """Return a copy of the latency samples buffer (for diagnostics)."""
+    return list(_latency_samples)

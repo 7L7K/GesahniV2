@@ -49,7 +49,11 @@ from .memory.vector_store import safe_query_user_memories
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from .skills.smalltalk_skill import SmalltalkSkill
 from .telemetry import log_record_var
-from .decisions import add_trace_event
+from .otel_utils import start_span, set_error
+try:  # optional: new retrieval pipeline
+    from .retrieval.pipeline import run_pipeline as _run_retrieval_pipeline
+except Exception:  # pragma: no cover
+    _run_retrieval_pipeline = None  # type: ignore
 from .token_utils import count_tokens
 from .embeddings import embed_sync as _embed
 from .memory.env_utils import _cosine_similarity as _cos, _normalized_hash as _nh
@@ -283,7 +287,8 @@ async def route_prompt(
         if not prompt or not prompt.strip():
             raise HTTPException(status_code=400, detail="empty_prompt")
 
-        intent, priority = detect_intent(prompt)
+        with start_span("router.decide") as _span_decide:
+            intent, priority = detect_intent(prompt)
         # Token budgeter: clamp excess input per intent
         prompt = clamp_prompt(prompt, intent)
         if rec:
@@ -529,13 +534,44 @@ async def route_prompt(
 
         # Determine model deterministically
         # Retrieve current memories explicitly and feed into deterministic router
-        try:
-            from .memory.env_utils import _get_mem_top_k
-
-            k = _get_mem_top_k()
-        except Exception:
-            k = 3
-        mem_docs = safe_query_user_memories(user_id, prompt, k=k)
+        # Retrieval path: new pipeline when enabled, otherwise legacy memory lookup
+        use_new_pipeline = os.getenv("RETRIEVAL_PIPELINE", "0").lower() in {"1", "true", "yes"}
+        mem_docs: list[str] = []
+        if use_new_pipeline and _run_retrieval_pipeline is not None:
+            try:
+                coll = os.getenv("QDRANT_COLLECTION", "memories")
+                docs, rt = _run_retrieval_pipeline(
+                    user_id=user_id,
+                    query=prompt,
+                    intent=intent,
+                    collection=coll,
+                    explain=True,
+                    extra_filter=None,
+                )
+                mem_docs = docs
+                if rec:
+                    try:
+                        add_trace_event(rec.req_id, "retrieval_trace", trace=rt, flags={
+                            "pipeline": True,
+                            "use_hosted_ce": os.getenv("RETRIEVE_USE_HOSTED_CE", "0"),
+                        })
+                    except Exception:
+                        pass
+            except Exception:
+                # fallback to legacy on any error
+                try:
+                    from .memory.env_utils import _get_mem_top_k
+                    k = _get_mem_top_k()
+                except Exception:
+                    k = 3
+                mem_docs = safe_query_user_memories(user_id, prompt, k=k)
+        else:
+            try:
+                from .memory.env_utils import _get_mem_top_k
+                k = _get_mem_top_k()
+            except Exception:
+                k = 3
+            mem_docs = safe_query_user_memories(user_id, prompt, k=k)
         # Track retrieval metrics (token approximation kept for telemetry)
         retrieved_tokens = max(0, ptoks - count_tokens(prompt))
         if rec:
@@ -560,6 +596,12 @@ async def route_prompt(
                     int(gen_opts.get("attachments_count", 0)) if gen_opts else 0
                 ),
             )
+            try:
+                if _span_decide is not None:
+                    _span_decide.set_attribute("rule_id", str(decision.reason))
+                    _span_decide.set_attribute("model_selected", str(decision.model))
+            except Exception:
+                pass
             if rec:
                 rec.route_reason = decision.reason
                 try:
@@ -610,19 +652,27 @@ async def route_prompt(
             except Exception:
                 bm = {"escalate_allowed": True}
             max_retries = 0 if not bm.get("escalate_allowed", True) else None
-            text, final_model, reason, score, pt, ct, cost, escalated = (
-                await run_with_self_check(
-                    ask_func=ask_gpt,
-                    model=decision.model,
-                    user_prompt=built_prompt,
-                    system_prompt=system_prompt,
-                    retrieved_docs=mem_docs,
-                    on_token=stream_cb,
-                    stream=bool(stream_cb),
-                    allow_test=True if os.getenv("PYTEST_CURRENT_TEST") else False,
-                    max_retries=max_retries,
+            with start_span("model.call.gpt", {"model": decision.model}) as _span_call:
+                text, final_model, reason, score, pt, ct, cost, escalated = (
+                    await run_with_self_check(
+                        ask_func=ask_gpt,
+                        model=decision.model,
+                        user_prompt=built_prompt,
+                        system_prompt=system_prompt,
+                        retrieved_docs=mem_docs,
+                        on_token=stream_cb,
+                        stream=bool(stream_cb),
+                        allow_test=True if os.getenv("PYTEST_CURRENT_TEST") else False,
+                        max_retries=max_retries,
+                    )
                 )
-            )
+                try:
+                    if _span_call is not None:
+                        _span_call.set_attribute("tokens_in", int(pt))
+                        _span_call.set_attribute("tokens_out", int(ct))
+                        _span_call.set_attribute("cost_usd", float(cost or 0))
+                except Exception:
+                    pass
             logger.debug(
                 "run_with_self_check result model=%s score=%.3f escalated=%s",
                 final_model,
@@ -709,7 +759,8 @@ async def route_prompt(
                 result = _dry("gpt", model_name)
                 return result
             try:
-                result = await _call_gpt(
+                with start_span("model.call.gpt", {"model": model_name}):
+                    result = await _call_gpt(
                     prompt=prompt,
                     built_prompt=built_prompt,
                     model=model_name,
@@ -719,7 +770,7 @@ async def route_prompt(
                     user_id=user_id,
                     ptoks=ptoks,
                     stream_cb=stream_cb,
-                )
+                    )
                 return result
             except Exception as e:
                 logger.warning("GPT call failed: %s", e)
@@ -766,7 +817,8 @@ async def route_prompt(
                 result = _dry("llama", model_name)
                 return result
             try:
-                result = await _call_llama(
+                with start_span("model.call.llama", {"model": model_name}):
+                    result = await _call_llama(
                 prompt=prompt,
                 built_prompt=built_prompt,
                 model=model_name,
@@ -776,8 +828,8 @@ async def route_prompt(
                 user_id=user_id,
                 ptoks=ptoks,
                 stream_cb=stream_cb,
-                gen_opts=gen_opts,
-                )
+                        gen_opts=gen_opts,
+                    )
                 # success: reset per-user breaker
                 _user_cb_reset(user_id)
                 return result
@@ -879,6 +931,18 @@ async def _call_gpt_override(
     memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
     add_user_memory(user_id, _fact_from_qa(prompt, text))
     try:
+        memgpt.write_claim(
+            session_id=session_id,
+            user_id=user_id,
+            claim_text=_fact_from_qa(prompt, text),
+            evidence_links=[],
+            claim_type="fact",
+            entities=[],
+            confidence=0.6,
+        )
+    except Exception:
+        pass
+    try:
         cache_answer(prompt=norm_prompt, answer=text)
     except Exception as e:  # pragma: no cover
         logger.warning("QA cache store failed (gpt override): %s", e)
@@ -935,6 +999,18 @@ async def _call_llama_override(
     )
     add_user_memory(user_id, _fact_from_qa(prompt, result_text))
     try:
+        memgpt.write_claim(
+            session_id=session_id,
+            user_id=user_id,
+            claim_text=_fact_from_qa(prompt, result_text),
+            evidence_links=[],
+            claim_type="fact",
+            entities=[],
+            confidence=0.6,
+        )
+    except Exception:
+        pass
+    try:
         cache_answer(prompt=norm_prompt, answer=result_text)
     except Exception as e:  # pragma: no cover
         logger.warning("QA cache store failed (llama override): %s", e)
@@ -978,6 +1054,18 @@ async def _call_gpt(
         memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
         # Store concise, fact-like memory derived from the exchange
         add_user_memory(user_id, _fact_from_qa(prompt, text))
+        try:
+            memgpt.write_claim(
+                session_id=session_id,
+                user_id=user_id,
+                claim_text=_fact_from_qa(prompt, text),
+                evidence_links=[],
+                claim_type="fact",
+                entities=[],
+                confidence=0.6,
+            )
+        except Exception:
+            pass
         try:
             cache_answer(prompt=norm_prompt, answer=text)
         except Exception as e:  # pragma: no cover
@@ -1098,6 +1186,18 @@ async def _call_llama(
         except Exception as e:  # pragma: no cover
             logger.warning("QA cache store failed (llama): %s", e)
         logger.debug("_call_llama result model=%s result=%s", model, result_text)
+        try:
+            memgpt.write_claim(
+                session_id=session_id,
+                user_id=user_id,
+                claim_text=_fact_from_qa(prompt, result_text),
+                evidence_links=[],
+                claim_type="fact",
+                entities=[],
+                confidence=0.6,
+            )
+        except Exception:
+            pass
         return await _finalise("llama", prompt, result_text, rec)
     except Exception:
         logger.exception("_call_llama failure")

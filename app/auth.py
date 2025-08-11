@@ -9,7 +9,7 @@ import logging
 import aiosqlite
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 
@@ -372,7 +372,7 @@ async def refresh(req: RefreshRequest) -> TokenResponse:
         if JWT_AUD:
             kwargs["audience"] = JWT_AUD
         payload = jwt.decode(req.refresh_token, SECRET_KEY, **kwargs)
-    except JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
     if payload.get("type") != "refresh":
@@ -437,7 +437,7 @@ async def logout(request: Request) -> dict:
         if JWT_AUD:
             kwargs["audience"] = JWT_AUD
         payload = jwt.decode(token, SECRET_KEY, **kwargs)
-    except JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
     if JWT_ISS and payload.get("iss") != JWT_ISS:
         raise HTTPException(status_code=401, detail="Invalid token issuer")

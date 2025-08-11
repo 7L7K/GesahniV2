@@ -9,6 +9,7 @@ import time
 from typing import List, Optional
 
 from app.telemetry import hash_user_id
+from app.redaction import redact_pii, store_redaction_map
 
 # ---------------------------------------------------------------------------
 # Export real ChromaVectorStore if available, but ALWAYS define the symbol
@@ -34,6 +35,14 @@ except Exception as _e:  # pragma: no cover - exercised only when chroma not imp
 
 from .env_utils import _get_mem_top_k, _normalized_hash
 from .memory_store import MemoryVectorStore, VectorStore
+try:
+    from .vector_store.qdrant import QdrantVectorStore  # type: ignore
+except Exception:  # pragma: no cover - optional
+    QdrantVectorStore = None  # type: ignore
+try:
+    from .vector_store.dual import DualReadVectorStore  # type: ignore
+except Exception:  # pragma: no cover - optional
+    DualReadVectorStore = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +69,17 @@ def _get_store() -> VectorStore:
         store: VectorStore = MemoryVectorStore()
     else:
         try:
-            if not chroma_path:
-                raise FileNotFoundError("CHROMA_PATH is empty")
-            logger.info("Initializing ChromaVectorStore at path: %s", chroma_path)
-            store = ChromaVectorStore()
+            if kind == "dual" and DualReadVectorStore is not None:
+                logger.info("Initializing DualReadVectorStore (Qdrant primary, Chroma fallback)")
+                store = DualReadVectorStore()  # type: ignore[call-arg]
+            elif kind == "qdrant" and QdrantVectorStore is not None:
+                logger.info("Initializing QdrantVectorStore")
+                store = QdrantVectorStore()  # type: ignore[call-arg]
+            else:
+                if not chroma_path:
+                    raise FileNotFoundError("CHROMA_PATH is empty")
+                logger.info("Initializing ChromaVectorStore at path: %s", chroma_path)
+                store = ChromaVectorStore()
         except Exception as exc:
             if os.getenv("ENV", "").lower() == "production":
                 # In production we bail hard so that mis-configured persistence
@@ -91,8 +107,19 @@ _store: VectorStore = _get_store()
 # ---------------------------------------------------------------------------
 
 def add_user_memory(user_id: str, memory: str) -> str:
-    """Persist a single memory string for *user_id*."""
-    return _store.add_user_memory(user_id, memory)
+    """Persist a single memory string for *user_id* with PII redaction.
+
+    The original-to-placeholder substitution map is stored separately under
+    `data/redactions/user_memory/<mem_id>.json` and is access-controlled at the
+    filesystem level.
+    """
+    redacted, mapping = redact_pii(memory)
+    mem_id = _store.add_user_memory(user_id, redacted)
+    try:
+        store_redaction_map("user_memory", mem_id, mapping)
+    except Exception:
+        pass
+    return mem_id
 
 
 def _coerce_k(k: int | str | None) -> int:
