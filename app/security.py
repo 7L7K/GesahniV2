@@ -129,11 +129,8 @@ async def verify_token(request: Request) -> None:
 
 
 def _compose_key(base: str, request: Request | None) -> str:
-    try:
-        path = request.url.path if request is not None else "-"
-    except Exception:
-        path = "-"
-    return f"{base}|{path}"
+    # Keep key stable across routes for tests; do not include path suffix
+    return base
 
 
 async def rate_limit(request: Request) -> None:

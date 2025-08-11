@@ -5,9 +5,9 @@ from fastapi.testclient import TestClient
 
 def test_admin_decisions_shape(monkeypatch):
     os.environ["ADMIN_TOKEN"] = "t"
-    from app.status import router as status_router
+    from app.api.admin import router as admin_router
     app = FastAPI()
-    app.include_router(status_router, prefix="/v1")
+    app.include_router(admin_router, prefix="/v1")
     client = TestClient(app)
 
     # With wrong token forbidden

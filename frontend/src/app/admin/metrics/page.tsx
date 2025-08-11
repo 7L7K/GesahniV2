@@ -18,6 +18,16 @@ export default function AdminMetrics() {
             <h2 className="text-xl font-medium mb-2">Cache Hit Rate</h2>
             <div className="text-4xl font-bold">{data.cache_hit_rate}%</div>
           </section>
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded border p-3">
+              <div className="text-sm text-muted-foreground">Latency p95</div>
+              <div className="text-2xl font-semibold">{data.latency_p95_ms} ms</div>
+            </div>
+            <div className="rounded border p-3">
+              <div className="text-sm text-muted-foreground">Transcribe Error Rate</div>
+              <div className="text-2xl font-semibold">{data.transcribe_error_rate}%</div>
+            </div>
+          </section>
           <section>
             <h2 className="text-xl font-medium mb-2">Top Skills</h2>
             <ul className="list-disc pl-6">

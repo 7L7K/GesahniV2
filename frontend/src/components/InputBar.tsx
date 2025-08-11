@@ -10,11 +10,13 @@ export default function InputBar({
   loading,
   model,
   onModelChange,
+  authed = true,
 }: {
   onSend: (text: string) => Promise<void> | void;
   loading: boolean;
   model: string;
   onModelChange: (m: string) => void;
+  authed?: boolean;
 }) {
   const [text, setText] = useState("");
 
@@ -55,10 +57,10 @@ export default function InputBar({
             className="w-full min-h-[40px] max-h-40 resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             minRows={1}
             maxRows={8}
-            disabled={loading}
+            disabled={loading || !authed}
           />
         </div>
-        <Button onClick={() => { void send(); }} disabled={loading || !text.trim()} size="icon" className="shadow-sm">
+        <Button onClick={() => { void send(); }} disabled={loading || !text.trim() || !authed} size="icon" className="shadow-sm">
           <Send className="size-4" />
         </Button>
       </div>

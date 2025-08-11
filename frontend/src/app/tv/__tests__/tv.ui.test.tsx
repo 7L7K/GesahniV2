@@ -1,3 +1,15 @@
+import React from 'react';
+import { render } from '@testing-library/react';
+import Page from '../page';
+
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), replace: jest.fn() }) }));
+
+describe('TV Page smoke', () => {
+    test('renders without crash', () => {
+        render(<Page />);
+    });
+});
+
 import React from 'react'
 import { render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom'
@@ -18,7 +30,8 @@ describe('TV UI basics', () => {
     it('Listening screen shows live caption structure', () => {
         render(<Listening />)
         expect(screen.getByText('Listening…')).toBeInTheDocument()
-        expect(screen.getByText(/You said:/)).toBeInTheDocument()
+        // multiple "You said:" elements exist; ensure at least one is present
+        expect(screen.getAllByText(/You said:/).length).toBeGreaterThanOrEqual(1)
     })
 
     it('Yes/No bar always shows buttons', () => {
@@ -29,7 +42,7 @@ describe('TV UI basics', () => {
 
     it('Caption bar displays spoken text', () => {
         render(<CaptionBar text="hello" />)
-        expect(screen.getByText(/You said:/)).toBeInTheDocument()
+        expect(screen.getAllByText(/You said:/).length).toBeGreaterThanOrEqual(1)
         expect(screen.getByText('hello')).toBeInTheDocument()
     })
 })

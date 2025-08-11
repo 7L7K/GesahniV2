@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getOnboardingStatus, OnboardingStatus } from '@/lib/api';
+import { getOnboardingStatus, OnboardingStatus, isAuthed } from '@/lib/api';
 import OnboardingFlow from '@/components/OnboardingFlow';
 
 function OnboardingPageInner() {
@@ -16,17 +16,21 @@ function OnboardingPageInner() {
                 const status = await getOnboardingStatus();
                 setOnboardingStatus(status);
 
-                // If onboarding is already completed, redirect to main app
                 if (status.completed) {
                     router.replace('/');
                 }
             } catch (error) {
                 console.error('Failed to get onboarding status:', error);
-                // If there's an error, assume we need to start onboarding
+                // If unauthenticated or API unavailable, route to login to re-auth
+                if (!isAuthed()) {
+                    router.replace('/login?next=%2Fonboarding');
+                    return;
+                }
+                // If authed but API failed, allow local onboarding fallback
                 setOnboardingStatus({
                     completed: false,
                     steps: [],
-                    current_step: 0
+                    current_step: 0,
                 });
             } finally {
                 setLoading(false);

@@ -519,20 +519,7 @@ async def intent_test(req: AskRequest, user_id: str = Depends(get_current_user_i
     return {"intent": "test", "prompt": req.prompt}
 
 
-# Router decisions admin + explain endpoints
-@core_router.get("/explain")
-async def explain_route(req_id: str, user_id: str = Depends(get_current_user_id)):
-    data = decisions_get(req_id)
-    if not data:
-        raise HTTPException(status_code=404, detail="not_found")
-    return data
-
-
-@core_router.get("/admin/router/decisions")
-async def list_router_decisions(
-    limit: int = Query(default=500, ge=1, le=1000), user_id: str = Depends(get_current_user_id)
-):
-    return {"items": decisions_recent(limit)}
+# Admin endpoints are served from app.api.admin. Avoid duplicating here.
 
 
 # Nickname table CRUD (aliases)
@@ -681,21 +668,7 @@ async def ha_webhook(request: Request):
     return WebhookAck()
 
 
-# Admin dashboard -------------------------------------------------------------
-
-
-@core_router.get("/admin/errors")
-async def admin_errors(limit: int = 50, user_id: str = Depends(get_current_user_id)):
-    return {"errors": get_last_errors(limit)}
-
-
-@core_router.get("/admin/self_review")
-async def admin_self_review(user_id: str = Depends(get_current_user_id)):
-    try:
-        res = _get_self_review()
-        return res or {"status": "unavailable"}
-    except Exception:
-        return {"status": "unavailable"}
+# Admin dashboard routes moved to app.api.admin
 
 
 @ha_router.get("/ha/resolve")
