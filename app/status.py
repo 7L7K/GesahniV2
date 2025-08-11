@@ -68,6 +68,12 @@ async def budget_status(user_id: str = Depends(get_current_user_id)) -> dict:
         return {"tokens_used": 0.0, "minutes_used": 0.0, "reply_len_target": "normal", "escalate_allowed": True, "near_cap": False}
 
 
+# Back-compat alias used by some frontends
+@router.get("/status/budget")
+async def budget_status_alias(user_id: str = Depends(get_current_user_id)) -> dict:
+    return await budget_status(user_id)  # type: ignore[arg-type]
+
+
 @router.get("/ha_status")
 async def ha_status(user_id: str = Depends(get_current_user_id)) -> dict:
     start = time.monotonic()

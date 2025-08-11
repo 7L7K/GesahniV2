@@ -27,6 +27,9 @@ export default function CaptureMode() {
   const [showIndicator, setShowIndicator] = useState(false);
   const lastSend = useRef<number>(0);
   const [volume, setVolume] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [sessionMeta, setSessionMeta] = useState<{ status?: string; tags?: string[]; created_at?: string; errors?: string[] } | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Dynamic MIME types
   const [audioMime, setAudioMime] = useState<string>('');
@@ -95,6 +98,7 @@ export default function CaptureMode() {
     }
     setupStream();
     return () => {
+      if (pollTimer.current) clearTimeout(pollTimer.current);
       try {
         audioRecorder.current?.stop();
       } catch { }
@@ -132,9 +136,23 @@ export default function CaptureMode() {
     ws.onclose = () => console.log('ws: closed');
     ws.onerror = (e) => console.error('ws: error', e);
     ws.onmessage = (e) => {
-      console.log('ws: message', e.data);
-      setCaptionText((prev) => (prev ? prev + '\n' : '') + e.data);
-      setShowIndicator(false);
+      try {
+        const msg = JSON.parse(String(e.data || '')) as { text?: string; session_id?: string; error?: string };
+        if (msg?.error) {
+          console.error('ws: error message', msg.error);
+          setError('Live transcription error.');
+        }
+        if (msg?.text) {
+          // Backend sends the full running transcript; render it directly
+          setCaptionText(msg.text);
+        }
+      } catch {
+        // Fallback: treat as plain text
+        const text = String(e.data || '').trim();
+        if (text) setCaptionText(text);
+      } finally {
+        setShowIndicator(false);
+      }
     };
     wsRef.current = ws;
 
@@ -184,6 +202,11 @@ export default function CaptureMode() {
     });
     audioRecorder.current?.stop();
     videoRecorder.current?.stop();
+    try {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send('end');
+      }
+    } catch { }
     wsRef.current?.close();
     await Promise.all([audioStopped, videoStopped]);
     setRecording(false);
@@ -192,27 +215,70 @@ export default function CaptureMode() {
     const videoBlob = new Blob(videoChunks.current, { type: videoMime });
     const form = new FormData();
     form.append('session_id', sessionIdRef.current || '');
-    form.append(
-      'audio',
-      audioBlob,
-      audioMime === 'audio/webm' ? 'audio.webm' : 'audio.mp4'
-    );
-    form.append(
-      'video',
-      videoBlob,
-      videoMime === 'video/mp4' ? 'video.mp4' : 'video.webm'
-    );
+    // Choose filenames consistent with MIME types to help backend/transcribers
+    const audioFilename = audioMime.startsWith('audio/webm')
+      ? 'audio.webm'
+      : audioMime.startsWith('audio/mpeg')
+        ? 'audio.mp3'
+        : audioMime.startsWith('audio/mp4')
+          ? 'audio.mp4'
+          : 'audio.wav';
+    const videoFilename = videoMime.startsWith('video/mp4') ? 'video.mp4' : 'video.webm';
+    form.append('audio', audioBlob, audioFilename);
+    form.append('video', videoBlob, videoFilename);
+    if (captionText.trim()) {
+      form.append('transcript', captionText.trim());
+    }
 
+    const sid = sessionIdRef.current;
     try {
+      setSaving(true);
       await apiFetch('/v1/capture/save', { method: 'POST', body: form });
       console.log('stopRecording: capture saved');
+      // Best-effort: trigger summarization to extract tags and summary
+      if (sid) {
+        try {
+          await apiFetch(`/v1/sessions/${sid}/summarize`, { method: 'POST' });
+        } catch (e) {
+          console.warn('summarize failed (non-fatal)', e);
+        }
+      }
+      // Poll capture status until DONE
+      const poll = async () => {
+        if (!sid) return;
+        try {
+          const res = await apiFetch(`/v1/capture/status/${sid}`, { method: 'GET' });
+          if (!res.ok) return;
+          const meta = await res.json();
+          setSessionMeta(meta as { status?: string; tags?: string[]; created_at?: string; errors?: string[] });
+          const statusVal = (meta as { status?: string } | null)?.status || '';
+          const done = String(statusVal).toUpperCase() === 'DONE';
+          if (!done) {
+            pollTimer.current = setTimeout(poll, 2000);
+          }
+        } catch {
+          // stop polling on error
+          if (pollTimer.current) clearTimeout(pollTimer.current);
+        } finally {
+          setSaving(false);
+        }
+      };
+      await poll();
     } catch (err) {
       console.error('failed to save capture', err);
       setError('Failed to save recording.');
+      setSaving(false);
     }
-  }, [audioMime, videoMime]);
+  }, [audioMime, videoMime, captionText]);
 
   const newQuestion = () => setCaptionText('');
+  const resetSession = () => {
+    sessionIdRef.current = null;
+    setCaptionText('');
+    setSessionMeta(null);
+    audioChunks.current = [];
+    videoChunks.current = [];
+  };
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -406,8 +472,8 @@ export default function CaptureMode() {
               onClick={pauseRecording}
               disabled={!recording}
               className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${recording
-                  ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  : 'bg-gray-50 text-gray-400 cursor-not-allowed'
+                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'bg-gray-50 text-gray-400 cursor-not-allowed'
                 }`}
             >
               <span>⏸️</span>
@@ -421,6 +487,14 @@ export default function CaptureMode() {
               <span>🔄</span>
               New Session
             </button>
+
+            <button
+              onClick={resetSession}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-all duration-200"
+            >
+              <span>🗑️</span>
+              Reset
+            </button>
           </div>
 
           {/* Smart hints */}
@@ -431,6 +505,28 @@ export default function CaptureMode() {
                 Press <kbd className="px-2 py-1 bg-white rounded text-xs font-mono shadow-sm">Space</kbd> to toggle recording
               </span>
             </div>
+            {(saving || sessionMeta) && (
+              <div className="mt-4 flex flex-col items-center gap-2 text-sm text-gray-600">
+                {saving && <span>Uploading…</span>}
+                {sessionMeta && (
+                  <>
+                    <span>
+                      Status: <strong>{sessionMeta.status || '—'}</strong>
+                    </span>
+                    {Array.isArray(sessionMeta.tags) && sessionMeta.tags.length > 0 && (
+                      <div className="flex flex-wrap justify-center gap-2">
+                        {sessionMeta.tags.map((t) => (
+                          <span key={t} className="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">#{t}</span>
+                        ))}
+                      </div>
+                    )}
+                    {Array.isArray(sessionMeta.errors) && sessionMeta.errors.length > 0 && (
+                      <div className="text-red-600">Last error: {sessionMeta.errors[sessionMeta.errors.length - 1]}</div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

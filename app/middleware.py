@@ -15,6 +15,7 @@ from .analytics import record_latency, latency_p95
 from .user_store import user_store
 from .env_utils import load_env
 from . import metrics
+from .security import get_rate_limit_snapshot
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -142,6 +143,17 @@ async def trace_request(request: Request, call_next):
                 local_mode = (not _LL_OK) and (os.getenv("OPENAI_API_KEY", "") == "")
                 if local_mode:
                     response.set_cookie("X-Local-Mode", "1", max_age=600, path="/")
+            except Exception:
+                pass
+            # Rate limit visibility headers
+            try:
+                snap = get_rate_limit_snapshot(request)
+                response.headers["X-RateLimit-Limit"] = str(snap.get("limit"))
+                response.headers["X-RateLimit-Remaining"] = str(snap.get("remaining"))
+                response.headers["X-RateLimit-Reset"] = str(snap.get("reset"))
+                response.headers["X-RateLimit-Burst-Limit"] = str(snap.get("burst_limit"))
+                response.headers["X-RateLimit-Burst-Remaining"] = str(snap.get("burst_remaining"))
+                response.headers["X-RateLimit-Burst-Reset"] = str(snap.get("burst_reset"))
             except Exception:
                 pass
 

@@ -84,7 +84,8 @@ export default function AdminPage() {
 
 function SelfReview() {
     const [errors, setErrors] = useState<{ timestamp: string; level: string; component: string; msg: string }[]>([])
-    const [review, setReview] = useState<any>(null)
+    type Review = Record<string, unknown> | null
+    const [review, setReview] = useState<Review>(null)
     const [loading, setLoading] = useState(true)
     const [err, setErr] = useState<string | null>(null)
 
@@ -97,12 +98,14 @@ function SelfReview() {
                     apiFetch('/v1/admin/errors'),
                     apiFetch('/v1/admin/self_review'),
                 ])
-                const eBody = await eRes.json()
-                const rBody = await rRes.json()
-                setErrors((eBody?.errors || []) as any[])
-                setReview(rBody || {})
-            } catch (e: any) {
-                setErr(e?.message || 'Failed to load')
+                const eBody = (await eRes.json()) as unknown
+                const rBody = (await rRes.json()) as unknown
+                const errs = (eBody && typeof eBody === 'object' && (eBody as { errors?: unknown }).errors)
+                setErrors(Array.isArray(errs) ? (errs as { timestamp: string; level: string; component: string; msg: string }[]) : [])
+                setReview((rBody && typeof rBody === 'object') ? (rBody as Record<string, unknown>) : {})
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : 'Failed to load'
+                setErr(msg)
             } finally {
                 setLoading(false)
             }

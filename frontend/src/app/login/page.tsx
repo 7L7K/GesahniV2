@@ -48,7 +48,21 @@ function LoginPageInner() {
             document.cookie = `auth:hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
             router.replace(next);
         } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
+            const msg = err instanceof Error ? err.message : String(err);
+            // Normalize common backend errors for nicer UX
+            if (/invalid_username/i.test(msg)) {
+                setError('Invalid username. Use 3–64 chars: a-z, 0-9, _, ., -');
+            } else if (/weak_password/i.test(msg)) {
+                setError('Password is too weak. Use at least 8 characters with letters and numbers.');
+            } else if (/username_taken/i.test(msg)) {
+                setError('That username is already taken.');
+            } else if (/invalid credentials/i.test(msg)) {
+                setError('Incorrect username or password.');
+            } else if (/rate_limited/i.test(msg)) {
+                setError('Too many attempts. Please wait and try again.');
+            } else {
+                setError(msg);
+            }
         } finally {
             setLoading(false);
         }
@@ -99,7 +113,8 @@ function LoginPageInner() {
                             const { auth_url } = await res.json();
                             window.location.href = auth_url;
                         } catch (err) {
-                            setError(err instanceof Error ? err.message : String(err));
+                            const msg = err instanceof Error ? err.message : String(err);
+                            setError(msg || 'Google sign-in is temporarily unavailable.');
                         }
                     }}
                 >

@@ -20,8 +20,11 @@ except Exception:  # pragma: no cover - optional dependency
 from urllib.parse import urlencode
 
 from .config import (
-    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI,
-    GOOGLE_SCOPES, JWT_STATE_SECRET
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI,
+    JWT_STATE_SECRET,
+    get_google_scopes,
 )
 
 CLIENT_CONFIG = {
@@ -65,7 +68,7 @@ def create_flow(scopes: Optional[List[str]] = None):
         raise HTTPException(status_code=501, detail="google oauth client unavailable")
     return _Flow.from_client_config(
         CLIENT_CONFIG,
-        scopes=scopes or GOOGLE_SCOPES,
+        scopes=scopes or get_google_scopes(),
         redirect_uri=GOOGLE_REDIRECT_URI,
     )
 
@@ -79,24 +82,16 @@ def build_auth_url(
     Uses the official Flow when available; otherwise constructs the URL
     manually so tests and lightweight environments work without heavy deps.
     """
-    requested_scopes = scopes or GOOGLE_SCOPES
+    requested_scopes = scopes or get_google_scopes()
     # Compose our signed state first
     state_payload: Dict[str, Any] = {"uid": user_id}
     if extra_state:
         state_payload.update(extra_state)
     signed = _sign_state(state_payload)
 
-    if _GOOGLE_AVAILABLE and _Flow is not None:  # pragma: no cover - env-dependent
-        flow = _Flow.from_client_config(
-            CLIENT_CONFIG, scopes=requested_scopes, redirect_uri=GOOGLE_REDIRECT_URI
-        )
-        auth_url, _ = flow.authorization_url(
-            access_type="offline",
-            include_granted_scopes="true",
-            prompt="consent",
-            state=signed,  # use our state directly
-        )
-        return auth_url, signed
+    # Always construct the URL manually for deterministic scopes to avoid
+    # oauthlib "scope_changed" exceptions due to Google returning userinfo.*
+    # even when requesting email/profile.
 
     # Manual construction fallback
     q = urlencode(
@@ -119,9 +114,50 @@ def exchange_code(code: str, signed_state: str):
     if not _GOOGLE_AVAILABLE or _Flow is None:  # pragma: no cover - env-dependent
         # Environments without google libraries should override this function in tests
         raise HTTPException(status_code=501, detail="google oauth exchange unavailable")
-    flow = create_flow()
-    flow.fetch_token(code=code)
-    return flow.credentials
+    # First try via official client
+    try:
+        flow = create_flow()
+        flow.fetch_token(code=code)
+        return flow.credentials
+    except Exception:
+        # Fallback: manual token exchange to avoid oauthlib scope_changed issues
+        try:
+            import requests
+            from datetime import datetime, timezone, timedelta
+
+            resp = requests.post(
+                CLIENT_CONFIG["web"]["token_uri"],
+                data={
+                    "code": code,
+                    "client_id": CLIENT_CONFIG["web"]["client_id"],
+                    "client_secret": CLIENT_CONFIG["web"]["client_secret"],
+                    "redirect_uri": CLIENT_CONFIG["web"]["redirect_uris"][0],
+                    "grant_type": "authorization_code",
+                },
+                timeout=10,
+            )
+            if not resp.ok:
+                raise HTTPException(status_code=400, detail="oauth_exchange_failed")
+            data = resp.json()
+
+            class _SimpleCreds:
+                def __init__(self, d):
+                    self.token = d.get("access_token")
+                    self.refresh_token = d.get("refresh_token")
+                    self.id_token = d.get("id_token")
+                    scope_raw = d.get("scope") or " ".join(get_google_scopes())
+                    self.scopes = scope_raw.split()
+                    expires_in = int(d.get("expires_in") or 3600)
+                    self.expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+                    self.token_uri = CLIENT_CONFIG["web"]["token_uri"]
+                    self.client_id = CLIENT_CONFIG["web"]["client_id"]
+                    self.client_secret = CLIENT_CONFIG["web"]["client_secret"]
+
+            return _SimpleCreds(data)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"oauth_exchange_failed: {e}")
 
 def refresh_if_needed(creds: Any) -> Any:
     try:

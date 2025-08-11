@@ -17,10 +17,15 @@ export default function AdminMetrics() {
             try {
                 const res = await apiFetch('/v1/status/admin/metrics');
                 if (!res.ok) throw new Error('metrics_failed');
-                const body = await res.json();
-                setData(body as MetricResp);
-            } catch (e: any) {
-                setErr(e?.message || 'Failed to load metrics');
+                const body = (await res.json()) as unknown;
+                // Best-effort runtime validation
+                const typed: MetricResp | null = body && typeof body === 'object'
+                    ? (body as MetricResp)
+                    : null;
+                setData(typed);
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : 'Failed to load metrics';
+                setErr(msg);
             } finally {
                 setLoading(false);
             }

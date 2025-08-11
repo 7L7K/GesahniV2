@@ -172,7 +172,7 @@ export async function sendPrompt(
 }
 
 export async function getBudget(): Promise<{ tokens_used: number; minutes_used: number; reply_len_target: string; escalate_allowed: boolean; near_cap: boolean }> {
-  const res = await apiFetch('/v1/status/budget', { method: 'GET' });
+  const res = await apiFetch('/v1/budget', { method: 'GET' });
   if (!res.ok) throw new Error('budget_failed');
   return res.json();
 }
@@ -189,10 +189,11 @@ export async function login(username: string, password: string) {
     auth: false,
     body: JSON.stringify({ username, password }),
   });
-  const body = await res.json().catch(() => ({}));
+  const body = await res.json().catch(() => ({} as Record<string, unknown>));
   if (!res.ok) {
-    const message = (body?.detail || body?.error || 'Login failed').toString();
-    throw new Error(message);
+    const detail = (body?.detail || body?.error || 'Login failed');
+    const message = typeof detail === 'string' ? detail : JSON.stringify(detail);
+    throw new Error(message || 'Login failed');
   }
   const { access_token, refresh_token, stats } = body as { access_token: string; refresh_token?: string; stats?: unknown };
   if (access_token) setTokens(access_token, refresh_token);

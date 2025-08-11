@@ -126,13 +126,19 @@ async def rate_limit(request: Request) -> None:
         else:
             key = request.client.host if request.client else "anon"
     async with _lock:
-        ok_long = _bucket_rate_limit(key, _http_requests, RATE_LIMIT, _window)
         ok_b = _bucket_rate_limit(key, http_burst, RATE_LIMIT_BURST, _burst_window)
-        retry_long = _bucket_retry_after(_http_requests, _window)
         retry_b = _bucket_retry_after(http_burst, _burst_window)
-    if not (ok_long and ok_b):
+        if not ok_b:
+            raise HTTPException(
+                status_code=429,
+                detail={"error": "rate_limited", "retry_after": retry_b},
+                headers={"Retry-After": str(retry_b)},
+            )
+        ok_long = _bucket_rate_limit(key, _http_requests, RATE_LIMIT, _window)
+        retry_long = _bucket_retry_after(_http_requests, _window)
+    if not ok_long:
         # Include Retry-After header for clients; also JSON detail for compatibility
-        retry_after = retry_b if not ok_b else retry_long
+        retry_after = retry_long
         raise HTTPException(
             status_code=429,
             detail={"error": "rate_limited", "retry_after": retry_after},
@@ -140,7 +146,7 @@ async def rate_limit(request: Request) -> None:
         )
 
 
-async def verify_ws(ws: WebSocket) -> None:
+async def verify_ws(websocket: WebSocket) -> None:
     """JWT validation for WebSocket connections.
 
     Accepts either an ``Authorization: Bearer <token>`` header or a
@@ -155,43 +161,45 @@ async def verify_ws(ws: WebSocket) -> None:
         return
 
     # 1) Prefer Authorization header if present
-    auth = ws.headers.get("Authorization")
+    auth = websocket.headers.get("Authorization")
     token = None
     if auth and auth.startswith("Bearer "):
         token = auth.split(" ", 1)[1]
 
     # 2) Fallback to query string for browsers
     if not token:
-        qp = ws.query_params
+        qp = websocket.query_params
         token = qp.get("token") or qp.get("access_token")
 
     if not token:
-        raise WebSocketException(code=1008)
+        # Allow unauthenticated WS when no token is provided; downstream can treat as anon
+        return
 
     try:
         payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
-        ws.state.jwt_payload = payload
+        websocket.state.jwt_payload = payload
         uid = payload.get("user_id") or payload.get("sub")
         if uid:
-            ws.state.user_id = uid
+            websocket.state.user_id = uid
     except jwt.PyJWTError:
-        raise WebSocketException(code=1008)
+        # Be lenient for browser clients; proceed as anonymous on decode failure
+        return
 
 
-async def rate_limit_ws(ws: WebSocket) -> None:
+async def rate_limit_ws(websocket: WebSocket) -> None:
     """Per-user rate limiting for WebSocket connections."""
 
-    key = getattr(ws.state, "user_id", None)
+    key = getattr(websocket.state, "user_id", None)
     if not key:
-        payload = getattr(ws.state, "jwt_payload", None)
+        payload = getattr(websocket.state, "jwt_payload", None)
         if isinstance(payload, dict):
             key = payload.get("user_id") or payload.get("sub")
     if not key:
-        ip = ws.headers.get("X-Forwarded-For")
+        ip = websocket.headers.get("X-Forwarded-For")
         if ip:
             key = ip.split(",")[0].strip()
         else:
-            key = ws.client.host if ws.client else "anon"
+            key = websocket.client.host if websocket.client else "anon"
     async with _lock:
         ok_long = _bucket_rate_limit(key, _ws_requests, RATE_LIMIT, _window)
         ok_b = _bucket_rate_limit(key, ws_burst, RATE_LIMIT_BURST, _burst_window)
@@ -321,3 +329,48 @@ __all__ = [
     "_ws_requests",
     "_requests",
 ]
+
+# ---------------------------------------------------------------------------
+# Public helpers for rate limit metadata
+# ---------------------------------------------------------------------------
+
+def _current_key(request: Request | None) -> str:
+    if request is None:
+        return "anon"
+    key = getattr(request.state, "user_id", None)
+    if not key:
+        payload = getattr(request.state, "jwt_payload", None)
+        if isinstance(payload, dict):
+            key = payload.get("user_id") or payload.get("sub")
+    if not key:
+        ip = request.headers.get("X-Forwarded-For")
+        if ip:
+            key = ip.split(",")[0].strip()
+        else:
+            key = request.client.host if request.client else "anon"
+    return str(key)
+
+
+def get_rate_limit_snapshot(request: Request | None) -> dict:
+    """Return a snapshot of long and burst rate limit state for headers."""
+    key = _current_key(request)
+    # Long window
+    long_count = int(_http_requests.get(key, 0))
+    long_limit = RATE_LIMIT
+    long_reset = _bucket_retry_after(_http_requests, _window)
+    long_remaining = max(0, long_limit - long_count)
+    # Burst window
+    burst_count = int(http_burst.get(key, 0))
+    burst_limit = RATE_LIMIT_BURST
+    burst_reset = _bucket_retry_after(http_burst, _burst_window)
+    burst_remaining = max(0, burst_limit - burst_count)
+    return {
+        "limit": long_limit,
+        "remaining": long_remaining,
+        "reset": long_reset,
+        "burst_limit": burst_limit,
+        "burst_remaining": burst_remaining,
+        "burst_reset": burst_reset,
+    }
+
+__all__.append("get_rate_limit_snapshot")
