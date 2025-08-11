@@ -1,3 +1,13 @@
+"""Metrics placeholders for Granny Mode."""
+
+
+def record_p95(stage: str, value_ms: float) -> None:
+    _ = (stage, value_ms)
+
+
+def inc_error(name: str) -> None:
+    _ = name
+
 from __future__ import annotations
 
 import time

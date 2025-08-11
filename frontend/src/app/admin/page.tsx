@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { useState } from "react";
+import { useRouterDecisions, apiFetch } from "@/lib/api";
 
 type Decision = {
     req_id: string
@@ -17,30 +17,15 @@ type Decision = {
 }
 
 export default function AdminPage() {
-    const [items, setItems] = useState<Decision[]>([])
-    const [err, setErr] = useState<string>('')
-
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const res = await fetch('/v1/admin/router/decisions')
-                if (!res.ok) throw new Error(`HTTP ${res.status}`)
-                const body = await res.json()
-                setItems(body.items || [])
-            } catch (e) {
-                setErr(String(e))
-            }
-        }
-        void load()
-        const t = setInterval(load, 4000)
-        return () => clearInterval(t)
-    }, [])
+    const { data, isLoading, error } = useRouterDecisions(50)
+    const items: Decision[] = (data?.items as Decision[]) || []
 
     return (
         <main className="mx-auto max-w-5xl px-4 py-6 space-y-8">
             <section>
                 <h1 className="text-xl font-semibold mb-4">Router Decisions</h1>
-                {err && <p className="text-sm text-red-600">{err}</p>}
+                {error && <p className="text-sm text-red-600">{error.message}</p>}
+                {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
                 <div className="overflow-x-auto rounded border">
                     <table className="min-w-full text-sm">
                         <thead className="bg-muted/50">
@@ -68,6 +53,9 @@ export default function AdminPage() {
                                     <td className="px-2 py-1 text-right">{d.self_check ? d.self_check.toFixed(2) : '-'}</td>
                                 </tr>
                             ))}
+                            {!items.length && !isLoading && (
+                                <tr><td className="px-2 py-3 text-sm text-muted-foreground" colSpan={8}>No decisions yet.</td></tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -75,7 +63,6 @@ export default function AdminPage() {
 
             <section>
                 <h2 className="text-xl font-medium mb-2">Daily self-review</h2>
-                {/* Fetch via apiFetch to align with auth and base URL handling */}
                 <SelfReview />
             </section>
         </main>

@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { login, register, setTokens, apiFetch } from '@/lib/api';
+import { setTokens, apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -39,11 +39,25 @@ function LoginPageInner() {
             if (password.trim().length < 6) {
                 throw new Error('Password too short');
             }
+            // Use direct API calls since we simplified api lib
+            const endpoint = mode === 'login' ? '/v1/login' : '/v1/register'
+            const res = await apiFetch(endpoint, { auth: false, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: uname, password }) })
+            const body = await res.json().catch(() => ({} as Record<string, unknown>))
+            if (!res.ok) {
+                const detail = body?.detail || body?.error || 'Login failed'
+                throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
+            }
+            // For login, persist tokens
             if (mode === 'login') {
-                await login(uname, password);
+                const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string }
+                if (access_token) setTokens(access_token, refresh_token)
             } else {
-                await register(uname, password);
-                await login(uname, password);
+                // After register, login
+                const res2 = await apiFetch('/v1/login', { auth: false, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: uname, password }) })
+                const body2 = await res2.json().catch(() => ({} as Record<string, unknown>))
+                if (!res2.ok) throw new Error('Login failed')
+                const { access_token, refresh_token } = body2 as { access_token?: string; refresh_token?: string }
+                if (access_token) setTokens(access_token, refresh_token)
             }
             document.cookie = `auth:hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
             router.replace(next);

@@ -146,7 +146,8 @@ def oauth_callback(
     email = None
     if id_token:
         try:
-            claims = jose_jwt.get_unverified_claims(id_token)
+            # Decode without verifying signature to read claims only
+            claims = jose_jwt.decode(id_token, options={"verify_signature": False, "verify_aud": False})
             email = (claims.get("email") or claims.get("sub") or "").lower()
         except Exception:
             email = None

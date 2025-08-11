@@ -23,7 +23,7 @@ JWT_SECRET: str | None = None  # backwards compat; actual value read from env
 API_TOKEN = os.getenv("API_TOKEN")
 RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MIN", "60"))
 _window = 60.0
-RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "10"))
+RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "20"))
 _burst_window = float(os.getenv("RATE_LIMIT_BURST_WINDOW", "10"))
 _lock = asyncio.Lock()
 

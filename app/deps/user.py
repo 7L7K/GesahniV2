@@ -43,6 +43,7 @@ def get_current_user_id(
         token = request.cookies.get("access_token")
 
     secret = JWT_SECRET or os.getenv("JWT_SECRET")
+    require_jwt = os.getenv("REQUIRE_JWT", "1").strip().lower() in {"1", "true", "yes", "on"}
     if token and secret:
         try:
             payload = jwt.decode(token, secret, algorithms=["HS256"])
@@ -50,6 +51,9 @@ def get_current_user_id(
         except jwt.PyJWTError:
             # Unauthorized if token is malformed or invalid
             raise HTTPException(status_code=401, detail="Invalid authentication token")
+    elif token and not secret and require_jwt:
+        # Token provided but no secret configured while required → fail-closed
+        raise HTTPException(status_code=500, detail="missing_jwt_secret")
 
     if not user_id:
         user_id = "anon"

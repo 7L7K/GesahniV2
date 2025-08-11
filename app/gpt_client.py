@@ -57,17 +57,40 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", GPT_MID_MODEL)
 # These aliases are used by the deterministic router and tests but may not
 # correspond to public API model names. Normalize them here so the OpenAI
 # client always receives a valid model identifier.
-_MODEL_ALIASES = {
-    # Baseline lightweight models / aliases
-    "gpt-5-nano": GPT_BASELINE_MODEL,
-    "gpt-4.1-nano": GPT_MID_MODEL,
-    # Mid-tier chat quality
-    "gpt-5-mini": GPT_MID_MODEL,
-    # Reasoning burst
-    "o1-mini": os.getenv("GPT_REASONING_MODEL", "o1-mini"),
-    # Heavy model alias
-    GPT_HEAVY_MODEL: GPT_HEAVY_MODEL,
-}
+def _load_models_aliases() -> dict:
+    aliases = {
+        # Baseline lightweight models / aliases
+        "gpt-5-nano": GPT_BASELINE_MODEL,
+        "gpt-4.1-nano": GPT_MID_MODEL,
+        # Mid-tier chat quality
+        "gpt-5-mini": GPT_MID_MODEL,
+        # Reasoning burst
+        "o1-mini": os.getenv("GPT_REASONING_MODEL", "o1-mini"),
+        # Heavy model alias
+        GPT_HEAVY_MODEL: GPT_HEAVY_MODEL,
+    }
+    # Optional: supplement/override from MODELS_JSON
+    try:
+        raw = os.getenv("MODELS_JSON", "").strip()
+        if raw:
+            import json as _json
+            data = _json.loads(raw)
+            # Accept either a list of {alias: real} or a dict
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    if isinstance(k, str) and isinstance(v, str) and k and v:
+                        aliases[k] = v
+            elif isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict):
+                        for k, v in item.items():
+                            if isinstance(k, str) and isinstance(v, str) and k and v:
+                                aliases[k] = v
+    except Exception:
+        pass
+    return aliases
+
+_MODEL_ALIASES = _load_models_aliases()
 
 
 def _normalize_model_name(name: str | None) -> str:

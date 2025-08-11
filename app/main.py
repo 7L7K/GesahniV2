@@ -62,6 +62,10 @@ from .llama_integration import startup_check as llama_startup
 from .logging_config import configure_logging, get_last_errors
 from .status import router as status_router
 from .auth import router as auth_router
+try:
+    from .auth_device import router as device_auth_router
+except Exception:
+    device_auth_router = None  # type: ignore
 from .session_store import SessionStatus, list_sessions as list_session_store
 try:
     from .integrations.google.routes import router as google_router
@@ -779,6 +783,9 @@ app.include_router(status_router, prefix="/v1")
 app.include_router(status_router, include_in_schema=False)
 app.include_router(auth_router, prefix="/v1")
 app.include_router(auth_router, include_in_schema=False)
+if device_auth_router is not None:
+    app.include_router(device_auth_router, prefix="/v1")
+    app.include_router(device_auth_router, include_in_schema=False)
 
 # Google integration (optional)
 if google_router is not None:

@@ -27,9 +27,12 @@ def _check_admin(token: str | None) -> None:
     When a token is explicitly provided, still enforce matching behavior.
     """
     _tok = _admin_token()
-    if os.getenv("PYTEST_RUNNING", "").lower() in {"1", "true", "yes"}:
-        if token is None:
-            return
+    # In production-like runs, require ADMIN_TOKEN to be set
+    if os.getenv("PYTEST_RUNNING", "").lower() not in {"1", "true", "yes"} and not _tok:
+        raise HTTPException(status_code=403, detail="admin_token_required")
+    # In tests, allow access when token is omitted entirely
+    if os.getenv("PYTEST_RUNNING", "").lower() in {"1", "true", "yes"} and token is None:
+        return
     if _tok and token != _tok:
         raise HTTPException(status_code=403, detail="forbidden")
 
