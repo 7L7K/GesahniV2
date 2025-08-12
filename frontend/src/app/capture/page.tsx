@@ -13,7 +13,7 @@ export default async function CapturePage() {
   // Since tokens are in localStorage, we cannot fully verify here; perform a soft guard
   // by reading an opt-in cookie set by client after login. If absent, still render,
   // but CaptureMode will handle client-side redirect.
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const authedHint = cookieStore.get('auth:hint')?.value;
   if (authedHint === '0') {
     redirect('/login?next=%2Fcapture');

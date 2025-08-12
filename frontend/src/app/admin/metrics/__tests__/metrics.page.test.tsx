@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import React from 'react'
 import { render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom'
 import Page from '../../metrics/page'
 
@@ -17,7 +18,8 @@ describe('Admin /admin/metrics page', () => {
     afterEach(() => { (global as any).fetch = undefined })
 
     it('renders metrics values', async () => {
-        render(<Page />)
+        const qc = new QueryClient()
+        render(<QueryClientProvider client={qc}><Page /></QueryClientProvider>)
         expect(await screen.findByText(/Admin Metrics/i)).toBeInTheDocument()
         expect(await screen.findByText(/Cache Hit Rate/i)).toBeInTheDocument()
     })

@@ -4,6 +4,9 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
     title: "Docs | Gesahni",
     description: "User Guide for GesahniV2",
+    metadataBase: new URL(
+        (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "http://localhost:3000") as string,
+    ),
 };
 
 const nav = [

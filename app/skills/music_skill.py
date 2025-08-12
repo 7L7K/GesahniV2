@@ -17,8 +17,8 @@ except Exception:
 
 class MusicSkill(Skill):
     PATTERNS = [
-        re.compile(r"(play|pause) music", re.I),
-        re.compile(r"play (?P<artist>[\w\.\s]+)$", re.I),
+        re.compile(r"\b(play|pause|stop) music\b", re.I),
+        re.compile(r"\bplay (?P<artist>[\w\.,\-\s]+)$", re.I),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
@@ -39,7 +39,7 @@ class MusicSkill(Skill):
             return f"Playing {artist}"
 
         action = match.group(1).lower() if match.groups() else "play"
-        service = "media_play" if action == "play" else "media_pause"
+        service = "media_play" if action == "play" else ("media_pause" if action == "pause" else "media_stop")
         await ha.call_service(
             "media_player", service, {"entity_id": "media_player.house"}
         )

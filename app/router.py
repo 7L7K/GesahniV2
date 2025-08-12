@@ -50,7 +50,7 @@ from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from .skills.smalltalk_skill import SmalltalkSkill
 from .telemetry import log_record_var
 from .otel_utils import start_span, set_error
-from .memory.profile_store import profile_store
+from .memory.profile_store import profile_store, CANONICAL_KEYS
 try:  # optional: new retrieval pipeline
     from .retrieval.pipeline import run_pipeline as _run_retrieval_pipeline
 except Exception:  # pragma: no cover
@@ -174,6 +174,96 @@ def _needs_rag(prompt: str) -> bool:
         or "what did i watch yesterday" in p
     )
 
+
+def _classify_profile_question(text: str) -> tuple[bool, str | None]:
+    """Return (is_profile_fact, canonical_key|None).
+
+    Simple heuristic mapper for short asks like "what's my favorite color".
+    """
+    p = (text or "").lower().strip()
+    # map phrases to canonical keys
+    mapping = {
+        "favorite color": "favorite_color",
+        "favourite color": "favorite_color",
+        "name": "preferred_name",
+        "preferred name": "preferred_name",
+        "timezone": "timezone",
+        "time zone": "timezone",
+        "locale": "locale",
+        "home city": "home_city",
+        "city do i live": "home_city",
+        "music service": "music_service",
+        "spotify or apple": "music_service",
+    }
+    for phrase, key in mapping.items():
+        if phrase in p:
+            return True, key
+    # generic patterns
+    if p.startswith("what's my ") or p.startswith("what is my "):
+        for key in CANONICAL_KEYS:
+            if key.replace("_", " ") in p:
+                return True, key
+    return False, None
+
+
+def _maybe_extract_confirmation(text: str) -> str | None:
+    """If text cleanly states a value (e.g., "it's blue"), return the value."""
+    t = (text or "").strip().strip(". ")
+    lowers = t.lower()
+    for prefix in ("it's ", "its ", "it is ", "is ", "= "):
+        if lowers.startswith(prefix):
+            return t[len(prefix):].strip()
+    # "blue" as a single token confirmation
+    if len(t.split()) <= 3 and len(t) <= 32:
+        return t
+    return None
+
+
+_BASIC_COLORS: set[str] = {
+    "red","blue","green","yellow","purple","orange","pink","black","white","gray","grey","brown","teal","cyan","magenta","maroon","navy","gold","silver"
+}
+
+
+def _maybe_update_profile_from_statement(user_id: str, text: str) -> None:
+    """Parse simple statements and upsert profile facts.
+
+    Examples:
+    - "my favorite color is blue" → favorite_color=blue
+    - "it's blue" → favorite_color=blue (when value is a known color)
+    - "call me Alex" / "my name is Alex" → preferred_name=Alex
+    - "i live in Detroit" → home_city=Detroit
+    """
+    t = (text or "").strip()
+    tl = t.lower()
+    try:
+        # favorite color variants
+        for phrase in ("my favorite color is ", "my favourite color is ", "favorite color is ", "favourite color is "):
+            if tl.startswith(phrase):
+                val = t[len(phrase):].strip(" .")
+                if val:
+                    profile_store.upsert(user_id, "favorite_color", val, source="utterance")
+                    return
+        # generic color-only confirmation
+        conf = _maybe_extract_confirmation(t)
+        if conf and conf.lower() in _BASIC_COLORS:
+            profile_store.upsert(user_id, "favorite_color", conf, source="utterance")
+            return
+        # name
+        for phrase in ("my name is ", "call me "):
+            if tl.startswith(phrase):
+                val = t[len(phrase):].strip(" .")
+                if val:
+                    profile_store.upsert(user_id, "preferred_name", val, source="utterance")
+                    return
+        # home city
+        for phrase in ("i live in ", "my home city is "):
+            if tl.startswith(phrase):
+                val = t[len(phrase):].strip(" .")
+                if val:
+                    profile_store.upsert(user_id, "home_city", val, source="utterance")
+                    return
+    except Exception:
+        pass
 
 def _annotate_provenance(text: str, mem_docs: list[str]) -> str:
     """Append [#chunk:ID] tags to lines with high semantic similarity to RAG.
@@ -337,6 +427,44 @@ async def route_prompt(
             return msg
         # If the LLaMA circuit is open, bypass all skills to force model path
         bypass_skills = bool(llama_circuit_open)
+
+        # Profile facts: KV-first short-ask handling
+        is_pf, pf_key = _classify_profile_question(norm_prompt)
+        if is_pf:
+            # Remember last asked key to accept short confirmations
+            try:
+                profile_store.set_last_asked_key(user_id, pf_key)
+            except Exception:
+                pass
+            value = profile_store.get_value(user_id, pf_key) if pf_key else None
+            if value is not None:
+                # Build minimal prompt with facts block; but answer directly
+                facts = {pf_key: value} if pf_key else {}
+                _built_prompt, ptoks = PromptBuilder.build(
+                    user_prompt,
+                    session_id=session_id,
+                    user_id=user_id,
+                    small_ask=True,
+                    profile_facts=facts,
+                )
+                if rec:
+                    rec.prompt_tokens = ptoks
+                    rec.prompt_hash = __import__(
+                        "app.memory.env_utils", fromlist=["_normalized_hash"]
+                    )._normalized_hash(norm_prompt)
+                try:
+                    logger.info(
+                        "profile_fact read — key=%s user=%s value=%r facts_block=%r",
+                        pf_key,
+                        user_id,
+                        value,
+                        rec.facts_block if rec else None,
+                    )
+                except Exception:
+                    pass
+                # Answer with the value directly to avoid hedging
+                result = await _finalise("gpt", prompt, str(value), rec)
+                return result
 
         # 1️⃣ Explicit override (bypass skills like smalltalk)
         if model_override:
@@ -502,6 +630,24 @@ async def route_prompt(
                 handle_user_reply(user_id, prompt)
             except Exception:
                 pass
+        # Also parse simple profile statements proactively
+        try:
+            _maybe_update_profile_from_statement(user_id, prompt)
+        except Exception:
+            pass
+
+        # Accept confirmations like "it's blue" for the last asked profile key
+        try:
+            pending_key = profile_store.get_last_asked_key(user_id)
+        except Exception:
+            pending_key = None
+        if pending_key:
+            maybe = _maybe_extract_confirmation(prompt)
+            if maybe:
+                try:
+                    profile_store.upsert(user_id, pending_key, maybe, source="utterance")
+                except Exception:
+                    pass
 
         # 3️⃣ Home‑Assistant (second chance if earlier routing changed state)
         ha_resp = handle_command(prompt)

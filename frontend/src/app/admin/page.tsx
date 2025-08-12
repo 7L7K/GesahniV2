@@ -17,7 +17,13 @@ type Decision = {
 }
 
 export default function AdminPage() {
-    const token = useMemo(() => process.env.NEXT_PUBLIC_ADMIN_TOKEN || '', [])
+    const [token, setToken] = useState<string>("")
+    // Initialize from public env or localStorage
+    useEffect(() => {
+        const envTok = process.env.NEXT_PUBLIC_ADMIN_TOKEN || ''
+        const lsTok = typeof window !== 'undefined' ? (localStorage.getItem('admin:token') || '') : ''
+        setToken(envTok || lsTok)
+    }, [])
     const [filters, setFilters] = useState<{ engine?: string; model?: string; cache_hit?: string; escalated?: string; q?: string }>({})
     const [cursor, setCursor] = useState<number | null>(0)
     const { data, isLoading, error } = useRouterDecisions(token, 20, { ...filters, cursor: cursor ?? 0 })
@@ -30,6 +36,17 @@ export default function AdminPage() {
                 {error && <p className="text-sm text-red-600">{error.message}</p>}
                 {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
                 <div className="flex flex-wrap gap-2 mb-3 items-end">
+                    <div className="flex items-center gap-2 mr-4">
+                        <label className="text-xs text-muted-foreground">Admin token</label>
+                        <input
+                            value={token}
+                            onChange={(e) => setToken(e.target.value)}
+                            onBlur={() => { try { localStorage.setItem('admin:token', token || '') } catch { } }}
+                            className="border rounded px-2 py-1 text-sm min-w-48"
+                            placeholder="paste token"
+                        />
+                        <button className="border rounded px-2 py-1 text-xs" onClick={() => { try { localStorage.setItem('admin:token', token || '') } catch { } }}>Save</button>
+                    </div>
                     <select className="border rounded px-2 py-1 text-sm" value={filters.engine || ''} onChange={(e) => { setCursor(0); setFilters({ ...filters, engine: e.target.value || undefined }) }}>
                         <option value="">Engine: Any</option>
                         <option value="gpt">gpt</option>

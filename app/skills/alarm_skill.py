@@ -52,11 +52,24 @@ def _parse_time(t: str) -> datetime | None:
 
 class AlarmSkill(Skill):
     PATTERNS = [
-        re.compile(r"set alarm for (?P<time>\d{1,2}(?::\d{2})?\s*(?:am|pm))", re.I),
+        # set/add alarm at/for 7am, 7:30 pm, etc.; also "wake me up at ..."
         re.compile(
-            r"cancel alarm(?: for (?P<ctime>\d{1,2}(?::\d{2})?\s*(?:am|pm)))", re.I
+            r"\b(?:set|add) (?:an )?alarm (?:for|at) (?P<time>\d{1,2}(?::\d{2})?\s*(?:am|pm))\b",
+            re.I,
         ),
-        re.compile(r"(?:list|show) alarms", re.I),
+        re.compile(
+            r"\bwake me (?:up )?at (?P<time>\d{1,2}(?::\d{2})?\s*(?:am|pm))\b",
+            re.I,
+        ),
+        # cancel a specific alarm time
+        re.compile(
+            r"\bcancel alarm(?: for (?P<ctime>\d{1,2}(?::\d{2})?\s*(?:am|pm)))\b",
+            re.I,
+        ),
+        # list/show alarms
+        re.compile(r"\b(?:list|show) alarm(?:s)?\b", re.I),
+        # clear all alarms
+        re.compile(r"\b(?:clear|delete|cancel) all alarms\b", re.I),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
@@ -89,6 +102,19 @@ class AlarmSkill(Skill):
                 pass
             _persist_alarms()
             return f"Alarm for {time_str} cancelled."
+
+        # clear all alarms
+        if re.search(r"\b(?:clear|delete|cancel) all alarms\b", prompt, re.I):
+            removed = 0
+            for _t, _id in list(ALARMS.items()):
+                try:
+                    scheduler.remove_job(_id)  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+                removed += 1
+                ALARMS.pop(_t, None)
+            _persist_alarms()
+            return "All alarms cleared." if removed else "No alarms to clear."
 
         if ALARMS:
             times = ", ".join(sorted(ALARMS.keys()))

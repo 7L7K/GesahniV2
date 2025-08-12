@@ -1,3 +1,4 @@
+- Retrieval policy: cosine only; keep if similarity ≥ 0.75 (distance ≤ 0.25). Logged with raw scores and kept/dropped counts.
 RBAC and Audit
 
 RBAC

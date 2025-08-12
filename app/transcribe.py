@@ -5,10 +5,10 @@ try:  # pragma: no cover - import may be deprecated in future runtimes
 except Exception:  # pragma: no cover - fallback for environments without audioop
     audioop = None  # type: ignore
 
-try:  # pragma: no cover - exercised when openai is installed
-    import openai
+try:  # pragma: no cover - prefer modern SDK
+    from openai import OpenAI as _SyncOpenAI  # type: ignore
 except Exception:  # pragma: no cover - executed when dependency missing
-    openai = None  # type: ignore
+    _SyncOpenAI = None  # type: ignore
 
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "whisper-1")
 VAD_ENERGY_THRESHOLD = int(os.getenv("VAD_ENERGY_THRESHOLD", "500"))
@@ -17,21 +17,22 @@ logger = logging.getLogger(__name__)
 
 
 def transcribe_file(path: str, model: str | None = None) -> str:
-    """Transcribe the given audio file using OpenAI's Whisper API."""
+    """Transcribe the given audio file using OpenAI's Whisper API (sync client)."""
     model = model or WHISPER_MODEL
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY not set")
-    if openai is None:
+    if _SyncOpenAI is None:
         raise RuntimeError("openai package not installed")
     try:
+        client = _SyncOpenAI(api_key=api_key)
         with open(path, "rb") as fh:
-            resp = openai.Audio.transcribe(model=model, file=fh, api_key=api_key)
-        if isinstance(resp, dict):
-            text = resp.get("text", "")
-        else:
-            text = getattr(resp, "text", str(resp))
-        return text.strip()
+            resp = client.audio.transcriptions.create(model=model, file=fh)
+        text = getattr(resp, "text", "")
+        return str(text or "").strip()
+    except FileNotFoundError as e:
+        logger.debug("transcribe_file file not found: %s", path)
+        raise
     except Exception as e:
         logger.exception("Transcription failed: %s", e)
         raise

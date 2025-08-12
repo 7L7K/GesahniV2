@@ -159,7 +159,7 @@ def embed_sync(text: str) -> List[float]:
         if backend == "openai"
         else os.getenv("LLAMA_EMBEDDINGS_MODEL", "")
     )
-    logger.debug("embed_sync backend=%s model=%s", backend, model)
+    logger.debug("embed_sync backend=%s model=%s (cosine metric assumed)", backend, model)
 
     if backend == "stub":
         return _embed_stub(text)
@@ -191,7 +191,7 @@ async def embed(text: str) -> List[float]:
         if backend == "openai"
         else os.getenv("LLAMA_EMBEDDINGS_MODEL", "")
     )
-    logger.debug("embed backend=%s model=%s", backend, model)
+    logger.debug("embed backend=%s model=%s (cosine metric assumed)", backend, model)
 
     if backend == "openai":
         return await _embed_openai(text)

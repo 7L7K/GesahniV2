@@ -62,6 +62,7 @@ export default function DevicePrefsStep({ profile, onNext }: DevicePrefsStepProp
                     <h3 className="text-lg font-medium text-gray-900 mb-3">Speech pace</h3>
                     <div className="flex items-center gap-4">
                         <input
+                            aria-label="Speech pace"
                             type="range"
                             min={0.8}
                             max={1.2}
@@ -99,6 +100,7 @@ export default function DevicePrefsStep({ profile, onNext }: DevicePrefsStepProp
                     <h3 className="text-lg font-medium text-gray-900 mb-3">Font size</h3>
                     <div className="flex items-center gap-4">
                         <input
+                            aria-label="Font size"
                             type="range"
                             min={0.9}
                             max={1.4}

@@ -44,9 +44,9 @@ CONVERSIONS: Dict[Tuple[str, str], Callable[[float], float]] = {
 
 class UnitConversionSkill(Skill):
     PATTERNS = [
-        re.compile(r"how many ([a-zA-Z]+) in (\d+(?:\.\d+)?) ([a-zA-Z]+)", re.I),
-        re.compile(r"(\d+(?:\.\d+)?)\s*°?\s*(c|f)\s*to\s*(c|f)", re.I),
-        re.compile(r"convert (\d+(?:\.\d+)?) ([a-zA-Z]+) to ([a-zA-Z]+)", re.I),
+        re.compile(r"\bhow many ([a-zA-Z]+) in (\d+(?:\.\d+)?) ([a-zA-Z]+)\b", re.I),
+        re.compile(r"\b(\d+(?:\.\d+)?)\s*°?\s*(c|f)\s*to\s*(c|f)\b", re.I),
+        re.compile(r"\bconvert (\d+(?:\.\d+)?) ([a-zA-Z]+) to ([a-zA-Z]+)\b", re.I),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
@@ -70,4 +70,7 @@ class UnitConversionSkill(Skill):
         rec = log_record_var.get()
         if rec is not None:
             rec.route_reason = (rec.route_reason or "") + "|force_llama_convert"
-        return f"{amount:g} {from_unit}{'' if amount==1 else 's'} is {result:.2f} {to_unit}{'' if result==1 else 's'}."
+        # singular/plural formatting with better rounding for tiny values
+        plural_from = "" if abs(amount - 1.0) < 1e-9 else "s"
+        plural_to = "" if abs(result - 1.0) < 1e-9 else "s"
+        return f"{amount:g} {from_unit}{plural_from} is {result:.2f} {to_unit}{plural_to}."

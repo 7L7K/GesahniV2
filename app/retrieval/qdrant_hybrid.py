@@ -34,7 +34,7 @@ def _to_items(points: List[Any]) -> List[RetrievedItem]:
     for p in points or []:
         pid = getattr(p, "id", None)
         payload = getattr(p, "payload", {}) or {}
-        score = float(getattr(p, "score", 0.0) or 0.0)
+        score = float(getattr(p, "score", 0.0) or 0.0)  # cosine similarity
         text = payload.get("text") or payload.get("document") or ""
         if pid is None:
             pid = payload.get("_id") or payload.get("hash") or str(hash(text))
@@ -67,7 +67,10 @@ def dense_search(
     c = _client()
     f = _payload_filter(user_id, extra_filter)
     res = c.search(collection_name=collection, query_vector=query_vector, limit=limit, query_filter=f)
-    return _to_items(res)
+    items = _to_items(res)
+    # Enforce keep threshold sim>=0.75 (dist<=0.25)
+    kept = [it for it in items if (1.0 - float(it.score)) <= 0.25]
+    return kept
 
 
 def sparse_search(

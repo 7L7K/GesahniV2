@@ -50,6 +50,8 @@ async def config(
         raise HTTPException(status_code=403, detail="forbidden")
     out = {k: v for k, v in os.environ.items() if k.isupper()}
     out.setdefault("SIM_THRESHOLD", os.getenv("SIM_THRESHOLD", "0.24"))
+    out.setdefault("VECTOR_METRIC", "cosine (locked)")
+    out.setdefault("RETRIEVE_POLICY", "keep if sim>=0.75 (dist<=0.25)")
     try:
         import builtins
 

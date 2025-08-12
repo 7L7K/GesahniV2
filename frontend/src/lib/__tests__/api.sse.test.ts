@@ -4,15 +4,9 @@ import { sendPrompt } from '@/lib/api';
 describe('sendPrompt SSE', () => {
   beforeEach(() => {
     (global as any).fetch = jest.fn(async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(encoder.encode('data: a\n\n'));
-          controller.enqueue(encoder.encode('data: b\n\n'));
-          controller.close();
-        },
-      });
-      return new Response(stream as any, { status: 200, headers: { 'content-type': 'text/event-stream' } } as any) as any;
+      // Use our setup's SimpleResponse which supports getReader()
+      const body = 'data: a\n\ndata: b\n\n';
+      return new (global as any).Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
     });
   });
 

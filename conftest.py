@@ -179,6 +179,10 @@ def _isolate_debug_and_flags(monkeypatch):
         monkeypatch.delenv(var, raising=False)
         monkeypatch.setenv(var, "0")
 
+    # Ensure a stable default vector backend per test. Individual tests may
+    # override this (e.g. to "dual"). Setting it here avoids cross‑test bleed.
+    monkeypatch.setenv("VECTOR_STORE", "memory")
+
     # Reset LLaMA/GPT health and circuit flags
     import app.router as router
     import app.model_picker as model_picker

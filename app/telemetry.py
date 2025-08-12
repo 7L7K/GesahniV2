@@ -74,6 +74,10 @@ class LogRecord(BaseModel):
     escalated: Optional[bool] = None
     prompt_hash: Optional[str] = None
     cache_similarity: Optional[float] = None
+
+    # profile facts / KV observability
+    profile_facts_keys: Optional[List[str]] = None
+    facts_block: Optional[str] = None
     route_trace: Optional[list] = None
 
 

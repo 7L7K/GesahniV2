@@ -1,15 +1,24 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useAdminMetrics } from "@/lib/api";
 
 export default function AdminMetrics() {
-  const token = useMemo(() => process.env.NEXT_PUBLIC_ADMIN_TOKEN || '', []);
+  const [token, setToken] = useState('');
+  useEffect(() => {
+    const envTok = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
+    const lsTok = typeof window !== 'undefined' ? (localStorage.getItem('admin:token') || '') : '';
+    setToken(envTok || lsTok);
+  }, []);
   const { data, isLoading, error } = useAdminMetrics(token);
 
   return (
     <div className="mx-auto max-w-5xl p-6 space-y-8">
       <h1 className="text-2xl font-semibold">Admin Metrics</h1>
+      <div className="flex items-center gap-2">
+        <input value={token} onChange={(e) => setToken(e.target.value)} onBlur={() => { try { localStorage.setItem('admin:token', token || '') } catch { } }} className="border rounded px-2 py-1 text-sm min-w-48" placeholder="admin token" />
+        <button className="border rounded px-2 py-1 text-xs" onClick={() => { try { localStorage.setItem('admin:token', token || '') } catch { } }}>Save</button>
+      </div>
       {isLoading && <div role="status" aria-live="polite">Loading…</div>}
       {error && <div className="text-red-600" role="alert">{error.message}</div>}
       {data && (

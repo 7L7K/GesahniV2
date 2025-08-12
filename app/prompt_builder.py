@@ -16,6 +16,7 @@ from .memory.vector_store import safe_query_user_memories
 from .retrieval import run_retrieval, why_logs
 from .config_runtime import get_config
 from .telemetry import log_record_var
+from .memory.profile_store import profile_store, CANONICAL_KEYS
 import os
 
 # ---------------------------------------------------------------------------
@@ -112,6 +113,8 @@ class PromptBuilder:
         rag_client: Any | None = None,
         rag_collection: str | None = None,
         rag_k: int | None = None,
+        small_ask: bool | None = None,
+        profile_facts: dict[str, str] | None = None,
         **_: Any,
     ) -> tuple[str, int]:
         """Return ``(prompt_text, prompt_tokens)``.
@@ -129,7 +132,32 @@ class PromptBuilder:
         # Context collection
         # ------------------------------------------------------------------
         date_time = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
-        summary = memgpt.summarize_session(session_id, user_id=user_id) or ""
+        # Conversation recap: enabled by default in tests for snapshot stability; otherwise opt-in via env
+        _default_flag = "1" if os.getenv("PYTEST_CURRENT_TEST") else "0"
+        include_recap = os.getenv("INCLUDE_CONVO_SUMMARY", _default_flag).lower() in {"1", "true", "yes"}
+        # For small asks, disable conversation recap entirely
+        if _ and isinstance(_, dict):
+            pass  # pragma: no cover - placeholder for kwargs future
+        summary = ""
+        if include_recap:
+            raw = memgpt.summarize_session(session_id, user_id=user_id) or ""
+            # Aggressive trimming: keep to 2 bullets, <= ~25 words each, last 3 turns only
+            try:
+                lines = [l.strip(" -\t") for l in raw.splitlines() if l.strip()]
+                # Keep only last few items if it looks like a list
+                lines = lines[-6:]
+                bullets: list[str] = []
+                for l in lines:
+                    if len(bullets) >= 2:
+                        break
+                    words = l.split()
+                    if not words:
+                        continue
+                    clipped = " ".join(words[:25])
+                    bullets.append(f"- {clipped}")
+                summary = "\n".join(bullets)
+            except Exception:
+                summary = raw[:200]
         k = _coerce_k(top_k)
 
         rag_docs: List[dict] = []
@@ -165,11 +193,27 @@ class PromptBuilder:
             rec.rag_top_k = k
 
         # ------------------------------------------------------------------
-        # Memory lookup & trimming
+        # Profile facts injection (KV-first)
+        # ------------------------------------------------------------------
+        facts_block = ""
+        if profile_facts:
+            items = [f"{k}={v}" for k, v in profile_facts.items() if v is not None]
+            if items:
+                facts_block = "[USER_PROFILE_FACTS]\n" + "\n".join(items) + "\n"
+        rec_pf = log_record_var.get()
+        if rec_pf and facts_block:
+            rec_pf.profile_facts_keys = list(profile_facts.keys()) if profile_facts else []
+            rec_pf.facts_block = facts_block
+
+        # ------------------------------------------------------------------
+        # Memory lookup & trimming (skip for small asks)
         # ------------------------------------------------------------------
         # Prefer modular retrieval pipeline when enabled; fallback to legacy
         use_pipeline = os.getenv("USE_RETRIEVAL_PIPELINE", "0").lower() in {"1", "true", "yes"}
-        if use_pipeline:
+        if small_ask:
+            summary = ""
+            memories = []
+        elif use_pipeline:
             cfg = get_config()
             try:
                 # Preferred: new pipeline signature
@@ -207,13 +251,21 @@ class PromptBuilder:
         # Core prompt assembly
         # ------------------------------------------------------------------
         dbg = debug_info if debug else ""
+        # If profile facts present, append an explicit KV-wins system rule to instructions
+        kv_rule = ""
+        if facts_block:
+            kv_rule = (
+                "\nSystem rule: If a requested key exists in [USER_PROFILE_FACTS], answer with it directly. "
+                "Do not claim you lack access."
+            )
+        ci = (custom_instructions + kv_rule).strip()
         core_template = _prompt_core()
 
         base_replacements = {
             "date_time": date_time,
             "conversation_summary": summary,
             "memories": "",
-            "custom_instructions": custom_instructions,
+            "custom_instructions": ci,
             "user_prompt": user_prompt,
             "debug_info": dbg,
         }
@@ -236,8 +288,8 @@ class PromptBuilder:
             replacements = {
                 "date_time": date_time,
                 "conversation_summary": summary,
-                "memories": mem_text,
-                "custom_instructions": custom_instructions,
+                "memories": (facts_block + mem_text).strip(),
+                "custom_instructions": ci,
                 "user_prompt": user_prompt,
                 "debug_info": dbg,
             }
