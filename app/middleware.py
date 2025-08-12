@@ -221,53 +221,50 @@ async def silent_refresh_middleware(request: Request, call_next):
       - JWT_ACCESS_TTL_SECONDS: lifetime of new tokens (default 14d)
       - ACCESS_REFRESH_THRESHOLD_SECONDS: refresh when exp - now < threshold (default 3600s)
     """
-    response: Response | None = None
+    # Call downstream first; do not swallow exceptions from handlers
+    response: Response = await call_next(request)
+
+    # Best-effort refresh; never raise from middleware
     try:
-        response = await call_next(request)
-    finally:
+        token = request.cookies.get("access_token")
+        secret = os.getenv("JWT_SECRET")
+        if not token or not secret:
+            return response
+        # Decode without hard-failing on expiry/format
         try:
-            token = request.cookies.get("access_token")
-            secret = os.getenv("JWT_SECRET")
-            if not token or not secret:
+            payload = jwt.decode(token, secret, algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            payload = None
+        except jwt.PyJWTError:
+            payload = None
+        if not payload:
+            return response
+        now = int(time.time())
+        exp = int(payload.get("exp", 0))
+        threshold = int(os.getenv("ACCESS_REFRESH_THRESHOLD_SECONDS", "3600"))
+        if exp - now <= threshold:
+            # Rotate token
+            user_id = str(payload.get("user_id") or "")
+            if not user_id:
                 return response
-            # Decode without verification of exp first to compute remaining window
-            try:
-                payload = jwt.decode(token, secret, algorithms=["HS256"])
-            except jwt.ExpiredSignatureError:
-                payload = None
-            except jwt.PyJWTError:
-                payload = None
-            if not payload:
-                return response
-            now = int(time.time())
-            exp = int(payload.get("exp", 0))
-            threshold = int(os.getenv("ACCESS_REFRESH_THRESHOLD_SECONDS", "3600"))
-            if exp - now <= threshold:
-                # rotate
-                user_id = str(payload.get("user_id") or "")
-                if not user_id:
-                    return response
-                lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))
-                new_payload = {"user_id": user_id, "iat": now, "exp": now + lifetime}
-                new_token = jwt.encode(new_payload, secret, algorithm="HS256")
-                cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes"}
-                cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-                # Ensure response exists
-                if response is None:
-                    response = Response()
-                response.set_cookie(
-                    key="access_token",
-                    value=new_token,
-                    httponly=True,
-                    secure=cookie_secure,
-                    samesite=cookie_samesite,
-                    max_age=lifetime,
-                    path="/",
-                )
-        except Exception:
-            # best-effort; never fail request due to refresh
-            pass
-        return response
+            lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))
+            new_payload = {"user_id": user_id, "iat": now, "exp": now + lifetime}
+            new_token = jwt.encode(new_payload, secret, algorithm="HS256")
+            cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes"}
+            cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+            response.set_cookie(
+                key="access_token",
+                value=new_token,
+                httponly=True,
+                secure=cookie_secure,
+                samesite=cookie_samesite,
+                max_age=lifetime,
+                path="/",
+            )
+    except Exception:
+        # best-effort; never fail request due to refresh
+        pass
+    return response
 
 async def reload_env_middleware(request: Request, call_next):
     load_env()

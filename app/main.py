@@ -888,6 +888,14 @@ except Exception:
     pass
 
 
+try:
+    from .api.memory_ingest import router as memory_ingest_router
+    app.include_router(memory_ingest_router, prefix="/v1")
+    app.include_router(memory_ingest_router, include_in_schema=False)
+except Exception:
+    pass
+
+
 
 if __name__ == "__main__":
     import uvicorn

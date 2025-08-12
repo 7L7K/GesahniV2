@@ -224,7 +224,7 @@ _BASIC_COLORS: set[str] = {
 }
 
 
-def _maybe_update_profile_from_statement(user_id: str, text: str) -> None:
+def _maybe_update_profile_from_statement(user_id: str, text: str) -> bool:
     """Parse simple statements and upsert profile facts.
 
     Examples:
@@ -235,6 +235,7 @@ def _maybe_update_profile_from_statement(user_id: str, text: str) -> None:
     """
     t = (text or "").strip()
     tl = t.lower()
+    updated = False
     try:
         # favorite color variants
         for phrase in ("my favorite color is ", "my favourite color is ", "favorite color is ", "favourite color is "):
@@ -242,28 +243,30 @@ def _maybe_update_profile_from_statement(user_id: str, text: str) -> None:
                 val = t[len(phrase):].strip(" .")
                 if val:
                     profile_store.upsert(user_id, "favorite_color", val, source="utterance")
-                    return
+                    updated = True
+                    return True
         # generic color-only confirmation
         conf = _maybe_extract_confirmation(t)
         if conf and conf.lower() in _BASIC_COLORS:
             profile_store.upsert(user_id, "favorite_color", conf, source="utterance")
-            return
+            return True
         # name
         for phrase in ("my name is ", "call me "):
             if tl.startswith(phrase):
                 val = t[len(phrase):].strip(" .")
                 if val:
                     profile_store.upsert(user_id, "preferred_name", val, source="utterance")
-                    return
+                    return True
         # home city
         for phrase in ("i live in ", "my home city is "):
             if tl.startswith(phrase):
                 val = t[len(phrase):].strip(" .")
                 if val:
                     profile_store.upsert(user_id, "home_city", val, source="utterance")
-                    return
+                    return True
     except Exception:
-        pass
+        return updated
+    return updated
 
 def _annotate_provenance(text: str, mem_docs: list[str]) -> str:
     """Append [#chunk:ID] tags to lines with high semantic similarity to RAG.
@@ -441,7 +444,7 @@ async def route_prompt(
                 # Build minimal prompt with facts block; but answer directly
                 facts = {pf_key: value} if pf_key else {}
                 _built_prompt, ptoks = PromptBuilder.build(
-                    user_prompt,
+                    prompt,
                     session_id=session_id,
                     user_id=user_id,
                     small_ask=True,
@@ -632,7 +635,11 @@ async def route_prompt(
                 pass
         # Also parse simple profile statements proactively
         try:
-            _maybe_update_profile_from_statement(user_id, prompt)
+            if _maybe_update_profile_from_statement(user_id, prompt):
+                # Acknowledge fact update without model call
+                ack = "Noted." if not isinstance(prompt, str) else f"Noted: {prompt.strip().rstrip('.')}"
+                result = await _finalise("skill", prompt, ack, rec)
+                return result
         except Exception:
             pass
 
