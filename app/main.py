@@ -306,25 +306,7 @@ async def presence(present: bool = True, user_id: str = Depends(get_current_user
     return {"status": "ok"}
 
 
-@core_router.post("/ha/webhook")
-async def ha_webhook(request: Request, user_id: str = Depends(get_current_user_id)):
-    # Verify signature and dispatch event
-    try:
-        body = await verify_webhook(request)  # type: ignore[arg-type]
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=400, detail="bad_request")
-    try:
-        data = (
-            json.loads(body.decode("utf-8"))
-            if isinstance(body, (bytes, bytearray))
-            else {}
-        )
-    except Exception:
-        data = {}
-    _on_ha_event(data if isinstance(data, dict) else {})
-    return {"status": "ok"}
+# Duplicate of ha_router webhook removed; single source in HA router
 
 
 # Memory export/delete --------------------------------------------------------
@@ -545,88 +527,7 @@ async def delete_alias(name: str, user_id: str = Depends(get_current_user_id)):
     return {"status": "ok"}
 
 
-# Profile and Onboarding endpoints ---------------------------------------------
-
-
-class UserProfile(BaseModel):
-    name: str | None = None
-    email: str | None = None
-    timezone: str | None = None
-    language: str | None = None
-    communication_style: str | None = None  # "casual", "formal", "technical"
-    interests: list[str] | None = None
-    occupation: str | None = None
-    home_location: str | None = None
-    preferred_model: str | None = None  # "gpt-4o", "llama3", "auto"
-    notification_preferences: dict | None = None
-    calendar_integration: bool = False
-    gmail_integration: bool = False
-    onboarding_completed: bool = False
-    # Accessibility and voice preferences (Stage 1 onboarding)
-    speech_rate: float | None = None          # 0.8..1.2 (1.0 = normal)
-    input_mode: str | None = None             # "voice" | "touch" | "both"
-    font_scale: float | None = None           # 0.9..1.4
-    wake_word_enabled: bool = False
-
-
-class OnboardingStep(BaseModel):
-    step: str
-    completed: bool
-    data: dict | None = None
-
-
-@core_router.get("/profile")
-async def get_profile(user_id: str = Depends(get_current_user_id)):
-    """Get user profile and preferences"""
-    profile = profile_store.get(user_id)
-    return UserProfile(**profile)
-
-
-@core_router.post("/profile")
-async def update_profile(
-    profile: UserProfile, 
-    user_id: str = Depends(get_current_user_id)
-):
-    """Update user profile and preferences"""
-    profile_data = profile.model_dump(exclude_none=True)
-    profile_store.update(user_id, profile_data)
-    return {"status": "success", "message": "Profile updated successfully"}
-
-
-@core_router.get("/onboarding/status")
-async def get_onboarding_status(user_id: str = Depends(get_current_user_id)):
-    """Get onboarding completion status"""
-    profile = profile_store.get(user_id)
-    steps = [
-        {"step": "welcome", "completed": True, "data": None},
-        {"step": "basic_info", "completed": bool(profile.get("name")), "data": {"name": profile.get("name")}},
-        # Stage 1 immediate device preferences
-        {
-            "step": "device_prefs",
-            "completed": bool(profile.get("speech_rate") and profile.get("font_scale")),
-            "data": {
-                "speech_rate": profile.get("speech_rate"),
-                "input_mode": profile.get("input_mode"),
-                "font_scale": profile.get("font_scale"),
-                "wake_word_enabled": profile.get("wake_word_enabled"),
-            },
-        },
-        {"step": "preferences", "completed": bool(profile.get("communication_style")), "data": {"communication_style": profile.get("communication_style")}},
-        {"step": "integrations", "completed": bool(profile.get("calendar_integration") or profile.get("gmail_integration")), "data": {"calendar": profile.get("calendar_integration"), "gmail": profile.get("gmail_integration")}},
-        {"step": "complete", "completed": profile.get("onboarding_completed", False), "data": None}
-    ]
-    return {
-        "completed": profile.get("onboarding_completed", False),
-        "steps": steps,
-        "current_step": next((i for i, step in enumerate(steps) if not step["completed"]), len(steps) - 1)
-    }
-
-
-@core_router.post("/onboarding/complete")
-async def complete_onboarding(user_id: str = Depends(get_current_user_id)):
-    """Mark onboarding as completed"""
-    profile_store.set(user_id, "onboarding_completed", True)
-    return {"status": "success", "message": "Onboarding completed!"}
+# Profile and onboarding endpoints have moved to app.api.profile
 
 
 @ha_router.get("/ha/entities")
