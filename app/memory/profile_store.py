@@ -23,6 +23,20 @@ CANONICAL_KEYS: tuple[str, ...] = (
     "commute_home",
     "device_ids",
     "calendars_connected",
+    # API profile keys used by /v1/profile
+    "name",
+    "email",
+    "language",
+    "home_location",
+    "preferred_model",
+    "notification_preferences",
+    "calendar_integration",
+    "gmail_integration",
+    "onboarding_completed",
+    "speech_rate",
+    "input_mode",
+    "font_scale",
+    "wake_word_enabled",
 )
 
 
@@ -136,6 +150,10 @@ class ProfileStore:
             for k, v in (attrs or {}).items():
                 self.upsert(user_id, k, v, source=source)
             self._refresh_ttl(user_id)
+
+    # Back-compat helper used by API layer
+    def update(self, user_id: str, attrs: Dict[str, Any], *, source: str = "api") -> None:
+        self.update_bulk(user_id, attrs, source=source)
 
     def persist_all(self) -> None:
         with self._lock:

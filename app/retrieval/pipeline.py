@@ -240,6 +240,7 @@ def run_pipeline(
     })
 
     # MemGPT/task policy trim: enforce token budget and minimal decision trail
+    # Include mem_documents as-is; downstream caps to 500–600 tokens via truncate_to_token_budget
     texts = [it.text for it in top_items]
     trimmed = truncate_to_token_budget(texts, max_tokens=token_budget)
     if not trimmed and texts:

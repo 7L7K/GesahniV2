@@ -192,7 +192,8 @@ def schedule_nightly_jobs() -> None:
             id="storytime_summarize_nightly",
             replace_existing=True,
         )
-        logger.info("Scheduled nightly storytime summarization at 02:00")
+        # Use structured logging style consistently
+        logger.info("storytime.schedule", extra={"meta": {"cron": "2:00", "job": "storytime_summarize_nightly"}})
     except Exception:
         logger.debug("Failed to schedule storytime summarization", exc_info=True)
 

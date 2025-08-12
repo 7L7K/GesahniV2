@@ -32,7 +32,10 @@ export default function AdminPage() {
     return (
         <main className="mx-auto max-w-5xl px-4 py-6 space-y-8">
             <section>
-                <h1 className="text-xl font-semibold mb-4">Router Decisions</h1>
+                <div className="flex items-center justify-between mb-4">
+                    <h1 className="text-xl font-semibold">Router Decisions</h1>
+                    <a className="text-blue-600 underline text-sm" href="/admin/ingest">Memory Ingest</a>
+                </div>
                 {error && <p className="text-sm text-red-600">{error.message}</p>}
                 {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
                 <div className="flex flex-wrap gap-2 mb-3 items-end">

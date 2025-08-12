@@ -80,7 +80,15 @@ def configure_logging() -> None:
 
     # Reduce third-party verbosity unless LOG_LEVEL is DEBUG
     if level != "DEBUG":
-        for noisy in ("httpx", "httpcore", "apscheduler"):
+        for noisy in (
+            "httpx",
+            "httpcore",
+            "apscheduler",
+            "uvicorn",
+            "uvicorn.error",
+            "uvicorn.access",
+            "passlib.handlers.bcrypt",
+        ):
             logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
