@@ -62,7 +62,8 @@ def _app(monkeypatch):
 
     app = FastAPI()
     app.include_router(routes.router, prefix="/google")
-    client = TestClient(app)
+    # Don't auto-follow redirects so we can assert Location header
+    client = TestClient(app, follow_redirects=False)
     return client
 
 
@@ -82,7 +83,8 @@ def test_google_login_flow(monkeypatch):
     assert state
 
     # 2) Callback: should redirect to APP_URL with app tokens
-    r2 = client.get("/google/oauth/callback", params={"code": "dummy", "state": state}, allow_redirects=False)
+    # Do not follow the redirect; we assert the Location target
+    r2 = client.get("/google/oauth/callback", params={"code": "dummy", "state": state})
     assert r2.status_code in (302, 307)
     location = r2.headers.get("Location")
     assert location and location.startswith("http://app.example/login?")

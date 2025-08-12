@@ -96,6 +96,9 @@ def _get_store() -> VectorStore:
             store = MemoryVectorStore()
 
     logger.debug("Vector store backend selected: %s", type(store).__name__)
+    if type(store).__name__ == "QdrantVectorStore":
+        # Assert cosine metric policy for visibility
+        logger.info("VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)")
     return store
 
 

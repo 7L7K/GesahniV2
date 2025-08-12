@@ -47,6 +47,7 @@ describe('Home Chat Page', () => {
     });
 
     test('persists messages to localStorage on update', async () => {
+        localStorage.setItem('auth:access_token', 't');
         render(<Page />);
         const textarea = screen.getByPlaceholderText('Type a message…');
         await act(async () => {

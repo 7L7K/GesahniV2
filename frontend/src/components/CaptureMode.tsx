@@ -130,15 +130,6 @@ function CaptureInner() {
 
           <div className="flex items-center justify-center gap-4">
             <button
-              onClick={pauseRecording}
-              disabled={!recording}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${recording ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-gray-50 text-gray-400 cursor-not-allowed'}`}
-            >
-              <span>⏸️</span>
-              Pause
-            </button>
-
-            <button
               onClick={newQuestion}
               className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium transition-all duration-200"
             >
@@ -146,6 +137,7 @@ function CaptureInner() {
               New Session
             </button>
 
+            {/* Single reset button below; remove duplicate to avoid query collisions */}
             <button
               onClick={resetSession}
               className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-50 text-gray-700 hover:bg-gray-100 text-sm font-medium transition-all duration-200"

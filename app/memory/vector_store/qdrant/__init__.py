@@ -137,6 +137,10 @@ class QdrantVectorStore:
         url = os.getenv("QDRANT_URL") or "http://localhost:6333"
         api_key = os.getenv("QDRANT_API_KEY") or None
         self.client = QdrantClient(url=url, api_key=api_key)
+        try:
+            logger.info("Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)")
+        except Exception:
+            pass
 
         # Collections
         self.cache_collection = os.getenv("QDRANT_QA_COLLECTION", "cache:qa")
@@ -261,16 +265,33 @@ class QdrantVectorStore:
                 with_payload=True,
             )
             docs: List[Tuple[float, float, str]] = []
-            cutoff = max(0.0, float(os.getenv("MEM_SIM_CUTOFF", "0.25")))
+            # Lock policy: cosine similarity must be >= 0.75 → distance <= 0.25
+            cutoff = 0.25
+            raw_scores: List[float] = []
+            kept = dropped = 0
             for pt in res:
                 payload = pt.payload or {}
                 text = payload.get("text") or ""
                 score = float(pt.score or 0.0)  # cosine similarity
                 dist = 1.0 - score
+                raw_scores.append(round(score, 4))
                 if dist <= cutoff:
                     ts = float(payload.get("updated_at") or payload.get("created_at") or 0.0)
                     docs.append((dist, -ts, text))
+                    kept += 1
+                else:
+                    dropped += 1
             docs.sort()
+            try:
+                logger.info(
+                    "qdrant.read user=%s scores=%s threshold=sim>=0.75 kept=%d dropped=%d",
+                    user_id,
+                    raw_scores[:5],
+                    kept,
+                    dropped,
+                )
+            except Exception:
+                pass
             return [d for _, __, d in docs[:k]]
         except Exception:
             global _LAST_ERR_TS

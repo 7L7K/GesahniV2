@@ -48,27 +48,31 @@ export default function OnboardingFlow({ onboardingStatus, onComplete }: Onboard
         const nextProfile = stepData ? { ...profile, ...stepData } : { ...profile };
         setProfile(nextProfile);
 
-        // Persist incremental progress when data provided
-        try {
-            if (stepData && Object.keys(stepData).length > 0) {
-                await updateProfile(nextProfile);
-            }
-        } catch (err) {
-            console.error('Failed to save step data:', err);
-        }
-
+        // For non-final steps, advance immediately so tests and UI update synchronously.
         if (currentStepIndex < STEPS.length - 1) {
             setCurrentStepIndex(prev => prev + 1);
+            // Persist incremental progress in the background (best-effort)
+            if (stepData && Object.keys(stepData).length > 0) {
+                void (async () => {
+                    try {
+                        await updateProfile(nextProfile);
+                    } catch (err) {
+                        // eslint-disable-next-line no-console
+                        console.error('Failed to save step data:', err as any);
+                    }
+                })();
+            }
             return;
         }
 
-        // Complete onboarding on final step
+        // Complete onboarding on final step (persist before completion)
         setLoading(true);
         try {
             await updateProfile(nextProfile);
             await completeOnboarding();
             onComplete();
         } catch (error) {
+            // eslint-disable-next-line no-console
             console.error('Failed to complete onboarding:', error);
             setLoading(false);
         }

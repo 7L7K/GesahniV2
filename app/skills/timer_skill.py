@@ -26,18 +26,28 @@ def _persist_timers() -> None:
 
 class TimerSkill(Skill):
     PATTERNS = [
+        # "start/set <name?> timer for <n> <seconds|minutes>"
         re.compile(
-            r"(?:start|set) (?:(?P<name>\w+) )?timer for (?P<amount>\d+) (?P<unit>seconds|minutes)",
+            r"\b(?:start|set) (?:(?P<name>[\w\-]+) )?timer for (?P<amount>\d+) (?P<unit>seconds?|minutes?)\b",
             re.I,
         ),
-        re.compile(r"cancel (?:(?P<cname>\w+) )?timer", re.I),
-        re.compile(r"how long left on (?:(?P<qname>\w+) )?timer", re.I),
+        # "pause/resume/cancel <name?> timer"
+        re.compile(r"\b(?:pause|resume|cancel) (?:(?P<cname>[\w\-]+) )?timer\b", re.I),
+        # "how long left on <name?> timer"
+        re.compile(r"\bhow (?:much |long )?left on (?:(?P<qname>[\w\-]+) )?timer\b", re.I),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
         groups = match.groupdict()
         if "cname" in groups and groups["cname"] is not None:
             name = groups["cname"] or "gesahni"
+            action = match.group(0).split()[0].lower()
+            if action == "pause":
+                await ha.call_service("timer", "pause", {"entity_id": f"timer.{name}"})
+                return f"{name} timer paused."
+            if action == "resume":
+                await ha.call_service("timer", "start", {"entity_id": f"timer.{name}"})
+                return f"{name} timer resumed."
             await ha.call_service("timer", "cancel", {"entity_id": f"timer.{name}"})
             TIMERS.pop(name, None)
             _persist_timers()

@@ -16,3 +16,4 @@ sessions/*
 users.db
 data/history.jsonl
 tests/test_llama_health.py
+.envrc-E

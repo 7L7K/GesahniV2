@@ -18,7 +18,7 @@ from .adapters.voice.pipecat_adapter import PipecatSession
 from .transcribe import has_speech
 
 try:  # pragma: no cover - executed when openai is available
-    from openai import AsyncClient as OpenAI
+    from openai import AsyncOpenAI as OpenAI  # modern v1 async client
     from openai import OpenAIError
 except Exception:  # pragma: no cover - exercised when dependency missing
 
@@ -26,8 +26,25 @@ except Exception:  # pragma: no cover - exercised when dependency missing
         pass
 
     class OpenAI:  # type: ignore[misc]
+        """Minimal stub so tests can run without the openai package.
+
+        Provides a no-op ``close`` and an ``audio.transcriptions.create``
+        coroutine that raises a deterministic error when used.
+        """
+
+        class _Transcriptions:
+            async def create(self, *_, **__):  # pragma: no cover - used only if a test hits it
+                raise RuntimeError("offline_whisper_unavailable")
+
+        class _Audio:
+            def __init__(self) -> None:
+                self.transcriptions = OpenAI._Transcriptions()
+
         def __init__(self, *_, **__):
-            raise RuntimeError("openai package not installed")
+            self.audio = OpenAI._Audio()
+
+        async def close(self) -> None:
+            return None
 
 
 TRANSCRIBE_MODEL = os.getenv("OPENAI_TRANSCRIBE_MODEL", "whisper-1")
@@ -71,9 +88,11 @@ async def transcribe_file(path: str, model: str | None = None) -> str:
     model = model or TRANSCRIBE_MODEL
 
     logger.debug("transcribe_file start: %s", path)
-    client = get_whisper_client()
     try:
+        # Open file first so missing paths are reported even when the OpenAI
+        # client is unavailable in the test environment.
         with open(path, "rb") as f:
+            client = get_whisper_client()
             resp = await client.audio.transcriptions.create(
                 model=model,
                 file=f,

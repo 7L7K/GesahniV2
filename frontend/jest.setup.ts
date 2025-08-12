@@ -50,6 +50,11 @@ if (!globalThis.navigator.mediaDevices) {
 globalThis.navigator.mediaDevices.getUserMedia = jest.fn(async () => ({
   getTracks: () => [],
 }))
+// @ts-ignore
+if (!globalThis.navigator.mediaDevices.enumerateDevices) {
+  // @ts-ignore
+  globalThis.navigator.mediaDevices.enumerateDevices = jest.fn(async () => []);
+}
 
 // AudioContext stub
 class MockAnalyser {
@@ -131,17 +136,29 @@ if (!(global as any).Response) {
     async json() { return typeof this._body === 'string' ? JSON.parse(this._body || '{}') : this._body; }
     async text() { return typeof this._body === 'string' ? this._body : JSON.stringify(this._body || ''); }
     get body() {
-      // emulate ReadableStream for tests that use .body.getReader()
+      // emulate ReadableStream and reader for SSE tests
       const encoder = new TextEncoder();
       const chunk = typeof this._body === 'string' ? this._body : JSON.stringify(this._body || '');
       const data = encoder.encode(chunk);
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(data);
-          controller.close();
+      return {
+        getReader() {
+          let done = false;
+          return {
+            async read() {
+              if (done) return { value: undefined, done: true };
+              done = true;
+              return { value: data, done: false };
+            },
+          } as any;
         },
-      });
-      return stream as any;
+        async *[Symbol.asyncIterator]() { yield data; },
+      } as any;
+    }
+    clone() { return new (SimpleResponse as any)(this._body, { status: this.status, headers: this._headers }); }
+    arrayBuffer() {
+      const encoder = new TextEncoder();
+      const chunk = typeof this._body === 'string' ? this._body : JSON.stringify(this._body || '');
+      return Promise.resolve(encoder.encode(chunk).buffer);
     }
   }
   (global as any).Response = SimpleResponse as any;
@@ -165,3 +182,18 @@ if (!(global as any).ReadableStream) {
 
 
 
+// WebSocket polyfill (force override to avoid Node/builtin differences in tests)
+class MockWS {
+  readyState = 1;
+  onopen?: () => void;
+  onmessage?: (e: { data: unknown }) => void;
+  onclose?: () => void;
+  constructor(_url: string) {
+    setTimeout(() => this.onopen && this.onopen(), 0);
+  }
+  send(_data: unknown) { /* noop */ }
+  close() { this.readyState = 3; this.onclose && this.onclose(); }
+  addEventListener() { /* noop */ }
+}
+// @ts-ignore
+(global as any).WebSocket = MockWS as any;

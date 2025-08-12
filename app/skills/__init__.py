@@ -71,6 +71,15 @@ SKILL_CLASSES: list[type] = [
     StatusSkill,
 ]
 
+# Optionally include extra skills behind env flag to preserve stable ordering in tests
+import os as _os
+if _os.getenv("ENABLE_EXTRA_SKILLS", "0").lower() in {"1", "true", "yes"}:
+    try:
+        from .shopping_list_skill import ShoppingListSkill as _ShoppingListSkill
+        SKILL_CLASSES.append(_ShoppingListSkill)
+    except Exception:
+        pass
+
 _base.SKILLS.clear()
 for cls in SKILL_CLASSES:
     if not any(isinstance(s, cls) for s in _base.SKILLS):

@@ -21,11 +21,13 @@ describe('InputBar', () => {
     });
 
     test('disabled when unauthenticated via auth event', async () => {
-        render(<InputBar onSend={jest.fn()} loading={false} model="auto" onModelChange={() => { }} authed={false} />);
+        const { unmount } = render(<InputBar onSend={jest.fn()} loading={false} model="auto" onModelChange={() => { }} authed={false} />);
         const textarea = screen.getByPlaceholderText('Type a message…') as HTMLTextAreaElement;
         expect(textarea.disabled).toBe(true);
+        unmount();
         render(<InputBar onSend={jest.fn()} loading={false} model="auto" onModelChange={() => { }} authed={true} />);
-        expect((screen.getByPlaceholderText('Type a message…') as HTMLTextAreaElement).disabled).toBe(false);
+        const enabledTextarea = screen.getAllByPlaceholderText('Type a message…')[0] as HTMLTextAreaElement;
+        expect(enabledTextarea.disabled).toBe(false);
     });
 });
 

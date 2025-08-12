@@ -324,12 +324,16 @@ async def maybe_curiosity_prompt(user_id: str, last_confidence: float | None) ->
 
 
 def handle_user_reply(user_id: str, text: str) -> None:
-    # naive extraction: key: value
+    # naive extraction: key: value → treat as profile fact upsert
     parts = text.split(":", 1)
     if len(parts) == 2:
         key = parts[0].strip().lower().replace(" ", "_")
         val = parts[1].strip()
-        profile_store.set(user_id, key, val)
+        try:
+            profile_store.upsert(user_id, key, val, source="utterance")
+        except Exception:
+            # fallback legacy setter
+            profile_store.set(user_id, key, val)
         add_user_memory(user_id, f"{key} = {val}")
 
 

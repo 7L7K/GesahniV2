@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 class AskRequest(BaseModel):
     prompt: str
     model_override: str | None = Field(None, alias="model")
+    # Optional hint for small-ask preset (e.g., client detected simple profile question)
+    small_ask: bool | None = None
 
     # Pydantic v2 config: allow both alias ("model") and field name ("model_override")
     model_config = ConfigDict(validate_by_name=True, validate_by_alias=True)

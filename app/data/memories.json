@@ -301,6 +301,61 @@
         "pinned": false,
         "user_id": "havenotseen@gmail.com"
       }
+    },
+    {
+      "prompt": "whats up",
+      "answer": "- Hey! Not much, just hanging out.  \n- How about you?  \n- Anything I can help with today?",
+      "tags": [],
+      "timestamp": 1754954201.1925051,
+      "hash": "db7cd76056bcb7832b6b9ab9470768371c10e83f749cd24182eb37e9a283eb02",
+      "audit": {
+        "pinned": false,
+        "user_id": "admin"
+      }
+    },
+    {
+      "prompt": "job is who",
+      "answer": "- \"Job is who\" is unclear.\n- Do you mean asking about a person's job or a specific individual?",
+      "tags": [],
+      "timestamp": 1754964022.223989,
+      "hash": "036d44b2d39a3689885ee0d8fd6118a535199b5dfcc3e0e59482c83fcbc0bc56",
+      "audit": {
+        "pinned": false,
+        "user_id": "admin"
+      }
+    },
+    {
+      "prompt": "whats my favorite color",
+      "answer": "- I don't have access to personal preferences like your favorite color.\n- Would you like help choosing a color or remembering something?",
+      "tags": [],
+      "timestamp": 1754964468.281336,
+      "hash": "a1de9844fe0e68210208a7c33defdd7519af253ccaff7bfad3a1f0d67b69b666",
+      "audit": {
+        "pinned": false,
+        "user_id": "admin"
+      }
+    },
+    {
+      "prompt": "its blue",
+      "answer": "- Noted: \"blue\" as your color.  \n- How can I assist you further?",
+      "tags": [],
+      "timestamp": 1754964478.7824142,
+      "hash": "44c640074fa5a7b9436462165828942aa709d09a54962d5e3099137f31ec0bd7",
+      "audit": {
+        "pinned": false,
+        "user_id": "admin"
+      }
+    },
+    {
+      "prompt": "how old is the sun",
+      "answer": "- The Sun is approximately 4.6 billion years old.  \n- Would you like more details?",
+      "tags": [],
+      "timestamp": 1754966443.611653,
+      "hash": "f81f7c2a31c778e7ee1be89ddac0e2fda10ea7368c6a13ca7694f2a70812dee8",
+      "audit": {
+        "pinned": false,
+        "user_id": "admin"
+      }
     }
   ]
 }

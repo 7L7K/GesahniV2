@@ -1,6 +1,6 @@
 {{custom_instructions}}
-Debug: {{debug_info}}
-Summary: {{conversation_summary}}
+{{debug_info}}
+{{conversation_summary}}
 
 RELEVANT MEMORY
 {{memories}}

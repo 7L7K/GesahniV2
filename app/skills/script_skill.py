@@ -11,7 +11,10 @@ _ALIAS = {"i'm home": "script.house_arrival"}
 class ScriptSkill(Skill):
     PATTERNS = [
         re.compile(r"i'?m home", re.I),
-        re.compile(r"run (?P<name>[\w\s]+)", re.I),
+        # Require a word boundary before 'run' to avoid matching inside words
+        # like "Lebrun" while still allowing natural phrasing like
+        # "can you run bedtime routine"
+        re.compile(r"\brun\s+(?P<name>[\w\s]+)", re.I),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:

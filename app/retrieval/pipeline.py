@@ -77,6 +77,9 @@ def run_pipeline(
         except Exception:
             sparse = []
         t_sparse = (time.perf_counter() - t2) * 1000.0
+    # Include threshold rationale snapshot: first few raw scores and keep/drop
+    def _sample_scores(items):
+        return [round(float(getattr(it, 'score', 0.0) or 0.0), 4) for it in items[:5]]
     trace.append({
         "event": "hybrid",
         "meta": {
@@ -85,6 +88,10 @@ def run_pipeline(
             "t_embed_ms": int(t_embed),
             "t_vec_ms": int(t_vec),
             "t_sparse_ms": int(t_sparse),
+            "scores_dense": _sample_scores(dense),
+            "scores_sparse": _sample_scores(sparse),
+            "threshold_sim": 0.75,
+            "policy": "keep if sim>=0.75 (dist<=0.25)",
         },
     })
 

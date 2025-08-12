@@ -9,7 +9,7 @@ import CompleteStep from '@/components/onboarding/CompleteStep'
 describe('Onboarding step components', () => {
   it('BasicInfoStep captures name and continues', () => {
     const onNext = jest.fn()
-    render(<BasicInfoStep profile={{}} onNext={onNext} onBack={() => {}} onSkip={() => {}} loading={false} isFirstStep isLastStep={false} /> as any)
+    render(<BasicInfoStep profile={{}} onNext={onNext} onBack={() => { }} onSkip={() => { }} loading={false} isFirstStep isLastStep={false} /> as any)
     fireEvent.change(screen.getByLabelText(/Full Name/i), { target: { value: 'Grace Hopper' } })
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
     expect(onNext).toHaveBeenCalled()
@@ -17,7 +17,7 @@ describe('Onboarding step components', () => {
 
   it('PreferencesStep toggles interests', () => {
     const onNext = jest.fn()
-    render(<PreferencesStep profile={{}} onNext={onNext} onBack={() => {}} onSkip={() => {}} loading={false} isFirstStep={false} isLastStep={false} /> as any)
+    render(<PreferencesStep profile={{}} onNext={onNext} onBack={() => { }} onSkip={() => { }} loading={false} isFirstStep={false} isLastStep={false} /> as any)
     const interest = screen.getByText('Music')
     fireEvent.click(interest)
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
@@ -26,15 +26,15 @@ describe('Onboarding step components', () => {
 
   it('DevicePrefsStep updates ranges and continues', () => {
     const onNext = jest.fn()
-    render(<DevicePrefsStep profile={{}} onNext={onNext} onBack={() => {}} onSkip={() => {}} loading={false} isFirstStep={false} isLastStep={false} /> as any)
-    fireEvent.change(screen.getByRole('slider', { name: '' }), { target: { value: '1.1' } })
+    render(<DevicePrefsStep profile={{}} onNext={onNext} onBack={() => { }} onSkip={() => { }} loading={false} isFirstStep={false} isLastStep={false} /> as any)
+    fireEvent.change(screen.getByRole('slider', { name: /speech pace/i }), { target: { value: '1.1' } })
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
     expect(onNext).toHaveBeenCalled()
   })
 
   it('CompleteStep primary button calls onNext', () => {
     const onNext = jest.fn()
-    render(<CompleteStep profile={{ name: 'A' }} onNext={onNext} onBack={() => {}} onSkip={() => {}} loading={false} isFirstStep={false} isLastStep /> as any)
+    render(<CompleteStep profile={{ name: 'A' }} onNext={onNext} onBack={() => { }} onSkip={() => { }} loading={false} isFirstStep={false} isLastStep /> as any)
     fireEvent.click(screen.getByRole('button'))
     expect(onNext).toHaveBeenCalled()
   })

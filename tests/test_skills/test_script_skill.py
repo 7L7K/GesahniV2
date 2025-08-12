@@ -20,3 +20,9 @@ def test_script_skill(monkeypatch):
     m = skill.match("I'm home")
     resp = asyncio.run(skill.run("I'm home", m))
     assert "house_arrival" in resp
+
+
+def test_script_skill_does_not_match_lebrun():
+    skill = ScriptSkill()
+    # Should not match because pattern requires explicit "run ..." at start
+    assert skill.match("how is Lebrun James") is None

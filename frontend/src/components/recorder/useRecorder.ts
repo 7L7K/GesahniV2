@@ -39,6 +39,10 @@ export function useRecorder(): RecorderExports {
     const videoChunks = useRef<Blob[]>([]);
     const lastSend = useRef<number>(0);
     const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const connectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastStartAttemptRef = useRef<number>(0);
+    const consecutiveConnectFailuresRef = useRef<number>(0);
+    const breakerUntilRef = useRef<number>(0);
 
     const [state, setState] = useState<RecorderState>({ status: "idle" });
     const [volume, setVolume] = useState(0);
@@ -105,6 +109,7 @@ export function useRecorder(): RecorderExports {
         setupStream();
         return () => {
             if (pollTimer.current) clearTimeout(pollTimer.current);
+            if (connectTimerRef.current) clearTimeout(connectTimerRef.current);
             try { audioRecorder.current?.stop(); } catch { }
             try { videoRecorder.current?.stop(); } catch { }
             try { wsRef.current?.close(); } catch { }
@@ -113,6 +118,20 @@ export function useRecorder(): RecorderExports {
     }, [setupStream]);
 
     const start = useCallback(async () => {
+        // Circuit breaker: avoid spamming start when failing
+        const now = Date.now();
+        if (now < breakerUntilRef.current) {
+            // quietly ignore attempts while breaker is active
+            return;
+        }
+        // Debounce rapid toggles / double keypress
+        if (now - lastStartAttemptRef.current < 1000) {
+            return;
+        }
+        lastStartAttemptRef.current = now;
+        if (state.status === 'arming' || state.status === 'recording') {
+            return;
+        }
         if (!streamRef.current) {
             await setupStream();
             if (!streamRef.current) return;
@@ -129,7 +148,11 @@ export function useRecorder(): RecorderExports {
         }
         const ws = new WebSocket(wsUrl("/v1/transcribe"));
         setWsOpen(false);
-        ws.onopen = () => setWsOpen(true);
+        ws.onopen = () => {
+            if (connectTimerRef.current) { clearTimeout(connectTimerRef.current); connectTimerRef.current = null; }
+            setWsOpen(true);
+            consecutiveConnectFailuresRef.current = 0;
+        };
         ws.onmessage = (e) => {
             try {
                 const msg = JSON.parse(String(e.data || ""));
@@ -140,8 +163,23 @@ export function useRecorder(): RecorderExports {
                 if (text) setCaptionText(text);
             }
         };
-        ws.onclose = () => setWsOpen(false);
+        ws.onclose = () => {
+            setWsOpen(false);
+            if (connectTimerRef.current) { clearTimeout(connectTimerRef.current); connectTimerRef.current = null; }
+        };
         wsRef.current = ws;
+
+        // Short connect timeout: if not open within 4s, close and engage breaker after N failures
+        if (connectTimerRef.current) clearTimeout(connectTimerRef.current);
+        connectTimerRef.current = setTimeout(() => {
+            try { ws.close(); } catch { }
+            setWsOpen(false);
+            consecutiveConnectFailuresRef.current += 1;
+            // After 3 rapid failures, back off for 30s
+            if (consecutiveConnectFailuresRef.current >= 3) {
+                breakerUntilRef.current = Date.now() + 30_000;
+            }
+        }, 4000);
 
         audioChunks.current = [];
         videoChunks.current = [];
@@ -165,7 +203,7 @@ export function useRecorder(): RecorderExports {
         const started = Date.now();
         setElapsedMs(0);
         tickRef.current = setInterval(() => setElapsedMs(Date.now() - started), 1000);
-    }, [audioMime, videoMime, setupStream]);
+    }, [audioMime, videoMime, setupStream, state.status]);
 
     const pause = useCallback(() => {
         audioRecorder.current?.pause();
@@ -215,6 +253,15 @@ export function useRecorder(): RecorderExports {
         setElapsedMs(0);
     }, []);
 
+    const stableSetDevices = useCallback((ids: { audio?: string; video?: string }) => {
+        setDeviceIds((prev) => {
+            const nextAudio = ids.audio || undefined;
+            const nextVideo = ids.video || undefined;
+            const unchanged = prev.audio === nextAudio && prev.video === nextVideo;
+            return unchanged ? prev : { audio: nextAudio, video: nextVideo };
+        });
+    }, []);
+
     return {
         state,
         volume,
@@ -228,7 +275,7 @@ export function useRecorder(): RecorderExports {
         reset,
         toggleMute: () => setMuted(m => !m),
         setMuted,
-        setDevices: (ids) => setDeviceIds(ids),
+        setDevices: stableSetDevices,
         audioOnly,
         setAudioOnly,
         media: { stream: streamRef.current, videoEl: camRef },
