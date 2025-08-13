@@ -4,6 +4,7 @@ import asyncio
 from typing import Dict, Set
 
 from fastapi import APIRouter, Depends, WebSocket
+from pydantic import BaseModel, ConfigDict
 
 from ..deps.user import get_current_user_id
 from ..security import verify_ws
@@ -36,6 +37,53 @@ async def _broadcast(topic: str, payload: dict) -> None:
                     await ws.close()
                 except Exception:
                     pass
+
+
+class WSSubscribeExample(BaseModel):
+    action: str = "subscribe"
+    topic: str = "resident:r1"
+
+    model_config = ConfigDict(json_schema_extra={"example": {"action": "subscribe", "topic": "resident:r1"}})
+
+
+class WSTopicsInfo(BaseModel):
+    subscribe_example: WSSubscribeExample = WSSubscribeExample()
+    topics: list[str] = [
+        "resident:{resident_id}",
+    ]
+    events_example: list[str] = [
+        "device.heartbeat",
+        "alert.created",
+        "alert.acknowledged",
+        "alert.resolved",
+        "tv.config.updated",
+    ]
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "subscribe_example": {"action": "subscribe", "topic": "resident:r1"},
+                "topics": ["resident:{resident_id}"],
+                "events_example": [
+                    "device.heartbeat",
+                    "alert.created",
+                    "alert.acknowledged",
+                    "alert.resolved",
+                    "tv.config.updated",
+                ],
+            }
+        }
+    )
+
+
+@router.get("/ws/care", response_model=WSTopicsInfo, responses={200: {"model": WSTopicsInfo}})
+async def ws_care_docs(_user_id: str = Depends(get_current_user_id)):
+    """WebSocket entry point documentation.
+
+    Connect to ``/v1/ws/care`` and send a JSON message to subscribe to a topic.
+    Example payload: ``{"action": "subscribe", "topic": "resident:r1"}``.
+    """
+    return WSTopicsInfo()
 
 
 @router.websocket("/ws/care")

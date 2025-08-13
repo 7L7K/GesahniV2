@@ -16,6 +16,7 @@ from app.analytics import (
 from app.decisions import get_recent as decisions_recent, get_explain as decisions_get
 from app.config_runtime import get_config
 from app.feature_flags import list_flags as _list_flags, set_value as _set_flag
+from app.api.tv import TvConfig, TvConfigResponse, QuietHours
 from app.jobs.qdrant_lifecycle import bootstrap_collection as _q_bootstrap, collection_stats as _q_stats
 from app.jobs.migrate_chroma_to_qdrant import main as _migrate_cli  # type: ignore
 from app.logging_config import get_last_errors
@@ -140,6 +141,23 @@ async def admin_retrieval_last(
         if any(ev.get("event") == "retrieval_trace" for ev in trace):
             out.append(it)
     return {"items": out[:limit]}
+
+
+@router.get("/admin/diagnostics/requests")
+async def admin_diagnostics_requests(
+    limit: int = Query(default=50, ge=1, le=200),
+    token: str | None = Query(default=None),
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
+    """Return last N request IDs with timestamps for quick diagnostics."""
+    _check_admin(token)
+    items = decisions_recent(limit)
+    out = [
+        {"req_id": it.get("req_id"), "timestamp": it.get("timestamp")}
+        for it in items
+        if it.get("req_id")
+    ]
+    return {"items": out}
 
 
 @router.get("/admin/decisions/explain")
@@ -366,5 +384,95 @@ if admin_inspect_router is not None:  # pragma: no cover - import-time wiring
 
     # include sub-router endpoints under /admin/* paths
     router.include_router(admin_inspect_router)
+
+
+# ---------------------------------------------------------------------------
+# Admin: TV Config (docs & examples)
+# ---------------------------------------------------------------------------
+
+_TV_CFG_EXAMPLE = {
+    "status": "ok",
+    "config": {
+        "ambient_rotation": 45,
+        "rail": "safe",
+        "quiet_hours": {"start": "22:00", "end": "06:00"},
+        "default_vibe": "Calm Night",
+    },
+}
+
+
+@router.get(
+    "/admin/tv/config",
+    response_model=TvConfigResponse,
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": _TV_CFG_EXAMPLE,
+                }
+            }
+        }
+    },
+)
+async def admin_tv_get_config(resident_id: str, user_id: str = Depends(get_current_user_id)):
+    """Mirror of /tv/config (GET) for docs under Admin tag."""
+    from app.care_store import get_tv_config as _get_tv_config
+
+    rec = await _get_tv_config(resident_id)
+    if not rec:
+        cfg = TvConfig()
+        return {"status": "ok", "config": cfg.model_dump()}
+    cfg = TvConfig(
+        ambient_rotation=int(rec.get("ambient_rotation") or 30),
+        rail=str(rec.get("rail") or "safe"),
+        quiet_hours=QuietHours(**(rec.get("quiet_hours") or {})) if rec.get("quiet_hours") else None,
+        default_vibe=str(rec.get("default_vibe") or "Calm Night"),
+    )
+    return {"status": "ok", "config": cfg.model_dump()}
+
+
+@router.put(
+    "/admin/tv/config",
+    response_model=TvConfigResponse,
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": _TV_CFG_EXAMPLE,
+                }
+            }
+        }
+    },
+)
+async def admin_tv_put_config(resident_id: str, body: TvConfig, user_id: str = Depends(get_current_user_id)):
+    """Mirror of /tv/config (PUT) for docs under Admin tag."""
+    # minimal validation to match tv endpoint
+    rail = (body.rail or "safe").lower()
+    if rail not in {"safe", "admin", "open"}:
+        raise HTTPException(status_code=400, detail="invalid_rail")
+    def _valid_hhmm(s: str | None) -> bool:
+        if not s:
+            return True
+        parts = s.split(":")
+        if len(parts) != 2:
+            return False
+        try:
+            hh, mm = int(parts[0]), int(parts[1])
+            return 0 <= hh <= 23 and 0 <= mm <= 59
+        except Exception:
+            return False
+    if body.quiet_hours and not (_valid_hhmm(body.quiet_hours.start) and _valid_hhmm(body.quiet_hours.end)):
+        raise HTTPException(status_code=400, detail="invalid_quiet_hours")
+
+    from app.care_store import set_tv_config as _set_tv_config
+
+    await _set_tv_config(
+        resident_id,
+        ambient_rotation=int(body.ambient_rotation),
+        rail=rail,
+        quiet_hours=body.quiet_hours.model_dump() if body.quiet_hours else None,
+        default_vibe=str(body.default_vibe or ""),
+    )
+    return {"status": "ok", "config": body.model_dump()}
 
 
