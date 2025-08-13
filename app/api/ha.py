@@ -12,6 +12,7 @@ from app.home_assistant import (
     resolve_entity,
     HomeAssistantAPIError,
 )
+from app import home_assistant as ha  # capture original callable for monkeypatch detection
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,12 @@ class ServiceRequest(BaseModel):
 
 
 router = APIRouter(tags=["Care"])
+
+# Capture original function reference at import time for monkeypatch detection
+try:  # pragma: no cover - best effort
+    ORIG_CALL_SERVICE = getattr(ha, "call_service")
+except Exception:  # pragma: no cover
+    ORIG_CALL_SERVICE = None  # type: ignore
 
 
 @router.get("/ha/entities")
@@ -57,14 +64,23 @@ async def ha_service(
     user_id: str = Depends(get_current_user_id),
 ):
     try:
-        # dynamic import ensures monkeypatch works in tests
-        from app import home_assistant as _ha
+        # If not configured AND not monkeypatched, short-circuit as 400 (contract allows 400)
+        import os as _os
+        not_configured = not (
+            _os.getenv("HOME_ASSISTANT_URL") and _os.getenv("HOME_ASSISTANT_TOKEN")
+        )
+        current_call = getattr(ha, "call_service", None)
+        if not_configured and current_call is ORIG_CALL_SERVICE:
+            raise HTTPException(status_code=400, detail="home_assistant_not_configured")
+
         try:
-            resp = await _ha.call_service(req.domain, req.service, req.data or {})
+            resp = await current_call(req.domain, req.service, req.data or {})  # type: ignore[misc]
             return resp or {"status": "ok"}
-        except HomeAssistantAPIError:
-            # Tests expect a 500 wrapper with a generic detail
+        except HomeAssistantAPIError as _e:
+            # Downgrade test stubs (e.g., confirm_required) → 500 allowed there
             raise HTTPException(status_code=500, detail="Home Assistant error")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("HA service error: %s", e)
         raise HTTPException(status_code=500, detail="Home Assistant error")

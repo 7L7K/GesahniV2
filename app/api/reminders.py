@@ -39,7 +39,7 @@ async def list_reminders(user_id: str = Depends(get_current_user_id)):
 
 class ReminderCreate(BaseModel):
     text: str
-    when: str | None = None
+    when: str
     channel: str | None = None
 
     model_config = ConfigDict(
@@ -61,6 +61,24 @@ class OkResponse(CommonOkResponse):
     "/reminders",
     response_model=OkResponse,
     responses={200: {"model": OkResponse}},
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "allOf": [
+                            {"$ref": "#/components/schemas/ReminderCreate"}
+                        ],
+                        "example": {
+                            "text": "Take meds",
+                            "when": "2025-01-01T09:00:00Z",
+                            "channel": "sms",
+                        },
+                    }
+                }
+            }
+        }
+    },
 )
 async def add_reminder(payload: ReminderCreate, user_id: str = Depends(get_current_user_id)):
     text = (payload.text or "").strip()
