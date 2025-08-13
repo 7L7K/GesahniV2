@@ -8,11 +8,16 @@ from pydantic import BaseModel
 
 from app.deps.user import get_current_user_id
 from app.security import rate_limit, verify_token
+from app.deps.scopes import require_scope
+from app.security import require_nonce
 
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["Admin"], dependencies=[Depends(verify_token), Depends(rate_limit)])
+router = APIRouter(
+    tags=["Admin"],
+    dependencies=[Depends(verify_token), Depends(rate_limit), Depends(require_scope("admin:write"))],
+)
 
 
 class IngestResponse(BaseModel):
@@ -26,6 +31,7 @@ class IngestResponse(BaseModel):
 @router.post("/memory/ingest", response_model=IngestResponse)
 async def ingest_memory(
     request: Request,
+    _nonce: None = Depends(require_nonce),
     user_id: str = Depends(get_current_user_id),
     file: UploadFile | None = File(None),
     url: str | None = Form(None),

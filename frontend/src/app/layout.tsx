@@ -47,6 +47,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <QueryClientProvider client={queryClient}>
             <div className="min-h-screen grid grid-rows-[auto_1fr]">
+              <AuthBootstrap />
               <Header />
               <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-primary text-primary-foreground rounded px-3 py-2">Skip to content</a>
               <div id="main" className="bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-50 via-background to-background dark:from-zinc-900/20">
@@ -59,4 +60,13 @@ export default function RootLayout({
       </body>
     </html>
   );
+}
+
+function AuthBootstrap() {
+  if (typeof window !== 'undefined') {
+    import("@/lib/api").then(({ apiFetch }) => {
+      apiFetch("/v1/whoami", { method: "GET", auth: true }).catch(() => { /* ignore */ });
+    });
+  }
+  return null;
 }

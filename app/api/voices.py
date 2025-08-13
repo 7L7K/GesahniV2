@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import os
 from fastapi import APIRouter, Depends
+from ..security import verify_token, rate_limit
+from ..deps.scopes import optional_require_scope
 
 from ..deps.user import get_current_user_id
 
 
-router = APIRouter(prefix="/voices", tags=["Music"])
+router = APIRouter(
+    prefix="/voices",
+    tags=["Music"],
+    dependencies=[Depends(verify_token), Depends(rate_limit), Depends(optional_require_scope("music:control"))],
+)
 
 
 @router.get("/catalog")
