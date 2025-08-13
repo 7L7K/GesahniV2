@@ -28,7 +28,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -392,6 +392,132 @@ if os.getenv("PROMETHEUS_ENABLED", "1").strip().lower() in {"1", "true", "yes", 
 @app.get("/healthz", tags=["Admin"])
 async def healthz() -> dict:
     return {"status": "ok"}
+
+
+# Dev-only helper page for testing WebSocket connections
+if _IS_DEV_ENV:
+    @app.get("/docs/ws", include_in_schema=False)
+    async def _ws_helper_page() -> HTMLResponse:  # pragma: no cover - covered by unit tests
+        html = """
+<!doctype html>
+<html lang=\"en\">
+  <head>
+    <meta charset=\"utf-8\" />
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <title>WS Helper • Granny Mode API</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color: #111; }
+      input, button, textarea { font-size: 14px; }
+      .row { display: flex; gap: 8px; margin: 6px 0; align-items: center; flex-wrap: wrap; }
+      label { min-width: 120px; font-weight: 600; }
+      #events { border: 1px solid #ddd; padding: 8px; height: 320px; overflow: auto; background: #fafafa; }
+      code, pre { background: #f3f3f3; padding: 2px 4px; border-radius: 4px; }
+      .small { color: #666; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>WebSocket helper</h1>
+    <p class=\"small\">Connect to <code>/v1/ws/care</code>, subscribe to a topic like <code>resident:{id}</code>, and view incoming events.</p>
+
+    <div class=\"row\">
+      <label for=\"url\">WS URL</label>
+      <input id=\"url\" size=\"60\" placeholder=\"ws://localhost:8000/v1/ws/care\" />
+      <button id=\"btnConnect\">Connect</button>
+      <button id=\"btnDisconnect\">Disconnect</button>
+    </div>
+
+    <div class=\"row\">
+      <label for=\"token\">JWT token</label>
+      <input id=\"token\" size=\"60\" placeholder=\"Optional: appended as ?token=...\" />
+      <span class=\"small\">Token is appended as <code>?token=</code> for browser WS</span>
+    </div>
+
+    <div class=\"row\">
+      <label for=\"resident\">Resident ID</label>
+      <input id=\"resident\" size=\"16\" placeholder=\"r1\" />
+      <label for=\"topic\">Topic</label>
+      <input id=\"topic\" size=\"24\" placeholder=\"resident:{id}\" />
+      <button id=\"btnSubscribe\">Subscribe</button>
+      <button id=\"btnPing\">Ping</button>
+    </div>
+
+    <div class=\"row\">
+      <label>Subscribe payload</label>
+      <code>{\"action\":\"subscribe\",\"topic\":\"resident:{id}\"}</code>
+    </div>
+
+    <h3>Events</h3>
+    <div id=\"events\"></div>
+
+    <script>
+      let ws = null;
+      const urlInput = document.getElementById('url');
+      const tokenInput = document.getElementById('token');
+      const topicInput = document.getElementById('topic');
+      const residentInput = document.getElementById('resident');
+      const eventsDiv = document.getElementById('events');
+
+      function defaultUrl() {
+        try {
+          const proto = (location.protocol === 'https:') ? 'wss:' : 'ws:';
+          return proto + '//' + location.host + '/v1/ws/care';
+        } catch (e) { return 'ws://localhost:8000/v1/ws/care'; }
+      }
+
+      urlInput.value = defaultUrl();
+
+      function log(kind, data) {
+        const line = document.createElement('div');
+        const ts = new Date().toISOString();
+        line.textContent = '[' + ts + '] ' + kind + ': ' + data;
+        eventsDiv.appendChild(line);
+        eventsDiv.scrollTop = eventsDiv.scrollHeight;
+      }
+
+      function connect() {
+        let u = urlInput.value.trim() || defaultUrl();
+        const t = tokenInput.value.trim();
+        if (t) {
+          const sep = u.includes('?') ? '&' : '?';
+          u = u + sep + 'token=' + encodeURIComponent(t);
+        }
+        ws = new WebSocket(u);
+        ws.addEventListener('open', () => log('open', u));
+        ws.addEventListener('close', () => log('close', '')); 
+        ws.addEventListener('error', (e) => log('error', JSON.stringify(e))); 
+        ws.addEventListener('message', (e) => log('message', e.data));
+      }
+
+      function disconnect() {
+        try { ws && ws.close(); } catch (e) {}
+      }
+
+      function subscribe() {
+        if (!ws || ws.readyState !== 1) { log('warn', 'not connected'); return; }
+        let topic = topicInput.value.trim();
+        const rid = residentInput.value.trim();
+        if (!topic && rid) { topic = 'resident:' + rid; }
+        if (!topic) { log('warn', 'topic required'); return; }
+        const payload = { action: 'subscribe', topic };
+        ws.send(JSON.stringify(payload));
+        log('send', JSON.stringify(payload));
+      }
+
+      function ping() {
+        if (!ws || ws.readyState !== 1) { log('warn', 'not connected'); return; }
+        ws.send('ping');
+        log('send', 'ping');
+      }
+
+      document.getElementById('btnConnect').addEventListener('click', connect);
+      document.getElementById('btnDisconnect').addEventListener('click', disconnect);
+      document.getElementById('btnSubscribe').addEventListener('click', subscribe);
+      document.getElementById('btnPing').addEventListener('click', ping);
+    </script>
+  </body>
+ </html>
+        """
+        return HTMLResponse(content=html, media_type="text/html")
 
 
 class AskRequest(BaseModel):
