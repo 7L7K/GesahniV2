@@ -19,6 +19,16 @@ from fastapi import Header
 
 import jwt
 from fastapi import HTTPException, Request, WebSocket, WebSocketException, Depends
+# Scope enforcement dependency
+def scope_required(*required_scopes: str):
+    async def _dep(request: Request) -> None:
+        if os.getenv("ENFORCE_JWT_SCOPES", "1").strip().lower() in {"0", "false", "no"}:
+            return
+        payload = getattr(request.state, "jwt_payload", None)
+        scopes = _payload_scopes(payload)
+        if not set(required_scopes) <= scopes:
+            raise HTTPException(status_code=403, detail="insufficient_scope")
+    return _dep
 from . import metrics
 
 JWT_SECRET: str | None = None  # backwards compat; actual value read from env

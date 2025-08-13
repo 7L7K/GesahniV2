@@ -3,9 +3,9 @@ from __future__ import annotations
 import os
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
-from ..deps.user import get_current_user_id
+from ..deps.user import get_current_user_id, get_current_session_device
 from ..config_runtime import get_config
 from ..user_store import user_store
 
@@ -34,6 +34,34 @@ async def me(user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
         "request_count": (stats or {}).get("request_count", 0),
     }
     return {"is_authenticated": is_auth, "profile": profile, "flags": flags}
+
+
+@router.get("/whoami")
+async def whoami(request: Request, user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
+    sess = get_current_session_device(request, None)
+    scopes = []
+    try:
+        payload = getattr(request.state, "jwt_payload", None)
+        raw_scopes = []
+        if isinstance(payload, dict):
+            raw_scopes = payload.get("scope") or payload.get("scopes") or []
+            if isinstance(raw_scopes, str):
+                scopes = [s.strip() for s in raw_scopes.split() if s.strip()]
+            else:
+                scopes = [str(s).strip() for s in raw_scopes if str(s).strip()]
+    except Exception:
+        scopes = []
+    providers = []
+    if os.getenv("PROVIDER_SPOTIFY", "").lower() in {"1","true","yes","on"}:
+        providers.append("spotify")
+    return {
+        "is_authenticated": user_id != "anon",
+        "user_id": user_id,
+        "session_id": sess.get("session_id"),
+        "device_id": sess.get("device_id"),
+        "scopes": scopes,
+        "providers": providers,
+    }
 
 
 __all__ = ["router"]
