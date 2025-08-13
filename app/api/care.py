@@ -136,18 +136,11 @@ class AlertRecord(BaseModel):
         },
     },
 )
-async def create_alert(body: AlertCreate, user_id: str = Depends(get_current_user_id)):
+async def create_alert(body: AlertCreate, request: Request, user_id: str = Depends(get_current_user_id)):
     # OPS-1: 1 request per 30 seconds per user
     # Use route-local limiter that returns RFC7807 when blocked
-    from fastapi import Request
-    def _req() -> Request:  # shim to access Request via dependency
-        raise NotImplementedError
-    # FastAPI cannot inject Request here via Depends directly; we perform the
-    # rate-limit by creating a small closure dependency below.
-    async def _limit_dep(request: Request):
-        await rate_limit_problem(request, long_limit=1, burst_limit=1, window_s=30.0)
-        return None
-    await _limit_dep.__call__  # type: ignore[attr-defined]
+    # Apply a strict, route-local rate limit using our RFC7807 helper
+    await rate_limit_problem(request, long_limit=1, burst_limit=1, window_s=30.0)
     if body.kind not in {"help", "fall", "battery", "custom"}:
         raise HTTPException(status_code=400, detail="invalid_kind")
     if body.severity not in {"info", "warn", "critical"}:

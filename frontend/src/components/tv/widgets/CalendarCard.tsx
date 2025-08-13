@@ -28,8 +28,9 @@ function fmtHM(d: Date): string {
 }
 
 function computeLeaveBy(now: Date, item: CalendarItem): string | null {
-  const travel = item.travelMinutes ?? null;
-  if (travel === null || typeof travel !== "number" || travel <= 0) return null;
+  const travelRaw = item.travelMinutes;
+  const travel = typeof travelRaw === "number" ? travelRaw : null;
+  if (travel === null || travel <= 0) return null;
   const buffer = Math.max(0, item.bufferMinutes ?? 0);
   // Establish event start: prefer startIso then time today
   let start: Date | null = null;
@@ -41,7 +42,7 @@ function computeLeaveBy(now: Date, item: CalendarItem): string | null {
   if (!start) return null;
   const nowPlusTravel = new Date(now.getTime() + travel * 60_000);
   const startMinusBuffer = new Date(start.getTime() - buffer * 60_000);
-  if (nowPlusTravel >= startMinusBuffer) {
+  if (nowPlusTravel.getTime() >= startMinusBuffer.getTime()) {
     // Show leave by time = (start - buffer - travel)
     const leaveBy = new Date(startMinusBuffer.getTime() - travel * 60_000);
     return fmtHM(leaveBy);

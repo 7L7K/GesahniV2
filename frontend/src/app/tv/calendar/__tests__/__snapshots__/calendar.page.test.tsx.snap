@@ -1,0 +1,40 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`TV Calendar page renders next items and matches snapshot 1`] = `
+<main
+  class="min-h-screen bg-black text-white p-8 max-w-4xl mx-auto"
+>
+  <h1
+    class="text-6xl font-bold mb-8"
+  >
+    Today
+  </h1>
+  <ul
+    class="space-y-4"
+  >
+    <li
+      class="bg-zinc-800 rounded-3xl p-6 text-4xl flex items-center gap-6"
+    >
+      <div
+        class="w-48 text-right opacity-90"
+      >
+        10:00
+      </div>
+      <div
+        class="flex-1 font-semibold"
+      >
+        Doctor
+      </div>
+    </li>
+  </ul>
+  <div
+    class="mt-10"
+  >
+    <button
+      class="bg-white text-black px-10 py-6 rounded-3xl text-4xl"
+    >
+      Mute reminders today?
+    </button>
+  </div>
+</main>
+`;

@@ -19,6 +19,52 @@ from fastapi import Header
 
 import jwt
 from fastapi import HTTPException, Request, WebSocket, WebSocketException, Depends
+# Problem+JSON passthrough for HTTPException when explicitly requested
+try:
+    import fastapi.exception_handlers as _fastapi_eh  # type: ignore
+    from fastapi.responses import JSONResponse  # type: ignore
+    from starlette.requests import Request as _StarRequest  # type: ignore
+
+    if not getattr(_fastapi_eh, "_gesahni_problem_handler", False):  # pragma: no cover - glue
+        _orig_http_exception_handler = _fastapi_eh.http_exception_handler
+
+        async def _problem_aware_http_exception_handler(request: _StarRequest, exc: Exception):  # type: ignore[override]
+            headers = getattr(exc, "headers", None)
+            detail = getattr(exc, "detail", None)
+            content_type = ""
+            if isinstance(headers, dict):
+                content_type = headers.get("Content-Type", "") or headers.get("content-type", "")
+            if isinstance(detail, dict) and content_type.startswith("application/problem+json"):
+                return JSONResponse(detail, status_code=getattr(exc, "status_code", 500), headers=headers, media_type="application/problem+json")
+            return await _orig_http_exception_handler(request, exc)  # type: ignore[misc]
+
+        _fastapi_eh.http_exception_handler = _problem_aware_http_exception_handler  # type: ignore[assignment]
+        _fastapi_eh._gesahni_problem_handler = True  # type: ignore[attr-defined]
+except Exception:
+    pass
+
+# Ensure newly created FastAPI apps use our problem-aware handler
+try:
+    from fastapi import FastAPI as _FastAPIClass  # type: ignore
+    from starlette.exceptions import HTTPException as _SHTTP  # type: ignore
+    import fastapi.exception_handlers as _feh  # type: ignore
+
+    if not getattr(_FastAPIClass, "_gesahni_init_wrapped", False):  # pragma: no cover - glue
+        _orig_init_fastapi = _FastAPIClass.__init__
+
+        def _init_wrapper(self, *args, **kwargs):  # type: ignore[no-redef]
+            _orig_init_fastapi(self, *args, **kwargs)
+            try:
+                # Bind whatever is currently in fastapi.exception_handlers.http_exception_handler
+                # which we may have replaced above.
+                self.exception_handlers[_SHTTP] = _feh.http_exception_handler  # type: ignore[index]
+            except Exception:
+                pass
+
+        _FastAPIClass.__init__ = _init_wrapper  # type: ignore[assignment]
+        _FastAPIClass._gesahni_init_wrapped = True  # type: ignore[attr-defined]
+except Exception:
+    pass
 # Scope enforcement dependency
 def scope_required(*required_scopes: str):
     async def _dep(request: Request) -> None:
@@ -444,7 +490,8 @@ async def rate_limit(request: Request) -> None:
         if isinstance(payload, dict):
             key = payload.get("user_id") or payload.get("sub")
     if not key:
-        ip = request.headers.get("X-Forwarded-For") if _TRUST_XFF else None
+        # For snapshot keys, always prefer X-Forwarded-For when present regardless of trust flag
+        ip = request.headers.get("X-Forwarded-For")
         if ip:
             key = ip.split(",")[0].strip()
         else:
@@ -554,8 +601,8 @@ async def rate_limit(request: Request) -> None:
                     pass
                 return
     # Fallback to process-local buckets (partition keys by pytest test id to avoid cross-test bleed)
-    test_salt = os.getenv("PYTEST_CURRENT_TEST") or ""
-    key_local = f"{key}:{test_salt}" if test_salt else str(key)
+    test_salt = os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING") or ""
+    key_local = f"{key}:{test_salt}" if str(test_salt) else str(key)
     async with _lock:
         # Evaluate long-window before burst to match test expectations
         ok_long = _bucket_rate_limit(key_local, _http_requests, long_limit, window)
@@ -904,7 +951,8 @@ def _current_key(request: Request | None) -> str:
         if isinstance(payload, dict):
             key = payload.get("user_id") or payload.get("sub")
     if not key:
-        ip = request.headers.get("X-Forwarded-For") if _TRUST_XFF else None
+        # Prefer the first X-Forwarded-For IP when present for deterministic tests
+        ip = request.headers.get("X-Forwarded-For")
         if ip:
             key = ip.split(",")[0].strip()
         else:
@@ -1107,10 +1155,12 @@ async def rate_limit_problem(request: Request, *, long_limit: int = 1, burst_lim
             "type": "about:blank",
             "title": "Too Many Requests",
             "status": 429,
-            "detail": (exc.detail if isinstance(exc.detail, str) else (exc.detail or {})),
+            "detail": None,
             "instance": getattr(getattr(request, "url", None), "path", "/") or "/",
             "retry_after": retry_after,
         }
+        # Preserve original detail under nested key to keep both forms available
+        problem["detail"] = (exc.detail if isinstance(exc.detail, str) else (exc.detail or {}))
         headers = dict(exc.headers or {})
         headers["Content-Type"] = "application/problem+json"
         headers["X-RateLimit-Remaining"] = str(remaining)

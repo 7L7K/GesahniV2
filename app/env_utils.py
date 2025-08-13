@@ -33,5 +33,7 @@ def load_env() -> None:
     if _last_mtime is not None and mtime <= _last_mtime:
         return  # unchanged → skip
 
-    load_dotenv(dotenv_path=_ENV_PATH, override=True)  # explicit path
+    # Do not override existing environment variables so tests and runtime
+    # overrides take precedence over .env contents.
+    load_dotenv(dotenv_path=_ENV_PATH, override=False)  # explicit path
     _last_mtime = mtime

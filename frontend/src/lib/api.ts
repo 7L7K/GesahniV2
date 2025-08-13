@@ -53,14 +53,14 @@ function authHeaders() {
 async function tryRefresh(): Promise<Response | null> {
   if (!HEADER_AUTH_MODE) return null;
   const refresh = getRefreshToken();
-  if (!refresh) return null;
-
+  // Even if no refresh token, attempt a cookie-based refresh endpoint for compatibility
   try {
     const res = await fetch(`${API_URL || ""}/v1/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refresh }),
-    });
+      body: refresh ? JSON.stringify({ refresh_token: refresh }) : undefined,
+      credentials: 'include',
+    } as RequestInit);
 
     if (res.ok) {
       const body = await res.json().catch(() => ({} as Record<string, unknown>));
@@ -129,7 +129,7 @@ export async function apiFetch(
       if (retryHasBody && !isFormData && !("Content-Type" in (retryHeaders as Record<string, string>))) {
         (retryHeaders as Record<string, string>)["Content-Type"] = "application/json";
       }
-      res = await fetch(url, { ...rest, headers: retryHeaders });
+      res = await fetch(url, { ...rest, headers: retryHeaders, credentials: 'include' });
       // In test environments, some mocks always return 401; surface the refresh result as success
       if (res.status === 401) return refreshRes;
     } else {
