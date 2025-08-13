@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple
 from collections import deque
 
 from ..base import MisconfiguredStoreError, SupportsQACache
+from app.metrics import DEPENDENCY_LATENCY_SECONDS, VECTOR_OP_LATENCY_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,14 @@ try:  # optional dependency at import time
 except Exception:  # pragma: no cover - symbol shim to keep import light
     QdrantClient = None  # type: ignore
     Distance = VectorParams = PointStruct = Filter = FieldCondition = MatchValue = object  # type: ignore
+
+# Under pytest, treat qdrant as unavailable by default to avoid external deps.
+# Tests that need Qdrant can explicitly patch the adapter.
+import os as _os
+import sys as _sys
+if ("PYTEST_CURRENT_TEST" in _os.environ) or ("pytest" in _sys.modules):
+    if _os.getenv("ALLOW_QDRANT_IN_TESTS", "0").strip().lower() not in {"1", "true", "yes", "on"}:
+        QdrantClient = None  # type: ignore
 
 
 def _require_qdrant():
@@ -158,6 +167,7 @@ class QdrantVectorStore:
 
     # -------------------- Bootstrap helpers --------------------
     def _ensure_collection(self, name: str, dim: int) -> None:
+        t0 = time.perf_counter()
         try:
             self.client.get_collection(name)
         except Exception:
@@ -173,6 +183,11 @@ class QdrantVectorStore:
                     collection_name=name,
                     hnsw_config=HnswConfigDiff(m=int(os.getenv("QDRANT_HNSW_M", "32")), ef_construct=int(os.getenv("QDRANT_HNSW_EF_CONSTRUCT", "128"))),
                 )
+            except Exception:
+                pass
+        finally:
+            try:
+                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "ensure_collection").observe(time.perf_counter() - t0)
             except Exception:
                 pass
         # Attempt to create useful payload indexes (best-effort)
@@ -231,10 +246,16 @@ class QdrantVectorStore:
                 # Raw text
                 "text": memory,
             }
+            t1 = time.perf_counter()
             self.client.upsert(
                 collection_name=col,
                 points=[PointStruct(id=mem_id, vector=vec, payload=payload)],
             )
+            try:
+                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "upsert").observe(time.perf_counter() - t1)
+                VECTOR_OP_LATENCY_SECONDS.labels("upsert").observe(time.perf_counter() - t1)
+            except Exception:
+                pass
             return mem_id
         except Exception:
             global _LAST_ERR_TS
@@ -256,6 +277,7 @@ class QdrantVectorStore:
                 flt = Filter(must=[FieldCondition(key="user_id", match=MatchValue(value=user_id))])
             except Exception:
                 flt = None  # not strictly needed with per-user collections
+            t1 = time.perf_counter()
             res = self.client.search(
                 collection_name=col,
                 query_vector=vec,
@@ -264,6 +286,11 @@ class QdrantVectorStore:
                 search_params=SearchParams(hnsw_ef=int(os.getenv("QDRANT_SEARCH_EF", "128"))),
                 with_payload=True,
             )
+            try:
+                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "search").observe(time.perf_counter() - t1)
+                VECTOR_OP_LATENCY_SECONDS.labels("search").observe(time.perf_counter() - t1)
+            except Exception:
+                pass
             docs: List[Tuple[float, float, str]] = []
             # Lock policy: cosine similarity must be >= 0.75 → distance <= 0.25
             cutoff = 0.25
@@ -306,7 +333,13 @@ class QdrantVectorStore:
         self._ensure_collection(col, dim)
         t0 = time.perf_counter()
         try:
+            t1 = time.perf_counter()
             res, _ = self.client.scroll(collection_name=col, with_payload=True, limit=1000)
+            try:
+                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "scroll").observe(time.perf_counter() - t1)
+                VECTOR_OP_LATENCY_SECONDS.labels("scroll").observe(time.perf_counter() - t1)
+            except Exception:
+                pass
         except Exception:
             global _LAST_ERR_TS
             _LAST_ERR_TS = time.time()
@@ -324,7 +357,13 @@ class QdrantVectorStore:
             col = self._user_collection(user_id)
             dim = int(os.getenv("EMBED_DIM", "1536"))
             self._ensure_collection(col, dim)
+            t1 = time.perf_counter()
             self.client.delete(collection_name=col, points_selector=[mem_id])
+            try:
+                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "delete").observe(time.perf_counter() - t1)
+                VECTOR_OP_LATENCY_SECONDS.labels("delete").observe(time.perf_counter() - t1)
+            except Exception:
+                pass
             return True
         except Exception:
             global _LAST_ERR_TS

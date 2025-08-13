@@ -23,6 +23,15 @@ class JsonFormatter(logging.Formatter):
             "component": record.name,
             "msg": record.getMessage(),
         }
+        # Attach current trace id when available for log-trace correlation
+        try:
+            from .otel_utils import get_trace_id_hex  # local import to avoid hard dep at import time
+
+            tid = get_trace_id_hex()
+            if tid:
+                payload["trace_id"] = tid
+        except Exception:
+            pass
         if hasattr(record, "meta"):
             payload["meta"] = record.meta
         try:
@@ -65,13 +74,13 @@ def configure_logging() -> None:
     """
     level = os.getenv("LOG_LEVEL", "INFO").upper()
 
-    # In tests, prefer a memory/null handler to avoid I/O on closed streams
-    is_test = os.getenv("ENV", "").lower() == "test"
-    if is_test:
-        handler = logging.NullHandler()
-    else:
+    # By default, do not stream logs to stdout (quiet terminal). Opt-in via LOG_TO_STDOUT=1.
+    force_stdout = os.getenv("LOG_TO_STDOUT", "").lower() in {"1", "true", "yes", "on"}
+    if force_stdout:
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(JsonFormatter())
+    else:
+        handler = logging.NullHandler()
 
     root = logging.getLogger()
     root.handlers = [handler, _ErrorBufferHandler()]  # blow away default handlers, add buffer

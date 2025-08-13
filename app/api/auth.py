@@ -11,7 +11,7 @@ from ..deps.user import get_current_user_id
 from ..user_store import user_store
 
 
-router = APIRouter(tags=["auth"])
+router = APIRouter(tags=["auth"], include_in_schema=False)
 
 
 def _jwt_secret() -> str:
@@ -35,7 +35,7 @@ async def login(username: str, response: Response):
     # In a real app, validate password/OTP/etc. Here we mint a session for the username
     token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))  # 14 days
     jwt_token = _make_jwt(username, exp_seconds=token_lifetime)
-    cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes"}
+    cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
     response.set_cookie(
         key="access_token",
@@ -63,7 +63,7 @@ async def refresh(response: Response, user_id: str = Depends(get_current_user_id
         raise HTTPException(status_code=401, detail="not_logged_in")
     token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))
     jwt_token = _make_jwt(user_id, exp_seconds=token_lifetime)
-    cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes"}
+    cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
     response.set_cookie(
         key="access_token",

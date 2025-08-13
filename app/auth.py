@@ -8,9 +8,10 @@ import logging
 
 import aiosqlite
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 import jwt
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
 from pydantic import BaseModel
 
 from .deps.user import get_current_user_id
@@ -43,20 +44,21 @@ _ATTEMPT_WINDOW = int(os.getenv("LOGIN_ATTEMPT_WINDOW_SECONDS", "300"))
 _ATTEMPT_MAX = int(os.getenv("LOGIN_ATTEMPT_MAX", "5"))
 _LOCKOUT_SECONDS = int(os.getenv("LOGIN_LOCKOUT_SECONDS", "60"))
 
-# Password hashing: prefer bcrypt+pbkdf2; auto-fallback if bcrypt backend broken
+# Password hashing: prefer bcrypt if a working backend is present; otherwise pbkdf2
 _TEST_ENV = "PYTEST_CURRENT_TEST" in os.environ
+def _has_working_bcrypt() -> bool:
+    try:
+        import bcrypt as _bcrypt  # type: ignore
+        # passlib probes _bcrypt.__about__.__version__; guard for broken wheels
+        return hasattr(_bcrypt, "__about__") and hasattr(_bcrypt.__about__, "__version__")
+    except Exception:
+        return False
+
 try:
-    if _TEST_ENV:
+    if _TEST_ENV or not _has_working_bcrypt():
         pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
     else:
-        # Include both so passlib can fall back automatically when bcrypt backend is missing
-        pwd_context = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
-        # quick self-test to surface backend issues early but not crash
-        try:
-            _ = pwd_context.hash("_probe_")
-        except Exception:
-            # continue with context (pbkdf2 will be used)
-            pass
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 except Exception:  # pragma: no cover - defensive
     pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
@@ -311,7 +313,7 @@ async def register(req: RegisterRequest, user_id: str = Depends(get_current_user
 # Login endpoint
 @router.post("/login", response_model=TokenResponse)
 async def login(
-    req: LoginRequest, request: Request, user_id: str = Depends(get_current_user_id)
+    req: LoginRequest, request: Request, response: Response, user_id: str = Depends(get_current_user_id)
 ) -> TokenResponse:
     await _ensure_table()
     norm_user = _sanitize_username(req.username)
@@ -325,7 +327,16 @@ async def login(
         # Try both auth table and legacy users table
         hashed = await _fetch_password_hash(db, norm_user)
 
-    if not hashed or not pwd_context.verify(req.password, hashed):
+    valid = False
+    if hashed:
+        try:
+            valid = bool(pwd_context.verify(req.password, hashed))
+        except UnknownHashError:
+            # Treat unrecognized/badly formatted hashes as invalid credentials
+            valid = False
+        except Exception:
+            valid = False
+    if not valid:
         _record_attempt(user_key, success=False)
         _record_attempt(ip_key, success=False)
         logger.warning("auth.login_failed", extra={"meta": {"username": norm_user, "ip": _client_ip(request)}})
@@ -369,6 +380,38 @@ async def login(
     await user_store.increment_login(user_id)
     stats = await user_store.get_stats(user_id) or {}
     logger.info("auth.login_success", extra={"meta": {"username": norm_user, "ip": _client_ip(request)}})
+
+    # Set HttpOnly cookies for browser clients (unified flow: header + cookie)
+    try:
+        cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
+        # In test/dev over HTTP, force non-secure so TestClient sends cookies
+        try:
+            if request is not None and getattr(request.url, "scheme", "http") != "https":
+                cookie_secure = False
+        except Exception:
+            pass
+        cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=cookie_secure,
+            samesite=cookie_samesite,
+            max_age=EXPIRE_MINUTES * 60,
+            path="/",
+        )
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=cookie_secure,
+            samesite=cookie_samesite,
+            max_age=REFRESH_EXPIRE_MINUTES * 60,
+            path="/",
+        )
+    except Exception:
+        pass
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -379,13 +422,24 @@ async def login(
 
 # Refresh endpoint
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(req: RefreshRequest) -> TokenResponse:
+async def refresh(req: RefreshRequest | None = None, request: Request = None, response: Response = None) -> TokenResponse:  # type: ignore[assignment]
     try:
         # Validate audience if configured; issuer verified after decode
         kwargs = {"algorithms": [ALGORITHM]}
         if JWT_AUD:
             kwargs["audience"] = JWT_AUD
-        payload = jwt.decode(req.refresh_token, SECRET_KEY, **kwargs)
+        token_in = None
+        if req and getattr(req, "refresh_token", None):
+            token_in = req.refresh_token
+        # Fallback to cookie when body not supplied
+        if not token_in and request is not None:
+            try:
+                token_in = request.cookies.get("refresh_token")
+            except Exception:
+                token_in = None
+        if not token_in:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        payload = jwt.decode(token_in, SECRET_KEY, **kwargs)
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -434,6 +488,38 @@ async def refresh(req: RefreshRequest) -> TokenResponse:
         refresh_payload["aud"] = JWT_AUD
     refresh_token = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
 
+    # Set refreshed cookies for browser clients
+    try:
+        if response is not None:
+            cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
+            # In test/dev over HTTP, force non-secure so TestClient sends cookies
+            try:
+                if request is not None and getattr(request.url, "scheme", "http") != "https":
+                    cookie_secure = False
+            except Exception:
+                pass
+            cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+            response.set_cookie(
+                key="access_token",
+                value=access_token,
+                httponly=True,
+                secure=cookie_secure,
+                samesite=cookie_samesite,
+                max_age=EXPIRE_MINUTES * 60,
+                path="/",
+            )
+            response.set_cookie(
+                key="refresh_token",
+                value=refresh_token,
+                httponly=True,
+                secure=cookie_secure,
+                samesite=cookie_samesite,
+                max_age=REFRESH_EXPIRE_MINUTES * 60,
+                path="/",
+            )
+    except Exception:
+        pass
+
     return TokenResponse(
         access_token=access_token, refresh_token=refresh_token, token=access_token
     )
@@ -441,7 +527,7 @@ async def refresh(req: RefreshRequest) -> TokenResponse:
 
 # Logout endpoint
 @router.post("/logout", response_model=dict)
-async def logout(request: Request) -> dict:
+async def logout(request: Request, response: Response) -> dict:
     auth = request.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -458,6 +544,12 @@ async def logout(request: Request) -> dict:
     jti = payload.get("jti")
     if jti:
         revoked_tokens.add(jti)
+    # Clear auth cookies
+    try:
+        response.delete_cookie("access_token", path="/")
+        response.delete_cookie("refresh_token", path="/")
+    except Exception:
+        pass
     return {"status": "ok"}
 
 

@@ -7,13 +7,61 @@ from hashlib import sha256
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 import jwt
+try:  # Optional dependency; provide a tiny fallback to avoid hard dep in tests
+    from cachetools import TTLCache  # type: ignore
+except Exception:  # pragma: no cover - fallback implementation
+    from collections import OrderedDict
+
+    class TTLCache:  # type: ignore
+        def __init__(self, maxsize: int, ttl: float):
+            self.maxsize = int(maxsize)
+            self.ttl = float(ttl)
+            self._data: dict[str, float] = {}
+            self._order: "OrderedDict[str, float]" = OrderedDict()
+
+        def _prune(self, now: float) -> None:
+            # Remove expired entries
+            expired = [k for k, ts in list(self._data.items()) if now - ts > self.ttl]
+            for k in expired:
+                self._data.pop(k, None)
+                self._order.pop(k, None)
+            # Enforce maxsize by evicting oldest
+            while len(self._data) > self.maxsize and self._order:
+                k, _ = self._order.popitem(last=False)
+                self._data.pop(k, None)
+
+        def get(self, key: str, default=None):
+            now = time.monotonic()
+            ts = self._data.get(key)
+            if ts is None:
+                return default
+            if now - ts > self.ttl:
+                # expired
+                self._data.pop(key, None)
+                self._order.pop(key, None)
+                return default
+            return ts
+
+        def __setitem__(self, key: str, value: float) -> None:
+            now = time.monotonic()
+            self._data[key] = float(value)
+            # maintain insertion order
+            self._order.pop(key, None)
+            self._order[key] = now
+            self._prune(now)
+
+        def __contains__(self, key: str) -> bool:  # pragma: no cover - convenience
+            return self.get(key) is not None
+
+        def __len__(self) -> int:  # pragma: no cover - convenience
+            return len(self._data)
 
 from .logging_config import req_id_var
 from .telemetry import LogRecord, log_record_var, utc_now
 from .decisions import add_decision, add_trace_event
 from .history import append_history
 from .analytics import record_latency, latency_p95
-from .otel_utils import get_trace_id_hex, observe_with_exemplar
+from .otel_utils import get_trace_id_hex, observe_with_exemplar, start_span
 from .user_store import user_store
 from .env_utils import load_env
 from . import metrics
@@ -22,11 +70,21 @@ from .security import get_rate_limit_snapshot
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        req_id = str(uuid.uuid4())
+        # Prefer client-provided ID to enable end-to-end correlation
+        req_id = request.headers.get("X-Request-ID") or req_id_var.get()
+        if not req_id or req_id == "-":
+            req_id = str(uuid.uuid4())
         token = req_id_var.set(req_id)
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = req_id
-        req_id_var.reset(token)
+        try:
+            response = await call_next(request)
+        finally:
+            # Ensure response carries the same request id without overwriting existing value
+            try:
+                if isinstance(response, Response):
+                    response.headers.setdefault("X-Request-ID", req_id)
+            except Exception:
+                pass
+            req_id_var.reset(token)
         return response
 
 
@@ -41,34 +99,38 @@ class DedupMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app):
         super().__init__(app)
-        # Map of request id -> last seen monotonic timestamp
-        self._seen: dict[str, float] = {}
-        self._ttl: float = float(os.getenv("DEDUP_TTL_SECONDS", "60"))
-        self._max_entries: int = int(os.getenv("DEDUP_MAX_ENTRIES", "10000"))
+        # TTL-bounded cache of request id -> first seen monotonic timestamp
+        ttl_raw = float(os.getenv("DEDUP_TTL_SECONDS", "60"))
+        max_raw = int(os.getenv("DEDUP_MAX_ENTRIES", "10000"))
+        # Clamp to sane ranges to avoid misconfiguration foot-guns
+        self._ttl: float = max(1.0, float(ttl_raw))
+        self._max_entries: int = max(1, min(int(max_raw), 1_000_000))
+        self._seen: TTLCache[str, float] = TTLCache(maxsize=self._max_entries, ttl=self._ttl)
+        self._lock = asyncio.Lock()
 
     async def dispatch(self, request: Request, call_next):
         now = time.monotonic()
-        # Prune expired ids
-        if self._seen:
-            expired = [rid for rid, ts in self._seen.items() if now - ts > self._ttl]
-            for rid in expired:
-                self._seen.pop(rid, None)
-
         req_id = request.headers.get("X-Request-ID")
-        if req_id and req_id in self._seen:
-            return Response("Duplicate request", status_code=409)
-
-        response = await call_next(request)
-
         if req_id:
-            self._seen[req_id] = now
-            # Soft cap: if we exceed max entries, keep only the newest half
-            if len(self._seen) > self._max_entries:
-                # Sort by timestamp descending and keep the most recent half
-                keep = sorted(self._seen.items(), key=lambda kv: kv[1], reverse=True)[
-                    : max(1, self._max_entries // 2)
-                ]
-                self._seen = dict(keep)
+            async with self._lock:
+                ts = self._seen.get(req_id)
+                if ts is not None:
+                    # Compute remaining TTL for client hint
+                    ttl_left = max(1, int(self._ttl - (now - float(ts))))
+                    return Response(
+                        "Duplicate request",
+                        status_code=409,
+                        headers={"Retry-After": str(ttl_left)},
+                    )
+                # Mark as in-flight to close the race window
+                self._seen[req_id] = now
+        response = await call_next(request)
+        # Optionally update last seen time after completion
+        if req_id:
+            try:
+                self._seen[req_id] = time.monotonic()
+            except Exception:
+                pass
         return response
 
 
@@ -84,75 +146,138 @@ def _anon_user_id(source: Request | str | None) -> str:
         return "local"
     if isinstance(source, str):
         return sha256(source.encode("utf-8")).hexdigest()[:32]
+    # Prefer Authorization hash when present for stability across IP changes
     auth = source.headers.get("Authorization")
     if auth:
         return sha256(auth.encode("utf-8")).hexdigest()[:32]
-    ip = source.headers.get("X-Forwarded-For") or (
-        source.client.host if source.client else None
-    )
+    # Use first IP from X-Forwarded-For if present
+    xff = source.headers.get("X-Forwarded-For")
+    ip = None
+    if xff:
+        ip = xff.split(",")[0].strip()
+    elif source.client:
+        ip = source.client.host
     if ip:
         return sha256(ip.encode("utf-8")).hexdigest()[:12]
-    return uuid.uuid4().hex[:32]
+    # Stable fallback rather than per-request random value
+    return "anon"
 
 
 async def trace_request(request: Request, call_next):
-    rec = LogRecord(req_id=str(uuid.uuid4()))
-    token_req = req_id_var.set(rec.req_id)
+    # Unify request id across middlewares and response
+    incoming_id = request.headers.get("X-Request-ID")
+    current_id = req_id_var.get()
+    req_id = incoming_id or (current_id if current_id and current_id != "-" else str(uuid.uuid4()))
+    rec = LogRecord(req_id=req_id)
+    token_req = req_id_var.set(req_id)
     token_rec = log_record_var.set(rec)
     rec.session_id = request.headers.get("X-Session-ID")
     rec.user_id = _anon_user_id(request)
-    await user_store.ensure_user(rec.user_id)
-    await user_store.increment_request(rec.user_id)
+    # Best-effort user accounting (do not affect request latency on failure)
+    try:
+        await user_store.ensure_user(rec.user_id)
+        await user_store.increment_request(rec.user_id)
+    except Exception:
+        pass
     rec.channel = request.headers.get("X-Channel")
     rec.received_at = utc_now().isoformat()
     rec.started_at = rec.received_at
     start_time = time.monotonic()
     response: Response | None = None
     try:
-        response = await call_next(request)
-        rec.status = "OK"
+        # Create a top-level span for the inbound request
+        route = request.scope.get("route") if hasattr(request, "scope") else None
+        route_path = getattr(route, "path", None) or request.url.path
+        with start_span(
+            "http.request",
+            {
+                "http.method": request.method,
+                "http.route": route_path,
+                "http.target": str(request.url),
+                "user.anonymous_id": rec.user_id,
+            },
+        ) as _span:
+            response = await call_next(request)
+            rec.status = "OK"
+            try:
+                if _span is not None and hasattr(_span, "set_attribute"):
+                    _span.set_attribute("http.status_code", getattr(response, "status_code", 200))
+            except Exception:
+                pass
     except asyncio.TimeoutError:
         rec.status = "ERR_TIMEOUT"
         raise
+    except Exception:
+        # Ensure status reflects generic failures
+        rec.status = "ERR_EXCEPTION"
+        raise
     finally:
         rec.latency_ms = int((time.monotonic() - start_time) * 1000)
+        # Keep this synchronous so tests and dashboards see updated p95 immediately
         await record_latency(rec.latency_ms)
-        rec.p95_latency_ms = latency_p95()
+        try:
+            rec.p95_latency_ms = latency_p95()
+        except Exception:
+            rec.p95_latency_ms = 0
 
         engine = rec.engine_used or "unknown"
-        metrics.REQUEST_COUNT.labels(request.url.path, request.method, engine).inc()
+        route = request.scope.get("route") if hasattr(request, "scope") else None
+        route_path = getattr(route, "path", None) or request.url.path
+        try:
+            metrics.REQUEST_COUNT.labels(route_path, request.method, engine).inc()
+        except Exception:
+            pass
         # Observe with exemplar when possible to jump from Grafana to trace
         try:
             trace_id = get_trace_id_hex()
+            hist = metrics.REQUEST_LATENCY.labels(route_path, request.method, engine)
             observe_with_exemplar(
-                metrics.REQUEST_LATENCY.labels(request.url.path, request.method, engine),
+                hist,
                 rec.latency_ms / 1000,
                 exemplar_labels={"trace_id": trace_id} if trace_id else None,
             )
         except Exception:
-            metrics.REQUEST_LATENCY.labels(
-                request.url.path, request.method, engine
-            ).observe(rec.latency_ms / 1000)
+            try:
+                metrics.REQUEST_LATENCY.labels(route_path, request.method, engine).observe(rec.latency_ms / 1000)
+            except Exception:
+                pass
         if rec.prompt_cost_usd:
             metrics.REQUEST_COST.labels(
-                request.url.path, request.method, engine, "prompt"
+                route_path, request.method, engine, "prompt"
             ).observe(rec.prompt_cost_usd)
         if rec.completion_cost_usd:
             metrics.REQUEST_COST.labels(
-                request.url.path, request.method, engine, "completion"
+                route_path, request.method, engine, "completion"
             ).observe(rec.completion_cost_usd)
         if rec.cost_usd:
             metrics.REQUEST_COST.labels(
-                request.url.path, request.method, engine, "total"
+                route_path, request.method, engine, "total"
             ).observe(rec.cost_usd)
 
         if isinstance(response, Response):
-            response.headers["X-Request-ID"] = rec.req_id
-            # Security headers (phase 6): HSTS and basic CSP
+            response.headers.setdefault("X-Request-ID", rec.req_id)
+            # Surface current trace id in responses when available
+            try:
+                tid = get_trace_id_hex()
+                if tid:
+                    response.headers["X-Trace-ID"] = tid
+                    # Optional hint for browser devtools
+                    response.headers.setdefault("Server-Timing", f"traceparent;desc={tid}")
+            except Exception:
+                pass
+            # Security headers: HSTS, CSP and other common hardening headers
             try:
                 if request.url.scheme == "https":
                     response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
-                response.headers.setdefault("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'")
+                # Allow common SPA/WebSocket usage by default; tighten per env if needed
+                response.headers.setdefault(
+                    "Content-Security-Policy",
+                    "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https: wss:; font-src 'self' data:; frame-ancestors 'none'",
+                )
+                response.headers.setdefault("Referrer-Policy", "no-referrer")
+                response.headers.setdefault("X-Content-Type-Options", "nosniff")
+                response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+                response.headers.setdefault("X-Frame-Options", "DENY")
             except Exception:
                 pass
             # Offline mode badge for UI: set a cookie when local fallback is in use
@@ -160,7 +285,22 @@ async def trace_request(request: Request, call_next):
                 from .llama_integration import LLAMA_HEALTHY as _LL_OK
                 local_mode = (not _LL_OK) and (os.getenv("OPENAI_API_KEY", "") == "")
                 if local_mode:
-                    response.set_cookie("X-Local-Mode", "1", max_age=600, path="/")
+                    # Enforce Secure/SameSite in prod; relax in tests/dev (http)
+                    secure = True
+                    try:
+                        if getattr(request.url, "scheme", "http") != "https":
+                            secure = False
+                    except Exception:
+                        pass
+                    response.set_cookie(
+                        "X-Local-Mode",
+                        "1",
+                        max_age=600,
+                        path="/",
+                        secure=secure,
+                        httponly=True,
+                        samesite="Lax",
+                    )
             except Exception:
                 pass
             # Rate limit visibility headers
@@ -197,15 +337,18 @@ async def trace_request(request: Request, call_next):
             pass
         # Persist structured history
         full = {**rec.model_dump(exclude_none=True), **{"meta": meta}}
-        await append_history(full)
+        try:
+            asyncio.create_task(append_history(full))
+        except Exception:
+            pass
         # Also store a compact decision record for admin UI and explain endpoint
         try:
-            add_decision(full)
+            asyncio.create_task(asyncio.to_thread(add_decision, full))
         except Exception:
             pass
         # Ensure at least a minimal trace exists
         try:
-            add_trace_event(rec.req_id, "request_end", status=rec.status, latency_ms=rec.latency_ms)
+            asyncio.create_task(asyncio.to_thread(add_trace_event, rec.req_id, "request_end", status=rec.status, latency_ms=rec.latency_ms))
         except Exception:
             pass
         log_record_var.reset(token_rec)
@@ -214,7 +357,7 @@ async def trace_request(request: Request, call_next):
 
 
 async def silent_refresh_middleware(request: Request, call_next):
-    """Rotate access_token cookie server-side when nearing expiry.
+    """Rotate access and refresh cookies server-side when nearing expiry.
 
     Controlled via env:
       - JWT_SECRET: required to decode/encode
@@ -233,9 +376,9 @@ async def silent_refresh_middleware(request: Request, call_next):
         # Decode without hard-failing on expiry/format
         try:
             payload = jwt.decode(token, secret, algorithms=["HS256"])
-        except jwt.ExpiredSignatureError:
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
             payload = None
-        except jwt.PyJWTError:
+        except Exception:
             payload = None
         if not payload:
             return response
@@ -243,15 +386,21 @@ async def silent_refresh_middleware(request: Request, call_next):
         exp = int(payload.get("exp", 0))
         threshold = int(os.getenv("ACCESS_REFRESH_THRESHOLD_SECONDS", "3600"))
         if exp - now <= threshold:
-            # Rotate token
+            # Rotate token, preserving custom claims
             user_id = str(payload.get("user_id") or "")
             if not user_id:
                 return response
             lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))
-            new_payload = {"user_id": user_id, "iat": now, "exp": now + lifetime}
+            base_claims = {k: v for k, v in payload.items() if k not in {"iat", "exp", "nbf", "jti"}}
+            base_claims["user_id"] = user_id
+            new_payload = {**base_claims, "iat": now, "exp": now + lifetime}
             new_token = jwt.encode(new_payload, secret, algorithm="HS256")
-            cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes"}
-            cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+            # Canonicalize SameSite and enforce Secure when SameSite=None
+            raw_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes"}
+            raw_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+            samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
+            cookie_samesite = samesite_map.get(raw_samesite, "Lax")
+            cookie_secure = True if cookie_samesite == "None" else raw_secure
             response.set_cookie(
                 key="access_token",
                 value=new_token,
@@ -261,11 +410,35 @@ async def silent_refresh_middleware(request: Request, call_next):
                 max_age=lifetime,
                 path="/",
             )
+            # Optionally extend refresh cookie if present (best-effort)
+            try:
+                rtok = request.cookies.get("refresh_token")
+                if rtok:
+                    rp = jwt.decode(rtok, secret, algorithms=["HS256"])  # may raise
+                    r_exp = int(rp.get("exp", now))
+                    r_life = max(0, r_exp - now)
+                    if r_life > 0:
+                        response.set_cookie(
+                            key="refresh_token",
+                            value=rtok,
+                            httponly=True,
+                            secure=cookie_secure,
+                            samesite=cookie_samesite,
+                            max_age=r_life,
+                            path="/",
+                        )
+            except Exception:
+                pass
     except Exception:
         # best-effort; never fail request due to refresh
         pass
     return response
 
 async def reload_env_middleware(request: Request, call_next):
-    load_env()
+    # Only reload env when explicitly enabled (e.g., in dev)
+    try:
+        if os.getenv("RELOAD_ENV_ON_REQUEST", os.getenv("ENV_RELOAD_ON_REQUEST", "0")).lower() in {"1", "true", "yes", "on"}:
+            load_env()
+    except Exception:
+        pass
     return await call_next(request)

@@ -11,7 +11,8 @@ from .base import Skill
 class DictionarySkill(Skill):
     PATTERNS = [
         re.compile(r"\bdefine (?P<word>[\w\-']+)\b", re.I),
-        re.compile(r"\bsynonyms? for (?P<word>[\w\-']+)\b", re.I),
+        re.compile(r"\bsynonyms? (?:for|of) (?P<word>[\w\-']+)\b", re.I),
+        re.compile(r"\bwhat does (?P<word>[\w\-']+) mean\b", re.I),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
@@ -26,9 +27,14 @@ class DictionarySkill(Skill):
         except Exception:
             return "Dictionary service unreachable."
         try:
-            meanings = data[0]["meanings"][0]
-            definition = meanings["definitions"][0]["definition"]
-            synonyms = meanings.get("synonyms", [])
+            # Prefer noun/verb meanings when present
+            meanings_list = data[0].get("meanings", [])
+            if not meanings_list:
+                return f"No definition found for '{word}'."
+            # pick the first meaning with definitions
+            chosen = next((m for m in meanings_list if m.get("definitions")), meanings_list[0])
+            definition = chosen["definitions"][0].get("definition", "")
+            synonyms = chosen.get("synonyms", [])
             if synonyms:
                 syn = ", ".join(synonyms[:5])
                 return f"{word}: {definition} Synonyms: {syn}"

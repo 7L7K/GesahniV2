@@ -6,7 +6,12 @@ import ChatBubble from '../components/ChatBubble';
 import LoadingBubble from '../components/LoadingBubble';
 import InputBar from '../components/InputBar';
 import { Button } from '@/components/ui/button';
-import { sendPrompt, getToken } from '@/lib/api';
+import { sendPrompt, getToken, getMusicState, type MusicState, wsUrl } from '@/lib/api';
+import NowPlayingCard from '@/components/music/NowPlayingCard';
+import DiscoveryCard from '@/components/music/DiscoveryCard';
+import MoodDial from '@/components/music/MoodDial';
+import QueueCard from '@/components/music/QueueCard';
+import DevicePicker from '@/components/music/DevicePicker';
 
 interface ChatMessage {
   id: string;
@@ -27,6 +32,7 @@ export default function Page() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [musicState, setMusicState] = useState<MusicState | null>(null);
   // 'auto' lets the backend route to skills/LLM; user can still force a model
   const [model, setModel] = useState('auto');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -98,6 +104,31 @@ export default function Page() {
       }
     }
   }, []);
+  // Music: initial load + live updates via WS
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    const init = async () => {
+      try {
+        const st = await getMusicState();
+        setMusicState(st);
+      } catch { }
+      try {
+        const url = wsUrl('/v1/ws/music');
+        ws = new WebSocket(url);
+        ws.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg?.topic === 'music.state') {
+              setMusicState(msg.data as MusicState);
+            }
+          } catch { }
+        };
+      } catch { }
+    };
+    init();
+    return () => { try { ws?.close(); } catch { } };
+  }, []);
+
 
   // Check onboarding status when authed
   useEffect(() => {
@@ -215,6 +246,29 @@ export default function Page() {
   return (
     <main className="mx-auto max-w-3xl px-4">
       <div className="flex min-h-[calc(100vh-56px)] flex-col">
+        {authed && musicState && (
+          <section className="py-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-2 space-y-4">
+                <NowPlayingCard state={musicState} />
+                {/* Emphasize Discovery when higher energy */}
+                {musicState.vibe.energy >= 0.5 ? (
+                  <DiscoveryCard />
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <DiscoveryCard />
+                    <div className="hidden md:block" />
+                  </div>
+                )}
+              </div>
+              <div className="space-y-4">
+                <MoodDial />
+                <QueueCard />
+                <DevicePicker />
+              </div>
+            </div>
+          </section>
+        )}
         {/* chat scroll area */}
         <section className="flex-1 overflow-y-auto py-6">
           {!authed && (

@@ -5,15 +5,15 @@ from __future__ import annotations
 import os
 import re
 from functools import lru_cache
-from typing import Any, Dict, Iterable, Tuple, Literal
+from typing import Any, Dict, Iterable, Tuple, Literal, TYPE_CHECKING
 
 from rapidfuzz import fuzz
 
-try:  # pragma: no cover - optional heavy dependency
-    from sentence_transformers import SentenceTransformer, util
-except Exception:  # pragma: no cover - fallback when library missing
-    SentenceTransformer = None  # type: ignore
-    util = None  # type: ignore
+# NOTE: Avoid importing sentence-transformers at module import time to prevent
+# fork warnings with uvicorn --reload and to keep startup fast. We import
+# lazily inside helpers.
+if TYPE_CHECKING:  # pragma: no cover - for static type checkers only
+    from sentence_transformers import SentenceTransformer  # noqa: F401
 
 from .telemetry import log_record_var
 
@@ -75,13 +75,17 @@ EXAMPLE_INTENTS: Dict[str, list[str]] = {
 
 
 @lru_cache(maxsize=1)
-def _get_model() -> tuple[SentenceTransformer, Dict[str, Any]]:
+def _get_model() -> tuple["SentenceTransformer", Dict[str, Any]]:
     """Return the SBERT model and prototype embeddings."""
-    if SentenceTransformer is None:
+    try:
+        from sentence_transformers import SentenceTransformer as _SentenceTransformer  # type: ignore
+    except Exception:
         raise RuntimeError("sentence-transformers not installed")
-    model = SentenceTransformer(MODEL_NAME)
+
+    model = _SentenceTransformer(MODEL_NAME)
     embeds = {
-        label: model.encode(texts, convert_to_tensor=True).mean(0)
+        # Suppress progress bar to avoid noisy 'Batches: 100%' logs
+        label: model.encode(texts, convert_to_tensor=True, show_progress_bar=False).mean(0)
         for label, texts in EXAMPLE_INTENTS.items()
     }
     return model, embeds
@@ -89,7 +93,11 @@ def _get_model() -> tuple[SentenceTransformer, Dict[str, Any]]:
 
 def _semantic_classify(text: str) -> Tuple[str, float, bool]:
     """Return ``(intent, score, exact)`` using a semantic model or fuzzy matching."""
-    if SentenceTransformer is None or util is None:
+    try:
+        from sentence_transformers import util as _util  # type: ignore
+        model, embeds = _get_model()
+    except Exception:
+        # Fallback: no sentence-transformers available
         best_label = "unknown"
         best_score = 0.0
         exact = False
@@ -100,9 +108,8 @@ def _semantic_classify(text: str) -> Tuple[str, float, bool]:
                     best_label, best_score = label, float(score)
                     exact = text == ex
         return best_label, best_score / 100.0, exact
-    model, embeds = _get_model()
-    emb = model.encode(text, convert_to_tensor=True)
-    scores = {label: float(util.cos_sim(emb, proto)) for label, proto in embeds.items()}
+    emb = model.encode(text, convert_to_tensor=True, show_progress_bar=False)
+    scores = {label: float(_util.cos_sim(emb, proto)) for label, proto in embeds.items()}
     intent, score = max(scores.items(), key=lambda kv: kv[1])
     return intent, score, False
 

@@ -25,6 +25,7 @@ from functools import lru_cache
 from typing import Dict, List, TYPE_CHECKING
 
 import numpy as np
+from .metrics import EMBEDDING_LATENCY_SECONDS
 
 if TYPE_CHECKING:  # pragma: no cover - for type checkers only
     from openai import OpenAI
@@ -125,7 +126,14 @@ async def _embed_openai(text: str) -> List[float]:
     """Asynchronously compute an OpenAI embedding with caching."""
     bucket = int(time.time() // _TTL)
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _embed_openai_sync, text, bucket)
+    t0 = time.perf_counter()
+    try:
+        return await loop.run_in_executor(None, _embed_openai_sync, text, bucket)
+    finally:
+        try:
+            EMBEDDING_LATENCY_SECONDS.labels("openai").observe(time.perf_counter() - t0)
+        except Exception:
+            pass
 
 
 async def _embed_llama(text: str) -> List[float]:
@@ -136,7 +144,14 @@ async def _embed_llama(text: str) -> List[float]:
         return result["data"][0]["embedding"]
 
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _run)
+    t0 = time.perf_counter()
+    try:
+        return await loop.run_in_executor(None, _run)
+    finally:
+        try:
+            EMBEDDING_LATENCY_SECONDS.labels("llama").observe(time.perf_counter() - t0)
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -161,14 +176,21 @@ def embed_sync(text: str) -> List[float]:
     )
     logger.debug("embed_sync backend=%s model=%s (cosine metric assumed)", backend, model)
 
-    if backend == "stub":
-        return _embed_stub(text)
-    if backend == "openai":
-        bucket = int(time.time() // _TTL)
-        return _embed_openai_sync(text, bucket)
-    if backend == "llama":
-        result = _get_llama_model().create_embedding(text)
-        return result["data"][0]["embedding"]
+    t0 = time.perf_counter()
+    try:
+        if backend == "stub":
+            return _embed_stub(text)
+        if backend == "openai":
+            bucket = int(time.time() // _TTL)
+            return _embed_openai_sync(text, bucket)
+        if backend == "llama":
+            result = _get_llama_model().create_embedding(text)
+            return result["data"][0]["embedding"]
+    finally:
+        try:
+            EMBEDDING_LATENCY_SECONDS.labels(backend).observe(time.perf_counter() - t0)
+        except Exception:
+            pass
     raise ValueError(f"Unsupported EMBEDDING_BACKEND: {backend}")
 
 
@@ -213,7 +235,7 @@ async def benchmark(text: str, iterations: int = 10, user_id: str | None = None)
     elapsed = time.perf_counter() - start
     latency = elapsed / iterations if iterations else 0.0
     throughput = iterations / elapsed if elapsed else 0.0
-    logger.info("Embedding latency %.4fs throughput %.2f req/s", latency, throughput)
+    logger.info("embeddings.benchmark", extra={"meta": {"latency": round(latency, 6), "throughput": round(throughput, 6)}})
     return {"latency": latency, "throughput": throughput}
 
 

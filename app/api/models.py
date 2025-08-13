@@ -30,7 +30,28 @@ async def list_models() -> Dict[str, Any]:
         # Fallback: construct from allowed envs
         gpt = [m for m in (os.getenv("ALLOWED_GPT_MODELS", "").split(",")) if m]
         llama = [m for m in (os.getenv("ALLOWED_LLAMA_MODELS", "").split(",")) if m]
-        models = ([{"engine": "gpt", "name": m} for m in gpt] + [{"engine": "llama", "name": m} for m in llama])
+        items: List[Dict[str, Any]] = []
+        # enrich GPT entries with pricing when available
+        try:
+            from app.gpt_client import MODEL_PRICING  # type: ignore
+        except Exception:
+            MODEL_PRICING = {}  # type: ignore
+        for m in gpt:
+            meta: Dict[str, Any] = {"engine": "gpt", "name": m}
+            price = MODEL_PRICING.get(m)
+            if isinstance(price, dict):
+                meta["pricing_per_1k_tokens"] = {"input": price.get("in"), "output": price.get("out")}
+            items.append(meta)
+        for m in llama:
+            items.append({"engine": "llama", "name": m, "pricing_per_1k_tokens": None})
+        models = items
+    # Add basic capabilities hints
+    for it in models:
+        if "capabilities" not in it:
+            if it.get("engine") == "gpt":
+                it["capabilities"] = ["reasoning", "tools", "json"]
+            else:
+                it["capabilities"] = ["local"]
     return {"items": models}
 
 

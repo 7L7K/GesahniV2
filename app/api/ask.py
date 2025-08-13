@@ -45,12 +45,7 @@ async def ask(
     request: Request,
     user_id: str = Depends(get_current_user_id),
 ):
-    logger.info(
-        "ask entry user_id=%s prompt=%s model_override=%s",
-        user_id,
-        req.prompt,
-        req.model_override,
-    )
+    logger.info("ask.entry", extra={"meta": {"user_id": user_id, "model_override": req.model_override, "prompt_len": len(req.prompt or "")}})
 
     queue: asyncio.Queue[str | None] = asyncio.Queue()
     status_code: int | None = None
@@ -83,9 +78,9 @@ async def ask(
             else:  # Compatibility with tests that monkeypatch route_prompt
                 result = await route_prompt(req.prompt, req.model_override, user_id)
             if streamed_any:
-                logger.info("ask success user_id=%s streamed=True", user_id)
+                logger.info("ask.success", extra={"meta": {"user_id": user_id, "streamed": True}})
             else:
-                logger.info("ask success user_id=%s result=%s", user_id, result)
+                logger.info("ask.success", extra={"meta": {"user_id": user_id, "streamed": False}})
                 # If the backend didn't stream any tokens, emit the final result once
                 if isinstance(result, str) and result:
                     await queue.put(result)

@@ -28,19 +28,20 @@ class TimerSkill(Skill):
     PATTERNS = [
         # "start/set <name?> timer for <n> <seconds|minutes>"
         re.compile(
-            r"\b(?:start|set) (?:(?P<name>[\w\-]+) )?timer for (?P<amount>\d+) (?P<unit>seconds?|minutes?)\b",
+            r"\b(?:start|set|begin|create) (?:(?P<name>[\w\-]+) )?timer for (?P<amount>\d+) (?P<unit>seconds?|minutes?|mins?)\b",
             re.I,
         ),
         # "pause/resume/cancel <name?> timer"
-        re.compile(r"\b(?:pause|resume|cancel) (?:(?P<cname>[\w\-]+) )?timer\b", re.I),
+        re.compile(r"\b(?:pause|resume|cancel|stop) (?:(?P<cname>[\w\-]+) )?timer\b", re.I),
         # "how long left on <name?> timer"
-        re.compile(r"\bhow (?:much |long )?left on (?:(?P<qname>[\w\-]+) )?timer\b", re.I),
+        re.compile(r"\bhow (?:much |long )?left (?:on|for) (?:(?P<qname>[\w\-]+) )?timer\b", re.I),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
         groups = match.groupdict()
         if "cname" in groups and groups["cname"] is not None:
             name = groups["cname"] or "gesahni"
+            # extract first verb
             action = match.group(0).split()[0].lower()
             if action == "pause":
                 await ha.call_service("timer", "pause", {"entity_id": f"timer.{name}"})
@@ -48,6 +49,11 @@ class TimerSkill(Skill):
             if action == "resume":
                 await ha.call_service("timer", "start", {"entity_id": f"timer.{name}"})
                 return f"{name} timer resumed."
+            if action == "stop":
+                await ha.call_service("timer", "cancel", {"entity_id": f"timer.{name}"})
+                TIMERS.pop(name, None)
+                _persist_timers()
+                return f"{name} timer cancelled."
             await ha.call_service("timer", "cancel", {"entity_id": f"timer.{name}"})
             TIMERS.pop(name, None)
             _persist_timers()
@@ -63,6 +69,8 @@ class TimerSkill(Skill):
         name = groups.get("name") or "gesahni"
         amount = int(groups["amount"])
         unit = groups["unit"].lower()
+        if unit == "mins":
+            unit = "minutes"
         total_seconds = amount * (60 if unit.startswith("minute") else 1)
         duration = str(timedelta(seconds=total_seconds))
         await ha.call_service(

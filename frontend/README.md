@@ -42,6 +42,6 @@ Run lints locally:
 npm run lint
 ```
 
-Note: The backend exposes both versioned (`/v1`) and unversioned endpoints. The UI targets the unversioned paths by default.
+Note: The backend exposes both versioned (`/v1`) and unversioned endpoints. The UI targets versioned endpoints by default and follows redirects for legacy paths.
 
 For backend deployment instructions and additional environment variables, consult the [project README](../README.md).

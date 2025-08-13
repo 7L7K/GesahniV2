@@ -17,3 +17,29 @@ users.db
 data/history.jsonl
 tests/test_llama_health.py
 .envrc-E
+
+# Python caches
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local databases and caches
+.chroma_data/
+*.sqlite3
+*.sqlite
+*.db
+
+# Coverage / build artifacts
+.coverage
+coverage.xml
+build/
+dist/
+*.egg-info/
+
+# Editors / envs
+.vscode/
+.venv/
+web/*
+
+.gitignore

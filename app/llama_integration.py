@@ -15,6 +15,7 @@ from .logging_config import req_id_var
 from .http_utils import json_request, log_exceptions
 from .metrics import LLAMA_LATENCY, LLAMA_TOKENS, MODEL_LATENCY_SECONDS
 from .model_params import for_ollama
+from .otel_utils import start_span
 
 # ---- ENV --------------------------------------------------------------------
 # Default to local Ollama to avoid import-time crashes when env isn’t set.
@@ -232,25 +233,26 @@ async def ask_llama(
             with attempt:
                 try:
                     async with _sema:
-                        async with httpx.AsyncClient(timeout=timeout) as client:
-                            async with client.stream("POST", url, json=payload) as resp:
-                                resp.raise_for_status()
-                                async for line in resp.aiter_lines():
-                                    if not line.strip():
-                                        continue
-                                    try:
-                                        data = json.loads(line)
-                                    except Exception:
-                                        continue
-                                    token = data.get("response")
-                                    if token:
-                                        yield token
-                                    if data.get("prompt_eval_count") is not None and prompt_tokens == 0:
-                                        prompt_tokens = data.get("prompt_eval_count", 0)
-                                    if data.get("eval_count") is not None:
-                                        completion_tokens = data.get("eval_count", completion_tokens)
-                                    if data.get("done"):
-                                        break
+                        with start_span("ollama.generate", {"llm.provider": "ollama", "llm.model": model or OLLAMA_MODEL}):
+                            async with httpx.AsyncClient(timeout=timeout) as client:
+                                async with client.stream("POST", url, json=payload) as resp:
+                                    resp.raise_for_status()
+                                    async for line in resp.aiter_lines():
+                                        if not line.strip():
+                                            continue
+                                        try:
+                                            data = json.loads(line)
+                                        except Exception:
+                                            continue
+                                        token = data.get("response")
+                                        if token:
+                                            yield token
+                                        if data.get("prompt_eval_count") is not None and prompt_tokens == 0:
+                                            prompt_tokens = data.get("prompt_eval_count", 0)
+                                        if data.get("eval_count") is not None:
+                                            completion_tokens = data.get("eval_count", completion_tokens)
+                                        if data.get("done"):
+                                            break
                     # on success
                     LLAMA_HEALTHY = True
                     _reset_failures()

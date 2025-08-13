@@ -34,11 +34,15 @@ def _mi_to_km(x: float) -> float:
 
 CONVERSIONS: Dict[Tuple[str, str], Callable[[float], float]] = {
     ("liter", "ounce"): _l_to_oz,
+    ("litre", "ounce"): _l_to_oz,
     ("ounce", "liter"): _oz_to_l,
+    ("ounce", "litre"): _oz_to_l,
     ("c", "f"): _c_to_f,
     ("f", "c"): _f_to_c,
     ("kilometer", "mile"): _km_to_mi,
+    ("kilometre", "mile"): _km_to_mi,
     ("mile", "kilometer"): _mi_to_km,
+    ("mile", "kilometre"): _mi_to_km,
 }
 
 
@@ -63,6 +67,10 @@ class UnitConversionSkill(Skill):
         amount = float(amount)
         from_unit = from_unit.lower().rstrip("s")
         to_unit = to_unit.lower().rstrip("s")
+        # Normalize common aliases
+        aliases = {"liters": "liter", "litre": "liter", "kilometre": "kilometer"}
+        from_unit = aliases.get(from_unit, from_unit)
+        to_unit = aliases.get(to_unit, to_unit)
         func = CONVERSIONS.get((from_unit, to_unit))
         if not func:
             return "Conversion not supported."

@@ -22,7 +22,15 @@ async def _load() -> dict[str, str]:
         # Ensure directory exists before reads/writes
         await _ensure_parent_dir()
         async with aiofiles.open(_PATH, "r") as f:
-            return json.loads(await f.read())
+            raw = await f.read()
+            try:
+                data = json.loads(raw) if raw else {}
+            except Exception:
+                data = {}
+            # Normalize keys to lowercase/stripped form
+            if isinstance(data, dict):
+                return {str(k).lower().strip(): str(v) for k, v in data.items()}
+            return {}
     except FileNotFoundError:
         return {}
 

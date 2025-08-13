@@ -112,3 +112,4 @@ pytest_asyncio
 apscheduler==3.10.4
 prometheus-client==0.20.0
 SQLAlchemy==2.0.36
+redis>=5.0.0

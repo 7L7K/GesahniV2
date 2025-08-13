@@ -58,7 +58,7 @@ async def admin_backup(
     if _tok and token != _tok:
         raise HTTPException(status_code=403, detail="forbidden")
 
-    backup_dir = Path(os.getenv("BACKUP_DIR", Path(__file__).resolve().parent.parent / "backups"))
+    backup_dir = Path(os.getenv("BACKUP_DIR", str(Path(__file__).resolve().parent.parent / "backups")))
     backup_dir.mkdir(parents=True, exist_ok=True)
     key = os.getenv("BACKUP_KEY", "")
     if not key:
@@ -98,11 +98,16 @@ async def admin_backup(
             "-out",
             str(out),
         ]
-        subprocess.check_call(cmd)
         try:
-            tar_path.unlink()
-        except Exception:
-            pass
+            subprocess.check_call(cmd)
+        except FileNotFoundError:
+            # Fallback path when openssl is unavailable: simple XOR+base64 masking
+            raise RuntimeError("openssl_missing")
+        finally:
+            try:
+                tar_path.unlink()
+            except Exception:
+                pass
     except Exception:
         try:
             import base64

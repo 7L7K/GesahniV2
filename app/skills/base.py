@@ -39,7 +39,10 @@ SKILLS: List[Skill] = []
 
 # ---------- NEW helper ----------
 def _normalize(text: str) -> str:
-    """Replace curly quotes / fancy dashes with ASCII equivalents."""
+    """Replace curly quotes / fancy dashes and collapse whitespace.
+
+    This makes regexes far more resilient to pasted Unicode and odd spacing.
+    """
     text = unicodedata.normalize("NFKD", text)
     replacements = {
         "’": "'",
@@ -48,9 +51,13 @@ def _normalize(text: str) -> str:
         "”": '"',
         "—": "-",
         "–": "-",
+        "…": "...",
+        "\u00A0": " ",
     }
     for bad, good in replacements.items():
         text = text.replace(bad, good)
+    # Collapse multiple spaces/tabs/newlines into single spaces
+    text = " ".join(text.split())
     return text
 
 

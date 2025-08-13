@@ -40,7 +40,7 @@ async def upload(
     dest = session_dir / "source.wav"
     content = await file.read()
     dest.write_bytes(content)
-    logger.info(f"File uploaded to {dest}")
+    logger.info("sessions.upload", extra={"meta": {"dest": str(dest)}})
     return {"session_id": session_id}
 
 

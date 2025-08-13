@@ -356,6 +356,61 @@
         "pinned": false,
         "user_id": "admin"
       }
+    },
+    {
+      "prompt": "what am I",
+      "answer": "- Need more context to identify you.\n- Are you asking about your identity, role, or something else?",
+      "tags": [],
+      "timestamp": 1755024312.5405068,
+      "hash": "b93ae5c548aff4c907f766d9747be68ed86aa12c080c7ee2ab2053f6e0ffad59",
+      "audit": {
+        "pinned": false,
+        "user_id": "havenotseen@gmail.com"
+      }
+    },
+    {
+      "prompt": "hi'",
+      "answer": "- Hello! How can I assist you today?",
+      "tags": [],
+      "timestamp": 1755024831.4956958,
+      "hash": "fb4d9cde377e45c5ff897b3e8e50ca9f8877300bc58aade9444cbb049ccc182b",
+      "audit": {
+        "pinned": false,
+        "user_id": "havenotseen@gmail.com"
+      }
+    },
+    {
+      "prompt": "turn teh fan on",
+      "answer": "- Turned the fan on.  \n- Do you want it on a specific setting or speed?",
+      "tags": [],
+      "timestamp": 1755026587.196356,
+      "hash": "3688c0f44ca49ddb3afa3f1e11e19f4cedeed6c60ecae19dff3016c910a6983a",
+      "audit": {
+        "pinned": false,
+        "user_id": "havenotseen@gmail.com"
+      }
+    },
+    {
+      "prompt": "how old is Lebrun james",
+      "answer": "- As of 2024, LeBron James is 39 years old.\n- Born on December 30, 1984.\n- Would you like more details about his career?",
+      "tags": [],
+      "timestamp": 1755038003.637632,
+      "hash": "f0ed7900bfc2e0aa67eaeb3d21b1d9215e304fe7227f9afa742d0a5c4ad563aa",
+      "audit": {
+        "pinned": false,
+        "user_id": "havenotseen@gmail.com"
+      }
+    },
+    {
+      "prompt": "whats my favorite color",
+      "answer": "- I don't have information on your favorite color.\n- Would you like to tell me what it is?",
+      "tags": [],
+      "timestamp": 1755048934.92352,
+      "hash": "c77321314812ee637c976016e2581d0bc82501284e64a1a0d90c7fde378f3058",
+      "audit": {
+        "pinned": false,
+        "user_id": "havenotseen@gmail.com"
+      }
     }
   ]
 }

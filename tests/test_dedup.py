@@ -20,3 +20,4 @@ def test_dedup_middleware(monkeypatch):
     assert r1.status_code == 200
     r2 = client.get("/health", headers=headers)
     assert r2.status_code == 409
+    assert r2.headers.get("Retry-After") is not None

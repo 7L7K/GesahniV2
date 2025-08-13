@@ -30,11 +30,11 @@ export default function AdminMetrics() {
           <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="rounded border p-3">
               <div className="text-sm text-muted-foreground">Latency p95</div>
-              <div className="text-2xl font-semibold">{data.latency_p95_ms} ms</div>
+              <div className="text-2xl font-semibold">{data.metrics?.latency_p95_ms ?? 0} ms</div>
             </div>
             <div className="rounded border p-3">
               <div className="text-sm text-muted-foreground">Transcribe Error Rate</div>
-              <div className="text-2xl font-semibold">{data.transcribe_error_rate}%</div>
+              <div className="text-2xl font-semibold">{data.metrics?.transcribe_error_rate ?? 0}%</div>
             </div>
           </section>
           <section>

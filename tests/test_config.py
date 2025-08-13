@@ -18,6 +18,8 @@ def setup_app(monkeypatch):
     os.environ["OPENAI_API_KEY"] = "key"
     os.environ["OPENAI_MODEL"] = "gpt"
     os.environ["SIM_THRESHOLD"] = "0.24"
+    # Ensure env reload per request is enabled for this test module
+    os.environ["ENV_RELOAD_ON_REQUEST"] = "1"
     import app.home_assistant as home_assistant
     import app.llama_integration as llama_integration
     import app.status as status

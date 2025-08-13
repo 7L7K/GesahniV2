@@ -77,7 +77,7 @@ class ReminderSkill(Skill):
         ),
         # "remind me to call grandma in 10 minutes"
         re.compile(
-            r"remind me to (?P<task>.+) in (?P<amt>\d+)\s*(?P<unit>seconds?|minutes?|hours?)",
+            r"remind me to (?P<task>.+) in (?P<amt>\d+)\s*(?P<unit>seconds?|minutes?|minute|mins?|hours?|hrs?)",
             re.I,
         ),
         # "remind me to pay rent every month"
@@ -118,7 +118,12 @@ class ReminderSkill(Skill):
         if gd.get("amt") and gd.get("unit"):
             amt = int(gd["amt"])
             unit = gd["unit"].lower()
-            sec = amt * (60 if "minute" in unit else 3600 if "hour" in unit else 1)
+            if unit in {"mins", "min", "minute", "minutes"}:
+                sec = amt * 60
+            elif unit in {"hrs", "hour", "hours"}:
+                sec = amt * 3600
+            else:
+                sec = amt
             task = gd["task"]
             scheduler.add_job(lambda: None, "date", seconds=sec)
             _persist_reminder({"type": "delay", "task": task, "seconds": sec})

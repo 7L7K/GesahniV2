@@ -41,6 +41,7 @@ from .metrics import (
 )
 from .model_params import for_openai
 from .telemetry import log_record_var
+from .otel_utils import start_span
 from .model_config import (
     GPT_BASELINE_MODEL,
     GPT_MID_MODEL,
@@ -205,30 +206,31 @@ async def ask_gpt(
         # Remove keys not accepted directly by OpenAI client to avoid TypeErrors
         # We'll pass only recognized args to the API call; others are ignored
         openai_kwargs = {k: v for k, v in gen_params.items() if v is not None}
-        if stream:
-            resp_stream = await client.chat.completions.create(
-                model=model, messages=messages, stream=True, **openai_kwargs
-            )
-            chunks: list[str] = []
-            final = None
-            async for part in resp_stream:
-                delta = getattr(part.choices[0], "delta", None)
-                token = getattr(delta, "content", None)
-                if token:
-                    chunks.append(token)
-                    if on_token:
-                        await on_token(token)
-                if getattr(part.choices[0], "finish_reason", None):
-                    final = part
-            resp = final
-            text = "".join(chunks).strip()
-        else:
-            resp = await client.chat.completions.create(
-                model=model, messages=messages, **openai_kwargs
-            )
-            text = resp.choices[0].message.content.strip()
-            if on_token:
-                await on_token(text)
+        with start_span("openai.chat", {"llm.provider": "openai", "llm.model": model}):
+            if stream:
+                resp_stream = await client.chat.completions.create(
+                    model=model, messages=messages, stream=True, **openai_kwargs
+                )
+                chunks: list[str] = []
+                final = None
+                async for part in resp_stream:
+                    delta = getattr(part.choices[0], "delta", None)
+                    token = getattr(delta, "content", None)
+                    if token:
+                        chunks.append(token)
+                        if on_token:
+                            await on_token(token)
+                    if getattr(part.choices[0], "finish_reason", None):
+                        final = part
+                resp = final
+                text = "".join(chunks).strip()
+            else:
+                resp = await client.chat.completions.create(
+                    model=model, messages=messages, **openai_kwargs
+                )
+                text = resp.choices[0].message.content.strip()
+                if on_token:
+                    await on_token(text)
         usage = getattr(resp, "usage", None) or {}
         pt = int(getattr(usage, "prompt_tokens", 0))
         ct = int(getattr(usage, "completion_tokens", 0))

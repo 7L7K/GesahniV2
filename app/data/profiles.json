@@ -1,25 +1,111 @@
 {
   "anon": {
-    "name": "algevon",
-    "email": "havenotseen@gmail.com",
-    "timezone": "America/Detroit",
-    "language": "en",
-    "communication_style": "technical",
-    "interests": [
-      "Technology",
-      "Travel",
-      "Environment"
-    ],
-    "occupation": "yo momma",
-    "home_location": "Detroit",
-    "preferred_model": "auto",
-    "calendar_integration": true,
-    "gmail_integration": true,
-    "onboarding_completed": true
+    "name": {
+      "value": "algevon",
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "email": {
+      "value": "havenotseen@gmail.com",
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "timezone": {
+      "value": "America/Detroit",
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "language": {
+      "value": "en",
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "communication_style": {
+      "value": "technical",
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "interests": {
+      "value": [
+        "Technology",
+        "Travel",
+        "Environment"
+      ],
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "occupation": {
+      "value": "yo momma",
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "home_location": {
+      "value": "Detroit",
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "preferred_model": {
+      "value": "auto",
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "calendar_integration": {
+      "value": true,
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "gmail_integration": {
+      "value": true,
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "onboarding_completed": {
+      "value": true,
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "favorite_color": {
+      "value": "blue",
+      "updated_at": 1755050919.599044,
+      "source": "utterance"
+    }
   },
   "havenotseen@gmail.com": {
-    "calendar_integration": false,
-    "gmail_integration": false,
-    "onboarding_completed": true
+    "calendar_integration": {
+      "value": false,
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "gmail_integration": {
+      "value": false,
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    },
+    "onboarding_completed": {
+      "value": true,
+      "updated_at": 1755010358.904133,
+      "source": "import"
+    }
+  },
+  "u_test": {
+    "favorite_color": {
+      "value": "blue",
+      "updated_at": 1755050919.650305,
+      "source": "ui"
+    }
+  },
+  "u1": {
+    "preferred_name": {
+      "value": "Alex",
+      "updated_at": 1755050919.655849,
+      "source": "import"
+    }
+  },
+  "tmp_ob_2": {
+    "onboarding_completed": {
+      "value": true,
+      "updated_at": 1755012332.9549031,
+      "source": "api"
+    }
   }
 }

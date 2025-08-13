@@ -102,6 +102,118 @@
           "legendFormat": "{{rule}}"
         }
       ]
+    },
+    {
+      "title": "Route Latency (p95 by route)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(app_request_latency_seconds_bucket[5m])) by (le, endpoint))",
+          "legendFormat": "{{endpoint}} p95"
+        }
+      ]
+    },
+    {
+      "title": "Dependency Latency (p95)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(dependency_latency_seconds_bucket[5m])) by (le, dependency, operation))",
+          "legendFormat": "{{dependency}}/{{operation}} p95"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(model_latency_seconds_bucket[5m])) by (le, model))",
+          "legendFormat": "model {{model}} p95"
+        }
+      ]
+    },
+    {
+      "title": "Vector Store",
+      "type": "bargauge",
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(vector_selected_total[5m])) by (backend)",
+          "legendFormat": "selected {{backend}}"
+        },
+        {
+          "expr": "sum(rate(vector_init_fallbacks_total[5m])) by (requested)",
+          "legendFormat": "fallbacks {{requested}}"
+        },
+        {
+          "expr": "sum(rate(vector_fallback_reads_total[5m])) by (area)",
+          "legendFormat": "reads {{area}}"
+        }
+      ]
+    },
+    {
+      "title": "Rate Limit",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(rate_limit_allow_total[5m])) by (channel, bucket)",
+          "legendFormat": "allow {{channel}} {{bucket}}"
+        },
+        {
+          "expr": "sum(rate(rate_limit_block_total[5m])) by (channel, bucket)",
+          "legendFormat": "block {{channel}} {{bucket}}"
+        }
+      ]
+    },
+    {
+      "title": "Embedding Latency (p95)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(embedding_latency_seconds_bucket[5m])) by (le, backend))",
+          "legendFormat": "{{backend}} p95"
+        }
+      ]
+    },
+    {
+      "title": "Vector Ops (p95)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(vector_op_latency_seconds_bucket[5m])) by (le, operation))",
+          "legendFormat": "{{operation}} p95"
+        }
+      ]
     }
   ]
 }

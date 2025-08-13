@@ -25,9 +25,10 @@ Thanks for your interest in contributing! This guide explains how to set up your
    ```
 4. Start the frontend (in another shell):
    ```bash
-   cd frontend
-   npm install
-   npm run dev
+    cd frontend
+    npm install
+    npm run dev
+    # Note: Any legacy `web/` app has been removed; the single source of truth is `frontend/`.
    ```
 
 ## Running Tests and Linters
@@ -43,6 +44,26 @@ black .
 Type‑checking (optional):
 ```bash
 pyright
+```
+
+### Smoke tests (golden flows)
+
+```bash
+pytest -q tests/smoke
+```
+
+### Load testing
+
+Run a lightweight scenario with k6 (requires `k6` installed):
+
+```bash
+k6 run scripts/k6_load_test.js -e BASE_URL=http://localhost:8000
+```
+
+Or with Locust:
+
+```bash
+locust -f locustfile.py --host=http://localhost:8000
 ```
 
 ## Branching and Commits

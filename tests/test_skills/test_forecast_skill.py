@@ -48,3 +48,36 @@ def test_forecast_skill(monkeypatch):
     assert m
     resp = asyncio.run(skill.run("3 day forecast for Paris", m))
     assert "Wed" in resp and resp.count("|") == 2
+
+
+def test_forecast_plain_phrase(monkeypatch):
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: FakeClient())
+    import app.skills.forecast_skill as fs
+    monkeypatch.setattr(fs, "OPENWEATHER_KEY", "dummy")
+    skill = ForecastSkill()
+    m = skill.match("forecast for Berlin, DE")
+    resp = asyncio.run(skill.run("forecast for Berlin, DE", m))
+    assert resp
+
+
+def test_forecast_handles_no_data(monkeypatch):
+    class EmptyClient:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+        async def get(self, url, params=None):
+            class R:
+                def json(self_non):
+                    return {"list": []}
+                def raise_for_status(self_non):
+                    pass
+            return R()
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: EmptyClient())
+    import app.skills.forecast_skill as fs
+    monkeypatch.setattr(fs, "OPENWEATHER_KEY", "dummy")
+    skill = ForecastSkill()
+    m = skill.match("three day forecast")
+    resp = asyncio.run(skill.run("three day forecast", m))
+    assert "No forecast data" in resp

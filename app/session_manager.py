@@ -115,9 +115,21 @@ async def save_session(
 
     tags = tags or []
     if transcript is not None:
-        safe_text = redact_and_store("transcript", session_id, transcript)
+        # Optional PII redaction before persistence
+        safe_text = transcript
+        try:
+            if os.getenv("REDACT_PII", "1").lower() in {"1", "true", "yes", "on"}:
+                safe_text = redact_and_store("transcript", session_id, transcript)
+        except Exception:
+            pass
         (session_dir / "transcript.txt").write_text(safe_text, encoding="utf-8")
         meta["status"] = SessionStatus.TRANSCRIBED.value
+        # Optional caregiver sharing pointer
+        if os.getenv("TRANSCRIPTS_SHARE", "0").lower() in {"1", "true", "yes", "on"}:
+            # Store an absolute-ish path clients can fetch from static mount if configured
+            base = os.getenv("TRANSCRIPTS_BASE", "")
+            rel = f"{session_id}/transcript.txt"
+            meta["transcript_uri"] = f"{base.rstrip('/')+'/'+rel if base else rel}"
     if tags:
         meta["tags"] = tags
         (session_dir / "tags.json").write_text(
@@ -125,12 +137,23 @@ async def save_session(
         )
     _save_meta(session_id, meta)
 
+    # Derive a stable, repo-relative path when possible; fallback to absolute
+    try:
+        from . import session_store as _store
+
+        try:
+            rel = session_dir.relative_to(_store.SESSIONS_DIR)
+        except Exception:
+            rel = session_dir
+        path_str = str(rel)
+    except Exception:
+        path_str = str(session_dir)
     record = {
         "type": "capture",
         "session_id": session_id,
         "timestamp": datetime.utcnow().isoformat(timespec="seconds") + "Z",
         "tags": tags,
-        "path": str(session_dir.relative_to(SESSIONS_DIR.parent)),
+        "path": path_str,
     }
     await append_history(record)
 

@@ -220,7 +220,7 @@ def _isolate_debug_and_flags(monkeypatch):
 pytest_plugins = ("pytest_asyncio",)
 
 
-def pytest_collect_file(file_path: Path, path, parent):  # type: ignore[override]
+def pytest_collect_file(file_path: Path, parent):  # type: ignore[override]
     # Guarantee OpenAIError exists even if other tests muck with import order
     _ensure_openai_error()
     return None  # allow default collection
