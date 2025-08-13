@@ -171,6 +171,14 @@ async def trace_request(request: Request, call_next):
     rec = LogRecord(req_id=req_id)
     token_req = req_id_var.set(req_id)
     token_rec = log_record_var.set(rec)
+    # Redact tokens from logs
+    def _redact(s: str | None) -> str | None:
+        if not s:
+            return s
+        if "Bearer " in s:
+            return "Bearer [REDACTED]"
+        return s
+    # Set session/device ids if present
     rec.session_id = request.headers.get("X-Session-ID")
     rec.user_id = _anon_user_id(request)
     # Best-effort user accounting (do not affect request latency on failure)
@@ -197,6 +205,15 @@ async def trace_request(request: Request, call_next):
                 "user.anonymous_id": rec.user_id,
             },
         ) as _span:
+            # Remove sensitive headers before passing to app log context
+            try:
+                if "authorization" in request.headers:
+                    request.headers.__dict__["_list"] = [
+                        (k, v if k.decode().lower() != "authorization" else b"Bearer [REDACTED]")
+                        for (k, v) in request.headers.raw
+                    ]
+            except Exception:
+                pass
             response = await call_next(request)
             rec.status = "OK"
             try:
@@ -410,13 +427,14 @@ async def silent_refresh_middleware(request: Request, call_next):
                 max_age=lifetime,
                 path="/",
             )
-            # Optionally extend refresh cookie if present (best-effort)
+            # Optionally extend refresh cookie if present (best-effort) with jitter to avoid herd
             try:
                 rtok = request.cookies.get("refresh_token")
                 if rtok:
                     rp = jwt.decode(rtok, secret, algorithms=["HS256"])  # may raise
                     r_exp = int(rp.get("exp", now))
-                    r_life = max(0, r_exp - now)
+                    import random as _rand
+                    r_life = max(0, r_exp - now - _rand.randint(0, 15))
                     if r_life > 0:
                         response.set_cookie(
                             key="refresh_token",

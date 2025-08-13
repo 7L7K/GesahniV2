@@ -61,7 +61,8 @@ def get_current_user_id(
             token = None
 
     secret = JWT_SECRET or os.getenv("JWT_SECRET")
-    require_jwt = os.getenv("REQUIRE_JWT", "1").strip().lower() in {"1", "true", "yes", "on"}
+    # Default to not requiring JWT in dev unless explicitly enabled
+    require_jwt = os.getenv("REQUIRE_JWT", "0").strip().lower() in {"1", "true", "yes", "on"}
     optional_in_tests = os.getenv("JWT_OPTIONAL_IN_TESTS", "0").lower() in {"1", "true", "yes", "on"}
     # In tests, allow anonymous without a secret to avoid 500s
     if not secret and (os.getenv("ENV", "").lower() == "test" or optional_in_tests or os.getenv("PYTEST_RUNNING")):
@@ -91,4 +92,25 @@ def get_current_user_id(
     return user_id
 
 
-__all__ = ["get_current_user_id"]
+def get_current_session_device(request: Request | None = None, websocket: WebSocket | None = None) -> dict:
+    target = request or websocket
+    sid = None
+    did = None
+    try:
+        if target is not None:
+            sid = target.headers.get("X-Session-ID")
+            did = target.headers.get("X-Device-ID")
+        if not sid and isinstance(request, Request):
+            sid = request.cookies.get("sid")
+        if not did and isinstance(request, Request):
+            did = request.cookies.get("did")
+        if not sid and websocket is not None:
+            sid = websocket.query_params.get("sid")
+        if not did and websocket is not None:
+            did = websocket.query_params.get("did")
+    except Exception:
+        pass
+    return {"session_id": sid, "device_id": did}
+
+
+__all__ = ["get_current_user_id", "get_current_session_device"]
