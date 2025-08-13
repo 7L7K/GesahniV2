@@ -15,13 +15,16 @@ from app.deps.user import get_current_user_id
 router = APIRouter(tags=["Calendar"])
 
 
+# Note: The calendar file path is resolved dynamically in _read() so tests that
+#       monkeypatch CALENDAR_FILE after import see updated data.
 CALENDAR_FILE = Path(os.getenv("CALENDAR_FILE", "data/calendar.json"))
 
 
 def _read() -> List[dict]:
     try:
-        if CALENDAR_FILE.exists():
-            data = json.loads(CALENDAR_FILE.read_text(encoding="utf-8") or "[]")
+        path = Path(os.getenv("CALENDAR_FILE", str(CALENDAR_FILE)))
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8") or "[]")
             return data if isinstance(data, list) else []
     except Exception:
         pass
@@ -107,7 +110,7 @@ EXAMPLE_NEXT = {
     },
 )
 async def list_today(user_id: str = Depends(get_current_user_id)) -> EventsResponse:
-    today = _dt.date.today().isoformat()
+    today = os.getenv("PYTEST_FAKE_TODAY") or _dt.date.today().isoformat()
     items = [e for e in _read() if str(e.get("date") or "") == today]
     items.sort(key=_sort_key)
     return EventsResponse(items=[Event(**it) for it in items])
@@ -133,19 +136,20 @@ async def next_three(user_id: str = Depends(get_current_user_id)) -> EventsRespo
 
         provider = FakeCalendarProvider()
         ev = provider.list_next(3)
-        # Map fake provider events to legacy Event shape
-        items = [
-            {
-                "date": e.get("start_local", "").split("T")[0],
-                "time": e.get("start_local", "").split("T")[1][:5] if "T" in (e.get("start_local") or "") else None,
-                "title": e.get("title"),
-            }
-            for e in ev
-        ]
-        return EventsResponse(items=[Event(**it) for it in items])
+        if ev:  # Only use provider when it yields events
+            items = [
+                {
+                    "date": e.get("start_local", "").split("T")[0],
+                    "time": e.get("start_local", "").split("T")[1][:5] if "T" in (e.get("start_local") or "") else None,
+                    "title": e.get("title"),
+                }
+                for e in ev
+            ]
+            return EventsResponse(items=[Event(**it) for it in items])
     except Exception:
         pass
-    today = _dt.date.today().isoformat()
+    # Fallback to local JSON data
+    today = os.getenv("PYTEST_FAKE_TODAY") or _dt.date.today().isoformat()
     items = [e for e in _read() if (str(e.get("date") or "")) >= today]
     items.sort(key=_sort_key)
     return EventsResponse(items=[Event(**it) for it in items[:3]])

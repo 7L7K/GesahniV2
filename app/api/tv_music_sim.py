@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ..deps.user import get_current_user_id
 from .music import music_command
+from app.models.common import OkResponse as CommonOkResponse
 
 
 router = APIRouter(tags=["TV"], prefix="")
@@ -17,10 +18,8 @@ class DuckBody(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"level": 15}})
 
 
-class OkResponse(BaseModel):
-    status: str = "ok"
-
-    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
+class OkResponse(CommonOkResponse):
+    model_config = ConfigDict(title="OkResponse")
 
 
 @router.post("/ui/duck", response_model=OkResponse, responses={200: {"model": OkResponse}})

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-from typing import Callable, Iterable, List
+from typing import Any, Callable, Iterable, List
 
-from fastapi import HTTPException, Request, Security
+from fastapi import HTTPException, Request, Security, WebSocket
 from fastapi.security import OAuth2PasswordBearer
 
 
@@ -25,6 +25,41 @@ oauth2_scheme = OAuth2PasswordBearer(
 )
 
 
+def _extract_payload(target: Any) -> dict | None:
+    """Return decoded JWT payload for either Request or WebSocket objects.
+
+    Prefers state.jwt_payload when present; otherwise falls back to helper
+    functions that parse Authorization headers/cookies.
+    """
+
+    try:
+        state = getattr(target, "state", None)
+        payload = getattr(state, "jwt_payload", None)
+        if isinstance(payload, dict):
+            return payload
+    except Exception:
+        pass
+    try:
+        # Try HTTP path first
+        from app.security import _get_request_payload as _get_req  # type: ignore
+
+        p = _get_req(target)
+        if isinstance(p, dict):
+            return p
+    except Exception:
+        pass
+    try:
+        # Fallback to WS path when available
+        from app.security import _get_ws_payload as _get_ws  # type: ignore
+
+        p = _get_ws(target)
+        if isinstance(p, dict):
+            return p
+    except Exception:
+        pass
+    return None
+
+
 def require_scope(required: str) -> Callable[[Request], None]:
     """Return a dependency that enforces a JWT scope when JWTs are enabled.
 
@@ -36,7 +71,7 @@ def require_scope(required: str) -> Callable[[Request], None]:
         # Only enforce when a JWT is in play
         if not os.getenv("JWT_SECRET"):
             return
-        payload = getattr(request.state, "jwt_payload", None)
+        payload = _extract_payload(request)
         if not isinstance(payload, dict):
             # verify_token dependency should have populated this already
             raise HTTPException(status_code=401, detail="Unauthorized")
@@ -50,18 +85,19 @@ def require_scope(required: str) -> Callable[[Request], None]:
 
 
 def optional_require_scope(required: str) -> Callable[[Request], None]:
-    """Scope check that can be globally turned off via env.
+    """Scope check that can be toggled via env at runtime.
 
-    When ENFORCE_JWT_SCOPES is not set, behaves as a no-op to keep tests green.
+    Evaluates ENFORCE_JWT_SCOPES on each request so tests that set/unset
+    the env after app import still take effect.
     """
 
-    if os.getenv("ENFORCE_JWT_SCOPES", "").lower() in {"1", "true", "yes"}:
-        return require_scope(required)
-
-    async def _noop(_: Request) -> None:
+    async def _maybe(request: Request) -> None:
+        if os.getenv("ENFORCE_JWT_SCOPES", "").lower() in {"1", "true", "yes"}:
+            dep = require_scope(required)
+            return await dep(request)
         return None
 
-    return _noop
+    return _maybe
 
 
 def require_any_scope(required: Iterable[str]) -> Callable[[Request], None]:
@@ -77,7 +113,7 @@ def require_any_scope(required: Iterable[str]) -> Callable[[Request], None]:
 
         if not _os.getenv("JWT_SECRET"):
             return
-        payload = getattr(request.state, "jwt_payload", None)
+        payload = _extract_payload(request)
         if not isinstance(payload, dict):
             raise HTTPException(status_code=401, detail="Unauthorized")
         scopes = payload.get("scope") or payload.get("scopes") or []
@@ -90,17 +126,15 @@ def require_any_scope(required: Iterable[str]) -> Callable[[Request], None]:
 
 
 def optional_require_any_scope(required: Iterable[str]) -> Callable[[Request], None]:
-    """Like require_any_scope but disabled unless ENFORCE_JWT_SCOPES is truthy."""
+    """Like require_any_scope but evaluated dynamically per request."""
 
-    import os as _os
-
-    if _os.getenv("ENFORCE_JWT_SCOPES", "").lower() in {"1", "true", "yes"}:
-        return require_any_scope(required)
-
-    async def _noop(_: Request) -> None:
+    async def _maybe(request: Request) -> None:
+        if os.getenv("ENFORCE_JWT_SCOPES", "").lower() in {"1", "true", "yes"}:
+            dep = require_any_scope(required)
+            return await dep(request)
         return None
 
-    return _noop
+    return _maybe
 
 
 def docs_security_with(scopes: List[str]):
@@ -118,6 +152,95 @@ def docs_security_with(scopes: List[str]):
     return _dep
 
 
+# Unified helpers: pluralized names that accept lists and can be used for
+# both HTTP and WebSocket routes (via FastAPI dependency system).
+
+def require_scopes(required: Iterable[str]) -> Callable[[Request], None]:
+    """Enforce that ALL required scopes are present on the JWT.
+
+    Semantics:
+    - If JWT is configured but token missing/invalid -> 401
+    - If token valid but lacks required scope(s) -> 403
+    - If JWT not configured -> no-op (dev/test convenience)
+    """
+
+    required_set = {str(s).strip() for s in required if str(s).strip()}
+
+    async def _dep(request: Request) -> None:
+        if not os.getenv("JWT_SECRET"):
+            return
+        payload = _extract_payload(request)
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        scopes = payload.get("scope") or payload.get("scopes") or []
+        if isinstance(scopes, str):
+            scopes = [s.strip() for s in scopes.split() if s.strip()]
+        if not required_set <= set(scopes):
+            raise HTTPException(status_code=403, detail="Forbidden: missing scope")
+
+    return _dep
+
+
+def require_any_scopes(required: Iterable[str]) -> Callable[[Request], None]:
+    """Enforce that ANY of the provided scopes are present on the JWT.
+
+    Same 401/403 semantics as require_scopes.
+    """
+
+    required_set = {str(s).strip() for s in required if str(s).strip()}
+
+    async def _dep(request: Request) -> None:
+        if not os.getenv("JWT_SECRET"):
+            return
+        payload = _extract_payload(request)
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        scopes = payload.get("scope") or payload.get("scopes") or []
+        if isinstance(scopes, str):
+            scopes = [s.strip() for s in scopes.split() if s.strip()]
+        if not (set(scopes) & required_set):
+            raise HTTPException(status_code=403, detail="Forbidden: missing scope")
+
+    return _dep
+
+
+def require_scopes_ws(required: Iterable[str]) -> Callable[[WebSocket], None]:
+    required_set = {str(s).strip() for s in required if str(s).strip()}
+
+    async def _dep(websocket: WebSocket) -> None:
+        if not os.getenv("JWT_SECRET"):
+            return
+        payload = _extract_payload(websocket)
+        if not isinstance(payload, dict):
+            # For WS, map to 4401-equivalent by raising HTTPException which FastAPI will map to 403-ish close.
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        scopes = payload.get("scope") or payload.get("scopes") or []
+        if isinstance(scopes, str):
+            scopes = [s.strip() for s in scopes.split() if s.strip()]
+        if not required_set <= set(scopes):
+            raise HTTPException(status_code=403, detail="Forbidden: missing scope")
+
+    return _dep
+
+
+def require_any_scopes_ws(required: Iterable[str]) -> Callable[[WebSocket], None]:
+    required_set = {str(s).strip() for s in required if str(s).strip()}
+
+    async def _dep(websocket: WebSocket) -> None:
+        if not os.getenv("JWT_SECRET"):
+            return
+        payload = _extract_payload(websocket)
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        scopes = payload.get("scope") or payload.get("scopes") or []
+        if isinstance(scopes, str):
+            scopes = [s.strip() for s in scopes.split() if s.strip()]
+        if not (set(scopes) & required_set):
+            raise HTTPException(status_code=403, detail="Forbidden: missing scope")
+
+    return _dep
+
+
 __all__ = [
     "oauth2_scheme",
     "OAUTH2_SCOPES",
@@ -125,6 +248,10 @@ __all__ = [
     "optional_require_scope",
     "require_any_scope",
     "optional_require_any_scope",
+    "require_scopes",
+    "require_any_scopes",
+    "require_scopes_ws",
+    "require_any_scopes_ws",
     "docs_security_with",
 ]
 

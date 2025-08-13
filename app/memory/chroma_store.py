@@ -46,6 +46,21 @@ def _normalize_meta(meta: dict | None) -> dict:
     return meta
 
 
+def _length_similarity(a: str, b: str) -> float:
+    """Return a deterministic similarity in [0, 1] based on string lengths.
+
+    - 1.0 when texts are exactly equal
+    - Otherwise, 1 - (|len(a) - len(b)| / max(1, len(a), len(b))) clamped to [0, 1]
+    """
+
+    if a == b:
+        return 1.0
+    la, lb = len(a), len(b)
+    denom = max(1, la, lb)
+    diff = abs(la - lb) / denom
+    return max(0.0, 1.0 - min(1.0, diff))
+
+
 class _NoopCache:
     """No-op collection used when QA cache is disabled via env flag."""
 
@@ -268,7 +283,21 @@ class ChromaVectorStore(VectorStore):
             prompt,
             k,
         )
-        self._dist_cutoff = 1.0 - _get_sim_threshold()
+        sim_threshold = _get_sim_threshold()
+        self._dist_cutoff = 1.0 - sim_threshold
+        try:
+            logger.info(
+                "vector.query_threshold",
+                extra={
+                    "meta": {
+                        "backend": "chroma",
+                        "sim_threshold": round(sim_threshold, 4),
+                        "dist_cutoff": round(self._dist_cutoff, 4),
+                    }
+                },
+            )
+        except Exception:
+            pass
         # Use normalized prompt for length-based distance computation
         _, norm_prompt = _normalize(prompt)
         # Use broad query when using length embedder so fallback tests that seed
@@ -302,16 +331,24 @@ class ChromaVectorStore(VectorStore):
             meta = metas[idx] or {}
             if not doc:
                 continue
-            # Prefer provided distances from the vector store when available.
-            # Fall back to a simple length‑ratio distance only when distances are missing.
-            dist_val = dvals[idx] if idx < len(dvals) else None
-            if dist_val is None:
-                dist = abs(len(doc) - len(norm_prompt)) / max(len(doc), len(norm_prompt), 1)
+            if use_length:
+                # Normalize stored document for deterministic comparison
+                _, norm_doc = _normalize(doc)
+                # Guard: never consider equal-length-but-different-text similar
+                if norm_doc != norm_prompt and (len(norm_doc) == len(norm_prompt)):
+                    continue
+                sim = _length_similarity(norm_doc, norm_prompt)
+                dist = 1.0 - sim
             else:
-                dist = float(dist_val)
-            gate_ok = True
-            # Apply global cutoff and optional length gate
-            if dist <= self._dist_cutoff and gate_ok:
+                # Prefer provided distances from the vector store when available.
+                # Fall back to a simple length‑ratio distance only when distances are missing.
+                dist_val = dvals[idx] if idx < len(dvals) else None
+                if dist_val is None:
+                    dist = abs(len(doc) - len(norm_prompt)) / max(len(doc), len(norm_prompt), 1)
+                else:
+                    dist = float(dist_val)
+            # Apply strict global cutoff: only keep items with distance < cutoff
+            if dist < self._dist_cutoff:
                 items.append((float(dist), -float(meta.get("ts", 0) or 0.0), doc))
         items.sort()
         top_items = items[:k]
@@ -396,15 +433,19 @@ class ChromaVectorStore(VectorStore):
         meta_raw = res.get("metadatas", [[]])
         meta = _normalize_meta(meta_raw[0][0] if meta_raw and meta_raw[0] else {})
         dvals = res.get("distances", [[None]])[0]
-        # For length embedder, compute distance from length ratio, not Chroma distance
         use_length = (
             not hasattr(self, "_embedder") or isinstance(self._embedder, _LengthEmbedder)
         )
         if use_length:
-            dist = abs(len(doc) - len(norm)) / max(len(doc), len(norm), 1)
+            # Guard: never consider equal-length-but-different-text similar
+            if doc != norm and (len(doc) == len(norm)):
+                logger.debug("Cache miss for %s (equal length mismatch)", hash_)
+                return None
+            sim = _length_similarity(doc, norm)
+            dist = 1.0 - sim
         else:
             dist = float(dvals[0]) if dvals and dvals[0] is not None else 1.0
-        if dist >= self._dist_cutoff:
+        if dist > self._dist_cutoff:
             logger.debug("Cache miss for %s (dist=%.4f > cutoff)", hash_, dist)
             return None
         ts = float(meta.get("timestamp", 0))

@@ -1,3 +1,18 @@
+import os
+import pytest
+from fastapi.testclient import TestClient
+from app.main import app
+
+
+@pytest.fixture
+def client(monkeypatch):
+    # Put app in test mode for routes that relax auth in tests
+    monkeypatch.setenv("PYTEST_MODE", "1")
+    # Allow anonymous requests in tests unless a JWT is explicitly set by a test
+    monkeypatch.delenv("JWT_SECRET", raising=False)
+    monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
+    return TestClient(app)
+
 # conftest.py
 #
 # Pytest bootstrap that hermetically seals the test runtime.

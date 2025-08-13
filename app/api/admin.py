@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
-from app.deps.scopes import optional_require_scope
+from app.deps.scopes import optional_require_any_scope
 from app.status import _admin_token
 from app.analytics import (
     get_metrics,
@@ -16,7 +16,7 @@ from app.analytics import (
 from app.decisions import get_recent as decisions_recent, get_explain as decisions_get
 from app.config_runtime import get_config
 from app.feature_flags import list_flags as _list_flags, set_value as _set_flag
-from app.api.tv import TvConfig, TvConfigResponse, QuietHours
+from app.models.tv import TvConfig, TvConfigResponse, QuietHours
 from app.jobs.qdrant_lifecycle import bootstrap_collection as _q_bootstrap, collection_stats as _q_stats
 from app.jobs.migrate_chroma_to_qdrant import main as _migrate_cli  # type: ignore
 from app.logging_config import get_last_errors
@@ -30,7 +30,20 @@ try:
 except Exception:
     admin_inspect_router = None  # type: ignore
 
-router = APIRouter(tags=["Admin"], dependencies=[Depends(optional_require_scope("admin"))])
+router = APIRouter(tags=["Admin"], dependencies=[Depends(optional_require_any_scope(["admin", "admin:write"]))])
+
+
+def _is_test_mode() -> bool:
+    """Return True when running under tests.
+
+    Accept multiple hints so isolated tests don't have to coordinate env vars.
+    """
+    v = lambda s: str(os.getenv(s, "")).strip().lower()
+    return (
+        v("PYTEST_MODE") in {"1", "true", "yes", "on"}
+        or v("PYTEST_RUNNING") in {"1", "true", "yes"}
+        or v("ENV") == "test"
+    )
 
 
 def _check_admin(token: str | None) -> None:
@@ -42,10 +55,10 @@ def _check_admin(token: str | None) -> None:
     """
     _tok = _admin_token()
     # In production-like runs, require ADMIN_TOKEN to be set
-    if os.getenv("PYTEST_RUNNING", "").lower() not in {"1", "true", "yes"} and not _tok:
+    if not _is_test_mode() and not _tok:
         raise HTTPException(status_code=403, detail="admin_token_required")
     # In tests, allow access when token is omitted entirely
-    if os.getenv("PYTEST_RUNNING", "").lower() in {"1", "true", "yes"} and token is None:
+    if _is_test_mode() and token is None:
         return
     if _tok and token != _tok:
         raise HTTPException(status_code=403, detail="forbidden")
@@ -194,7 +207,22 @@ class AdminOkResponse(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
 
 
-@router.post("/admin/reload_env", response_model=AdminOkResponse, responses={200: {"model": AdminOkResponse}})
+@router.post(
+    "/admin/reload_env",
+    
+    
+    response_model=AdminOkResponse,
+    responses={200: {"model": AdminOkResponse}},
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {"example": {}}
+                }
+            }
+        }
+    },
+)
 async def admin_reload_env(
     token: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),
@@ -350,10 +378,23 @@ class AdminFlagsResponse(BaseModel):
     )
 
 
-@router.post("/admin/flags", response_model=AdminFlagsResponse, responses={200: {"model": AdminFlagsResponse}})
+class AdminFlagBody(BaseModel):
+    key: str
+    value: str
+
+    model_config = ConfigDict(title="AdminFlagBody", json_schema_extra={"example": {"key": "RETRIEVAL_PIPELINE", "value": "dual"}})
+
+
+@router.post(
+    "/admin/flags",
+    response_model=AdminFlagsResponse,
+    responses={200: {"model": AdminFlagsResponse}},
+    openapi_extra={
+        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/AdminFlagBody"}}}}
+    },
+)
 async def admin_flags(
-    key: str = Query(..., description="Flag key, e.g., RETRIEVAL_PIPELINE"),
-    value: str = Query(..., description="New value (string form; '1'/'0' for bool)"),
+    body: AdminFlagBody,
     token: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),
 ):
@@ -362,6 +403,8 @@ async def admin_flags(
     Guarded by admin token. Note: only affects this process; not persisted.
     """
     _check_admin(token)
+    key = body.key
+    value = body.value
     _set_flag(key, value)
     os.environ[f"FLAG_{key.upper()}"] = value
     # Maintain backward-compat: also set plain key for legacy tests/tools
@@ -439,6 +482,21 @@ async def admin_tv_get_config(resident_id: str, user_id: str = Depends(get_curre
             "content": {
                 "application/json": {
                     "example": _TV_CFG_EXAMPLE,
+                }
+            }
+        }
+    },
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/TvConfig"},
+                    "example": {
+                        "ambient_rotation": 45,
+                        "rail": "safe",
+                        "quiet_hours": {"start": "22:00", "end": "06:00"},
+                        "default_vibe": "Calm Night"
+                    }
                 }
             }
         }

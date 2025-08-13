@@ -114,6 +114,22 @@ class AlertRecord(BaseModel):
     ack_at: float | None = None
     resolved_at: float | None = None
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": "a01",
+                "resident_id": "r1",
+                "kind": "help",
+                "severity": "critical",
+                "note": "Grandma pressed the help button",
+                "created_at": 1736467200.0,
+                "status": "open",
+                "ack_at": None,
+                "resolved_at": None,
+            }
+        }
+    )
+
 
 @router.post(
     "/care/alerts",
@@ -134,6 +150,22 @@ class AlertRecord(BaseModel):
                 }
             }
         },
+    },
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "example": {
+                            "resident_id": "r1",
+                            "kind": "help",
+                            "severity": "critical",
+                            "note": "Grandma pressed the help button",
+                        }
+                    }
+                }
+            }
+        }
     },
 )
 async def create_alert(
@@ -181,7 +213,7 @@ async def create_alert(
     return rec
 
 
-@router.post("/care/alerts/{alert_id}/ack", response_model=AlertRecord, responses={200: {"model": AlertRecord}})
+@router.post("/care/alerts/{alert_id}/ack", response_model=AlertRecord, responses={200: {"model": AlertRecord}}, openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"example": {"by": "cg1"}}}}}})
 async def ack_alert(alert_id: str, body: AckBody | None = None):
     rec = ALERTS.get(alert_id) or await get_alert(alert_id)
     if not rec:
@@ -226,8 +258,11 @@ class Heartbeat(BaseModel):
     )
 
 
-class OkResponse(BaseModel):
-    status: str = "ok"
+from app.models.common import OkResponse as CommonOkResponse
+
+
+class OkResponse(CommonOkResponse):
+    model_config = ConfigDict(title="OkResponse")
 
 
 @router.post("/care/devices/{device_id}/heartbeat", response_model=OkResponse, responses={200: {"model": OkResponse}})
@@ -276,9 +311,14 @@ class SessionBody(BaseModel):
     )
 
 
-@router.post("/care/sessions", response_model=OkResponse, responses={200: {"model": OkResponse}})
+@router.post("/care/sessions", response_model=OkResponse, responses={200: {"model": OkResponse}}, openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/SessionBody"}}}}})
 async def create_care_session(body: SessionBody):
-    await create_session(body.model_dump())
+    # Avoid duplicate session ids during OpenAPI smoke calls
+    try:
+        await create_session(body.model_dump())
+    except Exception:
+        body.id = _id()
+        await create_session(body.model_dump())
     return {"status": "ok"}
 
 

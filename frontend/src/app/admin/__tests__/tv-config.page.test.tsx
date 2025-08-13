@@ -11,7 +11,7 @@ jest.mock('@/lib/api', () => ({
 describe('Admin TV Config editor', () => {
   it('blocks invalid config and allows valid save', async () => {
     render(<Page />);
-    const ta = await screen.findByRole('textbox');
+    const ta = (await screen.findAllByRole('textbox')).pop()!;
     // invalid: rail
     fireEvent.change(ta, { target: { value: '{"ambient_rotation":30,"rail":"x","default_vibe":"Calm Night"}' } });
     expect(await screen.findByText(/rail must be/i)).toBeInTheDocument();

@@ -72,10 +72,20 @@ class RegisterRequest(BaseModel):
     username: str
     password: str
 
+    class Config:
+        json_schema_extra = {
+            "example": {"username": "demo", "password": "secret123"}
+        }
+
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {"username": "demo", "password": "secret123"}
+        }
 
 
 class TokenResponse(BaseModel):
@@ -89,15 +99,26 @@ class TokenResponse(BaseModel):
 class RefreshRequest(BaseModel):
     refresh_token: str
 
+    class Config:
+        json_schema_extra = {"example": {"refresh_token": "<jwt-refresh>"}}
+
 
 # Optional password reset models
 class ForgotRequest(BaseModel):
     username: str
 
+    class Config:
+        json_schema_extra = {"example": {"username": "demo"}}
+
 
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {"token": "abcd1234", "new_password": "NewPass123"}
+        }
 
 # Ensure auth table exists and migrate legacy schemas
 async def _ensure_table() -> None:
@@ -436,7 +457,7 @@ async def login(
 
 
 # Refresh endpoint
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=TokenResponse, openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/RefreshRequest"}}}}})
 async def refresh(req: RefreshRequest | None = None, request: Request = None, response: Response = None) -> TokenResponse:  # type: ignore[assignment]
     try:
         # Validate audience if configured; issuer verified after decode

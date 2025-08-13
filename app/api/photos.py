@@ -6,6 +6,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
+from app.models.common import OkResponse as CommonOkResponse
 
 from app.deps.user import get_current_user_id
 
@@ -61,10 +62,8 @@ async def list_photos(user_id: str = Depends(get_current_user_id)):
 
 
 @router.post("/tv/photos/favorite")
-class TvPhotoOkResponse(BaseModel):
-    status: str = "ok"
-
-    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
+class TvPhotoOkResponse(CommonOkResponse):
+    model_config = ConfigDict(title="OkResponse")
 
 
 @router.post("/tv/photos/favorite", response_model=TvPhotoOkResponse, responses={200: {"model": TvPhotoOkResponse}})

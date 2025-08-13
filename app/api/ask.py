@@ -26,13 +26,12 @@ class AskRequest(BaseModel):
 
     # Pydantic v2 config: allow both alias ("model") and field name ("model_override")
     model_config = ConfigDict(
+        title="AskRequest",
         validate_by_name=True,
         validate_by_alias=True,
         json_schema_extra={
             "example": {
-                "prompt": "Summarize today's schedule",
-                "model": "gpt-4o-mini",
-                "small_ask": True,
+                "prompt": "hello",
             }
         },
     )
@@ -49,7 +48,28 @@ def _require_auth_for_ask() -> bool:
     return os.getenv("REQUIRE_AUTH_FOR_ASK", "1").strip().lower() in {"1", "true", "yes", "on"}
 
 
-@router.post("/ask", dependencies=[Depends(rate_limit)])
+@router.post(
+    "/ask",
+    dependencies=[Depends(rate_limit)],
+    responses={
+        200: {
+            "content": {
+                "text/plain": {"schema": {"example": "hello world"}},
+                "text/event-stream": {"schema": {"example": "data: hello\n\n"}},
+                "application/json": {"schema": {"example": {"status": "ok"}}},
+            }
+        }
+    },
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/AskRequest"}
+                }
+            }
+        }
+    },
+)
 async def ask(
     req: AskRequest,
     request: Request,

@@ -54,11 +54,8 @@ def _coerce_k(k: Union[int, str, None]) -> int:
     logger.debug("_coerce_k: raw=%r → %d", raw, result)
     return result
 
-def _get_cutoff() -> float:
-    return 1.0 - _get_sim_threshold()
-
-def _distance(prompt: str, memory: str) -> float:
-    return 1.0 - _cosine_similarity(embed_sync(prompt), embed_sync(memory))
+def _similarity(prompt: str, memory: str) -> float:
+    return _cosine_similarity(embed_sync(prompt), embed_sync(memory))
 
 # --------------------------- safe API layer --------------------------
 
@@ -91,12 +88,30 @@ def query_user_memories(
     from app.adapters.memory import mem
     k_int = _coerce_k(int(k) if isinstance(k, str) and k.isdigit() else k)
     docs = mem.search(user_id, prompt, k=k_int, filters=filters)
-    cutoff = _get_cutoff()
-    out: List[str] = []
+    sim_threshold = _get_sim_threshold()
+    filtered: List[tuple[float, str]] = []
+    total = 0
     for d in docs:
         text = d.get("text") if isinstance(d, dict) else str(d)
-        if _distance(prompt, text) <= cutoff:
-            out.append(text)
+        total += 1
+        sim = _similarity(prompt, text)
+        if sim >= sim_threshold:
+            filtered.append((sim, text))
+    filtered.sort(key=lambda t: -t[0])
+    out = [t for _, t in filtered[:k_int]]
+    try:
+        logger.info(
+            "vector.query", extra={
+                "meta": {
+                    "backend": "adapter",
+                    "sim_threshold": round(sim_threshold, 4),
+                    "kept": len(out),
+                    "total": total,
+                }
+            }
+        )
+    except Exception:
+        pass
     return out
 
 def safe_query_user_memories(

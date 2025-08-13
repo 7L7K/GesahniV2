@@ -102,11 +102,23 @@ def _normalized_hash(prompt: str) -> str:
 
 
 def _cosine_similarity(a: List[float], b: List[float]) -> float:
-    """Return cosine similarity for two vectors."""
+    """Return cosine similarity in [0, 1] for two vectors.
 
-    a_arr, b_arr = np.array(a), np.array(b)
+    The raw cosine ranges in [-1, 1]. We map to [0, 1] using (cos + 1) / 2
+    and clamp to guard against floating point drift.
+    """
+
+    a_arr, b_arr = np.array(a, dtype=float), np.array(b, dtype=float)
     denom = np.linalg.norm(a_arr) * np.linalg.norm(b_arr)
-    return float(np.dot(a_arr, b_arr) / denom) if denom else 0.0
+    if not denom:
+        return 0.0
+    raw = float(np.dot(a_arr, b_arr) / denom)
+    sim = (raw + 1.0) / 2.0
+    if sim < 0.0:
+        return 0.0
+    if sim > 1.0:
+        return 1.0
+    return sim
 
 
 __all__ = [

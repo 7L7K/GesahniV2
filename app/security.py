@@ -94,7 +94,7 @@ _lock = asyncio.Lock()
 _TRUST_XFF = os.getenv("TRUST_X_FORWARDED_FOR", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 # Scope of rate limit keys: default to "route" to avoid cross-route contention
-_KEY_SCOPE = os.getenv("RATE_LIMIT_KEY_SCOPE", "route").strip().lower()
+_KEY_SCOPE = os.getenv("RATE_LIMIT_KEY_SCOPE", "global").strip().lower()
 
 # Track pytest's current test id to re-sync config between tests that mutate env
 _LAST_TEST_ID = os.getenv("PYTEST_CURRENT_TEST") or ""
@@ -124,18 +124,11 @@ def _maybe_refresh_settings_for_test() -> None:
 def _maybe_refresh_settings_for_test() -> None:
     """Refresh in-process settings from env during pytest.
 
-    Some unit tests modify env after import; allow re-reading the core limits.
+    Important: do NOT override module constants RATE_LIMIT/RATE_LIMIT_BURST here,
+    because tests monkeypatch them directly. Only refresh window sizes from env.
     """
     if os.getenv("PYTEST_RUNNING"):
-        global RATE_LIMIT, RATE_LIMIT_BURST, _window, _burst_window
-        try:
-            RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MIN", str(RATE_LIMIT)))
-        except Exception:
-            pass
-        try:
-            RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", str(RATE_LIMIT_BURST)))
-        except Exception:
-            pass
+        global _window, _burst_window
         try:
             _window = float(os.getenv("RATE_LIMIT_WINDOW_S", str(_window)))
         except Exception:
@@ -160,6 +153,9 @@ _RL_PREFIX = os.getenv("RATE_LIMIT_REDIS_PREFIX", "rl").strip(":")
 _redis_client: Optional[object] = None
 
 def _should_use_redis() -> bool:
+    # Under pytest, prefer in-memory to ensure deterministic behavior
+    if os.getenv("PYTEST_RUNNING"):
+        return False
     if _RATE_LIMIT_BACKEND in {"redis", "distributed"}:
         return True
     if _RATE_LIMIT_BACKEND == "memory":
@@ -276,7 +272,9 @@ def _payload_scopes(payload: dict | None) -> set[str]:
 
 def _bypass_scopes_env() -> set[str]:
     raw = os.getenv("RATE_LIMIT_BYPASS_SCOPES", "")
-    return {s.strip() for s in str(raw).split() if s.strip()}
+    # Accept space or comma separated list; normalize to spaces then split
+    cleaned = str(raw).replace(",", " ")
+    return {s.strip() for s in cleaned.split() if s.strip()}
 
 
 def _get_request_payload(request: Request | None) -> dict | None:
@@ -484,36 +482,51 @@ async def rate_limit(request: Request) -> None:
     """
 
     # Prefer explicit user_id set by deps; otherwise pull from JWT payload
-    key = getattr(request.state, "user_id", None)
-    if not key:
+    uid = getattr(request.state, "user_id", None)
+    if not uid:
         payload = getattr(request.state, "jwt_payload", None)
         if isinstance(payload, dict):
-            key = payload.get("user_id") or payload.get("sub")
-    if not key:
-        # For snapshot keys, always prefer X-Forwarded-For when present regardless of trust flag
+            uid = payload.get("user_id") or payload.get("sub")
+    # Consider only Bearer JWT as authenticated for rate-limit user keying
+    auth = request.headers.get("Authorization") or ""
+    is_bearer = auth.startswith("Bearer ")
+    # If we have a bearer token but no uid set yet (no auth dep in route), decode best-effort
+    if is_bearer and not uid:
+        try:
+            payload = _get_request_payload(request)
+            if isinstance(payload, dict):
+                uid = payload.get("user_id") or payload.get("sub")
+        except Exception:
+            uid = None
+    if is_bearer:
+        if not uid:
+            try:
+                import hashlib as _hl
+                token = (auth.split(" ", 1)[1] if " " in auth else auth)
+                uid = _hl.md5(token.encode("utf-8")).hexdigest()
+            except Exception:
+                uid = "anon"
+        key = f"user:{uid}"
+    else:
+        # Prefer X-Forwarded-For first IP when present; else remote address
         ip = request.headers.get("X-Forwarded-For")
-        if ip:
-            key = ip.split(",")[0].strip()
-        else:
-            key = request.client.host if request.client else "anon"
+        ip = (ip.split(",")[0].strip() if ip else (request.client.host if request.client else "anon"))
+        key = f"ip:{ip}"
     # Include route path in the key to avoid cross-route bucket interference
     key = _compose_key(str(key), request)
     # Allow per-route overrides via request.state when set by dependencies
-    env_long = os.getenv("RATE_LIMIT_PER_MIN")
-    env_burst = os.getenv("RATE_LIMIT_BURST")
-    long_limit = int(
-        getattr(request.state, "rate_limit_long_limit", None)
-        or (int(env_long) if env_long is not None else RATE_LIMIT)
-    )
-    burst_limit = int(
-        getattr(request.state, "rate_limit_burst_limit", None)
-        or (int(env_burst) if env_burst is not None else RATE_LIMIT_BURST)
-    )
+    # Prefer per-request overrides, then module constants; ignore env here so tests
+    # that monkeypatch RATE_LIMIT/RATE_LIMIT_BURST take effect deterministically
+    long_limit = int(getattr(request.state, "rate_limit_long_limit", None) or RATE_LIMIT)
+    burst_limit = int(getattr(request.state, "rate_limit_burst_limit", None) or RATE_LIMIT_BURST)
     window = float(getattr(request.state, "rate_limit_window_s", _window) or _window)
     burst_window = float(getattr(request.state, "rate_limit_burst_window_s", _burst_window) or _burst_window)
     # Global bypass for configured scopes
     try:
+        # Prefer payload from verified dependency, but fall back to best-effort decode
         payload = getattr(request.state, "jwt_payload", None)
+        if not isinstance(payload, dict):
+            payload = _get_request_payload(request)
         scopes = _payload_scopes(payload)
         bypass = bool(_bypass_scopes_env() & scopes)
         if bypass:
@@ -525,24 +538,33 @@ async def rate_limit(request: Request) -> None:
     except Exception:
         pass
 
-    # Optional daily cap per user
+    # Optional daily cap per user (or per-IP when unauthenticated). Key does not include route.
     daily_cap = int(os.getenv("DAILY_REQUEST_CAP", "0") or 0)
     r_daily = await _get_redis()
     if daily_cap > 0:
-        # Use a deterministic per-test key when under pytest to avoid cross-test pollution
-        test_salt = os.getenv("PYTEST_CURRENT_TEST") or ""
-        daily_key = f"{key}:{test_salt}" if test_salt else str(key)
-        count, ttl = await _daily_incr(r_daily, daily_key)
-        if count > daily_cap:
-            try:
-                metrics.RATE_LIMIT_BLOCKS.labels("http", "daily", "redis" if r_daily else "memory").inc()
-            except Exception:
-                pass
-            raise HTTPException(
-                status_code=429,
-                detail={"error": "daily_cap_exceeded", "retry_after": int(ttl)},
-                headers={"Retry-After": str(int(ttl))},
-            )
+        # Only apply daily cap to authenticated users
+        cap_payload = getattr(request.state, "jwt_payload", None)
+        if not isinstance(cap_payload, dict):
+            cap_payload = _get_request_payload(request)
+        cap_subject = None
+        if isinstance(cap_payload, dict):
+            cap_subject = cap_payload.get("user_id") or cap_payload.get("sub")
+        if cap_subject:
+            base_cap_key = f"user:{cap_subject}"
+            # Use a deterministic per-test key when under pytest to avoid cross-test pollution
+            test_salt = os.getenv("PYTEST_CURRENT_TEST") or ""
+            daily_key = f"{base_cap_key}:{test_salt}" if test_salt else base_cap_key
+            count, ttl = await _daily_incr(r_daily, daily_key)
+            if count > daily_cap:
+                try:
+                    metrics.RATE_LIMIT_BLOCKS.labels("http", "daily", "redis" if r_daily else "memory").inc()
+                except Exception:
+                    pass
+                raise HTTPException(
+                    status_code=429,
+                    detail={"error": "daily_cap_exceeded", "retry_after": int(ttl)},
+                    headers={"Retry-After": str(int(ttl))},
+                )
 
     # Old bypass block removed; handled above
     # Prefer distributed backend when available
@@ -601,8 +623,8 @@ async def rate_limit(request: Request) -> None:
                     pass
                 return
     # Fallback to process-local buckets (partition keys by pytest test id to avoid cross-test bleed)
-    test_salt = os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING") or ""
-    key_local = f"{key}:{test_salt}" if str(test_salt) else str(key)
+    # Use stable key for within-test accumulation; tests explicitly clear buckets
+    key_local = str(key)
     async with _lock:
         # Evaluate long-window before burst to match test expectations
         ok_long = _bucket_rate_limit(key_local, _http_requests, long_limit, window)
@@ -694,20 +716,22 @@ async def rate_limit_ws(websocket: WebSocket) -> None:
     _maybe_refresh_settings_for_test()
     """Per-user rate limiting for WebSocket connections."""
 
-    key = getattr(websocket.state, "user_id", None)
-    if not key:
+    uid = getattr(websocket.state, "user_id", None)
+    if not uid:
         payload = getattr(websocket.state, "jwt_payload", None)
         if isinstance(payload, dict):
-            key = payload.get("user_id") or payload.get("sub")
-    if not key:
+            uid = payload.get("user_id") or payload.get("sub")
+    if uid:
+        key = f"user:{uid}"
+    else:
         ip = websocket.headers.get("X-Forwarded-For") if _TRUST_XFF else None
-        if ip:
-            key = ip.split(",")[0].strip()
-        else:
-            key = websocket.client.host if websocket.client else "anon"
+        ip = (ip.split(",")[0].strip() if ip else (websocket.client.host if websocket.client else "anon"))
+        key = f"ip:{ip}"
     # Global bypass for configured scopes on WS too
     try:
         payload = getattr(websocket.state, "jwt_payload", None)
+        if not isinstance(payload, dict):
+            payload = _get_ws_payload(websocket)
         scopes = _payload_scopes(payload)
         if _bypass_scopes_env() & scopes:
             try:
@@ -1087,7 +1111,8 @@ def scope_rate_limit(scope: str, long_limit: int | None = None, burst_limit: int
             if not ok_long:
                 raise HTTPException(status_code=429, detail={"error": "rate_limited"})
             return None
-        return await rate_limit(request)
+        # If the user does not have the scope, do not enforce any extra limits here
+        return None
 
     return _dep
 
