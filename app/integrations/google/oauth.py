@@ -38,17 +38,52 @@ CLIENT_CONFIG = {
     }
 }
 
+def _b64u_encode(data: bytes) -> str:
+    # Return base64url without padding for compact URLs
+    return base64.urlsafe_b64encode(data).decode().rstrip("=")
+
+
+def _b64u_decode(data: str) -> bytes:
+    # Add padding back if missing
+    pad = "=" * ((4 - (len(data) % 4)) % 4)
+    return base64.urlsafe_b64decode((data + pad).encode())
+
+
 def _sign_state(payload: Dict, ttl_sec: int = 600) -> str:
     body = dict(payload)
     body["exp"] = int(time.time()) + ttl_sec
     raw = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
     sig = hmac.new(JWT_STATE_SECRET.encode(), raw, hashlib.sha256).digest()
-    return base64.urlsafe_b64encode(raw + b"." + sig).decode()
+    # Encode body and signature separately to avoid delimiter collisions
+    return f"{_b64u_encode(raw)}.{_b64u_encode(sig)}"
 
 def _verify_state(state: str) -> Dict:
+    # Primary path: split into base64url(body).base64url(sig)
+    try:
+        if "." in state:
+            b64_body, b64_sig = state.split(".", 1)
+            body = _b64u_decode(b64_body)
+            sig = _b64u_decode(b64_sig)
+            exp_sig = hmac.new(JWT_STATE_SECRET.encode(), body, hashlib.sha256).digest()
+            if not hmac.compare_digest(sig, exp_sig):
+                raise ValueError("bad signature")
+            payload = json.loads(body.decode())
+            if payload.get("exp", 0) < int(time.time()):
+                raise ValueError("expired")
+            return payload
+    except Exception:
+        # Fall through to legacy decode
+        pass
+    # Legacy fallback: single base64url encoding of body + b'.' + sig
     try:
         raw = base64.urlsafe_b64decode(state.encode())
-        body, sig = raw.rsplit(b".", 1)
+        # The legacy format concatenated raw JSON, a byte '.', then raw HMAC bytes.
+        # Since HMAC bytes may contain '.', split using the known digest size from the end.
+        if len(raw) <= 33:  # 1 for '.' + 32 for HMAC-SHA256
+            raise ValueError("truncated")
+        body, delim, sig = raw[:-33], raw[-33:-32], raw[-32:]
+        if delim != b".":
+            raise ValueError("bad delimiter")
         exp_sig = hmac.new(JWT_STATE_SECRET.encode(), body, hashlib.sha256).digest()
         if not hmac.compare_digest(sig, exp_sig):
             raise ValueError("bad signature")

@@ -1,15 +1,17 @@
 import os
 import time
 from fastapi import APIRouter, Depends, HTTPException, Query
+from datetime import datetime, time as dt_time
 from .deps.user import get_current_user_id
 
 from app.home_assistant import _request
 from .llama_integration import get_status as llama_get_status
 from .analytics import get_metrics, cache_hit_rate, get_top_skills
-from .memory.api import _store as _vector_store_instance  # type: ignore
+from .memory.api import get_store as _get_vector_store  # type: ignore
 from .memory.memory_store import MemoryVectorStore
 from .memory.chroma_store import ChromaVectorStore  # type: ignore
 from . import budget as _budget
+from .tts_orchestrator import TTSSpend
 
 router = APIRouter(tags=["status"])
 
@@ -39,6 +41,18 @@ async def healthz(user_id: str = Depends(get_current_user_id)) -> dict:
     return {"backend": "ok", "llama": llama_status}
 
 
+@router.get("/rate_limit_status")
+async def rate_limit_status(user_id: str = Depends(get_current_user_id)) -> dict:
+    """Return current rate-limit backend configuration and health."""
+    try:
+        from .security import get_rate_limit_backend_status  # lazy import
+
+        return await get_rate_limit_backend_status()
+    except Exception:
+        # In case security module is unavailable or raises, return minimal info
+        return {"backend": "unknown", "enabled": False, "connected": False}
+
+
 @router.get("/config")
 async def config(
     token: str | None = Query(default=None),
@@ -66,9 +80,10 @@ async def budget_status(user_id: str = Depends(get_current_user_id)) -> dict:
     try:
         b = _budget.get_budget_state(user_id)
         near_cap = b.get("reply_len_target") == "short"
-        return {**b, "near_cap": near_cap}
+        tts = TTSSpend.snapshot()
+        return {**b, "near_cap": near_cap, "tts": tts}
     except Exception:
-        return {"tokens_used": 0.0, "minutes_used": 0.0, "reply_len_target": "normal", "escalate_allowed": True, "near_cap": False}
+        return {"tokens_used": 0.0, "minutes_used": 0.0, "reply_len_target": "normal", "escalate_allowed": True, "near_cap": False, "tts": {"spent_usd": 0.0, "cap_usd": float(os.getenv("MONTHLY_TTS_CAP", "15") or 15), "ratio": 0.0, "near_cap": False, "blocked": False}}
 
 
 # Back-compat alias used by some frontends
@@ -106,6 +121,27 @@ async def full_status(user_id: str = Depends(get_current_user_id)) -> dict:
         "gpt_quota": "2k reqs left",
         "metrics": {},
     }
+    # Quiet hours status
+    try:
+        q_enabled = os.getenv("QUIET_HOURS", "0").lower() in {"1", "true", "yes", "on"}
+        start_s = os.getenv("QUIET_HOURS_START", "22:00")
+        end_s = os.getenv("QUIET_HOURS_END", "07:00")
+        def _parse(t: str) -> dt_time:
+            hh, mm = (t or "0:0").split(":", 1)
+            return dt_time(int(hh), int(mm))
+        active = False
+        if q_enabled:
+            now = datetime.now().time()
+            start_t = _parse(start_s)
+            end_t = _parse(end_s)
+            if start_t <= end_t:
+                active = start_t <= now <= end_t
+            else:
+                # Crosses midnight
+                active = now >= start_t or now <= end_t
+        out["quiet_hours"] = {"enabled": q_enabled, "start": start_s, "end": end_s, "active": active}
+    except Exception:
+        out["quiet_hours"] = {"enabled": False, "active": False}
     try:
         await _request("GET", "/states")
         out["ha"] = "ok"
@@ -137,6 +173,7 @@ async def full_status(user_id: str = Depends(get_current_user_id)) -> dict:
 
     # Vector backend info
     try:
+        _vector_store_instance = _get_vector_store()
         if isinstance(_vector_store_instance, MemoryVectorStore):
             out["vector_backend"] = "memory"
         elif isinstance(_vector_store_instance, ChromaVectorStore):  # type: ignore

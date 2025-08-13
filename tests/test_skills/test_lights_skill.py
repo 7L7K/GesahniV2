@@ -37,3 +37,87 @@ def test_lights_turn_on(monkeypatch):
     m = skill.match("turn on kitchen lights")
     resp = asyncio.run(skill.run("turn on kitchen lights", m))
     assert "Kitchen" in resp
+
+
+def test_lights_brightness_bounds(monkeypatch):
+    async def fake_get_states():
+        return [
+            {
+                "entity_id": "light.office",
+                "attributes": {"friendly_name": "Office"},
+            }
+        ]
+
+    captured = {}
+
+    async def fake_call_service(domain, service, data):
+        captured.update({"service": service, "data": data})
+
+    monkeypatch.setattr(home_assistant, "get_states", fake_get_states)
+    monkeypatch.setattr(home_assistant, "call_service", fake_call_service)
+
+    skill = LightsSkill()
+    m = skill.match("set office lights to 150%")
+    resp = asyncio.run(skill.run("set office lights to 150%", m))
+    assert captured["data"]["brightness_pct"] == 100
+    assert "Office" in resp
+
+
+def test_lights_switch_synonym(monkeypatch):
+    async def fake_get_states():
+        return [
+            {
+                "entity_id": "light.desk",
+                "attributes": {"friendly_name": "Desk"},
+            }
+        ]
+
+    captured = {}
+
+    async def fake_call_service(domain, service, data):
+        captured.update({"service": service, "data": data})
+
+    monkeypatch.setattr(home_assistant, "get_states", fake_get_states)
+    monkeypatch.setattr(home_assistant, "call_service", fake_call_service)
+
+    skill = LightsSkill()
+    m = skill.match("switch off desk light")
+    resp = asyncio.run(skill.run("switch off desk light", m))
+    assert captured["service"] == "turn_off"
+    assert "Desk" in resp
+
+
+def test_lights_fuzzy_match(monkeypatch):
+    async def fake_get_states():
+        return [
+            {
+                "entity_id": "light.living_room_lamp",
+                "attributes": {"friendly_name": "Living Room Lamp"},
+            }
+        ]
+
+    captured = {}
+
+    async def fake_call_service(domain, service, data):
+        captured.update({"service": service, "data": data})
+
+    monkeypatch.setattr(home_assistant, "get_states", fake_get_states)
+    monkeypatch.setattr(home_assistant, "call_service", fake_call_service)
+
+    skill = LightsSkill()
+    m = skill.match("turn on livingroom lamp")
+    resp = asyncio.run(skill.run("turn on livingroom lamp", m))
+    assert captured["service"] == "turn_on"
+    assert "Livingroom" not in resp  # normalizes casing
+
+
+def test_lights_not_found(monkeypatch):
+    async def fake_get_states():
+        return []
+
+    monkeypatch.setattr(home_assistant, "get_states", fake_get_states)
+
+    skill = LightsSkill()
+    m = skill.match("turn on unknown lights")
+    resp = asyncio.run(skill.run("turn on unknown lights", m))
+    assert "Couldn’t find any light" in resp

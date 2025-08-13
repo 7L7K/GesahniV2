@@ -31,6 +31,19 @@ def _reset_if_new_day() -> None:
 def _quotas() -> tuple[int, float]:
     max_tokens = int(os.getenv("DAILY_TOKEN_CAP", "200000"))  # ~200k tokens
     max_minutes = float(os.getenv("DAILY_MINUTES_CAP", "60"))
+    # Per-user overrides via env: BUDGET_TOKENS_<USERID>=N, BUDGET_MINUTES_<USERID>=M
+    # Kept simple: uppercase hex/alpha user ids common in this app.
+    uid = os.getenv("BUDGET_USER", "").strip().upper()
+    if uid:
+        try:
+            mt = os.getenv(f"BUDGET_TOKENS_{uid}")
+            mm = os.getenv(f"BUDGET_MINUTES_{uid}")
+            if mt is not None:
+                max_tokens = int(mt)
+            if mm is not None:
+                max_minutes = float(mm)
+        except Exception:
+            pass
     return max_tokens, max_minutes
 
 
@@ -39,6 +52,10 @@ def add_usage(user_id: str, *, prompt_tokens: int = 0, completion_tokens: int = 
     state = _STATE.setdefault(user_id, {"tokens": 0.0, "minutes": 0.0})
     state["tokens"] += float(prompt_tokens + completion_tokens)
     state["minutes"] += float(minutes)
+    # Hard cap enforcement option: raise flag when exceeding daily hard limit
+    hard_cap = float(os.getenv("BUDGET_HARD_TOKENS", "0") or 0)
+    if hard_cap and state["tokens"] > hard_cap:
+        state["tokens"] = hard_cap
 
 
 def get_budget_state(user_id: str) -> Dict[str, object]:

@@ -159,7 +159,7 @@ def summarize_stories_once() -> int:
             except Exception:
                 # Do not fail the whole job if vector store is unavailable
                 logger.debug("add_user_memory failed for %s", ch.user_id, exc_info=True)
-    logger.info("storytime summarize: wrote %d summaries", written)
+    logger.info("storytime.summarize", extra={"meta": {"written": written}})
     return written
 
 

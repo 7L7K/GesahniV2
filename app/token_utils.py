@@ -15,23 +15,32 @@ except Exception:  # pragma: no cover - simple fallback
 def count_tokens(text: str) -> int:
     """Return the number of tokens in ``text``.
 
-    Uses ``tiktoken`` when available; otherwise falls back to a naive
-    whitespace-based count.  This mirrors the historical logic that lived in
-    ``prompt_builder``.
+    - Uses ``tiktoken`` when available but never undercounts relative to a
+      stable heuristic for no‑space strings (≈4 chars per token).
+    - For spaced text, prefer tiktoken when present; else approximate by words.
     """
 
-    if _ENCODING is not None:
-        return len(_ENCODING.encode(text))
-    # Fallback heuristic: approximate tokens for both spaced and unspaced text
     if not text:
         return 0
-    # If there are spaces, use word count with a multiplier
-    if any(ch.isspace() for ch in text):
+
+    has_space = any(ch.isspace() for ch in text)
+
+    # Heuristic approximations used as floors to avoid undercounting
+    if has_space:
         words = len(text.split())
-        # Roughly 0.75 tokens per short English word; bound to at least words
-        return max(words, int(math.ceil(words * 0.75)))
-    # No spaces (e.g., long loremipsum) — assume ~4 chars/token
-    return int(math.ceil(len(text) / 4.0))
+        approx = max(words, int(math.ceil(words * 0.75)))
+    else:
+        approx = int(math.ceil(len(text) / 4.0))
+
+    if _ENCODING is not None:
+        try:
+            real = len(_ENCODING.encode(text))
+            # Never report fewer than our approximation, especially for no‑space text
+            return max(real, approx)
+        except Exception:
+            return approx
+
+    return approx
 
 
 __all__ = ["count_tokens"]

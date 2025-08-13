@@ -19,6 +19,14 @@ from .utils import (
 )
 from ..otel_utils import start_span
 
+# ---------------------------------------------------------------------------
+# Lightweight in-process cache for repeated queries within a short TTL
+# ---------------------------------------------------------------------------
+_CACHE: Dict[Tuple[str, str, str | None, str], Tuple[List[str], List[Dict[str, Any]], float]] = {}
+
+def _normalize_query(q: str) -> str:
+    return (q or "").strip().lower()
+
 
 def _budgets_for_intent(intent: str | None) -> Tuple[int, int, int]:
     """Return (k_dense, k_sparse, token_budget) based on task class/intent."""
@@ -46,6 +54,17 @@ def run_pipeline(
     """
 
     trace: List[Dict[str, Any]] = []
+    # Cache check
+    cache_ttl = float(os.getenv("RETRIEVE_CACHE_TTL_SECONDS", "0") or 0)
+    cache_max = int(os.getenv("RETRIEVE_CACHE_MAX", "128"))
+    key = (str(user_id), _normalize_query(query), intent, str(collection))
+    now = time.time()
+    if cache_ttl > 0:
+        cached = _CACHE.get(key)
+        if cached and now - cached[2] <= cache_ttl:
+            texts, trace_cached, _ts = cached
+            trace_cached = list(trace_cached) + [{"event": "cache_hit", "meta": {"age_s": round(now - _ts, 3)}}]
+            return list(texts), trace_cached
     kd, ks, token_budget = _budgets_for_intent(intent)
     trace.append({
         "event": "budget",
@@ -77,6 +96,13 @@ def run_pipeline(
         except Exception:
             sparse = []
         t_sparse = (time.perf_counter() - t2) * 1000.0
+    # Threshold filtering policy (best-effort)
+    dense_thresh = float(os.getenv("RETRIEVE_DENSE_SIM_THRESHOLD", "0.75"))
+    if dense:
+        try:
+            dense = [it for it in dense if float(getattr(it, "score", 0.0) or 0.0) >= dense_thresh]
+        except Exception:
+            pass
     # Include threshold rationale snapshot: first few raw scores and keep/drop
     def _sample_scores(items):
         return [round(float(getattr(it, 'score', 0.0) or 0.0), 4) for it in items[:5]]
@@ -284,6 +310,15 @@ def run_pipeline(
     if explain:
         trace.append({"event": "explain", "meta": {"items": explain_rows}})
 
+    # Cache store
+    if cache_ttl > 0:
+        try:
+            if len(_CACHE) >= cache_max:
+                # drop oldest entry (simple heuristic: pop arbitrary)
+                _CACHE.pop(next(iter(_CACHE)))
+            _CACHE[key] = (list(trimmed), list(trace), now)
+        except Exception:
+            pass
     return trimmed, trace
 
 

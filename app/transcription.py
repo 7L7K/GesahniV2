@@ -127,7 +127,10 @@ class TranscriptionStream:
 
     async def _iter_audio(self, first_msg: dict) -> AsyncIterator[bytes]:
         msg = first_msg
-        if msg.get("bytes") and has_speech(msg["bytes"]):
+        # Gate audio by wake/PTT when configured
+        wake_mode = os.getenv("WAKE_MODE", "any").lower()
+        waiting = wake_mode in {"wake", "ptt", "both"}
+        if msg.get("bytes") and has_speech(msg["bytes"]) and not waiting:
             yield msg["bytes"]
         while True:
             try:
@@ -139,6 +142,25 @@ class TranscriptionStream:
             if "text" in msg and msg["text"] == "end":
                 return
             chunk = msg.get("bytes")
+            if waiting:
+                # Await a JSON control message indicating wake/PTT
+                ctl = msg.get("text")
+                if ctl:
+                    try:
+                        data = json.loads(ctl)
+                        ptt_ok = bool(data.get("ptt"))
+                        wake_ok = bool(data.get("wake"))
+                        if wake_mode == "wake" and wake_ok:
+                            waiting = False
+                        elif wake_mode == "ptt" and ptt_ok:
+                            waiting = False
+                        elif wake_mode == "both" and wake_ok and ptt_ok:
+                            waiting = False
+                        elif wake_mode == "any" and (wake_ok or ptt_ok):
+                            waiting = False
+                    except Exception:
+                        pass
+                continue
             if chunk and has_speech(chunk):
                 yield chunk
 
@@ -156,12 +178,42 @@ class TranscriptionStream:
                 await self.ws.send_json({"error": "invalid metadata"})
                 await self.ws.close()
                 return
-        session = PipecatSession()
+        # Voice feature flag
+        if os.getenv("VOICE_ENABLED", "1").lower() not in {"1", "true", "yes", "on"}:
+            await self.ws.send_json({"error": "voice_disabled"})
+            await self.ws.close()
+            return
+
+        async def emit(kind: str, payload: dict) -> None:
+            try:
+                await self.ws.send_json({"event": kind, **payload, "session_id": self.session_id})
+            except Exception:
+                pass
+
+        try:
+            session = PipecatSession(event_cb=emit)
+        except TypeError:
+            # Back-compat for tests that stub PipecatSession without kwargs
+            session = PipecatSession()  # type: ignore
         await session.start()
         try:
+            # Send initial listening state
+            await self.ws.send_json({"event": "stt.state", "state": "listening", "session_id": self.session_id})
+            last_text: str | None = None
             async for text in session.stream(self._iter_audio(msg)):
-                await self.ws.send_json({"text": text, "session_id": self.session_id})
+                # Emit partials; relay TTS sync markers if present via log scanning is out-of-band.
+                await self.ws.send_json({"event": "stt.partial", "text": text, "session_id": self.session_id})
+                last_text = text
+            # Final punctuation pass (simple heuristic)
+            try:
+                import re as _re
+                final_text = _re.sub(r"\s+", " ", (last_text or "")).strip()
+                if final_text and final_text[-1] not in ".?!":
+                    final_text += "."
+            except Exception:
+                final_text = last_text or ""
+            await self.ws.send_json({"event": "stt.final", "text": final_text, "session_id": self.session_id})
         except Exception as e:  # pragma: no cover - best effort
-            await self.ws.send_json({"error": str(e)})
+            await self.ws.send_json({"error": "listening_network_shaky"})
         finally:
             await session.stop()

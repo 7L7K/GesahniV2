@@ -190,6 +190,8 @@ class MockWS {
   onclose?: () => void;
   constructor(_url: string) {
     setTimeout(() => this.onopen && this.onopen(), 0);
+    // expose last instance for tests
+    ; (global as any).WebSocket.mockInstance = this
   }
   send(_data: unknown) { /* noop */ }
   close() { this.readyState = 3; this.onclose && this.onclose(); }

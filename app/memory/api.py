@@ -9,6 +9,7 @@ import time
 from typing import List, Optional
 
 from app.telemetry import hash_user_id
+from app import metrics
 from app.redaction import redact_pii, store_redaction_map
 
 # ---------------------------------------------------------------------------
@@ -50,29 +51,55 @@ logger = logging.getLogger(__name__)
 # Backend selection helpers
 # ---------------------------------------------------------------------------
 
+def _strict_mode() -> bool:
+    """Return True if strict init policy is enabled.
+
+    In strict mode, any backend initialisation error is fatal, regardless of
+    the environment. Enable with ``STRICT_VECTOR_STORE=1|true|yes``.
+    """
+    return (os.getenv("STRICT_VECTOR_STORE") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _get_store() -> VectorStore:
     """Return the configured vector store backend.
 
     * ``VECTOR_STORE`` env-var controls the preferred backend.
-    * Falls back to an in-memory store automatically when running under pytest
-      or whenever the disk-backed Chroma store cannot be initialised.
+    * Defaults: when unset, prefer Chroma if CHROMA_PATH is set; otherwise memory in tests.
+    * Falls back to in-memory only when an explicit backend fails and strict mode is disabled.
     """
-    kind = os.getenv("VECTOR_STORE", "").lower()
+    raw_kind = (os.getenv("VECTOR_STORE") or "").strip().lower()
+    allowed = {"memory", "inmemory", "chroma", "cloud", "qdrant", "dual", ""}
+    kind = raw_kind if raw_kind in allowed else "_unknown_"
     chroma_path = os.getenv("CHROMA_PATH", ".chroma_data")
 
-    if (
-        kind in ("memory", "inmemory")
-        or "PYTEST_CURRENT_TEST" in os.environ
-        or "pytest" in sys.modules
-    ):
-        logger.info("Using MemoryVectorStore (test mode or VECTOR_STORE=%s)", kind)
-        store: VectorStore = MemoryVectorStore()
-    else:
-        try:
-            if kind == "dual" and DualReadVectorStore is not None:
+    try:
+        if kind in ("memory", "inmemory"):
+            logger.info("Using MemoryVectorStore (VECTOR_STORE=%s)", kind)
+            store: VectorStore = MemoryVectorStore()
+        else:
+            if kind == "":
+                is_pytest = ("PYTEST_CURRENT_TEST" in os.environ) or ("pytest" in sys.modules)
+                requested_kind = "chroma" if chroma_path else ("memory" if is_pytest else "chroma")
+            elif kind == "_unknown_":
+                logger.warning("Unknown VECTOR_STORE=%r; defaulting to ChromaVectorStore", raw_kind)
+                try:
+                    metrics.VECTOR_INIT_FALLBACKS.labels(requested=raw_kind or "(empty)", reason="unknown_kind").inc()
+                except Exception:
+                    pass
+                requested_kind = "chroma"
+            else:
+                requested_kind = kind
+
+            if requested_kind == "memory":
+                store = MemoryVectorStore()
+            elif requested_kind == "dual":
+                if DualReadVectorStore is None:
+                    raise RuntimeError("DualReadVectorStore unavailable (qdrant/chroma deps missing)")
                 logger.info("Initializing DualReadVectorStore (Qdrant primary, Chroma fallback)")
                 store = DualReadVectorStore()  # type: ignore[call-arg]
-            elif kind == "qdrant" and QdrantVectorStore is not None:
+            elif requested_kind == "qdrant":
+                if QdrantVectorStore is None:
+                    raise RuntimeError("QdrantVectorStore unavailable (qdrant-client not installed)")
                 logger.info("Initializing QdrantVectorStore")
                 store = QdrantVectorStore()  # type: ignore[call-arg]
             else:
@@ -80,30 +107,57 @@ def _get_store() -> VectorStore:
                     raise FileNotFoundError("CHROMA_PATH is empty")
                 logger.info("Initializing ChromaVectorStore at path: %s", chroma_path)
                 store = ChromaVectorStore()
-        except Exception as exc:
-            if os.getenv("ENV", "").lower() == "production":
-                # In production we bail hard so that mis-configured persistence
-                # layers don't silently fall back to in-memory.
-                logger.error("FATAL: ChromaVectorStore failed in production: %s", exc)
-                raise
-            logger.warning(
-                "ChromaVectorStore unavailable at %s (%s: %s); falling back to MemoryVectorStore",
-                chroma_path,
-                type(exc).__name__,
-                exc,
-                exc_info=True,
-            )
-            store = MemoryVectorStore()
+    except Exception as exc:
+        if os.getenv("ENV", "").lower() == "production" or _strict_mode():
+            logger.error("FATAL: Vector store init failed: %s", exc)
+            raise
+        requested = (requested_kind if "requested_kind" in locals() else (kind or "chroma"))
+        backend_label = (
+            "DualReadVectorStore" if requested == "dual" else
+            "QdrantVectorStore" if requested == "qdrant" else
+            "MemoryVectorStore" if requested == "memory" else
+            "ChromaVectorStore"
+        )
+        logger.warning("%s unavailable (%s: %s); falling back to MemoryVectorStore", backend_label, type(exc).__name__, exc)
+        try:
+            metrics.VECTOR_INIT_FALLBACKS.labels(requested=requested, reason=type(exc).__name__).inc()
+        except Exception:
+            pass
+        store = MemoryVectorStore()
 
     logger.debug("Vector store backend selected: %s", type(store).__name__)
+    try:
+        name = type(store).__name__
+        if name == "QdrantVectorStore":
+            metrics.VECTOR_SELECTED_TOTAL.labels("qdrant").inc()
+        elif name == "DualReadVectorStore":
+            metrics.VECTOR_SELECTED_TOTAL.labels("dual").inc()
+        elif name == "ChromaVectorStore":
+            metrics.VECTOR_SELECTED_TOTAL.labels(
+                "cloud" if (os.getenv("VECTOR_STORE", "").strip().lower() == "cloud") else "chroma"
+            ).inc()
+        else:
+            metrics.VECTOR_SELECTED_TOTAL.labels("memory").inc()
+    except Exception:
+        pass
     if type(store).__name__ == "QdrantVectorStore":
-        # Assert cosine metric policy for visibility
         logger.info("VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)")
     return store
 
 
 # The singleton store instance used by every helper below.
 _store: VectorStore = _get_store()
+
+
+def get_store() -> VectorStore:
+    """Factory for obtaining the vector store.
+
+    In production, do not silently fall back; reuse singleton to avoid churn.
+    In tests/dev, return the module-level instance.
+    """
+    if os.getenv("ENV", "").lower() == "production":
+        return _store
+    return _store
 
 # ---------------------------------------------------------------------------
 # Public helpers
@@ -279,6 +333,11 @@ def close_store() -> None:
             _store = _get_store()
 
 
+def reload_store() -> None:
+    """Alias for ``close_store`` to make intent explicit for callers."""
+    close_store()
+
+
 __all__ = [
     # helpers
     "add_user_memory",
@@ -290,6 +349,7 @@ __all__ = [
     "qa_cache",
     "invalidate_cache",
     "close_store",
+    "reload_store",
     # types/backends
     "VectorStore",
     "MemoryVectorStore",

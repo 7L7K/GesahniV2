@@ -10,8 +10,8 @@ class SearchSkill(Skill):
     # Only match true “search” intents, not generic “what is the weather?”
     PATTERNS = [
         re.compile(r"^search(?: for)? (?P<query>.+)", re.I),
-        re.compile(r"^who is (?P<query>.+)", re.I),
-        re.compile(r"^what is (?P<query>.+)", re.I),
+        re.compile(r"^who (?:is|was) (?P<query>.+)", re.I),
+        re.compile(r"^what (?:is|are) (?P<query>.+)", re.I),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
@@ -35,4 +35,10 @@ class SearchSkill(Skill):
         for key in ("Answer", "AbstractText", "Definition"):
             if val := data.get(key):
                 return val
+        # Fallback to first heading, if available
+        related = data.get("RelatedTopics") or []
+        if isinstance(related, list) and related:
+            first = related[0]
+            if isinstance(first, dict) and first.get("Text"):
+                return first.get("Text")
         return "No short answer found."

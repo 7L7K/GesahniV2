@@ -33,6 +33,30 @@ from .climate_skill import ClimateSkill
 from .vacuum_skill import VacuumSkill
 from .notes_skill import NotesSkill
 from .status_skill import StatusSkill
+try:
+    from .explain_route_skill import ExplainRouteSkill  # type: ignore
+except Exception:
+    ExplainRouteSkill = None  # type: ignore
+try:
+    from .password_skill import PasswordSkill  # type: ignore
+except Exception:
+    PasswordSkill = None  # type: ignore
+try:
+    from .datetime_skill import DateTimeSkill  # type: ignore
+except Exception:
+    DateTimeSkill = None  # type: ignore
+try:
+    from .uuid_skill import UUIDSkill  # type: ignore
+except Exception:
+    UUIDSkill = None  # type: ignore
+try:
+    from .regex_skill import RegexExplainSkill  # type: ignore
+except Exception:
+    RegexExplainSkill = None  # type: ignore
+try:
+    from .text_utils_skill import TextUtilsSkill  # type: ignore
+except Exception:
+    TextUtilsSkill = None  # type: ignore
  
 
 # Preserve class order but avoid duplicates when this module reloads
@@ -79,6 +103,17 @@ if _os.getenv("ENABLE_EXTRA_SKILLS", "0").lower() in {"1", "true", "yes"}:
         SKILL_CLASSES.append(_ShoppingListSkill)
     except Exception:
         pass
+    # Include utility/diagnostic skills behind the feature flag (only those that imported)
+    for _extra in (
+        ExplainRouteSkill,
+        PasswordSkill,
+        DateTimeSkill,
+        UUIDSkill,
+        RegexExplainSkill,
+        TextUtilsSkill,
+    ):
+        if _extra is not None:
+            SKILL_CLASSES.append(_extra)  # type: ignore[arg-type]
 
 _base.SKILLS.clear()
 for cls in SKILL_CLASSES:

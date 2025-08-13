@@ -2,6 +2,7 @@ import asyncio
 import logging
 import tempfile
 from collections.abc import AsyncIterator
+from typing import Awaitable, Callable, Optional
 from pathlib import Path
 
 from ... import router
@@ -20,12 +21,17 @@ class PipecatSession:
     """
 
     def __init__(
-        self, stt: str = "whisper", tts: str = "piper", llm: str = "gpt-4o-mini"
+        self,
+        stt: str = "whisper",
+        tts: str = "piper",
+        llm: str = "gpt-4o-mini",
+        event_cb: Optional[Callable[[str, dict], Awaitable[None]]] = None,
     ):
         self.stt = stt
         self.tts = tts
         self.llm = llm
         self._started = False
+        self._event_cb = event_cb
 
     async def start(self) -> None:
         self._started = True
@@ -38,15 +44,29 @@ class PipecatSession:
         logger.debug("PipecatSession stopped")
 
     async def _speak(self, text: str) -> None:
-        """Placeholder TTS hook.
-
-        Real implementations would stream ``text`` to a speech synthesiser.
-        Here we merely log for observability.
-        """
-
+        """TTS hook via orchestrator (logs in tests)."""
         if not text:
             return
-        logger.debug("[TTS:%s] %s", self.tts, text)
+        try:
+            from ..tts_orchestrator import synthesize
+
+            # Emit caption sync markers via logging hook for WS relay
+            if self._event_cb is not None:
+                try:
+                    await self._event_cb("tts.start", {"engine": self.tts})
+                except Exception:
+                    pass
+            audio = await synthesize(text=text, mode="capture")
+            # In a real session we'd stream audio bytes to the client.
+            # Here we only log for observability in tests.
+            logger.debug("[TTS:%s] bytes=%d", self.tts, len(audio))
+            if self._event_cb is not None:
+                try:
+                    await self._event_cb("tts.stop", {"engine": self.tts})
+                except Exception:
+                    pass
+        except Exception:
+            logger.debug("[TTS:%s] %s", self.tts, text)
 
     async def stream(self, audio_chunks: AsyncIterator[bytes]) -> AsyncIterator[str]:
         """Yield partial transcriptions then final LLM output.
@@ -82,6 +102,11 @@ class PipecatSession:
         queue: asyncio.Queue[str | None] = asyncio.Queue()
 
         async def _hook(token: str) -> None:
+            if self._event_cb is not None:
+                try:
+                    await self._event_cb("llm.token", {"token": token})
+                except Exception:
+                    pass
             await queue.put(token)
 
         async def _run() -> None:

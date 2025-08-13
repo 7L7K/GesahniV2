@@ -12,6 +12,7 @@ export default function TvHome() {
                     { label: "Calendar", href: "/tv/calendar" },
                     { label: "Music", href: "/tv/music" },
                     { label: "Photos", href: "/tv/photos" },
+                    { label: "Live", href: "/tv/live" },
                     { label: "Contacts", href: "/tv/contacts" },
                 ].map((t) => (
                     <Link key={t.href} href={t.href} className="bg-zinc-800 rounded-3xl p-12 text-[48px] text-center focus:outline-none focus:ring-8 focus:ring-blue-500">

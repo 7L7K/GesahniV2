@@ -23,14 +23,15 @@ export interface RecorderExports {
     reset: () => void;
     toggleMute: () => void;
     setMuted: (b: boolean) => void;
+    sendControl: (payload: Record<string, any>) => void;
     setDevices: (ids: { audio?: string; video?: string }) => void;
     audioOnly: boolean;
     setAudioOnly: (b: boolean) => void;
-    media: { stream: MediaStream | null; videoEl: React.RefObject<HTMLVideoElement> };
+    media: { stream: MediaStream | null; videoEl: React.RefObject<HTMLVideoElement | null> };
 }
 
 export function useRecorder(): RecorderExports {
-    const camRef = useRef<HTMLVideoElement>(null);
+    const camRef = useRef<HTMLVideoElement | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     const audioRecorder = useRef<MediaRecorder | null>(null);
@@ -156,8 +157,16 @@ export function useRecorder(): RecorderExports {
         ws.onmessage = (e) => {
             try {
                 const msg = JSON.parse(String(e.data || ""));
-                if (msg?.error) setState({ status: "error", message: "Live transcription error." });
-                if (msg?.text) setCaptionText(msg.text);
+                if (msg?.error) setState({ status: "error", message: msg.error === 'listening_network_shaky' ? 'Listening… network shaky' : 'Live transcription error.' });
+                if (msg?.event === 'stt.partial' && msg?.text) setCaptionText(msg.text);
+                if (msg?.event === 'stt.final' && msg?.text) setCaptionText(msg.text);
+                // Optionally, we could show a subtle glow when TTS runs
+                if (msg?.event === 'tts.start') {
+                    document.body.classList.add('tts-active');
+                }
+                if (msg?.event === 'tts.stop') {
+                    document.body.classList.remove('tts-active');
+                }
             } catch {
                 const text = String(e.data || "").trim();
                 if (text) setCaptionText(text);
@@ -168,6 +177,20 @@ export function useRecorder(): RecorderExports {
             if (connectTimerRef.current) { clearTimeout(connectTimerRef.current); connectTimerRef.current = null; }
         };
         wsRef.current = ws;
+
+        // Press-to-talk: while holding space, send control messages
+        const onKeyDown = (ev: KeyboardEvent) => {
+            if (ev.code === 'Space' && ws.readyState === WebSocket.OPEN) {
+                try { ws.send(JSON.stringify({ ptt: true })); } catch { }
+            }
+        };
+        const onKeyUp = (ev: KeyboardEvent) => {
+            if (ev.code === 'Space' && ws.readyState === WebSocket.OPEN) {
+                try { ws.send(JSON.stringify({ ptt: false })); } catch { }
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keyup', onKeyUp);
 
         // Short connect timeout: if not open within 4s, close and engage breaker after N failures
         if (connectTimerRef.current) clearTimeout(connectTimerRef.current);
@@ -242,6 +265,17 @@ export function useRecorder(): RecorderExports {
         setState({ status: "idle" });
         if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
         setElapsedMs(0);
+        // 8s inactivity settle timer
+        const settleMs = 8000;
+        setTimeout(() => {
+            try {
+                if (document && (window as any).location && (window as any).location.pathname === '/capture') {
+                    // Signal ambient mode; consumer can route or dim UI
+                    const ev = new CustomEvent('ambient:settle');
+                    window.dispatchEvent(ev);
+                }
+            } catch { }
+        }, settleMs);
     }, [state, audioMime, videoMime, captionText]);
 
     const reset = useCallback(() => {
@@ -262,6 +296,10 @@ export function useRecorder(): RecorderExports {
         });
     }, []);
 
+    const sendControl = (payload: Record<string, any>) => {
+        try { wsRef.current && wsRef.current.readyState === WebSocket.OPEN && wsRef.current.send(JSON.stringify(payload)); } catch { }
+    };
+
     return {
         state,
         volume,
@@ -273,6 +311,7 @@ export function useRecorder(): RecorderExports {
         pause,
         stop,
         reset,
+        sendControl,
         toggleMute: () => setMuted(m => !m),
         setMuted,
         setDevices: stableSetDevices,

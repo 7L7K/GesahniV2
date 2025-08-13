@@ -17,7 +17,7 @@ DEFAULT_CITY = os.getenv("CITY_NAME", "Detroit,US")
 class WeatherSkill(Skill):
     PATTERNS = [
         # Pattern for "weather in Seattle"
-        re.compile(r"\bweather in ([\w\s]+)", re.I),
+        re.compile(r"\bweather in ([\w\s,]+)", re.I),
         # Pattern for "what's the weather", "whats the weather", "what is the weather", "forecast", with/without today/now
         re.compile(
             r"\b(?:what(?:['’]s|s| is)? the weather|forecast)(?: today| now)?\b",
@@ -53,10 +53,9 @@ class WeatherSkill(Skill):
             log.exception("Weather fetch failed")
             return f"Couldn’t get the weather for {city.title()}."
 
-        temp = data.get("main", {}).get("temp")
+        main = data.get("main", {}) or {}
+        temp = main.get("temp")
         desc = data.get("weather", [{}])[0].get("description", "")
-        return (
-            f"{city.title()} is currently {desc}, around {temp:.0f}°F."
-            if temp is not None
-            else f"No weather data for {city}."
-        )
+        if isinstance(temp, (int, float)):
+            return f"{city.title()} is currently {desc}, around {temp:.0f}°F."
+        return f"No weather data for {city}."

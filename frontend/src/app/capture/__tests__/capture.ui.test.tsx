@@ -15,7 +15,7 @@ describe('Capture UI', () => {
 
   it('shows hint text', () => {
     render(<CaptureMode />)
-    expect(screen.getByText(/Press/i)).toBeInTheDocument()
+    expect(screen.getByText(/Press and hold to speak/i)).toBeInTheDocument()
   })
 })
 

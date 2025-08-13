@@ -17,11 +17,12 @@ DEFAULT_CITY = os.getenv("CITY_NAME", "Detroit,US")
 
 class ForecastSkill(Skill):
     PATTERNS = [
-        re.compile(r"\b(?:3|three)[- ]day forecast(?: for ([\w\s]+))?", re.I),
+        re.compile(r"\b(?:3|three)[- ]day forecast(?: for ([\w\s,]+))?", re.I),
+        re.compile(r"\bforecast for ([\w\s,]+)", re.I),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
-        city = match.group(1).strip() if match.lastindex == 1 else DEFAULT_CITY
+        city = match.group(1).strip() if match.lastindex and match.group(1) else DEFAULT_CITY
         if not OPENWEATHER_KEY:
             return "Weather API key not set."
         try:

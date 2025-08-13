@@ -35,15 +35,30 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
 async def update_profile(profile: UserProfile, user_id: str = Depends(get_current_user_id)):
     data = profile.model_dump(exclude_none=True)
     profile_store.update(user_id, data)
+    # Ensure durability across restarts
+    try:
+        profile_store.persist_all()
+    except Exception:
+        pass
     return {"status": "success"}
 
 
 @router.get("/onboarding/status")
 async def get_onboarding_status(user_id: str = Depends(get_current_user_id)):
     p = profile_store.get(user_id)
+    # Track steps in the same order as the frontend flow
+    device_prefs_done = any(
+        bool(p.get(k)) for k in ("speech_rate", "input_mode", "font_scale", "wake_word_enabled")
+    )
     steps = [
         {"step": "welcome", "completed": True, "data": None},
         {"step": "basic_info", "completed": bool(p.get("name")), "data": {"name": p.get("name")}},
+        {"step": "device_prefs", "completed": device_prefs_done, "data": {
+            "speech_rate": p.get("speech_rate"),
+            "input_mode": p.get("input_mode"),
+            "font_scale": p.get("font_scale"),
+            "wake_word_enabled": p.get("wake_word_enabled"),
+        }},
         {
             "step": "preferences",
             "completed": bool(p.get("communication_style")),
@@ -65,7 +80,12 @@ async def get_onboarding_status(user_id: str = Depends(get_current_user_id)):
 
 @router.post("/onboarding/complete")
 async def complete_onboarding(user_id: str = Depends(get_current_user_id)):
-    profile_store.set(user_id, "onboarding_completed", True)
+    # Use canonical update API and persist to disk
+    profile_store.update(user_id, {"onboarding_completed": True})
+    try:
+        profile_store.persist_all()
+    except Exception:
+        pass
     return {"status": "success"}
 
 

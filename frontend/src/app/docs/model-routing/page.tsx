@@ -12,6 +12,13 @@ export default function RoutingDocs() {
             <p>Use the model selector to force a specific model when needed.</p>
             <h2>Budgets & retries</h2>
             <p>Limits prevent runaway costs and retries; heavy tasks escalate only when justified.</p>
+            <h2>Observability</h2>
+            <p>Routing decisions are recorded for admin review and tuning.</p>
+            <ul>
+                <li>Prometheus: <code>router_decision_total</code></li>
+                <li>Latency histograms per model: <code>model_latency_seconds</code></li>
+                <li>Trace headers: <code>X-Request-ID</code> and <code>X-Trace-ID</code></li>
+            </ul>
         </article>
     );
 }

@@ -100,7 +100,8 @@ Set environment variables as needed:
 | `SIM_THRESHOLD` | `0.24` | no | Vector similarity cutoff |
 | `MEM_TOP_K` | `3` | no | Memories returned from vector store |
 | `DISABLE_QA_CACHE` | `false` | no | Skip semantic cache when set |
-| `VECTOR_STORE` | `chroma` | no | Vector store backend (`memory`, `chroma`, `qdrant`, or `dual`) |
+| `VECTOR_STORE` | `chroma` | no | Vector store backend (`memory`, `chroma`, `qdrant`, `dual`, or `cloud` for Chroma Cloud) |
+| `STRICT_VECTOR_STORE` | `0` | no | When `1/true/yes`, any init error is fatal (no silent fallback), regardless of `ENV`. |
 | `CHROMA_PATH` | `.chroma_data` | no | ChromaDB storage directory |
 | `QDRANT_URL` | – | no | Qdrant base URL |
 | `QDRANT_API_KEY` | – | no | Qdrant API key |
@@ -129,13 +130,14 @@ Start FastAPI:
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### 📦 Docker
+### 📦 Frontend
 
-This repository does not currently ship a Dockerfile. If you add one, a typical workflow is:
+The single web UI lives in `frontend/` (Next.js 15). A previously experimental `web/` app has been removed to keep things lean.
 
 ```bash
-docker build -t gesahni .
-docker run -d -p 8000:8000 --env-file .env gesahni
+cd frontend
+npm install
+npm run dev  # http://localhost:3000
 ```
 
 ### 🎥 Record a Session
@@ -152,6 +154,10 @@ python record_session.py --duration 5 --output ./sessions
 * Metrics include request volume, latency histograms, and request cost.
 * Import `grafana_dashboard.json` into Grafana for a sample dashboard with latency,
   cache hit rate, cost, and request volume panels.
+* Additional metrics:
+  - `dependency_latency_seconds{dependency,operation}`: External dependencies (e.g., qdrant, openai) latency.
+  - `embedding_latency_seconds{backend}`: Embedding backend latency.
+  - `vector_op_latency_seconds{operation}`: Vector store operations latency.
 
 ## 🔐 Authentication
 
@@ -224,6 +230,50 @@ curl -X POST localhost:8000/ask -d '{"prompt":"turn off kitchen lights"}'
 * **Proactive Engine v1**: Presence/webhook inputs, curiosity loop, APScheduler self‑tasks (e.g., unlock notifications and auto‑lock), hourly profile persistence.
 * **Security & Policy**: Per‑route scopes (`/admin/*`, `/ha/*`), nonce guard for state changes, signed webhooks with rotation helpers, deny‑list moderation on HA actions, dual‑bucket rate limits with Retry‑After.
 
+### Distributed rate limiting
+
+- Default backend: in‑memory (process‑local)
+- Optional backend: Redis (distributed across instances)
+
+Enable Redis:
+
+```bash
+cp docker-compose.redis.yml docker-compose.override.yml
+docker compose up -d redis
+
+export RATE_LIMIT_BACKEND=redis
+export REDIS_URL=redis://localhost:6379/0
+# optional
+export RATE_LIMIT_BYPASS_SCOPES="admin support"
+export DAILY_REQUEST_CAP=0
+```
+
+Health:
+
+```bash
+curl -s http://localhost:8000/rate_limit_status
+```
+
+Per‑route overrides example:
+
+```python
+from fastapi import Depends
+from app.security import rate_limit_with, scope_rate_limit
+
+@router.get("/burst-heavy", dependencies=[Depends(rate_limit_with(burst_limit=3))])
+async def burst_heavy():
+    return {"ok": True}
+
+@router.get("/admin/critical", dependencies=[Depends(scope_rate_limit("admin", long_limit=30, burst_limit=5))])
+async def admin_critical():
+    return {"ok": True}
+```
+
+Daily caps and bypass scopes:
+
+- `DAILY_REQUEST_CAP`: per-user daily cap across HTTP/WS (UTC midnight reset). `0` disables.
+- `RATE_LIMIT_BYPASS_SCOPES`: space-separated scopes that bypass all limits.
+
 ### Embedding Flow
 
 Memories and provenance tags rely on embeddings to gauge similarity:
@@ -242,6 +292,36 @@ Memories and provenance tags rely on embeddings to gauge similarity:
 * Personality Modules (Customize assistant's tone)
 
 ---
+
+### 🧪 Tests and Load
+
+Run the full test suite:
+
+```bash
+pytest -q
+```
+
+Smoke (golden flow) tests only:
+
+```bash
+pytest -q tests/smoke
+```
+
+Run k6 load test (with basic SLO thresholds):
+
+```bash
+k6 run scripts/k6_load_test.js -e BASE_URL=http://localhost:8000
+```
+
+Locust:
+
+```bash
+locust -f locustfile.py --host=http://localhost:8000
+```
+
+Default SLO thresholds (k6 thresholds):
+- p95 http_req_duration < 500ms
+- http_req_failed rate < 1%
 
 ### 🛟 Troubleshooting & Logs
 

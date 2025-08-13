@@ -6,7 +6,7 @@ Home Assistant to answer questions and automate your home.
 | Path | Purpose |
 | --- | --- |
 | `app/` | Backend services, skills, and routing logic |
-| `frontend/` | Next.js web UI for interacting with the assistant |
+| `frontend/` | Next.js web UI for interacting with the assistant (single UI; legacy `web/` removed) |
 | `tests/` | Pytest suite validating routing, skills, and utilities |
 | `data/` | History log, follow-up storage, sample calendar |
 | `sessions/` | Captured audio/video sessions and metadata |
@@ -29,8 +29,8 @@ Home Assistant to answer questions and automate your home.
 ## HTTP Endpoints
 Method | Path | Handler
 --- | --- | ---
-GET | `/me` | Authenticated user info and stats
-POST | `/ask` | Route prompt through skills and LLMs
+GET | `/me` | Authenticated user info and stats (also under `/v1/me`)
+POST | `/ask` | Route prompt through skills and LLMs (also under `/v1/ask`)
 POST | `/upload` | Save raw audio upload
 POST | `/capture/start` | Begin capture session
 POST | `/capture/save` | Finalize capture, store media
@@ -49,6 +49,15 @@ POST | `/transcribe/{id}` | Transcribe saved session
 GET | `/transcribe/{id}` | Retrieve transcript
 GET | `/health` | Basic heartbeat
 GET | `/healthz` | Unauthenticated probe (for orchestration)
+GET | `/metrics` | Prometheus metrics (enabled when `PROMETHEUS_ENABLED=1`)
+POST | `/v1/music` | Music control: play|pause|next|previous|volume
+POST | `/v1/vibe` | Set/update vibe preset (name, energy, tempo, explicit)
+GET | `/v1/state` | Current music state (vibe, volume, playing, track)
+GET | `/v1/queue` | Current queue
+GET | `/v1/recommendations` | Recommendations seeded by vibe + last track
+GET | `/v1/music/devices` | List provider devices (Spotify)
+POST | `/v1/music/device` | Transfer playback to a device
+WS | `/v1/ws/music` | Broadcast: `music.state`, `music.queue.updated`
 GET | `/config` | Dump environment (requires `ADMIN_TOKEN`)
 GET | `/ha_status` | Home Assistant health check
 GET | `/llama_status` | Ollama health check
@@ -141,7 +150,10 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `CALENDAR_FILE` | `data/calendar.json` | no | Calendar events source |
 | `MAX_UPLOAD_BYTES` | `10485760` | no | Max upload size for session media |
 | `DISABLE_QA_CACHE` | `false` | no | Skip semantic cache when set |
-| `VECTOR_STORE` | `chroma` | no | Vector store backend |
+| `VECTOR_STORE` | `chroma` | no | Vector store backend (`memory`, `chroma`, `qdrant`, `dual`, `cloud`) |
+| `STRICT_VECTOR_STORE` | `0` | no | Fail hard on vector store init errors when `1` |
+| `PROMETHEUS_ENABLED` | `1` | no | Expose `/metrics` endpoint when enabled |
+| `OTEL_ENABLED` | `1` | no | Enable OpenTelemetry traces (exporter optional) |
 
 *Required only when `EMBEDDING_BACKEND=llama`.
 
@@ -167,6 +179,21 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 ## Testing & Validation
 See `CONTRIBUTING.md` for the full development workflow, including tests and linting.
 
+### Smoke tests (golden flows)
+```bash
+pytest -q tests/smoke
+```
+
+### Load testing
+- k6 (with basic SLO thresholds):
+```bash
+k6 run scripts/k6_load_test.js -e BASE_URL=http://localhost:8000
+```
+- Locust:
+```bash
+locust -f locustfile.py --host=http://localhost:8000
+```
+
 ## Model Routing Rules
 - Accept `model_override` from frontend POST body.
 - Route `"llama*"` models to `ask_llama()`, `"gpt*"` models to `ask_gpt()`.
@@ -181,6 +208,17 @@ See `CONTRIBUTING.md` for the full development workflow, including tests and lin
 
 ## Contributing
 Please read `CONTRIBUTING.md` for contribution guidelines and the PR checklist.
+
+## Observability & Metrics
+- Request metrics: `app_request_total`, `app_request_latency_seconds`, `app_request_cost_usd`
+- Routing: `router_decision_total`
+- Model latency: `model_latency_seconds`
+- New dependency/vector metrics:
+  - `dependency_latency_seconds{dependency,operation}` (e.g., qdrant upsert/search)
+  - `embedding_latency_seconds{backend}` (openai|llama|stub)
+  - `vector_op_latency_seconds{operation}` (upsert|search|scroll|delete)
+- Rate limit: `rate_limit_allow_total`, `rate_limit_block_total`; responses include `X-RateLimit-*` headers.
+- Tracing: `X-Request-ID` and `X-Trace-ID` response headers aid correlation; enable traces via `OTEL_ENABLED=1`.
 
 ## Request Flow
 ```mermaid

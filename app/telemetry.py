@@ -80,5 +80,12 @@ class LogRecord(BaseModel):
     facts_block: Optional[str] = None
     route_trace: Optional[list] = None
 
+    # tts usage
+    tts_engine: Optional[str] = None
+    tts_tier: Optional[str] = None
+    tts_chars: Optional[int] = None
+    tts_minutes: Optional[float] = None
+    tts_cost_usd: Optional[float] = None
+
 
 log_record_var: ContextVar[LogRecord | None] = ContextVar("log_record", default=None)

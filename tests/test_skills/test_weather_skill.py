@@ -67,3 +67,26 @@ def test_weather_skill_zero_temp(monkeypatch):
     m = skill.match("weather in paris")
     resp = asyncio.run(skill.run("weather in paris", m))
     assert "0°F" in resp
+
+
+def test_weather_city_with_comma(monkeypatch):
+    class FakeCityClient:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+        async def get(self, url, params=None):
+            class R:
+                def json(self_non):
+                    return {"main": {"temp": 72}, "weather": [{"description": "cloudy"}]}
+                def raise_for_status(self_non):
+                    pass
+            return R()
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: FakeCityClient())
+    import app.skills.weather_skill as ws
+    monkeypatch.setattr(ws, "OPENWEATHER_KEY", "dummy")
+    skill = WeatherSkill()
+    m = skill.match("weather in Toronto, CA")
+    resp = asyncio.run(skill.run("weather in Toronto, CA", m))
+    assert "Toronto" in resp

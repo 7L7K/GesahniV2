@@ -14,6 +14,7 @@ from app.analytics import (
 )
 from app.decisions import get_recent as decisions_recent, get_explain as decisions_get
 from app.config_runtime import get_config
+from app.feature_flags import list_flags as _list_flags, set_value as _set_flag
 from app.jobs.qdrant_lifecycle import bootstrap_collection as _q_bootstrap, collection_stats as _q_stats
 from app.jobs.migrate_chroma_to_qdrant import main as _migrate_cli  # type: ignore
 from app.logging_config import get_last_errors
@@ -168,6 +169,21 @@ async def admin_config(
     return data
 
 
+@router.post("/admin/reload_env")
+async def admin_reload_env(
+    token: str | None = Query(default=None),
+    user_id: str = Depends(get_current_user_id),
+):
+    _check_admin(token)
+    try:
+        from app.env_utils import load_env
+
+        load_env()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/admin/errors")
 async def admin_errors(
     limit: int = Query(default=50, ge=1, le=500),
@@ -264,7 +280,7 @@ async def admin_qdrant_collections(
 @router.post("/admin/flags")
 async def admin_flags(
     key: str = Query(..., description="Flag key, e.g., RETRIEVAL_PIPELINE"),
-    value: str = Query(..., description="New value"),
+    value: str = Query(..., description="New value (string form; '1'/'0' for bool)"),
     token: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),
 ):
@@ -273,8 +289,20 @@ async def admin_flags(
     Guarded by admin token. Note: only affects this process; not persisted.
     """
     _check_admin(token)
+    _set_flag(key, value)
+    os.environ[f"FLAG_{key.upper()}"] = value
+    # Maintain backward-compat: also set plain key for legacy tests/tools
     os.environ[key] = value
-    return {"status": "ok", "key": key, "value": value}
+    return {"status": "ok", "key": key, "value": value, "flags": _list_flags()}
+
+
+@router.get("/admin/flags")
+async def admin_list_flags(
+    token: str | None = Query(default=None),
+    user_id: str = Depends(get_current_user_id),
+):
+    _check_admin(token)
+    return {"flags": _list_flags()}
 
 
 # Mount new admin-inspect routes under the same router if available

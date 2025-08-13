@@ -30,13 +30,22 @@ export function LiveTranscript({ text, onClear }: { text: string; onClear: () =>
                     )}
                 </div>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto" id="transcript-root">
                 {text ? (
                     <div className="space-y-3">
                         <p className="text-gray-500 text-sm">You said:</p>
                         {text.split('\n').map((line, i) => (
-                            <p key={i} className="text-gray-800 leading-relaxed text-2xl">{line}</p>
+                            <p key={i} className="leading-relaxed text-2xl text-gray-900">{line}</p>
                         ))}
+                        {/* Answer track placeholder: consumer appends answer tokens below when available */}
+                        <div id="answer-track" className="mt-6 text-2xl font-medium text-gray-800"></div>
+                        <style>{`
+                          body.tts-active #answer-track { text-shadow: 0 0 12px rgba(0, 120, 255, 0.35); }
+                          body.quiet-hours #transcript-root { filter: saturate(0.75) brightness(0.95); }
+                          @media (prefers-reduced-motion: reduce) {
+                            body.tts-active #answer-track { text-shadow: none; }
+                          }
+                        `}</style>
                     </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-center">

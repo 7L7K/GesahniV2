@@ -273,4 +273,10 @@ The system tracks routing decisions through:
 - **Telemetry**: Detailed request records with routing metadata
 - **Logging**: Debug logs for routing decisions and model selection
 
+Additional exported metrics relevant to routing and dependencies:
+- `model_latency_seconds{model}`: p50/p95 via histogram_quantile
+- `dependency_latency_seconds{dependency,operation}`: e.g., qdrant search/upsert
+- `embedding_latency_seconds{backend}`: openai vs llama
+- `vector_op_latency_seconds{operation}`: upsert/search/scroll/delete
+
 This routing system ensures optimal resource usage while maintaining response quality and user experience.

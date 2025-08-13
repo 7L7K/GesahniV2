@@ -55,10 +55,11 @@ class EntitiesSkill(Skill):
             return f"No {kind} found."
 
         # build nicely‑formatted lines for this slice
-        lines = [
-            f'{s["attributes"].get("friendly_name", "-")} → {s["entity_id"]}'
-            for s in wanted[start:end]
-        ]
+        lines = []
+        for s in wanted[start:end]:
+            attrs = s.get("attributes") or {}
+            name = attrs.get("friendly_name", s.get("entity_id", "-"))
+            lines.append(f"{name} → {s.get('entity_id', '-')}")
         body = "\n".join(lines)
 
         # append pagination hint if we truncated results

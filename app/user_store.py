@@ -18,6 +18,14 @@ class UserStore:
     async def _get_conn(self) -> aiosqlite.Connection:
         if self._conn is None:
             self._conn = await aiosqlite.connect(self._path)
+            # migrations table
+            await self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version INTEGER PRIMARY KEY
+                )
+                """
+            )
             await self._conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS user_stats (
@@ -28,6 +36,11 @@ class UserStore:
                 )
                 """
             )
+            # record version 1
+            try:
+                await self._conn.execute("INSERT OR IGNORE INTO schema_migrations (version) VALUES (1)")
+            except Exception:
+                pass
             await self._conn.commit()
         return self._conn
 

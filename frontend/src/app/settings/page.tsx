@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateProfile, UserProfile, useProfile } from '@/lib/api';
+import { getBudget } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 
 function SettingsPageInner() {
@@ -24,6 +25,12 @@ function SettingsPageInner() {
         }
         if (data) setProfile(prev => ({ ...prev, ...data }));
     }, [router, data, error]);
+
+    const [budget, setBudget] = useState<{ tts?: { spent_usd: number; cap_usd: number; ratio: number } } | null>(null);
+
+    useEffect(() => {
+        getBudget().then((b) => setBudget(b as any)).catch(() => setBudget(null));
+    }, []);
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -215,6 +222,28 @@ function SettingsPageInner() {
                                             </label>
                                         ))}
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Voice & Budget */}
+                        <div>
+                            <h2 className="text-xl font-semibold text-gray-900 mb-6">Voice & Budget</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="p-4 border rounded-lg">
+                                    <div className="text-sm text-gray-600 mb-2">Monthly TTS Spend</div>
+                                    <div className="h-2 bg-gray-200 rounded">
+                                        {budget?.tts && (
+                                            <div className={`h-2 rounded ${budget.tts.ratio >= 0.8 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(100, Math.round((budget.tts.ratio || 0) * 100))}%` }} />
+                                        )}
+                                    </div>
+                                    <div className="mt-2 text-xs text-gray-600">
+                                        {budget?.tts ? `~$${budget.tts.spent_usd.toFixed(2)} of $${budget.tts.cap_usd.toFixed(2)}` : '—'}
+                                    </div>
+                                </div>
+                                <div className="p-4 border rounded-lg">
+                                    <div className="text-sm text-gray-600 mb-2">Story Voice</div>
+                                    <div className="text-xs text-gray-500">Switches to OpenAI TTS for expressive narration in Capture mode.</div>
                                 </div>
                             </div>
                         </div>

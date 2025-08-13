@@ -51,6 +51,28 @@ def test_rate_limit_long_and_burst(monkeypatch):
     assert r.headers.get("Retry-After") is not None
 
 
+def test_response_has_security_headers(monkeypatch):
+    # Build a minimal app that includes the tracing middleware which sets headers
+    from fastapi import FastAPI
+    from app.middleware import trace_request
+
+    app = FastAPI()
+
+    @app.get("/pong")
+    async def pong():
+        return {"ok": True}
+
+    app.middleware("http")(trace_request)
+    client = TestClient(app)
+    r = client.get("/pong")
+    assert r.status_code == 200
+    # Basic hardening headers should be present
+    assert "Content-Security-Policy" in r.headers
+    assert r.headers.get("X-Content-Type-Options") == "nosniff"
+    assert r.headers.get("Referrer-Policy") is not None
+    assert r.headers.get("X-Frame-Options") == "DENY"
+
+
 def test_nonce_required_and_reuse(monkeypatch):
     client, _ = _app_with_security(monkeypatch, {"REQUIRE_NONCE": "1", "NONCE_TTL_SECONDS": "5"})
     # missing header

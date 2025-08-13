@@ -108,6 +108,85 @@ export async function apiFetch(
   return res;
 }
 
+// -----------------------------
+// Music helpers
+// -----------------------------
+
+export type MusicState = {
+  vibe: { name: string; energy: number; tempo: number; explicit: boolean }
+  volume: number
+  device_id: string | null
+  progress_ms?: number | null
+  is_playing?: boolean | null
+  track?: { id: string; name: string; artists: string; art_url?: string | null } | null
+  quiet_hours: boolean
+  explicit_allowed: boolean
+  provider?: 'spotify' | 'radio' | null
+}
+
+export async function musicCommand(cmd: {
+  command: 'play' | 'pause' | 'next' | 'previous' | 'volume'
+  volume?: number
+  temporary?: boolean
+}): Promise<void> {
+  const res = await apiFetch(`/v1/music`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cmd),
+    auth: true,
+  })
+  if (!res.ok) throw new Error(await res.text())
+}
+
+export async function setVibe(v: Partial<{
+  name: string
+  energy: number
+  tempo: number
+  explicit: boolean
+}>): Promise<void> {
+  const res = await apiFetch(`/v1/vibe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(v),
+    auth: true,
+  })
+  if (!res.ok) throw new Error(await res.text())
+}
+
+export async function getMusicState(): Promise<MusicState> {
+  const res = await apiFetch(`/v1/state`, { auth: true })
+  if (!res.ok) throw new Error(await res.text())
+  return (await res.json()) as MusicState
+}
+
+export async function getQueue(): Promise<{ current: any; up_next: any[]; skip_count?: number }> {
+  const res = await apiFetch(`/v1/queue`, { auth: true })
+  if (!res.ok) throw new Error(await res.text())
+  return (await res.json()) as any
+}
+
+export async function getRecommendations(): Promise<{ recommendations: any[] }> {
+  const res = await apiFetch(`/v1/recommendations`, { auth: true })
+  if (!res.ok) throw new Error(await res.text())
+  return (await res.json()) as any
+}
+
+export async function listDevices(): Promise<{ devices: any[] }> {
+  const res = await apiFetch(`/v1/music/devices`, { auth: true })
+  if (!res.ok) throw new Error(await res.text())
+  return (await res.json()) as any
+}
+
+export async function setDevice(device_id: string): Promise<void> {
+  const res = await apiFetch(`/v1/music/device`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_id }),
+    auth: true,
+  })
+  if (!res.ok) throw new Error(await res.text())
+}
+
 export function wsUrl(path: string): string {
   const base = (API_URL || "http://localhost:8000").replace(/^http/, "ws");
   const token = getToken();
@@ -278,7 +357,28 @@ export async function logout(): Promise<void> {
   }
 }
 
-export async function getBudget(): Promise<{ tokens_used: number; minutes_used: number; reply_len_target: string; escalate_allowed: boolean; near_cap: boolean }> {
+// -----------------------------
+// TTS helpers
+// -----------------------------
+
+// Backwards compatible budget API: prefer rich shape, allow legacy near_cap-only
+export async function getBudget(): Promise<{ tokens_used?: number; minutes_used?: number; reply_len_target?: string; escalate_allowed?: boolean; near_cap: boolean }> {
+  const res = await apiFetch('/v1/budget', { method: 'GET' });
+  if (!res.ok) throw new Error('budget_failed');
+  const body = await res.json();
+  if (body && typeof body === 'object' && 'near_cap' in body) return body;
+  // Legacy shim for boolean-only responses
+  return { near_cap: Boolean(body) } as any;
+}
+
+export async function ttsSpeak(input: { text: string; mode?: 'utility' | 'capture'; intent?: string; sensitive?: boolean; voice?: string }): Promise<Blob> {
+  const res = await apiFetch('/v1/tts/speak', { method: 'POST', body: JSON.stringify(input) });
+  if (!res.ok) throw new Error('tts_failed');
+  return await res.blob();
+}
+
+// Note: The function above supersedes; keep name unique to avoid redeclare
+export async function getBudgetDetails(): Promise<{ tokens_used: number; minutes_used: number; reply_len_target: string; escalate_allowed: boolean; near_cap: boolean }> {
   const res = await apiFetch("/v1/budget", { method: "GET" });
   if (!res.ok) throw new Error("budget_failed");
   return res.json();

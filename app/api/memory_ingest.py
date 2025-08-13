@@ -47,8 +47,16 @@ async def ingest_memory(
             import tempfile
             import os
             fd, tmp_path = tempfile.mkstemp(prefix="ing_", suffix="_upload")
-            with open(fd, "wb") as f:  # type: ignore[arg-type]
-                f.write(contents)
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    f.write(contents)
+            except Exception:
+                # Ensure descriptor is closed on any error to avoid leaks
+                try:
+                    os.close(fd)
+                except Exception:
+                    pass
+                raise
             path = tmp_path
         res = ingest_path_or_url(user_id=user_id, source=source or (url or (getattr(file, "filename", None) or "upload")), path=path, url=url)
         return IngestResponse(**res)

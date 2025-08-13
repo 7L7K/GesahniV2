@@ -32,3 +32,13 @@ Security notes
 - The redaction substitution maps are stored in data/redactions/ and are included in backups; access to backups must be restricted to trusted operators.
 
 
+
+### Observability notes
+
+- Logs are structured JSON with `req_id` and `trace_id` for correlation.
+- Prometheus metrics are available at `/metrics` when `PROMETHEUS_ENABLED=1`.
+- OpenTelemetry tracing can be enabled via environment:
+  - `OTEL_ENABLED=1`
+  - `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317` (or your collector)
+  - Optional: `OTEL_SERVICE_NAME=gesahni`, `OTEL_SERVICE_VERSION=dev`
+

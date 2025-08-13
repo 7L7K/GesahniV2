@@ -61,8 +61,21 @@ from .alias_store import get_all as alias_all, set as alias_set, delete as alias
 from .history import get_record_by_req_id
 from .llama_integration import startup_check as llama_startup
 from .logging_config import configure_logging, get_last_errors
+from .otel_utils import init_tracing, shutdown_tracing
 from .status import router as status_router
 from .auth import router as auth_router
+try:
+    from .api.preflight import router as preflight_router
+except Exception:
+    preflight_router = None  # type: ignore
+try:
+    from .api.auth import router as simple_auth_router
+except Exception:
+    simple_auth_router = None  # type: ignore
+try:
+    from .api.music import router as music_router
+except Exception:
+    music_router = None  # type: ignore
 try:
     from .auth_device import router as device_auth_router
 except Exception:
@@ -119,7 +132,12 @@ except Exception:  # pragma: no cover - optional
     optional_require_scope = require_scope  # type: ignore
 
 
-from .middleware import DedupMiddleware, reload_env_middleware, trace_request
+from .middleware import (
+    DedupMiddleware,
+    reload_env_middleware,
+    trace_request,
+    silent_refresh_middleware,
+)
 from .security import (
     rate_limit,
     rate_limit_ws,
@@ -150,6 +168,11 @@ def _anon_user_id(auth_header: str | None) -> str:
 
 
 configure_logging()
+# Initialize tracing early (best-effort; no-op if disabled/unavailable)
+try:
+    init_tracing()
+except Exception:
+    pass
 logger = logging.getLogger(__name__)
 
 
@@ -182,6 +205,19 @@ async def lifespan(app: FastAPI):
             proactive_startup()
         except Exception:
             logger.debug("proactive_startup failed", exc_info=True)
+        # Start care daemons
+        try:
+            from .care_daemons import heartbeat_monitor_loop
+
+            asyncio.create_task(heartbeat_monitor_loop())
+        except Exception:
+            logger.debug("heartbeat_monitor_loop not started", exc_info=True)
+        # Start SMS worker
+        try:
+            from .api.sms_queue import sms_worker
+            asyncio.create_task(sms_worker())
+        except Exception:
+            logger.debug("sms_worker not started", exc_info=True)
         yield
     finally:
         for func in (close_client, close_whisper_client):
@@ -193,6 +229,11 @@ async def lifespan(app: FastAPI):
             scheduler_shutdown()
         except Exception as e:  # pragma: no cover - best effort
             logger.debug("scheduler shutdown failed: %s", e)
+        # Ensure OpenTelemetry worker thread is stopped to avoid atexit noise
+        try:
+            shutdown_tracing()
+        except Exception:
+            pass
 
 
 app = FastAPI(title="GesahniV2", lifespan=lifespan, openapi_tags=tags_metadata)
@@ -210,17 +251,25 @@ app.add_middleware(
 )
 app.add_middleware(DedupMiddleware)
 app.middleware("http")(trace_request)
-from .middleware import silent_refresh_middleware
 app.middleware("http")(silent_refresh_middleware)
 app.middleware("http")(reload_env_middleware)
 
-# Optional static mount for TV shared photos
+    # Optional static mount for TV shared photos
 try:
     _tv_dir = os.getenv("TV_PHOTOS_DIR", "data/shared_photos")
     if _tv_dir:
         app.mount("/shared_photos", StaticFiles(directory=_tv_dir), name="shared_photos")
 except Exception:
     pass
+
+    # Album art cache mount for music UI
+    try:
+        _album_dir = os.getenv("ALBUM_ART_DIR", "data/album_art")
+        if _album_dir:
+            Path(_album_dir).mkdir(parents=True, exist_ok=True)
+            app.mount("/album_art", StaticFiles(directory=_album_dir), name="album_art")
+    except Exception:
+        pass
 
 if os.getenv("PROMETHEUS_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}:
     try:  # pragma: no cover - optional dependency
@@ -317,8 +366,9 @@ async def export_memories(user_id: str = Depends(get_current_user_id)):
     out = {"profile": [], "episodic": []}
     try:
         # Episodic via vector store listing when available
-        from .memory.api import _store as _vs  # type: ignore
+        from .memory.api import get_store as _get_vs  # type: ignore
 
+        _vs = _get_vs()
         if hasattr(_vs, "list_user_memories"):
             out["episodic"] = _vs.list_user_memories(user_id)  # type: ignore[attr-defined]
     except Exception:
@@ -336,8 +386,8 @@ async def export_memories(user_id: str = Depends(get_current_user_id)):
 @core_router.delete("/memories/{mem_id}")
 async def delete_memory(mem_id: str, user_id: str = Depends(get_current_user_id)):
     try:
-        from .memory.api import _store as _vs  # type: ignore
-
+        from .memory.api import get_store as _get_vs  # type: ignore
+        _vs = _get_vs()
         if hasattr(_vs, "delete_user_memory"):
             ok = _vs.delete_user_memory(user_id, mem_id)  # type: ignore[attr-defined]
             if ok:
@@ -378,7 +428,7 @@ async def upload(
     dest = session_dir / "source.wav"
     content = await file.read()
     dest.write_bytes(content)
-    logger.info(f"File uploaded to {dest}")
+    logger.info("sessions.upload", extra={"meta": {"dest": str(dest)}})
     return {"session_id": session_id}
 
 
@@ -497,7 +547,7 @@ async def websocket_storytime(
 
 @core_router.post("/intent-test")
 async def intent_test(req: AskRequest, user_id: str = Depends(get_current_user_id)):
-    logger.info("Intent test for: %s", req.prompt)
+    logger.info("intent.test", extra={"meta": {"prompt": req.prompt}})
     return {"intent": "test", "prompt": req.prompt}
 
 
@@ -682,9 +732,15 @@ app.include_router(status_router, prefix="/v1")
 app.include_router(status_router, include_in_schema=False)
 app.include_router(auth_router, prefix="/v1")
 app.include_router(auth_router, include_in_schema=False)
+if preflight_router is not None:
+    app.include_router(preflight_router, prefix="/v1")
+    app.include_router(preflight_router, include_in_schema=False)
 if device_auth_router is not None:
     app.include_router(device_auth_router, prefix="/v1")
     app.include_router(device_auth_router, include_in_schema=False)
+if simple_auth_router is not None:
+    app.include_router(simple_auth_router, prefix="/v1")
+    app.include_router(simple_auth_router, include_in_schema=False)
 
 # Google integration (optional)
 if google_router is not None:
@@ -707,14 +763,7 @@ try:
 except Exception:
     pass
 
-try:
-    # Mount dev/simple cookie auth only when explicitly enabled
-    if os.getenv("DEV_SIMPLE_AUTH", "0").strip().lower() in {"1", "true", "yes", "on"}:
-        from .api.auth import router as auth_router
-        app.include_router(auth_router, prefix="/v1")
-        app.include_router(auth_router, include_in_schema=False)
-except Exception:
-    pass
+# Remove legacy simple cookie auth router to avoid parallel flows
 
 try:
     from .api.profile import router as profile_router
@@ -788,6 +837,51 @@ try:
 except Exception:
     pass
 
+# TTS router (new)
+try:
+    from .api.tts import router as tts_router
+    app.include_router(tts_router, prefix="/v1")
+    app.include_router(tts_router, include_in_schema=False)
+except Exception:
+    pass
+
+# Additional feature routers used by TV/companion UIs
+try:
+    from .api.contacts import router as contacts_router
+    app.include_router(contacts_router, prefix="/v1")
+    app.include_router(contacts_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.caregiver_auth import router as caregiver_auth_router
+    app.include_router(caregiver_auth_router, prefix="/v1")
+    app.include_router(caregiver_auth_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.photos import router as photos_router
+    app.include_router(photos_router, prefix="/v1")
+    app.include_router(photos_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.calendar import router as calendar_router
+    app.include_router(calendar_router, prefix="/v1")
+    app.include_router(calendar_router, include_in_schema=False)
+except Exception:
+    pass
+
+# Voices catalog
+try:
+    from .api.voices import router as voices_router
+    app.include_router(voices_router, prefix="/v1")
+    app.include_router(voices_router, include_in_schema=False)
+except Exception:
+    pass
+
 
 try:
     from .api.memory_ingest import router as memory_ingest_router
@@ -795,6 +889,50 @@ try:
     app.include_router(memory_ingest_router, include_in_schema=False)
 except Exception:
     pass
+
+# Optional diagnostic/auxiliary routers -------------------------------------
+try:
+    from .api.care import router as care_router
+    app.include_router(care_router, prefix="/v1")
+    app.include_router(care_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.care_ws import router as care_ws_router
+    app.include_router(care_ws_router, prefix="/v1")
+    app.include_router(care_ws_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    # Vector-store health diagnostics (e.g., /v1/health/chroma)
+    from .health import router as health_diag_router
+    app.include_router(health_diag_router, prefix="/v1")
+    app.include_router(health_diag_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    # Caregiver portal scaffold (e.g., /v1/caregiver/*)
+    from .caregiver import router as caregiver_router
+    app.include_router(caregiver_router, prefix="/v1")
+    app.include_router(caregiver_router, include_in_schema=False)
+except Exception:
+    pass
+
+# Music API router (load outside caregiver try/except so it isn't swallowed)
+if music_router is not None:
+    # Mount under core_router-like scope (auth/rate limiting via main's routers)
+    app.include_router(music_router, prefix="/v1")
+    app.include_router(music_router, include_in_schema=False)
+    # Sim WS helpers for UI duck/restore
+    try:
+        from .api.tv_music_sim import router as tv_music_sim_router
+        app.include_router(tv_music_sim_router, prefix="/v1")
+        app.include_router(tv_music_sim_router, include_in_schema=False)
+    except Exception:
+        pass
 
 
 

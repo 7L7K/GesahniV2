@@ -120,6 +120,11 @@ class ProfileStore:
             if prev is None or float(prev.get("updated_at", 0.0) or 0.0) <= now:
                 user[key] = {"value": value, "updated_at": now, "source": source}
             self._refresh_ttl(user_id)
+            # Persist immediately to avoid loss on crash
+            try:
+                self._save()
+            except Exception:
+                pass
             rec = dict(user[key])
         try:
             logger.info(
@@ -150,6 +155,10 @@ class ProfileStore:
             for k, v in (attrs or {}).items():
                 self.upsert(user_id, k, v, source=source)
             self._refresh_ttl(user_id)
+            try:
+                self._save()
+            except Exception:
+                pass
 
     # Back-compat helper used by API layer
     def update(self, user_id: str, attrs: Dict[str, Any], *, source: str = "api") -> None:

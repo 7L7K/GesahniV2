@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { getToken } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -10,6 +10,7 @@ import { LevelMeter } from './recorder/LevelMeter';
 import { LiveTranscript } from './recorder/LiveTranscript';
 import { SessionTimeline } from './recorder/SessionTimeline';
 import { DevicePicker } from './recorder/DevicePicker';
+import FooterRibbon from '@/components/FooterRibbon';
 
 function CaptureInner() {
   const rec = useRecorderCtx();
@@ -17,6 +18,7 @@ function CaptureInner() {
   const router = useRouter();
 
   const recording = rec.state.status === 'recording';
+  const [storyVoice, setStoryVoice] = useState(true);
 
   // Auth guard on client: if tokens missing, hint cookie and redirect
   useEffect(() => {
@@ -51,10 +53,13 @@ function CaptureInner() {
   // Error surface from recorder
   if (rec.state.status === 'error') {
     return (
-      <div className="p-4">
-        <p>{rec.state.message}</p>
-        <Button onClick={newQuestion} className="mt-2">Retry</Button>
-      </div>
+      <>
+        <div className="p-4">
+          <p>{rec.state.message}</p>
+          <Button onClick={newQuestion} className="mt-2">Retry</Button>
+        </div>
+        <FooterRibbon />
+      </>
     );
   }
 
@@ -80,6 +85,10 @@ function CaptureInner() {
             <div className="text-gray-600">
               {recording ? `Elapsed: ${Math.floor(rec.elapsedMs / 1000)}s` : 'Idle'}
             </div>
+            <label className="flex items-center gap-2 text-gray-700">
+              <input type="checkbox" checked={storyVoice} onChange={e => setStoryVoice(e.target.checked)} />
+              Story Voice
+            </label>
           </div>
         </div>
       </div>
