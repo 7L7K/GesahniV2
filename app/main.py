@@ -74,6 +74,14 @@ try:
 except Exception:
     simple_auth_router = None  # type: ignore
 try:
+    from .api.oauth_google import router as oauth_google_router
+except Exception:
+    oauth_google_router = None  # type: ignore
+try:
+    from .api.oauth_apple import router as oauth_apple_router
+except Exception:
+    oauth_apple_router = None  # type: ignore
+try:
     from .api.music import router as music_router
 except Exception:
     music_router = None  # type: ignore
@@ -831,6 +839,12 @@ if device_auth_router is not None:
 if simple_auth_router is not None:
     app.include_router(simple_auth_router, prefix="/v1")
     app.include_router(simple_auth_router, include_in_schema=False)
+if oauth_google_router is not None:
+    app.include_router(oauth_google_router, prefix="/v1")
+    app.include_router(oauth_google_router, include_in_schema=False)
+if oauth_apple_router is not None:
+    app.include_router(oauth_apple_router, prefix="/v1")
+    app.include_router(oauth_apple_router, include_in_schema=False)
 
 # Google integration (optional)
 if google_router is not None:

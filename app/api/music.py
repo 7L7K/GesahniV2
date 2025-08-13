@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from ..deps.user import get_current_user_id
 from ..security import verify_ws, rate_limit
+from .ws_helpers import handle_reauth
 from ..integrations.music_spotify.client import SpotifyClient, SpotifyAuthError
 from ..models.music_state import MusicState, MusicVibe, load_state, save_state
 
@@ -287,8 +288,22 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
     _ws_clients.add(ws)
     try:
         while True:
-            msg = await ws.receive_text()
-            if msg == "ping":
+            raw = await ws.receive()
+            if raw.get("type") == "websocket.disconnect":
+                break
+            data = raw.get("text") or raw.get("bytes")
+            try:
+                import json
+
+                payload = json.loads(data) if isinstance(data, (str, bytes)) else None
+            except Exception:
+                payload = None
+            # Reauth handling
+            if await handle_reauth(ws, payload or {}):
+                await ws.send_json({"type": "reauth_ok"})
+                continue
+            # Simple ping/pong
+            if data == "ping":
                 await ws.send_text("pong")
     except Exception:
         pass
