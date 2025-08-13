@@ -30,6 +30,7 @@ def scope_required(*required_scopes: str):
             raise HTTPException(status_code=403, detail="insufficient_scope")
     return _dep
 from . import metrics
+from .token_store import _key_login_ip, _key_login_user, incr_login_counter
 
 JWT_SECRET: str | None = None  # backwards compat; actual value read from env
 API_TOKEN = os.getenv("API_TOKEN")
@@ -43,8 +44,8 @@ _burst_window = float(os.getenv("RATE_LIMIT_BURST_WINDOW", "10"))
 _lock = asyncio.Lock()
 
 # Trust proxy headers for client IP only when explicitly enabled
-# Back-compat: trust X-Forwarded-For by default (disable with TRUST_X_FORWARDED_FOR=0)
-_TRUST_XFF = os.getenv("TRUST_X_FORWARDED_FOR", "1").strip().lower() in {"1", "true", "yes", "on"}
+# Default: do NOT trust X-Forwarded-For unless explicitly enabled
+_TRUST_XFF = os.getenv("TRUST_X_FORWARDED_FOR", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 # Scope of rate limit keys: "global" (default) or "route" to include path
 _KEY_SCOPE = os.getenv("RATE_LIMIT_KEY_SCOPE", "global").strip().lower()

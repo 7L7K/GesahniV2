@@ -258,6 +258,52 @@ async def revoke_pat(pat_id: str) -> None:
         await db.commit()
 
 
+async def get_pat_by_id(pat_id: str) -> Optional[Dict[str, Any]]:
+    await ensure_tables()
+    async with aiosqlite.connect(str(DB_PATH)) as db:
+        await db.execute("PRAGMA foreign_keys=ON")
+        async with db.execute(
+            "SELECT id,user_id,name,token_hash,scopes,exp_at,created_at,revoked_at FROM pat_tokens WHERE id=?",
+            (pat_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "user_id": row[1],
+        "name": row[2],
+        "token_hash": row[3],
+        "scopes": json.loads(row[4] or "[]"),
+        "exp_at": row[5],
+        "created_at": row[6],
+        "revoked_at": row[7],
+    }
+
+
+async def get_pat_by_hash(token_hash: str) -> Optional[Dict[str, Any]]:
+    await ensure_tables()
+    async with aiosqlite.connect(str(DB_PATH)) as db:
+        await db.execute("PRAGMA foreign_keys=ON")
+        async with db.execute(
+            "SELECT id,user_id,name,token_hash,scopes,exp_at,created_at,revoked_at FROM pat_tokens WHERE token_hash=?",
+            (token_hash,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "user_id": row[1],
+        "name": row[2],
+        "token_hash": row[3],
+        "scopes": json.loads(row[4] or "[]"),
+        "exp_at": row[5],
+        "created_at": row[6],
+        "revoked_at": row[7],
+    }
+
+
 # ---------------------------- audit log --------------------------------------
 async def record_audit(*, id: str, user_id: str | None, session_id: str | None, event_type: str, meta: Dict[str, Any] | None = None) -> None:
     await ensure_tables()
@@ -288,6 +334,8 @@ __all__ = [
     # pat
     "create_pat",
     "revoke_pat",
+    "get_pat_by_hash",
+    "get_pat_by_id",
     # audit
     "record_audit",
 ]

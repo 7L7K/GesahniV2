@@ -38,7 +38,15 @@ class WsHub {
                     }
                 } catch { }
             };
-            ws.onclose = () => {
+            ws.onclose = async () => {
+                try {
+                    // Probe auth; if unauth, navigate to login
+                    const { apiFetch } = await import("@/lib/api");
+                    const resp = await apiFetch("/v1/whoami", { method: "GET" });
+                    if (!resp.ok) {
+                        try { window.location.assign('/login'); } catch { }
+                    }
+                } catch { }
                 const delay = Math.min(30000, 500 * Math.pow(2, retry++));
                 this.timers.music = setTimeout(() => this.connectMusic(retry), delay);
             };
@@ -71,7 +79,14 @@ class WsHub {
                     }
                 } catch { }
             };
-            ws.onclose = () => {
+            ws.onclose = async () => {
+                try {
+                    const { apiFetch } = await import("@/lib/api");
+                    const resp = await apiFetch("/v1/whoami", { method: "GET" });
+                    if (!resp.ok) {
+                        try { window.location.assign('/login'); } catch { }
+                    }
+                } catch { }
                 const delay = Math.min(30000, 500 * Math.pow(2, retry++));
                 this.timers.care = setTimeout(() => this.connectCare(retry), delay);
             };
