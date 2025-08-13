@@ -8,6 +8,7 @@ class WsHub {
     private music: WebSocket | null = null;
     private care: WebSocket | null = null;
     private timers: { music?: any; care?: any } = {};
+    private lastPong: { music?: number; care?: number } = {};
     private queues: { music: any[]; care: any[] } = { music: [], care: [] };
 
     start() {
@@ -62,7 +63,12 @@ class WsHub {
         try {
             const ws = new WebSocket(wsUrl("/v1/ws/music"));
             this.music = ws;
-            ws.onopen = () => { retry = 0; this.flushQueue('music'); };
+            ws.onopen = () => {
+                retry = 0;
+                this.flushQueue('music');
+                this.lastPong.music = Date.now();
+                try { ws.send('ping'); } catch {}
+            };
             ws.onmessage = (e) => {
                 try {
                     const msg = JSON.parse(String(e.data || ""));
@@ -71,6 +77,7 @@ class WsHub {
                         window.dispatchEvent(new CustomEvent("music.state"));
                     }
                 } catch { }
+                if (String(e.data || "") === 'pong') this.lastPong.music = Date.now();
             };
             ws.onclose = () => {
                 const delay = this.jitteredDelayFor(retry++);
@@ -91,6 +98,8 @@ class WsHub {
                 retry = 0;
                 try { ws.send(JSON.stringify({ action: "subscribe", topic: "resident:me" })); } catch { }
                 this.flushQueue('care');
+                this.lastPong.care = Date.now();
+                try { ws.send(JSON.stringify({ action: 'ping' })); } catch {}
             };
             ws.onmessage = (e) => {
                 try {
@@ -110,6 +119,7 @@ class WsHub {
                         window.dispatchEvent(new CustomEvent("tv.config.updated", { detail: data } as any));
                     }
                 } catch { }
+                if (String(e.data || "") === 'pong') this.lastPong.care = Date.now();
             };
             ws.onclose = () => {
                 const delay = this.jitteredDelayFor(retry++);
