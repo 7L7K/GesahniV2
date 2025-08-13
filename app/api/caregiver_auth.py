@@ -7,9 +7,10 @@ import time
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, ConfigDict
 
 
-router = APIRouter(tags=["care"])
+router = APIRouter(tags=["Care"])
 
 
 def _hmac(data: str, key: str) -> str:
@@ -42,7 +43,27 @@ def verify_ack_token(token: str) -> str:
     return alert_id
 
 
-@router.post("/care/alerts/ack_via_link")
+class AckViaLinkResponse(BaseModel):
+    status: str
+    id: str | None = None
+    resident_id: str | None = None
+    kind: str | None = None
+    severity: str | None = None
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "acknowledged",
+                "id": "a_01HXYZ",
+                "resident_id": "r1",
+                "kind": "help",
+                "severity": "critical",
+            }
+        }
+    )
+
+
+@router.post("/care/alerts/ack_via_link", responses={200: {"model": AckViaLinkResponse}})
 async def ack_via_link(token: str):
     from .care import ack_alert  # avoid circular import at module import time
     alert_id = verify_ack_token(token)

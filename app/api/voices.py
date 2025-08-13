@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from ..deps.user import get_current_user_id
 
 
-router = APIRouter(prefix="/voices", tags=["tts"])
+router = APIRouter(prefix="/voices", tags=["Music"])
 
 
 @router.get("/catalog")

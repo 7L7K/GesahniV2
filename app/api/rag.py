@@ -8,7 +8,7 @@ try:
 except Exception:
     _safe_query = None  # type: ignore
 
-router = APIRouter(tags=["rag"])
+router = APIRouter(tags=["Admin"])
 
 
 @router.get("/rag/search")

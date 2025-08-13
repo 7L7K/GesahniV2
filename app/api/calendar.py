@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 from app.deps.user import get_current_user_id
 
 
-router = APIRouter(tags=["calendar"])
+router = APIRouter(tags=["Calendar"])
 
 
 CALENDAR_FILE = Path(os.getenv("CALENDAR_FILE", "data/calendar.json"))
