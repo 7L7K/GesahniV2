@@ -7,7 +7,7 @@ try:
 except Exception:
     BUILTIN_CATALOG = []  # type: ignore
 
-router = APIRouter(tags=["skills"])
+router = APIRouter(tags=["Admin"])
 
 
 @router.get("/skills/list")

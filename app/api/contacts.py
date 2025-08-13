@@ -4,12 +4,12 @@ import uuid
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..care_store import create_contact, list_contacts, update_contact, delete_contact
 
 
-router = APIRouter(tags=["care"])
+router = APIRouter(tags=["Care"])
 
 
 class ContactBody(BaseModel):
@@ -20,8 +20,32 @@ class ContactBody(BaseModel):
     priority: int = 0
     quiet_hours: dict | None = None
 
+    # Example shown in OpenAPI
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "resident_id": "r1",
+                "name": "Leola",
+                "phone": "+15551234567",
+                "priority": 10,
+                "quiet_hours": {"start": "22:00", "end": "06:00"},
+            }
+        }
+    )
 
-@router.post("/care/contacts")
+
+class ContactCreateResponse(BaseModel):
+    id: str
+    status: str = "ok"
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"id": "c_01HXYZABCD", "status": "ok"}
+        }
+    )
+
+
+@router.post("/care/contacts", response_model=ContactCreateResponse, responses={200: {"model": ContactCreateResponse}})
 async def create_contact_api(body: ContactBody):
     cid = body.id or uuid.uuid4().hex
     rec: Dict[str, Any] = {**body.model_dump(), "id": cid}
@@ -34,7 +58,13 @@ async def list_contacts_api(resident_id: str):
     return {"items": await list_contacts(resident_id)}
 
 
-@router.patch("/care/contacts/{contact_id}")
+class ContactUpdateResponse(BaseModel):
+    status: str = "ok"
+
+    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
+
+
+@router.patch("/care/contacts/{contact_id}", response_model=ContactUpdateResponse, responses={200: {"model": ContactUpdateResponse}})
 async def update_contact_api(contact_id: str, body: dict):
     if not body:
         raise HTTPException(status_code=400, detail="empty_update")
@@ -42,7 +72,7 @@ async def update_contact_api(contact_id: str, body: dict):
     return {"status": "ok"}
 
 
-@router.delete("/care/contacts/{contact_id}")
+@router.delete("/care/contacts/{contact_id}", response_model=ContactUpdateResponse, responses={200: {"model": ContactUpdateResponse}})
 async def delete_contact_api(contact_id: str):
     await delete_contact(contact_id)
     return {"status": "ok"}
@@ -59,7 +89,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.deps.user import get_current_user_id
 
 
-tv_router = APIRouter(tags=["contacts"])
+tv_router = APIRouter(tags=["TV"])
 
 
 CONTACTS_FILE = Path(os.getenv("CONTACTS_FILE", "data/contacts.json"))
@@ -80,7 +110,7 @@ async def list_tv_contacts(user_id: str = Depends(get_current_user_id)):
     return {"items": _read_contacts()}
 
 
-@tv_router.post("/tv/contacts/call")
+@tv_router.post("/tv/contacts/call", response_model=ContactUpdateResponse, responses={200: {"model": ContactUpdateResponse}})
 async def start_call(name: str, user_id: str = Depends(get_current_user_id)):
     name = (name or "").strip()
     if not name:
@@ -108,7 +138,7 @@ async def start_call(name: str, user_id: str = Depends(get_current_user_id)):
 try:
     router  # type: ignore[name-defined]
 except NameError:
-    router = APIRouter(tags=["care"])  # fallback, but should not happen
+    router = APIRouter(tags=["Care"])  # fallback, but should not happen
 router.include_router(tv_router)
 
 

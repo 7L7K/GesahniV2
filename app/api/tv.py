@@ -6,12 +6,13 @@ from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
 from app.memory.profile_store import profile_store
 
 
-router = APIRouter(tags=["tv"])  # intentionally no auth deps for device-trusted kiosk
+router = APIRouter(tags=["TV"])  # intentionally no auth deps for device-trusted kiosk
 
 
 def _list_images(dir_path: Path) -> List[str]:
@@ -44,7 +45,13 @@ async def tv_photos(user_id: str = Depends(get_current_user_id)):
 _FAV_FILE = Path(os.getenv("PHOTO_FAVORITES_STORE", "data/photo_favorites.json"))
 
 
-@router.post("/tv/photos/favorite")
+class OkResponse(BaseModel):
+    status: str = "ok"
+
+    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
+
+
+@router.post("/tv/photos/favorite", responses={200: {"model": OkResponse}})
 async def tv_photos_favorite(name: str, user_id: str = Depends(get_current_user_id)):
     name = (name or "").strip()
     if not name:
@@ -95,7 +102,7 @@ async def tv_weather(user_id: str = Depends(get_current_user_id)):
     }
 
 
-@router.post("/tv/alert")
+@router.post("/tv/alert", responses={200: {"model": OkResponse}})
 async def tv_alert(kind: str = "help", note: str | None = None, user_id: str = Depends(get_current_user_id)):
     """Escalation hook from TV to caregiver channel.
 
@@ -108,7 +115,7 @@ async def tv_alert(kind: str = "help", note: str | None = None, user_id: str = D
         raise HTTPException(status_code=500, detail="alert_failed")
 
 
-@router.post("/tv/music/play")
+@router.post("/tv/music/play", response_model=OkResponse, responses={200: {"model": OkResponse}})
 async def tv_music_play(preset: str, user_id: str = Depends(get_current_user_id)):
     """Start playing a local preset playlist (placeholder)."""
     name = (preset or "").strip()
@@ -131,7 +138,7 @@ async def tv_get_prefs(user_id: str = Depends(get_current_user_id)):
     }
 
 
-@router.post("/tv/prefs")
+@router.post("/tv/prefs", response_model=OkResponse, responses={200: {"model": OkResponse}})
 async def tv_set_prefs(
     name: str | None = None,
     speech_rate: str | None = None,
@@ -159,7 +166,7 @@ async def tv_set_prefs(
     return {"status": "ok"}
 
 
-@router.post("/tv/stage2")
+@router.post("/tv/stage2", response_model=OkResponse, responses={200: {"model": OkResponse}})
 async def tv_stage2(
     tiles: List[str] | None = None,
     rhythm: str | None = None,
@@ -191,7 +198,7 @@ from fastapi import APIRouter, Depends
 from app.deps.user import get_current_user_id
 
 
-router = APIRouter(tags=["tv"])
+router = APIRouter(tags=["TV"])
 
 
 # -----------------------------

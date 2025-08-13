@@ -10,7 +10,7 @@ from app.retrieval import run_pipeline
 from app.retrieval.diagnostics import why_logs
 
 
-router = APIRouter(tags=["admin-inspect"]) 
+router = APIRouter(tags=["Admin"]) 
 
 
 @router.get("/admin/collections")

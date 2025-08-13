@@ -12,7 +12,7 @@ from app.decisions import get_recent as decisions_recent
 from app.analytics import get_metrics, cache_hit_rate
 
 
-router = APIRouter(tags=["admin-ui"])
+router = APIRouter(tags=["Admin"])
 
 
 def _guard(token: str | None) -> None:

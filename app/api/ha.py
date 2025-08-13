@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
 from app.security import require_nonce
@@ -20,7 +20,7 @@ class ServiceRequest(BaseModel):
     data: dict | None = None
 
 
-router = APIRouter(tags=["home-assistant"])
+router = APIRouter(tags=["Care"])
 
 
 @router.get("/ha/entities")
@@ -32,7 +32,13 @@ async def ha_entities(user_id: str = Depends(get_current_user_id)):
         raise HTTPException(status_code=500, detail="Home Assistant error")
 
 
-@router.post("/ha/service")
+class ServiceAck(BaseModel):
+    status: str = "ok"
+
+    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
+
+
+@router.post("/ha/service", response_model=ServiceAck, responses={200: {"model": ServiceAck}})
 async def ha_service(
     req: ServiceRequest,
     _nonce: None = Depends(require_nonce),
@@ -53,7 +59,7 @@ class WebhookAck(BaseModel):
     status: str = "ok"
 
 
-@router.post("/ha/webhook", response_model=WebhookAck)
+@router.post("/ha/webhook", response_model=WebhookAck, responses={200: {"model": WebhookAck}})
 async def ha_webhook(request: Request):
     from app.security import verify_webhook
 

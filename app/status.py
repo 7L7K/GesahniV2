@@ -13,7 +13,7 @@ from .memory.chroma_store import ChromaVectorStore  # type: ignore
 from . import budget as _budget
 from .tts_orchestrator import TTSSpend
 
-router = APIRouter(tags=["status"])
+router = APIRouter(tags=["Admin"])
 
 def _admin_token() -> str | None:
     """Return current admin token from environment (evaluated dynamically)."""

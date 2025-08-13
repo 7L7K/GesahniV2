@@ -9,7 +9,7 @@ from ..deps.user import get_current_user_id
 from ..security import verify_ws
 
 
-router = APIRouter(tags=["care"], dependencies=[])
+router = APIRouter(tags=["Care"], dependencies=[])
 
 
 _topics: Dict[str, Set[WebSocket]] = {}

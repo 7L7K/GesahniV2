@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
 from app.deps.scopes import optional_require_scope
@@ -28,7 +29,7 @@ try:
 except Exception:
     admin_inspect_router = None  # type: ignore
 
-router = APIRouter(tags=["admin"], dependencies=[Depends(optional_require_scope("admin"))])
+router = APIRouter(tags=["Admin"], dependencies=[Depends(optional_require_scope("admin"))])
 
 
 def _check_admin(token: str | None) -> None:
@@ -169,7 +170,13 @@ async def admin_config(
     return data
 
 
-@router.post("/admin/reload_env")
+class AdminOkResponse(BaseModel):
+    status: str = "ok"
+
+    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
+
+
+@router.post("/admin/reload_env", response_model=AdminOkResponse, responses={200: {"model": AdminOkResponse}})
 async def admin_reload_env(
     token: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),
@@ -207,7 +214,19 @@ async def admin_self_review(
         return {"status": "unavailable"}
 
 
-@router.post("/admin/vector_store/bootstrap")
+class AdminBootstrapResponse(BaseModel):
+    status: str
+    collection: str
+    existed: str
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"status": "ok", "collection": "kb:default", "existed": "False"}
+        }
+    )
+
+
+@router.post("/admin/vector_store/bootstrap", response_model=AdminBootstrapResponse, responses={200: {"model": AdminBootstrapResponse}})
 async def admin_vs_bootstrap(
     name: str | None = Query(default=None),
     token: str | None = Query(default=None),
@@ -220,7 +239,25 @@ async def admin_vs_bootstrap(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return res
-@router.post("/admin/vector_store/migrate")
+class AdminStartedResponse(BaseModel):
+    status: str
+    action: str
+    dry_run: bool
+    out_dir: str | None = None
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "started",
+                "action": "migrate",
+                "dry_run": True,
+                "out_dir": "/tmp/out",
+            }
+        }
+    )
+
+
+@router.post("/admin/vector_store/migrate", response_model=AdminStartedResponse, responses={200: {"model": AdminStartedResponse}})
 async def admin_vs_migrate(
     action: str = Query(default="migrate", pattern="^(inventory|export|migrate)$"),
     dry_run: bool = Query(default=True),
@@ -277,7 +314,25 @@ async def admin_qdrant_collections(
     return {"collections": out}
 
 
-@router.post("/admin/flags")
+class AdminFlagsResponse(BaseModel):
+    status: str = "ok"
+    key: str
+    value: str
+    flags: dict
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "ok",
+                "key": "RETRIEVAL_PIPELINE",
+                "value": "dual",
+                "flags": {"RETRIEVAL_PIPELINE": "dual"},
+            }
+        }
+    )
+
+
+@router.post("/admin/flags", response_model=AdminFlagsResponse, responses={200: {"model": AdminFlagsResponse}})
 async def admin_flags(
     key: str = Query(..., description="Flag key, e.g., RETRIEVAL_PIPELINE"),
     value: str = Query(..., description="New value (string form; '1'/'0' for bool)"),

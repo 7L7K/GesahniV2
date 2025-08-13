@@ -8,7 +8,7 @@ import httpx
 from fastapi import APIRouter
 
 
-router = APIRouter(tags=["status"])
+router = APIRouter(tags=["Admin"])
 
 
 def _check_tokenizers_parallelism() -> Dict[str, Any]:

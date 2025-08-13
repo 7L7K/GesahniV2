@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
 from app.memory.profile_store import profile_store
 
-router = APIRouter(tags=["profile"])
+router = APIRouter(tags=["Admin"])
 
 
 class UserProfile(BaseModel):
@@ -24,6 +24,21 @@ class UserProfile(BaseModel):
     gmail_integration: bool = False
     onboarding_completed: bool = False
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "Ava",
+                "email": "ava@example.com",
+                "timezone": "America/Los_Angeles",
+                "language": "en",
+                "preferred_model": "gpt-4o-mini",
+                "notification_preferences": {"sms": True},
+                "calendar_integration": True,
+                "gmail_integration": False,
+            }
+        }
+    )
+
 
 @router.get("/profile")
 async def get_profile(user_id: str = Depends(get_current_user_id)):
@@ -31,7 +46,13 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
     return UserProfile(**prof)
 
 
-@router.post("/profile")
+class ProfileOk(BaseModel):
+    status: str = "success"
+
+    model_config = ConfigDict(json_schema_extra={"example": {"status": "success"}})
+
+
+@router.post("/profile", responses={200: {"model": ProfileOk}})
 async def update_profile(profile: UserProfile, user_id: str = Depends(get_current_user_id)):
     data = profile.model_dump(exclude_none=True)
     profile_store.update(user_id, data)
