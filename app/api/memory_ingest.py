@@ -12,7 +12,7 @@ from app.security import rate_limit, verify_token
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["memory"], dependencies=[Depends(verify_token), Depends(rate_limit)])
+router = APIRouter(tags=["Admin"], dependencies=[Depends(verify_token), Depends(rate_limit)])
 
 
 class IngestResponse(BaseModel):

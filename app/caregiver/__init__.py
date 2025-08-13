@@ -5,7 +5,7 @@ Includes: sessions list, contacts manage placeholder, device status, alerts.
 
 from fastapi import APIRouter
 
-router = APIRouter(prefix="/caregiver", tags=["admin"])
+router = APIRouter(prefix="/caregiver", tags=["Admin"])
 
 
 @router.get("/sessions")

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 from app.deps.user import get_current_user_id
 
 
-router = APIRouter(tags=["photos"])
+router = APIRouter(tags=["TV"])
 
 
 PHOTOS_DIR = Path(os.getenv("PHOTOS_DIR", "data/photos"))

@@ -63,7 +63,7 @@ except Exception:  # pragma: no cover - defensive
     pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 # Router
-router = APIRouter(tags=["auth"])
+router = APIRouter(tags=["Auth"])
 logger = logging.getLogger(__name__)
 
 

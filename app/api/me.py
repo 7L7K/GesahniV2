@@ -10,7 +10,7 @@ from ..config_runtime import get_config
 from ..user_store import user_store
 
 
-router = APIRouter(tags=["me"])
+router = APIRouter(tags=["Auth"])
 
 
 @router.get("/me")

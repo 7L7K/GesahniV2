@@ -6,11 +6,12 @@ from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
 
 
-router = APIRouter(tags=["core"])
+router = APIRouter(tags=["Calendar"])
 
 REMINDERS_STORE = Path(os.getenv("REMINDERS_STORE", "data/reminders.json"))
 
@@ -36,8 +37,23 @@ async def list_reminders(user_id: str = Depends(get_current_user_id)):
 
 
 @router.post("/reminders")
-async def add_reminder(text: str, user_id: str = Depends(get_current_user_id)):
+class ReminderCreate(BaseModel):
+    text: str
+
+    model_config = ConfigDict(json_schema_extra={"example": {"text": "Take meds at 9pm"}})
+
+
+class OkResponse(BaseModel):
+    status: str = "ok"
+
+    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
+
+
+@router.post("/reminders", response_model=OkResponse, responses={200: {"model": OkResponse}})
+async def add_reminder(text: str | None = None, body: ReminderCreate | None = None, user_id: str = Depends(get_current_user_id)):
     text = (text or "").strip()
+    if not text and body and getattr(body, "text", None):
+        text = str(body.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="empty")
     data = _read()

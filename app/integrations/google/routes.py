@@ -19,7 +19,7 @@ from app.auth import (
 from app.user_store import user_store
 from .config import validate_config
 
-router = APIRouter()
+router = APIRouter(tags=["Auth"])
 
 # Note: this sample integration uses a stubbed session layer for demo purposes.
 def _current_user_id(req: Request) -> str:

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from ..deps.user import get_current_user_id
 from ..security import verify_ws, rate_limit
@@ -17,7 +17,7 @@ from ..integrations.music_spotify.client import SpotifyClient, SpotifyAuthError
 from ..models.music_state import MusicState, MusicVibe, load_state, save_state
 
 
-router = APIRouter(prefix="", tags=["music"])  # rate limit applied selectively in main
+router = APIRouter(prefix="", tags=["Music"])  # rate limit applied selectively in main
 
 
 # ---------------------------------------------------------------------------
@@ -221,12 +221,24 @@ class MusicCommand(BaseModel):
     device_id: Optional[str] = None
     temporary: bool = False  # when true, store prior volume to restore later
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"command": "volume", "volume": 20, "temporary": True}
+        }
+    )
+
 
 class VibeBody(BaseModel):
     name: Optional[str] = None
     energy: Optional[float] = Field(None, ge=0.0, le=1.0)
     tempo: Optional[float] = None
     explicit: Optional[bool] = None
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"name": "Calm Night", "energy": 0.3, "tempo": 85, "explicit": False}
+        }
+    )
 
 
 class StateResponse(BaseModel):
@@ -289,7 +301,13 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
 # ---------------------------------------------------------------------------
 
 
-@router.post("/music")
+class OkResponse(BaseModel):
+    status: str = "ok"
+
+    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
+
+
+@router.post("/music", response_model=OkResponse, responses={200: {"model": OkResponse}})
 async def music_command(body: MusicCommand, user_id: str = Depends(get_current_user_id)):
     state = load_state(user_id)
     quiet = _in_quiet_hours()
@@ -339,7 +357,21 @@ async def music_command(body: MusicCommand, user_id: str = Depends(get_current_u
     return {"status": "ok"}
 
 
-@router.post("/vibe")
+class VibeResponse(BaseModel):
+    status: str = "ok"
+    vibe: dict
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "ok",
+                "vibe": {"name": "Calm Night", "energy": 0.3, "tempo": 85, "explicit": False},
+            }
+        }
+    )
+
+
+@router.post("/vibe", response_model=VibeResponse, responses={200: {"model": VibeResponse}})
 async def set_vibe(body: VibeBody, user_id: str = Depends(get_current_user_id)):
     state = load_state(user_id)
     # Fill from defaults if only name provided
@@ -370,7 +402,7 @@ async def set_vibe(body: VibeBody, user_id: str = Depends(get_current_user_id)):
     return {"status": "ok", "vibe": asdict(state.vibe)}
 
 
-@router.post("/music/restore")
+@router.post("/music/restore", response_model=OkResponse, responses={200: {"model": OkResponse}})
 async def restore_volume(user_id: str = Depends(get_current_user_id)):
     state = load_state(user_id)
     if state.duck_from is not None:
@@ -535,6 +567,10 @@ async def get_recommendations(limit: int = 6, user_id: str = Depends(get_current
 class DeviceBody(BaseModel):
     device_id: str
 
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"device_id": "abcdef123"}}
+    )
+
 
 @router.get("/music/devices")
 async def list_devices(user_id: str = Depends(get_current_user_id)):
@@ -550,7 +586,7 @@ async def list_devices(user_id: str = Depends(get_current_user_id)):
     return {"devices": devices}
 
 
-@router.post("/music/device")
+@router.post("/music/device", response_model=OkResponse, responses={200: {"model": OkResponse}})
 async def set_device(body: DeviceBody, user_id: str = Depends(get_current_user_id)):
     state = load_state(user_id)
     state.device_id = body.device_id

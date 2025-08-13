@@ -9,7 +9,7 @@ import time
 import jwt
 from fastapi import APIRouter, Response
 
-router = APIRouter(prefix="/device", tags=["auth"])
+router = APIRouter(prefix="/device", tags=["Auth"])
 
 
 @router.get("/session")
