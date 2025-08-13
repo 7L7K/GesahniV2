@@ -6,7 +6,7 @@ import hmac
 import hashlib
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Body
 from pydantic import BaseModel, ConfigDict
 
 from ..deps.user import get_current_user_id
@@ -136,7 +136,18 @@ class AlertRecord(BaseModel):
         },
     },
 )
-async def create_alert(body: AlertCreate, request: Request, user_id: str = Depends(get_current_user_id)):
+async def create_alert(
+    body: AlertCreate = Body(
+        ..., example={
+            "resident_id": "r1",
+            "kind": "help",
+            "severity": "critical",
+            "note": "Grandma pressed the help button",
+        }
+    ),
+    request: Request = None,  # type: ignore[assignment]
+    user_id: str = Depends(get_current_user_id),
+):
     # OPS-1: 1 request per 30 seconds per user
     # Use route-local limiter that returns RFC7807 when blocked
     # Apply a strict, route-local rate limit using our RFC7807 helper

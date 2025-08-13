@@ -319,18 +319,15 @@ def _custom_openapi():
         routes=app.routes,
         tags=tags_metadata,
     )
-    # Provide developer-friendly servers list in dev
+    # Provide developer-friendly servers list in dev; allow override at runtime
     if _IS_DEV_ENV:
-        servers_env = os.getenv(
-            "OPENAPI_DEV_SERVERS",
-            "http://localhost:8000, http://127.0.0.1:8000",
-        )
+        servers_env = os.getenv("OPENAPI_DEV_SERVERS")
         servers = [
             {"url": s.strip()}
             for s in servers_env.split(",")
-            if s and s.strip()
+            if servers_env and s and s.strip()
         ]
-        if servers:
+        if servers_env and servers:
             schema["servers"] = servers
     app.openapi_schema = schema
     return app.openapi_schema
