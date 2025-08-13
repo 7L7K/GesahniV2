@@ -12,6 +12,12 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from ..deps.user import get_current_user_id
 from ..user_store import user_store
+from ..token_store import (
+    is_refresh_family_revoked,
+    revoke_refresh_family,
+    is_refresh_allowed,
+    allow_refresh,
+)
 from ..sessions_store import sessions_store
 from ..auth_store import (
     ensure_tables as _ensure_auth,
@@ -113,6 +119,64 @@ def _make_jwt(user_id: str, *, exp_seconds: int) -> str:
     return jwt.encode(payload, _jwt_secret(), algorithm="HS256")
 
 
+async def rotate_refresh_cookies(request: Request, response: Response) -> bool:
+    """Rotate access/refresh cookies strictly.
+
+    - If family revoked or jti reuse detected, revoke family, clear cookies, raise 401.
+    - On success, set new cookies and mark new jti as allowed.
+    """
+    try:
+        secret = _jwt_secret()
+        rtok = request.cookies.get("refresh_token")
+        if not rtok:
+            return False
+        # Decode refresh token
+        payload = jwt.decode(rtok, secret, algorithms=["HS256"])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=400, detail="invalid_token_type")
+        user_id = payload.get("user_id") or payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="invalid_token")
+        now = int(time.time())
+        r_exp = int(payload.get("exp", now))
+        ttl = max(1, r_exp - now)
+        jti = str(payload.get("jti") or "")
+        # Use session-id when available to scope family
+        sid = request.headers.get("X-Session-ID") or request.cookies.get("sid") or user_id
+        # Strict checks
+        if await is_refresh_family_revoked(sid):
+            # Clear cookies and deny
+            response.delete_cookie("access_token", path="/")
+            response.delete_cookie("refresh_token", path="/")
+            raise HTTPException(status_code=401, detail="refresh_family_revoked")
+        if not await is_refresh_allowed(sid, jti):
+            await revoke_refresh_family(sid, ttl_seconds=ttl)
+            response.delete_cookie("access_token", path="/")
+            response.delete_cookie("refresh_token", path="/")
+            raise HTTPException(status_code=401, detail="refresh_reused")
+        # Mint new access + refresh
+        token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))
+        access_payload = {"user_id": user_id, "iat": now, "exp": now + token_lifetime}
+        access_token = jwt.encode(access_payload, secret, algorithm="HS256")
+        refresh_life = int(os.getenv("JWT_REFRESH_TTL_SECONDS", os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440")))
+        # Support minutes var; if minutes, convert to seconds when large value looks like minutes
+        if refresh_life < 60:  # heuristically treat as minutes
+            refresh_life = refresh_life * 60
+        new_refresh_payload = {"user_id": user_id, "iat": now, "exp": now + refresh_life, "jti": jwt.api_jws.base64url_encode(os.urandom(16)).decode()}
+        new_refresh = jwt.encode(new_refresh_payload, secret, algorithm="HS256")
+        cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
+        cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+        response.set_cookie("access_token", access_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=token_lifetime, path="/")
+        response.set_cookie("refresh_token", new_refresh, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=refresh_life, path="/")
+        # Mark new token allowed
+        await allow_refresh(sid, str(new_refresh_payload.get("jti")), ttl_seconds=refresh_life)
+        return True
+    except HTTPException:
+        raise
+    except Exception:
+        return False
+
+
 @router.post("/auth/login")
 async def login(username: str, request: Request, response: Response):
     # Smart minimal login: accept any non-empty username for dev; in prod plug real check
@@ -173,19 +237,9 @@ async def refresh(request: Request, response: Response, user_id: str = Depends(g
         raise
     except Exception:
         pass
-    token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))
-    jwt_token = _make_jwt(user_id, exp_seconds=token_lifetime)
-    cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
-    cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-    response.set_cookie(
-        key="access_token",
-        value=jwt_token,
-        httponly=True,
-        secure=cookie_secure,
-        samesite=cookie_samesite,
-        max_age=token_lifetime,
-        path="/",
-    )
+    # Strict family rotation path
+    if not await rotate_refresh_cookies(request, response):
+        raise HTTPException(status_code=401, detail="invalid_refresh")
     return {"status": "ok", "user_id": user_id}
 
 
