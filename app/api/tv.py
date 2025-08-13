@@ -445,7 +445,31 @@ async def tv_get_prefs(user_id: str = Depends(get_current_user_id)):
     }
 
 
-@router.post("/tv/prefs", response_model=TvOkResponse, responses={200: {"model": TvOkResponse}})
+@router.post(
+    "/tv/prefs",
+    response_model=TvOkResponse,
+    responses={200: {"model": TvOkResponse}},
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "speech_rate": {"type": "string"},
+                            "input_mode": {"type": "string"},
+                            "font_scale": {"type": "string"},
+                            "wake_word_enabled": {"type": "boolean"},
+                            "address_style": {"type": "string"}
+                        },
+                        "example": {"name": "Ava", "speech_rate": "normal"}
+                    }
+                }
+            }
+        }
+    },
+)
 async def tv_set_prefs(
     name: str | None = None,
     speech_rate: str | None = None,
@@ -473,20 +497,43 @@ async def tv_set_prefs(
     return {"status": "ok"}
 
 
-@router.post("/tv/stage2", response_model=TvOkResponse, responses={200: {"model": TvOkResponse}})
+class Stage2Body(BaseModel):
+    tiles: List[str] | None = None
+    rhythm: str | None = None
+    helpfulness: str | None = None
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"tiles": ["calendar", "music"], "rhythm": "morning", "helpfulness": "high"}
+        }
+    )
+
+
+@router.post(
+    "/tv/stage2",
+    response_model=TvOkResponse,
+    responses={200: {"model": TvOkResponse}},
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/Stage2Body"}
+                }
+            }
+        }
+    },
+)
 async def tv_stage2(
-    tiles: List[str] | None = None,
-    rhythm: str | None = None,
-    helpfulness: str | None = None,
+    body: Stage2Body,
     user_id: str = Depends(get_current_user_id),
 ):
     data = {}
-    if tiles is not None:
-        data["preferences_tiles"] = tiles
-    if rhythm is not None:
-        data["daily_rhythm"] = rhythm
-    if helpfulness is not None:
-        data["helpfulness"] = helpfulness
+    if body.tiles is not None:
+        data["preferences_tiles"] = body.tiles
+    if body.rhythm is not None:
+        data["daily_rhythm"] = body.rhythm
+    if body.helpfulness is not None:
+        data["helpfulness"] = body.helpfulness
     if data:
         profile_store.update(user_id, data)
     return {"status": "ok"}
@@ -559,7 +606,26 @@ async def tv_get_config(resident_id: str, user_id: str = Depends(get_current_use
     return {"status": "ok", "config": cfg.model_dump()}
 
 
-@router.put("/tv/config", response_model=TvConfigResponse, responses={200: {"model": TvConfigResponse}})
+@router.put(
+    "/tv/config",
+    response_model=TvConfigResponse,
+    responses={200: {"model": TvConfigResponse}},
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/TvConfig"},
+                    "example": {
+                        "ambient_rotation": 45,
+                        "rail": "safe",
+                        "quiet_hours": {"start": "22:00", "end": "06:00"},
+                        "default_vibe": "Calm Night"
+                    }
+                }
+            }
+        }
+    },
+)
 async def tv_put_config(resident_id: str, body: TvConfig, user_id: str = Depends(get_current_user_id)):
     # Validate rail and simple hh:mm format for quiet hours
     rail = (body.rail or "safe").lower()

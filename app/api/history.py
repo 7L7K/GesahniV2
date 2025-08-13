@@ -42,7 +42,11 @@ async def recent_history(
     return {"items": list(reversed(items[-limit:]))}
 
 
-@router.post("/history/pin", dependencies=[Depends(optional_require_scope("pin"))])
+@router.post(
+    "/history/pin",
+    dependencies=[Depends(optional_require_scope("pin"))],
+    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "pinned"}}}}}},
+)
 async def pin_interaction(
     session_id: str,
     hash_value: str,

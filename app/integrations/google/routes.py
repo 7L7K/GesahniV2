@@ -237,8 +237,22 @@ class SendEmailIn(BaseModel):
     subject: str
     body_text: str
     from_alias: Optional[str] = None  # e.g., "King <me@gmail.com>"
+    class Config:
+        json_schema_extra = {"example": {"to": "a@b.com", "subject": "Hi", "body_text": "Hello"}}
 
-@router.post("/gmail/send")
+@router.post(
+    "/gmail/send",
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/SendEmailIn"}
+                }
+            }
+        }
+    },
+    responses={200: {"content": {"application/json": {"schema": {"example": {"id": "m_123"}}}}}},
+)
 def gmail_send(payload: SendEmailIn, request: Request):
     uid = _current_user_id(request)
     with SessionLocal() as s:
@@ -273,8 +287,22 @@ class CreateEventIn(BaseModel):
     attendees: Optional[List[str]] = None
     calendar_id: Optional[str] = "primary"
     location: Optional[str] = None
+    class Config:
+        json_schema_extra = {"example": {"title": "Dentist", "start_iso": "2025-08-11T10:00:00-04:00", "end_iso": "2025-08-11T10:30:00-04:00"}}
 
-@router.post("/calendar/create")
+@router.post(
+    "/calendar/create",
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/CreateEventIn"}
+                }
+            }
+        }
+    },
+    responses={200: {"content": {"application/json": {"schema": {"example": {"id": "evt_123", "htmlLink": "https://calendar.google.com/event?eid=..."}}}}}},
+)
 def calendar_create(evt: CreateEventIn, request: Request):
     uid = _current_user_id(request)
     with SessionLocal() as s:

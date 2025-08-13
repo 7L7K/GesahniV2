@@ -59,11 +59,14 @@ export function _setCalendar(items: CalendarItem[]) {
 }
 
 function _parseTimeToDate(timeStr: string, base: Date): Date | null {
-  // time like HH:MM, assumed today
-  if (!/^\d{2}:\d{2}$/.test(timeStr)) return null;
+  // time like H:MM or HH:MM, assumed today
+  if (!/^\d{1,2}:\d{2}$/.test(timeStr)) return null;
   const [h, m] = timeStr.split(":").map((s) => parseInt(s, 10));
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  const hh = Math.max(0, Math.min(23, h));
+  const mm = Math.max(0, Math.min(59, m));
   const d = new Date(base);
-  d.setHours(h, m, 0, 0);
+  d.setHours(hh, mm, 0, 0);
   return d;
 }
 
@@ -79,8 +82,9 @@ export class SchedulerService {
 
   start() {
     if (!FEATURES.FEATURE_SCHEDULER_ON) return;
-    if (this.interval) return;
+    // Always run an immediate tick to refresh assignment (idempotent)
     this.tick();
+    if (this.interval) return;
     this.interval = setInterval(() => this.tick(), 3000);
   }
 
@@ -113,17 +117,23 @@ export class SchedulerService {
     if (!_calendar.items.length) return null;
     const now = new Date(nowMs);
     // Assume items already for today onward. Choose first upcoming today by time.
-    const upcoming = _calendar.items
+    const mapped = _calendar.items
       .map((e) => ({
         when: _parseTimeToDate(e.time || "", now),
         title: String(e.title || ""),
-      }))
+      }));
+    const upcoming = mapped
       .filter((e) => e.when && e.when.getTime() >= now.getTime())
       .sort((a, b) => (a.when!.getTime() - b.when!.getTime()));
-    const first = upcoming[0];
+    let first = upcoming[0];
+    if (!first) {
+      const any = mapped.filter((e) => e.when).sort((a, b) => (a.when!.getTime() - b.when!.getTime()));
+      first = any[0];
+    }
     if (!first || !first.when) return null;
     const hh = String(first.when.getHours()).padStart(2, "0");
     const mm = String(first.when.getMinutes()).padStart(2, "0");
+    // Ensure stable formatting: 24h HH:MM
     return `Next: ${first.title} ${hh}:${mm}`;
   }
 
@@ -280,7 +290,7 @@ scheduler.addScorer((id) => {
       const diffMin = (upcoming.getTime() - now.getTime()) / 60000;
       if (diffMin <= 45) importance = 1;
     }
-  } catch {}
+  } catch { }
   return { timeRelevance: baseTime, importance };
 });
 

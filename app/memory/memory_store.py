@@ -179,7 +179,8 @@ class MemoryVectorStore(VectorStore):
         return mem_id
 
     def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
-        self._dist_cutoff = 1.0 - _get_sim_threshold()
+        sim_threshold = _get_sim_threshold()
+        self._dist_cutoff = 1.0 - sim_threshold
         logger.info(
             "query_user_memories start user_id=%s prompt=%s k=%s",
             user_id,
@@ -187,20 +188,36 @@ class MemoryVectorStore(VectorStore):
             k,
         )
         q_emb = embed_sync(prompt)
-        res: List[Tuple[float, float, str]] = []
+        items: List[Tuple[float, float, str]] = []
+        total = 0
         for _mid, doc, emb, ts in self._user_memories.get(user_id, []):
-            dist = 1.0 - _cosine_similarity(q_emb, emb)
-            if dist <= self._dist_cutoff:
-                res.append((dist, -ts, doc))
-        res.sort()
-        top_items = res[:k]
+            total += 1
+            sim = _cosine_similarity(q_emb, emb)
+            if sim >= sim_threshold:
+                items.append((sim, ts, doc))
+        # Sort by similarity desc, then recency desc
+        items.sort(key=lambda t: (-t[0], -t[1]))
+        top_items = items[:k]
         docs_out = [doc for _, _, doc in top_items]
-        dists_out = [round(float(dist), 4) for dist, _, _ in top_items]
+        sims_out = [round(float(sim), 4) for sim, _, _ in top_items]
+        try:
+            logger.info(
+                "vector.query", extra={
+                    "meta": {
+                        "backend": "memory",
+                        "sim_threshold": round(sim_threshold, 4),
+                        "kept": len(docs_out),
+                        "total": total,
+                    }
+                }
+            )
+        except Exception:
+            pass
         logger.info(
-            "query_user_memories end user_id=%s returned=%d dists=%s",
+            "query_user_memories end user_id=%s returned=%d sims=%s",
             user_id,
             len(docs_out),
-            dists_out,
+            sims_out,
         )
         return docs_out
 
@@ -267,18 +284,23 @@ class MemoryVectorStore(VectorStore):
         # Fuzzy path for natural-language prompts. Skip records backed by composed IDs.
         _, norm = _normalize(prompt)
         q_emb = embed_sync(norm)
+        sim_threshold = _get_sim_threshold()
         best = None
         best_id = None
-        best_dist = None
+        best_sim: float | None = None
+        total = 0
+        kept = 0
         for cid, rec in self._cache._store.items():
             if rec.feedback == "down":
                 continue
             # Ignore composed-id entries when querying by plain prompt
             if "|" in cid and cid.startswith("v1|"):
                 continue
-            dist = 1.0 - _cosine_similarity(q_emb, rec.embedding)
-            if dist <= self._dist_cutoff and (best_dist is None or dist < best_dist):
-                best, best_id, best_dist = rec, cid, dist
+            total += 1
+            sim = _cosine_similarity(q_emb, rec.embedding)
+            if sim >= sim_threshold and (best_sim is None or sim > best_sim):
+                best, best_id, best_sim = rec, cid, sim
+                kept += 1
         if not best:
             logger.debug("Cache miss for %s", hash_)
             return None
@@ -286,9 +308,22 @@ class MemoryVectorStore(VectorStore):
             logger.debug("Cache expired for %s", hash_)
             self._cache.delete(ids=[best_id])
             return None
-        logger.debug("Cache hit for %s (dist=%.4f)", hash_, best_dist or -1.0)
         try:
-            _LAST_SIMILARITY = max(0.0, min(1.0, 1.0 - float(best_dist or 0.0)))
+            logger.info(
+                "vector.cache_lookup", extra={
+                    "meta": {
+                        "backend": "memory",
+                        "sim_threshold": round(sim_threshold, 4),
+                        "kept": kept,
+                        "total": total,
+                    }
+                }
+            )
+        except Exception:
+            pass
+        logger.debug("Cache hit for %s (sim=%.4f)", hash_, best_sim or -1.0)
+        try:
+            _LAST_SIMILARITY = max(0.0, min(1.0, float(best_sim or 0.0)))
         except Exception:
             pass
         return best.answer

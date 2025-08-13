@@ -136,21 +136,53 @@ async def ensure_tables() -> None:
 
 # ------------------------------ users ----------------------------------------
 async def create_user(*, id: str, email: str, password_hash: str | None = None, name: str | None = None, avatar_url: str | None = None, auth_providers: list[str] | None = None) -> None:
+    """Create or upsert a user, honoring the provided id.
+
+    If a user already exists with the same email, update that row's id to the
+    provided value along with other mutable fields. Created/verified timestamps
+    are preserved on upsert.
+    """
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
+        norm_email = (email or "").strip().lower()
+        providers_json = json.dumps(auth_providers or [])
+        # Transaction with deferred FK checks to allow primary-key update then child updates
+        await db.execute("BEGIN IMMEDIATE")
+        await db.execute("PRAGMA defer_foreign_keys=ON")
+        # Check for existing by email
+        async with db.execute("SELECT id FROM users WHERE email=?", (norm_email,)) as cur:
+            row = await cur.fetchone()
+        if row is None:
+            await db.execute(
+                "INSERT INTO users(id,email,password_hash,name,avatar_url,created_at,verified_at,auth_providers) VALUES (?,?,?,?,?,?,?,?)",
+                (id, norm_email, password_hash, name, avatar_url, _now(), None, providers_json),
+            )
+            await db.commit()
+            return
+        # Exists: migrate id if different, otherwise update mutable fields
+        old_id = row[0]
+        if str(old_id) != str(id):
+            # Update parent id first (deferred FK avoids immediate failure)
+            await db.execute(
+                "UPDATE users SET id=?, password_hash=COALESCE(?, password_hash), name=COALESCE(?, name), avatar_url=COALESCE(?, avatar_url), auth_providers=? WHERE email=?",
+                (id, password_hash, name, avatar_url, providers_json, norm_email),
+            )
+            # Cascade children manually to the new id
+            for table, col in (
+                ("devices", "user_id"),
+                ("sessions", "user_id"),
+                ("oauth_identities", "user_id"),
+                ("pat_tokens", "user_id"),
+                ("audit_log", "user_id"),  # best-effort; nullable
+            ):
+                await db.execute(f"UPDATE {table} SET {col}=? WHERE {col}=?", (id, old_id))
+            await db.commit()
+            return
+        # Same id: update mutable fields
         await db.execute(
-            "INSERT INTO users(id,email,password_hash,name,avatar_url,created_at,verified_at,auth_providers) VALUES (?,?,?,?,?,?,?,?)",
-            (
-                id,
-                email,
-                password_hash,
-                name,
-                avatar_url,
-                _now(),
-                None,
-                json.dumps(auth_providers or []),
-            ),
+            "UPDATE users SET password_hash=COALESCE(?, password_hash), name=COALESCE(?, name), avatar_url=COALESCE(?, avatar_url), auth_providers=? WHERE email=?",
+            (password_hash, name, avatar_url, providers_json, norm_email),
         )
         await db.commit()
 
@@ -159,7 +191,8 @@ async def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
-        async with db.execute("SELECT id,email,password_hash,name,avatar_url,created_at,verified_at,auth_providers FROM users WHERE email=?", (email,)) as cur:
+        norm_email = (email or "").strip().lower()
+        async with db.execute("SELECT id,email,password_hash,name,avatar_url,created_at,verified_at,auth_providers FROM users WHERE email=?", (norm_email,)) as cur:
             row = await cur.fetchone()
     if not row:
         return None
@@ -233,7 +266,10 @@ async def link_oauth_identity(*, id: str, user_id: str, provider: str, provider_
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
         await db.execute(
-            "INSERT INTO oauth_identities(id,user_id,provider,provider_user_id,email,created_at) VALUES (?,?,?,?,?,?)",
+            (
+                "INSERT INTO oauth_identities(id,user_id,provider,provider_user_id,email,created_at) VALUES (?,?,?,?,?,?) "
+                "ON CONFLICT(provider, provider_user_id) DO UPDATE SET user_id=excluded.user_id, email=excluded.email"
+            ),
             (id, user_id, provider, provider_user_id, email, _now()),
         )
         await db.commit()

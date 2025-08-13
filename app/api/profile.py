@@ -52,7 +52,10 @@ class ProfileOk(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"status": "success"}})
 
 
-@router.post("/profile", responses={200: {"model": ProfileOk}})
+@router.post(
+    "/profile",
+    responses={200: {"model": ProfileOk}},
+)
 async def update_profile(profile: UserProfile, user_id: str = Depends(get_current_user_id)):
     data = profile.model_dump(exclude_none=True)
     profile_store.update(user_id, data)
@@ -99,7 +102,10 @@ async def get_onboarding_status(user_id: str = Depends(get_current_user_id)):
     }
 
 
-@router.post("/onboarding/complete")
+@router.post(
+    "/onboarding/complete",
+    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "success"}}}}}},
+)
 async def complete_onboarding(user_id: str = Depends(get_current_user_id)):
     # Use canonical update API and persist to disk
     profile_store.update(user_id, {"onboarding_completed": True})

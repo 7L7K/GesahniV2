@@ -197,7 +197,27 @@ class MockWS {
   addEventListener() { /* noop */ }
 }
 // Make WebSocket a jest mock constructor to allow inspecting calls/instances
-;(global as any).WebSocket = jest.fn((url: string) => new MockWS(url)) as any;
+const WS_MOCK = jest.fn(function (this: any, url: string) {
+  // initialize per-instance fields on `this` so jest.mock.instances tracks them
+  this.url = url;
+  this.readyState = 1; // OPEN by default
+  this.onopen = undefined;
+  this.onmessage = undefined;
+  this.onclose = undefined;
+  this.onerror = undefined;
+  this.send = jest.fn();
+  this.close = () => { this.readyState = 3; this.onclose && this.onclose(); };
+  this.addEventListener = () => { };
+  // expose last instance for tests that rely on it
+  (WS_MOCK as any).mockInstance = this;
+  setTimeout(() => this.onopen && this.onopen(), 0);
+} as any);
+; (global as any).WebSocket = WS_MOCK as any;
+// Define readyState constants expected by code under test
+(global as any).WebSocket.CONNECTING = 0;
+(global as any).WebSocket.OPEN = 1;
+(global as any).WebSocket.CLOSING = 2;
+(global as any).WebSocket.CLOSED = 3;
 
 // Force header-auth mode in tests so token helpers are active
 process.env.NEXT_PUBLIC_HEADER_AUTH_MODE = '1';

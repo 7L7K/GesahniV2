@@ -45,7 +45,30 @@ class ContactCreateResponse(BaseModel):
     )
 
 
-@router.post("/care/contacts", response_model=ContactCreateResponse, responses={200: {"model": ContactCreateResponse}})
+@router.post(
+    "/care/contacts",
+    
+    
+    response_model=ContactCreateResponse,
+    responses={200: {"model": ContactCreateResponse}},
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "example": {
+                            "resident_id": "r1",
+                            "name": "Leola",
+                            "phone": "+15551234567",
+                            "priority": 10,
+                            "quiet_hours": {"start": "22:00", "end": "06:00"}
+                        }
+                    }
+                }
+            }
+        }
+    },
+)
 async def create_contact_api(body: ContactBody):
     cid = body.id or uuid.uuid4().hex
     rec: Dict[str, Any] = {**body.model_dump(), "id": cid}

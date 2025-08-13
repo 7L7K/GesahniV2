@@ -39,8 +39,6 @@ async def rename_device(did: str, new_name: str, user_id: str = Depends(get_curr
 
 __all__ = ["router"]
 
-from __future__ import annotations
-
 import json
 import logging
 from pathlib import Path

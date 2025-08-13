@@ -40,14 +40,10 @@ function computeLeaveBy(now: Date, item: CalendarItem): string | null {
   }
   if (!start) start = parseTimeToToday(item.time);
   if (!start) return null;
-  const nowPlusTravel = new Date(now.getTime() + travel * 60_000);
   const startMinusBuffer = new Date(start.getTime() - buffer * 60_000);
-  if (nowPlusTravel.getTime() >= startMinusBuffer.getTime()) {
-    // Show leave by time = (start - buffer - travel)
-    const leaveBy = new Date(startMinusBuffer.getTime() - travel * 60_000);
-    return fmtHM(leaveBy);
-  }
-  return null;
+  const leaveBy = new Date(startMinusBuffer.getTime() - travel * 60_000);
+  // Always compute leave-by when travel is known
+  return fmtHM(leaveBy);
 }
 
 export function CalendarCard() {

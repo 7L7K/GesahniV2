@@ -7,6 +7,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
+from app.models.common import OkResponse as CommonOkResponse
 
 from app.deps.user import get_current_user_id
 
@@ -36,24 +37,37 @@ async def list_reminders(user_id: str = Depends(get_current_user_id)):
     return {"items": _read()}
 
 
-@router.post("/reminders")
 class ReminderCreate(BaseModel):
     text: str
 
     model_config = ConfigDict(json_schema_extra={"example": {"text": "Take meds at 9pm"}})
 
 
-class OkResponse(BaseModel):
-    status: str = "ok"
-
-    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
+class OkResponse(CommonOkResponse):
+    model_config = ConfigDict(title="OkResponse")
 
 
-@router.post("/reminders", response_model=OkResponse, responses={200: {"model": OkResponse}})
-async def add_reminder(text: str | None = None, body: ReminderCreate | None = None, user_id: str = Depends(get_current_user_id)):
-    text = (text or "").strip()
-    if not text and body and getattr(body, "text", None):
-        text = str(body.text or "").strip()
+@router.post(
+    "/reminders",
+    response_model=OkResponse,
+    responses={200: {"model": OkResponse}},
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "allOf": [
+                            {"$ref": "#/components/schemas/ReminderCreate"}
+                        ],
+                        "example": {"text": "Take meds at 9pm"}
+                    }
+                }
+            }
+        }
+    },
+)
+async def add_reminder(payload: ReminderCreate, user_id: str = Depends(get_current_user_id)):
+    text = (payload.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="empty")
     data = _read()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as _dt
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import Iterable, List, Optional
 
@@ -67,14 +68,35 @@ class FakeCalendarProvider:
         if self.ics_path and self.ics_path.exists():
             events.extend(self._read_ics(self.ics_path))
         events.extend(self._events)
-        # Filter by >= now
-        now = now or _dt.datetime.now(tz=self.tz) if self.tz else _dt.datetime.now()
+        # Normalize 'now' to UTC for consistent filtering/sorting
+        if now is None:
+            base_now = _dt.datetime.now(tz=self.tz) if self.tz is not None else _dt.datetime.now()
+        else:
+            base_now = now
+        if base_now.tzinfo is None and self.tz is not None:
+            base_now = base_now.replace(tzinfo=self.tz)
+        now_utc = base_now.astimezone(_dt.timezone.utc) if base_now.tzinfo is not None else base_now
+        try:
+            logging.getLogger(__name__).debug(
+                "calendar_now",
+                extra={
+                    "meta": {
+                        "now_input": str(now),
+                        "assumed_tz": self.tz_name,
+                        "now_utc": now_utc.isoformat(),
+                    }
+                },
+            )
+        except Exception:
+            pass
         out: List[dict] = []
         for ev in events:
             s_loc = self._as_local(ev.start)
-            if s_loc >= self._as_local(now):
+            s_utc = self._to_utc(s_loc)
+            if s_utc >= now_utc:  # include same-day boundary
                 out.append(self.build_event(ev.title, ev.start, ev.end))
-        out.sort(key=lambda e: e["start_utc"])  # sort by UTC for determinism
+        # Sort by UTC ISO timestamps for determinism
+        out.sort(key=lambda e: e["start_utc"])  # ISO-8601 Z timestamps sort lexicographically correctly
         return out[: max(0, int(n))]
 
     # -----------------
@@ -98,14 +120,21 @@ class FakeCalendarProvider:
         return dt.astimezone(_dt.timezone.utc)
 
     def _read_ics(self, path: Path) -> List[SimpleEvent]:
-        """Very small ICS parser supporting DTSTART/DTEND/SUMMARY.
+        """Very small ICS parser supporting DTSTART/DTEND/SUMMARY with TZID.
 
-        Handles:
+        Supports lines like:
           - DTSTART:YYYYMMDDTHHMMSSZ (UTC)
-          - DTSTART;TZID=America/Detroit:YYYYMMDDTHHMMSS (local)
+          - DTSTART;TZID=America/Detroit:YYYYMMDDTHHMMSS (local in TZID)
         """
         try:
-            lines = path.read_text(encoding="utf-8").splitlines()
+            # Read and unfold RFC 5545 folded lines (continuations start with a single space)
+            raw_lines = path.read_text(encoding="utf-8").splitlines()
+            lines: List[str] = []
+            for _ln in raw_lines:
+                if _ln.startswith(" ") and lines:
+                    lines[-1] += _ln[1:]
+                else:
+                    lines.append(_ln)
         except Exception:
             return []
         current: dict = {}
@@ -117,41 +146,105 @@ class FakeCalendarProvider:
             elif line == "END:VEVENT":
                 try:
                     title = str(current.get("SUMMARY") or "Event")
-                    dtstart = current.get("DTSTART")
-                    dtend = current.get("DTEND")
-                    if not dtstart or not dtend:
+                    s = current.get("__START_DT__")
+                    e = current.get("__END_DT__")
+                    if not isinstance(s, _dt.datetime) or not isinstance(e, _dt.datetime):
                         continue
-                    s = self._parse_ics_dt(dtstart)
-                    e = self._parse_ics_dt(dtend)
                     out.append(SimpleEvent(title=title, start=s, end=e))
+                    # Best-effort debug log
+                    try:
+                        s_loc = self._as_local(s)
+                        s_utc = self._to_utc(s_loc)
+                        logging.getLogger(__name__).debug(
+                            "calendar_ics_event",
+                            extra={
+                                "meta": {
+                                    "title": title,
+                                    "start_local": s_loc.isoformat(),
+                                    "start_utc": s_utc.isoformat(),
+                                }
+                            },
+                        )
+                    except Exception:
+                        pass
                 except Exception:
                     pass
                 current = {}
             else:
-                if ":" in line:
-                    key, val = line.split(":", 1)
+                if ":" not in line:
+                    continue
+                key, val = line.split(":", 1)
+                # Normalize keys and capture DTSTART/DTEND with optional TZID param
+                base = key.split(";", 1)[0].upper()
+                params = key[len(base):]
+                tzid: Optional[str] = None
+                if ";" in key:
+                    # Parse parameters like ";TZID=America/Detroit;VALUE=DATE-TIME"
+                    try:
+                        param_str = key.split(";", 1)[1]
+                        for piece in param_str.split(";"):
+                            if piece.upper().startswith("TZID="):
+                                tzid = piece.split("=", 1)[1]
+                                break
+                    except Exception:
+                        tzid = None
+                if base == "DTSTART":
+                    try:
+                        current["__START_DT__"] = self._parse_ics_dt_value(val, tzid)
+                    except Exception:
+                        pass
+                elif base == "DTEND":
+                    try:
+                        current["__END_DT__"] = self._parse_ics_dt_value(val, tzid)
+                    except Exception:
+                        pass
+                elif base == "SUMMARY":
+                    current["SUMMARY"] = val
+                else:
+                    # Keep raw in case of future expansion
                     current[key] = val
         return out
 
     def _parse_ics_dt(self, value: str) -> _dt.datetime:
-        # Handle TZID param
-        tz = self.tz
+        """Backward-compatible parser for legacy callers expecting only a value.
+
+        Delegates to _parse_ics_dt_value without an explicit TZID (uses provider tz).
+        """
+        return self._parse_ics_dt_value(value, None)
+
+    def _parse_ics_dt_value(self, value: str, tzid: Optional[str]) -> _dt.datetime:
+        """Parse an ICS date-time value with an optional TZID parameter.
+
+        - If the value ends with 'Z', treat as UTC and convert to tzid or provider tz.
+        - If tzid is provided, treat the naive value as local in that timezone.
+        - Otherwise, treat naive value as local in provider timezone.
+        """
+        # UTC form
         if value.endswith("Z"):
-            # UTC
             dt = _dt.datetime.strptime(value.rstrip("Z"), "%Y%m%dT%H%M%S").replace(tzinfo=_dt.timezone.utc)
-            return dt if tz is None else dt.astimezone(tz)
-        # TZID=America/Detroit:YYYYMMDDTHHMMSS
-        if value.startswith("TZID=") and ":" in value:
-            _, rest = value.split(":", 1)
-            dt = _dt.datetime.strptime(rest, "%Y%m%dT%H%M%S")
-            return self._as_local(dt)
-        # Bare local
+            # Convert to specific tz if requested; otherwise leave in UTC
+            if tzid and ZoneInfo is not None:
+                try:
+                    return dt.astimezone(ZoneInfo(tzid))
+                except Exception:
+                    pass
+            return dt if self.tz is None else dt.astimezone(self.tz)
+        # Local with tzid
+        if tzid and ZoneInfo is not None:
+            try:
+                tz_local = ZoneInfo(tzid)
+            except Exception:
+                tz_local = self.tz
+        else:
+            tz_local = self.tz
+        # Parse with seconds, then fallback without seconds
         try:
-            dt = _dt.datetime.strptime(value, "%Y%m%dT%H%M%S")
+            naive = _dt.datetime.strptime(value, "%Y%m%dT%H%M%S")
         except Exception:
-            # try without seconds
-            dt = _dt.datetime.strptime(value, "%Y%m%dT%H%M")
-        return self._as_local(dt)
+            naive = _dt.datetime.strptime(value, "%Y%m%dT%H%M")
+        if tz_local is not None:
+            return naive.replace(tzinfo=tz_local)
+        return naive
 
 
 __all__ = ["FakeCalendarProvider", "SimpleEvent", "DETROIT_TZ"]

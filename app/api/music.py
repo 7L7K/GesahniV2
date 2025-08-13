@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import asdict
+import time
 import inspect
 from datetime import datetime, time as dtime
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
 from pydantic import BaseModel, Field, ConfigDict
+from app.models.common import OkResponse as CommonOkResponse
 
 from ..deps.user import get_current_user_id
 from ..security import verify_ws, rate_limit
@@ -213,6 +215,72 @@ async def _provider_recommendations(
 
 
 # ---------------------------------------------------------------------------
+# In-memory recommendations cache (keyed by user + seeds/params) with TTL
+# ---------------------------------------------------------------------------
+
+_RECS_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
+_RECS_CACHE_TTL_S: int = int(os.getenv("RECS_CACHE_TTL", "180") or 180)
+# Optional TTL (seconds) for state-backed recommendations cache; 0 disables TTL (serve when present)
+_RECS_STATE_TTL_S: int = int(os.getenv("RECS_STATE_TTL_S", os.getenv("RECS_STATE_TTL", "0")) or 0)
+
+
+def _recs_cache_key(user_id: str, seeds: list[str] | None, vibe: MusicVibe) -> tuple:
+    provider = "spotify" if PROVIDER_SPOTIFY else "default"
+    # Normalize seeds: lowercase, strip, dedupe, sort
+    norm_seeds: list[str] = []
+    if seeds:
+        seen: set[str] = set()
+        for s in seeds:
+            if s is None:
+                continue
+            v = str(s).strip().lower()
+            if not v or v in seen:
+                continue
+            seen.add(v)
+            norm_seeds.append(v)
+        norm_seeds.sort()
+    # Stable key tuple; exclude limit so varying limits still hit cache and clamp later
+    # Include a version token for future busting and pytest salt for isolation
+    test_salt = os.getenv("PYTEST_CURRENT_TEST") or ""
+    key = (
+        user_id,
+        provider,
+        tuple(norm_seeds),
+        # placeholder for artists/markets params to keep shape stable
+        tuple(),
+        "US",
+        round(float(vibe.energy), 3),
+        int(round(float(vibe.tempo))),
+        bool(vibe.explicit),
+        "v1",
+        test_salt,
+    )
+    return key
+
+
+def _recs_get_cached(key: tuple) -> list[dict] | None:
+    try:
+        exp_ts, items = _RECS_CACHE.get(key, (0.0, []))
+        if not items:
+            return None
+        now_m = time.monotonic()
+        if now_m < float(exp_ts):
+            return items
+        # expired
+        _RECS_CACHE.pop(key, None)
+        return None
+    except Exception:
+        return None
+
+
+def _recs_set_cached(key: tuple, items: list[dict]) -> None:
+    try:
+        _RECS_CACHE[key] = (time.monotonic() + float(_RECS_CACHE_TTL_S), list(items))
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
 
@@ -317,13 +385,175 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
 # ---------------------------------------------------------------------------
 
 
-class OkResponse(BaseModel):
-    status: str = "ok"
-
-    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
+class OkResponse(CommonOkResponse):
+    model_config = ConfigDict(title="OkResponse")
 
 
-@router.post("/music", response_model=OkResponse, responses={200: {"model": OkResponse}})
+@router.post(
+    "/music",
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    response_model=OkResponse,
+    responses={200: {"model": OkResponse}},
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "example": {"command": "volume", "volume": 20, "temporary": True}
+                    }
+                }
+            }
+        }
+    },
+)
 async def music_command(body: MusicCommand, user_id: str = Depends(get_current_user_id)):
     state = load_state(user_id)
     quiet = _in_quiet_hours()
@@ -387,7 +617,31 @@ class VibeResponse(BaseModel):
     )
 
 
-@router.post("/vibe", response_model=VibeResponse, responses={200: {"model": VibeResponse}})
+@router.post(
+    "/vibe",
+    
+    
+    
+    
+    response_model=VibeResponse,
+    responses={200: {"model": VibeResponse}},
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "example": {
+                            "name": "Calm Night",
+                            "energy": 0.3,
+                            "tempo": 85,
+                            "explicit": False
+                        }
+                    }
+                }
+            }
+        }
+    },
+)
 async def set_vibe(body: VibeBody, user_id: str = Depends(get_current_user_id)):
     state = load_state(user_id)
     # Fill from defaults if only name provided
@@ -528,25 +782,29 @@ async def get_queue(user_id: str = Depends(get_current_user_id)):
 @router.get("/recommendations")
 async def get_recommendations(limit: int = 6, user_id: str = Depends(get_current_user_id)):
     state = load_state(user_id)
-    # Serve cached quickly if available (< 2 minutes) and provider disabled
-    if not PROVIDER_SPOTIFY and state.last_recommendations:
+    # Serve pre-seeded cached immediately when available and within TTL (or TTL disabled)
+    if state.last_recommendations:
         try:
-            import time
-
-            # If timestamp missing or stale handling fails, still serve cached in test/dev
-            if not state.recs_cached_at or (time.time() - float(state.recs_cached_at) < 120):
+            if _RECS_STATE_TTL_S <= 0:
+                clamp_cached = max(1, min(10, limit))
+                return {"recommendations": state.last_recommendations[:clamp_cached]}
+            if state.recs_cached_at is not None and (time.time() - float(state.recs_cached_at) < _RECS_STATE_TTL_S):
                 clamp_cached = max(1, min(10, limit))
                 return {"recommendations": state.last_recommendations[:clamp_cached]}
         except Exception:
-            # Best-effort fallback: return cached as-is
             clamp_cached = max(1, min(10, limit))
             return {"recommendations": state.last_recommendations[:clamp_cached]}
     seeds: list[str] | None = [state.last_track_id] if state.last_track_id else None
+    # Try in-memory cache first (covers provider-enabled paths)
+    cache_key = _recs_cache_key(user_id, seeds, state.vibe)
+    cached = _recs_get_cached(cache_key)
+    if cached:
+        clamp = max(1, min(10, limit))
+        return {"recommendations": cached[:clamp]}
     tracks: list[dict] = []
     if PROVIDER_SPOTIFY:
-        _rres = _provider_recommendations(
-            user_id, seed_tracks=seeds, vibe=state.vibe, limit=max(1, min(10, limit))
-        )
+        eff_limit = max(1, min(10, limit))
+        _rres = _provider_recommendations(user_id, seed_tracks=seeds, vibe=state.vibe, limit=eff_limit)
         tracks = await _rres if inspect.isawaitable(_rres) else _rres
     # Final clamp in case provider ignores requested limit
     clamp = max(1, min(10, limit))
@@ -573,10 +831,11 @@ async def get_recommendations(limit: int = 6, user_id: str = Depends(get_current
             }
         )
     # cache last recs (IDs + minimal data)
-    import time
     state.last_recommendations = out
     state.recs_cached_at = time.time()
     save_state(user_id, state)
+    # populate in-memory cache for provider-enabled flows
+    _recs_set_cached(cache_key, out)
     return {"recommendations": out}
 
 

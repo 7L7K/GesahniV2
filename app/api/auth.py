@@ -26,7 +26,7 @@ from ..auth_store import (
 )
 
 
-router = APIRouter(tags=["Auth"], include_in_schema=False)
+router = APIRouter(tags=["Auth"])  # expose in OpenAPI for docs/tests
 
 
 def _iso(dt: float | None) -> str | None:
@@ -117,7 +117,7 @@ async def list_pats(user_id: str = Depends(get_current_user_id)) -> List[Dict[st
     return []
 
 
-@router.post("/pats")
+@router.post("/pats", openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"example": {"name": "CI token", "scopes": ["admin:write"], "exp_at": None}}}}}})
 async def create_pat(body: Dict[str, Any], user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -216,7 +216,10 @@ async def rotate_refresh_cookies(request: Request, response: Response) -> bool:
         return False
 
 
-@router.post("/auth/login")
+@router.post(
+    "/auth/login",
+    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok", "user_id": "dev"}}}}}},
+)
 async def login(username: str, request: Request, response: Response):
     # Smart minimal login: accept any non-empty username for dev; in prod plug real check
     if not username:
@@ -292,13 +295,19 @@ async def login(username: str, request: Request, response: Response):
     return {"status": "ok", "user_id": username}
 
 
-@router.post("/auth/logout")
+@router.post(
+    "/auth/logout",
+    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok"}}}}}},
+)
 async def logout(response: Response, user_id: str = Depends(get_current_user_id)):
     response.delete_cookie("access_token", path="/")
     return {"status": "ok"}
 
 
-@router.post("/auth/refresh")
+@router.post(
+    "/auth/refresh",
+    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok", "user_id": "dev"}}}}}},
+)
 async def refresh(request: Request, response: Response, user_id: str = Depends(get_current_user_id)):
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="not_logged_in")
@@ -320,7 +329,11 @@ async def refresh(request: Request, response: Response, user_id: str = Depends(g
 
 
 # OAuth2 Password flow endpoint for Swagger "Authorize" in dev
-@router.post("/auth/token", include_in_schema=True)
+@router.post(
+    "/auth/token",
+    include_in_schema=True,
+    responses={200: {"content": {"application/json": {"schema": {"example": {"access_token": "<jwt>", "token_type": "bearer"}}}}}},
+)
 async def issue_token(request: Request):
     # Gate for production environments
     if os.getenv("DISABLE_DEV_TOKEN", "0").lower() in {"1", "true", "yes", "on"}:
