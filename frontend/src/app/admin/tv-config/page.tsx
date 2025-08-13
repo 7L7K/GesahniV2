@@ -40,12 +40,13 @@ function ExamplePreview({ cfg }: { cfg: TvConfig | null }) {
 export default function AdminTvConfigPage() {
   const [residentId, setResidentId] = useState<string>("r1");
   const [token, setToken] = useState<string>("");
-  const [raw, setRaw] = useState<string>("{
-  \"ambient_rotation\": 30,
-  \"rail\": \"safe\",
-  \"quiet_hours\": { \"start\": \"22:00\", \"end\": \"06:00\" },
-  \"default_vibe\": \"Calm Night\"
-}");
+  const [raw, setRaw] = useState<string>(`
+{
+  "ambient_rotation": 30,
+  "rail": "safe",
+  "quiet_hours": { "start": "22:00", "end": "06:00" },
+  "default_vibe": "Calm Night"
+}`);
   const [cfg, setCfg] = useState<TvConfig | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);

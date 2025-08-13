@@ -19,6 +19,7 @@ from ..models.music_state import MusicState, MusicVibe, load_state, save_state
 
 
 router = APIRouter(prefix="", tags=["Music"])  # rate limit applied selectively in main
+ws_router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
@@ -281,7 +282,7 @@ async def _broadcast(topic: str, payload: dict) -> None:
             pass
 
 
-@router.websocket("/ws/music")
+@ws_router.websocket("/ws/music")
 async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
     await verify_ws(ws)
     await ws.accept()

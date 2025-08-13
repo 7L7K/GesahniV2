@@ -45,13 +45,320 @@ async def tv_photos(user_id: str = Depends(get_current_user_id)):
 _FAV_FILE = Path(os.getenv("PHOTO_FAVORITES_STORE", "data/photo_favorites.json"))
 
 
-class OkResponse(BaseModel):
+class TvOkResponse(BaseModel):
     status: str = "ok"
 
-    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
+    model_config = ConfigDict(
+        title="TvOkResponse",
+        json_schema_extra={"example": {"status": "ok"}},
+    )
 
 
-@router.post("/tv/photos/favorite", responses={200: {"model": OkResponse}})
+@router.post(
+    "/tv/photos/favorite",
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    response_model=TvOkResponse,
+    responses={200: {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/TvOkResponse"}}}}},
+)
 async def tv_photos_favorite(name: str, user_id: str = Depends(get_current_user_id)):
     name = (name or "").strip()
     if not name:
@@ -102,7 +409,7 @@ async def tv_weather(user_id: str = Depends(get_current_user_id)):
     }
 
 
-@router.post("/tv/alert", responses={200: {"model": OkResponse}})
+@router.post("/tv/alert", responses={200: {"model": TvOkResponse}})
 async def tv_alert(kind: str = "help", note: str | None = None, user_id: str = Depends(get_current_user_id)):
     """Escalation hook from TV to caregiver channel.
 
@@ -115,7 +422,7 @@ async def tv_alert(kind: str = "help", note: str | None = None, user_id: str = D
         raise HTTPException(status_code=500, detail="alert_failed")
 
 
-@router.post("/tv/music/play", response_model=OkResponse, responses={200: {"model": OkResponse}})
+@router.post("/tv/music/play", response_model=TvOkResponse, responses={200: {"model": TvOkResponse}})
 async def tv_music_play(preset: str, user_id: str = Depends(get_current_user_id)):
     """Start playing a local preset playlist (placeholder)."""
     name = (preset or "").strip()
@@ -138,7 +445,7 @@ async def tv_get_prefs(user_id: str = Depends(get_current_user_id)):
     }
 
 
-@router.post("/tv/prefs", response_model=OkResponse, responses={200: {"model": OkResponse}})
+@router.post("/tv/prefs", response_model=TvOkResponse, responses={200: {"model": TvOkResponse}})
 async def tv_set_prefs(
     name: str | None = None,
     speech_rate: str | None = None,
@@ -166,7 +473,7 @@ async def tv_set_prefs(
     return {"status": "ok"}
 
 
-@router.post("/tv/stage2", response_model=OkResponse, responses={200: {"model": OkResponse}})
+@router.post("/tv/stage2", response_model=TvOkResponse, responses={200: {"model": TvOkResponse}})
 async def tv_stage2(
     tiles: List[str] | None = None,
     rhythm: str | None = None,
@@ -287,192 +594,3 @@ async def tv_put_config(resident_id: str, body: TvConfig, user_id: str = Depends
     except Exception:
         pass
     return {"status": "ok", "config": body.model_dump()}
-
-from __future__ import annotations
-
-import datetime as _dt
-import json
-import os
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
-import httpx
-from fastapi import APIRouter, Depends
-
-from app.deps.user import get_current_user_id
-
-
-router = APIRouter(tags=["TV"])
-
-
-# -----------------------------
-# Weather (cached)
-# -----------------------------
-
-OPENWEATHER_KEY = os.getenv("OPENWEATHER_API_KEY")
-DEFAULT_CITY = os.getenv("CITY_NAME", "Detroit,US")
-WEATHER_CACHE_PATH = Path(os.getenv("WEATHER_CACHE", "data/cache_weather.json"))
-WEATHER_TTL_SECONDS = int(os.getenv("WEATHER_TTL_SECONDS", "900"))  # 15 minutes
-
-
-def _read_json(path: Path) -> dict:
-    try:
-        if path.exists():
-            return json.loads(path.read_text(encoding="utf-8") or "{}")
-    except Exception:
-        pass
-    return {}
-
-
-def _write_json(path: Path, data: dict) -> None:
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-
-
-async def _fetch_current(city: str) -> Optional[dict]:
-    if not OPENWEATHER_KEY:
-        return None
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.get(
-                "https://api.openweathermap.org/data/2.5/weather",
-                params={"q": city, "appid": OPENWEATHER_KEY, "units": "imperial"},
-            )
-            resp.raise_for_status()
-            return resp.json()
-    except Exception:
-        return None
-
-
-async def _fetch_forecast(city: str) -> Optional[dict]:
-    if not OPENWEATHER_KEY:
-        return None
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.get(
-                "https://api.openweathermap.org/data/2.5/forecast",
-                params={"q": city, "appid": OPENWEATHER_KEY, "units": "imperial"},
-            )
-            resp.raise_for_status()
-            return resp.json()
-    except Exception:
-        return None
-
-
-def _agg_today_tomorrow(forecast: dict) -> Tuple[Optional[dict], Optional[dict]]:
-    if not forecast:
-        return None, None
-    # forecast["list"] contains 3h buckets; group by date
-    by_date: Dict[str, List[float]] = {}
-    for item in forecast.get("list", []) or []:
-        try:
-            dt_txt = item.get("dt_txt", "")
-            day = dt_txt.split(" ")[0]
-            t = item.get("main", {}).get("temp")
-            if isinstance(t, (int, float)) and day:
-                by_date.setdefault(day, []).append(float(t))
-        except Exception:
-            continue
-    if not by_date:
-        return None, None
-    days_sorted = sorted(by_date.keys())
-    today = _dt.date.today().isoformat()
-    tomorrow = (_dt.date.today() + _dt.timedelta(days=1)).isoformat()
-    def _make(day: str) -> Optional[dict]:
-        vals = [v for v in by_date.get(day, []) if isinstance(v, float)]
-        if not vals:
-            return None
-        return {"high": round(max(vals)), "low": round(min(vals))}
-    return _make(today), _make(tomorrow)
-
-
-def _stale(ts_iso: str | None, ttl: int) -> bool:
-    if not ts_iso:
-        return True
-    try:
-        ts = _dt.datetime.fromisoformat(ts_iso)
-    except Exception:
-        return True
-    return (_dt.datetime.utcnow() - ts).total_seconds() > ttl
-
-
-@router.get("/tv/weather")
-async def tv_weather(user_id: str = Depends(get_current_user_id)):
-    cache = _read_json(WEATHER_CACHE_PATH)
-    if not cache or _stale(cache.get("updatedAt"), WEATHER_TTL_SECONDS):
-        city = DEFAULT_CITY
-        current = await _fetch_current(city)
-        forecast = await _fetch_forecast(city)
-        now_desc = ((current or {}).get("weather") or [{}])[0].get("description") or None
-        now_temp = (current or {}).get("main", {}).get("temp")
-        today, tomorrow = _agg_today_tomorrow(forecast or {})
-        sentence = None
-        if isinstance(now_temp, (int, float)) and now_desc:
-            sentence = f"{city.split(',')[0]} is {now_desc}, about {round(now_temp)}°F."
-        cache = {
-            "city": city,
-            "now": {"temp": (round(now_temp) if isinstance(now_temp, (int, float)) else None), "desc": now_desc, "sentence": sentence},
-            "today": today or {},
-            "tomorrow": tomorrow or {},
-            "updatedAt": _dt.datetime.utcnow().isoformat(),
-        }
-        _write_json(WEATHER_CACHE_PATH, cache)
-    # Fallback sentence if offline
-    if not (cache.get("now") or {}).get("sentence"):
-        cache.setdefault("now", {})["sentence"] = "I didn’t catch the weather. Try the blue button later."
-    return cache
-
-
-# -----------------------------
-# Calendar (read-only, next 3)
-# -----------------------------
-
-CALENDAR_FILE = Path(os.getenv("CALENDAR_FILE", "data/calendar.json"))
-
-
-def _load_calendar_items() -> List[dict]:
-    try:
-        if CALENDAR_FILE.exists():
-            data = json.loads(CALENDAR_FILE.read_text(encoding="utf-8") or "[]")
-            if isinstance(data, list):
-                return data
-    except Exception:
-        pass
-    # fallback: try proactive_engine state when available
-    try:
-        from app.proactive_engine import STATE  # type: ignore
-
-        ev = (STATE.get("calendar") or {}).get("events") or []
-        if isinstance(ev, list):
-            # normalize: dt -> date/time
-            out = []
-            for e in ev:
-                dt: Optional[_dt.datetime] = e.get("when")
-                title = e.get("title") or ""
-                if isinstance(dt, _dt.datetime):
-                    out.append({"date": dt.date().isoformat(), "time": dt.strftime("%H:%M"), "title": title})
-            return out
-    except Exception:
-        pass
-    return []
-
-
-@router.get("/tv/calendar/next")
-async def tv_calendar_next(user_id: str = Depends(get_current_user_id)):
-    items = _load_calendar_items()
-    today = _dt.date.today().isoformat()
-    # keep events today and future, sort by date+time
-    def _key(e: dict) -> Tuple[str, str]:
-        return (e.get("date", ""), e.get("time", ""))
-
-    upcoming = sorted([e for e in items if (e.get("date") or "") >= today], key=_key)[:3]
-    # Return large-print friendly payload
-    return {
-        "items": [{"time": (e.get("time") or ""), "title": (e.get("title") or "")} for e in upcoming],
-        "updatedAt": _dt.datetime.utcnow().isoformat(),
-    }
-
-

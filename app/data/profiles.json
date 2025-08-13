@@ -1,24 +1,24 @@
 {
   "anon": {
     "name": {
-      "value": "algevon",
-      "updated_at": 1755010358.904133,
-      "source": "import"
+      "value": "Ava",
+      "updated_at": 1755065544.9758852,
+      "source": "api"
     },
     "email": {
-      "value": "havenotseen@gmail.com",
-      "updated_at": 1755010358.904133,
-      "source": "import"
+      "value": "ava@example.com",
+      "updated_at": 1755065544.979891,
+      "source": "api"
     },
     "timezone": {
-      "value": "America/Detroit",
-      "updated_at": 1755010358.904133,
-      "source": "import"
+      "value": "America/Los_Angeles",
+      "updated_at": 1755065544.983028,
+      "source": "api"
     },
     "language": {
       "value": "en",
-      "updated_at": 1755010358.904133,
-      "source": "import"
+      "updated_at": 1755065544.985792,
+      "source": "api"
     },
     "communication_style": {
       "value": "technical",
@@ -45,29 +45,36 @@
       "source": "import"
     },
     "preferred_model": {
-      "value": "auto",
-      "updated_at": 1755010358.904133,
-      "source": "import"
+      "value": "gpt-4o-mini",
+      "updated_at": 1755065544.9886541,
+      "source": "api"
     },
     "calendar_integration": {
       "value": true,
-      "updated_at": 1755010358.904133,
-      "source": "import"
+      "updated_at": 1755065544.9936,
+      "source": "api"
     },
     "gmail_integration": {
-      "value": true,
-      "updated_at": 1755010358.904133,
-      "source": "import"
+      "value": false,
+      "updated_at": 1755065544.995758,
+      "source": "api"
     },
     "onboarding_completed": {
-      "value": true,
-      "updated_at": 1755010358.904133,
-      "source": "import"
+      "value": false,
+      "updated_at": 1755065544.99861,
+      "source": "api"
     },
     "favorite_color": {
       "value": "blue",
-      "updated_at": 1755049156.633106,
+      "updated_at": 1755064341.394453,
       "source": "utterance"
+    },
+    "notification_preferences": {
+      "value": {
+        "sms": true
+      },
+      "updated_at": 1755065544.991374,
+      "source": "api"
     }
   },
   "havenotseen@gmail.com": {
@@ -90,14 +97,14 @@
   "u_test": {
     "favorite_color": {
       "value": "blue",
-      "updated_at": 1755049156.6706262,
+      "updated_at": 1755064341.471593,
       "source": "ui"
     }
   },
   "u1": {
     "preferred_name": {
       "value": "Alex",
-      "updated_at": 1755049156.673729,
+      "updated_at": 1755064341.480373,
       "source": "import"
     }
   },

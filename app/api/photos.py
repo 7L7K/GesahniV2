@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
 
@@ -60,6 +61,13 @@ async def list_photos(user_id: str = Depends(get_current_user_id)):
 
 
 @router.post("/tv/photos/favorite")
+class TvPhotoOkResponse(BaseModel):
+    status: str = "ok"
+
+    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
+
+
+@router.post("/tv/photos/favorite", response_model=TvPhotoOkResponse, responses={200: {"model": TvPhotoOkResponse}})
 async def mark_favorite(name: str, user_id: str = Depends(get_current_user_id)):
     name = (name or "").strip()
     images = set(_list_images())

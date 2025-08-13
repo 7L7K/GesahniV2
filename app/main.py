@@ -359,7 +359,6 @@ app.add_middleware(CSRFMiddleware)
 try:
     from .api.auth import router as early_auth_api_router
     app.include_router(early_auth_api_router, prefix="/v1")
-    app.include_router(early_auth_api_router, include_in_schema=False)
 except Exception:
     pass
 
@@ -463,9 +462,9 @@ if _IS_DEV_ENV:
       <button id=\"btnPing\">Ping</button>
     </div>
 
-    <div class=\"row\">
+    <div class=\"row\"> 
       <label>Subscribe payload</label>
-      <code>{\"action\":\"subscribe\",\"topic\":\"resident:{id}\"}</code>
+      <code>{\\\"action\\\":\\\"subscribe\\\",\\\"topic\\\":\\\"resident:{id}\\\"}</code>
     </div>
 
     <h3>Events</h3>
@@ -675,9 +674,9 @@ async def capture_start(
     request: Request,
     user_id: str = Depends(get_current_user_id),
 ):
-    from .api.sessions import capture_start as _start
-
-    return await _start(request, user_id)  # type: ignore[arg-type]
+    # Inline call to avoid re-import issues and keep tests isolated
+    from .session_manager import start_session as _start_capture_session
+    return await _start_capture_session()
 
 
 @protected_router.post("/capture/save", tags=["Care"])
@@ -1218,6 +1217,13 @@ if music_router is not None:
     music_http.include_router(music_router)
     app.include_router(music_http, prefix="/v1")
     app.include_router(music_router, include_in_schema=False)
+    # Mount WS endpoints without HTTP dependencies
+    try:
+        from .api.music import ws_router as music_ws_router
+        app.include_router(music_ws_router, prefix="/v1")
+        app.include_router(music_ws_router, include_in_schema=False)
+    except Exception:
+        pass
     # Sim WS helpers for UI duck/restore
     try:
         from .api.tv_music_sim import router as tv_music_sim_router

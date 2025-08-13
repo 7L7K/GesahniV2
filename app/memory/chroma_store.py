@@ -302,15 +302,14 @@ class ChromaVectorStore(VectorStore):
             meta = metas[idx] or {}
             if not doc:
                 continue
-            if use_length:
-                # For length embedder, ignore Chroma distances and use length-ratio distance
-                # Let the global cutoff (_dist_cutoff) be the sole gate to avoid over-filtering.
+            # Prefer provided distances from the vector store when available.
+            # Fall back to a simple length‑ratio distance only when distances are missing.
+            dist_val = dvals[idx] if idx < len(dvals) else None
+            if dist_val is None:
                 dist = abs(len(doc) - len(norm_prompt)) / max(len(doc), len(norm_prompt), 1)
-                gate_ok = True
             else:
-                dist_val = dvals[idx] if idx < len(dvals) else None
-                dist = float(dist_val) if dist_val is not None else 1.0
-                gate_ok = True
+                dist = float(dist_val)
+            gate_ok = True
             # Apply global cutoff and optional length gate
             if dist <= self._dist_cutoff and gate_ok:
                 items.append((float(dist), -float(meta.get("ts", 0) or 0.0), doc))
