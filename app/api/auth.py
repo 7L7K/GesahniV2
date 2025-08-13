@@ -75,12 +75,12 @@ async def list_sessions(user_id: str = Depends(get_current_user_id)) -> List[Dic
     return out
 
 
-@router.post("/sessions/{sid}/revoke", status_code=204)
-async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) -> None:
+@router.post("/sessions/{sid}/revoke")
+async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) -> Dict[str, str]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     await sessions_store.revoke_family(sid)
-    return None
+    return {"status": "ok"}
 
 
 @router.get("/pats")
@@ -292,6 +292,6 @@ async def token_examples():
     }
 
 
-__all__ = ["router"]
+__all__ = ["router", "verify_pat"]
 
 

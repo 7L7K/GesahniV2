@@ -54,20 +54,20 @@ async function tryRefresh(): Promise<Response | null> {
   if (!HEADER_AUTH_MODE) return null;
   const refresh = getRefreshToken();
   if (!refresh) return null;
-  
+
   try {
     const res = await fetch(`${API_URL || ""}/v1/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refresh }),
     });
-    
+
     if (res.ok) {
       const body = await res.json().catch(() => ({} as Record<string, unknown>));
       const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string };
       if (access_token) setTokens(access_token, refresh_token);
     }
-    
+
     return res;
   } catch {
     return null;

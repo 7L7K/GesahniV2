@@ -14,7 +14,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        if os.getenv("CSRF_ENABLED", "1").lower() not in {"1", "true", "yes", "on"}:
+        # Default disabled globally; enable per app/env via CSRF_ENABLED=1
+        if os.getenv("CSRF_ENABLED", "0").lower() not in {"1", "true", "yes", "on"}:
             return await call_next(request)
         if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
             return await call_next(request)

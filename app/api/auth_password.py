@@ -11,12 +11,15 @@ from passlib.context import CryptContext
 router = APIRouter(tags=["auth"], include_in_schema=False)
 
 
-_pwd = CryptContext(schemes=["argon2", "pbkdf2_sha256"], deprecated="auto")
-DB = os.getenv("USERS_DB", "users.db")
+_pwd = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+
+
+def _db_path() -> str:
+    return os.getenv("USERS_DB", "users.db")
 
 
 async def _ensure():
-    async with aiosqlite.connect(DB) as db:
+    async with aiosqlite.connect(_db_path()) as db:
         await db.execute(
             """
             CREATE TABLE IF NOT EXISTS auth_users(
@@ -37,7 +40,7 @@ async def register_pw(body: Dict[str, str]):
         raise HTTPException(status_code=400, detail="invalid")
     h = _pwd.hash(p)
     try:
-        async with aiosqlite.connect(DB) as db:
+        async with aiosqlite.connect(_db_path()) as db:
             await db.execute("INSERT INTO auth_users(username,password_hash) VALUES(?,?)", (u, h))
             await db.commit()
     except aiosqlite.IntegrityError:
@@ -50,7 +53,7 @@ async def login_pw(body: Dict[str, str]):
     await _ensure()
     u = (body.get("username") or "").strip().lower()
     p = body.get("password") or ""
-    async with aiosqlite.connect(DB) as db:
+    async with aiosqlite.connect(_db_path()) as db:
         async with db.execute("SELECT password_hash FROM auth_users WHERE username=?", (u,)) as cur:
             row = await cur.fetchone()
     if not row:

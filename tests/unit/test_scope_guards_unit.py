@@ -6,13 +6,14 @@ from fastapi import FastAPI, Depends
 from fastapi.testclient import TestClient
 
 from app.deps.scopes import require_scope
+from app.security import verify_token
 
 
 def _app():
     os.environ.setdefault("JWT_SECRET", "secret")
     app = FastAPI()
 
-    @app.get("/admin", dependencies=[Depends(require_scope("admin:write"))])
+    @app.get("/admin", dependencies=[Depends(verify_token), Depends(require_scope("admin:write"))])
     async def admin():
         return {"ok": True}
 
