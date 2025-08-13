@@ -21,4 +21,4 @@ describe('VitalsBadge heartbeat/live-stale indicator', () => {
 });
 
 
-
+ 
