@@ -3,11 +3,12 @@ from __future__ import annotations
 import os
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.deps.user import get_current_user_id
+from pydantic import BaseModel, ConfigDict
 from app.deps.scopes import optional_require_scope
 from pathlib import Path
 import subprocess
 
-router = APIRouter(tags=["status"])
+router = APIRouter(tags=["Admin"])
 
 
 @router.get("/status/features")
@@ -41,7 +42,16 @@ async def status_vector_store() -> dict:
         }
 
 
-@router.post("/admin/backup", dependencies=[Depends(optional_require_scope("admin"))])
+class BackupResponse(BaseModel):
+    status: str = "ok"
+    path: str
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"status": "ok", "path": "/app/backups/backup.tar.gz.enc"}}
+    )
+
+
+@router.post("/admin/backup", dependencies=[Depends(optional_require_scope("admin"))], response_model=BackupResponse, responses={200: {"model": BackupResponse}})
 async def admin_backup(
     token: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),

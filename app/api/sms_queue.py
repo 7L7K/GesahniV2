@@ -12,7 +12,7 @@ from ..integrations.twilio_sms import send_sms
 from ..metrics import CARE_SMS_RETRIES, CARE_SMS_DLQ
 
 
-router = APIRouter(tags=["care"])
+router = APIRouter(tags=["Care"])
 
 
 async def sms_worker(name: str = "care_sms", *, _stop: asyncio.Event | None = None) -> None:

@@ -23,7 +23,7 @@ from app.transcription import transcribe_file
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["sessions"])
+router = APIRouter(tags=["Care"])
 
 
 @router.post("/upload")

@@ -25,13 +25,23 @@ class AskRequest(BaseModel):
     small_ask: bool | None = None
 
     # Pydantic v2 config: allow both alias ("model") and field name ("model_override")
-    model_config = ConfigDict(validate_by_name=True, validate_by_alias=True)
+    model_config = ConfigDict(
+        validate_by_name=True,
+        validate_by_alias=True,
+        json_schema_extra={
+            "example": {
+                "prompt": "Summarize today's schedule",
+                "model": "gpt-4o-mini",
+                "small_ask": True,
+            }
+        },
+    )
 
 
 from app.security import rate_limit, verify_token
 
 
-router = APIRouter(tags=["core"])  # dependency added per-route to allow env gate
+router = APIRouter(tags=["Care"])  # dependency added per-route to allow env gate
 
 
 # Enforce auth/rate-limit with env gates

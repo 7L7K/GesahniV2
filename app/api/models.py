@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter
 
 
-router = APIRouter(tags=["models"])
+router = APIRouter(tags=["Admin"])
 
 
 def _parse_models_env(val: str | None) -> List[Dict[str, Any]]:

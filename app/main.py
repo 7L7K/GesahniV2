@@ -27,6 +27,7 @@ from fastapi import (
     WebSocket,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ConfigDict
@@ -121,7 +122,12 @@ def _on_ha_event(*args, **kwargs):  # type: ignore
 
 
 try:
-    from .deps.scopes import require_scope, optional_require_scope
+    from .deps.scopes import (
+        require_scope,
+        optional_require_scope,
+        optional_require_any_scope,
+        docs_security_with,
+    )
 except Exception:  # pragma: no cover - optional
 
     def require_scope(scope: str):  # type: ignore
@@ -130,6 +136,12 @@ except Exception:  # pragma: no cover - optional
 
         return _noop
     optional_require_scope = require_scope  # type: ignore
+    def optional_require_any_scope(scopes):  # type: ignore
+        return require_scope(next(iter(scopes), ""))
+    def docs_security_with(scopes):  # type: ignore
+        async def _noop2(*args, **kwargs):
+            return None
+        return _noop2
 
 
 from .middleware import (
@@ -177,18 +189,55 @@ logger = logging.getLogger(__name__)
 
 
 tags_metadata = [
-    {"name": "core", "description": "Core operations"},
-    {
-        "name": "sessions",
-        "description": "Session capture and transcription",
-    },
-    {
-        "name": "home-assistant",
-        "description": "Home Assistant integration",
-    },
-    {"name": "status", "description": "System status"},
-    {"name": "auth", "description": "Authentication"},
+    {"name": "Care", "description": "Care features, contacts, sessions, and Home Assistant actions."},
+    {"name": "Music", "description": "Music playback, voices, and TTS."},
+    {"name": "Calendar", "description": "Calendar and reminders."},
+    {"name": "TV", "description": "TV UI and related endpoints."},
+    {"name": "Admin", "description": "Admin, status, models, diagnostics, and tools."},
+    {"name": "Auth", "description": "Authentication and authorization."},
 ]
+
+
+def _get_version() -> str:
+    """Return a semantic version string for the API.
+
+    Priority:
+    1) ENV APP_VERSION
+    2) ENV GIT_TAG
+    3) `git describe --tags --always`
+    4) Fallback "0.0.0"
+    """
+    try:
+        ver = os.getenv("APP_VERSION") or os.getenv("GIT_TAG")
+        if ver:
+            return ver
+        import subprocess
+
+        proc = subprocess.run(
+            ["git", "describe", "--tags", "--always"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        out = (proc.stdout or "").strip()
+        if out:
+            return out
+    except Exception:
+        pass
+    return "0.0.0"
+
+
+_IS_DEV_ENV = (os.getenv("ENV", "dev").strip().lower() == "dev")
+
+_docs_url = "/docs" if _IS_DEV_ENV else None
+_redoc_url = "/redoc" if _IS_DEV_ENV else None
+_openapi_url = "/openapi.json" if _IS_DEV_ENV else None
+
+_swagger_ui_parameters = {
+    "docExpansion": "list",
+    "filter": True,
+    "persistAuthorization": True,
+}
 
 
 @asynccontextmanager
@@ -236,7 +285,45 @@ async def lifespan(app: FastAPI):
             pass
 
 
-app = FastAPI(title="GesahniV2", lifespan=lifespan, openapi_tags=tags_metadata)
+app = FastAPI(
+    title="Granny Mode API",
+    version=_get_version(),
+    lifespan=lifespan,
+    openapi_tags=tags_metadata,
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
+    openapi_url=_openapi_url,
+    swagger_ui_parameters=_swagger_ui_parameters,
+)
+
+
+def _custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        routes=app.routes,
+        tags=tags_metadata,
+    )
+    # Provide developer-friendly servers list in dev
+    if _IS_DEV_ENV:
+        servers_env = os.getenv(
+            "OPENAPI_DEV_SERVERS",
+            "http://localhost:8000, http://127.0.0.1:8000",
+        )
+        servers = [
+            {"url": s.strip()}
+            for s in servers_env.split(",")
+            if s and s.strip()
+        ]
+        if servers:
+            schema["servers"] = servers
+    app.openapi_schema = schema
+    return app.openapi_schema
+
+
+app.openapi = _custom_openapi  # type: ignore[assignment]
 
 # CORS middleware with stricter defaults
 _cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
@@ -302,7 +389,7 @@ if os.getenv("PROMETHEUS_ENABLED", "1").strip().lower() in {"1", "true", "yes", 
     app.mount("/metrics", make_asgi_app())
 
 
-@app.get("/healthz", tags=["status"])
+@app.get("/healthz", tags=["Admin"])
 async def healthz() -> dict:
     return {"status": "ok"}
 
@@ -325,27 +412,30 @@ class DeleteMemoryRequest(BaseModel):
     id: str
 
 
-core_router = APIRouter(tags=["core"])
+core_router = APIRouter(tags=["Care"])
 protected_router = APIRouter(dependencies=[Depends(verify_token), Depends(rate_limit)])
 # Scoped routers
 admin_router = APIRouter(
     dependencies=[
         Depends(verify_token),
         Depends(rate_limit),
-        Depends(optional_require_scope("admin")),
+        Depends(optional_require_any_scope(["admin", "admin:write"])),
+        # Docs-only dependency to render lock icon and OAuth2 scopes in Swagger
+        Depends(docs_security_with(["admin:write"])),
     ],
-    tags=["admin"],
+    tags=["Admin"],
 )
 ha_router = APIRouter(
     dependencies=[
         Depends(verify_token),
         Depends(rate_limit),
-        Depends(optional_require_scope("ha")),
+        Depends(optional_require_any_scope(["ha", "care:resident", "care:caregiver"])),
+        Depends(docs_security_with(["care:resident"])),
     ],
-    tags=["home-assistant"],
+    tags=["Care"],
 )
 ws_router = APIRouter(
-    dependencies=[Depends(verify_ws), Depends(rate_limit_ws)], tags=["sessions"]
+    dependencies=[Depends(verify_ws), Depends(rate_limit_ws)], tags=["Care"]
 )
 
 
@@ -415,7 +505,7 @@ async def ask(
     return await _ask(req, request, user_id)  # type: ignore[arg-type]
 
 
-@protected_router.post("/upload", tags=["sessions"])
+@protected_router.post("/upload", tags=["Care"])
 async def upload(
     request: Request,
     file: UploadFile = File(...),
@@ -432,7 +522,7 @@ async def upload(
     return {"session_id": session_id}
 
 
-@protected_router.post("/capture/start", tags=["sessions"])
+@protected_router.post("/capture/start", tags=["Care"])
 async def capture_start(
     request: Request,
     user_id: str = Depends(get_current_user_id),
@@ -442,7 +532,7 @@ async def capture_start(
     return await _start(request, user_id)  # type: ignore[arg-type]
 
 
-@protected_router.post("/capture/save", tags=["sessions"])
+@protected_router.post("/capture/save", tags=["Care"])
 async def capture_save(
     request: Request,
     session_id: str = Form(...),
@@ -457,7 +547,7 @@ async def capture_save(
     return await _save(request, session_id, audio, video, transcript, tags, user_id)  # type: ignore[arg-type]
 
 
-@protected_router.post("/capture/tags", tags=["sessions"])
+@protected_router.post("/capture/tags", tags=["Care"])
 async def capture_tags(
     request: Request,
     session_id: str = Form(...),
@@ -468,7 +558,7 @@ async def capture_tags(
     return await _tags(request, session_id, user_id)  # type: ignore[arg-type]
 
 
-@protected_router.get("/capture/status/{session_id}", tags=["sessions"])
+@protected_router.get("/capture/status/{session_id}", tags=["Care"])
 async def capture_status(
     session_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -478,7 +568,7 @@ async def capture_status(
     return await _status(session_id, user_id)  # type: ignore[arg-type]
 
 
-@protected_router.get("/search/sessions", tags=["sessions"])
+@protected_router.get("/search/sessions", tags=["Care"])
 async def search_sessions(
     q: str,
     sort: str = "recent",
@@ -491,7 +581,7 @@ async def search_sessions(
     return await _search(q, sort=sort, page=page, limit=limit)  # type: ignore[arg-type]
 
 
-@protected_router.get("/sessions", tags=["sessions"])
+@protected_router.get("/sessions", tags=["Care"])
 async def list_sessions(
     status: str | None = None,
     user_id: str = Depends(get_current_user_id),
@@ -506,7 +596,7 @@ async def list_sessions(
     return list_session_store(enum_val)
 
 
-@protected_router.post("/sessions/{session_id}/transcribe", tags=["sessions"])
+@protected_router.post("/sessions/{session_id}/transcribe", tags=["Care"])
 async def trigger_transcription_endpoint(
     session_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -516,7 +606,7 @@ async def trigger_transcription_endpoint(
     return await _tt(session_id, user_id)  # type: ignore[arg-type]
 
 
-@protected_router.post("/sessions/{session_id}/summarize", tags=["sessions"])
+@protected_router.post("/sessions/{session_id}/summarize", tags=["Care"])
 async def trigger_summary_endpoint(
     session_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -751,7 +841,16 @@ if google_router is not None:
 # New modular routers for HA and profile/admin
 try:
     from .api.ha import router as ha_api_router
-    app.include_router(ha_api_router, prefix="/v1")
+    app.include_router(
+        ha_api_router,
+        prefix="/v1",
+        dependencies=[
+            Depends(verify_token),
+            Depends(rate_limit),
+            Depends(optional_require_any_scope(["care:resident", "care:caregiver"])),
+            Depends(docs_security_with(["care:resident"])),
+        ],
+    )
     app.include_router(ha_api_router, include_in_schema=False)
 except Exception:
     pass
@@ -774,7 +873,14 @@ except Exception:
 
 try:
     from .api.admin import router as admin_api_router
-    app.include_router(admin_api_router, prefix="/v1")
+    app.include_router(
+        admin_api_router,
+        prefix="/v1",
+        dependencies=[
+            Depends(optional_require_any_scope(["admin", "admin:write"])),
+            Depends(docs_security_with(["admin:write"])),
+        ],
+    )
     app.include_router(admin_api_router, include_in_schema=False)
 except Exception:
     pass
@@ -811,7 +917,11 @@ except Exception:
 
 try:
     from .api.status_plus import router as status_plus_router
-    app.include_router(status_plus_router, prefix="/v1")
+    app.include_router(
+        status_plus_router,
+        prefix="/v1",
+        dependencies=[Depends(docs_security_with(["admin:write"]))],
+    )
     app.include_router(status_plus_router, include_in_schema=False)
 except Exception:
     pass
@@ -893,7 +1003,11 @@ except Exception:
 # Optional diagnostic/auxiliary routers -------------------------------------
 try:
     from .api.care import router as care_router
-    app.include_router(care_router, prefix="/v1")
+    app.include_router(
+        care_router,
+        prefix="/v1",
+        dependencies=[Depends(docs_security_with(["care:resident"]))],
+    )
     app.include_router(care_router, include_in_schema=False)
 except Exception:
     pass
@@ -916,7 +1030,16 @@ except Exception:
 try:
     # Caregiver portal scaffold (e.g., /v1/caregiver/*)
     from .caregiver import router as caregiver_router
-    app.include_router(caregiver_router, prefix="/v1")
+    app.include_router(
+        caregiver_router,
+        prefix="/v1",
+        dependencies=[
+            Depends(verify_token),
+            Depends(rate_limit),
+            Depends(optional_require_any_scope(["care:caregiver"])),
+            Depends(docs_security_with(["care:caregiver"])),
+        ],
+    )
     app.include_router(caregiver_router, include_in_schema=False)
 except Exception:
     pass
@@ -924,7 +1047,16 @@ except Exception:
 # Music API router (load outside caregiver try/except so it isn't swallowed)
 if music_router is not None:
     # Mount under core_router-like scope (auth/rate limiting via main's routers)
-    app.include_router(music_router, prefix="/v1")
+    app.include_router(
+        music_router,
+        prefix="/v1",
+        dependencies=[
+            Depends(verify_token),
+            Depends(rate_limit),
+            Depends(optional_require_any_scope(["music:control"])),
+            Depends(docs_security_with(["music:control"])),
+        ],
+    )
     app.include_router(music_router, include_in_schema=False)
     # Sim WS helpers for UI duck/restore
     try:

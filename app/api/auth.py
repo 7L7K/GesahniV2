@@ -6,12 +6,13 @@ from typing import Optional
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.security import OAuth2PasswordRequestForm
 
 from ..deps.user import get_current_user_id
 from ..user_store import user_store
 
 
-router = APIRouter(tags=["auth"], include_in_schema=False)
+router = APIRouter(tags=["Auth"], include_in_schema=False)
 
 
 def _jwt_secret() -> str:
@@ -75,6 +76,55 @@ async def refresh(response: Response, user_id: str = Depends(get_current_user_id
         path="/",
     )
     return {"status": "ok", "user_id": user_id}
+
+
+# OAuth2 Password flow endpoint for Swagger "Authorize" in dev
+@router.post("/auth/token", include_in_schema=True)
+async def issue_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    # Gate for production environments
+    if os.getenv("DISABLE_DEV_TOKEN", "0").lower() in {"1", "true", "yes", "on"}:
+        raise HTTPException(status_code=403, detail="disabled")
+    username = (form_data.username or "dev").strip() or "dev"
+    token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))
+    now = int(time.time())
+    scopes = form_data.scopes or []
+    payload = {
+        "user_id": username,
+        "sub": username,
+        "iat": now,
+        "exp": now + token_lifetime,
+    }
+    if scopes:
+        payload["scope"] = " ".join(sorted(set(scopes)))
+    token = jwt.encode(payload, _jwt_secret(), algorithm="HS256")
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@router.get("/auth/examples")
+async def token_examples():
+    """Return sanitized JWT examples and common scope sets.
+
+    These are not valid tokens; use /v1/auth/token to mint a real dev token.
+    """
+    return {
+        "samples": {
+            "header": {"alg": "HS256", "typ": "JWT"},
+            "payload": {
+                "user_id": "dev",
+                "sub": "dev",
+                "exp": 1714764000,
+                "scope": "admin:write",
+            },
+            "jwt_example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ey...<redacted>...",
+        },
+        "scopes": [
+            "care:resident",
+            "care:caregiver",
+            "music:control",
+            "admin:write",
+        ],
+        "notes": "Use /v1/auth/token with 'scopes' to mint a real token in dev.",
+    }
 
 
 __all__ = ["router"]

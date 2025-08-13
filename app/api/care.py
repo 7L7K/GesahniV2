@@ -7,7 +7,7 @@ import hashlib
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..deps.user import get_current_user_id
 from ..metrics import (
@@ -34,7 +34,7 @@ from ..care_store import (
 )
 
 
-router = APIRouter(tags=["care"], dependencies=[])
+router = APIRouter(tags=["Care"], dependencies=[])
 
 
 # In-memory MVP stores; swap with DB in CARE-001
@@ -50,9 +50,24 @@ class AlertCreate(BaseModel):
     severity: str = "info"  # info|warn|critical
     note: str | None = None
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "resident_id": "r1",
+                "kind": "help",
+                "severity": "critical",
+                "note": "Grandma pressed the help button",
+            }
+        }
+    )
+
 
 class AckBody(BaseModel):
     by: str | None = None  # caregiver id or name
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"by": "caregiver_123"}}
+    )
 
 
 def _now() -> float:
@@ -87,7 +102,19 @@ async def _notify_sms(resident_id: str, msg: str) -> bool:
         return False
 
 
-@router.post("/care/alerts")
+class AlertRecord(BaseModel):
+    id: str
+    resident_id: str
+    kind: str
+    severity: str
+    note: str
+    created_at: float
+    status: str
+    ack_at: float | None = None
+    resolved_at: float | None = None
+
+
+@router.post("/care/alerts", response_model=AlertRecord, responses={200: {"model": AlertRecord}})
 async def create_alert(body: AlertCreate, user_id: str = Depends(get_current_user_id)):
     if body.kind not in {"help", "fall", "battery", "custom"}:
         raise HTTPException(status_code=400, detail="invalid_kind")
@@ -118,7 +145,7 @@ async def create_alert(body: AlertCreate, user_id: str = Depends(get_current_use
     return rec
 
 
-@router.post("/care/alerts/{alert_id}/ack")
+@router.post("/care/alerts/{alert_id}/ack", response_model=AlertRecord, responses={200: {"model": AlertRecord}})
 async def ack_alert(alert_id: str, body: AckBody | None = None):
     rec = ALERTS.get(alert_id) or await get_alert(alert_id)
     if not rec:
@@ -139,7 +166,7 @@ async def ack_alert(alert_id: str, body: AckBody | None = None):
     return rec
 
 
-@router.post("/care/alerts/{alert_id}/resolve")
+@router.post("/care/alerts/{alert_id}/resolve", response_model=AlertRecord, responses={200: {"model": AlertRecord}})
 async def resolve_alert(alert_id: str):
     rec = ALERTS.get(alert_id) or await get_alert(alert_id)
     if not rec:
@@ -156,8 +183,18 @@ class Heartbeat(BaseModel):
     resident_id: str
     battery_pct: int | None = None
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"device_id": "dev-abc", "resident_id": "r1", "battery_pct": 92}
+        }
+    )
 
-@router.post("/care/devices/{device_id}/heartbeat")
+
+class OkResponse(BaseModel):
+    status: str = "ok"
+
+
+@router.post("/care/devices/{device_id}/heartbeat", response_model=OkResponse, responses={200: {"model": OkResponse}})
 async def heartbeat(device_id: str, body: Heartbeat):
     now = _now()
     st = await upsert_device(device_id, body.resident_id, battery_pct=body.battery_pct)
@@ -191,14 +228,25 @@ class SessionBody(BaseModel):
     title: str | None = None
     transcript_uri: str | None = None
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": "s_01HABCDEF",
+                "resident_id": "r1",
+                "title": "Morning check-in",
+                "transcript_uri": "s3://bucket/transcripts/s_01HABCDEF.txt",
+            }
+        }
+    )
 
-@router.post("/care/sessions")
+
+@router.post("/care/sessions", response_model=OkResponse, responses={200: {"model": OkResponse}})
 async def create_care_session(body: SessionBody):
     await create_session(body.model_dump())
     return {"status": "ok"}
 
 
-@router.patch("/care/sessions/{session_id}")
+@router.patch("/care/sessions/{session_id}", response_model=OkResponse, responses={200: {"model": OkResponse}})
 async def patch_care_session(session_id: str, body: dict):
     await update_session(session_id, **body)
     return {"status": "ok"}

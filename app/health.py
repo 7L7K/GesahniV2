@@ -6,7 +6,7 @@ from fastapi import Depends, APIRouter
 from app.otel_utils import start_span
 import os
 
-router = APIRouter()
+router = APIRouter(tags=["Admin"])
 
 @router.get("/health/chroma")
 def health_chroma():
