@@ -8,6 +8,7 @@ import { WeatherPeek } from "@/components/tv/widgets/WeatherPeek";
 import { VitalsBadge } from "@/components/tv/widgets/VitalsBadge";
 import { AlertPanel } from "@/components/tv/widgets/AlertPanel";
 import { NowPlayingCard } from "@/components/tv/widgets/NowPlayingCard";
+import { CalendarCard } from "@/components/tv/widgets/CalendarCard";
 
 function useScheduler() {
   return useSyncExternalStore((cb) => {
@@ -28,6 +29,7 @@ export function PrimaryStage() {
       {id === "VitalsBadge" && <VitalsBadge />}
       {id === "AlertPanel" && <AlertPanel />}
       {id === "NowPlayingCard" && <NowPlayingCard />}
+      {id === "CalendarCard" && <CalendarCard />}
     </div>
   );
 }

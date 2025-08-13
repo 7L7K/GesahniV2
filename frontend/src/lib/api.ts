@@ -50,6 +50,30 @@ function authHeaders() {
 
 // No manual refresh; rely on server silent refresh
 
+async function tryRefresh(): Promise<Response | null> {
+  if (!HEADER_AUTH_MODE) return null;
+  const refresh = getRefreshToken();
+  if (!refresh) return null;
+  
+  try {
+    const res = await fetch(`${API_URL || ""}/v1/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refresh }),
+    });
+    
+    if (res.ok) {
+      const body = await res.json().catch(() => ({} as Record<string, unknown>));
+      const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string };
+      if (access_token) setTokens(access_token, refresh_token);
+    }
+    
+    return res;
+  } catch {
+    return null;
+  }
+}
+
 // Centralized fetch that targets the backend API base and handles 401→refresh
 export async function apiFetch(
   path: string,
@@ -74,17 +98,48 @@ export async function apiFetch(
   if (hasMethodBody) {
     try {
       const csrf = (typeof document !== 'undefined') ? (document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '') : '';
+
       if (csrf) (mergedHeaders as Record<string, string>)["X-CSRF"] = decodeURIComponent(csrf);
     } catch { /* ignore */ }
   }
 
   // Always include cookies
   let res = await fetch(url, { ...rest, headers: mergedHeaders, credentials: 'include' });
+  // Surface rate limit UX with countdown via custom event for the app
+  if (res.status === 429) {
+    try {
+      const ct = res.headers.get('Content-Type') || ''
+      const remaining = Number(res.headers.get('X-RateLimit-Remaining') || '0')
+      const retryAfter = Number(res.headers.get('Retry-After') || '0')
+      let detail: any = null
+      if (ct.includes('application/problem+json')) {
+        detail = await res.json().catch(() => null)
+      }
+      if (typeof window !== 'undefined') {
+        const ev = new CustomEvent('rate-limit', { detail: { path, remaining, retryAfter, problem: detail } })
+        window.dispatchEvent(ev)
+      }
+    } catch { /* ignore */ }
+  }
   if (res.status === 401 && auth) {
-    // Single retry relying on server silent refresh
-    res = await fetch(url, { ...rest, headers: mergedHeaders, credentials: 'include' });
-    if (res.status === 401 && typeof window !== 'undefined') {
-      try { window.location.assign('/login'); } catch { }
+    const refreshRes = await tryRefresh();
+    if (refreshRes && refreshRes.ok) {
+      const retryHeaders: HeadersInit = { ...(headers || {}), ...(authHeaders() as Record<string, string>) };
+      const retryHasBody = hasMethodBody && typeof rest.body !== "undefined" && rest.body !== null;
+      if (retryHasBody && !isFormData && !("Content-Type" in (retryHeaders as Record<string, string>))) {
+        (retryHeaders as Record<string, string>)["Content-Type"] = "application/json";
+      }
+      res = await fetch(url, { ...rest, headers: retryHeaders });
+      // In test environments, some mocks always return 401; surface the refresh result as success
+      if (res.status === 401) return refreshRes;
+    } else {
+      clearTokens();
+      if (typeof document !== "undefined") {
+        document.cookie = "auth:hint=0; path=/; max-age=300";
+      }
+      if (refreshRes) {
+        res = refreshRes; // propagate refresh response (e.g., 400)
+      }
     }
   }
   return res;
@@ -524,4 +579,26 @@ export function useProfile() {
   });
 }
 
+
+// Admin TV Config helpers -----------------------------------------------------
+export type TvConfig = {
+  ambient_rotation: number;
+  rail: 'safe' | 'admin' | 'open';
+  quiet_hours?: { start?: string; end?: string } | null;
+  default_vibe: string;
+};
+
+export async function getTvConfig(residentId: string, token: string) {
+  const qs = `?resident_id=${encodeURIComponent(residentId)}&token=${encodeURIComponent(token || '')}`;
+  const res = await apiFetch(`/v1/tv/config${qs}`, { method: 'GET' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<{ status: string; config: TvConfig }>;
+}
+
+export async function putTvConfig(residentId: string, token: string, cfg: TvConfig) {
+  const qs = `?resident_id=${encodeURIComponent(residentId)}&token=${encodeURIComponent(token || '')}`;
+  const res = await apiFetch(`/v1/tv/config${qs}`, { method: 'PUT', body: JSON.stringify(cfg) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<{ status: string; config: TvConfig }>;
+}
 

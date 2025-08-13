@@ -9,7 +9,8 @@ export type WidgetId =
   | "WeatherPeek"
   | "VitalsBadge"
   | "AlertPanel"
-  | "NowPlayingCard";
+  | "NowPlayingCard"
+  | "CalendarCard";
 
 export type WidgetScore = {
   id: WidgetId;
@@ -34,6 +35,7 @@ export type SchedulerAssignment = {
   sideRail: WidgetId[];
   footerTicker: string | null;
   scores: WidgetScore[];
+  nextEventChip: string | null;
 };
 
 const DEFAULT_WIDGETS: WidgetId[] = [
@@ -43,16 +45,35 @@ const DEFAULT_WIDGETS: WidgetId[] = [
   "VitalsBadge",
   "AlertPanel",
   "NowPlayingCard",
+  "CalendarCard",
 ];
 
 function clamp01(n: number) { return Math.max(0, Math.min(1, n)); }
 
+// Lightweight calendar cache updated by TV calendar fetchers
+export type CalendarItem = { time?: string; title?: string; date?: string };
+let _calendar: { items: CalendarItem[]; updatedAt?: number } = { items: [] };
+export function _setCalendar(items: CalendarItem[]) {
+  _calendar.items = Array.isArray(items) ? items : [];
+  _calendar.updatedAt = Date.now();
+}
+
+function _parseTimeToDate(timeStr: string, base: Date): Date | null {
+  // time like HH:MM, assumed today
+  if (!/^\d{2}:\d{2}$/.test(timeStr)) return null;
+  const [h, m] = timeStr.split(":").map((s) => parseInt(s, 10));
+  const d = new Date(base);
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+
 export class SchedulerService {
   private scorers: Scorer[] = [];
   private interval: ReturnType<typeof setInterval> | null = null;
-  private lastAssignment: SchedulerAssignment = { primary: null, sideRail: [], footerTicker: null, scores: [] };
+  private lastAssignment: SchedulerAssignment = { primary: null, sideRail: [], footerTicker: null, scores: [], nextEventChip: null };
   private dryRunOverlayEl: HTMLDivElement | null = null;
   private forcedPrimary: { id: WidgetId; until: number } | null = null;
+  private dwellHold: { id: WidgetId; until: number } | null = null;
 
   addScorer(s: Scorer) { this.scorers.push(s); }
 
@@ -88,16 +109,50 @@ export class SchedulerService {
     return scores;
   }
 
+  private computeNextEventChip(nowMs: number): string | null {
+    if (!_calendar.items.length) return null;
+    const now = new Date(nowMs);
+    // Assume items already for today onward. Choose first upcoming today by time.
+    const upcoming = _calendar.items
+      .map((e) => ({
+        when: _parseTimeToDate(e.time || "", now),
+        title: String(e.title || ""),
+      }))
+      .filter((e) => e.when && e.when.getTime() >= now.getTime())
+      .sort((a, b) => (a.when!.getTime() - b.when!.getTime()));
+    const first = upcoming[0];
+    if (!first || !first.when) return null;
+    const hh = String(first.when.getHours()).padStart(2, "0");
+    const mm = String(first.when.getMinutes()).padStart(2, "0");
+    return `Next: ${first.title} ${hh}:${mm}`;
+  }
+
   private assign(scores: WidgetScore[]): SchedulerAssignment {
+    const now = Date.now();
     let primary = scores[0]?.id || null;
-    if (this.forcedPrimary && Date.now() < this.forcedPrimary.until) {
+    if (this.forcedPrimary && now < this.forcedPrimary.until) {
       primary = this.forcedPrimary.id;
+    } else if (this.dwellHold && now < this.dwellHold.until) {
+      primary = this.dwellHold.id;
     } else {
       this.forcedPrimary = null;
+      this.dwellHold = null;
     }
     const sideRail = scores.slice(1, 4).map(s => s.id);
     const footerTicker = this.makeTicker();
-    return { primary, sideRail, footerTicker, scores };
+    const nextEventChip = this.computeNextEventChip(Date.now());
+    // If CalendarCard is selected as primary by score (not forced/dwell), set a dwell window
+    const topByScore = scores[0]?.id || null;
+    if (!this.forcedPrimary && (!this.dwellHold || now >= this.dwellHold.until) && topByScore === "CalendarCard") {
+      const hour = new Date(now).getHours();
+      const morningOrEarlyPm = (hour >= 7 && hour <= 15);
+      const night = (hour >= 21 || hour <= 5);
+      // dwell: 15–25s mornings/early PM, 6–10s night, otherwise 10–15s
+      const dwellSec = morningOrEarlyPm ? (15 + Math.floor(Math.random() * 11)) : night ? (6 + Math.floor(Math.random() * 5)) : (10 + Math.floor(Math.random() * 6));
+      this.dwellHold = { id: "CalendarCard", until: now + dwellSec * 1000 };
+      primary = "CalendarCard";
+    }
+    return { primary, sideRail, footerTicker, scores, nextEventChip };
   }
 
   private makeTicker(): string | null {
@@ -146,6 +201,7 @@ export class SchedulerService {
       `primary=${assign.primary ?? "-"}`,
       `side=[${assign.sideRail.join(", ")}]`,
       `ticker=${assign.footerTicker ? assign.footerTicker.slice(0, 60) : "-"}`,
+      `next=${assign.nextEventChip || "-"}`,
     ];
     this.dryRunOverlayEl!.innerText = lines.join("\n");
   }
@@ -202,6 +258,30 @@ scheduler.addScorer((id) => {
   const hour = new Date().getHours();
   const boost = (hour >= 6 && hour <= 10) || (hour >= 17 && hour <= 20) ? 1 : 0.5;
   return { timeRelevance: boost };
+});
+
+// Calendar: boost mornings/early PM; lower at night; 45m pre-event priority
+scheduler.addScorer((id) => {
+  if (id !== "CalendarCard") return;
+  const hour = new Date().getHours();
+  const morningOrEarlyPm = (hour >= 7 && hour <= 13) || (hour >= 13 && hour <= 15);
+  const night = (hour >= 21 || hour <= 5);
+  const baseTime = morningOrEarlyPm ? 1 : night ? 0.3 : 0.6;
+  // priority boost within 45 minutes of next event
+  let importance = 0.5;
+  try {
+    const now = new Date();
+    const upcoming = _calendar.items
+      .map((e) => _parseTimeToDate(String(e.time || ""), now))
+      .filter((d): d is Date => !!d)
+      .sort((a, b) => a.getTime() - b.getTime())
+      .find((d) => d.getTime() >= now.getTime());
+    if (upcoming) {
+      const diffMin = (upcoming.getTime() - now.getTime()) / 60000;
+      if (diffMin <= 45) importance = 1;
+    }
+  } catch {}
+  return { timeRelevance: baseTime, importance };
 });
 
 // Prefs: placeholder constant mid-weight

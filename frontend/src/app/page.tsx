@@ -12,6 +12,7 @@ import DiscoveryCard from '@/components/music/DiscoveryCard';
 import MoodDial from '@/components/music/MoodDial';
 import QueueCard from '@/components/music/QueueCard';
 import DevicePicker from '@/components/music/DevicePicker';
+import { RateLimitToast } from '@/components/ui/toast';
 
 interface ChatMessage {
   id: string;
@@ -317,6 +318,7 @@ export default function Page() {
           </div>
         </footer>
       </div>
+      <RateLimitToast />
     </main>
   );
 }

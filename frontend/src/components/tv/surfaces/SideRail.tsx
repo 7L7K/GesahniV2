@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { VitalsBadge } from "@/components/tv/widgets/VitalsBadge";
+import { CalendarCard } from "@/components/tv/widgets/CalendarCard";
 
 type WeatherPayload = { now?: { temp?: number | null } };
 type CalendarNext = { items: { time: string; title: string }[] };
@@ -29,7 +30,7 @@ export function SideRail() {
     <div className="absolute top-8 right-8 flex flex-col gap-4 w-[360px] text-white">
       <VitalsBadge />
       <div className="bg-white/10 rounded-2xl px-6 py-4 text-[28px] whitespace-nowrap overflow-hidden text-ellipsis">Temp {temp}</div>
-      <div className="bg-white/10 rounded-2xl px-6 py-4 text-[28px] whitespace-nowrap overflow-hidden text-ellipsis">Next {next || '—'}</div>
+      <CalendarCard />
     </div>
   );
 }

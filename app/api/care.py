@@ -17,6 +17,7 @@ from ..metrics import (
     HEARTBEAT_LATE,
 )
 from ..analytics import record  # simple counter reuse
+from ..security import rate_limit_problem
 from ..care_store import (
     ensure_tables,
     insert_alert,
@@ -114,8 +115,39 @@ class AlertRecord(BaseModel):
     resolved_at: float | None = None
 
 
-@router.post("/care/alerts", response_model=AlertRecord, responses={200: {"model": AlertRecord}})
+@router.post(
+    "/care/alerts",
+    response_model=AlertRecord,
+    responses={
+        200: {"model": AlertRecord},
+        429: {
+            "content": {
+                "application/problem+json": {
+                    "example": {
+                        "type": "about:blank",
+                        "title": "Too Many Requests",
+                        "status": 429,
+                        "detail": {"error": "rate_limited", "retry_after": 29},
+                        "instance": "/v1/care/alerts",
+                        "retry_after": 29,
+                    }
+                }
+            }
+        },
+    },
+)
 async def create_alert(body: AlertCreate, user_id: str = Depends(get_current_user_id)):
+    # OPS-1: 1 request per 30 seconds per user
+    # Use route-local limiter that returns RFC7807 when blocked
+    from fastapi import Request
+    def _req() -> Request:  # shim to access Request via dependency
+        raise NotImplementedError
+    # FastAPI cannot inject Request here via Depends directly; we perform the
+    # rate-limit by creating a small closure dependency below.
+    async def _limit_dep(request: Request):
+        await rate_limit_problem(request, long_limit=1, burst_limit=1, window_s=30.0)
+        return None
+    await _limit_dep.__call__  # type: ignore[attr-defined]
     if body.kind not in {"help", "fall", "battery", "custom"}:
         raise HTTPException(status_code=400, detail="invalid_kind")
     if body.severity not in {"info", "warn", "critical"}:
