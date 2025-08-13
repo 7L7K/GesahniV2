@@ -127,6 +127,18 @@ async def ensure_tables() -> None:
             )
             """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tv_config (
+                resident_id TEXT PRIMARY KEY,
+                ambient_rotation INTEGER,
+                rail TEXT,
+                quiet_hours TEXT,
+                default_vibe TEXT,
+                updated_at REAL
+            )
+            """
+        )
         await db.commit()
 
 
@@ -349,6 +361,57 @@ async def list_devices() -> List[Dict[str, Any]]:
                     }
                 )
     return out
+
+
+# TV Config -------------------------------------------------------------------
+
+async def get_tv_config(resident_id: str) -> Optional[Dict[str, Any]]:
+    await ensure_tables()
+    async with aiosqlite.connect(str(DB_PATH)) as db:
+        async with db.execute(
+            "SELECT resident_id,ambient_rotation,rail,quiet_hours,default_vibe,updated_at FROM tv_config WHERE resident_id=?",
+            (resident_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    return {
+        "resident_id": row[0],
+        "ambient_rotation": row[1],
+        "rail": row[2],
+        "quiet_hours": json.loads(row[3] or "{}"),
+        "default_vibe": row[4],
+        "updated_at": row[5],
+    }
+
+
+async def set_tv_config(
+    resident_id: str,
+    *,
+    ambient_rotation: int,
+    rail: str,
+    quiet_hours: Dict[str, Any] | None,
+    default_vibe: str,
+) -> None:
+    await ensure_tables()
+    now = _now()
+    qh = json.dumps(quiet_hours or {})
+    async with aiosqlite.connect(str(DB_PATH)) as db:
+        # Upsert semantics
+        await db.execute(
+            """
+            INSERT INTO tv_config (resident_id,ambient_rotation,rail,quiet_hours,default_vibe,updated_at)
+            VALUES (?,?,?,?,?,?)
+            ON CONFLICT(resident_id) DO UPDATE SET
+                ambient_rotation=excluded.ambient_rotation,
+                rail=excluded.rail,
+                quiet_hours=excluded.quiet_hours,
+                default_vibe=excluded.default_vibe,
+                updated_at=excluded.updated_at
+            """,
+            (resident_id, int(ambient_rotation), str(rail), qh, str(default_vibe), now),
+        )
+        await db.commit()
 
 
 # Sessions --------------------------------------------------------------------

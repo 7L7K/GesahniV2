@@ -1059,3 +1059,48 @@ async def get_rate_limit_backend_status() -> dict:
         "windows_s": {"long": _window, "burst": _burst_window},
         "prefix": _RL_PREFIX,
     }
+
+
+# ---------------------------------------------------------------------------
+# Route-local helper: strict rate limit with custom window + RFC7807 on block
+# ---------------------------------------------------------------------------
+
+async def rate_limit_problem(request: Request, *, long_limit: int = 1, burst_limit: int = 1, window_s: float = 30.0) -> None:
+    """Apply a tight rate limit with a custom window and return RFC7807 on 429.
+
+    Sets per-request overrides for long/burst limits and long window seconds. On
+    blocking, raises an HTTPException with application/problem+json semantics and
+    X-RateLimit-Remaining header so clients can show a countdown.
+    """
+
+    try:
+        # Override knobs for this request only
+        request.state.rate_limit_long_limit = int(long_limit)
+        request.state.rate_limit_burst_limit = int(burst_limit)
+        request.state.rate_limit_window_s = float(window_s)
+        await rate_limit(request)
+    except HTTPException as exc:
+        if exc.status_code != 429:
+            raise
+        # Build RFC7807 payload
+        try:
+            retry_after = int((exc.headers or {}).get("Retry-After", "0"))
+        except Exception:
+            retry_after = 0
+        try:
+            snap = get_rate_limit_snapshot(request)
+            remaining = int(snap.get("remaining", 0))
+        except Exception:
+            remaining = 0
+        problem = {
+            "type": "about:blank",
+            "title": "Too Many Requests",
+            "status": 429,
+            "detail": (exc.detail if isinstance(exc.detail, str) else (exc.detail or {})),
+            "instance": getattr(getattr(request, "url", None), "path", "/") or "/",
+            "retry_after": retry_after,
+        }
+        headers = dict(exc.headers or {})
+        headers["Content-Type"] = "application/problem+json"
+        headers["X-RateLimit-Remaining"] = str(remaining)
+        raise HTTPException(status_code=429, detail=problem, headers=headers)
