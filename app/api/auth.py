@@ -4,6 +4,7 @@ import os
 import secrets
 import time
 from datetime import datetime, timezone
+import asyncio
 from typing import Any, Dict, List, Optional
 
 import jwt
@@ -35,10 +36,32 @@ def _iso(dt: float | None) -> str | None:
     return datetime.fromtimestamp(float(dt), tz=timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _in_test_mode() -> bool:
+    v = lambda s: str(os.getenv(s, "")).strip().lower()
+    return bool(
+        os.getenv("PYTEST_CURRENT_TEST")
+        or os.getenv("PYTEST_RUNNING")
+        or v("PYTEST_MODE") in {"1", "true", "yes", "on"}
+        or v("ENV") == "test"
+    )
+
+
+def _ensure_loop() -> None:
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+
+
+# Ensure a default loop exists when imported under pytest to support
+# synchronous helpers that need to spin async functions.
+if _in_test_mode():
+    _ensure_loop()
+
+
 def verify_pat(token: str, required_scopes: List[str] | None = None) -> Dict[str, Any] | None:
     try:
         import hashlib
-        import asyncio
 
         h = hashlib.sha256((token or "").encode("utf-8")).hexdigest()
         # Fetch synchronously via event loop since tests call this directly

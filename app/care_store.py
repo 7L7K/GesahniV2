@@ -5,6 +5,8 @@ import os
 import time
 import hashlib
 from pathlib import Path
+import sys
+import tempfile
 from typing import Any, Dict, List, Optional
 
 import aiosqlite
@@ -14,13 +16,30 @@ def _compute_db_path() -> Path:
     env_path = os.getenv("CARE_DB")
     if env_path:
         return Path(env_path).resolve()
+
+    # Detect pytest-style environments as early as possible to avoid reusing a
+    # persistent db across test runs (which can leak state and break defaults).
+    is_test_env = (
+        bool(os.getenv("PYTEST_CURRENT_TEST"))
+        or (os.getenv("PYTEST_MODE", "").strip().lower() in {"1", "true", "yes", "on"})
+        or bool(os.getenv("PYTEST_RUNNING"))
+        or os.getenv("ENV", "").strip().lower() == "test"
+        or ("pytest" in sys.modules)
+    )
+
     if os.getenv("PYTEST_CURRENT_TEST"):
         ident = os.getenv("PYTEST_CURRENT_TEST", "")
         digest = hashlib.md5(ident.encode()).hexdigest()[:8]
         p = Path.cwd() / f".tmp_care_{digest}.db"
-    else:
-        p = Path("care.db")
-    return p.resolve()
+        return p.resolve()
+
+    if is_test_env:
+        # Fallback to a per-process temp file when under tests but before
+        # PYTEST_CURRENT_TEST is populated at import time.
+        tmp = Path(tempfile.gettempdir()) / f".tmp_care_{os.getpid()}.db"
+        return tmp.resolve()
+
+    return Path("care.db").resolve()
 
 
 DB_PATH = _compute_db_path()

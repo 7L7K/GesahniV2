@@ -96,47 +96,71 @@ _TRUST_XFF = os.getenv("TRUST_X_FORWARDED_FOR", "0").strip().lower() in {"1", "t
 # Scope of rate limit keys: default to "route" to avoid cross-route contention
 _KEY_SCOPE = os.getenv("RATE_LIMIT_KEY_SCOPE", "global").strip().lower()
 
+# Capture initial defaults at import time so tests that monkeypatch module
+# variables (e.g., RATE_LIMIT = 1) are not clobbered by stale env from prior
+# tests when _maybe_refresh_settings_for_test runs.
+_INIT_RATE_LIMIT = RATE_LIMIT
+_INIT_RATE_LIMIT_BURST = RATE_LIMIT_BURST
+_INIT_WINDOW = _window
+_INIT_BURST_WINDOW = _burst_window
+_INIT_KEY_SCOPE = _KEY_SCOPE
+
 # Track pytest's current test id to re-sync config between tests that mutate env
 _LAST_TEST_ID = os.getenv("PYTEST_CURRENT_TEST") or ""
 
 
 def _maybe_refresh_settings_for_test() -> None:
-    """When running under pytest, ensure module-level knobs reflect current env.
+    """Refresh in-process rate-limit settings from env between pytest tests.
 
-    Some tests set env vars and reload this module, which can leave mutated
-    constants in place for later tests. We detect test case transitions via the
-    PYTEST_CURRENT_TEST env var and re-read key settings to avoid cross-test
-    leakage. Explicit monkeypatch of module globals within a single test still
-    works because we only refresh when the test id changes.
+    We re-read module-level constants on test transitions so that per-test env
+    changes take effect without leaking into subsequent tests. Within a single
+    test, explicit monkeypatch of module globals still wins because we only
+    refresh when the test id changes.
     """
+    if not (os.getenv("PYTEST_RUNNING") or os.getenv("PYTEST_CURRENT_TEST")):
+        return
     global RATE_LIMIT, RATE_LIMIT_BURST, _window, _burst_window, _KEY_SCOPE, _LAST_TEST_ID
     test_id = os.getenv("PYTEST_CURRENT_TEST") or ""
     if test_id == _LAST_TEST_ID:
         return
     _LAST_TEST_ID = test_id
-    # Do not override monkeypatched constants. Only update scoped key policy.
+    # Re-read limits and windows from env, but only apply when the current
+    # module-level value still matches the import-time default. This allows
+    # tests to monkeypatch RATE_LIMIT/RATE_LIMIT_BURST without being overridden
+    # by environment set in other tests.
     try:
-        _KEY_SCOPE = os.getenv("RATE_LIMIT_KEY_SCOPE", "global").strip().lower()
+        env_val = os.getenv("RATE_LIMIT_PER_MIN")
+        if env_val is not None and RATE_LIMIT == _INIT_RATE_LIMIT:
+            RATE_LIMIT = int(env_val)
+    except Exception:
+        pass
+    try:
+        env_val = os.getenv("RATE_LIMIT_BURST")
+        if env_val is not None and RATE_LIMIT_BURST == _INIT_RATE_LIMIT_BURST:
+            RATE_LIMIT_BURST = int(env_val)
+    except Exception:
+        pass
+    try:
+        env_val = os.getenv("RATE_LIMIT_WINDOW_S")
+        if env_val is not None and _window == _INIT_WINDOW:
+            _window = float(env_val)
+    except Exception:
+        pass
+    try:
+        env_val = os.getenv("RATE_LIMIT_BURST_WINDOW")
+        if env_val is not None and _burst_window == _INIT_BURST_WINDOW:
+            _burst_window = float(env_val)
+    except Exception:
+        pass
+    try:
+        env_val = os.getenv("RATE_LIMIT_KEY_SCOPE")
+        if env_val is not None and _KEY_SCOPE == _INIT_KEY_SCOPE:
+            _KEY_SCOPE = env_val.strip().lower()
     except Exception:
         _KEY_SCOPE = "global"
 
 
-def _maybe_refresh_settings_for_test() -> None:
-    """Refresh in-process settings from env during pytest.
-
-    Important: do NOT override module constants RATE_LIMIT/RATE_LIMIT_BURST here,
-    because tests monkeypatch them directly. Only refresh window sizes from env.
-    """
-    if os.getenv("PYTEST_RUNNING"):
-        global _window, _burst_window
-        try:
-            _window = float(os.getenv("RATE_LIMIT_WINDOW_S", str(_window)))
-        except Exception:
-            pass
-        try:
-            _burst_window = float(os.getenv("RATE_LIMIT_BURST_WINDOW", str(_burst_window)))
-        except Exception:
-            pass
+    # (previous duplicate definition removed; refresh handled above)
 
 # ---------------------------------------------------------------------------
 # Optional distributed backend (Redis) for rate limiting
@@ -626,11 +650,21 @@ async def rate_limit(request: Request) -> None:
     # Use stable key for within-test accumulation; tests explicitly clear buckets
     key_local = str(key)
     async with _lock:
-        # Evaluate long-window before burst to match test expectations
-        ok_long = _bucket_rate_limit(key_local, _http_requests, long_limit, window)
-        retry_long = _bucket_retry_after(_http_requests, window)
+        # Burst-first evaluation in in-memory mode
         ok_b = _bucket_rate_limit(key_local, http_burst, burst_limit, burst_window)
         retry_b = _bucket_retry_after(http_burst, burst_window)
+        ok_long = _bucket_rate_limit(key_local, _http_requests, long_limit, window)
+        retry_long = _bucket_retry_after(_http_requests, window)
+    if not ok_b:
+        try:
+            metrics.RATE_LIMIT_BLOCKS.labels("http", "burst", backend_label).inc()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=429,
+            detail={"error": "rate_limited", "retry_after": retry_b},
+            headers={"Retry-After": str(retry_b)},
+        )
     if not ok_long:
         # Include Retry-After header for clients; also JSON detail for compatibility
         try:
@@ -642,16 +676,6 @@ async def rate_limit(request: Request) -> None:
             status_code=429,
             detail={"error": "rate_limited", "retry_after": retry_after},
             headers={"Retry-After": str(retry_after)},
-        )
-    if not ok_b:
-        try:
-            metrics.RATE_LIMIT_BLOCKS.labels("http", "burst", backend_label).inc()
-        except Exception:
-            pass
-        raise HTTPException(
-            status_code=429,
-            detail={"error": "rate_limited", "retry_after": retry_b},
-            headers={"Retry-After": str(retry_b)},
         )
     try:
         metrics.RATE_LIMIT_ALLOWS.labels("http", "pass", backend_label).inc()
@@ -789,11 +813,18 @@ async def rate_limit_ws(websocket: WebSocket) -> None:
                     raise WebSocketException(code=1013)
                 return
     async with _lock:
-        ok_long = _bucket_rate_limit(key, _ws_requests, RATE_LIMIT, _window)
+        # Burst-first evaluation for in-memory WS limiter
         ok_b = _bucket_rate_limit(key, ws_burst, RATE_LIMIT_BURST, _burst_window)
-    if not (ok_long and ok_b):
+        ok_long = _bucket_rate_limit(key, _ws_requests, RATE_LIMIT, _window)
+    if not ok_b:
         try:
-            metrics.RATE_LIMIT_BLOCKS.labels("ws", "both", backend_label).inc()
+            metrics.RATE_LIMIT_BLOCKS.labels("ws", "burst", backend_label).inc()
+        except Exception:
+            pass
+        raise WebSocketException(code=1013)
+    if not ok_long:
+        try:
+            metrics.RATE_LIMIT_BLOCKS.labels("ws", "long", backend_label).inc()
         except Exception:
             pass
         raise WebSocketException(code=1013)

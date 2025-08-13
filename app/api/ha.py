@@ -10,6 +10,7 @@ from app.security import require_nonce
 from app.home_assistant import (
     get_states,
     resolve_entity,
+    HomeAssistantAPIError,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,23 +59,12 @@ async def ha_service(
     try:
         # dynamic import ensures monkeypatch works in tests
         from app import home_assistant as _ha
-
-        # Test-friendly short-circuit when HA is not configured
-        is_test = bool(
-            __import__("os").getenv("PYTEST_CURRENT_TEST")
-            or __import__("os").getenv("PYTEST_RUNNING")
-            or __import__("os").getenv("ENV", "").lower() == "test"
-        )
-        token = getattr(_ha, "HOME_ASSISTANT_TOKEN", None)
-        base = getattr(_ha, "HOME_ASSISTANT_URL", None)
-        # Detect monkeypatched call_service (tests override it to avoid network)
-        patched = getattr(_ha.call_service, "__module__", "").split(".", 1)[0] != "app"
-        # In tests, when HA isn't configured and call_service is not patched, return 400 instead of timing out
-        if (not token or not base) and is_test and not patched:
-            return JSONResponse(status_code=400, content={"error": "home_assistant_not_configured"})
-
-        resp = await _ha.call_service(req.domain, req.service, req.data or {})
-        return resp or {"status": "ok"}
+        try:
+            resp = await _ha.call_service(req.domain, req.service, req.data or {})
+            return resp or {"status": "ok"}
+        except HomeAssistantAPIError:
+            # Tests expect a 500 wrapper with a generic detail
+            raise HTTPException(status_code=500, detail="Home Assistant error")
     except Exception as e:
         logger.exception("HA service error: %s", e)
         raise HTTPException(status_code=500, detail="Home Assistant error")

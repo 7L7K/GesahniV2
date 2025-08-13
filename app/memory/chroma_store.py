@@ -23,11 +23,28 @@ except ImportError:  # pragma: no cover - optional dependency
     chromadb = None
     chroma_ef = None  # type: ignore
 
-from .env_utils import _clean_meta, _env_flag, _get_sim_threshold, _normalize
+from .env_utils import _clean_meta, _env_flag, _get_sim_threshold as _env_get_sim_threshold, _normalize
 from .memory_store import VectorStore
 
 
 logger = logging.getLogger(__name__)
+
+
+def _get_sim_threshold() -> float:
+    """Return similarity threshold with embedder-aware override.
+
+    When the Chroma embedder is the simple "length" embedder, we return a
+    slightly higher similarity cutoff (0.6) to keep the strict
+    distance-comparison (< cutoff) behavior while allowing sensible
+    fallbacks in dual-read flows. Otherwise, defer to the global env value.
+    """
+
+    embed_kind = (os.getenv("CHROMA_EMBEDDER", "length").strip().lower())
+    # Respect explicit SIM_THRESHOLD when provided. Only use the
+    # embedder-specific default (0.6) when unset.
+    if embed_kind == "length" and ("SIM_THRESHOLD" not in os.environ):
+        return 0.6
+    return _env_get_sim_threshold()
 
 
 def _normalize_meta(meta: dict | None) -> dict:
@@ -283,15 +300,28 @@ class ChromaVectorStore(VectorStore):
             prompt,
             k,
         )
+        # Determine which embedder is active to interpret cutoff semantics
+        use_length = (
+            not hasattr(self, "_embedder") or isinstance(self._embedder, _LengthEmbedder)
+        )
         sim_threshold = _get_sim_threshold()
-        self._dist_cutoff = 1.0 - sim_threshold
+        env_has_sim = ("SIM_THRESHOLD" in os.environ)
+        if use_length and not env_has_sim:
+            # For length embedder without explicit env override, interpret
+            # the embedder default as a distance cutoff (relaxed from 0.5→0.6)
+            self._dist_cutoff = float(sim_threshold)
+            sim_threshold_for_log = 1.0 - self._dist_cutoff
+        else:
+            # In all other cases, use standard similarity threshold semantics
+            self._dist_cutoff = 1.0 - sim_threshold
+            sim_threshold_for_log = sim_threshold
         try:
             logger.info(
                 "vector.query_threshold",
                 extra={
                     "meta": {
                         "backend": "chroma",
-                        "sim_threshold": round(sim_threshold, 4),
+                        "sim_threshold": round(sim_threshold_for_log, 4),
                         "dist_cutoff": round(self._dist_cutoff, 4),
                     }
                 },
@@ -323,9 +353,6 @@ class ChromaVectorStore(VectorStore):
         metas = (res.get("metadatas") or [[{}]])[0]
         dvals = (res.get("distances") or [[None]])[0]
         items: List[Tuple[float, float, str]] = []
-        use_length = (
-            not hasattr(self, "_embedder") or isinstance(self._embedder, _LengthEmbedder)
-        )
         for idx in range(min(len(docs), len(metas))):
             doc = docs[idx]
             meta = metas[idx] or {}

@@ -394,17 +394,28 @@ class AdminFlagBody(BaseModel):
     },
 )
 async def admin_flags(
-    body: AdminFlagBody,
+    body: AdminFlagBody | None = None,
     token: str | None = Query(default=None),
+    key: str | None = Query(default=None),
+    value: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),
 ):
     """Flip runtime flags (process env) — best-effort.
 
     Guarded by admin token. Note: only affects this process; not persisted.
     """
+    # Enforce admin guard before reading/validating request body
     _check_admin(token)
-    key = body.key
-    value = body.value
+
+    # Normalize inputs: prefer JSON body when provided; otherwise use query params
+    if body is not None:
+        key = key or body.key
+        value = value or body.value
+
+    if not key:
+        raise HTTPException(status_code=400, detail="missing_key")
+    if value is None or value == "":
+        raise HTTPException(status_code=400, detail="missing_value")
     _set_flag(key, value)
     os.environ[f"FLAG_{key.upper()}"] = value
     # Maintain backward-compat: also set plain key for legacy tests/tools
@@ -482,21 +493,6 @@ async def admin_tv_get_config(resident_id: str, user_id: str = Depends(get_curre
             "content": {
                 "application/json": {
                     "example": _TV_CFG_EXAMPLE,
-                }
-            }
-        }
-    },
-    openapi_extra={
-        "requestBody": {
-            "content": {
-                "application/json": {
-                    "schema": {"$ref": "#/components/schemas/TvConfig"},
-                    "example": {
-                        "ambient_rotation": 45,
-                        "rail": "safe",
-                        "quiet_hours": {"start": "22:00", "end": "06:00"},
-                        "default_vibe": "Calm Night"
-                    }
                 }
             }
         }
