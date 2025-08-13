@@ -50,7 +50,9 @@ def _ensure_loop() -> None:
     try:
         asyncio.get_event_loop()
     except RuntimeError:
-        asyncio.set_event_loop(asyncio.new_event_loop())
+        # Only create a loop automatically in test contexts
+        if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING") or os.getenv("ENV", "").lower() == "test":
+            asyncio.set_event_loop(asyncio.new_event_loop())
 
 
 # Ensure a default loop exists when imported under pytest to support
@@ -65,6 +67,7 @@ def verify_pat(token: str, required_scopes: List[str] | None = None) -> Dict[str
 
         h = hashlib.sha256((token or "").encode("utf-8")).hexdigest()
         # Fetch synchronously via event loop since tests call this directly
+        _ensure_loop()
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():

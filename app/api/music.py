@@ -89,6 +89,16 @@ def _explicit_allowed(vibe: MusicVibe) -> bool:
     return bool(vibe.explicit and EXPLICIT_DEFAULT)
 
 
+def _filter_explicit(items: list[dict], *, allow_explicit: bool) -> list[dict]:
+    """Filter out explicit items when explicit content is not allowed.
+
+    Operates on provider-raw recommendation items.
+    """
+    if allow_explicit:
+        return list(items)
+    return [t for t in items if not bool(t.get("explicit"))]
+
+
 async def _ensure_album_cached(url: str | None, track_id: str | None) -> str | None:
     if not url or not track_id:
         return None
@@ -782,23 +792,33 @@ async def get_queue(user_id: str = Depends(get_current_user_id)):
 @router.get("/recommendations")
 async def get_recommendations(limit: int = 6, user_id: str = Depends(get_current_user_id)):
     state = load_state(user_id)
-    clamp = max(1, min(10, int(limit)))
+    # Clamp requested limit to [1, 10]
+    try:
+        raw_limit = int(limit or 10)
+    except (TypeError, ValueError):
+        raw_limit = 10
+    clamp = max(1, min(10, raw_limit))
 
     # Provider-enabled flows: prefer fresh provider data (so tests that monkeypatch
     # the provider see their results), falling back to in-memory cache.
-    tracks: list[dict] = []
+    tracks_raw: list[dict] = []
     seeds: list[str] | None = [state.last_track_id] if state.last_track_id else None
     if PROVIDER_SPOTIFY:
         cache_key = _recs_cache_key(user_id, seeds, state.vibe)
         cached = _recs_get_cached(cache_key)
         if cached:
-            tracks = list(cached)[:clamp]
+            tracks_raw = list(cached)
         else:
-            eff_limit = clamp
-            _rres = _provider_recommendations(user_id, seed_tracks=seeds, vibe=state.vibe, limit=eff_limit)
-            tracks = await _rres if inspect.isawaitable(_rres) else _rres
-            if len(tracks) > clamp:
-                tracks = tracks[:clamp]
+            # Ask provider for up to the clamped limit; provider may return more
+            _rres = _provider_recommendations(
+                user_id,
+                seed_tracks=seeds,
+                vibe=state.vibe,
+                limit=clamp,
+            )
+            tracks_raw = await _rres if inspect.isawaitable(_rres) else _rres
+            # Cache provider-raw items so we can re-slice per request
+            _recs_set_cached(cache_key, tracks_raw)
     else:
         # Provider disabled: allow serving from state-backed cache first
         if state.last_recommendations:
@@ -810,12 +830,22 @@ async def get_recommendations(limit: int = 6, user_id: str = Depends(get_current
             except Exception:
                 return {"recommendations": state.last_recommendations[:clamp]}
 
-    # Map to minimal shape and apply explicit filter per current vibe
+    # If provider returned nothing but we have state-backed cache, serve it
+    if not tracks_raw and state.last_recommendations:
+        try:
+            if _RECS_STATE_TTL_S <= 0:
+                return {"recommendations": state.last_recommendations[:clamp]}
+            if state.recs_cached_at is not None and (time.time() - float(state.recs_cached_at) < _RECS_STATE_TTL_S):
+                return {"recommendations": state.last_recommendations[:clamp]}
+        except Exception:
+            return {"recommendations": state.last_recommendations[:clamp]}
+
+    # Apply explicit filter, then clamp to requested limit, then map to response shape
     allowed = _explicit_allowed(state.vibe)
+    filtered = _filter_explicit(tracks_raw, allow_explicit=allowed)
+    filtered = filtered[:clamp]
     out: list[dict] = []
-    for t in tracks:
-        if not allowed and t.get("explicit"):
-            continue
+    for t in filtered:
         tid = t.get("id")
         images = ((t.get("album") or {}).get("images") or [])
         art_url = images[0]["url"] if images else None
@@ -835,9 +865,7 @@ async def get_recommendations(limit: int = 6, user_id: str = Depends(get_current
     state.last_recommendations = out
     state.recs_cached_at = time.time()
     save_state(user_id, state)
-    if PROVIDER_SPOTIFY:
-        cache_key = _recs_cache_key(user_id, seeds, state.vibe)
-        _recs_set_cached(cache_key, out)
+    # In-memory cache already stores provider-raw; do not overwrite with mapped output
     return {"recommendations": out}
 
 

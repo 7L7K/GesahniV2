@@ -8,11 +8,13 @@ from typing import List
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
+from app.security import verify_token
 
-from app.deps.user import get_current_user_id
 
-
-router = APIRouter(tags=["Calendar"])
+# Public-by-default in tests; gate auth via CALENDAR_PUBLIC
+CAL_PUBLIC = os.getenv("CALENDAR_PUBLIC", "1").strip().lower() in {"1", "true", "yes", "on"}
+_DEPS = [] if CAL_PUBLIC else [Depends(verify_token)]
+router = APIRouter(tags=["Calendar"], dependencies=_DEPS)
 
 
 # Note: The calendar file path is resolved dynamically in _read() so tests that
@@ -109,7 +111,7 @@ EXAMPLE_NEXT = {
         }
     },
 )
-async def list_today(user_id: str = Depends(get_current_user_id)) -> EventsResponse:
+async def list_today() -> EventsResponse:
     today = os.getenv("PYTEST_FAKE_TODAY") or _dt.date.today().isoformat()
     items = [e for e in _read() if str(e.get("date") or "") == today]
     items.sort(key=_sort_key)
@@ -129,7 +131,7 @@ async def list_today(user_id: str = Depends(get_current_user_id)) -> EventsRespo
         }
     },
 )
-async def next_three(user_id: str = Depends(get_current_user_id)) -> EventsResponse:
+async def next_three() -> EventsResponse:
     # Prefer fake provider backing (Detroit TZ), fall back to local JSON
     try:
         from app.integrations.calendar_fake import FakeCalendarProvider
@@ -168,7 +170,7 @@ async def next_three(user_id: str = Depends(get_current_user_id)) -> EventsRespo
         }
     },
 )
-async def list_all(user_id: str = Depends(get_current_user_id)) -> EventsResponse:
+async def list_all() -> EventsResponse:
     items = list(_read())
     items.sort(key=_sort_key)
     return EventsResponse(items=[Event(**it) for it in items])

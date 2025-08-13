@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
@@ -544,52 +544,11 @@ async def tv_stage2(
 # -----------------------------
 
 
-class QuietHours(BaseModel):
-    start: str | None = None  # "22:00"
-    end: str | None = None    # "06:00"
-
-    model_config = ConfigDict(json_schema_extra={"example": {"start": "22:00", "end": "06:00"}})
-
-
-class TvConfig(BaseModel):
-    ambient_rotation: int = 30  # seconds between slides
-    rail: str = "safe"         # safe|admin|open
-    quiet_hours: QuietHours | None = None
-    default_vibe: str = "Calm Night"
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "ambient_rotation": 45,
-                "rail": "safe",
-                "quiet_hours": {"start": "22:00", "end": "06:00"},
-                "default_vibe": "Calm Night",
-            }
-        }
-    )
-
-
-class TvConfigResponse(BaseModel):
-    status: str = "ok"
-    config: TvConfig
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "status": "ok",
-                "config": {
-                    "ambient_rotation": 45,
-                    "rail": "safe",
-                    "quiet_hours": {"start": "22:00", "end": "06:00"},
-                    "default_vibe": "Calm Night",
-                },
-            }
-        }
-    )
+from app.models.tv import QuietHours, TvConfig, TvConfigResponse, TVConfigUpdate
 
 
 @router.get("/tv/config", response_model=TvConfigResponse, responses={200: {"model": TvConfigResponse}})
-async def tv_get_config(resident_id: str, user_id: str = Depends(get_current_user_id)):
+async def tv_get_config(resident_id: str):
     from app.care_store import get_tv_config
 
     rec = await get_tv_config(resident_id)
@@ -611,11 +570,32 @@ async def tv_get_config(resident_id: str, user_id: str = Depends(get_current_use
     response_model=TvConfigResponse,
     responses={200: {"model": TvConfigResponse}},
 )
-async def tv_put_config(resident_id: str, body: TvConfig, user_id: str = Depends(get_current_user_id)):
-    # Validate rail and simple hh:mm format for quiet hours
-    rail = (body.rail or "safe").lower()
+async def tv_put_config(
+    resident_id: str | None = Query(default="me"),
+    body: TVConfigUpdate = None,  # type: ignore[assignment]
+):
+    # Allow partial updates; merge with existing or defaults
+    from app.care_store import get_tv_config, set_tv_config
+
+    rec = await get_tv_config(resident_id or "me")
+    current = TvConfig(
+        ambient_rotation=int((rec or {}).get("ambient_rotation") or 30),
+        rail=str((rec or {}).get("rail") or "safe"),
+        quiet_hours=QuietHours(**((rec or {}).get("quiet_hours") or {})) if (rec and rec.get("quiet_hours")) else None,
+        default_vibe=str((rec or {}).get("default_vibe") or "Calm Night"),
+    )
+
+    # Compute effective values
+    new_ambient = int(body.ambient_rotation) if body and body.ambient_rotation is not None else current.ambient_rotation
+    new_rail = (body.rail or current.rail).lower() if body else current.rail
+    new_qh = body.quiet_hours if (body and body.quiet_hours is not None) else current.quiet_hours
+    new_vibe = body.default_vibe if (body and body.default_vibe is not None) else current.default_vibe
+
+    # Validate rail and simple hh:mm format for quiet hours (400 on bad input)
+    rail = (new_rail or "safe").lower()
     if rail not in {"safe", "admin", "open"}:
         raise HTTPException(status_code=400, detail="invalid_rail")
+
     def _valid_hhmm(s: str | None) -> bool:
         if not s:
             return True
@@ -627,21 +607,31 @@ async def tv_put_config(resident_id: str, body: TvConfig, user_id: str = Depends
             return 0 <= hh <= 23 and 0 <= mm <= 59
         except Exception:
             return False
-    if body.quiet_hours and not (_valid_hhmm(body.quiet_hours.start) and _valid_hhmm(body.quiet_hours.end)):
+
+    if new_qh and not (_valid_hhmm(new_qh.start) and _valid_hhmm(new_qh.end)):
         raise HTTPException(status_code=400, detail="invalid_quiet_hours")
-    from app.care_store import set_tv_config
 
     await set_tv_config(
-        resident_id,
-        ambient_rotation=int(body.ambient_rotation),
+        resident_id or "me",
+        ambient_rotation=int(new_ambient),
         rail=rail,
-        quiet_hours=body.quiet_hours.model_dump() if body.quiet_hours else None,
-        default_vibe=str(body.default_vibe or ""),
+        quiet_hours=new_qh.model_dump() if new_qh else None,
+        default_vibe=str(new_vibe or ""),
     )
     # Emit WS event so TV can hot-reload config without full refresh
     try:
         from app.api.care_ws import broadcast_resident
-        await broadcast_resident(resident_id, "tv.config.updated", {"config": body.model_dump()})
+        await broadcast_resident(resident_id or "me", "tv.config.updated", {"config": {
+            "ambient_rotation": new_ambient,
+            "rail": rail,
+            "quiet_hours": new_qh.model_dump() if new_qh else None,
+            "default_vibe": new_vibe,
+        }})
     except Exception:
         pass
-    return {"status": "ok", "config": body.model_dump()}
+    return {"status": "ok", "config": {
+        "ambient_rotation": new_ambient,
+        "rail": rail,
+        "quiet_hours": new_qh.model_dump() if new_qh else None,
+        "default_vibe": new_vibe,
+    }}

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import aiosqlite
+import asyncio
 
 
 def _compute_db_path() -> Path:
@@ -37,6 +38,12 @@ def _now() -> float:
 
 
 async def ensure_tables() -> None:
+    # Under pytest, make sure an event loop exists for sync callers
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        if os.getenv("PYTEST_CURRENT_TEST"):
+            asyncio.set_event_loop(asyncio.new_event_loop())
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
         # users

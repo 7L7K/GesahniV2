@@ -304,9 +304,23 @@ class ChromaVectorStore(VectorStore):
         use_length = (
             not hasattr(self, "_embedder") or isinstance(self._embedder, _LengthEmbedder)
         )
-        sim_threshold = _get_sim_threshold()
+        # Optional explicit query threshold (similarity in [0,1]) wins if provided
+        _vqt_raw = os.getenv("VECTOR_QUERY_THRESHOLD")
+        vqt_override = None
+        if _vqt_raw is not None:
+            try:
+                vqt = float(_vqt_raw)
+                # Clamp to [0,1]
+                if vqt < 0.0:
+                    vqt = 0.0
+                if vqt > 1.0:
+                    vqt = 1.0
+                vqt_override = vqt
+            except Exception:
+                vqt_override = None
+        sim_threshold = vqt_override if (vqt_override is not None) else _get_sim_threshold()
         env_has_sim = ("SIM_THRESHOLD" in os.environ)
-        if use_length and not env_has_sim:
+        if (vqt_override is None) and use_length and not env_has_sim:
             # For length embedder without explicit env override, interpret
             # the embedder default as a distance cutoff (relaxed from 0.5→0.6)
             self._dist_cutoff = float(sim_threshold)

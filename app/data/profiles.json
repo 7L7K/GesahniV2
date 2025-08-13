@@ -2,22 +2,22 @@
   "anon": {
     "name": {
       "value": "Ava",
-      "updated_at": 1755105496.977174,
+      "updated_at": 1755108344.051011,
       "source": "api"
     },
     "email": {
       "value": "ava@example.com",
-      "updated_at": 1755105496.9786692,
+      "updated_at": 1755108344.051657,
       "source": "api"
     },
     "timezone": {
       "value": "America/Los_Angeles",
-      "updated_at": 1755105496.9806101,
+      "updated_at": 1755108344.0521631,
       "source": "api"
     },
     "language": {
       "value": "en",
-      "updated_at": 1755105496.9828758,
+      "updated_at": 1755108344.052639,
       "source": "api"
     },
     "communication_style": {
@@ -46,34 +46,34 @@
     },
     "preferred_model": {
       "value": "gpt-4o-mini",
-      "updated_at": 1755105496.9842932,
+      "updated_at": 1755108344.053331,
       "source": "api"
     },
     "calendar_integration": {
       "value": true,
-      "updated_at": 1755105496.986604,
+      "updated_at": 1755108344.0542889,
       "source": "api"
     },
     "gmail_integration": {
       "value": false,
-      "updated_at": 1755105496.987724,
+      "updated_at": 1755108344.054784,
       "source": "api"
     },
     "onboarding_completed": {
       "value": false,
-      "updated_at": 1755105496.988826,
+      "updated_at": 1755108344.0553868,
       "source": "api"
     },
     "favorite_color": {
       "value": "blue",
-      "updated_at": 1755105501.199543,
+      "updated_at": 1755108347.7131782,
       "source": "utterance"
     },
     "notification_preferences": {
       "value": {
         "sms": true
       },
-      "updated_at": 1755105496.985554,
+      "updated_at": 1755108344.053807,
       "source": "api"
     },
     "preferences_tiles": {
@@ -81,17 +81,17 @@
         "calendar",
         "music"
       ],
-      "updated_at": 1755105497.372607,
+      "updated_at": 1755108344.234452,
       "source": "api"
     },
     "daily_rhythm": {
       "value": "morning",
-      "updated_at": 1755105497.3738601,
+      "updated_at": 1755108344.235046,
       "source": "api"
     },
     "helpfulness": {
       "value": "high",
-      "updated_at": 1755105497.375259,
+      "updated_at": 1755108344.235575,
       "source": "api"
     }
   },
@@ -115,14 +115,14 @@
   "u_test": {
     "favorite_color": {
       "value": "blue",
-      "updated_at": 1755105501.303405,
+      "updated_at": 1755108347.7731662,
       "source": "ui"
     }
   },
   "u1": {
     "preferred_name": {
       "value": "Alex",
-      "updated_at": 1755105501.308565,
+      "updated_at": 1755108347.7763531,
       "source": "import"
     }
   },
