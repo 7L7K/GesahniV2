@@ -66,7 +66,7 @@
     },
     "favorite_color": {
       "value": "blue",
-      "updated_at": 1755050919.599044,
+      "updated_at": 1755049156.633106,
       "source": "utterance"
     }
   },
@@ -90,14 +90,14 @@
   "u_test": {
     "favorite_color": {
       "value": "blue",
-      "updated_at": 1755050919.650305,
+      "updated_at": 1755049156.6706262,
       "source": "ui"
     }
   },
   "u1": {
     "preferred_name": {
       "value": "Alex",
-      "updated_at": 1755050919.655849,
+      "updated_at": 1755049156.673729,
       "source": "import"
     }
   },

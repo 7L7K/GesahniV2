@@ -73,3 +73,78 @@ def test_has_speech_python_fallback(monkeypatch):
     assert transcribe.has_speech(loud, threshold=100) is True
 
 
+def test_missing_api_key_raises(monkeypatch):
+    import importlib
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    from app import transcribe
+    importlib.reload(transcribe)
+    # get_sync_whisper_client should raise when key missing
+    try:
+        transcribe.get_sync_whisper_client()
+        assert False, "expected RuntimeError"
+    except RuntimeError as e:
+        assert "OPENAI_API_KEY" in str(e)
+
+
+def test_missing_openai_package_raises(monkeypatch):
+    import importlib
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    from app import transcribe
+    importlib.reload(transcribe)
+    # Simulate missing SDK
+    monkeypatch.setattr(transcribe, "_SyncOpenAI", None)
+    try:
+        transcribe.get_sync_whisper_client()
+        assert False, "expected RuntimeError"
+    except RuntimeError as e:
+        assert "openai" in str(e).lower()
+
+
+def test_client_cached_and_close(monkeypatch):
+    import importlib
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    from app import transcribe
+    importlib.reload(transcribe)
+
+    class Fake:
+        def __init__(self, *a, **k):
+            self.closed = False
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr(transcribe, "_SyncOpenAI", Fake)
+    c1 = transcribe.get_sync_whisper_client()
+    c2 = transcribe.get_sync_whisper_client()
+    assert c1 is c2
+    transcribe.close_sync_whisper_client()
+    assert getattr(c1, "closed", False) is True
+    # next call returns a new instance
+    c3 = transcribe.get_sync_whisper_client()
+    assert c3 is not c1
+
+
+def test_legacy_whisper_model_env(monkeypatch, tmp_path):
+    import importlib
+    monkeypatch.setenv("OPENAI_API_KEY", "x")
+    monkeypatch.delenv("OPENAI_TRANSCRIBE_MODEL", raising=False)
+    monkeypatch.setenv("WHISPER_MODEL", "whisper-9")
+    from app import transcribe
+    importlib.reload(transcribe)
+
+    class Resp: text = "ok"
+    class T:
+        def __init__(self): self.last_model = None
+        def create(self, *a, **k): self.last_model = k.get("model"); return Resp()
+    class A: 
+        def __init__(self): self.transcriptions = T()
+    class C:
+        def __init__(self): self.audio = A()
+
+    fake = C()
+    monkeypatch.setattr(transcribe, "_client_sync", fake)
+    p = tmp_path / "a.wav"; p.write_bytes(b"x")
+    out = transcribe.transcribe_file(str(p))
+    assert out == "ok"
+    assert fake.audio.transcriptions.last_model == "whisper-9"
+
+

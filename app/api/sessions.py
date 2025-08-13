@@ -1,5 +1,46 @@
 from __future__ import annotations
 
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, Depends, HTTPException
+
+from ..deps.user import get_current_user_id
+from ..sessions_store import sessions_store
+
+
+router = APIRouter(tags=["auth"], include_in_schema=False)
+
+
+@router.get("/sessions")
+async def list_sessions(user_id: str = Depends(get_current_user_id)) -> Dict[str, List[Dict[str, Any]]]:
+    if user_id == "anon":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    out = await sessions_store.list_user_sessions(user_id)
+    return {"items": out}
+
+
+@router.post("/sessions/{sid}/revoke")
+async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) -> Dict[str, str]:
+    if user_id == "anon":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    await sessions_store.revoke_family(sid)
+    return {"status": "ok"}
+
+
+@router.post("/devices/{did}/rename")
+async def rename_device(did: str, new_name: str, user_id: str = Depends(get_current_user_id)) -> Dict[str, str]:
+    if user_id == "anon":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    ok = await sessions_store.rename_device(user_id, did, new_name)
+    if not ok:
+        raise HTTPException(status_code=400, detail="rename_failed")
+    return {"status": "ok"}
+
+
+__all__ = ["router"]
+
+from __future__ import annotations
+
 import json
 import logging
 from pathlib import Path
