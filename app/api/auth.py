@@ -22,6 +22,7 @@ from ..sessions_store import sessions_store
 from ..auth_store import (
     ensure_tables as _ensure_auth,
     create_pat as _create_pat,
+    get_pat_by_hash as _get_pat_by_hash,
 )
 
 
@@ -32,6 +33,33 @@ def _iso(dt: float | None) -> str | None:
     if dt is None:
         return None
     return datetime.fromtimestamp(float(dt), tz=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def verify_pat(token: str, required_scopes: List[str] | None = None) -> Dict[str, Any] | None:
+    try:
+        import hashlib
+        import asyncio
+
+        h = hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+        # Fetch synchronously via event loop since tests call this directly
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # In case an event loop is already running, fall back to None (not expected in unit)
+                return None
+            rec = loop.run_until_complete(_get_pat_by_hash(h))  # type: ignore[arg-type]
+        except RuntimeError:
+            rec = asyncio.run(_get_pat_by_hash(h))  # type: ignore[arg-type]
+        if not rec:
+            return None
+        if rec.get("revoked_at"):
+            return None
+        scopes = set(rec.get("scopes") or [])
+        if required_scopes and not set(required_scopes).issubset(scopes):
+            return None
+        return rec
+    except Exception:
+        return None
 
 
 @router.get("/whoami")
