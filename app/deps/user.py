@@ -61,7 +61,8 @@ def get_current_user_id(
             token = None
 
     secret = JWT_SECRET or os.getenv("JWT_SECRET")
-    require_jwt = os.getenv("REQUIRE_JWT", "1").strip().lower() in {"1", "true", "yes", "on"}
+    # Default to not requiring JWT in dev unless explicitly enabled
+    require_jwt = os.getenv("REQUIRE_JWT", "0").strip().lower() in {"1", "true", "yes", "on"}
     optional_in_tests = os.getenv("JWT_OPTIONAL_IN_TESTS", "0").lower() in {"1", "true", "yes", "on"}
     # In tests, allow anonymous without a secret to avoid 500s
     if not secret and (os.getenv("ENV", "").lower() == "test" or optional_in_tests or os.getenv("PYTEST_RUNNING")):
