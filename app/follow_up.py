@@ -41,6 +41,16 @@ except Exception:  # pragma: no cover - optional dependency
 
 from .history import append_history
 
+
+def _in_test_mode() -> bool:
+    v = lambda s: str(os.getenv(s, "")).strip().lower()
+    return bool(
+        os.getenv("PYTEST_CURRENT_TEST")
+        or os.getenv("PYTEST_RUNNING")
+        or v("PYTEST_MODE") in {"1", "true", "yes", "on"}
+        or v("ENV") == "test"
+    )
+
 # ---------------------------------------------------------------------------
 # Config and persistence
 # ---------------------------------------------------------------------------
@@ -53,15 +63,22 @@ FOLLOW_UPS_FILE = Path(
 )
 FOLLOW_UPS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-# Ensure an event loop exists for the scheduler, even during import-time
-try:
-    _loop = asyncio.get_event_loop()
-except RuntimeError:
-    _loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(_loop)
-
-_scheduler = AsyncIOScheduler(event_loop=_loop)
-_scheduler.start()
+# Initialize scheduler conservatively in tests to avoid manipulating the global
+# event loop policy/runtime when importing this module under pytest.
+if _in_test_mode():
+    try:
+        _loop = asyncio.get_event_loop()
+    except RuntimeError:
+        _loop = None  # don't create/set a loop in tests; remain lazy
+    _scheduler = AsyncIOScheduler(event_loop=_loop)  # type: ignore[arg-type]
+else:
+    try:
+        _loop = asyncio.get_event_loop()
+    except RuntimeError:
+        _loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(_loop)
+    _scheduler = AsyncIOScheduler(event_loop=_loop)
+    _scheduler.start()
 
 _lock = asyncio.Lock()
 
@@ -109,13 +126,14 @@ def _schedule(entry: Dict[str, Any]) -> None:
     )
 
 
-# Rehydrate jobs on import
-for _entry in _load_followups():
-    try:
-        if datetime.fromisoformat(_entry["when"]) > datetime.utcnow():
-            _schedule(_entry)
-    except Exception:
-        continue
+# Rehydrate jobs on import (skip during tests to avoid side effects)
+if not _in_test_mode():
+    for _entry in _load_followups():
+        try:
+            if datetime.fromisoformat(_entry["when"]) > datetime.utcnow():
+                _schedule(_entry)
+        except Exception:
+            continue
 
 
 # ---------------------------------------------------------------------------

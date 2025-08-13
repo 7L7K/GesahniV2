@@ -610,21 +610,6 @@ async def tv_get_config(resident_id: str, user_id: str = Depends(get_current_use
     "/tv/config",
     response_model=TvConfigResponse,
     responses={200: {"model": TvConfigResponse}},
-    openapi_extra={
-        "requestBody": {
-            "content": {
-                "application/json": {
-                    "schema": {"$ref": "#/components/schemas/TvConfig"},
-                    "example": {
-                        "ambient_rotation": 45,
-                        "rail": "safe",
-                        "quiet_hours": {"start": "22:00", "end": "06:00"},
-                        "default_vibe": "Calm Night"
-                    }
-                }
-            }
-        }
-    },
 )
 async def tv_put_config(resident_id: str, body: TvConfig, user_id: str = Depends(get_current_user_id)):
     # Validate rail and simple hh:mm format for quiet hours
