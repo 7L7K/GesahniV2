@@ -9,6 +9,7 @@ class WsHub {
   private sockets: Record<WSName, WebSocket | null> = { music: null, care: null };
   private timers: Record<WSName, ReturnType<typeof setTimeout> | null> = { music: null, care: null };
   private queues: Record<WSName, string[]> = { music: [], care: [] };
+  private lastPong: Record<WSName, number> = { music: 0, care: 0 };
 
   start() {
     this.connect("music", "/v1/ws/music", this.onMusicOpen, this.onMusicMessage);
@@ -79,12 +80,19 @@ class WsHub {
 
       ws.onopen = () => {
         retry = 0; // reset backoff
+        this.lastPong[name] = Date.now();
         try { onOpenExtra.call(this, ws); } catch { /* noop */ }
         this.flushQueue(name);
       };
 
       ws.onmessage = (e) => {
-        try { onMessage.call(this, e); } catch { /* swallow to keep socket alive */ }
+        try {
+          onMessage.call(this, e);
+          // Handle pong responses
+          if (String(e.data || "") === 'pong') {
+            this.lastPong[name] = Date.now();
+          }
+        } catch { /* swallow to keep socket alive */ }
       };
 
       ws.onclose = () => {
@@ -107,7 +115,8 @@ class WsHub {
   // ---------------- message handlers ----------------
 
   private onMusicOpen(ws: WebSocket) {
-    // nothing special beyond queue flush for now
+    // Send initial ping
+    try { ws.send('ping'); } catch { /* noop */ }
   }
 
   private onMusicMessage(e: MessageEvent) {
@@ -121,6 +130,8 @@ class WsHub {
   private onCareOpen(ws: WebSocket) {
     try {
       ws.send(JSON.stringify({ action: "subscribe", topic: "resident:me" }));
+      // Send initial ping
+      ws.send(JSON.stringify({ action: 'ping' }));
     } catch { /* noop */ }
   }
 

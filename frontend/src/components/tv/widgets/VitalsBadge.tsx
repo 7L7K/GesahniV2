@@ -31,19 +31,20 @@ function useHeartbeat() {
     const [lastAt, setLastAt] = useState<number>(0);
     const [online, setOnline] = useState<boolean>(typeof navigator !== "undefined" ? navigator.onLine : true);
     useEffect(() => {
-        const tick = async () => {
-            try {
-                const res = await apiFetch("/v1/status/features", { method: "GET" });
-                if (res.ok) setLastAt(Date.now());
-            } catch { }
-        };
-        tick();
-        const t = setInterval(tick, 60_000);
+        const onPing = () => setLastAt(Date.now());
+        const onHeart = () => setLastAt(Date.now());
+        window.addEventListener('music.state', onPing as any);
+        window.addEventListener('device.heartbeat', onHeart as any);
         const on = () => setOnline(true);
         const off = () => setOnline(false);
         window.addEventListener("online", on);
         window.addEventListener("offline", off);
-        return () => { clearInterval(t); window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+        return () => {
+            window.removeEventListener('music.state', onPing as any);
+            window.removeEventListener('device.heartbeat', onHeart as any);
+            window.removeEventListener("online", on);
+            window.removeEventListener("offline", off);
+        };
     }, []);
     return { lastAt, online };
 }
@@ -51,7 +52,7 @@ function useHeartbeat() {
 export function VitalsBadge() {
     const { lastAt, online } = useHeartbeat();
     const bat = useBattery();
-    const stale = useMemo(() => (Date.now() - (lastAt || 0)) > 90_000, [lastAt]);
+    const stale = useMemo(() => (Date.now() - (lastAt || 0)) > 60_000, [lastAt]);
     const netLabel = online && !stale ? "Online ✓" : stale ? "Reconnecting…" : "Offline";
     const batPct = bat ? Math.round((bat.level || 0) * 100) : null;
     const batLabel = batPct !== null ? `${batPct}%${bat?.charging ? " ⚡" : ""}` : "—";
