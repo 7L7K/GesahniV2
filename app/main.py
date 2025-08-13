@@ -1082,9 +1082,15 @@ try:
 except Exception:
     pass
 
-# Music API router (avoid applying HTTP dependencies to WS routes)
+# Music API router: attach HTTP dependencies to HTTP paths only
 if music_router is not None:
-    app.include_router(music_router, prefix="/v1")
+    from fastapi import APIRouter
+    music_http = APIRouter(
+        dependencies=[Depends(verify_token), Depends(rate_limit), Depends(optional_require_any_scope(["music:control"]))]
+    )
+    # mount HTTP subrouter for HTTP routes
+    music_http.include_router(music_router)
+    app.include_router(music_http, prefix="/v1")
     app.include_router(music_router, include_in_schema=False)
     # Sim WS helpers for UI duck/restore
     try:
