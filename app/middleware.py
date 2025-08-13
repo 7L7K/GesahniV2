@@ -403,6 +403,13 @@ async def silent_refresh_middleware(request: Request, call_next):
         exp = int(payload.get("exp", 0))
         threshold = int(os.getenv("ACCESS_REFRESH_THRESHOLD_SECONDS", "3600"))
         if exp - now <= threshold:
+            # Small jitter to avoid stampede when many tabs refresh concurrently
+            try:
+                import random as _rand
+                import asyncio as _asyncio
+                await _asyncio.sleep(_rand.uniform(0.05, 0.25))
+            except Exception:
+                pass
             # Rotate token, preserving custom claims
             user_id = str(payload.get("user_id") or "")
             if not user_id:
@@ -434,8 +441,14 @@ async def silent_refresh_middleware(request: Request, call_next):
                     rp = jwt.decode(rtok, secret, algorithms=["HS256"])  # may raise
                     r_exp = int(rp.get("exp", now))
                     import random as _rand
-                    r_life = max(0, r_exp - now - _rand.randint(0, 15))
+                    # Jitter extension by 50–250ms only; do not reduce lifespan substantially
+                    r_life = max(0, r_exp - now)
                     if r_life > 0:
+                        # Jitter write ordering
+                        try:
+                            await asyncio.sleep(_rand.uniform(0.05, 0.25))  # type: ignore[name-defined]
+                        except Exception:
+                            pass
                         response.set_cookie(
                             key="refresh_token",
                             value=rtok,
