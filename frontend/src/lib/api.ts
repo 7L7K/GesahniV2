@@ -84,6 +84,22 @@ export async function apiFetch(
   if (auth) Object.assign(mergedHeaders as Record<string, string>, authHeaders());
 
   let res = await fetch(url, { ...rest, headers: mergedHeaders });
+  // Surface rate limit UX with countdown via custom event for the app
+  if (res.status === 429) {
+    try {
+      const ct = res.headers.get('Content-Type') || ''
+      const remaining = Number(res.headers.get('X-RateLimit-Remaining') || '0')
+      const retryAfter = Number(res.headers.get('Retry-After') || '0')
+      let detail: any = null
+      if (ct.includes('application/problem+json')) {
+        detail = await res.json().catch(() => null)
+      }
+      if (typeof window !== 'undefined') {
+        const ev = new CustomEvent('rate-limit', { detail: { path, remaining, retryAfter, problem: detail } })
+        window.dispatchEvent(ev)
+      }
+    } catch { /* ignore */ }
+  }
   if (res.status === 401 && auth) {
     const refreshRes = await tryRefresh();
     if (refreshRes && refreshRes.ok) {
@@ -515,4 +531,26 @@ export function useProfile() {
   });
 }
 
+
+// Admin TV Config helpers -----------------------------------------------------
+export type TvConfig = {
+  ambient_rotation: number;
+  rail: 'safe' | 'admin' | 'open';
+  quiet_hours?: { start?: string; end?: string } | null;
+  default_vibe: string;
+};
+
+export async function getTvConfig(residentId: string, token: string) {
+  const qs = `?resident_id=${encodeURIComponent(residentId)}&token=${encodeURIComponent(token || '')}`;
+  const res = await apiFetch(`/v1/tv/config${qs}`, { method: 'GET' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<{ status: string; config: TvConfig }>;
+}
+
+export async function putTvConfig(residentId: string, token: string, cfg: TvConfig) {
+  const qs = `?resident_id=${encodeURIComponent(residentId)}&token=${encodeURIComponent(token || '')}`;
+  const res = await apiFetch(`/v1/tv/config${qs}`, { method: 'PUT', body: JSON.stringify(cfg) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<{ status: string; config: TvConfig }>;
+}
 

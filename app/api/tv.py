@@ -184,6 +184,110 @@ async def tv_stage2(
         profile_store.update(user_id, data)
     return {"status": "ok"}
 
+
+# -----------------------------
+# TV Config per-resident
+# -----------------------------
+
+
+class QuietHours(BaseModel):
+    start: str | None = None  # "22:00"
+    end: str | None = None    # "06:00"
+
+    model_config = ConfigDict(json_schema_extra={"example": {"start": "22:00", "end": "06:00"}})
+
+
+class TvConfig(BaseModel):
+    ambient_rotation: int = 30  # seconds between slides
+    rail: str = "safe"         # safe|admin|open
+    quiet_hours: QuietHours | None = None
+    default_vibe: str = "Calm Night"
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "ambient_rotation": 45,
+                "rail": "safe",
+                "quiet_hours": {"start": "22:00", "end": "06:00"},
+                "default_vibe": "Calm Night",
+            }
+        }
+    )
+
+
+class TvConfigResponse(BaseModel):
+    status: str = "ok"
+    config: TvConfig
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "ok",
+                "config": {
+                    "ambient_rotation": 45,
+                    "rail": "safe",
+                    "quiet_hours": {"start": "22:00", "end": "06:00"},
+                    "default_vibe": "Calm Night",
+                },
+            }
+        }
+    )
+
+
+@router.get("/tv/config", response_model=TvConfigResponse, responses={200: {"model": TvConfigResponse}})
+async def tv_get_config(resident_id: str, user_id: str = Depends(get_current_user_id)):
+    from app.care_store import get_tv_config
+
+    rec = await get_tv_config(resident_id)
+    if not rec:
+        # Default config when none saved
+        cfg = TvConfig()
+        return {"status": "ok", "config": cfg.model_dump()}
+    cfg = TvConfig(
+        ambient_rotation=int(rec.get("ambient_rotation") or 30),
+        rail=str(rec.get("rail") or "safe"),
+        quiet_hours=QuietHours(**(rec.get("quiet_hours") or {})) if rec.get("quiet_hours") else None,
+        default_vibe=str(rec.get("default_vibe") or "Calm Night"),
+    )
+    return {"status": "ok", "config": cfg.model_dump()}
+
+
+@router.put("/tv/config", response_model=TvConfigResponse, responses={200: {"model": TvConfigResponse}})
+async def tv_put_config(resident_id: str, body: TvConfig, user_id: str = Depends(get_current_user_id)):
+    # Validate rail and simple hh:mm format for quiet hours
+    rail = (body.rail or "safe").lower()
+    if rail not in {"safe", "admin", "open"}:
+        raise HTTPException(status_code=400, detail="invalid_rail")
+    def _valid_hhmm(s: str | None) -> bool:
+        if not s:
+            return True
+        parts = s.split(":")
+        if len(parts) != 2:
+            return False
+        try:
+            hh, mm = int(parts[0]), int(parts[1])
+            return 0 <= hh <= 23 and 0 <= mm <= 59
+        except Exception:
+            return False
+    if body.quiet_hours and not (_valid_hhmm(body.quiet_hours.start) and _valid_hhmm(body.quiet_hours.end)):
+        raise HTTPException(status_code=400, detail="invalid_quiet_hours")
+    from app.care_store import set_tv_config
+
+    await set_tv_config(
+        resident_id,
+        ambient_rotation=int(body.ambient_rotation),
+        rail=rail,
+        quiet_hours=body.quiet_hours.model_dump() if body.quiet_hours else None,
+        default_vibe=str(body.default_vibe or ""),
+    )
+    # Emit WS event so TV can hot-reload config without full refresh
+    try:
+        from app.api.care_ws import broadcast_resident
+        await broadcast_resident(resident_id, "tv.config.updated", {"config": body.model_dump()})
+    except Exception:
+        pass
+    return {"status": "ok", "config": body.model_dump()}
+
 from __future__ import annotations
 
 import datetime as _dt
