@@ -3,20 +3,24 @@
 import { useQuery } from "@tanstack/react-query";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || ""; // when empty, use same-origin in browser
+const HEADER_AUTH_MODE = (process.env.NEXT_PUBLIC_HEADER_AUTH_MODE || "0").toLowerCase() === "1";
 
 // --- Auth token helpers ------------------------------------------------------
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
+  if (!HEADER_AUTH_MODE) return null;
   return localStorage.getItem("auth:access_token");
 }
 
 export function getRefreshToken(): string | null {
   if (typeof window === "undefined") return null;
+  if (!HEADER_AUTH_MODE) return null;
   return localStorage.getItem("auth:refresh_token");
 }
 
 export function setTokens(access: string, refresh?: string) {
   if (typeof window === "undefined") return;
+  if (!HEADER_AUTH_MODE) return; // do not persist tokens when cookie mode
   localStorage.setItem("auth:access_token", access);
   if (refresh) localStorage.setItem("auth:refresh_token", refresh);
   try {
@@ -34,28 +38,36 @@ export function clearTokens() {
 }
 
 export function isAuthed(): boolean {
+  if (!HEADER_AUTH_MODE) return true; // cookie mode relies on server state
   return Boolean(getToken());
 }
 
 function authHeaders() {
+  if (!HEADER_AUTH_MODE) return {};
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// No manual refresh; rely on server silent refresh
+
 async function tryRefresh(): Promise<Response | null> {
+  if (!HEADER_AUTH_MODE) return null;
   const refresh = getRefreshToken();
+  if (!refresh) return null;
+
   try {
-    const base = API_URL || (typeof window !== "undefined" ? "" : "http://localhost:8000");
-    const init: RequestInit = { method: "POST", headers: { "Content-Type": "application/json" } };
-    // Even if no refresh token exists, attempt a soft refresh for tests/local envs
-    (init as any).body = JSON.stringify(refresh ? { refresh_token: refresh } : {});
-    const res = await fetch(`${base}/v1/refresh`, init);
+    const res = await fetch(`${API_URL || ""}/v1/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refresh }),
+    });
+
     if (res.ok) {
-      try {
-        const body = (await res.json()) as { access_token?: string; refresh_token?: string };
-        if (body.access_token) setTokens(body.access_token, body.refresh_token);
-      } catch { /* ignore parse */ }
+      const body = await res.json().catch(() => ({} as Record<string, unknown>));
+      const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string };
+      if (access_token) setTokens(access_token, refresh_token);
     }
+
     return res;
   } catch {
     return null;
@@ -82,8 +94,17 @@ export async function apiFetch(
     (mergedHeaders as Record<string, string>)["Content-Type"] = "application/json";
   }
   if (auth) Object.assign(mergedHeaders as Record<string, string>, authHeaders());
+  // CSRF header for mutating requests (cookie-based)
+  if (hasMethodBody) {
+    try {
+      const csrf = (typeof document !== 'undefined') ? (document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '') : '';
 
-  let res = await fetch(url, { ...rest, headers: mergedHeaders });
+      if (csrf) (mergedHeaders as Record<string, string>)["X-CSRF"] = decodeURIComponent(csrf);
+    } catch { /* ignore */ }
+  }
+
+  // Always include cookies
+  let res = await fetch(url, { ...rest, headers: mergedHeaders, credentials: 'include' });
   // Surface rate limit UX with countdown via custom event for the app
   if (res.status === 429) {
     try {
@@ -205,6 +226,7 @@ export async function setDevice(device_id: string): Promise<void> {
 
 export function wsUrl(path: string): string {
   const base = (API_URL || "http://localhost:8000").replace(/^http/, "ws");
+  if (!HEADER_AUTH_MODE) return `${base}${path}`; // cookie-auth for WS
   const token = getToken();
   if (!token) return `${base}${path}`;
   const sep = path.includes("?") ? "&" : "?";
@@ -347,9 +369,9 @@ export async function login(username: string, password: string) {
     const message = typeof detail === "string" ? detail : JSON.stringify(detail);
     throw new Error(message || "Login failed");
   }
-  const { access_token, refresh_token } = body as { access_token: string; refresh_token?: string };
-  if (access_token) setTokens(access_token, refresh_token);
-  return { access_token, refresh_token };
+  const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string };
+  if (access_token && HEADER_AUTH_MODE) setTokens(access_token, refresh_token);
+  return { access_token, refresh_token } as any;
 }
 
 export async function register(username: string, password: string) {
@@ -371,6 +393,32 @@ export async function logout(): Promise<void> {
   } finally {
     clearTokens();
   }
+}
+
+// Sessions & PATs --------------------------------------------------------------
+export type SessionInfo = { session_id: string; device_id: string; device_name?: string; created_at?: number; last_seen_at?: number; current?: boolean }
+export async function listSessions(): Promise<SessionInfo[]> {
+  const res = await apiFetch('/v1/sessions', { method: 'GET' });
+  if (!res.ok) throw new Error('sessions_failed');
+  return res.json();
+}
+
+export async function revokeSession(sid: string): Promise<void> {
+  const res = await apiFetch(`/v1/sessions/${encodeURIComponent(sid)}/revoke`, { method: 'POST' });
+  if (!res.ok && res.status !== 204) throw new Error('revoke_failed');
+}
+
+export type PatInfo = { id: string; name: string; scopes: string[]; exp_at?: number | null; last_used_at?: number | null }
+export async function listPATs(): Promise<PatInfo[]> {
+  const res = await apiFetch('/v1/pats', { method: 'GET' });
+  if (!res.ok) throw new Error('pats_failed');
+  return res.json();
+}
+
+export async function createPAT(name: string, scopes: string[], exp_at?: number | null): Promise<{ id: string; token?: string }> {
+  const res = await apiFetch('/v1/pats', { method: 'POST', body: JSON.stringify({ name, scopes, exp_at }) });
+  if (!res.ok) throw new Error('pat_create_failed');
+  return res.json();
 }
 
 // -----------------------------

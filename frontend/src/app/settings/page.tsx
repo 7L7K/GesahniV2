@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { updateProfile, UserProfile, useProfile } from '@/lib/api';
+import { updateProfile, UserProfile, useProfile, listSessions, revokeSession, listPATs, createPAT } from '@/lib/api';
 import { getBudget } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 
@@ -248,6 +248,18 @@ function SettingsPageInner() {
                             </div>
                         </div>
 
+                        {/* Sessions */}
+                        <div>
+                            <h2 className="text-xl font-semibold text-gray-900 mb-6">Sessions</h2>
+                            <SessionsPanel />
+                        </div>
+
+                        {/* Security */}
+                        <div>
+                            <h2 className="text-xl font-semibold text-gray-900 mb-6">Security</h2>
+                            <PatPanel />
+                        </div>
+
                         {/* Integrations */}
                         <div>
                             <h2 className="text-xl font-semibold text-gray-900 mb-6">Integrations</h2>
@@ -299,6 +311,82 @@ function SettingsPageInner() {
                 </div>
             </div>
         </main>
+    );
+}
+
+function SessionsPanel() {
+    const [items, setItems] = useState<{ session_id: string; device_id: string; device_name?: string; created_at?: number; last_seen_at?: number; current?: boolean }[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    useEffect(() => {
+        listSessions().then(setItems).catch((e) => setError(e?.message || 'failed')).finally(() => setLoading(false));
+    }, []);
+    const onRevoke = async (sid: string) => {
+        try { await revokeSession(sid); setItems((prev) => prev.filter((s) => s.session_id !== sid)); } catch { /* ignore */ }
+    };
+    if (loading) return <div className="text-sm text-gray-500">Loading sessions…</div>;
+    if (error) return <div className="text-sm text-red-600">{error}</div>;
+    if (!items.length) return <div className="text-sm text-gray-500">No active sessions</div>;
+    return (
+        <div className="space-y-3">
+            {items.map((s) => (
+                <div key={s.session_id} className="flex items-center justify-between p-3 border rounded">
+                    <div className="text-sm">
+                        <div className="font-medium">{s.device_name || s.device_id}</div>
+                        <div className="text-gray-500">Created: {s.created_at ? new Date(s.created_at * 1000).toLocaleString() : '—'} · Last seen: {s.last_seen_at ? new Date(s.last_seen_at * 1000).toLocaleString() : '—'}</div>
+                        {s.current ? <div className="text-xs text-emerald-600">This device</div> : null}
+                    </div>
+                    {!s.current && (
+                        <button onClick={() => onRevoke(s.session_id)} className="text-sm text-red-600 hover:underline">Revoke</button>
+                    )}
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function PatPanel() {
+    const [items, setItems] = useState<{ id: string; name: string; scopes: string[]; exp_at?: number | null; last_used_at?: number | null }[]>([]);
+    const [name, setName] = useState('');
+    const [scopes, setScopes] = useState('');
+    const [creating, setCreating] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    useEffect(() => { listPATs().then(setItems).catch((e) => setError(e?.message || 'failed')); }, []);
+    const onCreate = async () => {
+        setCreating(true); setError(null);
+        try {
+            const s = scopes.split(',').map(s => s.trim()).filter(Boolean);
+            const res = await createPAT(name || 'New PAT', s);
+            setItems((prev) => [{ id: res.id, name: name || 'New PAT', scopes: s }, ...prev]);
+            setName(''); setScopes('');
+        } catch (e: any) {
+            setError(e?.message || 'failed');
+        } finally { setCreating(false); }
+    };
+    return (
+        <div className="space-y-4">
+            <div className="flex items-end gap-3">
+                <div className="flex-1">
+                    <label className="block text-sm text-gray-700 mb-1">Name</label>
+                    <input value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-2 border rounded" />
+                </div>
+                <div className="flex-1">
+                    <label className="block text-sm text-gray-700 mb-1">Scopes (comma-separated)</label>
+                    <input value={scopes} onChange={(e) => setScopes(e.target.value)} className="w-full px-3 py-2 border rounded" />
+                </div>
+                <Button onClick={onCreate} disabled={creating || !name} className="min-w-[120px]">{creating ? 'Creating…' : 'Create PAT'}</Button>
+            </div>
+            {error && <div className="text-sm text-red-600">{error}</div>}
+            <div className="space-y-2">
+                {items.map((p) => (
+                    <div key={p.id} className="p-3 border rounded text-sm">
+                        <div className="font-medium">{p.name}</div>
+                        <div className="text-gray-600">Scopes: {p.scopes.join(', ') || '—'}</div>
+                        {typeof p.last_used_at === 'number' && <div className="text-gray-500">Last used: {new Date((p.last_used_at as number) * 1000).toLocaleString()}</div>}
+                    </div>
+                ))}
+            </div>
+        </div>
     );
 }
 

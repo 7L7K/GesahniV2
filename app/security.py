@@ -30,6 +30,7 @@ def scope_required(*required_scopes: str):
             raise HTTPException(status_code=403, detail="insufficient_scope")
     return _dep
 from . import metrics
+from .token_store import _key_login_ip, _key_login_user, incr_login_counter
 
 JWT_SECRET: str | None = None  # backwards compat; actual value read from env
 API_TOKEN = os.getenv("API_TOKEN")
@@ -43,11 +44,11 @@ _burst_window = float(os.getenv("RATE_LIMIT_BURST_WINDOW", "10"))
 _lock = asyncio.Lock()
 
 # Trust proxy headers for client IP only when explicitly enabled
-# Back-compat: trust X-Forwarded-For by default (disable with TRUST_X_FORWARDED_FOR=0)
-_TRUST_XFF = os.getenv("TRUST_X_FORWARDED_FOR", "1").strip().lower() in {"1", "true", "yes", "on"}
+# Default: do NOT trust X-Forwarded-For unless explicitly enabled
+_TRUST_XFF = os.getenv("TRUST_X_FORWARDED_FOR", "0").strip().lower() in {"1", "true", "yes", "on"}
 
-# Scope of rate limit keys: "global" (default) or "route" to include path
-_KEY_SCOPE = os.getenv("RATE_LIMIT_KEY_SCOPE", "global").strip().lower()
+# Scope of rate limit keys: default to "route" to avoid cross-route contention
+_KEY_SCOPE = os.getenv("RATE_LIMIT_KEY_SCOPE", "route").strip().lower()
 
 # Track pytest's current test id to re-sync config between tests that mutate env
 _LAST_TEST_ID = os.getenv("PYTEST_CURRENT_TEST") or ""
@@ -365,8 +366,8 @@ async def verify_token(request: Request) -> None:
     """
 
     jwt_secret = os.getenv("JWT_SECRET")
-    # Default to pass-through when no secret is configured unless explicitly required
-    require_jwt = os.getenv("REQUIRE_JWT", "0").strip().lower() in {"1", "true", "yes", "on"}
+    # Require JWT by default; tests/dev can opt-out via JWT_OPTIONAL_IN_TESTS
+    require_jwt = os.getenv("REQUIRE_JWT", "1").strip().lower() in {"1", "true", "yes", "on"}
     # Test-mode bypass: allow anonymous when secret is missing under tests OR when JWT_OPTIONAL_IN_TESTS=1
     test_bypass = (
         os.getenv("ENV", "").strip().lower() == "test"

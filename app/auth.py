@@ -310,7 +310,7 @@ async def register(req: RegisterRequest, user_id: str = Depends(get_current_user
     return {"status": "ok"}
 
 
-# Login endpoint
+# Login endpoint with backoff after failures
 @router.post("/login", response_model=TokenResponse)
 async def login(
     req: LoginRequest, request: Request, response: Response, user_id: str = Depends(get_current_user_id)
@@ -339,6 +339,21 @@ async def login(
     if not valid:
         _record_attempt(user_key, success=False)
         _record_attempt(ip_key, success=False)
+        # Exponential backoff with jitter: after 3 failures add 200–1000ms delay; after 6 lock for 60s
+        try:
+            import asyncio as _asyncio
+            import random as _rand
+            count, ts = _attempts.get(user_key, (0, 0))
+            if count >= 6:
+                # Lock out for 60s
+                raise HTTPException(status_code=429, detail={"error": "rate_limited", "retry_after": 60})
+            if count >= 3:
+                delay_ms = _rand.randint(200, 1000)
+                await _asyncio.sleep(delay_ms / 1000.0)
+        except HTTPException:
+            raise
+        except Exception:
+            pass
         logger.warning("auth.login_failed", extra={"meta": {"username": norm_user, "ip": _client_ip(request)}})
         raise HTTPException(status_code=401, detail="Invalid credentials")
     _record_attempt(user_key, success=True)

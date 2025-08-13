@@ -62,6 +62,7 @@ from .alias_store import get_all as alias_all, set as alias_set, delete as alias
 from .history import get_record_by_req_id
 from .llama_integration import startup_check as llama_startup
 from .logging_config import configure_logging, get_last_errors
+from .csrf import CSRFMiddleware
 from .otel_utils import init_tracing, shutdown_tracing
 from .status import router as status_router
 from .auth import router as auth_router
@@ -81,6 +82,10 @@ try:
     from .api.oauth_apple import router as oauth_apple_router
 except Exception:
     oauth_apple_router = None  # type: ignore
+try:
+    from .api.auth_password import router as auth_password_router
+except Exception:
+    auth_password_router = None  # type: ignore
 try:
     from .api.music import router as music_router
 except Exception:
@@ -348,6 +353,15 @@ app.add_middleware(DedupMiddleware)
 app.middleware("http")(trace_request)
 app.middleware("http")(silent_refresh_middleware)
 app.middleware("http")(reload_env_middleware)
+app.add_middleware(CSRFMiddleware)
+
+# Mount auth API contract routes early for precedence
+try:
+    from .api.auth import router as early_auth_api_router
+    app.include_router(early_auth_api_router, prefix="/v1")
+    app.include_router(early_auth_api_router, include_in_schema=False)
+except Exception:
+    pass
 
     # Optional static mount for TV shared photos
 try:
@@ -971,6 +985,9 @@ if oauth_google_router is not None:
 if oauth_apple_router is not None:
     app.include_router(oauth_apple_router, prefix="/v1")
     app.include_router(oauth_apple_router, include_in_schema=False)
+if auth_password_router is not None:
+    app.include_router(auth_password_router, prefix="/v1")
+    app.include_router(auth_password_router, include_in_schema=False)
 
 # Google integration (optional)
 if google_router is not None:
@@ -1038,6 +1055,13 @@ try:
     from .api.me import router as me_router
     app.include_router(me_router, prefix="/v1")
     app.include_router(me_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.auth import router as auth_api_router
+    app.include_router(auth_api_router, prefix="/v1")
+    app.include_router(auth_api_router, include_in_schema=False)
 except Exception:
     pass
 
@@ -1184,19 +1208,15 @@ try:
 except Exception:
     pass
 
-# Music API router (load outside caregiver try/except so it isn't swallowed)
+# Music API router: attach HTTP dependencies to HTTP paths only
 if music_router is not None:
-    # Mount under core_router-like scope (auth/rate limiting via main's routers)
-    app.include_router(
-        music_router,
-        prefix="/v1",
-        dependencies=[
-            Depends(verify_token),
-            Depends(rate_limit),
-            Depends(optional_require_any_scope(["music:control"])),
-            Depends(docs_security_with(["music:control"])),
-        ],
+    from fastapi import APIRouter
+    music_http = APIRouter(
+        dependencies=[Depends(verify_token), Depends(rate_limit), Depends(optional_require_any_scope(["music:control"]))]
     )
+    # mount HTTP subrouter for HTTP routes
+    music_http.include_router(music_router)
+    app.include_router(music_http, prefix="/v1")
     app.include_router(music_router, include_in_schema=False)
     # Sim WS helpers for UI duck/restore
     try:
