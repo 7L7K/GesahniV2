@@ -51,17 +51,17 @@
     },
     "calendar_integration": {
       "value": false,
-      "updated_at": 1755195845.907108,
+      "updated_at": 1755197016.382617,
       "source": "api"
     },
     "gmail_integration": {
       "value": false,
-      "updated_at": 1755195845.90978,
+      "updated_at": 1755197016.384376,
       "source": "api"
     },
     "onboarding_completed": {
       "value": false,
-      "updated_at": 1755195845.912941,
+      "updated_at": 1755197016.386372,
       "source": "api"
     },
     "favorite_color": {
@@ -115,14 +115,14 @@
   "u_test": {
     "favorite_color": {
       "value": "blue",
-      "updated_at": 1755163557.8671548,
+      "updated_at": 1755197138.351489,
       "source": "ui"
     }
   },
   "u1": {
     "preferred_name": {
       "value": "Alex",
-      "updated_at": 1755163557.8694358,
+      "updated_at": 1755197138.356071,
       "source": "import"
     }
   },
@@ -200,7 +200,7 @@
   "null": {
     "favorite_color": {
       "value": "blue",
-      "updated_at": 1755181131.8644538,
+      "updated_at": 1755197138.269187,
       "source": "utterance"
     }
   }
