@@ -47,16 +47,7 @@ module.exports = {
         source: '/v1/:path*',
         destination: 'http://localhost:8000/v1/:path*',
       },
-      {
-        source: '/capture/start',
-        destination: 'http://localhost:8000/capture/start',
-      },
-      {
-        source: '/capture/save',
-        destination: 'http://localhost:8000/capture/save',
-      },
-      // no WS rewrite—will connect directly
-    ];
+    ]
   },
   async headers() {
     return [
