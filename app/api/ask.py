@@ -5,6 +5,7 @@ import inspect
 import logging
 import os
 from importlib import import_module
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Body
 import os
@@ -476,5 +477,113 @@ async def ask(
         except Exception:
             pass
     return resp
+
+
+@router.post(
+    "/ask/dry-explain",
+    dependencies=[Depends(_require_auth_dep), Depends(rate_limit)],
+    response_model=dict,
+    include_in_schema=False,
+)
+async def ask_dry_explain(
+    request: Request,
+    body: dict | None = Body(default=None),
+):
+    """Shadow routing endpoint that returns routing decision without making model calls."""
+    # Step 1: Log entry point and payload details
+    print(f"🔍 ASK DRY-EXPLAIN: /v1/ask/dry-explain hit with payload={body}")
+    if body and isinstance(body, dict):
+        model_override = body.get("model") or body.get("model_override")
+        print(f"🔍 ASK PAYLOAD: model_override={model_override}, keys={list(body.keys())}")
+    
+    # Content-Type guard: only accept JSON bodies
+    try:
+        ct = (request.headers.get("content-type") or request.headers.get("Content-Type") or "").lower()
+    except Exception:
+        ct = ""
+    if "application/json" not in ct:
+        raise HTTPException(status_code=415, detail="unsupported_media_type")
+    
+    # Resolve user id from JWT payload set by verify_token dependency
+    try:
+        payload = getattr(request.state, "jwt_payload", None)
+        user_id = None
+        if isinstance(payload, dict):
+            user_id = payload.get("user_id") or payload.get("sub")
+        user_hash = hash_user_id(user_id) if user_id else "anon"
+    except Exception:
+        user_id = None
+        user_hash = "anon"
+    
+    # Use the same normalization logic
+    prompt_text, model_override, stream_flag, stream_explicit, gen_opts, shape, normalized_from = _normalize_payload(body)
+    
+    # Track shape normalization metrics
+    if normalized_from:
+        try:
+            from ..metrics import ROUTER_SHAPE_NORMALIZED_TOTAL
+            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(from_shape=normalized_from, to_shape=shape).inc()
+        except Exception:
+            pass
+    
+    # Generate request ID
+    import uuid
+    request_id = str(uuid.uuid4())[:8]
+    
+    # Get routing decision without making actual calls
+    from ..router import route_prompt
+    from ..model_picker import pick_model
+    from ..intent import detect_intent
+    from ..tokenizer import count_tokens
+    
+    # Detect intent and count tokens
+    norm_prompt = prompt_text.lower().strip()
+    intent, priority = detect_intent(prompt_text)
+    tokens = count_tokens(prompt_text)
+    
+    # Determine routing decision
+    if model_override:
+        mv = model_override.strip()
+        if mv.startswith("gpt"):
+            chosen_vendor = "openai"
+            chosen_model = mv
+            picker_reason = "explicit_override"
+        elif mv.startswith("llama"):
+            chosen_vendor = "ollama"
+            chosen_model = mv
+            picker_reason = "explicit_override"
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown model '{mv}'")
+    else:
+        engine, model_name, picker_reason = pick_model(prompt_text, intent, tokens)
+        chosen_vendor = "openai" if engine == "gpt" else "ollama"
+        chosen_model = model_name
+    
+    # Check circuit breakers
+    from ..llama_integration import llama_circuit_open
+    from ..router import _user_circuit_open
+    cb_global_open = llama_circuit_open
+    cb_user_open = _user_circuit_open(user_id) if user_id else False
+    
+    # Return the routing decision
+    return {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "rid": request_id,
+        "uid": user_id,
+        "path": "/v1/ask/dry-explain",
+        "shape": shape,
+        "normalized_from": normalized_from,
+        "override_in": model_override,
+        "intent": intent,
+        "tokens_est": tokens,
+        "picker_reason": picker_reason,
+        "chosen_vendor": chosen_vendor,
+        "chosen_model": chosen_model,
+        "dry_run": True,
+        "cb_user_open": cb_user_open,
+        "cb_global_open": cb_global_open,
+        "allow_fallback": True,
+        "stream": bool(stream_flag),
+    }
 
 

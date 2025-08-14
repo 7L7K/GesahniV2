@@ -22,19 +22,38 @@ def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str, str]:
     
     print(f"🎯 PICK_MODEL: prompt_len={len(prompt)}, words={len(words)}, tokens={tokens}, intent={intent}")
     
-    if (
-        len(words) > HEAVY_WORD_COUNT
-        or any(re.search(rf"\b{k}\b", prompt_lc) for k in KEYWORDS)
-        or tokens > HEAVY_TOKENS
-        or intent in HEAVY_INTENTS
-    ):
+    # Check for heavy tasks
+    if len(words) > HEAVY_WORD_COUNT:
         print(f"🎯 PICK_MODEL: HEAVY TASK → GPT (words={len(words)}, tokens={tokens}, intent={intent})")
         logger.info(
             f"Routing to GPT: words={len(words)}, tokens={tokens}, "
             f"intent={intent}, prompt='{prompt[:60]}...'"
         )
-        reason = "heavy_length" if len(words) > HEAVY_WORD_COUNT or tokens > HEAVY_TOKENS else "heavy_intent"
-        return "gpt", GPT_HEAVY_MODEL, reason
+        return "gpt", GPT_HEAVY_MODEL, "heavy_length"
+    
+    if tokens > HEAVY_TOKENS:
+        print(f"🎯 PICK_MODEL: HEAVY TASK → GPT (words={len(words)}, tokens={tokens}, intent={intent})")
+        logger.info(
+            f"Routing to GPT: words={len(words)}, tokens={tokens}, "
+            f"intent={intent}, prompt='{prompt[:60]}...'"
+        )
+        return "gpt", GPT_HEAVY_MODEL, "heavy_tokens"
+    
+    if any(re.search(rf"\b{k}\b", prompt_lc) for k in KEYWORDS):
+        print(f"🎯 PICK_MODEL: HEAVY TASK → GPT (words={len(words)}, tokens={tokens}, intent={intent})")
+        logger.info(
+            f"Routing to GPT: words={len(words)}, tokens={tokens}, "
+            f"intent={intent}, prompt='{prompt[:60]}...'"
+        )
+        return "gpt", GPT_HEAVY_MODEL, "keyword"
+    
+    if intent in HEAVY_INTENTS:
+        print(f"🎯 PICK_MODEL: HEAVY TASK → GPT (words={len(words)}, tokens={tokens}, intent={intent})")
+        logger.info(
+            f"Routing to GPT: words={len(words)}, tokens={tokens}, "
+            f"intent={intent}, prompt='{prompt[:60]}...'"
+        )
+        return "gpt", GPT_HEAVY_MODEL, "heavy_intent"
 
     llama_model = llama_integration.OLLAMA_MODEL or os.getenv(
         "OLLAMA_MODEL", "llama3:latest"

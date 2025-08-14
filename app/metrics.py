@@ -102,6 +102,62 @@ except Exception:  # pragma: no cover
             return None
     ROUTER_SHAPE_NORMALIZED_TOTAL = _C3()  # type: ignore
 
+try:
+    ROUTER_REQUESTS_TOTAL = Counter(
+        "gesahni_router_requests_total",
+        "Count of routed requests",
+        ["vendor", "model", "reason"],
+    )
+except Exception:  # pragma: no cover
+    class _C4:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    ROUTER_REQUESTS_TOTAL = _C4()  # type: ignore
+
+try:
+    ROUTER_FALLBACKS_TOTAL = Counter(
+        "gesahni_router_fallbacks_total",
+        "Fallbacks between vendors",
+        ["from", "to", "reason"],
+    )
+except Exception:  # pragma: no cover
+    class _C5:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    ROUTER_FALLBACKS_TOTAL = _C5()  # type: ignore
+
+try:
+    ROUTER_CIRCUIT_OPEN_TOTAL = Counter(
+        "gesahni_router_circuit_open_total",
+        "Circuit breaker openings",
+        ["scope"],
+    )
+except Exception:  # pragma: no cover
+    class _C6:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    ROUTER_CIRCUIT_OPEN_TOTAL = _C6()  # type: ignore
+
+try:
+    ROUTER_DURATION_MS = Histogram(
+        "gesahni_router_duration_ms",
+        "Request duration in milliseconds",
+        ["vendor", "model"],
+    )
+except Exception:  # pragma: no cover
+    class _H2:
+        def labels(self, *a, **k):
+            return self
+        def observe(self, *a, **k):
+            return None
+    ROUTER_DURATION_MS = _H2()  # type: ignore
+
 # Histogram for request cost in USD
 REQUEST_COST = Histogram(
     "app_request_cost_usd",

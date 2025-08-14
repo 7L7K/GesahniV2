@@ -76,6 +76,81 @@ except Exception:  # pragma: no cover - fallback stubs
 
 logger = logging.getLogger(__name__)
 
+import json
+import uuid
+from datetime import datetime, timezone
+
+def _log_golden_trace(
+    request_id: str,
+    user_id: str | None,
+    path: str,
+    shape: str,
+    normalized_from: str | None,
+    override_in: str | None,
+    intent: str,
+    tokens_est: int,
+    picker_reason: str,
+    chosen_vendor: str,
+    chosen_model: str,
+    dry_run: bool,
+    cb_user_open: bool,
+    cb_global_open: bool,
+    allow_fallback: bool,
+    stream: bool,
+) -> None:
+    """Emit exactly one post-decision log before adapter call. Make it the law."""
+    trace = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "rid": request_id,
+        "uid": user_id,
+        "path": path,
+        "shape": shape,
+        "normalized_from": normalized_from,
+        "override_in": override_in,
+        "intent": intent,
+        "tokens_est": tokens_est,
+        "picker_reason": picker_reason,
+        "chosen_vendor": chosen_vendor,
+        "chosen_model": chosen_model,
+        "dry_run": dry_run,
+        "cb_user_open": cb_user_open,
+        "cb_global_open": cb_global_open,
+        "allow_fallback": allow_fallback,
+        "stream": stream,
+    }
+    print(f"🎯 GOLDEN_TRACE: {json.dumps(trace)}")
+    
+    # Emit metrics
+    try:
+        from .metrics import ROUTER_REQUESTS_TOTAL
+        ROUTER_REQUESTS_TOTAL.labels(vendor=chosen_vendor, model=chosen_model, reason=picker_reason).inc()
+    except Exception:
+        pass
+
+
+def _log_routing_decision(
+    override_in: str | None,
+    intent: str,
+    tokens_est: int,
+    picker_reason: str,
+    chosen_vendor: str,
+    chosen_model: str,
+    dry_run: bool,
+    cb_user_open: bool,
+    cb_global_open: bool,
+    shape: str,
+    normalized_from: str | None,
+) -> None:
+    """Log the final routing decision for auditability."""
+    print(
+        f"🎯 ROUTING DECISION: "
+        f"override_in={override_in}, intent={intent}, tokens_est={tokens_est}, "
+        f"picker_reason={picker_reason}, chosen_vendor={chosen_vendor}, chosen_model={chosen_model}, "
+        f"dry_run={dry_run}, cb_user_open={cb_user_open}, cb_global_open={cb_global_open}, "
+        f"shape={shape}, normalized_from={normalized_from}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Constants / Config
 # ---------------------------------------------------------------------------
@@ -303,29 +378,6 @@ def _annotate_provenance(text: str, mem_docs: list[str]) -> str:
         return text
 
 
-def _log_routing_decision(
-    override_in: str | None,
-    intent: str,
-    tokens_est: int,
-    picker_reason: str,
-    chosen_vendor: str,
-    chosen_model: str,
-    dry_run: bool,
-    cb_user_open: bool,
-    cb_global_open: bool,
-    shape: str,
-    normalized_from: str | None,
-) -> None:
-    """Log the final routing decision for auditability."""
-    print(
-        f"🎯 ROUTING DECISION: "
-        f"override_in={override_in}, intent={intent}, tokens_est={tokens_est}, "
-        f"picker_reason={picker_reason}, chosen_vendor={chosen_vendor}, chosen_model={chosen_model}, "
-        f"dry_run={dry_run}, cb_user_open={cb_user_open}, cb_global_open={cb_global_open}, "
-        f"shape={shape}, normalized_from={normalized_from}"
-    )
-
-
 # ---------------------------------------------------------------------------
 # Main entry‑point
 # ---------------------------------------------------------------------------
@@ -339,6 +391,9 @@ async def route_prompt(
     normalized_from: str | None = None,
     **gen_opts: Any,
 ) -> Any:
+    # Generate unique request ID for tracing
+    request_id = str(uuid.uuid4())[:8]
+    
     # Step 2: Log model routing inputs and decisions
     print(f"🎯 ROUTE_PROMPT: prompt='{prompt[:50]}...', model_override={model_override}, user_id={user_id}, gen_opts={gen_opts}")
     
@@ -511,7 +566,12 @@ async def route_prompt(
                     )
                 
                 # Log routing decision before adapter call
-                _log_routing_decision(
+                _log_golden_trace(
+                    request_id=request_id,
+                    user_id=user_id,
+                    path="/v1/ask",
+                    shape=shape,
+                    normalized_from=normalized_from,
                     override_in=mv,
                     intent=intent,
                     tokens_est=tokens,
@@ -521,8 +581,8 @@ async def route_prompt(
                     dry_run=debug_route,
                     cb_user_open=_user_circuit_open(user_id),
                     cb_global_open=llama_circuit_open,
-                    shape=shape,
-                    normalized_from=normalized_from,
+                    allow_fallback=True,
+                    stream=bool(stream_cb),
                 )
                 
                 try:
@@ -579,7 +639,12 @@ async def route_prompt(
                     )
                 
                 # Log routing decision before adapter call
-                _log_routing_decision(
+                _log_golden_trace(
+                    request_id=request_id,
+                    user_id=user_id,
+                    path="/v1/ask",
+                    shape=shape,
+                    normalized_from=normalized_from,
                     override_in=mv,
                     intent=intent,
                     tokens_est=tokens,
@@ -589,8 +654,8 @@ async def route_prompt(
                     dry_run=debug_route,
                     cb_user_open=_user_circuit_open(user_id),
                     cb_global_open=llama_circuit_open,
-                    shape=shape,
-                    normalized_from=normalized_from,
+                    allow_fallback=True,
+                    stream=bool(stream_cb),
                 )
                 
                 result = await _call_llama_override(
@@ -1026,7 +1091,12 @@ async def route_prompt(
             print(f"🎯 GPT PATH: calling _call_gpt with {model_name}")
             
             # Log routing decision before adapter call
-            _log_routing_decision(
+            _log_golden_trace(
+                request_id=request_id,
+                user_id=user_id,
+                path="/v1/ask",
+                shape=shape,
+                normalized_from=normalized_from,
                 override_in=model_override,
                 intent=intent,
                 tokens_est=tokens,
@@ -1036,8 +1106,8 @@ async def route_prompt(
                 dry_run=debug_route,
                 cb_user_open=_user_circuit_open(user_id),
                 cb_global_open=llama_circuit_open,
-                shape=shape,
-                normalized_from=normalized_from,
+                allow_fallback=True,
+                stream=bool(stream_cb),
             )
             
             if debug_route:
@@ -1082,7 +1152,12 @@ async def route_prompt(
             print(f"🎯 LLAMA PATH: calling _call_llama with {model_name}")
             
             # Log routing decision before adapter call
-            _log_routing_decision(
+            _log_golden_trace(
+                request_id=request_id,
+                user_id=user_id,
+                path="/v1/ask",
+                shape=shape,
+                normalized_from=normalized_from,
                 override_in=model_override,
                 intent=intent,
                 tokens_est=tokens,
@@ -1092,8 +1167,8 @@ async def route_prompt(
                 dry_run=debug_route,
                 cb_user_open=_user_circuit_open(user_id),
                 cb_global_open=llama_circuit_open,
-                shape=shape,
-                normalized_from=normalized_from,
+                allow_fallback=True,
+                stream=bool(stream_cb),
             )
             
             # Per-user circuit: short-circuit to GPT if this user has a hot breaker
