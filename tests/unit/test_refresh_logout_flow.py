@@ -19,7 +19,9 @@ def test_logout_clears_cookies(monkeypatch):
         # simulate cookies
         client.cookies.set('access_token', 'x')
         client.cookies.set('refresh_token', 'y')
-        r = client.post('/v1/auth/logout')
+        # CSRF enabled path
+        client.cookies.set('csrf_token', 'abc')
+        r = client.post('/v1/auth/logout', headers={'X-CSRF-Token': 'abc'})
         assert r.status_code == 200
 
 
