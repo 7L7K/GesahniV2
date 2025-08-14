@@ -17,7 +17,8 @@ const isPublicRoute = createRouteMatcher([
 
 const baseClerkMiddleware = clerkMiddleware(async (auth, req: NextRequest) => {
     const { userId } = await auth()
-    const isApi = req.nextUrl.pathname.startsWith('/api') || req.nextUrl.pathname.startsWith('/v1')
+    // Only guard Next's own API; allow /v1/* to flow to FastAPI via rewrites
+    const isApi = req.nextUrl.pathname.startsWith('/api')
     if (isApi && !userId) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -27,6 +28,17 @@ const baseClerkMiddleware = clerkMiddleware(async (auth, req: NextRequest) => {
         url.searchParams.set('next', req.nextUrl.pathname + req.nextUrl.search)
         return NextResponse.redirect(url)
     }
+    // If Clerk finished login on our domain, bounce through server finish route
+    try {
+        const pathname = req.nextUrl.pathname
+        if (userId && (pathname === '/sign-in' || pathname === '/sign-up')) {
+            const next = sanitizeNextPath(req.nextUrl.searchParams.get('next'), '/')
+            const url = req.nextUrl.clone()
+            url.pathname = '/v1/auth/finish'
+            url.searchParams.set('next', next)
+            return NextResponse.redirect(url)
+        }
+    } catch { /* ignore */ }
     return NextResponse.next()
 })
 

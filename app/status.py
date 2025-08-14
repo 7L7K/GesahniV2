@@ -14,7 +14,10 @@ from . import budget as _budget
 from .tts_orchestrator import TTSSpend
 from .memory.vector_store.qdrant import get_stats as _q_stats  # type: ignore
 
-router = APIRouter(tags=["Admin"])
+from .deps.scopes import docs_security_with
+
+
+router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
 
 def _admin_token() -> str | None:
     """Return current admin token from environment (evaluated dynamically)."""

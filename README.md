@@ -235,6 +235,13 @@ Storage:
 ## 🎯 Endpoints
 
 * `/ask`: Send your prompt here.
+  - Canonical body: `{ prompt: string | Message[], model?: string, stream?: boolean }`
+  - Liberal inputs accepted and normalized internally: `message`, `text`, `query`, `q`, `input.prompt|text|message`, `messages: [{ role, content }]`
+  - Provider adapters:
+    - Chat models (e.g. `gpt-4o`): string prompt is wrapped as one user message; arrays are passed as-is.
+    - Completion models (e.g. `llama3` via Ollama): messages are joined into a single text prompt.
+  - Streaming behavior: set `stream: true` to force SSE; else uses `Accept: text/event-stream`.
+  - Errors: invalid inputs return 4xx with clear `detail`; upstream 4xx are preserved.
 * `/upload`: upload audio for transcription.
 * `/sessions`: list captured sessions.
 * `/sessions/{id}/transcribe`: queue transcription for a session.

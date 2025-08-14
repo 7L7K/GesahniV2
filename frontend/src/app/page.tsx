@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import ChatBubble from '../components/ChatBubble';
 import LoadingBubble from '../components/LoadingBubble';
 import InputBar from '../components/InputBar';
 import { Button } from '@/components/ui/button';
-import { SignedIn, SignedOut, SignInButton, SignUpButton } from '@clerk/nextjs';
+import { SignedIn, SignedOut, SignInButton, SignUpButton, useUser, useAuth } from '@clerk/nextjs';
 import { sendPrompt, getToken, getMusicState, type MusicState } from '@/lib/api';
 import { wsHub } from '@/services/wsHub';
 import NowPlayingCard from '@/components/music/NowPlayingCard';
@@ -27,7 +27,20 @@ export default function Page() {
   const router = useRouter();
   const [authed, setAuthed] = useState<boolean>(false);
   const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [sessionReady, setSessionReady] = useState<boolean>(false);
+  const [backendOffline, setBackendOffline] = useState<boolean>(false);
+  const [hasAccessCookie, setHasAccessCookie] = useState<boolean>(false);
+  const [whoamiOk, setWhoamiOk] = useState<boolean>(false);
+  const authBootOnce = useRef<boolean>(false);
+  const finishOnceRef = useRef<boolean>(false);
+  const [finishBusy, setFinishBusy] = useState<boolean>(false);
+  const [finishError, setFinishError] = useState<string | null>(null);
+  const finishAbortRef = useRef<AbortController | null>(null);
+  const prevReadyRef = useRef<boolean>(false);
+  const prevBackendOnlineRef = useRef<boolean | null>(null);
   const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+  const { isSignedIn } = useUser();
+  const { isLoaded } = useAuth();
   const createInitialMessage = (): ChatMessage => ({
     id: crypto.randomUUID(),
     role: 'assistant',
@@ -60,27 +73,81 @@ export default function Page() {
   const historyKey = getScopedKey('chat-history');
   const modelKey = getScopedKey('selected-model');
 
+  // Helper to read cookie presence client-side
+  const readHasAccessCookie = useCallback(() => {
+    try { return typeof document !== 'undefined' && document.cookie.includes('access_token='); } catch { return false; }
+  }, []);
+
+  // Startup probe: ping healthz with a 2s timeout and backoff when offline
+  useEffect(() => {
+    let cancelled = false;
+    let backoff = 2000;
+    const ping = async () => {
+      if (cancelled) return;
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 2000);
+        // Avoid sending cookies so an invalid/expired access_token cookie doesn't 401 this probe
+        const r = await fetch('/v1/healthz', { signal: controller.signal, credentials: 'omit', cache: 'no-store' });
+        clearTimeout(t);
+        const ok = r && r.ok;
+        setBackendOffline(!ok);
+        window.dispatchEvent(new CustomEvent('auth:backend', { detail: { online: ok } }));
+        if (prevBackendOnlineRef.current !== ok) {
+          try { console.info(`AUTH backend: online=${ok}`); } catch { /* noop */ }
+          prevBackendOnlineRef.current = ok;
+        }
+        if (!ok) {
+          setTimeout(ping, backoff);
+          backoff = Math.min(15000, Math.floor(backoff * 1.6));
+        }
+      } catch {
+        setBackendOffline(true);
+        window.dispatchEvent(new CustomEvent('auth:backend', { detail: { online: false } }));
+        if (prevBackendOnlineRef.current !== false) {
+          try { console.info(`AUTH backend: online=false`); } catch { /* noop */ }
+          prevBackendOnlineRef.current = false;
+        }
+        setTimeout(ping, backoff);
+        backoff = Math.min(15000, Math.floor(backoff * 1.6));
+      }
+    };
+    ping();
+    return () => { cancelled = true; };
+  }, []);
+
   // Hydrate from localStorage on mount; if none, seed with initial assistant msg
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const hasHeaderToken = Boolean(getToken());
+      const cookiePresent = readHasAccessCookie();
+      setHasAccessCookie(cookiePresent);
+      if (cookiePresent) {
+        setAuthed(true);
+      }
       if (hasHeaderToken) {
         setAuthed(true);
+        setSessionReady(true);
       } else {
         // Cookie mode: rely on auth hint or backend whoami
-        (async () => {
+        if (!authBootOnce.current) (async () => {
           try {
             const hinted = document.cookie.includes('auth_hint=1');
             if (hinted) {
               setAuthed(true);
+              setSessionReady(true);
             } else {
-              const res = await fetch('/v1/whoami', { credentials: 'include' });
-              if (res.ok) {
-                const body = await res.json().catch(() => ({}));
-                setAuthed(Boolean(body && (body.is_authenticated || body.user_id !== 'anon')));
-              } else {
-                setAuthed(false);
-              }
+              // Background whoami to hydrate, do not block UI
+              try {
+                const r = await fetch('/v1/whoami', { credentials: 'include' });
+                if (r.ok) {
+                  const b: any = await r.json().catch(() => ({}));
+                  const ok = Boolean(b && (b.is_authenticated || (b.user_id && b.user_id !== 'anon')));
+                  setAuthed(ok);
+                  setWhoamiOk(ok);
+                  window.dispatchEvent(new CustomEvent('auth:whoami', { detail: { ok } }));
+                }
+              } catch { /* ignore */ }
             }
           } catch {
             setAuthed(false);
@@ -130,7 +197,66 @@ export default function Page() {
         window.removeEventListener('offline', onDown);
       }
     }
-  }, []);
+  }, [readHasAccessCookie]);
+
+  // Compute readiness for Clerk: isSignedIn AND (cookie present OR whoami says ok)
+  useEffect(() => {
+    if (!clerkEnabled) return;
+    const ready = Boolean(isSignedIn && (hasAccessCookie || whoamiOk));
+    setSessionReady(ready);
+    try { window.dispatchEvent(new CustomEvent('auth:ready', { detail: { ready } })); } catch { /* noop */ }
+    if (prevReadyRef.current !== ready) {
+      try {
+        console.info(`AUTH ready: signedIn=${Boolean(isSignedIn)} cookie=${Boolean(hasAccessCookie)} whoamiOk=${Boolean(whoamiOk)}`);
+      } catch { /* noop */ }
+      prevReadyRef.current = ready;
+    }
+  }, [clerkEnabled, isSignedIn, hasAccessCookie, whoamiOk]);
+
+  // Single-shot finisher: when signed-in but cookie missing, mint cookies fast and refresh
+  const runFinish = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    setFinishBusy(true);
+    setFinishError(null);
+    try {
+      try { finishAbortRef.current?.abort(); } catch { /* noop */ }
+      const controller = new AbortController();
+      finishAbortRef.current = controller;
+      const t = setTimeout(() => controller.abort(), 5000);
+      const url = new URL('/v1/auth/finish', window.location.origin);
+      url.searchParams.set('next', '/');
+      console.info('AUTH finisher: POST /v1/auth/finish');
+      await fetch(url.toString(), { method: 'POST', redirect: 'follow', credentials: 'include', signal: controller.signal });
+      clearTimeout(t);
+    } catch (e: any) {
+      const msg = e?.name === 'AbortError' ? 'Timed out' : (e?.message || 'failed');
+      setFinishError(msg);
+    } finally {
+      finishAbortRef.current = null;
+      setFinishBusy(false);
+      setHasAccessCookie(readHasAccessCookie());
+      try {
+        const r = await fetch('/v1/whoami', { credentials: 'include' });
+        if (r.ok) {
+          const b: any = await r.json().catch(() => ({}));
+          const ok = Boolean(b && (b.is_authenticated || (b.user_id && b.user_id !== 'anon')));
+          setWhoamiOk(ok);
+          if (ok) setAuthed(true);
+        }
+      } catch { /* ignore */ }
+      try { router.refresh(); } catch { /* noop */ }
+    }
+  }, [readHasAccessCookie, router]);
+
+  useEffect(() => {
+    if (!clerkEnabled) return;
+    if (finishOnceRef.current) return;
+    if (isSignedIn && !hasAccessCookie) {
+      try { console.info('AUTH finisher.trigger reason=cookie.missing'); } catch { }
+      finishOnceRef.current = true;
+      runFinish();
+    }
+  }, [clerkEnabled, isSignedIn, hasAccessCookie, runFinish]);
   // Music: initial load + subscribe to hub events
   useEffect(() => {
     (async () => {
@@ -147,7 +273,7 @@ export default function Page() {
   // Check onboarding status when authed
   useEffect(() => {
     const checkOnboarding = async () => {
-      if (authed) {
+      if (authed && !authBootOnce.current) {
         try {
           const { getOnboardingStatus } = await import('@/lib/api');
           const status = await getOnboardingStatus();
@@ -159,6 +285,7 @@ export default function Page() {
           // If there's an error, assume onboarding is needed
           router.push('/onboarding');
         }
+        authBootOnce.current = true;
       }
     };
 
@@ -197,7 +324,7 @@ export default function Page() {
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
-    if (!authed) {
+    if (!(authed && (sessionReady || !clerkEnabled))) {
       // Prevent sending when unauthenticated
       setMessages(prev => ([
         ...prev,
@@ -258,94 +385,119 @@ export default function Page() {
   };
 
   return (
-    <main className="mx-auto max-w-3xl px-4">
-      <div className="flex min-h-[calc(100vh-56px)] flex-col">
-        {authed && musicState && (
-          <section className="py-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="md:col-span-2 space-y-4">
-                <NowPlayingCard state={musicState} />
-                {/* Emphasize Discovery when higher energy */}
-                {musicState.vibe.energy >= 0.5 ? (
-                  <DiscoveryCard />
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    (clerkEnabled && !isLoaded) ? (
+      <main className="mx-auto max-w-3xl px-4">
+        <div className="flex min-h-[calc(100vh-56px)] items-center justify-center text-xs text-muted-foreground">Loading…</div>
+      </main>
+    ) : (
+      <main className="mx-auto max-w-3xl px-4">
+        <div className="flex min-h-[calc(100vh-56px)] flex-col">
+          {authed && musicState && (
+            <section className="py-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2 space-y-4">
+                  <NowPlayingCard state={musicState} />
+                  {/* Emphasize Discovery when higher energy */}
+                  {musicState.vibe.energy >= 0.5 ? (
                     <DiscoveryCard />
-                    <div className="hidden md:block" />
-                  </div>
-                )}
-              </div>
-              <div className="space-y-4">
-                <MoodDial />
-                <QueueCard />
-                <DevicePicker />
-              </div>
-            </div>
-          </section>
-        )}
-        {/* chat scroll area */}
-        <section className="flex-1 overflow-y-auto py-6">
-          {clerkEnabled ? (
-            <SignedOut>
-              <div className="mb-4 rounded-xl border p-4 text-sm bg-card/50">
-                <p className="mb-2">You&apos;re not signed in. Please sign in to enable full features.</p>
-                <div className="flex gap-2">
-                  <SignInButton mode="modal">
-                    <Button size="sm" variant="secondary">Sign in</Button>
-                  </SignInButton>
-                  <SignUpButton mode="modal">
-                    <Button size="sm">Sign up</Button>
-                  </SignUpButton>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <DiscoveryCard />
+                      <div className="hidden md:block" />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-4">
+                  <MoodDial />
+                  <QueueCard />
+                  <DevicePicker />
                 </div>
               </div>
-            </SignedOut>
-          ) : (
-            !authed && (
-              <div className="mb-4 rounded-xl border p-4 text-sm bg-card/50">
-                <p className="mb-2">You&apos;re not signed in. Please sign in to enable full features.</p>
-                <a
-                  href="/login"
-                  className="inline-flex items-center rounded-md bg-primary px-3 py-1 text-primary-foreground hover:opacity-90"
-                >
-                  Go to Login
-                </a>
-              </div>
-            )
+            </section>
           )}
-          {messages.map(m =>
-            m.loading ? (
-              <LoadingBubble key={m.id} />
+          {/* chat scroll area */}
+          <section className="flex-1 overflow-y-auto py-6">
+            {clerkEnabled ? (
+              <SignedOut>
+                <div className="mb-4 rounded-xl border p-4 text-sm bg-card/50">
+                  <p className="mb-2">You&apos;re not signed in. Please sign in to enable full features.</p>
+                  <div className="flex gap-2">
+                    <SignInButton mode="modal">
+                      <Button size="sm" variant="secondary">Sign in</Button>
+                    </SignInButton>
+                    <SignUpButton mode="modal">
+                      <Button size="sm">Sign up</Button>
+                    </SignUpButton>
+                  </div>
+                </div>
+              </SignedOut>
             ) : (
-              <ChatBubble key={m.id} role={m.role} text={m.content} />
-            )
-          )}
-          <div ref={bottomRef} />
-        </section>
+              !authed && (
+                <div className="mb-4 rounded-xl border p-4 text-sm bg-card/50">
+                  <p className="mb-2">You&apos;re not signed in. Please sign in to enable full features.</p>
+                  <a
+                    href="/login"
+                    className="inline-flex items-center rounded-md bg-primary px-3 py-1 text-primary-foreground hover:opacity-90"
+                  >
+                    Go to Login
+                  </a>
+                </div>
+              )
+            )}
+            {messages.map(m =>
+              m.loading ? (
+                <LoadingBubble key={m.id} />
+              ) : (
+                <ChatBubble key={m.id} role={m.role} text={m.content} />
+              )
+            )}
+            <div ref={bottomRef} />
+          </section>
 
-        {/* input pinned bottom */}
-        <footer className="sticky bottom-0 w-full border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="mx-auto max-w-2xl py-4">
-            <InputBar
-              onSend={handleSend}
-              loading={loading}
-              model={model}
-              onModelChange={setModel}
-              authed={authed}
-            />
-            <div className="mt-2 flex justify-end">
-              <Button
-                onClick={clearHistory}
-                variant="ghost"
-                size="sm"
-                className="text-xs"
-              >
-                Clear history
-              </Button>
+          {/* input pinned bottom */}
+          <footer className="sticky bottom-0 w-full border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="mx-auto max-w-2xl py-4">
+              <InputBar
+                onSend={handleSend}
+                loading={loading}
+                model={model}
+                onModelChange={setModel}
+                authed={authed && (sessionReady || !clerkEnabled)}
+              />
+              {backendOffline ? (
+                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <div>Backend offline — retrying…</div>
+                </div>
+              ) : (!authed || (clerkEnabled && !sessionReady)) ? (
+                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <div>
+                    {clerkEnabled ? (sessionReady ? '' : 'Finalizing sign-in…') : (!authed ? 'Sign in required' : '')}
+                  </div>
+                  {clerkEnabled && isSignedIn && !hasAccessCookie && (
+                    <div className="flex items-center gap-3">
+                      {finishError ? <span className="text-red-600">{finishError}</span> : null}
+                      <button className="underline disabled:opacity-60" disabled={finishBusy} onClick={() => { try { console.info('AUTH finisher.retry reason=manual'); } catch { }; runFinish(); }}>
+                        {finishBusy ? 'Retrying…' : 'Retry sign-in'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+              <div className="mt-2 flex justify-end">
+                <Button
+                  onClick={clearHistory}
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs"
+                >
+                  Clear history
+                </Button>
+              </div>
             </div>
-          </div>
-        </footer>
-      </div>
-      <RateLimitToast />
-    </main>
+          </footer>
+        </div>
+        <RateLimitToast />
+      </main>
+    )
   );
 }

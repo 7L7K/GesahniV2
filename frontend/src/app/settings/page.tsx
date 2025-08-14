@@ -319,17 +319,21 @@ function SessionsPanel() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     useEffect(() => {
-        listSessions().then(setItems).catch((e) => setError(e?.message || 'failed')).finally(() => setLoading(false));
+        listSessions()
+            .then((res) => { setItems(Array.isArray(res) ? res : []); console.log('items raw:', res); })
+            .catch((e) => setError(e?.message || 'failed'))
+            .finally(() => setLoading(false));
     }, []);
+    useEffect(() => { console.log('items state (sessions):', items); }, [items]);
     const onRevoke = async (sid: string) => {
         try { await revokeSession(sid); setItems((prev) => prev.filter((s) => s.session_id !== sid)); } catch { /* ignore */ }
     };
     if (loading) return <div className="text-sm text-gray-500">Loading sessions…</div>;
     if (error) return <div className="text-sm text-red-600">{error}</div>;
-    if (!items.length) return <div className="text-sm text-gray-500">No active sessions</div>;
+    if (!Array.isArray(items) || items.length === 0) return <div className="text-sm text-gray-500">No active sessions</div>;
     return (
         <div className="space-y-3">
-            {items.map((s, i) => (
+            {Array.isArray(items) ? items.map((s, i) => (
                 <div key={s.session_id || `${s.device_id}:${s.created_at || s.last_seen_at || i}`}
                     className="flex items-center justify-between p-3 border rounded">
                     <div className="text-sm">
@@ -341,7 +345,7 @@ function SessionsPanel() {
                         <button onClick={() => onRevoke(s.session_id)} className="text-sm text-red-600 hover:underline">Revoke</button>
                     )}
                 </div>
-            ))}
+            )) : null}
         </div>
     );
 }
@@ -352,7 +356,8 @@ function PatPanel() {
     const [scopes, setScopes] = useState('');
     const [creating, setCreating] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    useEffect(() => { listPATs().then(setItems).catch((e) => setError(e?.message || 'failed')); }, []);
+    useEffect(() => { listPATs().then((res) => { setItems(Array.isArray(res) ? res : []); console.log('items raw:', res); }).catch((e) => setError(e?.message || 'failed')); }, []);
+    useEffect(() => { console.log('items state (pats):', items); }, [items]);
     const onCreate = async () => {
         setCreating(true); setError(null);
         try {
@@ -379,13 +384,17 @@ function PatPanel() {
             </div>
             {error && <div className="text-sm text-red-600">{error}</div>}
             <div className="space-y-2">
-                {items.map((p) => (
-                    <div key={p.id} className="p-3 border rounded text-sm">
-                        <div className="font-medium">{p.name}</div>
-                        <div className="text-gray-600">Scopes: {p.scopes.join(', ') || '—'}</div>
-                        {typeof p.last_used_at === 'number' && <div className="text-gray-500">Last used: {new Date((p.last_used_at as number) * 1000).toLocaleString()}</div>}
-                    </div>
-                ))}
+                {Array.isArray(items) && items.length > 0 ? (
+                    items.map((p) => (
+                        <div key={p.id} className="p-3 border rounded text-sm">
+                            <div className="font-medium">{p.name}</div>
+                            <div className="text-gray-600">Scopes: {p.scopes.join(', ') || '—'}</div>
+                            {typeof p.last_used_at === 'number' && <div className="text-gray-500">Last used: {new Date((p.last_used_at as number) * 1000).toLocaleString()}</div>}
+                        </div>
+                    ))
+                ) : (
+                    <div className="text-sm text-gray-500">No personal tokens yet</div>
+                )}
             </div>
         </div>
     );

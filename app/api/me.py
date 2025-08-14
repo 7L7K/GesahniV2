@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException, Query
 
 from ..deps.user import get_current_user_id, get_current_session_device
 from ..sessions_store import sessions_store
@@ -39,41 +39,12 @@ async def me(user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
     return {"is_authenticated": is_auth, "profile": profile, "flags": flags}
 
 
-@router.get("/whoami")
-async def whoami(request: Request, user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
-    sess = get_current_session_device(request, None)
-    scopes = []
-    try:
-        payload = getattr(request.state, "jwt_payload", None)
-        raw_scopes = []
-        if isinstance(payload, dict):
-            raw_scopes = payload.get("scope") or payload.get("scopes") or []
-            if isinstance(raw_scopes, str):
-                scopes = [s.strip() for s in raw_scopes.split() if s.strip()]
-            else:
-                scopes = [str(s).strip() for s in raw_scopes if str(s).strip()]
-    except Exception:
-        scopes = []
-    providers = []
-    if os.getenv("PROVIDER_SPOTIFY", "").lower() in {"1","true","yes","on"}:
-        providers.append("spotify")
-    return {
-        "is_authenticated": user_id != "anon",
-        "user_id": user_id,
-        "session_id": sess.get("session_id"),
-        "device_id": sess.get("device_id"),
-        "scopes": scopes,
-        "providers": providers,
-    }
+# /v1/whoami is canonically served from app.api.auth; keep no duplicate here.
 
 
-@router.get("/sessions")
-async def sessions(user_id: str = Depends(get_current_user_id)) -> list[dict]:
-    if user_id == "anon":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    rows = await sessions_store.list_user_sessions(user_id)
-    out: list[dict] = []
+def _to_session_info(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     current_sid = os.getenv("CURRENT_SESSION_ID")
+    out: List[Dict[str, Any]] = []
     for i, r in enumerate(rows):
         out.append(
             {
@@ -88,35 +59,55 @@ async def sessions(user_id: str = Depends(get_current_user_id)) -> list[dict]:
     return out
 
 
-@router.post("/sessions/{sid}/revoke", status_code=204)
-async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) -> None:
+@router.get("/sessions")
+async def sessions(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+    legacy: Optional[int] = Query(default=None, description="Return legacy wrapped shape when 1 (deprecated; TODO remove by 2026-01-31)"),
+) -> List[Dict[str, Any]] | Dict[str, Any]:
+    if user_id == "anon":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    rows = await sessions_store.list_user_sessions(user_id)
+    items = _to_session_info(rows)
+    try:
+        if str(legacy or "").strip() in {"1", "true", "yes"}:
+            return {"items": items}
+    except Exception:
+        pass
+    return items
+
+
+@router.get("/sessions/paginated")
+async def sessions_paginated(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+    limit: int = Query(default=50, ge=1, le=500),
+    cursor: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    if user_id == "anon":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    rows = await sessions_store.list_user_sessions(user_id)
+    start = 0
+    try:
+        if cursor is not None and str(cursor).strip() != "":
+            start = max(0, int(cursor))
+    except Exception:
+        start = 0
+    end = min(len(rows), start + int(limit))
+    page = rows[start:end]
+    next_cursor: Optional[str] = str(end) if end < len(rows) else None
+    return {"items": _to_session_info(page), "next_cursor": next_cursor}
+
+
+@router.post("/sessions/{sid}/revoke")
+async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) -> Dict[str, str]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     await sessions_store.revoke_family(sid)
-    return None
+    return {"status": "ok"}
 
 
-@router.get("/pats")
-async def list_pats(user_id: str = Depends(get_current_user_id)) -> list[dict]:
-    # Storage not yet wired for listing; return empty list for contract shape
-    return []
-
-
-@router.post("/pats")
-async def create_pat(body: Dict[str, Any], user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
-    if user_id == "anon":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    await _ensure_auth()
-    name = str(body.get("name") or "")
-    scopes = body.get("scopes") or []
-    exp_at = body.get("exp_at")
-    if not name or not isinstance(scopes, list):
-        raise HTTPException(status_code=400, detail="invalid_request")
-    pat_id = f"pat_{secrets.token_hex(4)}"
-    token = f"pat_live_{secrets.token_urlsafe(24)}"
-    token_hash = secrets.token_hex(16)
-    await _create_pat(id=pat_id, user_id=user_id, name=name, token_hash=token_hash, scopes=scopes, exp_at=None)
-    return {"id": pat_id, "token": token, "scopes": scopes, "exp_at": exp_at}
+# /v1/pats is canonically served from app.api.auth; remove duplicate definitions here.
 
 
 __all__ = ["router"]

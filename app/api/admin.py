@@ -166,7 +166,8 @@ async def admin_router_decisions(
 ) -> dict:
     from datetime import datetime
     _check_admin(token, request)
-    items = decisions_recent(1000)
+    _raw = decisions_recent(1000)
+    items = _raw if isinstance(_raw, list) else []
     # Apply filters
     if engine:
         items = [it for it in items if (it.get("engine") or "").lower() == engine.lower()]
@@ -210,7 +211,8 @@ async def admin_router_decisions_ndjson(
 ):
     """Download last N router decisions as NDJSON (for audit pipelines)."""
     _check_admin(token, request)
-    items = decisions_recent(limit)
+    _raw = decisions_recent(limit)
+    items = _raw if isinstance(_raw, list) else []
 
     def _iter():
         for it in items:
@@ -232,7 +234,8 @@ async def admin_retrieval_last(
 ):
     """Return last N retrieval traces (subset of router decisions), most recent first."""
     _check_admin(token, request)
-    items = decisions_recent(limit)
+    _raw = decisions_recent(limit)
+    items = _raw if isinstance(_raw, list) else []
     # filter to those that have a retrieval_trace event
     out = []
     for it in items:
@@ -251,7 +254,8 @@ async def admin_diagnostics_requests(
 ) -> dict:
     """Return last N request IDs with timestamps for quick diagnostics."""
     _check_admin(token, request)
-    items = decisions_recent(limit)
+    _raw = decisions_recent(limit)
+    items = _raw if isinstance(_raw, list) else []
     out = [
         {"req_id": it.get("req_id"), "timestamp": it.get("timestamp")}
         for it in items

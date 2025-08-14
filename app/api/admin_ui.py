@@ -7,12 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
 from app.deps.user import get_current_user_id
+from app.deps.scopes import docs_security_with
 from app.status import _admin_token
 from app.decisions import get_recent as decisions_recent
 from app.analytics import get_metrics, cache_hit_rate
 
 
-router = APIRouter(tags=["Admin"])
+router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
 
 
 def _guard(token: str | None) -> None:

@@ -258,6 +258,11 @@ async def trace_request(request: Request, call_next):
             metrics.REQUEST_COUNT.labels(route_path, request.method, engine).inc()
         except Exception:
             pass
+        # Emit canonical counters/histograms too
+        try:
+            metrics.GESAHNI_REQUESTS_TOTAL.labels(route_path, request.method, str(status_code or 0)).inc()
+        except Exception:
+            pass
         # Observe with exemplar when possible to jump from Grafana to trace
         try:
             trace_id = get_trace_id_hex()
@@ -272,6 +277,10 @@ async def trace_request(request: Request, call_next):
                 metrics.REQUEST_LATENCY.labels(route_path, request.method, engine).observe(rec.latency_ms / 1000)
             except Exception:
                 pass
+        try:
+            metrics.GESAHNI_LATENCY_SECONDS.labels(route_path).observe(rec.latency_ms / 1000)
+        except Exception:
+            pass
         if rec.prompt_cost_usd:
             metrics.REQUEST_COST.labels(
                 route_path, request.method, engine, "prompt"
@@ -294,6 +303,13 @@ async def trace_request(request: Request, call_next):
                     response.headers["X-Trace-ID"] = tid
                     # Optional hint for browser devtools
                     response.headers.setdefault("Server-Timing", f"traceparent;desc={tid}")
+            except Exception:
+                pass
+            # Mark model fallback headers for observability (e.g., llama→gpt)
+            try:
+                rr = rec.route_reason or ""
+                if rr and "fallback_from_llama" in rr:
+                    response.headers.setdefault("X-Fallback", "gpt")
             except Exception:
                 pass
             # Make backend origin explicit for debugging across the Next proxy
@@ -324,12 +340,13 @@ async def trace_request(request: Request, call_next):
                     https_origin = "https://localhost"
                 script_src = f"'self' 'nonce-{csp_nonce}'" if csp_nonce else "'self'"
                 style_src = f"'self' 'nonce-{csp_nonce}'" if csp_nonce else "'self'"
+                # Allow local FastAPI (http) and WS in dev via Next.js proxy
                 csp = (
                     "default-src 'self'; "
                     + "img-src 'self' data:; "
                     + f"style-src {style_src}; "
                     + f"script-src {script_src}; "
-                    + f"connect-src 'self' {https_origin} {ws_origin}; "
+                    + f"connect-src 'self' http://localhost:8000 {https_origin} {ws_origin} ws://localhost:8000; "
                     + "font-src 'self' data:; frame-ancestors 'none'"
                 )
                 response.headers.setdefault("Content-Security-Policy", csp)
@@ -420,6 +437,10 @@ async def trace_request(request: Request, call_next):
             "limit_bucket": limit_bucket,
             "requests_remaining": (limit_bucket or {}).get("long_remaining") if isinstance(limit_bucket, dict) else None,
             "enforced_scope": " ".join(sorted(set(scopes))) if scopes else None,
+            # Structured fields
+            "user_id": getattr(request.state, "user_id", None) or rec.user_id,
+            "route": route_path,
+            "error_code": (getattr(getattr(response, "body_iterator", None), "status_code", None) or None),
         }
         try:
             # log via std logging for live dashboards then persist in history
@@ -511,21 +532,31 @@ async def silent_refresh_middleware(request: Request, call_next):
             base_claims["user_id"] = user_id
             new_payload = {**base_claims, "iat": now, "exp": now + lifetime}
             new_token = jwt.encode(new_payload, secret, algorithm="HS256")
-            # Canonicalize SameSite and enforce Secure when SameSite=None
+            # Canonicalize SameSite and decide Secure based on scheme
             raw_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes"}
             raw_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
             samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
             cookie_samesite = samesite_map.get(raw_samesite, "Lax")
             cookie_secure = True if cookie_samesite == "None" else raw_secure
-            response.set_cookie(
-                key="access_token",
-                value=new_token,
-                httponly=True,
-                secure=cookie_secure,
-                samesite=cookie_samesite,
-                max_age=lifetime,
-                path="/",
-            )
+            # In dev over http, prefer not Secure unless SameSite=None is explicitly requested
+            try:
+                if getattr(request.url, "scheme", "http") != "https" and cookie_samesite != "None":
+                    cookie_secure = False
+            except Exception:
+                pass
+            try:
+                from .api.auth import _append_cookie_with_priority as _append
+                _append(response, key="access_token", value=new_token, max_age=lifetime, secure=cookie_secure, samesite=cookie_samesite)
+            except Exception:
+                response.set_cookie(
+                    key="access_token",
+                    value=new_token,
+                    httponly=True,
+                    secure=cookie_secure,
+                    samesite=cookie_samesite,
+                    max_age=lifetime,
+                    path="/",
+                )
             # Optionally extend refresh cookie if present (best-effort) with jitter to avoid herd
             try:
                 rtok = request.cookies.get("refresh_token")
@@ -541,15 +572,19 @@ async def silent_refresh_middleware(request: Request, call_next):
                             await asyncio.sleep(_rand.uniform(0.05, 0.25))  # type: ignore[name-defined]
                         except Exception:
                             pass
-                        response.set_cookie(
-                            key="refresh_token",
-                            value=rtok,
-                            httponly=True,
-                            secure=cookie_secure,
-                            samesite=cookie_samesite,
-                            max_age=r_life,
-                            path="/",
-                        )
+                        try:
+                            from .api.auth import _append_cookie_with_priority as _append
+                            _append(response, key="refresh_token", value=rtok, max_age=r_life, secure=cookie_secure, samesite=cookie_samesite)
+                        except Exception:
+                            response.set_cookie(
+                                key="refresh_token",
+                                value=rtok,
+                                httponly=True,
+                                secure=cookie_secure,
+                                samesite=cookie_samesite,
+                                max_age=r_life,
+                                path="/",
+                            )
             except Exception:
                 pass
     except Exception:

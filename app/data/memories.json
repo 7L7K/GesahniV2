@@ -411,6 +411,17 @@
         "pinned": false,
         "user_id": "havenotseen@gmail.com"
       }
+    },
+    {
+      "prompt": "ping",
+      "answer": "- Pong! How can I assist you today?",
+      "tags": [],
+      "timestamp": 1755147722.727634,
+      "hash": "d1771e3929763a961c4fcd0fbebfe49c2c687a0b56a8460a11ef91d4af2a6f26",
+      "audit": {
+        "pinned": false,
+        "user_id": "anon"
+      }
     }
   ]
 }

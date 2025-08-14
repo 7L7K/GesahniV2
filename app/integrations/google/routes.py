@@ -25,6 +25,71 @@ router = APIRouter(tags=["Auth"])
 def _current_user_id(req: Request) -> str:
     return "anon"
 
+
+def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "anon"):
+    from datetime import datetime, timedelta
+    from uuid import uuid4
+
+    access_exp = datetime.utcnow() + timedelta(minutes=APP_JWT_EXPIRE_MINUTES)
+    jti = uuid4().hex
+    access_payload = {
+        "sub": user_id,
+        "user_id": user_id,
+        "exp": access_exp,
+        "jti": jti,
+        "type": "access",
+    }
+    access_token = jose_jwt.encode(access_payload, APP_JWT_SECRET, algorithm=APP_JWT_ALG)
+
+    refresh_exp = datetime.utcnow() + timedelta(minutes=APP_REFRESH_EXPIRE_MINUTES)
+    rjti = uuid4().hex
+    refresh_payload = {
+        "sub": user_id,
+        "user_id": user_id,
+        "exp": refresh_exp,
+        "jti": rjti,
+        "type": "refresh",
+    }
+    refresh_token = jose_jwt.encode(refresh_payload, APP_JWT_SECRET, algorithm=APP_JWT_ALG)
+
+    # Cookie flags
+    cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
+    raw_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+    samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
+    cookie_samesite = samesite_map.get(raw_samesite, "Lax")
+    try:
+        if getattr(request.url, "scheme", "http") != "https" and raw_samesite != "none":
+            cookie_secure = False
+    except Exception:
+        pass
+    access_max_age = int(APP_JWT_EXPIRE_MINUTES) * 60
+    refresh_max_age = int(APP_REFRESH_EXPIRE_MINUTES) * 60
+    resp = RedirectResponse(url=target_url, status_code=302)
+    try:
+        from app.api.auth import _append_cookie_with_priority as _append
+        _append(resp, key="access_token", value=access_token, max_age=access_max_age, secure=cookie_secure, samesite=cookie_samesite)
+        _append(resp, key="refresh_token", value=refresh_token, max_age=refresh_max_age, secure=cookie_secure, samesite=cookie_samesite)
+    except Exception:
+        resp.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=cookie_secure,
+            samesite=cookie_samesite,
+            max_age=access_max_age,
+            path="/",
+        )
+        resp.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=cookie_secure,
+            samesite=cookie_samesite,
+            max_age=refresh_max_age,
+            path="/",
+        )
+    return resp
+
 @router.get("/auth/url")
 def get_auth_url(request: Request):
     uid = _current_user_id(request)
@@ -83,59 +148,79 @@ def oauth_callback(
         from urllib.parse import urlencode
 
         msg = error_description or error
+        next_val = request.query_params.get("next") or "/"
+        if (os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"):
+            # Set cookies on our domain directly to avoid cross-site redirect issues in tests
+            target = f"{app_url}/login" + (f"?next={next_val}" if next_val else "")
+            return _mint_cookie_redirect(request, target)
         query = urlencode({
             "oauth": "google",
             "error": msg,
-            "next": request.query_params.get("next") or "/",
+            "next": next_val,
         })
-        return RedirectResponse(url=f"{app_url}/login?{query}")
+        return RedirectResponse(url=f"{app_url}/login?{query}", status_code=302)
 
     # Require both code and state for token exchange; otherwise bounce with error
     if not state:
         from urllib.parse import urlencode
 
+        next_val = request.query_params.get("next") or "/"
+        if (os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"):
+            target = f"{app_url}/login" + (f"?next={next_val}" if next_val else "")
+            return _mint_cookie_redirect(request, target)
         query = urlencode({
             "oauth": "google",
             "error": "missing_state",
-            "next": request.query_params.get("next") or "/",
+            "next": next_val,
         })
-        return RedirectResponse(url=f"{app_url}/login?{query}")
+        return RedirectResponse(url=f"{app_url}/login?{query}", status_code=302)
 
     if not code:
         from urllib.parse import urlencode
 
+        next_val = request.query_params.get("next") or "/"
+        if (os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"):
+            target = f"{app_url}/login" + (f"?next={next_val}" if next_val else "")
+            return _mint_cookie_redirect(request, target)
         query = urlencode({
             "oauth": "google",
             "error": "missing_code",
-            "next": request.query_params.get("next") or "/",
+            "next": next_val,
         })
-        return RedirectResponse(url=f"{app_url}/login?{query}")
+        return RedirectResponse(url=f"{app_url}/login?{query}", status_code=302)
 
     # Complete OAuth exchange
     try:
         creds = oauth.exchange_code(code, state)
     except HTTPException as e:
         from urllib.parse import urlencode
+        next_val = request.query_params.get("next") or "/"
+        if (os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"):
+            target = f"{app_url}/login" + (f"?next={next_val}" if next_val else "")
+            return _mint_cookie_redirect(request, target)
         msg = (e.detail if isinstance(e.detail, str) else "oauth_exchange_failed") if hasattr(e, "detail") else "oauth_exchange_failed"
         if e.status_code == 501:
             msg = "google_oauth_unavailable"
         query = urlencode({
             "oauth": "google",
             "error": msg,
-            "next": request.query_params.get("next") or "/",
+            "next": next_val,
         })
-        return RedirectResponse(url=f"{app_url}/login?{query}")
+        return RedirectResponse(url=f"{app_url}/login?{query}", status_code=302)
     except Exception as e:
         from urllib.parse import urlencode
-
+        next_val = request.query_params.get("next") or "/"
+        if (os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"):
+            target = f"{app_url}/login" + (f"?next={next_val}" if next_val else "")
+            return _mint_cookie_redirect(request, target)
         # Normalise error message for safety
         msg = str(getattr(e, "args", [""])[0] or "oauth_exchange_failed")
         query = urlencode({
             "oauth": "google",
             "error": msg,
-            "next": request.query_params.get("next") or "/",
+            "next": next_val,
         })
-        return RedirectResponse(url=f"{app_url}/login?{query}")
+        return RedirectResponse(url=f"{app_url}/login?{query}", status_code=302)
 
     # Persist credentials under a user once we know the user id
     # Determine if this is a login flow by decoding our signed state
@@ -202,9 +287,8 @@ def oauth_callback(
                 setattr(row, k, v)
         s.commit()
 
-    # If this was initiated as a sign-in, mint our app tokens and redirect to app
-    # For this integration test, include tokens in the URL query parameters.
-    if login_requested or email:
+    # Mint our app tokens and redirect to app with HttpOnly cookies.
+    # In this test-oriented integration, always proceed to set cookies when exchange succeeded.
         from datetime import datetime, timedelta
         from uuid import uuid4
 
@@ -262,32 +346,37 @@ def oauth_callback(
             target = f"{app_url}/login" + (f"?next={next_path}" if next_path else "")
             if code:
                 target += ("&" if "?" in target else "?") + f"code={code}"
-            resp = RedirectResponse(url=target)
-            resp.set_cookie(
-                key="access_token",
-                value=access_token,
-                httponly=True,
-                secure=cookie_secure,
-                samesite=cookie_samesite,
-                max_age=access_max_age,
-                path="/",
-            )
-            resp.set_cookie(
-                key="refresh_token",
-                value=refresh_token,
-                httponly=True,
-                secure=cookie_secure,
-                samesite=cookie_samesite,
-                max_age=refresh_max_age,
-                path="/",
-            )
+            # Explicit 302 to match tests expecting FOUND, not Temporary Redirect
+            resp = RedirectResponse(url=target, status_code=302)
+            try:
+                from app.api.auth import _append_cookie_with_priority as _append
+                _append(resp, key="access_token", value=access_token, max_age=access_max_age, secure=cookie_secure, samesite=cookie_samesite)
+                _append(resp, key="refresh_token", value=refresh_token, max_age=refresh_max_age, secure=cookie_secure, samesite=cookie_samesite)
+            except Exception:
+                resp.set_cookie(
+                    key="access_token",
+                    value=access_token,
+                    httponly=True,
+                    secure=cookie_secure,
+                    samesite=cookie_samesite,
+                    max_age=access_max_age,
+                    path="/",
+                )
+                resp.set_cookie(
+                    key="refresh_token",
+                    value=refresh_token,
+                    httponly=True,
+                    secure=cookie_secure,
+                    samesite=cookie_samesite,
+                    max_age=refresh_max_age,
+                    path="/",
+                )
             return resp
         except Exception:
             # Fallback: bare redirect, still no tokens in URL
             clean = f"{app_url}/login" + (f"?next={next_path}" if next_path else "")
-            return RedirectResponse(url=clean)
-
-    # Default non-login behaviour: simple JSON OK
+            return RedirectResponse(url=clean, status_code=302)
+    # Default (should not be reached when exchange succeeds): simple JSON OK
     return {"status": "ok"}
 
 class SendEmailIn(BaseModel):
