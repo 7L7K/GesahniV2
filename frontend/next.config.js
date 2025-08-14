@@ -36,6 +36,10 @@ module.exports = {
         destination: 'http://localhost:8000/healthz/:path*',
       },
       {
+        source: '/metrics',
+        destination: 'http://localhost:8000/metrics',
+      },
+      {
         source: '/capture/:path*',
         destination: 'http://localhost:8000/capture/:path*',
       },
@@ -61,6 +65,17 @@ module.exports = {
         headers: [
           { key: 'x-debug-next', value: 'rewrite-to-8000' },
           { key: 'x-debug-source', value: '/healthz/:path*' },
+          { key: 'cache-control', value: 'no-store' },
+          { key: 'pragma', value: 'no-cache' },
+        ],
+      },
+      {
+        source: '/metrics',
+        headers: [
+          { key: 'x-debug-next', value: 'rewrite-to-8000' },
+          { key: 'x-debug-source', value: '/metrics' },
+          { key: 'cache-control', value: 'no-store' },
+          { key: 'pragma', value: 'no-cache' },
         ],
       },
       // Mark responses that match rewrites to the backend

@@ -16,7 +16,22 @@ def test_metrics_exposes_prometheus_and_increments_counter():
     r1 = c.get("/metrics")
     assert r1.status_code == 200
     body1 = r1.text
-    # Expect our request counter family to be present (prefix match to tolerate name differences)
-    assert "app_request_total" in body1 or "gesahni_requests_total" in body1 or "REQUEST_COUNT" or "http_request_total" in body1
+    # Expect our request counter family to be present
+    assert ("gesahni_requests_total" in body1) or ("app_request_total" in body1)
+
+
+def test_metrics_health_requests_count_and_latency():
+    c = TestClient(app)
+    for _ in range(3):
+        c.get("/healthz/ready")
+    body = c.get("/metrics").text
+    # Counter includes route label
+    assert "gesahni_requests_total" in body
+    assert "/healthz/ready" in body
+    # Histogram buckets present
+    assert "gesahni_latency_seconds_bucket" in body
+    # /metrics is unauthenticated
+    r = c.get("/metrics", headers={"Cookie": "access_token=bogus"})
+    assert r.status_code == 200
 
 

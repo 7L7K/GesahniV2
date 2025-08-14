@@ -46,3 +46,29 @@ def test_health_deps_skipped_when_env_missing(monkeypatch):
     assert set((body.get("checks") or {}).keys()) >= {"backend", "llama", "ha", "qdrant", "spotify"}
 
 
+def test_llama_skipped_when_disabled_env(monkeypatch):
+    monkeypatch.setenv("LLAMA_ENABLED", "false")
+    from importlib import reload
+    import app.health_utils as hu
+    reload(hu)
+    c = TestClient(app)
+    r = c.get("/healthz/deps")
+    assert r.status_code == 200
+    js = r.json()
+    assert js["checks"]["llama"] == "skipped"
+    assert js["status"] in {"ok", "degraded"}
+
+
+def test_optional_hang_times_out(monkeypatch):
+    async def hang():
+        import asyncio
+        await asyncio.sleep(2)
+        return "ok"
+    monkeypatch.setattr(hu, "check_qdrant", hang)
+    c = TestClient(app)
+    r = c.get("/healthz/deps")
+    assert r.status_code == 200
+    js = r.json()
+    assert js["checks"]["qdrant"] in {"error", "skipped"}
+
+

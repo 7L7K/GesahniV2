@@ -65,6 +65,9 @@ async def _http_probe(url: str, method: str = "HEAD", timeout_ms: int = 400) -> 
 
 
 async def check_llama() -> HealthResult:
+    # Explicit toggle wins
+    if (os.getenv("LLAMA_ENABLED") or "").strip().lower() in {"0","false","no","off"}:
+        return "skipped"
     url = (os.getenv("OLLAMA_URL") or os.getenv("LLAMA_URL") or "").strip()
     if not url:
         return "skipped"
