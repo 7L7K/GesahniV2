@@ -436,24 +436,30 @@ async def login(
             _append(response, key="access_token", value=access_token, max_age=EXPIRE_MINUTES * 60, secure=cookie_secure, samesite=cookie_samesite)
             _append(response, key="refresh_token", value=refresh_token, max_age=REFRESH_EXPIRE_MINUTES * 60, secure=cookie_secure, samesite=cookie_samesite)
         except Exception:
-            response.set_cookie(
-                key="access_token",
-                value=access_token,
-                httponly=True,
-                secure=cookie_secure,
-                samesite=cookie_samesite,
-                max_age=EXPIRE_MINUTES * 60,
-                path="/",
-            )
-            response.set_cookie(
-                key="refresh_token",
-                value=refresh_token,
-                httponly=True,
-                secure=cookie_secure,
-                samesite=cookie_samesite,
-                max_age=REFRESH_EXPIRE_MINUTES * 60,
-                path="/",
-            )
+            pass
+        # Always set via Starlette API as well for compatibility with cookie jars that ignore Priority
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=cookie_secure,
+            samesite=cookie_samesite,
+            max_age=EXPIRE_MINUTES * 60,
+            path="/",
+        )
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=cookie_secure,
+            samesite=cookie_samesite,
+            max_age=REFRESH_EXPIRE_MINUTES * 60,
+            path="/",
+        )
+        try:
+            print(f"login.set_cookie secure={cookie_secure} samesite={cookie_samesite}")
+        except Exception:
+            pass
     except Exception:
         pass
 
