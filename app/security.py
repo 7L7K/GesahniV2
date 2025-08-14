@@ -494,8 +494,10 @@ async def verify_token(request: Request) -> None:
     if not token:
         token = request.cookies.get("access_token")
     if not token:
-        # Allow anonymous when tests indicate JWT is optional OR when
-        # ENFORCE_JWT_SCOPES=0 is configured for public endpoints.
+        # If JWT is required, enforce 401 even under tests
+        if require_jwt:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        # Otherwise allow anonymous when tests indicate JWT is optional OR when scopes enforcement is disabled.
         if test_bypass or os.getenv("ENFORCE_JWT_SCOPES", "1").strip() in {"0", "false", "no"}:
             return
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -513,6 +515,9 @@ async def verify_token(request: Request) -> None:
         else:
             payload = jwt.decode(token, jwt_secret, algorithms=["HS256"], leeway=skew)
         request.state.jwt_payload = payload
+    except jwt.ExpiredSignatureError:
+        # Allow caller to distinguish expiry for logging
+        raise HTTPException(status_code=401, detail="token_expired")
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Unauthorized")
 

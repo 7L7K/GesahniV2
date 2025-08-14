@@ -734,23 +734,33 @@ async def route_prompt(
         if use_new_pipeline and _run_retrieval_pipeline is not None:
             try:
                 coll = os.getenv("QDRANT_COLLECTION", "memories")
-                docs, rt = _run_retrieval_pipeline(
-                    user_id=user_id,
-                    query=prompt,
-                    intent=intent,
-                    collection=coll,
-                    explain=True,
-                    extra_filter=None,
-                )
-                mem_docs = docs
-                if rec:
-                    try:
-                        add_trace_event(rec.req_id, "retrieval_trace", trace=rt, flags={
-                            "pipeline": True,
-                            "use_hosted_ce": os.getenv("RETRIEVE_USE_HOSTED_CE", "0"),
-                        })
-                    except Exception:
-                        pass
+                if ":" in coll:
+                    # Temporarily disable retrieval when collection name is invalid per acceptance criteria
+                    logger.warning("retrieval.disabled_invalid_collection name=%s", coll)
+                    if rec:
+                        try:
+                            add_trace_event(rec.req_id, "retrieval_disabled", reason="invalid_collection_name", collection=coll)
+                        except Exception:
+                            pass
+                    mem_docs = []
+                else:
+                    docs, rt = _run_retrieval_pipeline(
+                        user_id=user_id,
+                        query=prompt,
+                        intent=intent,
+                        collection=coll,
+                        explain=True,
+                        extra_filter=None,
+                    )
+                    mem_docs = docs
+                    if rec:
+                        try:
+                            add_trace_event(rec.req_id, "retrieval_trace", trace=rt, flags={
+                                "pipeline": True,
+                                "use_hosted_ce": os.getenv("RETRIEVE_USE_HOSTED_CE", "0"),
+                            })
+                        except Exception:
+                            pass
             except Exception:
                 # fallback to legacy on any error
                 try:
@@ -1113,6 +1123,27 @@ async def _call_gpt_override(
         )
     except TypeError:
         text, pt, ct, cost = await ask_gpt(built, model, SYSTEM_PROMPT)
+    except Exception as e:
+        # Preserve provider 4xx as 4xx for transparency; otherwise propagate
+        try:
+            import httpx as _httpx  # type: ignore
+            if isinstance(e, _httpx.HTTPStatusError):
+                sc = int(getattr(getattr(e, "response", None), "status_code", 500) or 500)
+                if 400 <= sc < 500:
+                    msg = None
+                    try:
+                        data = e.response.json()
+                        msg = data.get("error") or data.get("message") or data.get("detail")
+                    except Exception:
+                        try:
+                            msg = e.response.text
+                        except Exception:
+                            msg = str(e)
+                    from fastapi import HTTPException as _HTTPEx  # type: ignore
+                    raise _HTTPEx(status_code=sc, detail=str(msg or "provider_error"))
+        except Exception:
+            pass
+        raise
     if rec:
         rec.engine_used = "gpt"
         rec.model_name = model
@@ -1228,16 +1259,36 @@ async def _call_gpt(
         "_call_gpt start prompt=%r model=%s user_id=%s", prompt, model, user_id
     )
     try:
+        text, pt, ct, cost = await ask_gpt(
+            built_prompt,
+            model,
+            SYSTEM_PROMPT,
+            stream=bool(stream_cb),
+            on_token=stream_cb,
+        )
+    except TypeError:
+        text, pt, ct, cost = await ask_gpt(built_prompt, model, SYSTEM_PROMPT)
+    except Exception as e:
+        # Preserve provider 4xx as 4xx
         try:
-            text, pt, ct, cost = await ask_gpt(
-                built_prompt,
-                model,
-                SYSTEM_PROMPT,
-                stream=bool(stream_cb),
-                on_token=stream_cb,
-            )
-        except TypeError:
-            text, pt, ct, cost = await ask_gpt(built_prompt, model, SYSTEM_PROMPT)
+            import httpx as _httpx  # type: ignore
+            if isinstance(e, _httpx.HTTPStatusError):
+                sc = int(getattr(getattr(e, "response", None), "status_code", 500) or 500)
+                if 400 <= sc < 500:
+                    msg = None
+                    try:
+                        data = e.response.json()
+                        msg = data.get("error") or data.get("message") or data.get("detail")
+                    except Exception:
+                        try:
+                            msg = e.response.text
+                        except Exception:
+                            msg = str(e)
+                    from fastapi import HTTPException as _HTTPEx  # type: ignore
+                    raise _HTTPEx(status_code=sc, detail=str(msg or "provider_error"))
+        except Exception:
+            pass
+        raise
         if rec:
             rec.engine_used = "gpt"
             rec.model_name = model
@@ -1329,6 +1380,13 @@ async def _call_llama(
             logger.debug(
                 "_call_llama fallback result model=%s result=%s", fallback_model, text
             )
+            # Tag fallback for response headers via telemetry record
+            try:
+                if rec:
+                    rec.engine_used = "gpt"
+                    rec.route_reason = (rec.route_reason or "") + "|fallback_from_llama"
+            except Exception:
+                pass
             return text
         except Exception:
             logger.exception("_call_llama fallback to GPT failed")
@@ -1359,6 +1417,12 @@ async def _call_llama(
                     fallback_model,
                     text,
                 )
+                try:
+                    if rec:
+                        rec.engine_used = "gpt"
+                        rec.route_reason = (rec.route_reason or "") + "|fallback_from_llama"
+                except Exception:
+                    pass
                 return text
             except Exception:
                 logger.exception("_call_llama low-conf fallback to GPT failed")

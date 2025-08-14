@@ -6,6 +6,19 @@ from typing import Optional
 
 
 _redis_client: Optional[object] = None
+_local_used_refresh: dict[str, float] = {}
+_local_last_used_jti: dict[str, str] = {}
+_local_revoked_families: dict[str, float] = {}
+try:
+    import threading as _threading  # type: ignore
+    _local_lock = _threading.Lock()
+except Exception:  # pragma: no cover - fallback
+    class _Dummy:
+        def __enter__(self):
+            return None
+        def __exit__(self, *a):
+            return False
+    _local_lock = _Dummy()
 
 
 async def _get_redis():
@@ -15,6 +28,12 @@ async def _get_redis():
     url = os.getenv("REDIS_URL")
     if not url:
         return None
+async def has_redis() -> bool:
+    try:
+        return (await _get_redis()) is not None
+    except Exception:
+        return False
+
     try:
         import redis.asyncio as redis  # type: ignore
     except Exception:
@@ -58,9 +77,75 @@ async def is_refresh_allowed(sid: str, jti: str) -> bool:
         return True
 
 
+async def claim_refresh_jti(sid: str, jti: str, ttl_seconds: int) -> bool:
+    """Atomically mark a refresh ``jti`` for ``sid`` as used.
+
+    Returns True only for the first caller; subsequent calls until TTL expiry
+    return False. Uses Redis when available; falls back to a process-local map.
+    """
+    key = f"refresh_used:{sid}:{jti}"
+    r = await _get_redis()
+    if r is not None:
+        try:
+            # SET key NX EX ttl → True only when not previously set
+            ok = await r.set(key, "1", ex=max(1, int(ttl_seconds)), nx=True)  # type: ignore[attr-defined]
+            return bool(ok)
+        except Exception:
+            # fall back to local
+            pass
+    # Local fallback with coarse pruning
+    import time as _time
+    now = _time.time()
+    with _local_lock:
+        # prune expired
+        try:
+            for k, exp in list(_local_used_refresh.items()):
+                if exp <= now:
+                    _local_used_refresh.pop(k, None)
+        except Exception:
+            pass
+        if key in _local_used_refresh:
+            return False
+        _local_used_refresh[key] = now + max(1, int(ttl_seconds))
+        return True
+
+
+async def set_last_used_jti(sid: str, jti: str, ttl_seconds: int | None = None) -> None:
+    key = f"refresh_last_used:{sid}"
+    r = await _get_redis()
+    if r is not None:
+        try:
+            if ttl_seconds and ttl_seconds > 0:
+                await r.set(key, jti, ex=int(ttl_seconds))  # type: ignore[attr-defined]
+            else:
+                await r.set(key, jti)  # type: ignore[attr-defined]
+            return
+        except Exception:
+            pass
+    with _local_lock:
+        _local_last_used_jti[key] = jti
+
+
+async def get_last_used_jti(sid: str) -> str | None:
+    key = f"refresh_last_used:{sid}"
+    r = await _get_redis()
+    if r is not None:
+        try:
+            val = await r.get(key)  # type: ignore[attr-defined]
+            return str(val) if val is not None else None
+        except Exception:
+            pass
+    with _local_lock:
+        return _local_last_used_jti.get(key)
+
+
 async def revoke_refresh_family(sid: str, ttl_seconds: int) -> None:
     r = await _get_redis()
     if r is None:
+        # Local fallback
+        import time as _time
+        with _local_lock:
+            _local_revoked_families[f"fam:{sid}"] = _time.time() + max(1, int(ttl_seconds))
         return
     try:
         await r.set(_key_revoked_refresh_family(sid), "1", ex=max(1, int(ttl_seconds)))  # type: ignore[attr-defined]
@@ -71,7 +156,18 @@ async def revoke_refresh_family(sid: str, ttl_seconds: int) -> None:
 async def is_refresh_family_revoked(sid: str) -> bool:
     r = await _get_redis()
     if r is None:
-        return False
+        # Local fallback check with pruning
+        import time as _time
+        now = _time.time()
+        key = f"fam:{sid}"
+        with _local_lock:
+            try:
+                for k, exp in list(_local_revoked_families.items()):
+                    if exp <= now:
+                        _local_revoked_families.pop(k, None)
+            except Exception:
+                pass
+            return key in _local_revoked_families
     try:
         val = await r.get(_key_revoked_refresh_family(sid))  # type: ignore[attr-defined]
         return val is not None

@@ -25,9 +25,17 @@ function LoginPageInner() {
             setTokens(access, refresh);
             document.cookie = `auth_hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
             // Fire-and-forget to backend to rotate/ensure HttpOnly cookies
-            fetch('/v1/refresh', { method: 'POST', credentials: 'include' }).finally(() => {
+            try { console.info('AUTH finisher.trigger reason=cookie.missing'); } catch { }
+            {
+              const headers: Record<string,string> = { 'X-Auth-Intent': 'refresh' };
+              try {
+                const m = document.cookie.split('; ').find(c => c.startsWith('csrf_token='));
+                if (m) headers['X-CSRF-Token'] = decodeURIComponent(m.split('=')[1] || '');
+              } catch {}
+              fetch('/v1/auth/refresh', { method: 'POST', headers, credentials: 'include' }).finally(() => {
                 router.replace(next);
-            });
+              });
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);

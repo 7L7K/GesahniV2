@@ -27,7 +27,12 @@ export default function AdminPage() {
     const [filters, setFilters] = useState<{ engine?: string; model?: string; cache_hit?: string; escalated?: string; q?: string }>({})
     const [cursor, setCursor] = useState<number | null>(0)
     const { data, isLoading, error } = useRouterDecisions(token, 20, { ...filters, cursor: cursor ?? 0 })
-    const items: Decision[] = (data?.items as Decision[]) || []
+    const items: Decision[] = Array.isArray((data as any)?.items) ? ((data as any).items as Decision[]) : []
+    useEffect(() => {
+        // Debug logging to validate shape during Clerk callback troubleshooting
+        // eslint-disable-next-line no-console
+        console.log("admin.items", items)
+    }, [items])
 
     return (
         <main className="mx-auto max-w-5xl px-4 py-6 space-y-8">
@@ -37,7 +42,8 @@ export default function AdminPage() {
                     <a className="text-blue-600 underline text-sm" href="/admin/ingest">Memory Ingest</a>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4 text-sm">
-                    <TileVector token={token} />
+                    {/* Vector tile disabled pending stable endpoint */}
+                    {/* <TileVector token={token} /> */}
                     <TileCache token={token} />
                     <TileBudget />
                     <TileHA />
@@ -123,11 +129,11 @@ export default function AdminPage() {
     );
 }
 
-function TileVector({ token }: { token: string }) {
-    const [data, setData] = useState<{ backend: string; avg_latency_ms?: number; sample_size?: number } | null>(null)
-    useEffect(() => { apiFetch('/v1/status/vector_store').then(r => r.json()).then(setData).catch(() => setData(null)) }, [token])
-    return <div className="rounded border p-3 bg-white/50 dark:bg-zinc-900/50"><div className="text-xs text-muted-foreground">Vector</div><div className="font-medium">{data?.backend || 'unknown'}</div><div className="text-xs">avg {data?.avg_latency_ms ?? 0} ms ({data?.sample_size ?? 0})</div></div>
-}
+// function TileVector({ token }: { token: string }) {
+//     const [data, setData] = useState<{ backend: string; avg_latency_ms?: number; sample_size?: number } | null>(null)
+//     useEffect(() => { apiFetch('/v1/status/vector_store').then(r => r.json()).then(setData).catch(() => setData(null)) }, [token])
+//     return <div className="rounded border p-3 bg-white/50 dark:bg-zinc-900/50"><div className="text-xs text-muted-foreground">Vector</div><div className="font-medium">{data?.backend || 'unknown'}</div><div className="text-xs">avg {data?.avg_latency_ms ?? 0} ms ({data?.sample_size ?? 0})</div></div>
+// }
 
 function TileCache({ token }: { token: string }) {
     const [rate, setRate] = useState<number>(0)

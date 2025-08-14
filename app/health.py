@@ -1,12 +1,15 @@
 # app/health.py
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from app.memory.vector_store import add_user_memory
 from app.memory.vector_store import query_user_memories as q
 from fastapi import Depends, APIRouter
 from app.otel_utils import start_span
 import os
 
-router = APIRouter(tags=["Admin"])
+from .deps.scopes import docs_security_with
+
+
+router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
 
 @router.get("/health/chroma")
 def health_chroma():

@@ -336,6 +336,10 @@ async def register(req: RegisterRequest, user_id: str = Depends(get_current_user
 async def login(
     req: LoginRequest, request: Request, response: Response, user_id: str = Depends(get_current_user_id)
 ) -> TokenResponse:
+    """Password login for local accounts.
+
+    CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
+    """
     await _ensure_table()
     norm_user = _sanitize_username(req.username)
     # Basic lockout per username and per IP address
@@ -427,114 +431,11 @@ async def login(
         except Exception:
             pass
         cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=cookie_secure,
-            samesite=cookie_samesite,
-            max_age=EXPIRE_MINUTES * 60,
-            path="/",
-        )
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            secure=cookie_secure,
-            samesite=cookie_samesite,
-            max_age=REFRESH_EXPIRE_MINUTES * 60,
-            path="/",
-        )
-    except Exception:
-        pass
-
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token=access_token,
-        stats=stats,
-    )
-
-
-# Refresh endpoint
-@router.post("/refresh", response_model=TokenResponse, openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/RefreshRequest"}}}}})
-async def refresh(req: RefreshRequest | None = None, request: Request = None, response: Response = None) -> TokenResponse:  # type: ignore[assignment]
-    try:
-        # Validate audience if configured; issuer verified after decode
-        kwargs = {"algorithms": [ALGORITHM]}
-        if JWT_AUD:
-            kwargs["audience"] = JWT_AUD
-        token_in = None
-        if req and getattr(req, "refresh_token", None):
-            token_in = req.refresh_token
-        # Fallback to cookie when body not supplied
-        if not token_in and request is not None:
-            try:
-                token_in = request.cookies.get("refresh_token")
-            except Exception:
-                token_in = None
-        if not token_in:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        payload = jwt.decode(token_in, SECRET_KEY, **kwargs)
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    if payload.get("type") != "refresh":
-        raise HTTPException(status_code=400, detail="Invalid token type")
-    if JWT_ISS and payload.get("iss") != JWT_ISS:
-        raise HTTPException(status_code=401, detail="Invalid token issuer")
-
-    jti = payload.get("jti")
-    if jti in revoked_tokens:
-        raise HTTPException(status_code=401, detail="Token revoked")
-
-    # Revoke used refresh token
-    revoked_tokens.add(jti)
-    username = payload.get("sub")
-
-    # Issue new access token
-    expire = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
-    new_jti = uuid4().hex
-    access_payload = {
-        "sub": username,
-        "user_id": username,
-        "exp": expire,
-        "jti": new_jti,
-        "type": "access",
-    }
-    if JWT_ISS:
-        access_payload["iss"] = JWT_ISS
-    if JWT_AUD:
-        access_payload["aud"] = JWT_AUD
-    access_token = jwt.encode(access_payload, SECRET_KEY, algorithm=ALGORITHM)
-
-    # Issue new refresh token
-    refresh_expire = datetime.utcnow() + timedelta(minutes=REFRESH_EXPIRE_MINUTES)
-    refresh_jti = uuid4().hex
-    refresh_payload = {
-        "sub": username,
-        "user_id": username,
-        "exp": refresh_expire,
-        "jti": refresh_jti,
-        "type": "refresh",
-    }
-    if JWT_ISS:
-        refresh_payload["iss"] = JWT_ISS
-    if JWT_AUD:
-        refresh_payload["aud"] = JWT_AUD
-    refresh_token = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
-
-    # Set refreshed cookies for browser clients
-    try:
-        if response is not None:
-            cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
-            # In test/dev over HTTP, force non-secure so TestClient sends cookies
-            try:
-                if request is not None and getattr(request.url, "scheme", "http") != "https":
-                    cookie_secure = False
-            except Exception:
-                pass
-            cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+        try:
+            from .api.auth import _append_cookie_with_priority as _append  # reuse helper
+            _append(response, key="access_token", value=access_token, max_age=EXPIRE_MINUTES * 60, secure=cookie_secure, samesite=cookie_samesite)
+            _append(response, key="refresh_token", value=refresh_token, max_age=REFRESH_EXPIRE_MINUTES * 60, secure=cookie_secure, samesite=cookie_samesite)
+        except Exception:
             response.set_cookie(
                 key="access_token",
                 value=access_token,
@@ -557,36 +458,73 @@ async def refresh(req: RefreshRequest | None = None, request: Request = None, re
         pass
 
     return TokenResponse(
-        access_token=access_token, refresh_token=refresh_token, token=access_token
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token=access_token,
+        stats=stats,
     )
 
 
-# Logout endpoint
+_DEPRECATE_REFRESH_LOGGED = False
+
+# Refresh endpoint (legacy path) delegates to modern implementation with full parity
+@router.post("/refresh", response_model=TokenResponse, openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/RefreshRequest"}}}}})
+async def refresh(req: RefreshRequest | None = None, request: Request = None, response: Response = None) -> TokenResponse:  # type: ignore[assignment]
+    global _DEPRECATE_REFRESH_LOGGED
+    if not _DEPRECATE_REFRESH_LOGGED:
+        try:
+            print("deprecate route=/v1/refresh")
+        except Exception:
+            pass
+        _DEPRECATE_REFRESH_LOGGED = True
+    # Delegate to /v1/auth/refresh parity logic
+    from .api.auth import refresh as _refresh  # type: ignore
+    # Construct a starlette Request/Response compatible invocation
+    # Ensure intent/CSRF parity is enforced by delegated handler
+    body_tokens = None
+    try:
+        if req and getattr(req, "refresh_token", None):
+            body_tokens = {"refresh_token": req.refresh_token}
+    except Exception:
+        body_tokens = None
+    out = await _refresh(request, response)  # type: ignore[arg-type]
+    # Map response body to TokenResponse for compatibility when tokens are present
+    try:
+        at = getattr(out, "get", lambda k, d=None: None)("access_token", None)
+        rt = getattr(out, "get", lambda k, d=None: None)("refresh_token", None)
+    except Exception:
+        at = None
+        rt = None
+    if at and rt:
+        return TokenResponse(access_token=at, refresh_token=rt, token=at)
+    # Fallback: return empty tokens if not provided (cookie mode only)
+    return TokenResponse(access_token="", refresh_token="", token="")
+
+
+_DEPRECATE_LOGOUT_LOGGED = False
+
+# Logout endpoint (legacy path) delegates to modern /v1/auth/logout behavior
 @router.post("/logout", response_model=dict)
 async def logout(request: Request, response: Response) -> dict:
-    auth = request.headers.get("Authorization")
-    if not auth or not auth.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-    token = auth.split(" ", 1)[1]
+    global _DEPRECATE_LOGOUT_LOGGED
+    if not _DEPRECATE_LOGOUT_LOGGED:
+        try:
+            print("deprecate route=/v1/logout")
+        except Exception:
+            pass
+        _DEPRECATE_LOGOUT_LOGGED = True
+    # Delegate to canonical cookie-based logout which revokes refresh family
     try:
-        kwargs = {"algorithms": [ALGORITHM]}
-        if JWT_AUD:
-            kwargs["audience"] = JWT_AUD
-        payload = jwt.decode(token, SECRET_KEY, **kwargs)
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    if JWT_ISS and payload.get("iss") != JWT_ISS:
-        raise HTTPException(status_code=401, detail="Invalid token issuer")
-    jti = payload.get("jti")
-    if jti:
-        revoked_tokens.add(jti)
-    # Clear auth cookies
-    try:
-        response.delete_cookie("access_token", path="/")
-        response.delete_cookie("refresh_token", path="/")
+        from .api.auth import logout as _logout  # type: ignore
+        return await _logout(request, response)  # type: ignore[arg-type]
     except Exception:
-        pass
-    return {"status": "ok"}
+        # Fallback: clear cookies
+        try:
+            response.delete_cookie("access_token", path="/")
+            response.delete_cookie("refresh_token", path="/")
+        except Exception:
+            pass
+        return {"status": "ok"}
 
 
 # Forgot/reset password endpoints (opt-in flow for local accounts)

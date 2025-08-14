@@ -24,3 +24,13 @@ class GoogleToken(Base):
 
 def init_db():
     Base.metadata.create_all(ENGINE)
+    # Lightweight migration: add rotated_at if missing (older test DBs)
+    try:
+        with ENGINE.begin() as conn:
+            rows = conn.exec_driver_sql("PRAGMA table_info(google_tokens)").fetchall()
+            cols = {str(r[1]) for r in rows}
+            if "rotated_at" not in cols:
+                conn.exec_driver_sql("ALTER TABLE google_tokens ADD COLUMN rotated_at DATETIME")
+    except Exception:
+        # best-effort; if migration fails, tests may recreate DB via env override
+        pass

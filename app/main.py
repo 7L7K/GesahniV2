@@ -72,10 +72,6 @@ try:
 except Exception:
     preflight_router = None  # type: ignore
 try:
-    from .api.auth import router as simple_auth_router
-except Exception:
-    simple_auth_router = None  # type: ignore
-try:
     from .api.oauth_google import router as oauth_google_router
 except Exception:
     oauth_google_router = None  # type: ignore
@@ -295,6 +291,14 @@ async def lifespan(app: FastAPI):
             logger.debug("sms_worker not started", exc_info=True)
         yield
     finally:
+        # Log health flip to offline on shutdown
+        try:
+            from typing import cast as _cast
+            if _HEALTH_LAST.get("online", True):
+                print("healthz status=offline")
+            _HEALTH_LAST["online"] = False
+        except Exception:
+            pass
         for func in (close_client, close_whisper_client):
             try:
                 await func()
@@ -351,6 +355,25 @@ def _custom_openapi():
 
 app.openapi = _custom_openapi  # type: ignore[assignment]
 
+# Debug logger strictly scoped to /v1/auth/* without intercepting handlers
+try:
+    @app.middleware("http")
+    async def _auth_probe_logger(request: Request, call_next):
+        try:
+            path = getattr(getattr(request, "url", None), "path", "") or ""
+            if path.startswith("/v1/auth/"):
+                print("<<< Auth hit:", getattr(request, "method", ""), request.url)
+                try:
+                    body = await request.body()
+                except Exception:
+                    body = b""
+                print("<<< Body:", body)
+        except Exception:
+            pass
+        return await call_next(request)
+except Exception:
+    pass
+
 # CORS middleware with stricter defaults
 _cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
@@ -369,19 +392,7 @@ app.middleware("http")(silent_refresh_middleware)
 app.middleware("http")(reload_env_middleware)
 app.add_middleware(CSRFMiddleware)
 
-# Mount core auth/me routes early for precedence and ensure whoami has rate limit
-try:
-    from fastapi import APIRouter as _APIR
-    from .deps.user import get_current_user_id as _get_uid
-    from .security import rate_limit as _rl
-
-    _core = _APIR()
-    @_core.get("/whoami")
-    async def _whoami(user_id: str = Depends(_get_uid), _r: None = Depends(_rl)):
-        return {"user_id": user_id}
-    app.include_router(_core)
-except Exception:
-    pass
+# Removed legacy unversioned /whoami to ensure a single canonical /v1/whoami
 
     # Optional static mount for TV shared photos
 try:
@@ -428,13 +439,29 @@ if os.getenv("PROMETHEUS_ENABLED", "1").strip().lower() in {"1", "true", "yes", 
             return _Resp(content=body, media_type="text/plain; version=0.0.4")
 
 
+_HEALTH_LAST: dict[str, bool] = {"online": True}
+
 @app.get("/healthz", tags=["Admin"])
 async def healthz() -> dict:
+    # Service is online if we reached this handler; log only state flips
+    if not _HEALTH_LAST.get("online", False):
+        try:
+            print("healthz status=online")
+        except Exception:
+            pass
+    _HEALTH_LAST["online"] = True
     return {"status": "ok"}
 
 # K8s-friendly health group (no auth)
 @app.get("/health/live", include_in_schema=False)
 async def _health_live() -> dict:
+    # If ever used to signal offline, mirror flip logging
+    if not _HEALTH_LAST.get("online", False):
+        try:
+            print("healthz status=online")
+        except Exception:
+            pass
+    _HEALTH_LAST["online"] = True
     return {"status": "ok"}
 
 @app.get("/health/ready", include_in_schema=False)
@@ -574,8 +601,10 @@ if os.getenv("ENV", "").strip().lower() not in {"prod", "production"}:
 
 
 class AskRequest(BaseModel):
-    prompt: str
+    # Accept both legacy text and chat-style array
+    prompt: str | list[dict]
     model_override: str | None = Field(None, alias="model")
+    stream: bool | None = Field(False, description="Force SSE when true; otherwise negotiated via Accept")
 
     # Pydantic v2 config: allow both alias ("model") and field name ("model_override")
     model_config = ConfigDict(
@@ -693,18 +722,13 @@ async def delete_memory(mem_id: str, user_id: str = Depends(get_current_user_id)
     raise HTTPException(status_code=404, detail="memory_not_found")
 
 
-@core_router.get("/me")
-async def get_me(user_id: str = Depends(get_current_user_id)):
-    stats = await user_store.get_stats(user_id)
-    if stats is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"user_id": user_id, **stats}
+# /v1/me and /v1/whoami are served from app.api.me and app.api.auth respectively; keep no duplicates here
 
 
 async def _require_auth_dep_for_core(request: Request) -> None:
     if os.getenv("REQUIRE_JWT", "0").strip().lower() in {"1", "true", "yes", "on"}:
-        from .security import verify_token_strict as _vts  # lazy
-        await _vts(request)
+        from .security import verify_token as _vt  # lazy; supports cookies or bearer
+        await _vt(request)
 
 
 @core_router.post(
@@ -728,12 +752,62 @@ async def _require_auth_dep_for_core(request: Request) -> None:
     },
 )
 async def ask(
-    req: AskRequest, request: Request, user_id: str = Depends(get_current_user_id)
+    req: AskRequest, request: Request
 ):
     """Deprecated: moved to app.api.ask. Kept for backward-compatibility via include order."""
     from .api.ask import ask as _ask  # lazy import to avoid circular deps
-
-    return await _ask(req, request, user_id)  # type: ignore[arg-type]
+    # Content-Type guard: only accept JSON
+    try:
+        ct = (request.headers.get("content-type") or request.headers.get("Content-Type") or "").lower()
+    except Exception:
+        ct = ""
+    if "application/json" not in ct:
+        raise HTTPException(status_code=415, detail="unsupported_media_type")
+    # Normalize prompt shape: string → messages[]; array passes through
+    prompt_val = req.prompt
+    if isinstance(prompt_val, str):
+        norm_prompt = [{"role": "user", "content": prompt_val}]
+        prompt_shape = "text"
+        tok_src = prompt_val
+    else:
+        norm_prompt = prompt_val
+        prompt_shape = "array"
+        try:
+            tok_src = "\n".join(
+                [
+                    (m.get("content") if isinstance(m, dict) else str(getattr(m, "content", "")))
+                    for m in (norm_prompt or [])
+                ]
+            )
+        except Exception:
+            tok_src = ""
+    model = req.model_override
+    body = {"prompt": norm_prompt, "model": model, "stream": bool(req.stream)}
+    # Telemetry breadcrumb: log once with model, prompt shape, tokens est, user_id, and req id
+    try:
+        rid = request.headers.get("x-request-id")
+        payload = getattr(request.state, "jwt_payload", None)
+        user_id = None
+        if isinstance(payload, dict):
+            user_id = payload.get("user_id") or payload.get("sub")
+        from .token_utils import count_tokens as _ct
+        tokens_est = int(_ct(tok_src or "")) if tok_src else 0
+        logger.info(
+            "ask.adapter",
+            extra={
+                "meta": {
+                    "model": model or "auto",
+                    "prompt_shape": prompt_shape,
+                    "tokens_est": tokens_est,
+                    "user_id": user_id or "anon",
+                    "req_id": rid,
+                    "stream": bool(req.stream),
+                }
+            },
+        )
+    except Exception:
+        pass
+    return await _ask(request, body)  # type: ignore[arg-type]
 
 
 @protected_router.post(
@@ -836,8 +910,8 @@ async def search_sessions(
     return await _search(q, sort=sort, page=page, limit=limit)  # type: ignore[arg-type]
 
 
-@protected_router.get("/sessions", tags=["Care"])
-async def list_sessions(
+@protected_router.get("/capture/sessions", tags=["Care"])
+async def list_sessions_capture(
     status: str | None = None,
     user_id: str = Depends(get_current_user_id),
 ):
@@ -1150,9 +1224,7 @@ if preflight_router is not None:
 if device_auth_router is not None:
     app.include_router(device_auth_router, prefix="/v1")
     app.include_router(device_auth_router, include_in_schema=False)
-if simple_auth_router is not None:
-    app.include_router(simple_auth_router, prefix="/v1")
-    app.include_router(simple_auth_router, include_in_schema=False)
+# Removed duplicate inclusion of app.api.auth router to avoid route shadowing
 if oauth_google_router is not None:
     app.include_router(oauth_google_router, prefix="/v1")
     app.include_router(oauth_google_router, include_in_schema=False)
@@ -1252,11 +1324,15 @@ try:
 except Exception:
     pass
 
+# Include modern auth API router exactly once (for /v1/auth/* and /v1/whoami)
 try:
     from .api.auth import router as auth_api_router
     app.include_router(auth_api_router, prefix="/v1")
+    app.include_router(auth_api_router, include_in_schema=False)
 except Exception:
     pass
+
+# app.api.auth already included once above; do not include again
 
 try:
     from .api.models import router as models_router

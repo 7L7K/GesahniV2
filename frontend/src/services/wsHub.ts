@@ -11,8 +11,34 @@ class WsHub {
   private queues: Record<WSName, string[]> = { music: [], care: [] };
   private lastPong: Record<WSName, number> = { music: 0, care: 0 };
   private startRefs: Record<WSName, number> = { music: 0, care: 0 };
+  private config: Record<WSName, { path: string; onOpen: (ws: WebSocket) => void; onMessage: (e: MessageEvent) => void }> = {
+    music: { path: "/v1/ws/music", onOpen: this.onMusicOpen, onMessage: this.onMusicMessage },
+    care: { path: "/v1/ws/care", onOpen: this.onCareOpen, onMessage: this.onCareMessage },
+  } as const;
+
+  constructor() {
+    // Resume aggressively when app becomes visible or network returns
+    if (typeof window !== "undefined") {
+      try {
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") {
+            this.resumeAll("visibility");
+          }
+        });
+        window.addEventListener("focus", () => this.resumeAll("focus"));
+        window.addEventListener("online", () => this.resumeAll("online"));
+        // React immediately to auth token/epoch changes (switch namespaces)
+        window.addEventListener("auth:tokens_set", () => this.refreshAuth());
+        window.addEventListener("auth:tokens_cleared", () => this.refreshAuth());
+        window.addEventListener("auth:epoch_bumped", () => this.refreshAuth());
+      } catch {
+        /* noop */
+      }
+    }
+  }
 
   start(channels?: Partial<Record<WSName, boolean>>) {
+    try { console.info('AUTH backend online=true'); } catch { }
     const want: Record<WSName, boolean> = {
       music: channels?.music !== false, // default to true for music
       care: Boolean(channels?.care),
@@ -28,6 +54,7 @@ class WsHub {
   }
 
   stop(channels?: Partial<Record<WSName, boolean>>) {
+    try { console.info('AUTH backend online=false'); } catch { }
     const target: Record<WSName, boolean> = {
       music: channels?.music !== false, // default to true if unspecified
       care: channels?.care === true || channels?.care === undefined,
@@ -59,6 +86,38 @@ class WsHub {
     return Math.max(250, Math.floor(base + jitter));
   }
 
+  private resumeAll(reason: string) {
+    // Attempt immediate reconnects for any desired-but-not-open channels
+    (Object.keys(this.startRefs) as WSName[]).forEach((name) => {
+      if (this.startRefs[name] <= 0) return;
+      const ws = this.sockets[name];
+      const open = ws && ws.readyState === WebSocket.OPEN;
+      const connecting = ws && ws.readyState === WebSocket.CONNECTING;
+      if (open) {
+        // Nudge alive
+        try { ws!.send("ping"); } catch { /* noop */ }
+        return;
+      }
+      if (connecting) return;
+      // Clear any backoff timer and reconnect now
+      if (this.timers[name]) { clearTimeout(this.timers[name]!); this.timers[name] = null; }
+      const cfg = this.config[name];
+      this.connect(name, cfg.path, cfg.onOpen, cfg.onMessage, 0);
+    });
+  }
+
+  private refreshAuth() {
+    // On auth changes, force-close and reconnect to propagate new token/namespace
+    (Object.keys(this.startRefs) as WSName[]).forEach((name) => {
+      if (this.startRefs[name] <= 0) return;
+      this.safeClose(this.sockets[name]);
+      this.sockets[name] = null;
+      if (this.timers[name]) { clearTimeout(this.timers[name]!); this.timers[name] = null; }
+      const cfg = this.config[name];
+      this.connect(name, cfg.path, cfg.onOpen, cfg.onMessage, 0);
+    });
+  }
+
   private flushQueue(which: WSName) {
     const ws = this.sockets[which];
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -71,14 +130,15 @@ class WsHub {
   }
 
   private async probeAuthAndMaybeRedirect() {
+    // Do not hard-redirect on auth failures; surface an event for the UI to show CTA and pause.
     try {
       const { apiFetch } = await import("@/lib/api");
       const resp = await apiFetch("/v1/whoami", { method: "GET" });
       if (!resp.ok) {
-        try { window.location.assign("/login"); } catch { /* noop */ }
+        try { window.dispatchEvent(new CustomEvent("auth:required")); } catch { /* noop */ }
       }
     } catch {
-      // Network flake — ignore and let reconnect logic handle it
+      try { window.dispatchEvent(new CustomEvent("auth:required")); } catch { /* noop */ }
     }
   }
 

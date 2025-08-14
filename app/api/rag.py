@@ -8,7 +8,10 @@ try:
 except Exception:
     _safe_query = None  # type: ignore
 
-router = APIRouter(tags=["Admin"])
+from app.deps.scopes import docs_security_with
+
+
+router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
 
 
 @router.get("/rag/search")

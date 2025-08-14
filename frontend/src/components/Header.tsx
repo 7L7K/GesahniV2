@@ -88,7 +88,10 @@ export default function Header() {
                                 </SignUpButton>
                             </SignedOut>
                             <SignedIn>
-                                <UserButton appearance={{ elements: { userButtonAvatarBox: 'h-6 w-6' } }} afterSignOutUrl="/" />
+                                <div className="flex items-center gap-2">
+                                    <Link href="/logout" className="hover:text-foreground">Logout</Link>
+                                    <UserButton appearance={{ elements: { userButtonAvatarBox: 'h-6 w-6' } }} afterSignOutUrl="/" />
+                                </div>
                             </SignedIn>
                         </>
                     ) : (

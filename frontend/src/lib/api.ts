@@ -62,7 +62,13 @@ export function bumpAuthEpoch(): void {
   const epoch = String(safeNow());
   setLocalStorage('auth:epoch', epoch);
   try { INFLIGHT_REQUESTS.clear(); SHORT_CACHE.clear(); } catch { /* noop */ }
-  try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('auth:epoch_bumped')); } catch { /* noop */ }
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('auth:epoch_bumped'));
+      // Emit single-line observability for flips
+      try { console.info(`AUTH ready: signedIn=${Boolean(getToken())} cookie=true whoamiOk=unknown`); } catch { }
+    }
+  } catch { /* noop */ }
 }
 
 function getAuthNamespace(): string {
@@ -131,8 +137,38 @@ export function clearTokens() {
 }
 
 export function isAuthed(): boolean {
-  if (!HEADER_AUTH_MODE) return true; // cookie mode relies on server state
+  // Optimistic: header mode checks token presence; cookie mode does not assert readiness
+  if (!HEADER_AUTH_MODE) return true;
   return Boolean(getToken());
+}
+
+type SessionState = {
+  signedIn: boolean;
+  cookiePresent: boolean;
+  whoamiOk: boolean;
+  sessionReady: boolean;
+};
+
+export async function getSessionState(): Promise<SessionState> {
+  const signedIn = Boolean(getToken());
+  // Cookie presence hint
+  let cookiePresent = false;
+  try {
+    if (typeof document !== 'undefined') cookiePresent = /access_token=/.test(document.cookie);
+  } catch { cookiePresent = false; }
+  let whoamiOk = false;
+  try {
+    const res = await apiFetch('/v1/whoami', { method: 'GET', auth: false });
+    whoamiOk = res.ok;
+  } catch { whoamiOk = false; }
+  const sessionReady = Boolean((signedIn || cookiePresent) && whoamiOk);
+  return { signedIn, cookiePresent, whoamiOk, sessionReady };
+}
+
+export function useSessionState() {
+  const [state, setState] = (typeof window !== 'undefined') ? (window as any).__useSessionStateHook?.() ?? [] : [];
+  // Fallback minimal polyfill when hook infra is not present (tests)
+  return state || { signedIn: Boolean(getToken()), cookiePresent: true, whoamiOk: false, sessionReady: false } as SessionState;
 }
 
 function authHeaders() {
@@ -146,25 +182,36 @@ function authHeaders() {
 async function tryRefresh(): Promise<Response | null> {
   if (!HEADER_AUTH_MODE) return null;
   const refresh = getRefreshToken();
-  // Even if no refresh token, attempt a cookie-based refresh endpoint for compatibility
-  try {
-    const res = await fetch(`${API_URL || ""}/v1/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: refresh ? JSON.stringify({ refresh_token: refresh }) : undefined,
-      credentials: 'include',
-    } as RequestInit);
-
-    if (res.ok) {
-      const body = await res.json().catch(() => ({} as Record<string, unknown>));
-      const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string };
-      if (access_token) setTokens(access_token, refresh_token);
-    }
-
-    return res;
-  } catch {
-    return null;
+  // Prefer new bridge endpoint; fall back for older backends
+  const endpoints = [
+    `${API_URL || ""}/v1/auth/refresh`,
+    `${API_URL || ""}/v1/refresh`,
+  ];
+  for (const url of endpoints) {
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json", "X-Auth-Intent": "refresh" };
+      // Attach CSRF if cookie present
+      try {
+        const csrf = (typeof document !== 'undefined') ? (document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '') : '';
+        if (csrf) headers["X-CSRF-Token"] = decodeURIComponent(csrf);
+      } catch { /* noop */ }
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: refresh ? JSON.stringify({ refresh_token: refresh }) : undefined,
+        credentials: 'include',
+      } as RequestInit);
+      if (res.ok) {
+        const body = await res.json().catch(() => ({} as Record<string, unknown>));
+        const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string };
+        if (access_token) setTokens(access_token, refresh_token);
+        return res;
+      }
+      // If first attempt failed with 401/400, try next
+      if (res.status >= 500) return res;
+    } catch { /* try next */ }
   }
+  return null;
 }
 
 // Centralized fetch that targets the backend API base and handles 401→refresh
@@ -372,11 +419,23 @@ export async function setDevice(device_id: string): Promise<void> {
 }
 
 export function wsUrl(path: string): string {
-  const base = (API_URL || "http://localhost:8000").replace(/^http/, "ws");
+  // Align host with the page (localhost vs 127.0.0.1), but keep backend port 8000 in dev when API_URL not set.
+  let httpBase: string;
+  if (API_URL) {
+    httpBase = API_URL;
+  } else if (typeof window !== "undefined") {
+    const proto = window.location.protocol || "http:"; // http: | https:
+    const host = window.location.hostname || "localhost"; // e.g., localhost or 127.0.0.1
+    httpBase = `${proto}//${host}:8000`;
+  } else {
+    httpBase = "http://localhost:8000";
+  }
+  const base = httpBase.replace(/^http/, "ws");
   if (!HEADER_AUTH_MODE) return `${base}${path}`; // cookie-auth for WS
   const token = getToken();
   if (!token) return `${base}${path}`;
   const sep = path.includes("?") ? "&" : "?";
+  // Backend accepts both token and access_token; prefer access_token for consistency with HTTP
   return `${base}${path}${sep}access_token=${encodeURIComponent(token)}`;
 }
 
@@ -540,7 +599,7 @@ export async function register(username: string, password: string) {
 
 export async function logout(): Promise<void> {
   try {
-    const res = await apiFetch("/v1/logout", { method: "POST" });
+    const res = await apiFetch("/v1/auth/logout", { method: "POST" });
     if (!res.ok) throw new Error("Logout failed");
   } catch {
     // best-effort; still clear local tokens
