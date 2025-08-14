@@ -87,7 +87,8 @@ export default function Page() {
       try {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 2000);
-        const r = await fetch('/v1/healthz', { signal: controller.signal });
+        // Avoid sending cookies so an invalid/expired access_token cookie doesn't 401 this probe
+        const r = await fetch('/v1/healthz', { signal: controller.signal, credentials: 'omit', cache: 'no-store' });
         clearTimeout(t);
         const ok = r && r.ok;
         setBackendOffline(!ok);
