@@ -30,6 +30,35 @@ REQUEST_LATENCY = Histogram(
     ["endpoint", "method", "engine"],
 )
 
+# New canonical names expected by dashboards/tests (do not remove legacy above)
+try:
+    GESAHNI_REQUESTS_TOTAL = Counter(
+        "gesahni_requests_total",
+        "Total HTTP requests",
+        ["route", "method", "status"],
+    )
+except Exception:  # pragma: no cover - metrics optional
+    class _C:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    GESAHNI_REQUESTS_TOTAL = _C()  # type: ignore
+
+try:
+    GESAHNI_LATENCY_SECONDS = Histogram(
+        "gesahni_latency_seconds",
+        "HTTP request latency in seconds",
+        ["route"],
+    )
+except Exception:  # pragma: no cover
+    class _H:
+        def labels(self, *a, **k):
+            return self
+        def observe(self, *a, **k):
+            return None
+    GESAHNI_LATENCY_SECONDS = _H()  # type: ignore
+
 # Histogram for request cost in USD
 REQUEST_COST = Histogram(
     "app_request_cost_usd",

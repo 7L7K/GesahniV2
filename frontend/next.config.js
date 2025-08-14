@@ -32,6 +32,10 @@ module.exports = {
   async rewrites() {
     return [
       {
+        source: '/healthz/:path*',
+        destination: 'http://localhost:8000/healthz/:path*',
+      },
+      {
         source: '/capture/:path*',
         destination: 'http://localhost:8000/capture/:path*',
       },
@@ -52,6 +56,13 @@ module.exports = {
   },
   async headers() {
     return [
+      {
+        source: '/healthz/:path*',
+        headers: [
+          { key: 'x-debug-next', value: 'rewrite-to-8000' },
+          { key: 'x-debug-source', value: '/healthz/:path*' },
+        ],
+      },
       // Mark responses that match rewrites to the backend
       {
         source: '/v1/:path*',
