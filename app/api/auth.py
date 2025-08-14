@@ -241,7 +241,7 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
     return {
         "is_authenticated": bool(is_authenticated),
         "session_ready": bool(session_ready),
-        "user": {"id": effective_uid if effective_uid else None, "email": getattr(request.state, "email", None)} if (effective_uid or getattr(request.state, "email", None)) else None,
+        "user": {"id": effective_uid if effective_uid else None, "email": getattr(request.state, "email", None)},
         "source": src,
         "version": 1,
     }
@@ -281,7 +281,8 @@ async def create_pat(body: Dict[str, Any], user_id: str = Depends(get_current_us
 def _jwt_secret() -> str:
     sec = os.getenv("JWT_SECRET")
     if not sec:
-        raise HTTPException(status_code=500, detail="missing_jwt_secret")
+        # Dev-friendly fallback to align with legacy auth default
+        return os.getenv("JWT_SECRET", "change-me")
     return sec
 
 
@@ -307,7 +308,8 @@ def _key_pool_from_env() -> dict[str, str]:
             pass
     sec = os.getenv("JWT_SECRET")
     if not sec:
-        return {}
+        # Align with legacy auth default used for login when unset
+        sec = "change-me"
     return {"k0": sec}
 
 
@@ -552,7 +554,7 @@ async def clerk_finish(request: Request) -> Dict[str, Any]:
         return {"status": "ok"}
 
 
-async def rotate_refresh_cookies(request: Request, response: Response) -> Dict[str, str] | None:
+async def rotate_refresh_cookies(request: Request, response: Response, refresh_override: str | None = None) -> Dict[str, str] | None:
     """Rotate access/refresh cookies strictly.
 
     - If family revoked or jti reuse detected, revoke family, clear cookies, raise 401.
@@ -560,8 +562,16 @@ async def rotate_refresh_cookies(request: Request, response: Response) -> Dict[s
     """
     try:
         secret = _jwt_secret()
-        rtok = request.cookies.get("refresh_token")
+        rtok = refresh_override or request.cookies.get("refresh_token")
         if not rtok:
+            try:
+                print("auth.refresh debug no_refresh_cookie headers=", dict(request.headers))
+                try:
+                    print("auth.refresh debug cookies=", dict(request.cookies))
+                except Exception:
+                    pass
+            except Exception:
+                pass
             return None
         # Decode refresh token against any configured key with a small skew
         payload = _decode_any(rtok, leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60))
@@ -822,13 +832,38 @@ async def refresh(request: Request, response: Response):
         raise
     except Exception:
         pass
+    # Optional JSON body may supply refresh_token for header-mode clients and legacy /v1/refresh delegation
+    refresh_override: str | None = None
+    try:
+        body = await request.json()
+        if isinstance(body, dict):
+            val = body.get("refresh_token")
+            if isinstance(val, str) and val:
+                refresh_override = val
+    except Exception:
+        refresh_override = None
     t0 = time.time()
-    tokens = await rotate_refresh_cookies(request, response)
+    tokens = await rotate_refresh_cookies(request, response, refresh_override)
     if not tokens:
         # Metric for spikes on refresh failures
         try:
             from ..metrics import AUTH_4XX_TOTAL  # type: ignore
             AUTH_4XX_TOTAL.labels("/v1/auth/refresh", "401").inc()
+        except Exception:
+            pass
+        # Fallback: if a valid access_token cookie exists, treat as session-ready and return 200
+        try:
+            atok = request.cookies.get("access_token")
+            if atok:
+                claims = _decode_any(atok)
+                uid_fb = str(claims.get("user_id") or claims.get("sub") or "anon")
+                try:
+                    dt = int((time.time() - t0) * 1000)
+                    sid = request.headers.get("X-Session-ID") or request.cookies.get("sid") or uid_fb
+                    print(f"auth.refresh t={dt}ms result=ok sid={sid}")
+                except Exception:
+                    pass
+                return {"status": "ok", "user_id": uid_fb}
         except Exception:
             pass
         raise HTTPException(status_code=401, detail="invalid_refresh")
