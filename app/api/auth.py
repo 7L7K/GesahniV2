@@ -683,6 +683,11 @@ async def login(username: str, request: Request, response: Response):
             cookie_secure = False
     except Exception:
         pass
+    # Set with Priority helper first, then duplicate via Starlette API for compatibility
+    try:
+        _append_cookie_with_priority(response, key="access_token", value=jwt_token, max_age=token_lifetime, secure=cookie_secure, samesite=cookie_samesite)
+    except Exception:
+        pass
     response.set_cookie(
         key="access_token",
         value=jwt_token,
@@ -714,6 +719,10 @@ async def login(username: str, request: Request, response: Response):
         if aud:
             refresh_payload["aud"] = aud
         refresh_token = jwt.encode(refresh_payload, _jwt_secret(), algorithm="HS256")
+        try:
+            _append_cookie_with_priority(response, key="refresh_token", value=refresh_token, max_age=refresh_life, secure=cookie_secure, samesite=cookie_samesite)
+        except Exception:
+            pass
         response.set_cookie(
             key="refresh_token",
             value=refresh_token,

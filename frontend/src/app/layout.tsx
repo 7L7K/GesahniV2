@@ -5,6 +5,8 @@ import { ThemeProvider } from "next-themes";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import Header from "@/components/Header";
+import BackendBanner from "@/components/BackendBanner";
+import DegradedNotice from "@/components/DegradedNotice";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import WsBootstrap from "@/components/WsBootstrap";
@@ -58,6 +60,8 @@ export default function RootLayout({
                   <AuthBootstrap />
                   <WsBootstrap />
                   <Header />
+                  <BackendBanner />
+                  <DegradedNotice />
                   <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-primary text-primary-foreground rounded px-3 py-2">Skip to content</a>
                   <div id="main" className="bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-50 via-background to-background dark:from-zinc-900/20">
                     {children}
@@ -74,6 +78,8 @@ export default function RootLayout({
                 <AuthBootstrap />
                 <WsBootstrap />
                 <Header />
+                <BackendBanner />
+                <DegradedNotice />
                 <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-primary text-primary-foreground rounded px-3 py-2">Skip to content</a>
                 <div id="main" className="bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-50 via-background to-background dark:from-zinc-900/20">
                   {children}

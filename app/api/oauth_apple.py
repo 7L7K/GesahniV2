@@ -75,6 +75,7 @@ async def apple_start(request: Request) -> Response:
     except Exception:
         secure = False
     # Double-submit: persist state and next target for 10 minutes
+    # Ensure cookies follow parity rules
     resp.set_cookie("oauth_state", state, max_age=600, httponly=True, path="/", samesite=cookie_samesite, secure=secure)
     resp.set_cookie("oauth_next", next_url, max_age=600, httponly=False, path="/", samesite=cookie_samesite, secure=secure)
     return resp

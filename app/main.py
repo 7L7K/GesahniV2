@@ -66,6 +66,7 @@ from .logging_config import configure_logging, get_last_errors
 from .csrf import CSRFMiddleware
 from .otel_utils import init_tracing, shutdown_tracing
 from .status import router as status_router
+from .api.health import router as health_router
 from .auth import router as auth_router
 try:
     from .api.preflight import router as preflight_router
@@ -415,10 +416,31 @@ if os.getenv("PROMETHEUS_ENABLED", "1").strip().lower() in {"1", "true", "yes", 
     # Prefer a simple GET route to avoid mount-related edge cases/hangs
     try:  # pragma: no cover - optional dependency
         from fastapi import Response as _Resp  # type: ignore
-        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest, Gauge
+
+        # Basic gauges for health visibility
+        try:
+            LLAMA_QUEUE_DEPTH = Gauge("gesahni_llama_queue_depth", "Current LLaMA queue depth")  # noqa: N806
+        except Exception:
+            class _G:
+                def set(self, *_a, **_k):
+                    return None
+            LLAMA_QUEUE_DEPTH = _G()  # type: ignore
 
         @app.get("/metrics", include_in_schema=False)
         async def _metrics_route() -> _Resp:  # type: ignore[valid-type]
+            # Best-effort snapshot of queue depth (0 if N/A)
+            try:
+                from .llama_integration import QUEUE_DEPTH as _QD  # type: ignore[attr-defined]
+                try:
+                    LLAMA_QUEUE_DEPTH.set(int(_QD))  # type: ignore[arg-type]
+                except Exception:
+                    LLAMA_QUEUE_DEPTH.set(0)  # type: ignore[attr-defined]
+            except Exception:
+                try:
+                    LLAMA_QUEUE_DEPTH.set(0)  # type: ignore[attr-defined]
+                except Exception:
+                    pass
             data = generate_latest()
             return _Resp(content=data, media_type=CONTENT_TYPE_LATEST)
     except Exception:  # pragma: no cover - executed when dependency missing
@@ -1216,6 +1238,8 @@ app.include_router(ws_router, prefix="/v1")
 app.include_router(ws_router, include_in_schema=False)
 app.include_router(status_router, prefix="/v1")
 app.include_router(status_router, include_in_schema=False)
+# Tiered health (unauthenticated): /healthz/* endpoints
+app.include_router(health_router)
 app.include_router(auth_router, prefix="/v1")
 app.include_router(auth_router, include_in_schema=False)
 if preflight_router is not None:

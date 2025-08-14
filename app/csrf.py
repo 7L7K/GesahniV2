@@ -49,6 +49,13 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
             return await call_next(request)
+        # Allow-list OAuth provider callbacks which validate state/nonce explicitly
+        try:
+            path = getattr(getattr(request, "url", None), "path", "") or ""
+            if path in {"/v1/auth/apple/callback", "/auth/apple/callback"}:
+                return await call_next(request)
+        except Exception:
+            pass
         token_hdr, used_legacy, legacy_allowed = _extract_csrf_header(request)
         token_cookie = request.cookies.get("csrf_token") or ""
         # Reject legacy header when grace disabled

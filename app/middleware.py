@@ -258,6 +258,11 @@ async def trace_request(request: Request, call_next):
             metrics.REQUEST_COUNT.labels(route_path, request.method, engine).inc()
         except Exception:
             pass
+        # Emit canonical counters/histograms too
+        try:
+            metrics.GESAHNI_REQUESTS_TOTAL.labels(route_path, request.method, str(status_code or 0)).inc()
+        except Exception:
+            pass
         # Observe with exemplar when possible to jump from Grafana to trace
         try:
             trace_id = get_trace_id_hex()
@@ -272,6 +277,10 @@ async def trace_request(request: Request, call_next):
                 metrics.REQUEST_LATENCY.labels(route_path, request.method, engine).observe(rec.latency_ms / 1000)
             except Exception:
                 pass
+        try:
+            metrics.GESAHNI_LATENCY_SECONDS.labels(route_path).observe(rec.latency_ms / 1000)
+        except Exception:
+            pass
         if rec.prompt_cost_usd:
             metrics.REQUEST_COST.labels(
                 route_path, request.method, engine, "prompt"
