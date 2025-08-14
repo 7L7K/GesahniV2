@@ -59,6 +59,35 @@ except Exception:  # pragma: no cover
             return None
     GESAHNI_LATENCY_SECONDS = _H()  # type: ignore
 
+# Health probe metrics ---------------------------------------------------------
+try:
+    HEALTH_CHECK_DURATION_SECONDS = Histogram(
+        "gesahni_health_check_duration_seconds",
+        "Health check duration (seconds)",
+        ["check"],
+    )
+except Exception:  # pragma: no cover
+    class _H2:
+        def labels(self, *a, **k):
+            return self
+        def observe(self, *a, **k):
+            return None
+    HEALTH_CHECK_DURATION_SECONDS = _H2()  # type: ignore
+
+try:
+    HEALTH_READY_FAILURES_TOTAL = Counter(
+        "gesahni_health_ready_failures_total",
+        "Health readiness failures",
+        ["reason"],
+    )
+except Exception:  # pragma: no cover
+    class _C2:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    HEALTH_READY_FAILURES_TOTAL = _C2()  # type: ignore
+
 # Histogram for request cost in USD
 REQUEST_COST = Histogram(
     "app_request_cost_usd",
