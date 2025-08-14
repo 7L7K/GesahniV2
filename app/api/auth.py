@@ -597,7 +597,7 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
             response.delete_cookie("access_token", path="/")
             response.delete_cookie("refresh_token", path="/")
             raise HTTPException(status_code=401, detail="refresh_family_revoked")
-        # Single-use guard for this refresh token (replay protection)
+        # Single-use guard for this refresh token (replay protection). Claim FIRST, before any rotation.
         first_use = await claim_refresh_jti(sid, jti, ttl_seconds=ttl)
         if not first_use:
             # Deny replay (another concurrent request likely succeeded)

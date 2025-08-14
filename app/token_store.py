@@ -7,6 +7,7 @@ from typing import Optional
 
 _redis_client: Optional[object] = None
 _local_used_refresh: dict[str, float] = {}
+_local_counters: dict[str, tuple[int, float]] = {}
 _local_last_used_jti: dict[str, str] = {}
 _local_revoked_families: dict[str, float] = {}
 try:
@@ -217,7 +218,23 @@ def _key_login_user(email: str) -> str:
 async def incr_login_counter(key: str, ttl_seconds: int) -> int:
     r = await _get_redis()
     if r is None:
-        return 0
+        # Local fallback counter with TTL
+        import time as _time
+        now = _time.time()
+        with _local_lock:
+            # prune expired entries
+            try:
+                for k, (cnt, exp) in list(_local_counters.items()):
+                    if exp <= now:
+                        _local_counters.pop(k, None)
+            except Exception:
+                pass
+            cnt, exp = _local_counters.get(key, (0, 0.0))
+            if exp <= now:
+                cnt = 0
+            cnt += 1
+            _local_counters[key] = (cnt, now + max(1, int(ttl_seconds)))
+            return cnt
     try:
         p = r.pipeline()  # type: ignore[attr-defined]
         p.incr(key)
