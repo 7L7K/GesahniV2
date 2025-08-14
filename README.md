@@ -189,6 +189,49 @@ header. Revoked token IDs are stored in memory and cannot be reused.
 curl -X POST localhost:8000/logout -H "Authorization: Bearer <refresh_token>"
 ```
 
+### Clerk (JWT) backend verification
+
+Enable JWT verification against Clerk JWKS for HTTP + WS:
+
+```env
+# One of the following is required
+CLERK_ISSUER=https://<tenant>.clerk.accounts.dev
+# or provide JWKS directly
+# CLERK_JWKS_URL=https://<tenant>.clerk.accounts.dev/.well-known/jwks.json
+
+# Optional audience enforcement (recommended)
+CLERK_AUDIENCE=<your-publishable-key-or-aud>
+```
+
+- Reusable dependency: `app/deps/clerk_auth.py` → `require_user()` validates the Bearer token, attaches
+  `request.state.jwt_payload`, `request.state.user_id`, `request.state.email`, and `request.state.roles`.
+- WS handshake guard: `require_user_ws()` closes with code 1008 and a clear reason when invalid.
+- Example protected route: `GET /v1/auth/clerk/protected` (200 with valid token; 401 otherwise).
+
+### Roles and gates
+
+- Roles can be set in Clerk via Organization roles or custom user metadata. Ensure a `roles` claim appears in the session JWT (array or space/comma-separated string). You can mirror roles from scopes if you prefer (`admin` from `admin:write`, `caregiver` from `care:caregiver`, `resident` from `care:resident`).
+- Dependency helper: `require_roles(["admin"])`, `require_roles(["caregiver"])`, `require_roles(["resident"])` in `app/deps/roles.py`.
+- Behavior: missing/invalid token → 401; authenticated without required role → 403.
+
+### Device/TV pairing (scoped device token)
+
+Endpoints:
+- `POST /v1/devices/pair/start` (auth required): returns `{ code, expires_in }`. Optionally send `X-Device-Label` header (e.g., `tv-livingroom`).
+- `POST /v1/devices/pair/complete` (device): body `{ code }` → returns `{ access_token, token_type, expires_in }`. Token is HS256 JWT with `scope: "care:resident"`, `roles: ["resident"]`, `type: "device"`.
+- `POST /v1/devices/{id}/revoke` (owner): revokes a device token. Body may include `{ jti }` or header `X-Device-Token-ID`.
+
+Simulate pairing:
+1) User (browser): `curl -H "Authorization: Bearer <user_jwt>" -H "X-Device-Label: tv-livingroom" -X POST http://localhost:8000/v1/devices/pair/start`
+2) TV/device: `curl -X POST http://localhost:8000/v1/devices/pair/complete -H 'Content-Type: application/json' -d '{"code":"<code>"}'`
+3) TV stores `access_token` and uses it as Bearer for resident‑scoped endpoints (e.g., `/v1/care/*`). Admin endpoints remain 403.
+
+Revocation:
+- Owner can call `POST /v1/devices/{id}/revoke` with `Authorization: Bearer <owner_jwt>` and `{ "jti": "..." }` to revoke immediately.
+
+Storage:
+- Pairing codes and active device tokens are stored in Redis (keys prefixed `pair:code:*` and `device:token:*`). TTLs: `DEVICE_PAIR_CODE_TTL_S` (default 300s), `DEVICE_TOKEN_TTL_S` (default 30d).
+
 ## 🎯 Endpoints
 
 * `/ask`: Send your prompt here.

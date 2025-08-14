@@ -162,6 +162,12 @@ class QdrantVectorStore:
                 collection_name=self.cache_collection,
                 vectors_config=VectorParams(size=1, distance=Distance.COSINE),
             )
+        # Health signal: record when we recreate to help detect drift
+        try:
+            import logging as _logging
+            _logging.getLogger(__name__).info("qdrant.bootstrap.cache_qa_collection", extra={"meta": {"name": self.cache_collection}})
+        except Exception:
+            pass
 
         self._qa = _QACollection(self.client, self.cache_collection)
 

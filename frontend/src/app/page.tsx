@@ -6,7 +6,9 @@ import ChatBubble from '../components/ChatBubble';
 import LoadingBubble from '../components/LoadingBubble';
 import InputBar from '../components/InputBar';
 import { Button } from '@/components/ui/button';
-import { sendPrompt, getToken, getMusicState, type MusicState, wsUrl } from '@/lib/api';
+import { SignedIn, SignedOut, SignInButton, SignUpButton } from '@clerk/nextjs';
+import { sendPrompt, getToken, getMusicState, type MusicState } from '@/lib/api';
+import { wsHub } from '@/services/wsHub';
 import NowPlayingCard from '@/components/music/NowPlayingCard';
 import DiscoveryCard from '@/components/music/DiscoveryCard';
 import MoodDial from '@/components/music/MoodDial';
@@ -25,6 +27,7 @@ export default function Page() {
   const router = useRouter();
   const [authed, setAuthed] = useState<boolean>(false);
   const [isOnline, setIsOnline] = useState<boolean>(true);
+  const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
   const createInitialMessage = (): ChatMessage => ({
     id: crypto.randomUUID(),
     role: 'assistant',
@@ -60,7 +63,30 @@ export default function Page() {
   // Hydrate from localStorage on mount; if none, seed with initial assistant msg
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setAuthed(Boolean(getToken()));
+      const hasHeaderToken = Boolean(getToken());
+      if (hasHeaderToken) {
+        setAuthed(true);
+      } else {
+        // Cookie mode: rely on auth hint or backend whoami
+        (async () => {
+          try {
+            const hinted = document.cookie.includes('auth_hint=1');
+            if (hinted) {
+              setAuthed(true);
+            } else {
+              const res = await fetch('/v1/whoami', { credentials: 'include' });
+              if (res.ok) {
+                const body = await res.json().catch(() => ({}));
+                setAuthed(Boolean(body && (body.is_authenticated || body.user_id !== 'anon')));
+              } else {
+                setAuthed(false);
+              }
+            }
+          } catch {
+            setAuthed(false);
+          }
+        })();
+      }
       setIsOnline(navigator.onLine);
       const onUp = () => setIsOnline(true);
       const onDown = () => setIsOnline(false);
@@ -105,29 +131,16 @@ export default function Page() {
       }
     }
   }, []);
-  // Music: initial load + live updates via WS
+  // Music: initial load + subscribe to hub events
   useEffect(() => {
-    let ws: WebSocket | null = null;
-    const init = async () => {
-      try {
-        const st = await getMusicState();
-        setMusicState(st);
-      } catch { }
-      try {
-        const url = wsUrl('/v1/ws/music');
-        ws = new WebSocket(url);
-        ws.onmessage = (ev) => {
-          try {
-            const msg = JSON.parse(ev.data);
-            if (msg?.topic === 'music.state') {
-              setMusicState(msg.data as MusicState);
-            }
-          } catch { }
-        };
-      } catch { }
+    (async () => {
+      try { setMusicState(await getMusicState()); } catch { }
+    })();
+    const onState = (ev: Event) => {
+      try { const detail = (ev as CustomEvent).detail as MusicState; setMusicState(detail || null); } catch { }
     };
-    init();
-    return () => { try { ws?.close(); } catch { } };
+    window.addEventListener('music.state', onState as EventListener);
+    return () => { window.removeEventListener('music.state', onState as EventListener); };
   }, []);
 
 
@@ -272,18 +285,32 @@ export default function Page() {
         )}
         {/* chat scroll area */}
         <section className="flex-1 overflow-y-auto py-6">
-          {!authed && (
-            <div className="mb-4 rounded-xl border p-4 text-sm bg-card/50">
-              <p className="mb-2">
-                You&apos;re not signed in. Please sign in to enable full features.
-              </p>
-              <a
-                href="/login"
-                className="inline-flex items-center rounded-md bg-primary px-3 py-1 text-primary-foreground hover:opacity-90"
-              >
-                Go to Login
-              </a>
-            </div>
+          {clerkEnabled ? (
+            <SignedOut>
+              <div className="mb-4 rounded-xl border p-4 text-sm bg-card/50">
+                <p className="mb-2">You&apos;re not signed in. Please sign in to enable full features.</p>
+                <div className="flex gap-2">
+                  <SignInButton mode="modal">
+                    <Button size="sm" variant="secondary">Sign in</Button>
+                  </SignInButton>
+                  <SignUpButton mode="modal">
+                    <Button size="sm">Sign up</Button>
+                  </SignUpButton>
+                </div>
+              </div>
+            </SignedOut>
+          ) : (
+            !authed && (
+              <div className="mb-4 rounded-xl border p-4 text-sm bg-card/50">
+                <p className="mb-2">You&apos;re not signed in. Please sign in to enable full features.</p>
+                <a
+                  href="/login"
+                  className="inline-flex items-center rounded-md bg-primary px-3 py-1 text-primary-foreground hover:opacity-90"
+                >
+                  Go to Login
+                </a>
+              </div>
+            )
           )}
           {messages.map(m =>
             m.loading ? (

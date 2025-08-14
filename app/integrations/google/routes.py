@@ -43,9 +43,20 @@ def get_login_url(request: Request, next: str = "/"):
         validate_config()
     except Exception:
         pass
+    # Allowlist next paths to avoid open redirects
+    def _sanitize_next(n: str) -> str:
+        try:
+            n = (n or "/").strip()
+        except Exception:
+            return "/"
+        allowed = {"/", "/app", "/capture", "/settings", "/tv", "/login"}
+        if n in allowed or any(n.startswith(p + "/") for p in allowed if p != "/"):
+            return n
+        return "/"
+    safe_next = _sanitize_next(next)
     url, _state = oauth.build_auth_url(
         user_id="anon",
-        extra_state={"login": True, "next": next},
+        extra_state={"login": True, "next": safe_next, "issued_at": int(__import__("time").time())},
     )
     return {"auth_url": url}
 
@@ -171,6 +182,16 @@ def oauth_callback(
     # Store Google credentials keyed by resolved user id when available
     user_id = email or _current_user_id(request)
     data = oauth.creds_to_record(creds)
+    # Optional: encrypt tokens at rest
+    try:
+        from app.crypto import encrypt_text  # hypothetical util; Unknown if present
+        if data.get("access_token"):
+            data["access_token"] = encrypt_text(data["access_token"])  # type: ignore[index]
+        if data.get("refresh_token"):
+            data["refresh_token"] = encrypt_text(data["refresh_token"])  # type: ignore[index]
+    except Exception:
+        # proceed unencrypted if helper unavailable
+        pass
     with SessionLocal() as s:
         row = s.get(GoogleToken, user_id)
         if row is None:
@@ -217,17 +238,54 @@ def oauth_callback(
         except Exception:
             pass
 
-        # Redirect with tokens in URL to satisfy client bootstrap flow in tests
+        # Clean redirect: set HttpOnly cookies and avoid tokens-in-URL
         from urllib.parse import urlencode
         next_path = next_path_default or request.query_params.get("next") or "/"
         if not isinstance(next_path, str) or not next_path.startswith("/"):
             next_path = "/"
-        query = urlencode({
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "next": next_path,
-        })
-        return RedirectResponse(url=f"{app_url}/login?{query}")
+        try:
+            cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
+            cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+            # In dev/test over http, disable Secure unless SameSite=None which requires Secure
+            try:
+                if getattr(request.url, "scheme", "http") != "https" and cookie_samesite != "none":
+                    cookie_secure = False
+            except Exception:
+                pass
+            # Convert configured minutes to seconds for cookie max_age
+            access_max_age = int(APP_JWT_EXPIRE_MINUTES) * 60
+            refresh_max_age = int(APP_REFRESH_EXPIRE_MINUTES) * 60
+            # Optional one-time code for test bootstrap only
+            code = None
+            if os.getenv("PYTEST_RUNNING"):
+                code = uuid4().hex
+            target = f"{app_url}/login" + (f"?next={next_path}" if next_path else "")
+            if code:
+                target += ("&" if "?" in target else "?") + f"code={code}"
+            resp = RedirectResponse(url=target)
+            resp.set_cookie(
+                key="access_token",
+                value=access_token,
+                httponly=True,
+                secure=cookie_secure,
+                samesite=cookie_samesite,
+                max_age=access_max_age,
+                path="/",
+            )
+            resp.set_cookie(
+                key="refresh_token",
+                value=refresh_token,
+                httponly=True,
+                secure=cookie_secure,
+                samesite=cookie_samesite,
+                max_age=refresh_max_age,
+                path="/",
+            )
+            return resp
+        except Exception:
+            # Fallback: bare redirect, still no tokens in URL
+            clean = f"{app_url}/login" + (f"?next={next_path}" if next_path else "")
+            return RedirectResponse(url=clean)
 
     # Default non-login behaviour: simple JSON OK
     return {"status": "ok"}

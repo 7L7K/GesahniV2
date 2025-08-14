@@ -63,6 +63,8 @@ _RISKY_ACTIONS: set[tuple[str, str]] = {
     ("lock", "unlock"),
     ("alarm_control_panel", "alarm_disarm"),
     ("cover", "open_cover"),
+    ("cover", "close_cover"),
+    ("climate", "turn_off"),
 }
 
 
@@ -239,17 +241,37 @@ async def call_service(domain: str, service: str, data: dict) -> Any:
         if os.getenv("HA_STRICT_SERVICES", "").lower() in {"1", "true", "yes"}:
             raise
     # Enforce confirmation for risky actions unless BYPASS_CONFIRM is enabled
-    if requires_confirmation(domain, service) and not (
-        os.getenv("BYPASS_CONFIRM", "").lower() in {"1", "true", "yes"}
-    ):
-        confirm = False
-        # accept common keys for confirmation flags
-        for key in ("confirm", "__confirm__", "requires_confirm_ack"):
-            if isinstance(data, dict) and data.get(key) in (True, 1, "1", "true", "yes"):
-                confirm = True
-                break
-        if not confirm:
-            raise HomeAssistantAPIError("confirm_required")
+    if os.getenv("BYPASS_CONFIRM", "").lower() not in {"1", "true", "yes"}:
+        needs_confirm = False
+        # Static allowlist
+        if requires_confirmation(domain, service):
+            needs_confirm = True
+        # Dynamic: climate set_hvac_mode to off is risky
+        try:
+            if domain == "climate" and service == "set_hvac_mode":
+                mode = str((data or {}).get("hvac_mode", "")).strip().lower()
+                if mode == "off":
+                    needs_confirm = True
+        except Exception:
+            pass
+        # Dynamic: large group operations for lights/switches/fans
+        try:
+            if domain in {"light", "switch", "fan"} and service in {"turn_off", "turn_on"}:
+                ids = (data or {}).get("entity_id")
+                if isinstance(ids, (list, tuple)):
+                    max_group = int(os.getenv("HA_CONFIRM_GROUP_SIZE", "5") or 5)
+                    if len(ids) >= max_group:
+                        needs_confirm = True
+        except Exception:
+            pass
+        if needs_confirm:
+            confirm = False
+            for key in ("confirm", "__confirm__", "requires_confirm_ack"):
+                if isinstance(data, dict) and data.get(key) in (True, 1, "1", "true", "yes"):
+                    confirm = True
+                    break
+            if not confirm:
+                raise HomeAssistantAPIError("confirm_required")
     rec = log_record_var.get()
     if rec is not None:
         rec.ha_service_called = f"{domain}.{service}"

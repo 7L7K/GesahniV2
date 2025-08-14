@@ -67,7 +67,10 @@ class TvPhotoOkResponse(CommonOkResponse):
 
 
 @router.post("/tv/photos/favorite", response_model=TvPhotoOkResponse, responses={200: {"model": TvPhotoOkResponse}})
-async def mark_favorite(name: str, user_id: str = Depends(get_current_user_id)):
+async def mark_favorite(body: dict | None = None, name: str | None = None, user_id: str = Depends(get_current_user_id)):
+    # Prefer JSON body { name }, fall back to query param for backward compat
+    if body and isinstance(body, dict) and not name:
+        name = str(body.get("name") or "")
     name = (name or "").strip()
     images = set(_list_images())
     if name and name in images:

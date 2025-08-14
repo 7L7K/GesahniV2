@@ -12,6 +12,7 @@ from .memory.memory_store import MemoryVectorStore
 from .memory.chroma_store import ChromaVectorStore  # type: ignore
 from . import budget as _budget
 from .tts_orchestrator import TTSSpend
+from .memory.vector_store.qdrant import get_stats as _q_stats  # type: ignore
 
 router = APIRouter(tags=["Admin"])
 
@@ -58,11 +59,18 @@ async def config(
     token: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
-    # If ADMIN_TOKEN is unset, allow local access for troubleshooting
+    # Require admin token if set
     _tok = _admin_token()
     if _tok and token != _tok:
         raise HTTPException(status_code=403, detail="forbidden")
-    out = {k: v for k, v in os.environ.items() if k.isupper()}
+    # Never expose sensitive secrets
+    SENSITIVE_PREFIXES = ("API_KEY", "SECRET", "TOKEN", "PASSWORD", "KEY", "PRIVATE", "WEBHOOK_SECRET")
+    out = {}
+    for k, v in os.environ.items():
+        if not k.isupper():
+            continue
+        redact = any(p in k for p in SENSITIVE_PREFIXES)
+        out[k] = "***" if redact else v
     out.setdefault("SIM_THRESHOLD", os.getenv("SIM_THRESHOLD", "0.24"))
     out.setdefault("VECTOR_METRIC", "cosine (locked)")
     out.setdefault("RETRIEVE_POLICY", "keep if sim>=0.75 (dist<=0.25)")
@@ -184,10 +192,19 @@ async def full_status(user_id: str = Depends(get_current_user_id)) -> dict:
             out["vector_backend"] = name
             if "dual" in name:
                 try:
-                    from app.memory.vector_store.qdrant import get_stats as _get_q_stats  # type: ignore
-                    out["vector_dual"] = {"qdrant": _get_q_stats()}
+                    out["vector_dual"] = {"qdrant": _q_stats()}
                 except Exception:
                     pass
+        # Qdrant health: basic collection existence for cache:qa and mem:user
+        try:
+            if out.get("vector_backend", "").startswith("qdrant") or "dual" in str(out.get("vector_backend", "")):
+                out.setdefault("vector_health", {})
+                try:
+                    out["vector_health"]["qdrant_cache_qa"] = _q_stats(os.getenv("QDRANT_QA_COLLECTION", "cache:qa"))
+                except Exception:
+                    out["vector_health"]["qdrant_cache_qa"] = {"error": True}
+        except Exception:
+            pass
         # Collections or counts
         try:
             cache_keys = getattr(_vector_store_instance.qa_cache, "keys", None)

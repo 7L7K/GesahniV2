@@ -1,0 +1,79 @@
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
+
+function sanitizeNextPath(raw: string | null | undefined, fallback: string = '/') {
+    const input = (raw || '').trim()
+    if (!input) return fallback
+    if (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(input)) return fallback
+    if (!input.startsWith('/')) return fallback
+    return input.replace(/\/+/, '/')
+}
+
+const isPublicRoute = createRouteMatcher([
+    '/',
+    '/docs(.*)',
+    '/login',
+])
+
+const baseClerkMiddleware = clerkMiddleware(async (auth, req: NextRequest) => {
+    const { userId } = await auth()
+    const isApi = req.nextUrl.pathname.startsWith('/api') || req.nextUrl.pathname.startsWith('/v1')
+    if (isApi && !userId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!isPublicRoute(req) && !userId) {
+        const url = req.nextUrl.clone()
+        url.pathname = '/'
+        url.searchParams.set('next', req.nextUrl.pathname + req.nextUrl.search)
+        return NextResponse.redirect(url)
+    }
+    return NextResponse.next()
+})
+
+export default function middleware(req: NextRequest, ev: NextFetchEvent) {
+    const hasClerk = Boolean(process.env.CLERK_SECRET_KEY || process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
+    const { pathname, searchParams } = req.nextUrl
+    // Preserve legacy token capture for backend cookie auth
+    if (pathname === '/login' && (searchParams.has('access_token') || searchParams.has('refresh_token'))) {
+        const access = searchParams.get('access_token') || ''
+        const refresh = searchParams.get('refresh_token') || ''
+        const next = sanitizeNextPath(searchParams.get('next'), '/')
+        const res = NextResponse.redirect(new URL(next, req.url))
+        if (access) {
+            res.cookies.set('access_token', access, {
+                httpOnly: true,
+                sameSite: (process.env.COOKIE_SAMESITE || 'lax').toLowerCase() as any,
+                secure: (process.env.NODE_ENV === 'production') || (process.env.COOKIE_SECURE || '1').toLowerCase() === '1',
+                path: '/',
+                maxAge: Number(process.env.NEXT_PUBLIC_JWT_EXPIRE_MINUTES || process.env.JWT_EXPIRE_MINUTES || 30) * 60,
+            })
+        }
+        if (refresh) {
+            const refreshMinutes = Number(process.env.NEXT_PUBLIC_JWT_REFRESH_EXPIRE_MINUTES || process.env.JWT_REFRESH_EXPIRE_MINUTES || 1440)
+            res.cookies.set('refresh_token', refresh, {
+                httpOnly: true,
+                sameSite: (process.env.COOKIE_SAMESITE || 'lax').toLowerCase() as any,
+                secure: (process.env.NODE_ENV === 'production') || (process.env.COOKIE_SECURE || '1').toLowerCase() === '1',
+                path: '/',
+                maxAge: refreshMinutes * 60,
+            })
+        }
+        res.cookies.set('auth_hint', '1', { path: '/', maxAge: 14 * 24 * 60 * 60 })
+        return res
+    }
+    if (hasClerk) {
+        return baseClerkMiddleware(req, ev)
+    }
+    return NextResponse.next()
+}
+
+export const config = {
+    matcher: [
+        // All app routes except static files and Next internals
+        '/((?!_next/|favicon.ico|apple-touch-icon.png|v1/|capture/|.*\.(?:js|css|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf)).*)',
+        // Include API routes
+        '/(api)(.*)'
+    ],
+}
+
+

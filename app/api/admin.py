@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import os
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+import logging
+from fastapi.responses import StreamingResponse
+import asyncio
+import json
 from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
 from app.deps.scopes import optional_require_any_scope
+from app.deps.roles import require_roles
+from app.security import verify_token
 from app.status import _admin_token
 from app.analytics import (
     get_metrics,
@@ -30,7 +36,8 @@ try:
 except Exception:
     admin_inspect_router = None  # type: ignore
 
-router = APIRouter(tags=["Admin"], dependencies=[Depends(optional_require_any_scope(["admin", "admin:write"]))])
+router = APIRouter(tags=["Admin"], dependencies=[Depends(verify_token), Depends(require_roles(["admin"]))])
+logger = logging.getLogger(__name__)
 
 
 def _is_test_mode() -> bool:
@@ -46,7 +53,7 @@ def _is_test_mode() -> bool:
     )
 
 
-def _check_admin(token: str | None) -> None:
+def _check_admin(token: str | None, request: Request | None = None) -> None:
     """Enforce admin token when configured.
 
     In test runs (PYTEST_RUNNING=1), allow access when no token query param
@@ -57,19 +64,74 @@ def _check_admin(token: str | None) -> None:
     # In production-like runs, require ADMIN_TOKEN to be set
     if not _is_test_mode() and not _tok:
         raise HTTPException(status_code=403, detail="admin_token_required")
+    # Extract from headers or cookies if not provided as query
+    header_token: str | None = None
+    cookie_token: str | None = None
+    if request is not None:
+        try:
+            auth = request.headers.get("Authorization") or ""
+            if auth.startswith("Bearer "):
+                header_token = auth.split(" ", 1)[1]
+            header_token = header_token or request.headers.get("X-Admin-Token")
+            cookie_token = request.cookies.get("admin_token")
+        except Exception:
+            pass
+    candidate = token or header_token or cookie_token
     # In tests, allow access when token is omitted entirely
-    if _is_test_mode() and token is None:
+    if _is_test_mode() and candidate is None:
         return
-    if _tok and token != _tok:
+    if _tok and candidate != _tok:
         raise HTTPException(status_code=403, detail="forbidden")
+
+
+@router.get("/admin/surface/index")
+async def admin_surface_index(
+    token: str | None = Query(default=None),
+    request: Request = None,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Return a generated index of HTTP (OpenAPI) and WS routes to prevent drift."""
+    _check_admin(token, request)
+    try:
+        from app.main import app as _app  # type: ignore
+        schema = _app.openapi()
+        ws_list: list[dict] = []
+        try:
+            from fastapi.routing import WebSocketRoute  # type: ignore
+            for r in _app.routes:
+                try:
+                    if isinstance(r, WebSocketRoute):
+                        ws_list.append({
+                            "path": getattr(r, "path", None),
+                            "name": getattr(r, "name", None),
+                            "endpoint": getattr(getattr(r, "endpoint", None), "__name__", None),
+                        })
+                    sub = getattr(r, "routes", None)
+                    if sub:
+                        for rr in sub:
+                            if isinstance(rr, WebSocketRoute):
+                                ws_list.append({
+                                    "path": getattr(rr, "path", None),
+                                    "name": getattr(rr, "name", None),
+                                    "endpoint": getattr(getattr(rr, "endpoint", None), "__name__", None),
+                                })
+                except Exception:
+                    continue
+        except Exception:
+            ws_list = []
+        return {"openapi": schema, "websockets": ws_list}
+    except Exception as e:
+        logger.exception("admin.surface_index error: %s", e)
+        raise HTTPException(status_code=500, detail="surface_index_error")
 
 
 @router.get("/admin/metrics")
 async def admin_metrics(
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
-    _check_admin(token)
+    _check_admin(token, request)
     m = get_metrics()
     # Derived fields that are useful in dashboards
     transcribe_count = max(0, int(m.get("transcribe_count", 0)))
@@ -99,10 +161,11 @@ async def admin_router_decisions(
     q: str | None = Query(default=None, description="Substring match in route_reason"),
     since: str | None = Query(default=None, description="ISO timestamp lower bound (inclusive)"),
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
     from datetime import datetime
-    _check_admin(token)
+    _check_admin(token, request)
     items = decisions_recent(1000)
     # Apply filters
     if engine:
@@ -138,14 +201,37 @@ async def admin_router_decisions(
     return {"items": sliced, "total": total, "next_cursor": next_cursor}
 
 
+@router.get("/admin/router/decisions.ndjson")
+async def admin_router_decisions_ndjson(
+    limit: int = Query(default=500, ge=1, le=1000),
+    token: str | None = Query(default=None),
+    request: Request = None,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Download last N router decisions as NDJSON (for audit pipelines)."""
+    _check_admin(token, request)
+    items = decisions_recent(limit)
+
+    def _iter():
+        for it in items:
+            try:
+                yield json.dumps(it, ensure_ascii=False) + "\n"
+            except Exception:
+                # best-effort; skip malformed entries
+                continue
+
+    return StreamingResponse(_iter(), media_type="application/x-ndjson")
+
+
 @router.get("/admin/retrieval/last")
 async def admin_retrieval_last(
     limit: int = Query(default=200, ge=1, le=2000),
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ):
     """Return last N retrieval traces (subset of router decisions), most recent first."""
-    _check_admin(token)
+    _check_admin(token, request)
     items = decisions_recent(limit)
     # filter to those that have a retrieval_trace event
     out = []
@@ -160,10 +246,11 @@ async def admin_retrieval_last(
 async def admin_diagnostics_requests(
     limit: int = Query(default=50, ge=1, le=200),
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
     """Return last N request IDs with timestamps for quick diagnostics."""
-    _check_admin(token)
+    _check_admin(token, request)
     items = decisions_recent(limit)
     out = [
         {"req_id": it.get("req_id"), "timestamp": it.get("timestamp")}
@@ -177,21 +264,23 @@ async def admin_diagnostics_requests(
 async def explain_decision(
     req_id: str,
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ):
-    _check_admin(token)
+    _check_admin(token, request)
     data = decisions_get(req_id)
     if not data:
         raise HTTPException(status_code=404, detail="not_found")
     return data
 
 
-@router.get("/admin/config")
+@router.get("/admin/config", dependencies=[Depends(verify_token), Depends(optional_require_any_scope(["admin", "admin:write"]))])
 async def admin_config(
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ):
-    _check_admin(token)
+    _check_admin(token, request)
     data = get_config().to_dict()
     # Overlay a few live values for observability at runtime
     import os as _os
@@ -225,12 +314,13 @@ class AdminOkResponse(BaseModel):
 )
 async def admin_reload_env(
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ):
-    _check_admin(token)
+    _check_admin(token, request)
     try:
         from app.env_utils import load_env
-
+        logger.info("admin.reload_env", extra={"meta": {"user": user_id}})
         load_env()
         return {"status": "ok"}
     except Exception as e:
@@ -241,18 +331,20 @@ async def admin_reload_env(
 async def admin_errors(
     limit: int = Query(default=50, ge=1, le=500),
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
-    _check_admin(token)
+    _check_admin(token, request)
     return {"errors": get_last_errors(limit)}
 
 
 @router.get("/admin/self_review")
 async def admin_self_review(
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
-    _check_admin(token)
+    _check_admin(token, request)
     try:
         res = _get_self_review()
         return res or {"status": "unavailable"}
@@ -276,9 +368,11 @@ class AdminBootstrapResponse(BaseModel):
 async def admin_vs_bootstrap(
     name: str | None = Query(default=None),
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ):
-    _check_admin(token)
+    _check_admin(token, request)
+    logger.info("admin.vector_bootstrap", extra={"meta": {"user": user_id, "collection": name or (os.getenv("QDRANT_COLLECTION") or "kb:default")}})
     coll = name or (os.getenv("QDRANT_COLLECTION") or "kb:default")
     try:
         res = _q_bootstrap(coll, int(os.getenv("EMBED_DIM", "1536")))
@@ -309,9 +403,11 @@ async def admin_vs_migrate(
     dry_run: bool = Query(default=True),
     out_dir: str | None = Query(default=None),
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ):
-    _check_admin(token)
+    _check_admin(token, request)
+    logger.info("admin.vector_migrate", extra={"meta": {"user": user_id, "action": action, "dry_run": dry_run, "out_dir": out_dir}})
     argv = [action]
     if dry_run:
         argv.append("--dry-run")
@@ -325,14 +421,113 @@ async def admin_vs_migrate(
     return {"status": "started", "action": action, "dry_run": dry_run, "out_dir": out_dir}
 
 
+def _sse_format(event: str | None, data: dict | str | None) -> str:
+    payload = data if isinstance(data, str) else json.dumps(data or {})
+    if event:
+        return f"event: {event}\n" + f"data: {payload}\n\n"
+    return f"data: {payload}\n\n"
+
+
+@router.get("/admin/vector_store/bootstrap/stream")
+async def admin_vs_bootstrap_stream(
+    name: str | None = Query(default=None),
+    token: str | None = Query(default=None),
+    request: Request = None,
+    user_id: str = Depends(get_current_user_id),
+):
+    """SSE stream for Qdrant bootstrap with idempotence.
+
+    Emits events: start, step, done, error.
+    """
+    _check_admin(token, request)
+    logger.info("admin.vector_bootstrap_stream", extra={"meta": {"user": user_id, "collection": coll}})
+    coll = name or (os.getenv("QDRANT_COLLECTION") or "kb:default")
+
+    async def _agen():
+        yield _sse_format("start", {"collection": coll})
+        try:
+            yield _sse_format("step", {"msg": f"Ensuring collection {coll}"})
+            res = _q_bootstrap(coll, int(os.getenv("EMBED_DIM", "1536")))
+            yield _sse_format("step", {"result": res})
+            yield _sse_format("done", {"status": "ok", "idempotent": True})
+        except Exception as e:
+            yield _sse_format("error", {"error": str(e)})
+
+    return StreamingResponse(_agen(), media_type="text/event-stream")
+
+
+@router.get("/admin/vector_store/migrate/stream")
+async def admin_vs_migrate_stream(
+    action: str = Query(default="migrate", pattern="^(inventory|export|migrate)$"),
+    dry_run: bool = Query(default=True),
+    out_dir: str | None = Query(default=None),
+    token: str | None = Query(default=None),
+    request: Request = None,
+    user_id: str = Depends(get_current_user_id),
+):
+    """SSE stream for Chroma → Qdrant migration with idempotence.
+
+    Uses in-process calls for portability; degrades gracefully when deps missing.
+    """
+    _check_admin(token, request)
+    logger.info("admin.vector_migrate_stream", extra={"meta": {"user": user_id, "action": action, "dry_run": dry_run, "out_dir": out_dir}})
+
+    async def _agen():
+        yield _sse_format("start", {"action": action, "dry_run": dry_run, "out_dir": out_dir})
+        try:
+            # Import lazily to avoid heavy deps on startup
+            import importlib
+
+            mod = importlib.import_module("app.jobs.migrate_chroma_to_qdrant")
+
+            if action == "inventory":
+                inv = mod._inventory_chroma()  # type: ignore[attr-defined]
+                yield _sse_format("step", {"inventory": inv})
+                yield _sse_format("done", {"status": "ok"})
+                return
+
+            cli = mod._open_chroma()  # type: ignore[attr-defined]
+            qc = mod._open_qdrant()  # type: ignore[attr-defined]
+
+            if action == "export":
+                qa = mod._export_qa(cli)  # type: ignore[attr-defined]
+                um = mod._export_user_memories(cli)  # type: ignore[attr-defined]
+                yield _sse_format("step", {"qa_cache": len(qa), "user_memories": len(um)})
+                if out_dir:
+                    mod._write_jsonl(os.path.join(out_dir, "qa_cache.jsonl"), [  # type: ignore[attr-defined]
+                        {"id": i, "document": d, "metadata": m} for (i, d, m) in qa
+                    ])
+                    mod._write_jsonl(os.path.join(out_dir, "user_memories.jsonl"), [  # type: ignore[attr-defined]
+                        {"id": i, "text": d, "metadata": m} for (i, d, m) in um
+                    ])
+                    yield _sse_format("step", {"exported_to": out_dir})
+                yield _sse_format("done", {"status": "ok"})
+                return
+
+            # migrate
+            qa = mod._export_qa(cli)  # type: ignore[attr-defined]
+            um = mod._export_user_memories(cli)  # type: ignore[attr-defined]
+            yield _sse_format("step", {"phase": "export", "qa_cache": len(qa), "user_memories": len(um)})
+            moved_qa = mod._upsert_qa(qc, qa, dry_run=dry_run)  # type: ignore[attr-defined]
+            yield _sse_format("step", {"phase": "upsert_qa", "count": moved_qa, "idempotent": True})
+            moved_um = mod._upsert_user_memories(qc, um, dry_run=dry_run)  # type: ignore[attr-defined]
+            yield _sse_format("step", {"phase": "upsert_user_memories", "count": moved_um, "idempotent": True})
+            yield _sse_format("done", {"status": "ok", "dry_run": dry_run})
+        except Exception as e:
+            yield _sse_format("error", {"error": str(e)})
+
+    return StreamingResponse(_agen(), media_type="text/event-stream")
+
+
 
 @router.get("/admin/vector_store/stats")
 async def admin_vs_stats(
     name: str | None = Query(default=None),
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ):
-    _check_admin(token)
+    _check_admin(token, request)
     coll = name or (os.getenv("QDRANT_COLLECTION") or "kb:default")
     try:
         return _q_stats(coll)
@@ -344,9 +539,10 @@ async def admin_vs_stats(
 async def admin_qdrant_collections(
     names: str | None = Query(default=None, description="CSV of collection names"),
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ):
-    _check_admin(token)
+    _check_admin(token, request)
     cols = [c.strip() for c in (names.split(",") if names else []) if c.strip()]
     if not cols:
         # fall back to default only
@@ -395,6 +591,7 @@ class AdminFlagBody(BaseModel):
 )
 async def admin_flags(
     token: str | None = Query(default=None),
+    request: Request = None,
     body: AdminFlagBody | None = None,
     key: str | None = Query(default=None),
     value: str | None = Query(default=None),
@@ -405,7 +602,7 @@ async def admin_flags(
     Guarded by admin token. Note: only affects this process; not persisted.
     """
     # Enforce admin guard before reading/validating request body
-    _check_admin(token)
+    _check_admin(token, request)
 
     # Normalize inputs: prefer JSON body when provided; otherwise use query params
     if body is not None:
@@ -416,6 +613,7 @@ async def admin_flags(
         raise HTTPException(status_code=400, detail="missing_key")
     if value is None or value == "":
         raise HTTPException(status_code=400, detail="missing_value")
+    logger.info("admin.flags.set", extra={"meta": {"user": user_id, "key": key, "value": value}})
     _set_flag(key, value)
     os.environ[f"FLAG_{key.upper()}"] = value
     # Maintain backward-compat: also set plain key for legacy tests/tools
@@ -423,12 +621,64 @@ async def admin_flags(
     return {"status": "ok", "key": key, "value": value, "flags": _list_flags()}
 
 
+@router.get("/admin/health/router_retrieval")
+async def admin_health_router_retrieval(
+    token: str | None = Query(default=None),
+    request: Request = None,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Snapshot of router + retrieval config with basic validation and telemetry hints."""
+    _check_admin(token, request)
+    out: dict = {"router": {}, "retrieval": {}, "warnings": []}
+    try:
+        import app.model_router as mr  # type: ignore
+        try:
+            rules = mr._load_rules()  # type: ignore[attr-defined]
+        except Exception:
+            rules = None
+        out["router"] = {
+            "rules_loaded": bool(rules),
+            "rule_values": rules or {
+                "MAX_SHORT_PROMPT_TOKENS": mr.MAX_SHORT_PROMPT_TOKENS,
+                "RAG_LONG_CONTEXT_THRESHOLD": mr.RAG_LONG_CONTEXT_THRESHOLD,
+                "DOC_LONG_REPLY_TARGET": mr.DOC_LONG_REPLY_TARGET,
+                "OPS_MAX_FILES_SIMPLE": mr.OPS_MAX_FILES_SIMPLE,
+                "SELF_CHECK_FAIL_THRESHOLD": mr.SELF_CHECK_FAIL_THRESHOLD,
+                "MAX_RETRIES_PER_REQUEST": mr.MAX_RETRIES_PER_REQUEST,
+            },
+        }
+    except Exception as e:
+        out["warnings"].append(f"router_rules_error: {e}")
+    try:
+        from app.config_runtime import get_config as _get_cfg  # type: ignore
+        cfg = _get_cfg()
+        import os as _os
+        th_raw = _os.getenv("RETRIEVE_DENSE_SIM_THRESHOLD", "0.75")
+        try:
+            th = float(th_raw)
+        except Exception:
+            th = None
+        out["retrieval"] = {
+            "use_pipeline": _os.getenv("USE_RETRIEVAL_PIPELINE", "0").lower() in {"1", "true", "yes"},
+            "dense_sim_threshold": th,
+            "mmr_lambda": getattr(cfg.retrieval, "mmr_lambda", None),
+            "topk_vec": getattr(cfg.retrieval, "topk_vec", None),
+            "topk_final": getattr(cfg.retrieval, "topk_final", None),
+        }
+        if th is None or not (0.0 <= th <= 1.0):
+            out["warnings"].append(f"threshold_invalid: RETRIEVE_DENSE_SIM_THRESHOLD={th_raw}")
+    except Exception as e:
+        out["warnings"].append(f"retrieval_cfg_error: {e}")
+    return out
+
+
 @router.get("/admin/flags")
 async def admin_list_flags(
     token: str | None = Query(default=None),
+    request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ):
-    _check_admin(token)
+    _check_admin(token, request)
     return {"flags": _list_flags()}
 
 

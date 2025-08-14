@@ -134,7 +134,10 @@ async def list_tv_contacts(user_id: str = Depends(get_current_user_id)):
 
 
 @tv_router.post("/tv/contacts/call", response_model=ContactUpdateResponse, responses={200: {"model": ContactUpdateResponse}})
-async def start_call(name: str, user_id: str = Depends(get_current_user_id)):
+async def start_call(body: dict | None = None, name: str | None = None, user_id: str = Depends(get_current_user_id)):
+    # Prefer JSON body { name }, fall back to query param for backward compat
+    if body and isinstance(body, dict) and not name:
+        name = str(body.get("name") or "")
     name = (name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="name_required")

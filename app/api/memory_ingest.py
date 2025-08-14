@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(
     tags=["Admin"],
-    dependencies=[Depends(verify_token), Depends(rate_limit), Depends(require_scope("admin:write"))],
+    # Auth -> scopes -> limiter ordering
+    dependencies=[Depends(verify_token), Depends(require_scope("admin:write")), Depends(rate_limit)],
 )
 
 

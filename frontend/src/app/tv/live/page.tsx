@@ -10,8 +10,8 @@ import { VibeSwitcher } from "@/components/tv/layers/VibeSwitcher";
 import { QuietHoursBadge } from "@/components/tv/QuietHoursBadge";
 import { attachRemoteKeymap } from "@/lib/remoteKeymap";
 import { scheduler } from "@/services/scheduler";
-import { wsHub } from "@/services/wsHub";
 import { attachUiEffects } from "@/lib/uiEffects";
+import { wsHub } from "@/services/wsHub";
 
 export default function TvLive() {
     useEffect(() => {
@@ -20,9 +20,10 @@ export default function TvLive() {
         const onNext = () => scheduler.nudge("next");
         window.addEventListener("remote:left", onPrev);
         window.addEventListener("remote:right", onNext);
-        wsHub.start();
+        // TV live needs the care channel
+        wsHub.start({ care: true, music: false });
         const detachUi = attachUiEffects();
-        return () => { detachUi(); detach(); };
+        return () => { wsHub.stop({ care: true, music: false }); detachUi(); detach(); };
     }, []);
     return (
         <main className="min-h-screen bg-black text-white">

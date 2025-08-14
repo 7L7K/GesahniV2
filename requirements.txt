@@ -1,3 +1,16 @@
+fastapi
+uvicorn
+httpx
+jinja2
+PyJWT
+passlib[bcrypt]
+aiosqlite
+python-multipart
+redis
+cachetools
+pytest
+pytest-timeout
+requests
 annotated-types==0.7.0
 anyio==4.10.0
 attrs==25.3.0

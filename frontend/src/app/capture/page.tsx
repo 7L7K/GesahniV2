@@ -14,7 +14,7 @@ export default async function CapturePage() {
   // by reading an opt-in cookie set by client after login. If absent, still render,
   // but CaptureMode will handle client-side redirect.
   const cookieStore = await cookies();
-  const authedHint = cookieStore.get('auth:hint')?.value;
+  const authedHint = cookieStore.get('auth_hint')?.value;
   if (authedHint === '0') {
     redirect('/login?next=%2Fcapture');
   }

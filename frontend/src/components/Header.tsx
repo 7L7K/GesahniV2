@@ -4,22 +4,43 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { getToken, clearTokens, getBudget } from '@/lib/api';
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs';
+import { getToken, clearTokens, getBudget, bumpAuthEpoch } from '@/lib/api';
 import { usePathname, useRouter } from 'next/navigation';
 
 export default function Header() {
     const [authed, setAuthed] = useState(false);
+    const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
     const router = useRouter();
     const pathname = usePathname();
+    // Note: useAuth() must only be used within ClerkProvider.
+    // We render a small child component inside <SignedIn> to bump auth epoch on user changes.
 
     useEffect(() => {
-        setAuthed(Boolean(getToken()))
+        let cancelled = false;
+        const update = async () => {
+            // Prefer header mode token when present
+            const hasHeaderToken = Boolean(getToken());
+            if (hasHeaderToken) {
+                if (!cancelled) setAuthed(true);
+                return;
+            }
+            // Cookie mode: ask backend whoami to detect auth
+            try {
+                const res = await fetch('/v1/whoami', { credentials: 'include' });
+                if (!cancelled) setAuthed(res.ok && (await res.json()).is_authenticated !== false);
+            } catch {
+                if (!cancelled) setAuthed(false);
+            }
+        };
+        update();
+        return () => { cancelled = true };
     }, [pathname])
 
     const doLogout = async () => {
         try { clearTokens() } finally {
             setAuthed(false)
-            document.cookie = 'auth:hint=0; path=/; max-age=300'
+            document.cookie = 'auth_hint=0; path=/; max-age=300'
             router.push('/')
         }
     }
@@ -50,17 +71,41 @@ export default function Header() {
                 <nav className="flex items-center gap-3 text-sm text-muted-foreground">
                     <Link href="/tv" className="hover:text-foreground">TV</Link>
                     <Link href="/docs" className="hover:text-foreground">Docs</Link>
-                    {authed && (
+                    {clerkEnabled ? (
                         <>
-                            <Link href="/capture" className="hover:text-foreground">Capture</Link>
-                            <Link href="/settings" className="hover:text-foreground">Settings</Link>
-                            <Link href="/admin" className="hover:text-foreground">Admin</Link>
+                            <SignedIn>
+                                <ClerkEpochBump />
+                                <Link href="/capture" className="hover:text-foreground">Capture</Link>
+                                <Link href="/settings" className="hover:text-foreground">Settings</Link>
+                                <Link href="/admin" className="hover:text-foreground">Admin</Link>
+                            </SignedIn>
+                            <SignedOut>
+                                <SignInButton mode="modal">
+                                    <Button size="sm" variant="ghost">Sign in</Button>
+                                </SignInButton>
+                                <SignUpButton mode="modal">
+                                    <Button size="sm">Sign up</Button>
+                                </SignUpButton>
+                            </SignedOut>
+                            <SignedIn>
+                                <UserButton appearance={{ elements: { userButtonAvatarBox: 'h-6 w-6' } }} afterSignOutUrl="/" />
+                            </SignedIn>
                         </>
-                    )}
-                    {!authed ? (
-                        <Link href={`/login?next=${encodeURIComponent(pathname || '/')}`} className="hover:text-foreground">Login</Link>
                     ) : (
-                        <Button size="sm" variant="ghost" onClick={doLogout}>Logout</Button>
+                        <>
+                            {authed && (
+                                <>
+                                    <Link href="/capture" className="hover:text-foreground">Capture</Link>
+                                    <Link href="/settings" className="hover:text-foreground">Settings</Link>
+                                    <Link href="/admin" className="hover:text-foreground">Admin</Link>
+                                </>
+                            )}
+                            {!authed ? (
+                                <Link href={`/login?next=${encodeURIComponent(pathname || '/')}`} className="hover:text-foreground">Login</Link>
+                            ) : (
+                                <Button size="sm" variant="ghost" onClick={doLogout}>Logout</Button>
+                            )}
+                        </>
                     )}
                     <ThemeToggle />
                 </nav>
@@ -74,4 +119,12 @@ export default function Header() {
     );
 }
 
+
+function ClerkEpochBump() {
+    const { userId } = useAuth();
+    useEffect(() => {
+        try { bumpAuthEpoch(); } catch { /* noop */ }
+    }, [userId]);
+    return null;
+}
 

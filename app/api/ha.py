@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
-from app.security import require_nonce
+from app.security import require_nonce, verify_token
+from app.deps.scopes import require_any_scope
 from app.home_assistant import (
     get_states,
     resolve_entity,
@@ -33,7 +34,11 @@ class ServiceRequest(BaseModel):
     )
 
 
-router = APIRouter(tags=["Care"])
+router = APIRouter(
+    tags=["Care"],
+    # Ensure JWT + scopes enforced above nonce for all HA endpoints
+    dependencies=[Depends(verify_token), Depends(require_any_scope(["care:resident", "care:caregiver"]))],
+)
 
 # Capture original function reference at import time for monkeypatch detection
 try:  # pragma: no cover - best effort
@@ -48,6 +53,21 @@ async def ha_entities(user_id: str = Depends(get_current_user_id)):
         return await get_states()
     except Exception as e:
         logger.exception("HA states error: %s", e)
+        raise HTTPException(status_code=500, detail="Home Assistant error")
+
+
+@router.get("/ha/health")
+async def ha_health(user_id: str = Depends(get_current_user_id)):
+    """Lightweight HA connectivity check.
+
+    Returns 200 when the HA API responds; 500 on failure.
+    """
+    try:
+        # Minimal call: reuse states fetch as a health probe (errors mapped to 500)
+        await get_states()
+        return {"status": "healthy"}
+    except Exception as e:
+        logger.exception("HA health error: %s", e)
         raise HTTPException(status_code=500, detail="Home Assistant error")
 
 
@@ -91,10 +111,14 @@ class WebhookAck(BaseModel):
 
 
 @router.post("/ha/webhook", response_model=WebhookAck, responses={200: {"model": WebhookAck}})
-async def ha_webhook(request: Request):
+async def ha_webhook(
+    request: Request,
+    x_signature: str | None = Header(default=None),
+    x_timestamp: str | None = Header(default=None),
+):
     from app.security import verify_webhook
 
-    _ = await verify_webhook(request)
+    _ = await verify_webhook(request, x_signature=x_signature, x_timestamp=x_timestamp)
     return WebhookAck()
 
 

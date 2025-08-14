@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from fastapi import Request, Response
+from secrets import token_urlsafe
 from starlette.middleware.base import BaseHTTPMiddleware
 
 
@@ -26,6 +27,16 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-__all__ = ["CSRFMiddleware"]
+async def get_csrf_token() -> str:
+    """Return an existing csrf_token cookie or mint a new random value.
+
+    Middlewares that want to ensure presence can call this and set cookie.
+    The /v1/csrf endpoint returns this value for test flows.
+    """
+    # For now, just return a random per-call token; a route should set cookie.
+    return token_urlsafe(16)
+
+
+__all__ = ["CSRFMiddleware", "get_csrf_token"]
 
 

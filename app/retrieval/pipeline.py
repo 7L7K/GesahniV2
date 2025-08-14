@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from typing import Any, Dict, List, Tuple
+import logging
 import time
 
 from ..embeddings import embed_sync
@@ -18,6 +19,9 @@ from .utils import (
     truncate_to_token_budget,
 )
 from ..otel_utils import start_span
+from ..telemetry import hash_user_id
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Lightweight in-process cache for repeated queries within a short TTL
@@ -54,6 +58,21 @@ def run_pipeline(
     """
 
     trace: List[Dict[str, Any]] = []
+    try:
+        user_hash = hash_user_id(str(user_id)) if user_id else "anon"
+        logger.info(
+            "retrieval.start",
+            extra={
+                "meta": {
+                    "user_hash": user_hash,
+                    "intent": (intent or ""),
+                    "collection": str(collection),
+                    "query_len": len(query or ""),
+                }
+            },
+        )
+    except Exception:
+        pass
     # Cache check
     cache_ttl = float(os.getenv("RETRIEVE_CACHE_TTL_SECONDS", "0") or 0)
     cache_max = int(os.getenv("RETRIEVE_CACHE_MAX", "128"))
@@ -64,6 +83,21 @@ def run_pipeline(
         if cached and now - cached[2] <= cache_ttl:
             texts, trace_cached, _ts = cached
             trace_cached = list(trace_cached) + [{"event": "cache_hit", "meta": {"age_s": round(now - _ts, 3)}}]
+            try:
+                logger.info(
+                    "retrieval.cache_hit",
+                    extra={
+                        "meta": {
+                            "user_hash": hash_user_id(str(user_id)) if user_id else "anon",
+                            "intent": (intent or ""),
+                            "collection": str(collection),
+                            "age_s": round(now - _ts, 3),
+                            "texts": len(texts),
+                        }
+                    },
+                )
+            except Exception:
+                pass
             return list(texts), trace_cached
     kd, ks, token_budget = _budgets_for_intent(intent)
     trace.append({
@@ -116,16 +150,25 @@ def run_pipeline(
             "t_sparse_ms": int(t_sparse),
             "scores_dense": _sample_scores(dense),
             "scores_sparse": _sample_scores(sparse),
-            "threshold_sim": 0.75,
-            "policy": "keep if sim>=0.75 (dist<=0.25)",
+            "threshold_sim": round(dense_thresh, 4),
+            "policy": f"keep if sim>={dense_thresh} (dist<={round(1.0-dense_thresh,4)})",
         },
     })
 
-    # RRF
+    # RRF (include simple feature breakdown sample)
     t3 = time.perf_counter()
     with start_span("retrieval.pipeline", {"topk_pre": len(dense) + len(sparse)}):
         fused = reciprocal_rank_fusion([dense, sparse]) if (dense or sparse) else []
     t_rrf = (time.perf_counter() - t3) * 1000.0
+    def _rrf_features(fused_items: List[RetrievedItem]) -> List[Dict[str, float]]:
+        rows: List[Dict[str, float]] = []
+        for it in fused_items[:5]:
+            md = it.metadata or {}
+            rows.append({
+                "rrf_score": float(md.get("rrf_score", it.score)),
+                "base": float(md.get("base", 0.0)),
+            })
+        return rows
     trace.append({
         "event": "rrf",
         "meta": {
@@ -133,6 +176,7 @@ def run_pipeline(
             "in_sparse": len(sparse),
             "out": len(fused),
             "t_ms": int(t_rrf),
+            "features": _rrf_features(fused),
         },
     })
 
@@ -171,6 +215,7 @@ def run_pipeline(
             "diversity_before": round(before_div, 3),
             "diversity_after": round(after_div, 3),
             "diversity_delta": round(after_div - before_div, 3),
+            "sample_ids": [it.id for it in diversified[:5]],
         },
     })
 
@@ -191,6 +236,7 @@ def run_pipeline(
             "t_ms": int(t_rerank1),
             "ce_top": round(ce_top, 3),
             "ce_avg": round(ce_avg, 3),
+            "kept_ids": [it.id for it in after_local[:10]],
         },
     })
     use_hosted = os.getenv("RETRIEVE_USE_HOSTED_CE", "0").lower() in {"1", "true", "yes"}
@@ -208,6 +254,7 @@ def run_pipeline(
             "t_ms": int(t_rerank2),
             "hosted_calls": int(use_hosted),
             "score_avg": round(ce2_avg, 3),
+            "kept_ids": [it.id for it in after_hosted[:10]],
         },
     })
 
@@ -319,6 +366,24 @@ def run_pipeline(
             _CACHE[key] = (list(trimmed), list(trace), now)
         except Exception:
             pass
+    try:
+        logger.info(
+            "retrieval.finish",
+            extra={
+                "meta": {
+                    "user_hash": hash_user_id(str(user_id)) if user_id else "anon",
+                    "intent": (intent or ""),
+                    "collection": str(collection),
+                    "input_len": len(query or ""),
+                    "kept": len(trimmed),
+                    "trace_len": len(trace),
+                    "k_dense": kd,
+                    "k_sparse": ks,
+                }
+            },
+        )
+    except Exception:
+        pass
     return trimmed, trace
 
 

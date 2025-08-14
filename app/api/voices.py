@@ -11,7 +11,8 @@ from ..deps.user import get_current_user_id
 router = APIRouter(
     prefix="/voices",
     tags=["Music"],
-    dependencies=[Depends(verify_token), Depends(rate_limit), Depends(optional_require_scope("music:control"))],
+    # Scope gate before limiter
+    dependencies=[Depends(verify_token), Depends(optional_require_scope("music:control")), Depends(rate_limit)],
 )
 
 

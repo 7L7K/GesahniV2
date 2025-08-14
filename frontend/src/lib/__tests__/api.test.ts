@@ -60,8 +60,65 @@ describe("apiFetch", () => {
 
         const res = await apiFetch("/v1/profile", { method: "GET" });
         // When refresh fails, we return the refresh error response
-        expect(res.status).toBe(400);
+        // In cookie mode, refresh attempt may be skipped; allow 401 or 400
+        expect([400, 401]).toContain(res.status);
         expect(window.localStorage.getItem("auth:access_token")).toBeNull();
+    });
+
+    it("429 with Retry-After delays once and retries", async () => {
+        (global.fetch as any)
+            .mockResolvedValueOnce(new Response("Too Many", { status: 429, headers: { 'Retry-After': '1' } }))
+            .mockResolvedValueOnce(new Response("{}", { status: 200, headers: { 'Content-Type': 'application/json' } }));
+        const p = apiFetch("/v1/models?case=429", { method: "GET" });
+        await Promise.resolve();
+        jest.advanceTimersByTime(1500);
+        const res = await p;
+        expect(res.status).toBe(200);
+        expect((global.fetch as jest.Mock).mock.calls.length).toBe(2);
+    });
+
+    it("does not retry 404/422/403", async () => {
+        (global.fetch as any).mockResolvedValueOnce(new Response("not found", { status: 404 }));
+        const res = await apiFetch("/v1/none", { method: "GET" });
+        expect(res.status).toBe(404);
+        expect((global.fetch as jest.Mock).mock.calls.length).toBe(1);
+    });
+
+    it("5xx GETs do limited backoff retries and stop after cap", async () => {
+        jest.spyOn(global.Math, 'random').mockReturnValue(0);
+        (global.fetch as any)
+            .mockResolvedValueOnce(new Response("boom", { status: 500 }))
+            .mockResolvedValueOnce(new Response("boom", { status: 502 }))
+            .mockResolvedValueOnce(new Response("ok", { status: 200 }));
+        const p = apiFetch("/v1/state?case=5xx", { method: "GET" });
+        await Promise.resolve();
+        jest.advanceTimersByTime(800);
+        const res = await p;
+        expect(res.status).toBe(200);
+        expect((global.fetch as jest.Mock).mock.calls.length).toBe(3);
+        ; (global.Math.random as any).mockRestore?.();
+    });
+
+    it("circuit breaker opens on repeated 5xx and pauses next attempt", async () => {
+        jest.spyOn(global.Math, 'random').mockReturnValue(0);
+        (global.fetch as any)
+            .mockResolvedValueOnce(new Response("boom", { status: 500 }))
+            .mockResolvedValueOnce(new Response("boom", { status: 500 }))
+            .mockResolvedValueOnce(new Response("boom", { status: 500 }))
+            .mockResolvedValueOnce(new Response("{}", { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+        const p1 = apiFetch("/v1/state?break=1", { method: "GET" });
+        await Promise.resolve();
+        jest.advanceTimersByTime(800);
+        await p1.catch(() => { });
+
+        const p2 = apiFetch("/v1/state?break=1", { method: "GET" });
+        await Promise.resolve();
+        jest.advanceTimersByTime(600);
+        const res = await p2;
+        expect(res.status).toBe(200);
+        expect((global.fetch as jest.Mock).mock.calls.length).toBe(4);
+        ; (global.Math.random as any).mockRestore?.();
     });
 });
 

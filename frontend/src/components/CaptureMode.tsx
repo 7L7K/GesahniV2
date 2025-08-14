@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { getToken } from '@/lib/api';
+import { getToken, isAuthed } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { RecorderProvider, useRecorderCtx } from './recorder/RecorderProvider';
 import { RecorderControls } from './recorder/RecorderControls';
@@ -20,11 +20,21 @@ function CaptureInner() {
   const recording = rec.state.status === 'recording';
   const [storyVoice, setStoryVoice] = useState(true);
 
-  // Auth guard on client: if tokens missing, hint cookie and redirect
+  // Auth guard on client:
+  // - In header-token mode, require token
+  // - In cookie mode, rely on auth_hint=1 set during login middleware
   useEffect(() => {
-    if (!getToken()) {
-      document.cookie = 'auth:hint=0; path=/; max-age=300';
-      router.replace('/login?next=%2Fcapture');
+    try {
+      const hinted = typeof document !== 'undefined' && document.cookie.includes('auth_hint=1');
+      if (!isAuthed() && !getToken() && !hinted) {
+        document.cookie = 'auth_hint=0; path=/; max-age=300';
+        router.replace('/login?next=%2Fcapture');
+        return;
+      }
+      // Set a long-lived hint so SSR can render without redirect when logged in
+      document.cookie = 'auth_hint=1; path=/; max-age=1209600';
+    } catch {
+      /* ignore */
     }
   }, [router]);
 

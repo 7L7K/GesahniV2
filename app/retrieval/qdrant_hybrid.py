@@ -68,8 +68,13 @@ def dense_search(
     f = _payload_filter(user_id, extra_filter)
     res = c.search(collection_name=collection, query_vector=query_vector, limit=limit, query_filter=f)
     items = _to_items(res)
-    # Enforce keep threshold sim>=0.75 (dist<=0.25)
-    kept = [it for it in items if (1.0 - float(it.score)) <= 0.25]
+    # Enforce keep threshold: sim>=THRESH (dist<=1-THRESH). Default 0.75
+    try:
+        thresh = float(os.getenv("RETRIEVE_DENSE_SIM_THRESHOLD", "0.75"))
+    except Exception:
+        thresh = 0.75
+    cutoff = 1.0 - max(0.0, min(1.0, thresh))
+    kept = [it for it in items if (1.0 - float(it.score)) <= cutoff]
     return kept
 
 

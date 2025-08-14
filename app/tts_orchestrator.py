@@ -5,6 +5,7 @@ import os
 import time
 from dataclasses import dataclass
 from typing import Literal, Optional, Tuple
+import hashlib
 
 from .telemetry import log_record_var
 from .metrics import TTS_FALLBACKS, TTS_COST_USD, TTS_LATENCY_SECONDS, TTS_REQUEST_COUNT
@@ -42,6 +43,8 @@ def _load_config() -> TTSConfig:
 class TTSSpend:
     _month_epoch: float | None = None
     _spent_usd: float = 0.0
+    _day_epoch: float | None = None
+    _spent_day_usd: float = 0.0
 
     @classmethod
     def _month(cls) -> float:
@@ -49,10 +52,15 @@ class TTSSpend:
 
     @classmethod
     def _roll(cls) -> None:
-        cur = cls._month()
-        if cls._month_epoch != cur:
-            cls._month_epoch = cur
+        cur_m = cls._month()
+        if cls._month_epoch != cur_m:
+            cls._month_epoch = cur_m
             cls._spent_usd = 0.0
+        # Daily epoch (UTC day)
+        cur_d = time.time() // 86400
+        if cls._day_epoch != cur_d:
+            cls._day_epoch = cur_d
+            cls._spent_day_usd = 0.0
 
     @classmethod
     def add(cls, usd: float) -> float:
@@ -66,18 +74,40 @@ class TTSSpend:
         return cls._spent_usd
 
     @classmethod
+    def add_day(cls, usd: float) -> float:
+        cls._roll()
+        cls._spent_day_usd += max(0.0, float(usd))
+        return cls._spent_day_usd
+
+    @classmethod
+    def total_day(cls) -> float:
+        cls._roll()
+        return cls._spent_day_usd
+
+    @classmethod
     def snapshot(cls) -> dict:
         cls._roll()
         cfg = _load_config()
         spent = float(cls._spent_usd)
         cap = float(cfg.monthly_cap_usd)
         ratio = spent / cap if cap > 0 else 0.0
+        # Daily view (auto-degrade threshold controlled by env)
+        day_cap = float(os.getenv("DAILY_TTS_CAP_USD", os.getenv("DAILY_TTS_BUDGET_USD", "3.0")) or 3.0)
+        warn_ratio = float(os.getenv("DAILY_TTS_WARN_RATIO", "0.8") or 0.8)
+        day_spent = float(cls._spent_day_usd)
+        day_ratio = day_spent / day_cap if day_cap > 0 else 0.0
         return {
             "spent_usd": round(spent, 6),
             "cap_usd": cap,
             "ratio": ratio,
             "near_cap": ratio >= 0.8 and ratio < 1.0,
             "blocked": ratio >= 1.0,
+            # Daily fields
+            "day_spent_usd": round(day_spent, 6),
+            "day_cap_usd": day_cap,
+            "day_ratio": day_ratio,
+            "day_near_cap": day_ratio >= warn_ratio and day_ratio < 1.0,
+            "day_blocked": day_ratio >= 1.0,
         }
 
 
@@ -135,14 +165,39 @@ async def synthesize(
         intent = intent_hint or detect_intent(text)[0]
         engine, tier = _pick_engine(mode, intent, cfg)
 
-    # budget guard
-    spent = TTSSpend.total()
-    if spent >= cfg.monthly_cap_usd and cfg.voice_mode != "always_openai":
+    # budget guard (monthly + daily auto-degrade)
+    spent_m = TTSSpend.total()
+    if spent_m >= cfg.monthly_cap_usd and cfg.voice_mode != "always_openai":
+        engine, tier = "piper", "piper"
+    # Daily guard: flip to Piper when over warn ratio/cap
+    daily_cap = float(os.getenv("DAILY_TTS_CAP_USD", os.getenv("DAILY_TTS_BUDGET_USD", "3.0")) or 3.0)
+    warn_ratio = float(os.getenv("DAILY_TTS_WARN_RATIO", "0.8") or 0.8)
+    spent_d = TTSSpend.total_day()
+    if daily_cap > 0 and (spent_d / daily_cap) >= warn_ratio and engine != "piper":
         engine, tier = "piper", "piper"
 
     rec = log_record_var.get()
     if rec:
         rec.engine_used = f"tts:{engine}:{tier}"
+
+    # In-memory TTL cache to avoid repeated synthesis cost for identical requests
+    _ttl_s = int(os.getenv("TTS_CACHE_TTL_S", "600") or 600)
+    key_voice = (openai_voice or "piper") if engine == "openai" else "piper"
+    _key = f"{engine}:{tier}:{key_voice}:{hashlib.sha1((text or '').encode('utf-8')).hexdigest()}"
+    # simple module-level cache
+    global _TTS_CACHE  # type: ignore[var-annotated]
+    try:
+        _TTS_CACHE
+    except NameError:
+        _TTS_CACHE = {}  # type: ignore[assignment]
+
+    now = time.time()
+    try:
+        exp, cached = _TTS_CACHE.get(_key, (0.0, b""))  # type: ignore[attr-defined]
+        if exp and now < float(exp) and isinstance(cached, (bytes, bytearray)) and cached:
+            return bytes(cached)
+    except Exception:
+        pass
 
     async def _call() -> Tuple[bytes, float]:
         if engine == "piper":
@@ -157,6 +212,7 @@ async def synthesize(
             audio, cost = await _call()
             if cost:
                 new_total = TTSSpend.add(cost)
+                TTSSpend.add_day(cost)
                 TTS_COST_USD.labels(engine, tier if engine == "openai" else "piper").observe(cost)
                 # hard block above cap unless always_openai is forced
                 if new_total > cfg.monthly_cap_usd and cfg.voice_mode != "always_openai":
@@ -169,6 +225,11 @@ async def synthesize(
             TTS_LATENCY_SECONDS.labels(engine, tier if engine == "openai" else "piper").observe(
                 time.perf_counter() - start
             )
+            # store in cache
+            try:
+                _TTS_CACHE[_key] = (now + float(_ttl_s), bytes(audio))  # type: ignore[index]
+            except Exception:
+                pass
             return audio
         except Exception as e:
             if attempt == 1:

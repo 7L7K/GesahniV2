@@ -150,9 +150,10 @@ async def google_callback(request: Request, response: Response) -> Response:
     next_url = request.cookies.get("oauth_next") or "/"
     if not _allow_redirect(next_url):
         next_url = "/"
-    resp = Response(status_code=302)
-    resp.headers["Location"] = next_url
-    return resp
+    # Clean redirect (no tokens in URL); cookies already set on 'response'
+    response.status_code = 302
+    response.headers["Location"] = next_url
+    return response
 
 
 __all__ = ["router"]

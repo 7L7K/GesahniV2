@@ -14,7 +14,9 @@ export default function Reminders() {
                 <button className="bg-white text-black px-6 py-4 rounded-2xl text-2xl" onClick={async () => {
                     const t = text.trim();
                     if (!t) return;
-                    try { await apiFetch(`/v1/reminders?text=${encodeURIComponent(t)}`, { method: 'POST' }); } catch { }
+                    try {
+                        await apiFetch(`/v1/reminders`, { method: 'POST', body: JSON.stringify({ text: t, when: new Date().toISOString() }) });
+                    } catch { }
                     setItems([t, ...items]); setText("");
                 }}>Add</button>
             </div>

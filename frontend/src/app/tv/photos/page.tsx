@@ -42,7 +42,7 @@ export default function Photos() {
     const fav = async () => {
         const name = items[idx % Math.max(1, items.length)];
         try {
-            await apiFetch(`/v1/tv/photos/favorite?name=${encodeURIComponent(name)}`, { method: "POST" });
+            await apiFetch(`/v1/tv/photos/favorite`, { method: "POST", body: JSON.stringify({ name }) });
             setStatus("Favorited");
             setTimeout(() => setStatus(""), 1500);
         } catch { }

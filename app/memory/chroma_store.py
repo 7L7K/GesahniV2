@@ -218,6 +218,21 @@ class ChromaVectorStore(VectorStore):
             self._embedder = _LengthEmbedder()
             logger.info("Chroma embedder selected: length")
 
+        # Embedder/dimension coupling validation
+        try:
+            if embed_kind == "openai":
+                # OpenAI embeddings default to 1536 for text-embedding-3-small
+                exp_dim = int(os.getenv("EMBED_DIM", "1536"))
+                if exp_dim not in {1536, 3072}:  # allow future variants
+                    logger.warning("EMBED_DIM=%s may not match OpenAI embedder; expected 1536/3072", exp_dim)
+            else:
+                # Length embedder emits dimension=1
+                exp_dim = int(os.getenv("EMBED_DIM", "1536"))
+                if exp_dim != 1:
+                    logger.warning("EMBED_DIM=%s mismatch: length embedder uses dim=1", exp_dim)
+        except Exception:
+            pass
+
         # Gate QA cache collection behind env flag so it cannot block startup
         # Disable QA cache only outside tests
         disable_qa = (
