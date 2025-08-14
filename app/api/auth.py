@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from fastapi.security import OAuth2PasswordRequestForm
 
 from ..deps.user import get_current_user_id
+from ..deps.clerk_auth import require_user
 from ..user_store import user_store
 from ..token_store import (
     is_refresh_family_revoked,
@@ -28,6 +29,10 @@ from ..auth_store import (
 
 
 router = APIRouter(tags=["Auth"])  # expose in OpenAPI for docs/tests
+@router.get("/auth/clerk/protected")
+async def clerk_protected(user_id: str = Depends(require_user)) -> Dict[str, Any]:
+    return {"ok": True, "user_id": user_id}
+
 
 
 def _iso(dt: float | None) -> str | None:
@@ -101,6 +106,8 @@ async def whoami(request: Request, user_id: str = Depends(get_current_user_id)) 
     return {
         "is_authenticated": user_id != "anon",
         "user_id": user_id,
+        "email": getattr(request.state, "email", None),
+        "roles": getattr(request.state, "roles", None) or [],
         "session_id": request.headers.get("X-Session-ID") or request.cookies.get("sid"),
         "device_id": request.headers.get("X-Device-ID") or request.cookies.get("did"),
         "scopes": scopes,
@@ -169,7 +176,13 @@ def _jwt_secret() -> str:
 
 def _make_jwt(user_id: str, *, exp_seconds: int) -> str:
     now = int(time.time())
-    payload = {"user_id": user_id, "iat": now, "exp": now + exp_seconds}
+    payload = {"user_id": user_id, "sub": user_id, "iat": now, "exp": now + exp_seconds}
+    iss = os.getenv("JWT_ISSUER")
+    aud = os.getenv("JWT_AUDIENCE")
+    if iss:
+        payload["iss"] = iss
+    if aud:
+        payload["aud"] = aud
     return jwt.encode(payload, _jwt_secret(), algorithm="HS256")
 
 
@@ -266,7 +279,8 @@ async def login(username: str, request: Request, response: Response):
         raise
     except Exception:
         pass
-    token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))  # 14 days
+    # Short access in prod by default: 15 minutes; tests/dev can override
+    token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "900"))
     jwt_token = _make_jwt(username, exp_seconds=token_lifetime)
     cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
@@ -287,7 +301,8 @@ async def login(username: str, request: Request, response: Response):
     # Also issue a refresh token and mark it allowed for this session
     try:
         now = int(time.time())
-        refresh_life = int(os.getenv("JWT_REFRESH_TTL_SECONDS", os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440")))
+        # Longer refresh in prod: default 7 days (604800s), allow 7–30d via env
+        refresh_life = int(os.getenv("JWT_REFRESH_TTL_SECONDS", os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "10080")))
         if refresh_life < 60:
             refresh_life = refresh_life * 60
         import os as _os
@@ -300,6 +315,12 @@ async def login(username: str, request: Request, response: Response):
             "exp": now + refresh_life,
             "jti": jti,
         }
+        iss = os.getenv("JWT_ISSUER")
+        aud = os.getenv("JWT_AUDIENCE")
+        if iss:
+            refresh_payload["iss"] = iss
+        if aud:
+            refresh_payload["aud"] = aud
         refresh_token = jwt.encode(refresh_payload, _jwt_secret(), algorithm="HS256")
         response.set_cookie(
             key="refresh_token",
@@ -325,8 +346,21 @@ async def login(username: str, request: Request, response: Response):
     "/auth/logout",
     responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok"}}}}}},
 )
-async def logout(response: Response, user_id: str = Depends(get_current_user_id)):
-    response.delete_cookie("access_token", path="/")
+async def logout(request: Request, response: Response, user_id: str = Depends(get_current_user_id)):
+    # Revoke refresh family bound to session id (did/sid) when possible
+    try:
+        from ..token_store import revoke_refresh_family
+        sid = request.headers.get("X-Session-ID") or request.cookies.get("sid") or user_id
+        # TTL: align with remaining refresh TTL when available; best-effort 7d
+        await revoke_refresh_family(sid, ttl_seconds=int(os.getenv("JWT_REFRESH_TTL_SECONDS", "604800")))
+    except Exception:
+        pass
+    # Clear cookies regardless of Bearer availability
+    try:
+        response.delete_cookie("access_token", path="/")
+        response.delete_cookie("refresh_token", path="/")
+    except Exception:
+        pass
     return {"status": "ok"}
 
 

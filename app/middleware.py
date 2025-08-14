@@ -74,6 +74,15 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         req_id = request.headers.get("X-Request-ID") or req_id_var.get()
         if not req_id or req_id == "-":
             req_id = str(uuid.uuid4())
+            # Inject synthesized ID into request headers so downstream middlewares (e.g., Dedup) see it
+            try:
+                # Starlette headers are immutable mappings backed by raw list
+                # Append lower-case header key and value bytes as per internal storage
+                raw = list(getattr(request.headers, "raw", []))
+                raw.append((b"x-request-id", req_id.encode("utf-8")))
+                request.headers.__dict__["_list"] = raw
+            except Exception:
+                pass
         token = req_id_var.set(req_id)
         try:
             response = await call_next(request)
@@ -196,12 +205,14 @@ async def trace_request(request: Request, call_next):
         # Create a top-level span for the inbound request
         route = request.scope.get("route") if hasattr(request, "scope") else None
         route_path = getattr(route, "path", None) or request.url.path
+        safe_target = getattr(request.url, "path", "/") or "/"
         with start_span(
             "http.request",
             {
                 "http.method": request.method,
                 "http.route": route_path,
-                "http.target": str(request.url),
+                # Avoid logging query strings
+                "http.target": safe_target,
                 "user.anonymous_id": rec.user_id,
             },
         ) as _span:
@@ -214,6 +225,9 @@ async def trace_request(request: Request, call_next):
                     ]
             except Exception:
                 pass
+            # Skip CORS preflight requests from consuming downstream budget and heavy work
+            if str(request.method).upper() == "OPTIONS":
+                return Response(status_code=204)
             response = await call_next(request)
             rec.status = "OK"
             try:
@@ -282,15 +296,45 @@ async def trace_request(request: Request, call_next):
                     response.headers.setdefault("Server-Timing", f"traceparent;desc={tid}")
             except Exception:
                 pass
-            # Security headers: HSTS, CSP and other common hardening headers
+            # Make backend origin explicit for debugging across the Next proxy
             try:
-                if request.url.scheme == "https":
+                response.headers.setdefault("X-Debug-Backend", "fastapi")
+            except Exception:
+                pass
+            # Security headers: HSTS, CSP and other hardening headers
+            try:
+                env = os.getenv("ENV", "").strip().lower()
+                if request.url.scheme == "https" and env in {"prod", "production"}:
                     response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
-                # Allow common SPA/WebSocket usage by default; tighten per env if needed
-                response.headers.setdefault(
-                    "Content-Security-Policy",
-                    "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https: wss:; font-src 'self' data:; frame-ancestors 'none'",
+                # Nonce-based CSP and allow WS/connect only to our host
+                try:
+                    import secrets as _secrets
+                    csp_nonce = _secrets.token_urlsafe(16)
+                except Exception:
+                    csp_nonce = None
+                try:
+                    host = request.url.hostname or "localhost"
+                    port = request.url.port
+                    hostport = f"{host}:{port}" if port else host
+                    ws_scheme = "wss" if request.url.scheme == "https" else "ws"
+                    ws_origin = f"{ws_scheme}://{hostport}"
+                    https_origin = f"https://{hostport}"
+                except Exception:
+                    ws_origin = "wss://localhost"
+                    https_origin = "https://localhost"
+                script_src = f"'self' 'nonce-{csp_nonce}'" if csp_nonce else "'self'"
+                style_src = f"'self' 'nonce-{csp_nonce}'" if csp_nonce else "'self'"
+                csp = (
+                    "default-src 'self'; "
+                    + "img-src 'self' data:; "
+                    + f"style-src {style_src}; "
+                    + f"script-src {script_src}; "
+                    + f"connect-src 'self' {https_origin} {ws_origin}; "
+                    + "font-src 'self' data:; frame-ancestors 'none'"
                 )
+                response.headers.setdefault("Content-Security-Policy", csp)
+                if csp_nonce:
+                    response.headers.setdefault("X-CSP-Nonce", str(csp_nonce))
                 response.headers.setdefault("Referrer-Policy", "no-referrer")
                 response.headers.setdefault("X-Content-Type-Options", "nosniff")
                 response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
@@ -333,23 +377,64 @@ async def trace_request(request: Request, call_next):
                 pass
 
         # Attach a compact logging meta for downstream log formatters and history
+        # Include required fields: latency_ms, status_code, req_id, and router decision tag
+        status_code = 0
+        try:
+            status_code = int(getattr(response, "status_code", 0)) if response is not None else 0
+        except Exception:
+            status_code = 0
+        # Rate limit snapshot for visibility in logs
+        try:
+            snap = get_rate_limit_snapshot(request)
+            limit_bucket = {
+                "long_limit": snap.get("limit"),
+                "long_remaining": snap.get("remaining"),
+                "burst_limit": snap.get("burst_limit"),
+                "burst_remaining": snap.get("burst_remaining"),
+            }
+        except Exception:
+            limit_bucket = None
+        # Scope info for logs
+        try:
+            payload = getattr(request.state, "jwt_payload", None)
+            scopes = []
+            if isinstance(payload, dict):
+                raw_scopes = payload.get("scope") or payload.get("scopes") or []
+                scopes = (raw_scopes.split() if isinstance(raw_scopes, str) else [str(s) for s in raw_scopes])
+        except Exception:
+            scopes = []
         meta = {
+            "req_id": rec.req_id,
+            "status_code": status_code,
+            "latency_ms": rec.latency_ms,
+            "router_decision": rec.route_reason,
             "model_used": rec.model_name,
             "reason": rec.route_reason,
             "rule": rec.route_reason,  # duplicate for dashboard filters
             "tokens_in": rec.prompt_tokens,
             "tokens_out": rec.completion_tokens,
             "retrieved_tokens": rec.retrieved_tokens,
-            "latency_ms": rec.latency_ms,
             "self_check": rec.self_check_score,
             "escalated": rec.escalated,
             "cache_hit": rec.cache_hit,
+            "limit_bucket": limit_bucket,
+            "requests_remaining": (limit_bucket or {}).get("long_remaining") if isinstance(limit_bucket, dict) else None,
+            "enforced_scope": " ".join(sorted(set(scopes))) if scopes else None,
         }
         try:
             # log via std logging for live dashboards then persist in history
-            import logging
-
-            logging.getLogger(__name__).info("request_summary", extra={"meta": meta})
+            import logging, random as _rand
+            env = os.getenv("ENV", "").strip().lower()
+            status_family = (status_code // 100) if status_code else 0
+            # Sample successes in prod; log all non-2xx
+            p = 1.0
+            if env in {"prod", "production"} and status_family == 2:
+                try:
+                    p = float(os.getenv("OBS_SAMPLE_SUCCESS_RATE", "0.1"))
+                except Exception:
+                    p = 0.1
+            if status_family != 2 or _rand.random() < p:
+                logging.getLogger(__name__).info("request_summary", extra={"meta": meta})
         except Exception:
             pass
         # Persist structured history
@@ -386,6 +471,13 @@ async def silent_refresh_middleware(request: Request, call_next):
 
     # Best-effort refresh; never raise from middleware
     try:
+        # Skip static and non-API paths to avoid unnecessary token work
+        try:
+            path = request.url.path or ""
+            if not path.startswith("/v1"):
+                return response
+        except Exception:
+            pass
         token = request.cookies.get("access_token")
         secret = os.getenv("JWT_SECRET")
         if not token or not secret:

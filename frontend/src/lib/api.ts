@@ -2,6 +2,97 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+// Cache Key Policy (AUTH-06):
+// - All user-scoped query keys MUST include an auth namespace and relevant context (e.g., device/resident/room)
+// - Auth namespace changes on token changes (header mode) or epoch bumps (cookie mode)
+// - Device/room context is included in both React Query keys and fetch coalescing keys
+// - Only GET requests dedupe inflight; mutating requests are never deduped
+
+// Lightweight client-side dedupe + short cache for GETs to avoid initial render stampedes
+const INFLIGHT_REQUESTS: Map<string, Promise<Response>> = new Map();
+const SHORT_CACHE: Map<string, { ts: number; res: Response }> = new Map();
+const DEFAULT_DEDUPE_MS = Number(process.env.NEXT_PUBLIC_FETCH_DEDUPE_MS || 300) || 300;
+const DEFAULT_SHORT_CACHE_MS = Number(process.env.NEXT_PUBLIC_FETCH_SHORT_CACHE_MS || 750) || 750;
+
+// -----------------------------
+// Auth & context keying helpers
+// -----------------------------
+
+function safeNow(): number {
+  try { return Date.now(); } catch { return Math.floor(new Date().getTime()); }
+}
+
+function getLocalStorage(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try { return window.localStorage.getItem(key); } catch { return null; }
+}
+
+function setLocalStorage(key: string, value: string): void {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(key, value); } catch { /* noop */ }
+}
+
+function removeLocalStorage(key: string): void {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.removeItem(key); } catch { /* noop */ }
+}
+
+function normalizeContextKey(ctx?: string | string[]): string {
+  if (!ctx) return "";
+  if (Array.isArray(ctx)) return ctx.filter(Boolean).sort().join("|");
+  return String(ctx || "");
+}
+
+function getActiveDeviceId(): string | null {
+  const persisted = getLocalStorage("music:device_id");
+  if (persisted) return persisted;
+  try {
+    const st: any = (typeof window !== 'undefined') ? (window as any).__musicState : null;
+    const did = st && (st.device_id || st?.device?.id);
+    if (typeof did === 'string' && did.length > 0) return did;
+  } catch { /* noop */ }
+  return null;
+}
+
+export function getAuthEpoch(): string {
+  return getLocalStorage('auth:epoch') || '0';
+}
+
+export function bumpAuthEpoch(): void {
+  const epoch = String(safeNow());
+  setLocalStorage('auth:epoch', epoch);
+  try { INFLIGHT_REQUESTS.clear(); SHORT_CACHE.clear(); } catch { /* noop */ }
+  try { if (typeof window !== 'undefined') window.dispatchEvent(new Event('auth:epoch_bumped')); } catch { /* noop */ }
+}
+
+function getAuthNamespace(): string {
+  if (HEADER_AUTH_MODE) {
+    const tok = getToken();
+    const suffix = tok ? tok.slice(-8) : 'anon';
+    return `hdr:${suffix}`;
+  }
+  const epoch = getAuthEpoch();
+  return `ck:${epoch || '0'}`;
+}
+
+export function buildQueryKey(base: string, extra?: any, ctx?: string | string[]): any[] {
+  const ns = getAuthNamespace();
+  const device = getActiveDeviceId();
+  const context = normalizeContextKey([ctx as any].flat().filter(Boolean).concat(device ? [`device:${device}`] : []));
+  const arr: any[] = [base, ns];
+  if (context) arr.push(context);
+  if (extra !== undefined) arr.push(extra);
+  return arr;
+}
+
+// Compose a stable request key for dedupe/cache: METHOD URL AUTH_NS [CTX]
+function requestKey(method: string, url: string, ctx?: string | string[]): string {
+  const authNs = getAuthNamespace();
+  const device = getActiveDeviceId();
+  const ctxNorm = normalizeContextKey([ctx as any].flat().filter(Boolean).concat(device ? [`device:${device}`] : []));
+  return `${method.toUpperCase()} ${url} ${authNs}${ctxNorm ? ` ${ctxNorm}` : ''}`;
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || ""; // when empty, use same-origin in browser
 const HEADER_AUTH_MODE = (process.env.NEXT_PUBLIC_HEADER_AUTH_MODE || "0").toLowerCase() === "1";
 
@@ -9,32 +100,34 @@ const HEADER_AUTH_MODE = (process.env.NEXT_PUBLIC_HEADER_AUTH_MODE || "0").toLow
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   if (!HEADER_AUTH_MODE) return null;
-  return localStorage.getItem("auth:access_token");
+  return getLocalStorage("auth:access_token");
 }
 
 export function getRefreshToken(): string | null {
   if (typeof window === "undefined") return null;
   if (!HEADER_AUTH_MODE) return null;
-  return localStorage.getItem("auth:refresh_token");
+  return getLocalStorage("auth:refresh_token");
 }
 
 export function setTokens(access: string, refresh?: string) {
   if (typeof window === "undefined") return;
   if (!HEADER_AUTH_MODE) return; // do not persist tokens when cookie mode
-  localStorage.setItem("auth:access_token", access);
-  if (refresh) localStorage.setItem("auth:refresh_token", refresh);
+  setLocalStorage("auth:access_token", access);
+  if (refresh) setLocalStorage("auth:refresh_token", refresh);
   try {
     window.dispatchEvent(new Event("auth:tokens_set"));
   } catch { }
+  bumpAuthEpoch();
 }
 
 export function clearTokens() {
   if (typeof window === "undefined") return;
-  localStorage.removeItem("auth:access_token");
-  localStorage.removeItem("auth:refresh_token");
+  removeLocalStorage("auth:access_token");
+  removeLocalStorage("auth:refresh_token");
   try {
     window.dispatchEvent(new Event("auth:tokens_cleared"));
   } catch { }
+  bumpAuthEpoch();
 }
 
 export function isAuthed(): boolean {
@@ -77,9 +170,9 @@ async function tryRefresh(): Promise<Response | null> {
 // Centralized fetch that targets the backend API base and handles 401→refresh
 export async function apiFetch(
   path: string,
-  init: (RequestInit & { auth?: boolean }) = {}
+  init: (RequestInit & { auth?: boolean; dedupe?: boolean; shortCacheMs?: number; contextKey?: string | string[] }) = {}
 ): Promise<Response> {
-  const { auth = true, headers, ...rest } = init;
+  const { auth = true, headers, dedupe = true, shortCacheMs, contextKey, ...rest } = init as any;
   const isAbsolute = /^(?:https?:)?\/\//i.test(path);
   const isBrowser = typeof window !== "undefined";
   const base = API_URL || (isBrowser ? "" : "http://localhost:8000");
@@ -88,6 +181,7 @@ export async function apiFetch(
   const mergedHeaders: HeadersInit = { ...(headers || {}) };
   const isFormData = rest.body instanceof FormData;
   const hasMethodBody = rest.method && /^(POST|PUT|PATCH|DELETE)$/i.test(rest.method);
+  const method = (rest.method || 'GET').toString().toUpperCase();
   const hasBody = hasMethodBody && typeof rest.body !== "undefined" && rest.body !== null;
   // Only set Content-Type if we are sending a body and it was not provided
   if (hasBody && !isFormData && !("Content-Type" in (mergedHeaders as Record<string, string>))) {
@@ -99,12 +193,39 @@ export async function apiFetch(
     try {
       const csrf = (typeof document !== 'undefined') ? (document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '') : '';
 
-      if (csrf) (mergedHeaders as Record<string, string>)["X-CSRF"] = decodeURIComponent(csrf);
+      if (csrf) (mergedHeaders as Record<string, string>)["X-CSRF-Token"] = decodeURIComponent(csrf);
     } catch { /* ignore */ }
   }
 
-  // Always include cookies
-  let res = await fetch(url, { ...rest, headers: mergedHeaders, credentials: 'include' });
+  // Dedupe + short cache only for safe idempotent GET requests
+  let res: Response | null = null;
+  if (method === 'GET' && dedupe) {
+    const key = requestKey(method, url, contextKey);
+    const now = Date.now();
+    const cacheHorizon = typeof shortCacheMs === 'number' ? shortCacheMs : DEFAULT_SHORT_CACHE_MS;
+    const cached = SHORT_CACHE.get(key);
+    if (cached && (now - cached.ts) <= cacheHorizon) {
+      // Serve a fresh clone from short cache
+      try { return cached.res.clone(); } catch { /* fallthrough to network */ }
+    }
+    const inflight = INFLIGHT_REQUESTS.get(key);
+    if (inflight) {
+      const r = await inflight;
+      try { return r.clone(); } catch { return r; }
+    }
+    const p = (async () => {
+      const r = await fetch(url, { ...rest, method, headers: mergedHeaders, credentials: 'include' });
+      // Only cache successful/non-error responses for a very short horizon
+      try { if (r.ok && r.status < 400) SHORT_CACHE.set(key, { ts: Date.now(), res: r.clone() }); } catch { /* ignore */ }
+      return r;
+    })();
+    INFLIGHT_REQUESTS.set(key, p);
+    p.finally(() => { try { setTimeout(() => INFLIGHT_REQUESTS.delete(key), DEFAULT_DEDUPE_MS); } catch { /* noop */ } }).catch(() => { });
+    res = await p;
+  } else {
+    // Always include cookies
+    res = await fetch(url, { ...rest, headers: mergedHeaders, credentials: 'include' });
+  }
   // Surface rate limit UX with countdown via custom event for the app
   if (res.status === 429) {
     try {
@@ -135,7 +256,7 @@ export async function apiFetch(
     } else {
       clearTokens();
       if (typeof document !== "undefined") {
-        document.cookie = "auth:hint=0; path=/; max-age=300";
+        document.cookie = "auth_hint=0; path=/; max-age=300";
       }
       if (refreshRes) {
         res = refreshRes; // propagate refresh response (e.g., 400)
@@ -191,27 +312,52 @@ export async function setVibe(v: Partial<{
 }
 
 export async function getMusicState(): Promise<MusicState> {
-  const res = await apiFetch(`/v1/state`, { auth: true })
+  const device = getActiveDeviceId();
+  const res = await apiFetch(`/v1/state`, { auth: true, contextKey: device ? [`device:${device}`] : undefined })
   if (!res.ok) throw new Error(await res.text())
   return (await res.json()) as MusicState
 }
 
+// Lightweight dedupe cache for read-only endpoints (coalesce concurrent calls)
+const _inflight: Record<string, Promise<any> | undefined> = Object.create(null);
+const _cache: Record<string, { ts: number; data: any } | undefined> = Object.create(null);
+const STALE_MS = Number(process.env.NEXT_PUBLIC_READ_CACHE_MS || 1500);
+
+function _dedupKey(path: string, contextKey?: string | string[]): string {
+  const authNs = getAuthNamespace();
+  const device = getActiveDeviceId();
+  const ctx = normalizeContextKey([contextKey as any].flat().filter(Boolean).concat(device ? [`device:${device}`] : []));
+  return `dedup ${path} ${authNs}${ctx ? ` ${ctx}` : ''}`;
+}
+
+async function _dedup(path: string, contextKey?: string | string[]): Promise<any> {
+  const key = _dedupKey(path, contextKey);
+  const now = Date.now();
+  const cached = _cache[key];
+  if (cached && now - cached.ts < STALE_MS) return cached.data;
+  if (_inflight[key]) return _inflight[key]!;
+  const p = (async () => {
+    const res = await apiFetch(path, { auth: true, contextKey });
+    if (!res.ok) throw new Error(await res.text());
+    const json = await res.json();
+    _cache[key] = { ts: Date.now(), data: json };
+    return json;
+  })();
+  _inflight[key] = p.finally(() => { delete _inflight[key]; });
+  return p;
+}
+
 export async function getQueue(): Promise<{ current: any; up_next: any[]; skip_count?: number }> {
-  const res = await apiFetch(`/v1/queue`, { auth: true })
-  if (!res.ok) throw new Error(await res.text())
-  return (await res.json()) as any
+  const device = getActiveDeviceId();
+  return _dedup(`/v1/queue`, device ? [`device:${device}`] : undefined);
 }
 
 export async function getRecommendations(): Promise<{ recommendations: any[] }> {
-  const res = await apiFetch(`/v1/recommendations`, { auth: true })
-  if (!res.ok) throw new Error(await res.text())
-  return (await res.json()) as any
+  return _dedup(`/v1/recommendations`);
 }
 
 export async function listDevices(): Promise<{ devices: any[] }> {
-  const res = await apiFetch(`/v1/music/devices`, { auth: true })
-  if (!res.ok) throw new Error(await res.text())
-  return (await res.json()) as any
+  return _dedup(`/v1/music/devices`);
 }
 
 export async function setDevice(device_id: string): Promise<void> {
@@ -222,6 +368,7 @@ export async function setDevice(device_id: string): Promise<void> {
     auth: true,
   })
   if (!res.ok) throw new Error(await res.text())
+  try { setLocalStorage('music:device_id', device_id); } catch { /* noop */ }
 }
 
 export function wsUrl(path: string): string {
@@ -371,6 +518,9 @@ export async function login(username: string, password: string) {
   }
   const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string };
   if (access_token && HEADER_AUTH_MODE) setTokens(access_token, refresh_token);
+  // In cookie-auth mode, a successful login sets cookies server-side.
+  // Bump the auth epoch to invalidate short caches and switch namespace immediately.
+  if (!HEADER_AUTH_MODE) bumpAuthEpoch();
   return { access_token, refresh_token } as any;
 }
 
@@ -381,7 +531,11 @@ export async function register(username: string, password: string) {
     const raw = (body && (typeof body.detail === 'string' ? body.detail : body.error)) || res.statusText;
     throw new Error(String(raw));
   }
-  return await res.json();
+  const out = await res.json();
+  // If the server logs the user in as part of registration (common for cookie-auth),
+  // bump the auth epoch so future GETs use the new auth namespace immediately.
+  if (!HEADER_AUTH_MODE) bumpAuthEpoch();
+  return out;
 }
 
 export async function logout(): Promise<void> {
@@ -429,9 +583,17 @@ export async function createPAT(name: string, scopes: string[], exp_at?: number 
 export async function getBudget(): Promise<{ tokens_used?: number; minutes_used?: number; reply_len_target?: string; escalate_allowed?: boolean; near_cap: boolean }> {
   const res = await apiFetch('/v1/budget', { method: 'GET' });
   if (!res.ok) throw new Error('budget_failed');
-  const body = await res.json();
-  if (body && typeof body === 'object' && 'near_cap' in body) return body;
-  // Legacy shim for boolean-only responses
+  // Safari sometimes surfaces non-JSON content with a generic SyntaxError.
+  // Parse defensively and fall back to boolean shape.
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  let body: any = null;
+  if (ct.includes('application/json')) {
+    body = await res.json().catch(() => null);
+  } else {
+    const text = await res.text().catch(() => '');
+    try { body = JSON.parse(text); } catch { body = text; }
+  }
+  if (body && typeof body === 'object' && 'near_cap' in body) return body as any;
   return { near_cap: Boolean(body) } as any;
 }
 
@@ -459,7 +621,7 @@ export async function getModels(): Promise<{ items: ModelItem[] }> {
 
 export function useModels() {
   return useQuery({
-    queryKey: ["models"],
+    queryKey: buildQueryKey("models"),
     queryFn: getModels,
     staleTime: 5 * 60_000,
   });
@@ -469,7 +631,8 @@ export function useAdminMetrics(token: string) {
   return useQuery<{ metrics: Record<string, number>; cache_hit_rate: number; top_skills: [string, number][] }, Error>({
     queryKey: ["admin_metrics", token],
     queryFn: async () => {
-      const res = await apiFetch(`/v1/admin/metrics?token=${encodeURIComponent(token || "")}`);
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await apiFetch(`/v1/admin/metrics`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
@@ -486,11 +649,12 @@ export function useRouterDecisions(
   return useQuery<{ items: any[]; total: number; next_cursor: number | null }, Error>({
     queryKey: ["router_decisions", token, limit, params],
     queryFn: async () => {
-      const usp = new URLSearchParams({ limit: String(limit), token: token || "" });
+      const usp = new URLSearchParams({ limit: String(limit) });
       for (const [k, v] of Object.entries(params)) {
         if (v !== undefined && v !== null && v !== "") usp.set(k, String(v));
       }
-      const res = await apiFetch(`/v1/admin/router/decisions?${usp.toString()}`);
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await apiFetch(`/v1/admin/router/decisions?${usp.toString()}`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
@@ -503,7 +667,8 @@ export function useAdminErrors(token: string) {
   return useQuery<{ errors: { timestamp: string; level: string; component: string; msg: string }[] }, Error>({
     queryKey: ["admin_errors", token],
     queryFn: async () => {
-      const res = await apiFetch(`/v1/admin/errors?token=${encodeURIComponent(token || "")}`);
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await apiFetch(`/v1/admin/errors`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
@@ -515,7 +680,8 @@ export function useSelfReview(token: string) {
   return useQuery<Record<string, unknown> | { status: string }, Error>({
     queryKey: ["self_review", token],
     queryFn: async () => {
-      const res = await apiFetch(`/v1/admin/self_review?token=${encodeURIComponent(token || "")}`);
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await apiFetch(`/v1/admin/self_review`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
@@ -569,7 +735,7 @@ export async function updateProfile(profile: Partial<UserProfile>): Promise<void
 
 export function useProfile() {
   return useQuery<UserProfile, Error>({
-    queryKey: ["profile"],
+    queryKey: buildQueryKey("profile"),
     queryFn: async () => {
       const res = await apiFetch("/v1/profile", { method: "GET" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -578,7 +744,6 @@ export function useProfile() {
     staleTime: 60_000,
   });
 }
-
 
 // Admin TV Config helpers -----------------------------------------------------
 export type TvConfig = {
@@ -589,15 +754,17 @@ export type TvConfig = {
 };
 
 export async function getTvConfig(residentId: string, token: string) {
-  const qs = `?resident_id=${encodeURIComponent(residentId)}&token=${encodeURIComponent(token || '')}`;
-  const res = await apiFetch(`/v1/tv/config${qs}`, { method: 'GET' });
+  const qs = `?resident_id=${encodeURIComponent(residentId)}`;
+  const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+  const res = await apiFetch(`/v1/tv/config${qs}`, { method: 'GET', headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<{ status: string; config: TvConfig }>;
 }
 
 export async function putTvConfig(residentId: string, token: string, cfg: TvConfig) {
-  const qs = `?resident_id=${encodeURIComponent(residentId)}&token=${encodeURIComponent(token || '')}`;
-  const res = await apiFetch(`/v1/tv/config${qs}`, { method: 'PUT', body: JSON.stringify(cfg) });
+  const qs = `?resident_id=${encodeURIComponent(residentId)}`;
+  const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+  const res = await apiFetch(`/v1/tv/config${qs}`, { method: 'PUT', body: JSON.stringify(cfg), headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<{ status: string; config: TvConfig }>;
 }

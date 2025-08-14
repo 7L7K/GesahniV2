@@ -38,6 +38,7 @@ from .gpt_client import close_client
 from .user_store import user_store
 from . import router
 from .memory.profile_store import profile_store
+from .csrf import get_csrf_token as _get_csrf_token  # for /v1/csrf helper
 
 
 async def route_prompt(*args, **kwargs):
@@ -164,6 +165,7 @@ except Exception:  # pragma: no cover - optional
 
 
 from .middleware import (
+    RequestIDMiddleware,
     DedupMiddleware,
     reload_env_middleware,
     trace_request,
@@ -171,7 +173,6 @@ from .middleware import (
 )
 from .security import (
     rate_limit,
-    rate_limit_ws,
     verify_token,
     verify_ws,
     verify_webhook,
@@ -214,6 +215,7 @@ tags_metadata = [
     {"name": "TV", "description": "TV UI and related endpoints."},
     {"name": "Admin", "description": "Admin, status, models, diagnostics, and tools."},
     {"name": "Auth", "description": "Authentication and authorization."},
+    {"name": "TTS", "description": "Text-to-Speech APIs."},
 ]
 
 
@@ -360,6 +362,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(DedupMiddleware)
 app.middleware("http")(trace_request)
 app.middleware("http")(silent_refresh_middleware)
@@ -398,38 +401,49 @@ except Exception:
         pass
 
 if os.getenv("PROMETHEUS_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}:
+    # Prefer a simple GET route to avoid mount-related edge cases/hangs
     try:  # pragma: no cover - optional dependency
-        from prometheus_client import make_asgi_app
+        from fastapi import Response as _Resp  # type: ignore
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+        @app.get("/metrics", include_in_schema=False)
+        async def _metrics_route() -> _Resp:  # type: ignore[valid-type]
+            data = generate_latest()
+            return _Resp(content=data, media_type=CONTENT_TYPE_LATEST)
     except Exception:  # pragma: no cover - executed when dependency missing
-        from starlette.responses import Response
+        from fastapi import Response as _Resp  # type: ignore
 
-        def make_asgi_app():
-            async def _app(scope, receive, send):
-                if scope.get("type") != "http":
-                    raise RuntimeError("metrics endpoint only supports HTTP")
-                try:
-                    from . import metrics  # type: ignore
+        @app.get("/metrics", include_in_schema=False)
+        async def _metrics_route_fallback() -> _Resp:  # type: ignore[valid-type]
+            try:
+                from . import metrics as _m  # type: ignore
 
-                    parts = [
-                        f"{metrics.REQUEST_COUNT.name} {metrics.REQUEST_COUNT.value}",
-                        f"{metrics.REQUEST_LATENCY.name} {metrics.REQUEST_LATENCY.value}",
-                        f"{metrics.REQUEST_COST.name} {metrics.REQUEST_COST.value}",
-                        f"{metrics.LLAMA_TOKENS.name} {metrics.LLAMA_TOKENS.value}",
-                        f"{metrics.LLAMA_LATENCY.name} {metrics.LLAMA_LATENCY.value}",
-                    ]
-                    body = ("\n".join(parts) + "\n").encode()
-                except Exception:
-                    body = b""
-                response = Response(content=body, media_type="text/plain; version=0.0.4")
-                await response(scope, receive, send)
-
-            return _app
-
-    app.mount("/metrics", make_asgi_app())
+                parts = [
+                    f"{_m.REQUEST_COUNT.name} {_m.REQUEST_COUNT.value}",
+                    f"{_m.REQUEST_LATENCY.name} {_m.REQUEST_LATENCY.value}",
+                ]
+                body = ("\n".join(parts) + "\n").encode()
+            except Exception:
+                body = b""
+            return _Resp(content=body, media_type="text/plain; version=0.0.4")
 
 
 @app.get("/healthz", tags=["Admin"])
 async def healthz() -> dict:
+    return {"status": "ok"}
+
+# K8s-friendly health group (no auth)
+@app.get("/health/live", include_in_schema=False)
+async def _health_live() -> dict:
+    return {"status": "ok"}
+
+@app.get("/health/ready", include_in_schema=False)
+async def _health_ready() -> dict:
+    # Optionally expand with dependency checks
+    return {"status": "ok"}
+
+@app.get("/health/startup", include_in_schema=False)
+async def _health_startup() -> dict:
     return {"status": "ok"}
 
 
@@ -617,7 +631,7 @@ ha_router = APIRouter(
     tags=["Care"],
 )
 ws_router = APIRouter(
-    dependencies=[Depends(verify_ws), Depends(rate_limit_ws)], tags=["Care"]
+    dependencies=[Depends(verify_ws)], tags=["Care"]
 )
 
 
@@ -687,8 +701,15 @@ async def get_me(user_id: str = Depends(get_current_user_id)):
     return {"user_id": user_id, **stats}
 
 
+async def _require_auth_dep_for_core(request: Request) -> None:
+    if os.getenv("REQUIRE_JWT", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        from .security import verify_token_strict as _vts  # lazy
+        await _vts(request)
+
+
 @core_router.post(
     "/ask",
+    dependencies=[Depends(_require_auth_dep_for_core), Depends(rate_limit)],
     responses={
         200: {
             "content": {
@@ -884,6 +905,34 @@ async def websocket_storytime(
 async def intent_test(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     logger.info("intent.test", extra={"meta": {"prompt": req.prompt}})
     return {"intent": "test", "prompt": req.prompt}
+
+
+# Public helpers for tests/docs ------------------------------------------------
+
+
+@core_router.get("/csrf")
+async def get_csrf(request: Request) -> dict:
+    # Expose a tiny helper to fetch the CSRF token value and set the cookie
+    try:
+        tok = await _get_csrf_token()
+        # Set cookie for double-submit; not HttpOnly so client can echo back
+        from fastapi.responses import JSONResponse
+        resp = JSONResponse({"csrf_token": tok})
+        resp.set_cookie("csrf_token", tok, max_age=600, path="/")
+        return resp
+    except Exception:
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"csrf_token": ""})
+
+
+@core_router.get("/client-crypto-policy")
+async def client_crypto_policy() -> dict:
+    return {
+        "cipher": "AES-GCM-256",
+        "key_wrap_methods": ["webauthn", "pbkdf2"],
+        "storage": "indexeddb",
+        "deks": "per-user-per-device",
+    }
 
 
 # Admin endpoints are served from app.api.admin. Avoid duplicating here.
@@ -1159,8 +1208,9 @@ try:
         admin_api_router,
         prefix="/v1",
         dependencies=[
-            # Bind OAuth2 scopes for docs; runtime auth enforced inside router
+            # Bind OAuth2 scopes for docs; runtime auth enforced inside router AND here for belt & suspenders
             Depends(docs_security_with(["admin:write"])),
+            Depends(verify_token),
         ],
     )
     app.include_router(admin_api_router, include_in_schema=False)
@@ -1192,6 +1242,13 @@ except Exception:
 try:
     from .api.me import router as me_router
     app.include_router(me_router, prefix="/v1")
+except Exception:
+    pass
+
+try:
+    from .api.devices import router as devices_router
+    app.include_router(devices_router, prefix="/v1")
+    app.include_router(devices_router, include_in_schema=False)
 except Exception:
     pass
 
@@ -1350,10 +1407,10 @@ if music_router is not None:
     music_http = APIRouter(
         dependencies=[
             Depends(verify_token),
-            Depends(rate_limit),
             Depends(optional_require_any_scope(["music:control"])),
             # Docs-only dependency to render lock icon and OAuth2 scopes in Swagger
             Depends(docs_security_with(["music:control"])),
+            Depends(rate_limit),
         ]
     )
     # mount HTTP subrouter for HTTP routes

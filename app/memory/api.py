@@ -57,7 +57,13 @@ def _strict_mode() -> bool:
     In strict mode, any backend initialisation error is fatal, regardless of
     the environment. Enable with ``STRICT_VECTOR_STORE=1|true|yes``.
     """
-    return (os.getenv("STRICT_VECTOR_STORE") or "").strip().lower() in {"1", "true", "yes", "on"}
+    if (os.getenv("STRICT_VECTOR_STORE") or "").strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    # Treat staging/production-like envs as strict by default
+    env = (os.getenv("ENV") or os.getenv("APP_ENV") or "").strip().lower()
+    if env in {"production", "prod", "staging", "preprod", "preview"}:
+        return True
+    return False
 
 
 def _get_store() -> VectorStore:
@@ -81,6 +87,8 @@ def _get_store() -> VectorStore:
                 is_pytest = ("PYTEST_CURRENT_TEST" in os.environ) or ("pytest" in sys.modules)
                 requested_kind = "chroma" if chroma_path else ("memory" if is_pytest else "chroma")
             elif kind == "_unknown_":
+                if _strict_mode():
+                    raise RuntimeError(f"Unknown VECTOR_STORE={raw_kind!r} under STRICT_VECTOR_STORE")
                 logger.warning("Unknown VECTOR_STORE=%r; defaulting to ChromaVectorStore", raw_kind)
                 try:
                     metrics.VECTOR_INIT_FALLBACKS.labels(requested=raw_kind or "(empty)", reason="unknown_kind").inc()
@@ -91,6 +99,11 @@ def _get_store() -> VectorStore:
                 requested_kind = kind
 
             if requested_kind == "memory":
+                # Disallow in non-test environments to avoid per-process drift
+                env = (os.getenv("ENV") or os.getenv("APP_ENV") or "").strip().lower()
+                is_test = ("PYTEST_CURRENT_TEST" in os.environ) or ("pytest" in sys.modules) or env == "test"
+                if not is_test:
+                    raise RuntimeError("MemoryVectorStore is restricted to tests/dev environments")
                 store = MemoryVectorStore()
             elif requested_kind == "dual":
                 if DualReadVectorStore is None:
@@ -108,7 +121,8 @@ def _get_store() -> VectorStore:
                 logger.info("Initializing ChromaVectorStore at path: %s", chroma_path)
                 store = ChromaVectorStore()
     except Exception as exc:
-        if os.getenv("ENV", "").lower() == "production" or _strict_mode():
+        # In strict mode, never fallback — including when VECTOR_STORE is unknown
+        if _strict_mode():
             logger.error("FATAL: Vector store init failed: %s", exc)
             raise
         requested = (requested_kind if "requested_kind" in locals() else (kind or "chroma"))

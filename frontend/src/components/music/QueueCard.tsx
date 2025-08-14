@@ -1,16 +1,18 @@
 "use client";
 
 import React from "react";
-import { getQueue, wsUrl } from "@/lib/api";
+import { getQueue } from "@/lib/api";
 
 export default function QueueCard() {
     const [items, setItems] = React.useState<any[]>([]);
     const [skipCount, setSkipCount] = React.useState(0);
+    const lastLoadedAtRef = React.useRef<number>(0);
 
     const refresh = async () => {
         const q = await getQueue();
         setItems(q.up_next || []);
         if (typeof q.skip_count === 'number') setSkipCount(q.skip_count);
+        lastLoadedAtRef.current = Date.now();
     };
 
     React.useEffect(() => {
@@ -18,17 +20,14 @@ export default function QueueCard() {
     }, []);
 
     React.useEffect(() => {
-        let ws: WebSocket | null = null;
-        try {
-            ws = new WebSocket(wsUrl('/v1/ws/music'));
-            ws.onmessage = (ev) => {
-                try {
-                    const msg = JSON.parse(ev.data);
-                    if (msg?.topic === 'music.queue.updated') refresh();
-                } catch { }
-            };
-        } catch { }
-        return () => { try { ws?.close(); } catch { } };
+        const onQueue = () => {
+            const now = Date.now();
+            // Ignore echo right after our own refresh completes
+            if (now - lastLoadedAtRef.current <= 250) return;
+            refresh();
+        };
+        window.addEventListener('music.queue.updated', onQueue as EventListener);
+        return () => { window.removeEventListener('music.queue.updated', onQueue as EventListener); };
     }, []);
 
     const onSkip = () => {

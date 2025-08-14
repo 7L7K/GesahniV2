@@ -329,8 +329,9 @@ function SessionsPanel() {
     if (!items.length) return <div className="text-sm text-gray-500">No active sessions</div>;
     return (
         <div className="space-y-3">
-            {items.map((s) => (
-                <div key={s.session_id} className="flex items-center justify-between p-3 border rounded">
+            {items.map((s, i) => (
+                <div key={s.session_id || `${s.device_id}:${s.created_at || s.last_seen_at || i}`}
+                    className="flex items-center justify-between p-3 border rounded">
                     <div className="text-sm">
                         <div className="font-medium">{s.device_name || s.device_id}</div>
                         <div className="text-gray-500">Created: {s.created_at ? new Date(s.created_at * 1000).toLocaleString() : '—'} · Last seen: {s.last_seen_at ? new Date(s.last_seen_at * 1000).toLocaleString() : '—'}</div>

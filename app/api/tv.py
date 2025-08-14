@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
 from app.memory.profile_store import profile_store
+from app.metrics import REQUEST_LATENCY
 
 
 router = APIRouter(tags=["TV"])  # intentionally no auth deps for device-trusted kiosk
@@ -27,6 +28,43 @@ def _list_images(dir_path: Path) -> List[str]:
         return []
 
 
+def _estimate_brightness_and_smile(img_path: Path) -> Tuple[float, bool]:
+    try:
+        from PIL import Image, ImageStat  # type: ignore
+        # Brightness via grayscale mean
+        with Image.open(img_path) as im:
+            im = im.convert("L")
+            stat = ImageStat.Stat(im)
+            brightness = float(stat.mean[0] if stat.mean else 0.0)
+        # Very naive "smile" heuristic: filenames containing happy keywords
+        name = img_path.name.lower()
+        smiling = any(w in name for w in ("smile", "happy", "grin"))
+        return brightness, smiling
+    except Exception:
+        return 0.0, False
+
+
+def _is_quiet_hours_active() -> bool:
+    try:
+        from datetime import datetime, time as dt_time
+
+        q_enabled = os.getenv("QUIET_HOURS", "0").lower() in {"1", "true", "yes", "on"}
+        if not q_enabled:
+            return False
+        start_s = os.getenv("QUIET_HOURS_START", "22:00")
+        end_s = os.getenv("QUIET_HOURS_END", "07:00")
+        hh, mm = (start_s or "0:0").split(":", 1)
+        start_t = dt_time(int(hh), int(mm))
+        hh2, mm2 = (end_s or "0:0").split(":", 1)
+        end_t = dt_time(int(hh2), int(mm2))
+        now = datetime.now().time()
+        if start_t <= end_t:
+            return start_t <= now <= end_t
+        return now >= start_t or now <= end_t
+    except Exception:
+        return False
+
+
 @router.get("/tv/photos")
 async def tv_photos(user_id: str = Depends(get_current_user_id)):
     """Return slideshow folder and items.
@@ -39,6 +77,16 @@ async def tv_photos(user_id: str = Depends(get_current_user_id)):
     base_url = os.getenv("TV_PHOTOS_URL_BASE", "/shared_photos")
     dir_path = Path(dir_str)
     items = _list_images(dir_path)
+    # Photo safety filter during quiet hours: prefer bright/smiling images
+    if _is_quiet_hours_active():
+        min_brightness = float(os.getenv("PHOTO_MIN_BRIGHTNESS_NIGHT", "60") or 60)
+        safe: List[str] = []
+        for name in items:
+            b, smile = _estimate_brightness_and_smile(dir_path / name)
+            if b >= min_brightness or smile:
+                safe.append(name)
+        # If nothing passes, fall back to the original list to avoid emptiness
+        items = safe or items
     return {"folder": base_url, "items": items}
 
 
@@ -416,10 +464,35 @@ async def tv_alert(kind: str = "help", note: str | None = None, user_id: str = D
     This is a thin wrapper; in V1.1 we can fan-out to SMS/voice/webhook.
     """
     try:
-        # Reuse caregiver API semantics locally
+        # Fan-out over WS so caregivers can see real-time alerts
+        try:
+            from app.api.care_ws import broadcast_resident
+            resident_id = os.getenv("TV_RESIDENT_ID", "me")
+            await broadcast_resident(resident_id, "alert.created", {"kind": kind, "note": note})
+        except Exception:
+            pass
         return {"status": "accepted", "kind": kind, "note": note}
     except Exception:
         raise HTTPException(status_code=500, detail="alert_failed")
+
+
+@router.get("/tv/tips")
+async def tv_ambient_tips(user_id: str = Depends(get_current_user_id)):
+    """Ambient tips via lightweight local RAG-style mashup.
+
+    Example: "It's 72°F and cloudy; lo-fi playlist queued."
+    """
+    # Weather from existing endpoint (or env defaults)
+    try:
+        w = await tv_weather(user_id)
+    except Exception:
+        w = {"now": {"temp": 72, "desc": "Cloudy"}}
+    temp = int(round(float(w.get("now", {}).get("temp") or 72)))
+    desc = str(w.get("now", {}).get("desc") or "cloudy").lower()
+    # Very small prompt-free heuristic for vibe
+    vibe = "lo-fi" if "cloud" in desc or temp < 68 else ("chill" if temp < 78 else "upbeat")
+    tip = f"It's {temp}°F and {desc}; {vibe} playlist queued."
+    return {"status": "ok", "tip": tip}
 
 
 @router.post("/tv/music/play", response_model=TvOkResponse, responses={200: {"model": TvOkResponse}})

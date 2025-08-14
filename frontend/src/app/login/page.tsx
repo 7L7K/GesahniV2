@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { setTokens, apiFetch } from '@/lib/api';
+import { setTokens, apiFetch, bumpAuthEpoch } from '@/lib/api';
 import { sanitizeNextPath } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -21,9 +21,13 @@ function LoginPageInner() {
         const access = params.get('access_token');
         const refresh = params.get('refresh_token') || undefined;
         if (access) {
+            // Persist in header mode for SPA; also ensure server cookies via refresh
             setTokens(access, refresh);
-            document.cookie = `auth:hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
-            router.replace(next);
+            document.cookie = `auth_hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
+            // Fire-and-forget to backend to rotate/ensure HttpOnly cookies
+            fetch('/v1/refresh', { method: 'POST', credentials: 'include' }).finally(() => {
+                router.replace(next);
+            });
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -61,7 +65,7 @@ function LoginPageInner() {
                 const { access_token, refresh_token } = body2 as { access_token?: string; refresh_token?: string }
                 if (access_token) setTokens(access_token, refresh_token)
             }
-            document.cookie = `auth:hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
+            document.cookie = `auth_hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
             router.replace(next);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);

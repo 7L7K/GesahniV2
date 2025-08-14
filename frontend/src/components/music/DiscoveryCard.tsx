@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { getRecommendations, wsUrl } from "@/lib/api";
+import { getRecommendations } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 export default function DiscoveryCard() {
@@ -21,20 +21,9 @@ export default function DiscoveryCard() {
 
     React.useEffect(() => {
         refresh();
-        let ws: WebSocket | null = null;
-        try {
-            ws = new WebSocket(wsUrl('/v1/ws/music'));
-            ws.onmessage = (ev) => {
-                try {
-                    const msg = JSON.parse(ev.data);
-                    if (msg?.topic === 'music.state') {
-                        // Vibe changed → refresh recs
-                        refresh();
-                    }
-                } catch { }
-            };
-        } catch { }
-        return () => { try { ws?.close(); } catch { } };
+        const onState = () => refresh();
+        window.addEventListener('music.state', onState as EventListener);
+        return () => { window.removeEventListener('music.state', onState as EventListener); };
     }, []);
 
     return (

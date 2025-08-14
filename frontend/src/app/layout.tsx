@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "next-themes";
+import { ClerkProvider } from "@clerk/nextjs";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import Header from "@/components/Header";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import WsBootstrap from "@/components/WsBootstrap";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,22 +43,46 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <QueryClientProvider client={queryClient}>
-            <div className="min-h-screen grid grid-rows-[auto_1fr]">
-              <AuthBootstrap />
-              <Header />
-              <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-primary text-primary-foreground rounded px-3 py-2">Skip to content</a>
-              <div id="main" className="bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-50 via-background to-background dark:from-zinc-900/20">
-                {children}
+        {publishableKey ? (
+          <ClerkProvider
+            publishableKey={publishableKey}
+            appearance={{ elements: { userButtonAvatarBox: 'h-6 w-6' } }}
+          >
+            <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+              <QueryClientProvider client={queryClient}>
+                <div className="min-h-screen grid grid-rows-[auto_1fr]">
+                  <AuthBootstrap />
+                  <WsBootstrap />
+                  <Header />
+                  <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-primary text-primary-foreground rounded px-3 py-2">Skip to content</a>
+                  <div id="main" className="bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-50 via-background to-background dark:from-zinc-900/20">
+                    {children}
+                  </div>
+                </div>
+                <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
+              </QueryClientProvider>
+            </ThemeProvider>
+          </ClerkProvider>
+        ) : (
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            <QueryClientProvider client={queryClient}>
+              <div className="min-h-screen grid grid-rows-[auto_1fr]">
+                <AuthBootstrap />
+                <WsBootstrap />
+                <Header />
+                <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-primary text-primary-foreground rounded px-3 py-2">Skip to content</a>
+                <div id="main" className="bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-50 via-background to-background dark:from-zinc-900/20">
+                  {children}
+                </div>
               </div>
-            </div>
-            <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
-          </QueryClientProvider>
-        </ThemeProvider>
+              <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
+            </QueryClientProvider>
+          </ThemeProvider>
+        )}
       </body>
     </html>
   );

@@ -7,10 +7,13 @@ import os
 from importlib import import_module
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+import os
+import jwt
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ConfigDict
 
 from app.deps.user import get_current_user_id
+from app.telemetry import hash_user_id
 from app.otel_utils import start_span, get_trace_id_hex
 from app.policy import moderation_precheck
 
@@ -48,9 +51,34 @@ def _require_auth_for_ask() -> bool:
     return os.getenv("REQUIRE_AUTH_FOR_ASK", "1").strip().lower() in {"1", "true", "yes", "on"}
 
 
+async def _verify_bearer_strict(request: Request) -> None:
+    secret = os.getenv("JWT_SECRET")
+    if not secret:
+        raise HTTPException(status_code=500, detail="missing_jwt_secret")
+    auth = request.headers.get("Authorization")
+    token = None
+    if auth and auth.startswith("Bearer "):
+        token = auth.split(" ", 1)[1]
+    if not token:
+        logger.info("auth.missing_bearer", extra={"meta": {"path": getattr(getattr(request, "url", None), "path", "/")}})
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+        request.state.jwt_payload = payload
+    except jwt.PyJWTError:
+        logger.info("auth.invalid_token", extra={"meta": {"path": getattr(getattr(request, "url", None), "path", "/")}})
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+async def _require_auth_dep(request: Request) -> None:
+    # When auth is required for ask, enforce strict token validation before rate limiting
+    if _require_auth_for_ask():
+        await _verify_bearer_strict(request)
+
+
 @router.post(
     "/ask",
-    dependencies=[Depends(rate_limit)],
+    dependencies=[Depends(_require_auth_dep), Depends(rate_limit)],
     responses={
         200: {
             "content": {
@@ -75,7 +103,11 @@ async def ask(
     request: Request,
     user_id: str = Depends(get_current_user_id),
 ):
-    logger.info("ask.entry", extra={"meta": {"user_id": user_id, "model_override": req.model_override, "prompt_len": len(req.prompt or "")}})
+    try:
+        user_hash = hash_user_id(user_id) if user_id else "anon"
+    except Exception:
+        user_hash = "anon"
+    logger.info("ask.entry", extra={"meta": {"user_hash": user_hash, "model_override": req.model_override, "prompt_len": len(req.prompt or "")}})
 
     queue: asyncio.Queue[str | None] = asyncio.Queue()
     status_code: int | None = None
@@ -93,9 +125,7 @@ async def ask(
             # Safety: block obviously destructive phrases locally; conversational scam cues are handled in router with a warning
             if not moderation_precheck(req.prompt, extra_phrases=[]):
                 raise HTTPException(status_code=400, detail="blocked_by_policy")
-            # If auth is required for /ask, enforce JWT now
-            if _require_auth_for_ask():
-                await verify_token(request)
+            # Auth is enforced via route dependency to ensure verify_token runs before rate_limit
                 # rate_limit applied via route dependency; keep explicit header snapshot behavior
             # Lazily import to respect tests that monkeypatch app.main.route_prompt
             main_mod = import_module("app.main")
@@ -108,9 +138,9 @@ async def ask(
             else:  # Compatibility with tests that monkeypatch route_prompt
                 result = await route_prompt(req.prompt, req.model_override, user_id)
             if streamed_any:
-                logger.info("ask.success", extra={"meta": {"user_id": user_id, "streamed": True}})
+                logger.info("ask.success", extra={"meta": {"user_hash": user_hash, "streamed": True}})
             else:
-                logger.info("ask.success", extra={"meta": {"user_id": user_id, "streamed": False}})
+                logger.info("ask.success", extra={"meta": {"user_hash": user_hash, "streamed": False}})
                 # If the backend didn't stream any tokens, emit the final result once
                 if isinstance(result, str) and result:
                     await queue.put(result)
@@ -124,12 +154,12 @@ async def ask(
             except Exception:
                 pass
         except HTTPException as exc:
-            logger.exception("ask HTTPException user_id=%s", user_id)
+            logger.exception("ask.http_error status=%s", getattr(exc, "status_code", None))
             status_code = exc.status_code
             await queue.put(f"[error:{exc.detail}]")
         except Exception as e:  # pragma: no cover - defensive
             # Ensure HTTP status reflects failure and propagate a useful error token
-            logger.exception("ask error user_id=%s", user_id)
+            logger.exception("ask.error")
             status_code = 500
             # Include exception type to avoid empty messages like "Exception()"
             detail = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
@@ -197,6 +227,18 @@ async def ask(
                 yield f"data: {chunk}\n\n"
         except asyncio.CancelledError:
             # Propagate cancellation to underlying generator cleanup
+            raise
+        except Exception as e:
+            # Ensure producer cleanup on error
+            try:
+                if not producer_task.done():
+                    producer_task.cancel()
+                    try:
+                        await producer_task
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             raise
 
     generator = _streamer()

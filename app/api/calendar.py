@@ -157,6 +157,16 @@ async def next_three() -> EventsResponse:
     return EventsResponse(items=[Event(**it) for it in items[:3]])
 
 
+@router.get("/tv/calendar/next", include_in_schema=False)
+async def tv_calendar_next_alias() -> EventsResponse:
+    """Alias for TV surfaces expecting /tv/calendar/next.
+
+    Mirrors /calendar/next without duplicating logic; hidden from OpenAPI to
+    avoid drift in documented surface.
+    """
+    return await next_three()
+
+
 @router.get(
     "/calendar/list",
     response_model=EventsResponse,

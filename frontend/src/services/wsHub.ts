@@ -10,21 +10,40 @@ class WsHub {
   private timers: Record<WSName, ReturnType<typeof setTimeout> | null> = { music: null, care: null };
   private queues: Record<WSName, string[]> = { music: [], care: [] };
   private lastPong: Record<WSName, number> = { music: 0, care: 0 };
+  private startRefs: Record<WSName, number> = { music: 0, care: 0 };
 
-  start() {
-    this.connect("music", "/v1/ws/music", this.onMusicOpen, this.onMusicMessage);
-    this.connect("care", "/v1/ws/care", this.onCareOpen, this.onCareMessage);
+  start(channels?: Partial<Record<WSName, boolean>>) {
+    const want: Record<WSName, boolean> = {
+      music: channels?.music !== false, // default to true for music
+      care: Boolean(channels?.care),
+    } as Record<WSName, boolean>;
+    (Object.keys(want) as WSName[]).forEach((name) => {
+      if (!want[name]) return;
+      this.startRefs[name] += 1;
+      if (this.startRefs[name] === 1) {
+        if (name === "music") this.connect("music", "/v1/ws/music", this.onMusicOpen, this.onMusicMessage);
+        if (name === "care") this.connect("care", "/v1/ws/care", this.onCareOpen, this.onCareMessage);
+      }
+    });
   }
 
-  stop() {
-    (["music", "care"] as WSName[]).forEach((name) => {
-      this.safeClose(this.sockets[name]);
-      this.sockets[name] = null;
-      if (this.timers[name]) {
-        clearTimeout(this.timers[name]!);
-        this.timers[name] = null;
+  stop(channels?: Partial<Record<WSName, boolean>>) {
+    const target: Record<WSName, boolean> = {
+      music: channels?.music !== false, // default to true if unspecified
+      care: channels?.care === true || channels?.care === undefined,
+    } as Record<WSName, boolean>;
+    (Object.keys(target) as WSName[]).forEach((name) => {
+      if (!target[name]) return;
+      if (this.startRefs[name] > 0) this.startRefs[name] -= 1;
+      if (this.startRefs[name] === 0) {
+        this.safeClose(this.sockets[name]);
+        this.sockets[name] = null;
+        if (this.timers[name]) {
+          clearTimeout(this.timers[name]!);
+          this.timers[name] = null;
+        }
+        this.queues[name] = [];
       }
-      this.queues[name] = [];
     });
   }
 
@@ -75,29 +94,38 @@ class WsHub {
     this.safeClose(this.sockets[name]);
 
     try {
-      const ws = new WebSocket(wsUrl(path));
+      const ws = new WebSocket(wsUrl(path), ["json.realtime.v1"]);
       this.sockets[name] = ws;
+
+      // heartbeat: send ping every 25s
+      const heartbeat = () => {
+        try { ws.send('ping'); } catch { /* noop */ }
+      };
+
+      let hbTimer: ReturnType<typeof setInterval> | null = null;
 
       ws.onopen = () => {
         retry = 0; // reset backoff
         this.lastPong[name] = Date.now();
         try { onOpenExtra.call(this, ws); } catch { /* noop */ }
         this.flushQueue(name);
+        if (hbTimer) clearInterval(hbTimer);
+        hbTimer = setInterval(heartbeat, 25_000);
       };
 
       ws.onmessage = (e) => {
         try {
+          const raw = String(e.data || "");
+          // Handle pong responses first to avoid JSON.parse errors downstream
+          if (raw === 'pong') { this.lastPong[name] = Date.now(); return; }
           onMessage.call(this, e);
-          // Handle pong responses
-          if (String(e.data || "") === 'pong') {
-            this.lastPong[name] = Date.now();
-          }
         } catch { /* swallow to keep socket alive */ }
       };
 
       ws.onclose = () => {
         // Optional: probe auth on close to bounce to login if session expired
         this.probeAuthAndMaybeRedirect();
+        if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
         const delay = this.jitteredDelayFor(retry++);
         this.timers[name] = setTimeout(() => this.connect(name, path, onOpenExtra, onMessage, retry), delay);
       };
@@ -120,10 +148,20 @@ class WsHub {
   }
 
   private onMusicMessage(e: MessageEvent) {
-    const msg = JSON.parse(String(e.data ?? "{}"));
-    if (msg && msg.topic === "music.state") {
+    const raw = String(e.data ?? "");
+    if (!raw || raw === 'pong') return;
+    let msg: any;
+    try { msg = JSON.parse(raw); } catch { return; }
+    const topic = String(msg?.topic || "");
+    if (topic === "music.state") {
       (window as any).__musicState = msg.data || {};
-      window.dispatchEvent(new CustomEvent("music.state"));
+      // Broadcast with detail for consumers
+      try { window.dispatchEvent(new CustomEvent("music.state", { detail: msg.data || {} })); } catch { /* noop */ }
+      return;
+    }
+    // Fan-out any other music.* topics (e.g., music.queue.updated)
+    if (topic.startsWith("music.")) {
+      try { window.dispatchEvent(new CustomEvent(topic, { detail: msg.data ?? msg } as any)); } catch { /* noop */ }
     }
   }
 
@@ -136,7 +174,10 @@ class WsHub {
   }
 
   private onCareMessage(e: MessageEvent) {
-    const msg = JSON.parse(String(e.data ?? "{}"));
+    const raw = String(e.data ?? "");
+    if (!raw || raw === 'pong') return;
+    let msg: any;
+    try { msg = JSON.parse(raw); } catch { return; }
     const data = msg?.data || {};
     const event: string = String(data.event || "");
 

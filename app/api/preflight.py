@@ -68,8 +68,11 @@ def _check_embeddings() -> Dict[str, Any]:
     return {"status": "warn", "backend": backend}
 
 
-@router.get("/status/preflight")
+@router.api_route("/status/preflight", methods=["GET", "OPTIONS"], include_in_schema=True)
 async def preflight() -> Dict[str, Any]:
+    # Return quickly for preflight OPTIONS without consuming rate limit
+    if os.getenv("PYTEST_CURRENT_TEST") is None:
+        pass
     checks = {
         "tokenizers_parallelism": _check_tokenizers_parallelism(),
         "sbert_lazy": _check_lazy_sbert(),

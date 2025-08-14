@@ -144,9 +144,10 @@ async def apple_callback(request: Request, response: Response) -> Response:
     next_url = str(form.get("state") or "/")
     if not _allow_redirect(next_url):
         next_url = "/"
-    resp = Response(status_code=302)
-    resp.headers["Location"] = next_url
-    return resp
+    # Return the same response we set cookies on to ensure cookies persist
+    response.status_code = 302
+    response.headers["Location"] = next_url
+    return response
 
 
 __all__ = ["router"]

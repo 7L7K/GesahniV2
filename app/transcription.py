@@ -124,6 +124,10 @@ class TranscriptionStream:
     def __init__(self, ws: WebSocket) -> None:
         self.ws = ws
         self.session_id = uuid.uuid4().hex
+        self._last_partial_ts: float = 0.0
+        self._silence_started: float | None = None
+        self._partial_min_interval_s: float = float(os.getenv("STT_PARTIAL_MIN_INTERVAL_S", "0.15") or 0.15)
+        self._silence_final_s: float = float(os.getenv("STT_SILENCE_FINALIZE_S", "1.2") or 1.2)
 
     async def _iter_audio(self, first_msg: dict) -> AsyncIterator[bytes]:
         msg = first_msg
@@ -162,7 +166,17 @@ class TranscriptionStream:
                         pass
                 continue
             if chunk and has_speech(chunk):
+                # reset silence window
+                self._silence_started = None
                 yield chunk
+            else:
+                # track silence onset
+                if self._silence_started is None:
+                    try:
+                        import time as _t
+                        self._silence_started = _t.time()
+                    except Exception:
+                        self._silence_started = None
 
     async def process(self) -> None:
         await self.ws.accept()
@@ -200,10 +214,17 @@ class TranscriptionStream:
             # Send initial listening state
             await self.ws.send_json({"event": "stt.state", "state": "listening", "session_id": self.session_id})
             last_text: str | None = None
+            import time as _t
             async for text in session.stream(self._iter_audio(msg)):
-                # Emit partials; relay TTS sync markers if present via log scanning is out-of-band.
-                await self.ws.send_json({"event": "stt.partial", "text": text, "session_id": self.session_id})
+                # Emit partials throttled; relay TTS sync markers out-of-band.
+                now = _t.time()
+                if now - self._last_partial_ts >= self._partial_min_interval_s:
+                    await self.ws.send_json({"event": "stt.partial", "text": text, "session_id": self.session_id})
+                    self._last_partial_ts = now
                 last_text = text
+                # End-of-speech via silence window
+                if self._silence_started and (now - self._silence_started) >= self._silence_final_s:
+                    break
             # Final punctuation pass (simple heuristic)
             try:
                 import re as _re

@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Body
 from pydantic import BaseModel, ConfigDict
 
 from ..deps.user import get_current_user_id
+from ..deps.scopes import optional_require_scope
+from ..deps.roles import require_roles
 from ..metrics import (
     TIME_TO_ACK_SECONDS,
     ALERT_SEND_FAILURES,
@@ -213,7 +215,13 @@ async def create_alert(
     return rec
 
 
-@router.post("/care/alerts/{alert_id}/ack", response_model=AlertRecord, responses={200: {"model": AlertRecord}}, openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"example": {"by": "cg1"}}}}}})
+@router.post(
+    "/care/alerts/{alert_id}/ack",
+    response_model=AlertRecord,
+    responses={200: {"model": AlertRecord}},
+    openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"example": {"by": "cg1"}}}}}},
+    dependencies=[Depends(optional_require_scope("care:caregiver")), Depends(require_roles(["caregiver"]))],
+)
 async def ack_alert(alert_id: str, body: AckBody | None = None):
     rec = ALERTS.get(alert_id) or await get_alert(alert_id)
     if not rec:
@@ -234,7 +242,7 @@ async def ack_alert(alert_id: str, body: AckBody | None = None):
     return rec
 
 
-@router.post("/care/alerts/{alert_id}/resolve", response_model=AlertRecord, responses={200: {"model": AlertRecord}})
+@router.post("/care/alerts/{alert_id}/resolve", response_model=AlertRecord, responses={200: {"model": AlertRecord}}, dependencies=[Depends(require_roles(["caregiver", "admin"]))])
 async def resolve_alert(alert_id: str):
     rec = ALERTS.get(alert_id) or await get_alert(alert_id)
     if not rec:
@@ -265,7 +273,7 @@ class OkResponse(CommonOkResponse):
     model_config = ConfigDict(title="OkResponse")
 
 
-@router.post("/care/devices/{device_id}/heartbeat", response_model=OkResponse, responses={200: {"model": OkResponse}})
+@router.post("/care/devices/{device_id}/heartbeat", response_model=OkResponse, responses={200: {"model": OkResponse}}, dependencies=[Depends(require_roles(["caregiver", "resident"]))])
 async def heartbeat(device_id: str, body: Heartbeat):
     now = _now()
     st = await upsert_device(device_id, body.resident_id, battery_pct=body.battery_pct)
@@ -277,7 +285,7 @@ async def heartbeat(device_id: str, body: Heartbeat):
     return {"status": "ok"}
 
 
-@router.get("/care/device_status")
+@router.get("/care/device_status", dependencies=[Depends(require_roles(["caregiver", "resident"]))])
 async def device_status(device_id: str) -> dict:
     st = await get_device(device_id)
     if not st:
@@ -286,7 +294,7 @@ async def device_status(device_id: str) -> dict:
     return {"device_id": device_id, "online": online, "battery": st.get("battery_pct")}
 
 
-@router.get("/care/alerts")
+@router.get("/care/alerts", dependencies=[Depends(require_roles(["caregiver", "resident"]))])
 async def list_alerts(resident_id: Optional[str] = None):
     items = await list_alerts_db(resident_id)
     return {"items": items}

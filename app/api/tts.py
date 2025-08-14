@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 import io
@@ -9,7 +9,7 @@ from ..deps.user import get_current_user_id
 from ..tts_orchestrator import synthesize
 
 
-router = APIRouter(prefix="/tts", tags=["Music"])
+router = APIRouter(prefix="/tts", tags=["TTS"])
 
 
 class TTSRequest(BaseModel):
@@ -32,24 +32,79 @@ class TTSRequest(BaseModel):
     )
 
 
-class TTSAck(BaseModel):
-    status: str = "ok"
-
-    model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
-
-
-@router.post("/speak", response_model=TTSAck, responses={200: {"model": TTSAck}})
-async def speak(req: TTSRequest, user_id: str = Depends(get_current_user_id)):
-    if not req.text or not req.text.strip():
+@router.post(
+    "/speak",
+    responses={
+        200: {
+            "content": {
+                "audio/wav": {
+                    "schema": {
+                        "type": "string",
+                        "format": "binary",
+                        "description": "PCM WAV audio stream",
+                    }
+                }
+            }
+        }
+    },
+)
+async def speak(req: TTSRequest, request: Request, user_id: str = Depends(get_current_user_id)):
+    # CSRF header enforcement for cookie-auth flows
+    try:
+        if (request.cookies.get("access_token") or request.cookies.get("refresh_token")) and request.headers.get("X-CSRF") is None:
+            raise HTTPException(status_code=400, detail="missing_csrf")
+    except Exception:
+        pass
+    text = (req.text or "").strip()
+    if not text:
         raise HTTPException(status_code=400, detail="empty_text")
-    audio = await synthesize(
-        text=req.text,
-        mode=(req.mode or "utility"),
-        intent_hint=req.intent,
-        sensitivity_hint=req.sensitive,
-        openai_voice=req.voice,
-    )
-    return StreamingResponse(io.BytesIO(audio), media_type="audio/wav")
+    # Length/byte caps
+    import os as _os
+    max_chars = int((_os.getenv("TTS_MAX_CHARS", "800") or 800))
+    if len(text) > max_chars:
+        raise HTTPException(status_code=400, detail="text_too_long")
+
+    # Chunk long inputs for sequential streaming
+    def _chunks(s: str, limit: int = 240) -> list[str]:
+        import re as _re
+        parts = _re.split(r"(?<=[\.!?])\s+", s)
+        out: list[str] = []
+        cur = ""
+        for p in parts:
+            if len(cur) + len(p) + 1 <= limit:
+                cur = (cur + " " + p).strip()
+            else:
+                if cur:
+                    out.append(cur)
+                cur = p
+        if cur:
+            out.append(cur)
+        return out or [s]
+
+    chunks = _chunks(text)
+
+    async def _gen():
+        for chunk in chunks:
+            audio = await synthesize(
+                text=chunk,
+                mode=(req.mode or "utility"),
+                intent_hint=req.intent,
+                sensitivity_hint=req.sensitive,
+                openai_voice=req.voice,
+            )
+            yield audio
+
+    if len(chunks) == 1:
+        audio = await synthesize(
+            text=text,
+            mode=(req.mode or "utility"),
+            intent_hint=req.intent,
+            sensitivity_hint=req.sensitive,
+            openai_voice=req.voice,
+        )
+        return StreamingResponse(io.BytesIO(audio), media_type="audio/wav")
+    # Multi-part stream: raw chunk bytes; client handles sequential playback
+    return StreamingResponse(_gen(), media_type="application/octet-stream")
 
 
 

@@ -25,7 +25,7 @@ export default function Contacts() {
     const confirm = async () => {
         if (!toCall) return;
         try {
-            const res = await apiFetch(`/v1/tv/contacts/call?name=${encodeURIComponent(toCall.name)}`, { method: "POST" });
+            const res = await apiFetch(`/v1/tv/contacts/call`, { method: "POST", body: JSON.stringify({ name: toCall.name }) });
             const body = await res.json().catch(() => ({} as any));
             setMessage((body?.message as string) || "Pick up your phone, I’ll dial for you");
         } catch {

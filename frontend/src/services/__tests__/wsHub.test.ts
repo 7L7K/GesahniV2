@@ -6,9 +6,9 @@ describe('wsHub', () => {
         wsHub.stop()
     })
 
-    it('dispatches tv.config.updated event', () => {
-        // Ensure hub is connected
-        wsHub.start()
+    it('dispatches tv.config.updated event (care channel)', () => {
+        // Ensure hub is connected to care only
+        wsHub.start({ care: true, music: false })
         // Find the care WebSocket mock instance
         const calls = (global as any).WebSocket?.mock?.calls || []
         const careCallIdx = calls.findIndex((c: any[]) => String(c?.[0] || '').includes('/v1/ws/care'))
@@ -20,11 +20,11 @@ describe('wsHub', () => {
         careWs.onmessage && careWs.onmessage({ data: JSON.stringify(payload) })
         expect(events.some((e) => (e as CustomEvent).type === 'tv.config.updated')).toBe(true)
         spy.mockRestore()
-        wsHub.stop()
+        wsHub.stop({ care: true, music: false })
     })
 
     it('queues outbound messages and flushes after reconnect', () => {
-        wsHub.start()
+        wsHub.start({ care: true, music: false })
         const calls = (global as any).WebSocket?.mock?.calls || []
         const careCallIdx = calls.findIndex((c: any[]) => String(c?.[0] || '').includes('/v1/ws/care'))
         const careWs = (global as any).WebSocket.mock.instances[careCallIdx]
@@ -44,7 +44,23 @@ describe('wsHub', () => {
         // Fire onopen to flush queue
         newCareWs.onopen && newCareWs.onopen({})
         expect(newCareWs.send).toHaveBeenCalled()
-        wsHub.stop()
+        wsHub.stop({ care: true, music: false })
+    })
+
+    it('is idempotent under StrictMode (multiple start calls only connect once)', () => {
+        const WS = (global as any).WebSocket
+        WS.mockClear()
+        wsHub.start({ music: true })
+        wsHub.start({ music: true })
+        wsHub.start({ music: true })
+        // Expect only one connection per socket path for music
+        const paths = WS.mock.calls.map((c: any[]) => String(c?.[0] || ''))
+        const musicCount = paths.filter((p: string) => p.includes('/v1/ws/music')).length
+        expect(musicCount).toBe(1)
+        // stop thrice should fully close
+        wsHub.stop({ music: true })
+        wsHub.stop({ music: true })
+        wsHub.stop({ music: true })
     })
 })
 

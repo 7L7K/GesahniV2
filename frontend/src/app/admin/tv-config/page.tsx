@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getTvConfig, putTvConfig, TvConfig } from "@/lib/api";
 import { scheduler } from "@/services/scheduler";
+import { wsHub } from "@/services/wsHub";
 
 function validate(cfg: Partial<TvConfig>): string | null {
   if (cfg.ambient_rotation !== undefined && (cfg.ambient_rotation < 0 || cfg.ambient_rotation > 360)) return "ambient_rotation must be 0..360";
@@ -50,12 +51,14 @@ export default function AdminTvConfigPage() {
   const [cfg, setCfg] = useState<TvConfig | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     const envTok = process.env.NEXT_PUBLIC_ADMIN_TOKEN || '';
     const lsTok = typeof window !== 'undefined' ? (localStorage.getItem('admin:token') || '') : '';
     setToken(envTok || lsTok);
+    // Start care channel to listen for apply ack events
+    wsHub.start({ care: true, music: false });
+    return () => { wsHub.stop({ care: true, music: false }); };
   }, []);
 
   useEffect(() => {
@@ -92,23 +95,10 @@ export default function AdminTvConfigPage() {
       const res = await putTvConfig(residentId, token, next);
       setCfg(res.config);
       setErr(null);
-      // Connect WS and wait for ack event
-      try {
-        const base = (process.env.NEXT_PUBLIC_API_BASE || '').replace(/^http/, 'ws');
-        const ws = new WebSocket(`${base}/v1/ws/care`);
-        wsRef.current = ws;
-        ws.onopen = () => ws.send(JSON.stringify({ action: 'subscribe', topic: `resident:${residentId}` }));
-        const to = setTimeout(() => { try { ws.close(); } catch {} }, 3000);
-        ws.onmessage = (ev) => {
-          try {
-            const msg = JSON.parse(ev.data);
-            if (msg?.data?.event === 'tv.config.updated' || msg?.event === 'tv.config.updated') {
-              clearTimeout(to);
-              ws.close();
-            }
-          } catch {}
-        };
-      } catch {}
+      // Wait for hub-broadcasted tv.config.updated
+      const to = setTimeout(() => { /* timeout silently */ }, 3000);
+      const onUpdated = () => { clearTimeout(to); };
+      window.addEventListener('tv.config.updated', onUpdated as EventListener, { once: true } as any);
     } catch (e: any) {
       setErr(e?.message || 'Save failed');
     } finally {

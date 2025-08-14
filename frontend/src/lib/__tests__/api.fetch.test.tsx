@@ -28,6 +28,14 @@ describe('apiFetch', () => {
     const res = await apiFetch('/200')
     expect(res.status).toBe(200)
   })
+
+  it('does not retry 404 and returns immediately', async () => {
+    // @ts-ignore
+    global.fetch = jest.fn(async (url, init) => new Response('nope', { status: 404 } as any) as any)
+    const res = await apiFetch('/missing')
+    expect(res.status).toBe(404)
+    expect((global.fetch as any).mock.calls.length).toBe(1)
+  })
 })
 
 
