@@ -6,10 +6,10 @@ import logging
 import os
 from importlib import import_module
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Body
 import os
 import jwt
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field, ConfigDict
 
 from app.deps.user import get_current_user_id
@@ -21,21 +21,25 @@ from app.policy import moderation_precheck
 logger = logging.getLogger(__name__)
 
 
-class AskRequest(BaseModel):
-    prompt: str
-    model_override: str | None = Field(None, alias="model")
-    # Optional hint for small-ask preset (e.g., client detected simple profile question)
-    small_ask: bool | None = None
+class Message(BaseModel):
+    role: str = Field(..., description="Message role: system|user|assistant")
+    content: str = Field(..., description="Message text content")
 
-    # Pydantic v2 config: allow both alias ("model") and field name ("model_override")
+    model_config = ConfigDict(title="Message")
+
+
+class AskRequest(BaseModel):
+    prompt: str | list[Message] = Field(..., description="Canonical prompt: text or messages[]")
+    model: str | None = Field(None, description="Preferred model id (e.g., gpt-4o, llama3)")
+    stream: bool | None = Field(False, description="Force SSE when true; otherwise negotiated via Accept")
+
+    # Allow legacy alias 'model_override' in docs compatibility
+    model_override: str | None = Field(None, exclude=True)
+
     model_config = ConfigDict(
         title="AskRequest",
-        validate_by_name=True,
-        validate_by_alias=True,
         json_schema_extra={
-            "example": {
-                "prompt": "hello",
-            }
+            "example": {"prompt": "ping", "model": "llama3", "stream": False}
         },
     )
 
@@ -73,7 +77,11 @@ async def _verify_bearer_strict(request: Request) -> None:
 async def _require_auth_dep(request: Request) -> None:
     # When auth is required for ask, enforce strict token validation before rate limiting
     if _require_auth_for_ask():
-        await _verify_bearer_strict(request)
+        # Prefer cookie/header hybrid validator to support cookie-auth flows; allow strict bearer via env
+        if os.getenv("ASK_STRICT_BEARER", "0").strip().lower() in {"1", "true", "yes", "on"}:
+            await _verify_bearer_strict(request)
+        else:
+            await verify_token(request)
 
 
 @router.post(
@@ -99,18 +107,122 @@ async def _require_auth_dep(request: Request) -> None:
     },
 )
 async def ask(
-    req: AskRequest,
     request: Request,
-    user_id: str = Depends(get_current_user_id),
+    body: dict | None = Body(default=None),
 ):
+    # Content-Type guard: only accept JSON bodies
     try:
+        ct = (request.headers.get("content-type") or request.headers.get("Content-Type") or "").lower()
+    except Exception:
+        ct = ""
+    if "application/json" not in ct:
+        raise HTTPException(status_code=415, detail="unsupported_media_type")
+    # Resolve user id from JWT payload set by verify_token dependency
+    try:
+        payload = getattr(request.state, "jwt_payload", None)
+        user_id = None
+        if isinstance(payload, dict):
+            user_id = payload.get("user_id") or payload.get("sub")
         user_hash = hash_user_id(user_id) if user_id else "anon"
     except Exception:
+        user_id = None
         user_hash = "anon"
-    logger.info("ask.entry", extra={"meta": {"user_hash": user_hash, "model_override": req.model_override, "prompt_len": len(req.prompt or "")}})
+    # Liberal parsing: normalize various legacy shapes into (prompt_text, model, opts)
+    def _dget(obj: dict | None, path: str):
+        cur = obj or {}
+        for part in path.split('.'):
+            if not isinstance(cur, dict) or part not in cur:
+                return None
+            cur = cur[part]
+        return cur
+
+    def _normalize_payload(raw: dict | None) -> tuple[str, str | None, bool, bool, dict]:
+        if not isinstance(raw, dict):
+            raise HTTPException(status_code=422, detail="invalid_request")
+        model = raw.get("model") or raw.get("model_override")
+        stream_present = "stream" in raw
+        stream_flag = bool(raw.get("stream", False))
+        # Accept canonical keys and aliases
+        prompt_val = raw.get("prompt")
+        if isinstance(prompt_val, dict):
+            # Some clients send { prompt: { text: "..." } }
+            prompt_val = prompt_val.get("text") or prompt_val.get("content")
+        if prompt_val is None:
+            for key in ("message", "text", "query", "q"):
+                if isinstance(raw.get(key), str):
+                    prompt_val = raw.get(key)
+                    break
+        if prompt_val is None:
+            inner = raw.get("input") if isinstance(raw.get("input"), dict) else None
+            if inner:
+                for key in ("prompt", "text", "message"):
+                    if isinstance(inner.get(key), str):
+                        prompt_val = inner.get(key)
+                        break
+                if prompt_val is None and isinstance(inner.get("messages"), list):
+                    prompt_val = inner.get("messages")
+        # messages[] path
+        messages = raw.get("messages")
+        if prompt_val is None and isinstance(messages, list):
+            prompt_val = messages
+        # dotted path input.prompt
+        if prompt_val is None:
+            dotted = _dget(raw, "input.prompt") or _dget(raw, "input.text")
+            if isinstance(dotted, str):
+                prompt_val = dotted
+        # Normalize to text
+        prompt_text: str | None = None
+        if isinstance(prompt_val, str):
+            prompt_text = prompt_val
+        elif isinstance(prompt_val, list):
+            try:
+                parts = []
+                for m in prompt_val:
+                    if isinstance(m, dict):
+                        c = str(m.get("content") or "").strip()
+                        if c:
+                            parts.append(c)
+                prompt_text = "\n".join(parts).strip()
+            except Exception:
+                prompt_text = None
+        if not prompt_text or not isinstance(prompt_text, str) or not prompt_text.strip():
+            raise HTTPException(status_code=422, detail="empty_prompt")
+        # Forward select generation options when present
+        gen_opts = {}
+        for k in ("temperature", "top_p", "max_tokens"):
+            if k in raw:
+                gen_opts[k] = raw[k]
+        return (
+            prompt_text,
+            (str(model).strip() if isinstance(model, str) and model.strip() else None),
+            stream_flag,
+            bool(stream_present),
+            gen_opts,
+        )
+
+    prompt_text, model_override, stream_flag, stream_explicit, gen_opts = _normalize_payload(body)
+    # Telemetry breadcrumb (once per request): include request id and stream flag
+    try:
+        rid = request.headers.get("X-Request-ID")
+    except Exception:
+        rid = None
+    logger.info(
+        "ask.entry",
+        extra={
+            "meta": {
+                "user_hash": user_hash,
+                "model_override": model_override,
+                "prompt_len": len(prompt_text or ""),
+                "req_id": rid,
+                "stream": bool(stream_flag),
+            }
+        },
+    )
 
     queue: asyncio.Queue[str | None] = asyncio.Queue()
     status_code: int | None = None
+    error_detail: str | dict | None = None
+    error_category: str | None = None
 
     streamed_any: bool = False
 
@@ -123,7 +235,12 @@ async def ask(
         nonlocal status_code
         try:
             # Safety: block obviously destructive phrases locally; conversational scam cues are handled in router with a warning
-            if not moderation_precheck(req.prompt, extra_phrases=[]):
+            if not moderation_precheck(prompt_text, extra_phrases=[]):
+                try:
+                    from app.metrics import VALIDATION_4XX_TOTAL  # type: ignore
+                    VALIDATION_4XX_TOTAL.labels("/v1/ask", "400").inc()
+                except Exception:
+                    pass
                 raise HTTPException(status_code=400, detail="blocked_by_policy")
             # Auth is enforced via route dependency to ensure verify_token runs before rate_limit
                 # rate_limit applied via route dependency; keep explicit header snapshot behavior
@@ -133,10 +250,14 @@ async def ask(
             params = inspect.signature(route_prompt).parameters
             if "stream_cb" in params:
                 result = await route_prompt(
-                    req.prompt, req.model_override, user_id, stream_cb=_stream_cb
+                    prompt_text,
+                    model_override,
+                    user_id,
+                    stream_cb=_stream_cb,
+                    **gen_opts,
                 )
             else:  # Compatibility with tests that monkeypatch route_prompt
-                result = await route_prompt(req.prompt, req.model_override, user_id)
+                result = await route_prompt(prompt_text, model_override, user_id, **gen_opts)
             if streamed_any:
                 logger.info("ask.success", extra={"meta": {"user_hash": user_hash, "streamed": True}})
             else:
@@ -154,16 +275,32 @@ async def ask(
             except Exception:
                 pass
         except HTTPException as exc:
-            logger.exception("ask.http_error status=%s", getattr(exc, "status_code", None))
-            status_code = exc.status_code
-            await queue.put(f"[error:{exc.detail}]")
+            # Map provider/client errors to stable categories for consumers
+            status_code = int(getattr(exc, "status_code", 400) or 400)
+            code = "client_error"
+            if status_code in (401, 403):
+                code = "auth_error"
+            elif status_code == 429:
+                code = "rate_limited"
+            elif status_code >= 500:
+                code = "downstream_error"
+            error_category = code
+            try:
+                d = getattr(exc, "detail", None)
+                if d is not None:
+                    error_detail = d
+            except Exception:
+                error_detail = None
+            await queue.put(f"[error:{code}]")
         except Exception as e:  # pragma: no cover - defensive
             # Ensure HTTP status reflects failure and propagate a useful error token
             logger.exception("ask.error")
             status_code = 500
             # Include exception type to avoid empty messages like "Exception()"
             detail = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
-            await queue.put(f"[error:{detail}]")
+            error_detail = detail
+            error_category = "downstream_error"
+            await queue.put("[error:downstream_error]")
         finally:
             await queue.put(None)
 
@@ -209,16 +346,14 @@ async def ask(
                 except Exception:
                     pass
 
-    # Negotiate basic streaming transport: SSE if requested via Accept, else text/plain
+    # Negotiate basic streaming transport: SSE if requested via Accept/body, else JSON
     accept = request.headers.get("accept", "")
-    media_type = (
-        "text/event-stream"
-        if (
-            "text/event-stream" in accept
-            or os.getenv("FORCE_SSE", "").lower() in {"1", "true", "yes"}
-        )
-        else "text/plain"
+    wants_sse = bool(
+        (stream_flag)
+        or ((not stream_explicit) and ("text/event-stream" in accept))
+        or (os.getenv("FORCE_SSE", "").lower() in {"1", "true", "yes"})
     )
+    media_type = "text/event-stream" if wants_sse else "application/json"
 
     async def _sse_wrapper(gen):
         try:
@@ -241,13 +376,44 @@ async def ask(
                 pass
             raise
 
-    generator = _streamer()
     if media_type == "text/event-stream":
-        generator = _sse_wrapper(generator)
-
-    resp = StreamingResponse(
-        generator, media_type=media_type, status_code=status_code or 200
-    )
+        generator = _sse_wrapper(_streamer())
+        resp = StreamingResponse(
+            generator, media_type=media_type, status_code=status_code or 200
+        )
+        # Explicit SSE headers per contract
+        try:
+            resp.headers.setdefault("Cache-Control", "no-cache")
+            resp.headers.setdefault("Connection", "keep-alive")
+        except Exception:
+            pass
+    else:
+        # Aggregate full result and return JSON for non-streaming clients
+        # Drain the queue starting from first_chunk
+        chunks: list[str] = []
+        if isinstance(first_chunk, str) and first_chunk:
+            chunks.append(first_chunk)
+        # Continue reading until sentinel
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
+            if isinstance(chunk, str) and chunk:
+                chunks.append(chunk)
+        text_result = "".join(chunks)
+        if status_code and status_code >= 400:
+            # Error path: propagate detail with proper status
+            detail_payload = error_detail if (isinstance(error_detail, dict) or isinstance(error_detail, list)) else {"detail": str(error_detail or error_category or "error")}
+            resp = JSONResponse(detail_payload, status_code=int(status_code))
+        else:
+            resp = JSONResponse({"response": text_result}, status_code=200)
+    # Ensure request id is present for correlation in clients
+    try:
+        rid = request.headers.get("X-Request-ID")
+        if rid:
+            resp.headers.setdefault("X-Request-ID", rid)
+    except Exception:
+        pass
     # Expose trace id for correlation
     try:
         tid = get_trace_id_hex()

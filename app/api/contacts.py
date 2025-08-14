@@ -3,13 +3,16 @@
 import uuid
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, ConfigDict
 
 from ..care_store import create_contact, list_contacts, update_contact, delete_contact
 
 
-router = APIRouter(tags=["Care"])
+from app.deps.scopes import docs_security_with
+
+
+router = APIRouter(tags=["Care"], dependencies=[Depends(docs_security_with(["care:resident"]))])
 
 
 class ContactBody(BaseModel):
@@ -112,7 +115,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.deps.user import get_current_user_id
 
 
-tv_router = APIRouter(tags=["TV"])
+tv_router = APIRouter(tags=["TV"], dependencies=[Depends(docs_security_with(["care:resident"]))])
 
 
 CONTACTS_FILE = Path(os.getenv("CONTACTS_FILE", "data/contacts.json"))

@@ -131,8 +131,13 @@ async def apple_callback(request: Request, response: Response) -> Response:
     except Exception:
         pass
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-    response.set_cookie("access_token", access, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=int(EXPIRE_MINUTES) * 60, path="/")
-    response.set_cookie("refresh_token", refresh, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=int(REFRESH_EXPIRE_MINUTES) * 60, path="/")
+    try:
+        from .auth import _append_cookie_with_priority as _append
+        _append(response, key="access_token", value=access, max_age=int(EXPIRE_MINUTES) * 60, secure=cookie_secure, samesite=cookie_samesite)
+        _append(response, key="refresh_token", value=refresh, max_age=int(REFRESH_EXPIRE_MINUTES) * 60, secure=cookie_secure, samesite=cookie_samesite)
+    except Exception:
+        response.set_cookie("access_token", access, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=int(EXPIRE_MINUTES) * 60, path="/")
+        response.set_cookie("refresh_token", refresh, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=int(REFRESH_EXPIRE_MINUTES) * 60, path="/")
 
     try:
         import logging

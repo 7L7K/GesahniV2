@@ -45,6 +45,14 @@ async def trust_device(response: Response) -> dict:
         )
         return {"status": "ok", "trusted": True, "cookie": "access_token"}
     # Fallback marker cookie for environments without JWT configured
+    # Harden: in production, refuse to set non-HttpOnly/non-Secure device_trust
+    env = (os.getenv("ENV", "dev").strip().lower())
+    if env in {"prod", "production"}:
+        try:
+            print("device_trust.cookie_refused prod=true")
+        except Exception:
+            pass
+        return {"status": "ok", "trusted": False, "cookie": None}  # type: ignore[return-value]
     response.set_cookie(
         key="device_trust",
         value="1",

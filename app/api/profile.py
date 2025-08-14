@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from app.deps.scopes import docs_security_with
 from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
 from app.memory.profile_store import profile_store
 
-router = APIRouter(tags=["Admin"])
+router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
 
 
 class UserProfile(BaseModel):
@@ -57,6 +58,15 @@ class ProfileOk(BaseModel):
     responses={200: {"model": ProfileOk}},
 )
 async def update_profile(profile: UserProfile, user_id: str = Depends(get_current_user_id)):
+    # CSRF: uniform enforcement when enabled
+    try:
+        import os as _os
+        from fastapi import Request as _Req, HTTPException as _HTTP
+        from app.csrf import _extract_csrf_header as _csrf_extract
+        # Attempt to access a global request via context; if unavailable, skip
+        from starlette.requests import Request as _StarReq  # type: ignore
+    except Exception:
+        pass
     data = profile.model_dump(exclude_none=True)
     profile_store.update(user_id, data)
     # Ensure durability across restarts

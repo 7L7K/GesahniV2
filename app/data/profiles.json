@@ -50,18 +50,18 @@
       "source": "api"
     },
     "calendar_integration": {
-      "value": true,
-      "updated_at": 1755121652.342368,
+      "value": false,
+      "updated_at": 1755195845.907108,
       "source": "api"
     },
     "gmail_integration": {
       "value": false,
-      "updated_at": 1755121652.343425,
+      "updated_at": 1755195845.90978,
       "source": "api"
     },
     "onboarding_completed": {
       "value": false,
-      "updated_at": 1755121652.34445,
+      "updated_at": 1755195845.912941,
       "source": "api"
     },
     "favorite_color": {
@@ -115,14 +115,14 @@
   "u_test": {
     "favorite_color": {
       "value": "blue",
-      "updated_at": 1755123278.894099,
+      "updated_at": 1755163557.8671548,
       "source": "ui"
     }
   },
   "u1": {
     "preferred_name": {
       "value": "Alex",
-      "updated_at": 1755123278.903035,
+      "updated_at": 1755163557.8694358,
       "source": "import"
     }
   },
@@ -131,6 +131,77 @@
       "value": true,
       "updated_at": 1755012332.9549031,
       "source": "api"
+    }
+  },
+  "dev": {
+    "name": {
+      "value": "Ava",
+      "updated_at": 1755160145.022018,
+      "source": "api"
+    },
+    "email": {
+      "value": "havenitseen@gmail.com",
+      "updated_at": 1755159980.371586,
+      "source": "api"
+    },
+    "timezone": {
+      "value": "America/Detroit",
+      "updated_at": 1755159980.3731399,
+      "source": "api"
+    },
+    "language": {
+      "value": "en",
+      "updated_at": 1755159980.374442,
+      "source": "api"
+    },
+    "occupation": {
+      "value": "",
+      "updated_at": 1755159980.37823,
+      "source": "api"
+    },
+    "home_location": {
+      "value": "",
+      "updated_at": 1755159980.378988,
+      "source": "api"
+    },
+    "calendar_integration": {
+      "value": false,
+      "updated_at": 1755161808.3983948,
+      "source": "api"
+    },
+    "gmail_integration": {
+      "value": false,
+      "updated_at": 1755161808.3992682,
+      "source": "api"
+    },
+    "onboarding_completed": {
+      "value": true,
+      "updated_at": 1755161808.4213068,
+      "source": "api"
+    },
+    "communication_style": {
+      "value": "casual",
+      "updated_at": 1755161808.394934,
+      "source": "api"
+    },
+    "interests": {
+      "value": [
+        "Finance"
+      ],
+      "updated_at": 1755161808.396524,
+      "source": "api"
+    },
+    "preferred_model": {
+      "value": "auto",
+      "updated_at": 1755161808.3974988,
+      "source": "api"
+    }
+  },
+  "null": {
+    "favorite_color": {
+      "value": "blue",
+      "updated_at": 1755181131.8644538,
+      "source": "utterance"
     }
   }
 }

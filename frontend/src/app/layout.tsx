@@ -91,7 +91,27 @@ export default function RootLayout({
 function AuthBootstrap() {
   if (typeof window !== 'undefined') {
     import("@/lib/api").then(({ apiFetch }) => {
-      apiFetch("/v1/whoami", { method: "GET", auth: true }).catch(() => { /* ignore */ });
+      apiFetch("/v1/whoami", { method: "GET", auth: true })
+        .then(async (res) => {
+          try {
+            const body = await res.json().catch(() => null as any)
+            const ok = Boolean(body && (body.is_authenticated || (body.user_id && body.user_id !== 'anon')))
+            console.info('[breadcrumb] whoami.authenticated', { ok, user_id: body?.user_id, session_ready: body?.session_ready })
+          } catch { /* noop */ }
+        }).catch(() => { /* ignore */ });
+      // Lightweight periodic refresh to keep access fresh before expiry
+      try {
+        const intervalMs = Math.max(60_000, Number(process.env.NEXT_PUBLIC_REFRESH_POLL_MS || 10 * 60_000));
+        const id = setInterval(async () => {
+          try {
+            const r = await apiFetch('/v1/auth/refresh', { method: 'POST' })
+            console.info('[breadcrumb] finish.completed', { ok: r?.ok, status: r?.status })
+          } catch (e) {
+            console.info('[breadcrumb] finish.completed', { ok: false, error: (e as any)?.message })
+          }
+        }, intervalMs);
+        window.addEventListener('beforeunload', () => clearInterval(id));
+      } catch { /* noop */ }
     });
   }
   return null;

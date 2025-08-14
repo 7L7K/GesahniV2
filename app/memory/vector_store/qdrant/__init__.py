@@ -151,8 +151,13 @@ class QdrantVectorStore:
         except Exception:
             pass
 
-        # Collections
-        self.cache_collection = os.getenv("QDRANT_QA_COLLECTION", "cache:qa")
+        # Collections: sanitize illegal characters (e.g., colon) to avoid 422
+        raw_cache = os.getenv("QDRANT_QA_COLLECTION", "cache:qa")
+        try:
+            # Replace ':' with '_' per Qdrant naming rules
+            self.cache_collection = str(raw_cache).replace(":", "_")
+        except Exception:
+            self.cache_collection = "cache_qa"
 
         # QA cache uses payload-only, but Qdrant requires vectors; use size=1 stub
         try:
@@ -384,9 +389,13 @@ class QdrantVectorStore:
         return self._qa
 
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
+        if os.getenv("DISABLE_QA_CACHE", "").lower() in {"1", "true", "yes", "on"}:
+            return
         self._qa.upsert(ids=[cache_id], documents=[prompt], metadatas=[{"answer": answer, "timestamp": time.time(), "feedback": None}])
 
     def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
+        if os.getenv("DISABLE_QA_CACHE", "").lower() in {"1", "true", "yes", "on"}:
+            return None
         # Lightweight exact-id path: treat prompts like hashes via env usage in app.memory.api
         res = self._qa.get_items(ids=None, include=["metadatas", "documents"])  # scan small cache (<=1k)
         ids = res.get("ids", [])
