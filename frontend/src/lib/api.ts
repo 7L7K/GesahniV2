@@ -182,12 +182,13 @@ function authHeaders() {
 async function tryRefresh(): Promise<Response | null> {
   if (!HEADER_AUTH_MODE) return null;
   const refresh = getRefreshToken();
-  // Prefer new bridge endpoint; fall back for older backends
+  // Prefer new bridge endpoint; fall back for older backends (404/501 only)
   const endpoints = [
     `${API_URL || ""}/v1/auth/refresh`,
     `${API_URL || ""}/v1/refresh`,
   ];
-  for (const url of endpoints) {
+  for (let i = 0; i < endpoints.length; i++) {
+    const url = endpoints[i];
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json", "X-Auth-Intent": "refresh" };
       // Attach CSRF if cookie present
@@ -207,7 +208,12 @@ async function tryRefresh(): Promise<Response | null> {
         if (access_token) setTokens(access_token, refresh_token);
         return res;
       }
-      // If first attempt failed with 401/400, try next
+      // Only fall back from /v1/auth/refresh to /v1/refresh on 404/501
+      if (i === 0) {
+        if (res.status === 404 || res.status === 501) continue;
+        // For 401/403 or other auth errors, do not fall back
+        return res;
+      }
       if (res.status >= 500) return res;
     } catch { /* try next */ }
   }
