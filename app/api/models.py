@@ -4,10 +4,13 @@ import os
 import json
 from typing import Any, Dict, List
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 
-router = APIRouter(tags=["Admin"])
+from app.deps.scopes import docs_security_with
+
+
+router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
 
 
 def _parse_models_env(val: str | None) -> List[Dict[str, Any]]:

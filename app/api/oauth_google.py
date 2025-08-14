@@ -67,10 +67,16 @@ async def google_start(request: Request) -> Response:
             }
         )
     )
-    # TTL 10 minutes
-    resp.set_cookie("pkce_verifier", code_verifier, max_age=600, httponly=True, path="/")
-    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, path="/")
-    resp.set_cookie("oauth_next", next_url, max_age=600, httponly=False, path="/")
+    # TTL 10 minutes; enforce explicit SameSite and Secure where appropriate
+    cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+    same = cookie_samesite if cookie_samesite in {"lax", "strict", "none"} else "lax"
+    try:
+        secure = getattr(request.url, "scheme", "http") == "https"
+    except Exception:
+        secure = False
+    resp.set_cookie("pkce_verifier", code_verifier, max_age=600, httponly=True, path="/", samesite=same, secure=secure)
+    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, path="/", samesite=same, secure=secure)
+    resp.set_cookie("oauth_next", next_url, max_age=600, httponly=False, path="/", samesite=same, secure=secure)
     return resp
 
 
@@ -136,8 +142,13 @@ async def google_callback(request: Request, response: Response) -> Response:
     except Exception:
         pass
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-    response.set_cookie("access_token", access, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=EXPIRE_MINUTES * 60, path="/")
-    response.set_cookie("refresh_token", refresh, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=REFRESH_EXPIRE_MINUTES * 60, path="/")
+    try:
+        from .auth import _append_cookie_with_priority as _append
+        _append(response, key="access_token", value=access, max_age=EXPIRE_MINUTES * 60, secure=cookie_secure, samesite=cookie_samesite)
+        _append(response, key="refresh_token", value=refresh, max_age=REFRESH_EXPIRE_MINUTES * 60, secure=cookie_secure, samesite=cookie_samesite)
+    except Exception:
+        response.set_cookie("access_token", access, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=EXPIRE_MINUTES * 60, path="/")
+        response.set_cookie("refresh_token", refresh, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=REFRESH_EXPIRE_MINUTES * 60, path="/")
 
     # Audit
     try:

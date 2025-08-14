@@ -5,6 +5,8 @@ import { ThemeProvider } from "next-themes";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import Header from "@/components/Header";
+import BackendBanner from "@/components/BackendBanner";
+import DegradedNotice from "@/components/DegradedNotice";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import WsBootstrap from "@/components/WsBootstrap";
@@ -58,6 +60,8 @@ export default function RootLayout({
                   <AuthBootstrap />
                   <WsBootstrap />
                   <Header />
+                  <BackendBanner />
+                  <DegradedNotice />
                   <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-primary text-primary-foreground rounded px-3 py-2">Skip to content</a>
                   <div id="main" className="bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-50 via-background to-background dark:from-zinc-900/20">
                     {children}
@@ -74,6 +78,8 @@ export default function RootLayout({
                 <AuthBootstrap />
                 <WsBootstrap />
                 <Header />
+                <BackendBanner />
+                <DegradedNotice />
                 <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-primary text-primary-foreground rounded px-3 py-2">Skip to content</a>
                 <div id="main" className="bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-50 via-background to-background dark:from-zinc-900/20">
                   {children}
@@ -91,7 +97,27 @@ export default function RootLayout({
 function AuthBootstrap() {
   if (typeof window !== 'undefined') {
     import("@/lib/api").then(({ apiFetch }) => {
-      apiFetch("/v1/whoami", { method: "GET", auth: true }).catch(() => { /* ignore */ });
+      apiFetch("/v1/whoami", { method: "GET", auth: true })
+        .then(async (res) => {
+          try {
+            const body = await res.json().catch(() => null as any)
+            const ok = Boolean(body && (body.is_authenticated || (body.user_id && body.user_id !== 'anon')))
+            console.info('[breadcrumb] whoami.authenticated', { ok, user_id: body?.user_id, session_ready: body?.session_ready })
+          } catch { /* noop */ }
+        }).catch(() => { /* ignore */ });
+      // Lightweight periodic refresh to keep access fresh before expiry
+      try {
+        const intervalMs = Math.max(60_000, Number(process.env.NEXT_PUBLIC_REFRESH_POLL_MS || 10 * 60_000));
+        const id = setInterval(async () => {
+          try {
+            const r = await apiFetch('/v1/auth/refresh', { method: 'POST' })
+            console.info('[breadcrumb] finish.completed', { ok: r?.ok, status: r?.status })
+          } catch (e) {
+            console.info('[breadcrumb] finish.completed', { ok: false, error: (e as any)?.message })
+          }
+        }, intervalMs);
+        window.addEventListener('beforeunload', () => clearInterval(id));
+      } catch { /* noop */ }
     });
   }
   return null;

@@ -182,6 +182,17 @@ if (!(global as any).ReadableStream) {
 
 
 
+// AbortSignal.timeout polyfill for Node/JSDOM
+if (!(global as any).AbortSignal || !(global as any).AbortSignal.timeout) {
+  class AC { controller = new (global as any).AbortController(); signal = this.controller.signal }
+  ; (global as any).AbortSignal = (global as any).AbortSignal || ({} as any)
+    ; (global as any).AbortSignal.timeout = (ms: number) => {
+      const c = new AbortController();
+      setTimeout(() => c.abort(), ms);
+      return c.signal as any;
+    };
+}
+
 // WebSocket polyfill (force override to avoid Node/builtin differences in tests)
 class MockWS {
   readyState = 1;

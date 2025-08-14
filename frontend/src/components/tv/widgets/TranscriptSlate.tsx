@@ -10,22 +10,64 @@ export function TranscriptSlate() {
   const scene = useSceneManager();
 
   useEffect(() => {
-    const ws = new WebSocket(wsUrl("/v1/transcribe"));
-    ws.onmessage = (e) => {
-      let msg: any = null;
-      try { msg = JSON.parse(String(e.data || "")); } catch { msg = { text: String(e.data || "") }; }
-      const t = String(msg.text || msg.partial || msg.final || "");
-      const is_final = Boolean(msg.final || msg.is_final);
-      setText(t);
-      setIsFinal(is_final);
-      (window as any).__lastTranscriptAt = Date.now();
-      if (!is_final) {
-        scene.toInteractive("stt_partial");
-      } else {
-        scene.toInteractive("stt_final");
-      }
+    let ws: WebSocket | null = null;
+    let retry = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const delay = (n: number) => {
+      const base = Math.min(30_000, 500 * Math.pow(2, n));
+      const jitter = base * (0.15 * (Math.random() * 2 - 1));
+      return Math.max(250, Math.floor(base + jitter));
     };
-    return () => { try { ws.close(); } catch {} };
+
+    const setup = () => {
+      try { ws?.close(); } catch { }
+      ws = new WebSocket(wsUrl("/v1/transcribe"));
+      ws.onopen = () => { retry = 0; };
+      ws.onmessage = (e) => {
+        let msg: any = null;
+        try { msg = JSON.parse(String(e.data || "")); } catch { msg = { text: String(e.data || "") }; }
+        const t = String(msg.text || msg.partial || msg.final || "");
+        const is_final = Boolean(msg.final || msg.is_final);
+        setText(t);
+        setIsFinal(is_final);
+        (window as any).__lastTranscriptAt = Date.now();
+        if (!is_final) {
+          scene.toInteractive("stt_partial");
+        } else {
+          scene.toInteractive("stt_final");
+        }
+      };
+      ws.onclose = () => {
+        const d = delay(retry++);
+        timer = setTimeout(() => setup(), d);
+      };
+      ws.onerror = () => { try { ws && ws.close(); } catch { } };
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        try { ws.send("ping"); } catch { }
+        return;
+      }
+      if (timer) { clearTimeout(timer); timer = null; }
+      retry = 0;
+      setup();
+    };
+
+    setup();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onVisible);
+      window.removeEventListener("focus", onVisible);
+      if (timer) clearTimeout(timer);
+      try { ws?.close(); } catch { }
+    };
   }, [scene]);
 
   useEffect(() => { (window as any).__lastExchange = text; }, [text]);

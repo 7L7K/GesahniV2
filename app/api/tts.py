@@ -49,10 +49,19 @@ class TTSRequest(BaseModel):
     },
 )
 async def speak(req: TTSRequest, request: Request, user_id: str = Depends(get_current_user_id)):
-    # CSRF header enforcement for cookie-auth flows
+    # CSRF: uniform enforcement for mutating routes when globally enabled
     try:
-        if (request.cookies.get("access_token") or request.cookies.get("refresh_token")) and request.headers.get("X-CSRF") is None:
-            raise HTTPException(status_code=400, detail="missing_csrf")
+        import os as _os
+        if _os.getenv("CSRF_ENABLED", "0").strip().lower() in {"1","true","yes","on"}:
+            from app.csrf import _extract_csrf_header  # lazy import
+            token_hdr, used_legacy, legacy_allowed = _extract_csrf_header(request)
+            cookie = request.cookies.get("csrf_token") or ""
+            if used_legacy and not legacy_allowed:
+                raise HTTPException(status_code=400, detail="missing_csrf")
+            if not token_hdr or not cookie or token_hdr != cookie:
+                raise HTTPException(status_code=403, detail="invalid_csrf")
+    except HTTPException:
+        raise
     except Exception:
         pass
     text = (req.text or "").strip()

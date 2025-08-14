@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 try:
     from app.skills.base import SKILLS as BUILTIN_CATALOG
 except Exception:
     BUILTIN_CATALOG = []  # type: ignore
 
-router = APIRouter(tags=["Admin"])
+from app.deps.scopes import docs_security_with
+
+
+router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
 
 
 @router.get("/skills/list")

@@ -54,6 +54,9 @@ async def apple_start(request: Request) -> Response:
     next_url = request.query_params.get("next") or "/"
     if not _allow_redirect(next_url):
         next_url = "/"
+    # Generate a random state and set short-lived cookies to validate callback and redirect target
+    import secrets
+    state = secrets.token_urlsafe(16)
     qs = urlencode(
         {
             "response_type": "code",
@@ -61,11 +64,20 @@ async def apple_start(request: Request) -> Response:
             "client_id": client_id,
             "redirect_uri": redirect_uri,
             "scope": "name email",
-            "state": next_url,
+            "state": state,
         }
     )
     resp = Response(status_code=302)
     resp.headers["Location"] = f"https://appleid.apple.com/auth/authorize?{qs}"
+    cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+    try:
+        secure = getattr(request.url, "scheme", "http") == "https"
+    except Exception:
+        secure = False
+    # Double-submit: persist state and next target for 10 minutes
+    # Ensure cookies follow parity rules
+    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, path="/", samesite=cookie_samesite, secure=secure)
+    resp.set_cookie("oauth_next", next_url, max_age=600, httponly=False, path="/", samesite=cookie_samesite, secure=secure)
     return resp
 
 
@@ -73,8 +85,17 @@ async def apple_start(request: Request) -> Response:
 async def apple_callback(request: Request, response: Response) -> Response:
     form = await request.form()
     code = form.get("code")
+    state = form.get("state")
     if not code:
         raise HTTPException(status_code=400, detail="missing_code")
+    # Validate state against double-submit cookie
+    try:
+        if (state or "") != (request.cookies.get("oauth_state") or ""):
+            raise HTTPException(status_code=400, detail="bad_state")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
 
     client_id = os.getenv("APPLE_CLIENT_ID")
     team_id = os.getenv("APPLE_TEAM_ID")
@@ -131,8 +152,13 @@ async def apple_callback(request: Request, response: Response) -> Response:
     except Exception:
         pass
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-    response.set_cookie("access_token", access, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=int(EXPIRE_MINUTES) * 60, path="/")
-    response.set_cookie("refresh_token", refresh, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=int(REFRESH_EXPIRE_MINUTES) * 60, path="/")
+    try:
+        from .auth import _append_cookie_with_priority as _append
+        _append(response, key="access_token", value=access, max_age=int(EXPIRE_MINUTES) * 60, secure=cookie_secure, samesite=cookie_samesite)
+        _append(response, key="refresh_token", value=refresh, max_age=int(REFRESH_EXPIRE_MINUTES) * 60, secure=cookie_secure, samesite=cookie_samesite)
+    except Exception:
+        response.set_cookie("access_token", access, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=int(EXPIRE_MINUTES) * 60, path="/")
+        response.set_cookie("refresh_token", refresh, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=int(REFRESH_EXPIRE_MINUTES) * 60, path="/")
 
     try:
         import logging
@@ -141,7 +167,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
     except Exception:
         pass
 
-    next_url = str(form.get("state") or "/")
+    next_url = str(request.cookies.get("oauth_next") or "/")
     if not _allow_redirect(next_url):
         next_url = "/"
     # Return the same response we set cookies on to ensure cookies persist

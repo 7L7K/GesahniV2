@@ -6,7 +6,10 @@ from app.deps.user import get_current_user_id
 from app.history import HISTORY_FILE
 from app.deps.scopes import optional_require_scope
 
-router = APIRouter(tags=["Admin"])
+from app.deps.scopes import docs_security_with
+
+
+router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
 
 
 @router.get("/history/recent")
