@@ -110,6 +110,12 @@ async def ask(
     request: Request,
     body: dict | None = Body(default=None),
 ):
+    # Step 1: Log entry point and payload details
+    print(f"🔍 ASK ENTRY: /v1/ask hit with payload={body}")
+    if body and isinstance(body, dict):
+        model_override = body.get("model") or body.get("model_override")
+        print(f"🔍 ASK PAYLOAD: model_override={model_override}, keys={list(body.keys())}")
+    
     # Content-Type guard: only accept JSON bodies
     try:
         ct = (request.headers.get("content-type") or request.headers.get("Content-Type") or "").lower()
@@ -136,9 +142,27 @@ async def ask(
             cur = cur[part]
         return cur
 
-    def _normalize_payload(raw: dict | None) -> tuple[str, str | None, bool, bool, dict]:
+    def _normalize_payload(raw: dict | None) -> tuple[str, str | None, bool, bool, dict, str]:
         if not isinstance(raw, dict):
             raise HTTPException(status_code=422, detail="invalid_request")
+        
+        # Detect payload shape
+        shape = "text"  # default
+        normalized_from = None
+        
+        # Check for chat format: prompt is a list of {role, content}
+        if isinstance(raw.get("prompt"), list):
+            shape = "chat"
+            normalized_from = "prompt_list"
+        # Check for nested format: input.prompt or input.text
+        elif raw.get("input") and isinstance(raw.get("input"), dict):
+            shape = "nested"
+            normalized_from = "input_nested"
+        # Check for other chat-like formats
+        elif raw.get("messages") and isinstance(raw.get("messages"), list):
+            shape = "chat"
+            normalized_from = "messages_list"
+        
         model = raw.get("model") or raw.get("model_override")
         stream_present = "stream" in raw
         stream_flag = bool(raw.get("stream", False))
@@ -198,9 +222,20 @@ async def ask(
             stream_flag,
             bool(stream_present),
             gen_opts,
+            shape,
+            normalized_from,
         )
 
-    prompt_text, model_override, stream_flag, stream_explicit, gen_opts = _normalize_payload(body)
+    prompt_text, model_override, stream_flag, stream_explicit, gen_opts, shape, normalized_from = _normalize_payload(body)
+    
+    # Track shape normalization metrics
+    if normalized_from:
+        try:
+            from ..metrics import ROUTER_SHAPE_NORMALIZED_TOTAL
+            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(from_shape=normalized_from, to_shape=shape).inc()
+        except Exception:
+            pass
+    
     # Telemetry breadcrumb (once per request): include request id and stream flag
     try:
         rid = request.headers.get("X-Request-ID")
@@ -254,6 +289,8 @@ async def ask(
                     model_override,
                     user_id,
                     stream_cb=_stream_cb,
+                    shape=shape,
+                    normalized_from=normalized_from,
                     **gen_opts,
                 )
             else:  # Compatibility with tests that monkeypatch route_prompt

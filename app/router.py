@@ -303,6 +303,29 @@ def _annotate_provenance(text: str, mem_docs: list[str]) -> str:
         return text
 
 
+def _log_routing_decision(
+    override_in: str | None,
+    intent: str,
+    tokens_est: int,
+    picker_reason: str,
+    chosen_vendor: str,
+    chosen_model: str,
+    dry_run: bool,
+    cb_user_open: bool,
+    cb_global_open: bool,
+    shape: str,
+    normalized_from: str | None,
+) -> None:
+    """Log the final routing decision for auditability."""
+    print(
+        f"🎯 ROUTING DECISION: "
+        f"override_in={override_in}, intent={intent}, tokens_est={tokens_est}, "
+        f"picker_reason={picker_reason}, chosen_vendor={chosen_vendor}, chosen_model={chosen_model}, "
+        f"dry_run={dry_run}, cb_user_open={cb_user_open}, cb_global_open={cb_global_open}, "
+        f"shape={shape}, normalized_from={normalized_from}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Main entry‑point
 # ---------------------------------------------------------------------------
@@ -312,8 +335,13 @@ async def route_prompt(
     user_id: str = Depends(get_current_user_id),
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     stream_hook: Callable[[str], Awaitable[None]] | None = None,
+    shape: str = "text",
+    normalized_from: str | None = None,
     **gen_opts: Any,
 ) -> Any:
+    # Step 2: Log model routing inputs and decisions
+    print(f"🎯 ROUTE_PROMPT: prompt='{prompt[:50]}...', model_override={model_override}, user_id={user_id}, gen_opts={gen_opts}")
+    
     logger.debug(
         "route_prompt start prompt=%r model_override=%s user_id=%s",
         prompt,
@@ -472,13 +500,31 @@ async def route_prompt(
         # 1️⃣ Explicit override (bypass skills like smalltalk)
         if model_override:
             mv = model_override.strip()
+            print(f"🔀 MODEL OVERRIDE: {mv} requested - bypassing skills")
             logger.info("🔀 Model override requested → %s", mv)
             # GPT override
             if mv.startswith("gpt"):
+                print(f"🔀 GPT OVERRIDE: calling _call_gpt_override with {mv}")
                 if mv not in ALLOWED_GPT_MODELS:
                     raise HTTPException(
                         status_code=400, detail=f"Model '{mv}' not allowed"
                     )
+                
+                # Log routing decision before adapter call
+                _log_routing_decision(
+                    override_in=mv,
+                    intent=intent,
+                    tokens_est=tokens,
+                    picker_reason="explicit_override",
+                    chosen_vendor="openai",
+                    chosen_model=mv,
+                    dry_run=debug_route,
+                    cb_user_open=_user_circuit_open(user_id),
+                    cb_global_open=llama_circuit_open,
+                    shape=shape,
+                    normalized_from=normalized_from,
+                )
+                
                 try:
                     result = await _call_gpt_override(
                         mv,
@@ -521,6 +567,7 @@ async def route_prompt(
                     )
             # LLaMA override
             if mv.startswith("llama"):
+                print(f"🔀 LLAMA OVERRIDE: calling _call_llama_override with {mv}")
                 if ALLOWED_LLAMA_MODELS and mv not in ALLOWED_LLAMA_MODELS:
                     raise HTTPException(
                         status_code=400, detail=f"Model '{mv}' not allowed"
@@ -530,6 +577,22 @@ async def route_prompt(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                         detail="LLaMA backend unavailable",
                     )
+                
+                # Log routing decision before adapter call
+                _log_routing_decision(
+                    override_in=mv,
+                    intent=intent,
+                    tokens_est=tokens,
+                    picker_reason="explicit_override",
+                    chosen_vendor="ollama",
+                    chosen_model=mv,
+                    dry_run=debug_route,
+                    cb_user_open=_user_circuit_open(user_id),
+                    cb_global_open=llama_circuit_open,
+                    shape=shape,
+                    normalized_from=normalized_from,
+                )
+                
                 result = await _call_llama_override(
                     mv,
                     prompt,
@@ -957,8 +1020,26 @@ async def route_prompt(
             # Preserve existing dry-run behavior when LLaMA healthy
             result = _dry("llama", os.getenv("OLLAMA_MODEL", "llama3").split(":")[0])
             return result
-        engine, model_name = pick_model(prompt, intent, tokens)
+        engine, model_name, picker_reason = pick_model(prompt, intent, tokens)
+        print(f"🎯 DEFAULT MODEL SELECTION: engine={engine}, model={model_name}, intent={intent}, reason={picker_reason}")
         if engine == "gpt":
+            print(f"🎯 GPT PATH: calling _call_gpt with {model_name}")
+            
+            # Log routing decision before adapter call
+            _log_routing_decision(
+                override_in=model_override,
+                intent=intent,
+                tokens_est=tokens,
+                picker_reason=picker_reason,
+                chosen_vendor="openai",
+                chosen_model=model_name,
+                dry_run=debug_route,
+                cb_user_open=_user_circuit_open(user_id),
+                cb_global_open=llama_circuit_open,
+                shape=shape,
+                normalized_from=normalized_from,
+            )
+            
             if debug_route:
                 result = _dry("gpt", model_name)
                 return result
@@ -998,8 +1079,26 @@ async def route_prompt(
                 )
 
         if engine == "llama" and llama_integration.LLAMA_HEALTHY:
+            print(f"🎯 LLAMA PATH: calling _call_llama with {model_name}")
+            
+            # Log routing decision before adapter call
+            _log_routing_decision(
+                override_in=model_override,
+                intent=intent,
+                tokens_est=tokens,
+                picker_reason=picker_reason,
+                chosen_vendor="ollama",
+                chosen_model=model_name,
+                dry_run=debug_route,
+                cb_user_open=_user_circuit_open(user_id),
+                cb_global_open=llama_circuit_open,
+                shape=shape,
+                normalized_from=normalized_from,
+            )
+            
             # Per-user circuit: short-circuit to GPT if this user has a hot breaker
             if _user_circuit_open(user_id):
+                print(f"🎯 USER CIRCUIT OPEN: short-circuiting to GPT for user {user_id}")
                 # Execute GPT directly and return
                 try:
                     result = await _call_gpt(
@@ -1255,6 +1354,7 @@ async def _call_gpt(
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     fallback: bool = False,
 ):
+    print(f"🤖 CALLING GPT: model={model}, prompt_len={len(prompt)}")
     logger.debug(
         "_call_gpt start prompt=%r model=%s user_id=%s", prompt, model, user_id
     )
@@ -1335,6 +1435,7 @@ async def _call_llama(
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     gen_opts: dict[str, Any] | None = None,
 ):
+    print(f"🤖 CALLING LLAMA: model={model}, prompt_len={len(prompt)}")
     logger.debug(
         "_call_llama start prompt=%r model=%s user_id=%s", prompt, model, user_id
     )

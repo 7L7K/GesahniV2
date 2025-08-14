@@ -44,12 +44,12 @@ const baseClerkMiddleware = clerkMiddleware(async (auth, req: NextRequest) => {
 
 export default function middleware(req: NextRequest, ev: NextFetchEvent) {
     const { pathname } = req.nextUrl
-    
+
     // Bypass health endpoints and metrics completely - no auth, no redirects
     if (pathname.startsWith('/healthz/') || pathname === '/metrics') {
         return NextResponse.next()
     }
-    
+
     const hasClerk = Boolean(process.env.CLERK_SECRET_KEY || process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
     const { searchParams } = req.nextUrl
     // Preserve legacy token capture for backend cookie auth

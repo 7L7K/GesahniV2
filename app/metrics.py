@@ -88,6 +88,20 @@ except Exception:  # pragma: no cover
             return None
     HEALTH_READY_FAILURES_TOTAL = _C2()  # type: ignore
 
+try:
+    ROUTER_SHAPE_NORMALIZED_TOTAL = Counter(
+        "gesahni_router_shape_normalized_total",
+        "Router shape normalization events",
+        ["from_shape", "to_shape"],
+    )
+except Exception:  # pragma: no cover
+    class _C3:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    ROUTER_SHAPE_NORMALIZED_TOTAL = _C3()  # type: ignore
+
 # Histogram for request cost in USD
 REQUEST_COST = Histogram(
     "app_request_cost_usd",
