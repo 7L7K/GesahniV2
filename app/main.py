@@ -1,5 +1,5 @@
 # ruff: noqa: E402
-from .env_utils import load_env
+from app.env_utils import load_env
 
 load_env()
 import asyncio
@@ -26,9 +26,9 @@ from fastapi import (
     UploadFile,
     WebSocket,
 )
-from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -164,8 +164,8 @@ except Exception:  # pragma: no cover - optional
 from .middleware import (
     RequestIDMiddleware,
     DedupMiddleware,
+    TraceRequestMiddleware,
     reload_env_middleware,
-    trace_request,
     silent_refresh_middleware,
 )
 from .security import (
@@ -356,42 +356,25 @@ def _custom_openapi():
 
 app.openapi = _custom_openapi  # type: ignore[assignment]
 
-# Debug logger strictly scoped to /v1/auth/* without intercepting handlers
-try:
-    @app.middleware("http")
-    async def _auth_probe_logger(request: Request, call_next):
-        try:
-            path = getattr(getattr(request, "url", None), "path", "") or ""
-            if path.startswith("/v1/auth/"):
-                print("<<< Auth hit:", getattr(request, "method", ""), request.url)
-                try:
-                    body = await request.body()
-                except Exception:
-                    body = b""
-                print("<<< Body:", body)
-        except Exception:
-            pass
-        return await call_next(request)
-except Exception:
-    pass
-
-# CORS middleware with stricter defaults
-_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+# CORS configuration - will be added as outermost middleware
+_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://127.0.0.1:3000,http://localhost:3000")
 origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
-allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "false").strip().lower() in {"1", "true", "yes", "on"}
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=allow_credentials,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.add_middleware(RequestIDMiddleware)
-app.add_middleware(DedupMiddleware)
-app.middleware("http")(trace_request)
-app.middleware("http")(silent_refresh_middleware)
-app.middleware("http")(reload_env_middleware)
-app.add_middleware(CSRFMiddleware)
+allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").strip().lower() in {"1", "true", "yes", "on"}
+
+# Custom handler for HTTP requests to WebSocket endpoints
+@app.get("/v1/ws/{path:path}")
+@app.post("/v1/ws/{path:path}")
+@app.put("/v1/ws/{path:path}")
+@app.patch("/v1/ws/{path:path}")
+@app.delete("/v1/ws/{path:path}")
+async def websocket_http_handler(request: Request, path: str):
+    """Handle HTTP requests to WebSocket endpoints with proper error response."""
+    response = Response(
+        content="WebSocket endpoint requires WebSocket protocol",
+        status_code=400,
+        media_type="text/plain"
+    )
+    return response
 
 # Removed legacy unversioned /whoami to ensure a single canonical /v1/whoami
 
@@ -463,16 +446,7 @@ if os.getenv("PROMETHEUS_ENABLED", "1").strip().lower() in {"1", "true", "yes", 
 
 _HEALTH_LAST: dict[str, bool] = {"online": True}
 
-@app.get("/healthz", tags=["Admin"])
-async def healthz() -> dict:
-    # Service is online if we reached this handler; log only state flips
-    if not _HEALTH_LAST.get("online", False):
-        try:
-            print("healthz status=online")
-        except Exception:
-            pass
-    _HEALTH_LAST["online"] = True
-    return {"status": "ok"}
+# Health endpoint is handled by status.py router
 
 # K8s-friendly health group (no auth)
 @app.get("/health/live", include_in_schema=False)
@@ -748,6 +722,9 @@ async def delete_memory(mem_id: str, user_id: str = Depends(get_current_user_id)
 
 
 async def _require_auth_dep_for_core(request: Request) -> None:
+    # Skip CORS preflight requests
+    if request.method == "OPTIONS":
+        return
     if os.getenv("REQUIRE_JWT", "0").strip().lower() in {"1", "true", "yes", "on"}:
         from .security import verify_token as _vt  # lazy; supports cookies or bearer
         await _vt(request)
@@ -773,6 +750,7 @@ async def _require_auth_dep_for_core(request: Request) -> None:
         }
     },
 )
+# Let CORS middleware handle OPTIONS requests - no manual handler needed
 async def ask(
     req: AskRequest, request: Request
 ):
@@ -1227,6 +1205,8 @@ async def get_transcription(
     raise HTTPException(status_code=404, detail="Transcript not found")
 
 
+
+
 # Include routers with versioned and unversioned paths
 app.include_router(core_router, prefix="/v1")
 app.include_router(core_router, include_in_schema=False)
@@ -1532,6 +1512,40 @@ if music_router is not None:
     except Exception:
         pass
 
+
+# ============================================================================
+# MIDDLEWARE REGISTRATION (AFTER ALL ROUTERS)
+# ============================================================================
+
+# 1) CORS FIRST (outermost) - it will short-circuit OPTIONS with 204
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=allow_credentials,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["authorization", "content-type", "x-csrf-token", "x-requested-with", "x-request-id"],
+    expose_headers=["X-Request-ID", "X-CSRF-Token", "Retry-After", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset"],
+    max_age=600,
+)
+
+# 2) Register all custom middleware (inner layers)
+app.add_middleware(CSRFMiddleware)
+app.add_middleware(TraceRequestMiddleware)
+app.add_middleware(DedupMiddleware)
+app.add_middleware(RequestIDMiddleware)
+# app.middleware("http")(silent_refresh_middleware)  # Temporarily disabled for testing
+# Note: reload_env_middleware is a simple function, not a class, so we use the decorator
+app.middleware("http")(reload_env_middleware)
+
+# Debug middleware order dump
+def _dump_mw_stack(app):
+    try:
+        stack = getattr(app, "user_middleware", [])
+        logging.warning("MW-ORDER (inner→outer): %s", [m.cls.__name__ for m in stack])
+    except Exception as e:
+        logging.warning("MW-ORDER dump failed: %r", e)
+
+_dump_mw_stack(app)
 
 
 if __name__ == "__main__":

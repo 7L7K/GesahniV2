@@ -68,9 +68,9 @@ def _check_embeddings() -> Dict[str, Any]:
     return {"status": "warn", "backend": backend}
 
 
-@router.api_route("/status/preflight", methods=["GET", "OPTIONS"], include_in_schema=True)
+@router.api_route("/status/preflight", methods=["GET"], include_in_schema=True)
 async def preflight() -> Dict[str, Any]:
-    # Return quickly for preflight OPTIONS without consuming rate limit
+    # Preflight OPTIONS requests are handled by CORSMiddleware
     if os.getenv("PYTEST_CURRENT_TEST") is None:
         pass
     checks = {

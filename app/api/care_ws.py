@@ -110,6 +110,18 @@ async def ws_care_docs(_user_id: str = Depends(get_current_user_id)):
 
 @router.websocket("/ws/care")
 async def ws_care(ws: WebSocket, _user_id: str = Depends(get_current_user_id), _roles=Depends(require_roles(["caregiver", "resident"]))):
+    # Validate WebSocket Origin explicitly
+    origin = ws.headers.get("Origin")
+    allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://127.0.0.1:3000,http://localhost:3000")
+    origins = [o.strip() for o in allowed_origins.split(",") if o.strip()]
+    
+    if origin and origin not in origins:
+        try:
+            await ws.close(code=1008, reason="origin_not_allowed")
+        except Exception:
+            pass
+        return
+    
     # Prefer Clerk JWT when configured; otherwise fall back to legacy verify_ws
     try:
         if os.getenv("CLERK_ISSUER") or os.getenv("CLERK_JWKS_URL") or os.getenv("CLERK_DOMAIN"):

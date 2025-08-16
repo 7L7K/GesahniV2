@@ -1,6 +1,6 @@
 import os
 import time
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from datetime import datetime, time as dt_time
 from .deps.user import get_current_user_id
 
@@ -34,8 +34,9 @@ async def health(user_id: str = Depends(get_current_user_id)) -> dict:
 
 
 @router.get("/healthz")
-async def healthz(user_id: str = Depends(get_current_user_id)) -> dict:
+async def healthz(response: Response) -> dict:
     """Report backend and LLaMA health for probes."""
+    response.headers["Cache-Control"] = "no-store"
     llama_status = "error"
     try:
         stat = await llama_get_status()

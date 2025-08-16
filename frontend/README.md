@@ -15,14 +15,14 @@ This directory contains the [Next.js](https://nextjs.org/) web interface for Ges
    set it in your shell or create a `.env.local` file:
    ```bash
    # Shell
-   export NEXT_PUBLIC_API_URL="http://localhost:8000"
+   export NEXT_PUBLIC_API_ORIGIN="http://127.0.0.1:8000"
    ```
    or
    ```env
    # .env.local
-   NEXT_PUBLIC_API_URL="http://localhost:8000"
+   NEXT_PUBLIC_API_ORIGIN="http://127.0.0.1:8000"
    ```
-   The app falls back to `http://localhost:8000` when this variable is unset.
+   The app defaults to `http://127.0.0.1:8000` for consistent development.
 3. Start the development server:
    ```bash
    npm run dev

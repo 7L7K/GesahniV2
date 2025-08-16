@@ -34,6 +34,10 @@ try:
         _orig_http_exception_handler = _fastapi_eh.http_exception_handler
 
         async def _problem_aware_http_exception_handler(request: _StarRequest, exc: Exception):  # type: ignore[override]
+            # Skip CORS preflight requests - don't touch headers
+            if str(getattr(request, "method", "")).upper() == "OPTIONS":
+                return await _orig_http_exception_handler(request, exc)  # type: ignore[misc]
+            
             headers = getattr(exc, "headers", None)
             detail = getattr(exc, "detail", None)
             content_type = ""
@@ -395,6 +399,8 @@ ws_requests: Dict[str, int] = {}
 # Additional short-window buckets for burst allowances
 http_burst: Dict[str, int] = {}
 ws_burst: Dict[str, int] = {}
+# Scope-based rate limiting buckets
+scope_rate_limits: Dict[str, int] = {}
 # Backwards-compatible aliases expected by some tests
 _http_requests = http_requests
 _ws_requests = ws_requests
@@ -402,19 +408,56 @@ _ws_requests = ws_requests
 _http_burst = http_burst
 _ws_burst = ws_burst
 
-# Legacy per-IP store for the deprecated helper below -----------------------
-_requests: Dict[str, List[float]] = {}
+# Rate limiting lock
+_lock = asyncio.Lock()
 
-# Dedicated counters for scope-based overrides to avoid interference with default buckets
-_override_long: Dict[str, int] = {}
-_override_burst: Dict[str, int] = {}
+def _current_key(request: Request) -> str:
+    """Get the current rate limiting key for the request."""
+    # Prefer explicit user_id set by deps; otherwise pull from JWT payload
+    uid = getattr(request.state, "user_id", None)
+    if not uid:
+        payload = getattr(request.state, "jwt_payload", None)
+        if not isinstance(payload, dict):
+            payload = _get_request_payload(request)
+        if isinstance(payload, dict):
+            uid = payload.get("user_id") or payload.get("sub")
+    
+    if uid:
+        return f"user:{uid}"
+    
+    # Fallback to IP-based key
+    ip = request.headers.get("X-Forwarded-For")
+    ip = (ip.split(",")[0].strip() if ip else (request.client.host if request.client else "anon"))
+    return f"ip:{ip}"
 
+def _should_bypass_rate_limit(request: Request) -> bool:
+    """Check if rate limiting should be bypassed for this request."""
+    # Exclude CORS preflight / OPTIONS from consuming budget
+    try:
+        if str(getattr(request, "method", "")).upper() == "OPTIONS":
+            return True
+    except Exception:
+        pass
+    
+    # Check for bypass scopes
+    try:
+        payload = getattr(request.state, "jwt_payload", None)
+        if not isinstance(payload, dict):
+            payload = _get_request_payload(request)
+        scopes = _payload_scopes(payload)
+        bypass = bool(_bypass_scopes_env() & scopes)
+        if bypass:
+            return True
+    except Exception:
+        pass
+    
+    return False
 
-def _bucket_rate_limit(
-    key: str, bucket: Dict[str, int], limit: int, period: float
-) -> bool:
-    """Increment ``key`` in ``bucket`` and enforce ``limit`` within ``period``."""
-
+def _bucket_rate_limit(key: str, bucket: Dict[str, int], limit: int, period: float) -> bool:
+    """Apply rate limiting to a bucket.
+    
+    Returns True if the request is allowed, False if rate limited.
+    """
     now = time.time()
     reset = bucket.setdefault("_reset", now)
     if now - reset >= period:
@@ -424,15 +467,11 @@ def _bucket_rate_limit(
     bucket[key] = count
     return count <= limit
 
-
 def _bucket_retry_after(bucket: Dict[str, int], period: float) -> int:
-    """Return seconds until this bucket resets (rounded up)."""
-
+    """Calculate retry after time for a bucket."""
     now = time.time()
-    reset = float(bucket.get("_reset", now))
-    remaining = (reset + period) - now
-    return int(max(0, int(remaining + 0.999)))
-
+    reset = bucket.get("_reset", now)
+    return max(0, int(reset + period - now))
 
 async def _apply_rate_limit(key: str, record: bool = True) -> bool:
     """Compatibility shim used directly by some legacy tests.
@@ -463,6 +502,10 @@ async def verify_token(request: Request) -> None:
     Prefers Authorization: Bearer token; falls back to ``access_token`` cookie for
     kiosk/TV devices where headers aren't available from the web UI.
     """
+
+    # Skip CORS preflight requests
+    if str(request.method).upper() == "OPTIONS":
+        return
 
     jwt_secret = os.getenv("JWT_SECRET")
     # Require JWT by default; tests/dev can opt-out via JWT_OPTIONAL_IN_TESTS
@@ -532,6 +575,10 @@ async def verify_token_strict(request: Request) -> None:
       - On success, attaches decoded payload to ``request.state.jwt_payload``
     """
 
+    # Skip CORS preflight requests
+    if str(request.method).upper() == "OPTIONS":
+        return
+
     secret = os.getenv("JWT_SECRET")
     if not secret:
         raise HTTPException(status_code=500, detail="missing_jwt_secret")
@@ -576,241 +623,61 @@ def get_rate_limit_defaults() -> dict:
 
 
 async def rate_limit(request: Request) -> None:
-    _maybe_refresh_settings_for_test()
-    # Exclude CORS preflight / OPTIONS from consuming budget
-    try:
-        if str(getattr(request, "method", "")).upper() == "OPTIONS":
-            return
-    except Exception:
-        pass
-    """Rate limit requests per authenticated user (or IP when unauthenticated).
+    """Apply rate limiting to the request.
 
-    When the limit is exceeded, we attach a short-lived Retry-After hint via the
-    raised HTTPException's detail so the caller can read a suggested wait time.
+    Raises HTTPException(429) if the request exceeds the rate limit.
     """
-
-    # Dev-only relaxations for localhost to reduce 429s during local development
-    try:
-        _env = os.getenv("ENV", "dev").strip().lower()
-        _host = (request.client.host if request.client else None) or ""
-        _is_local = _host in {"127.0.0.1", "::1", "localhost"}
-        if _env in {"dev", "development"} and _is_local:
-            # Boost per-minute caps 3x in dev for localhost traffic only
-            request.state.rate_limit_long_limit = int(max(int(getattr(request.state, "rate_limit_long_limit", 0) or 0), RATE_LIMIT * 3))
-            request.state.rate_limit_burst_limit = int(max(int(getattr(request.state, "rate_limit_burst_limit", 0) or 0), RATE_LIMIT_BURST * 3))
-    except Exception:
-        pass
-
-    # Prefer explicit user_id set by deps; otherwise pull from JWT payload (Authorization or cookie)
-    uid = getattr(request.state, "user_id", None)
-    if not uid:
-        payload = getattr(request.state, "jwt_payload", None)
-        if not isinstance(payload, dict):
-            payload = _get_request_payload(request)
-        if isinstance(payload, dict):
-            uid = payload.get("user_id") or payload.get("sub")
-
-    # Determine if this is an admin route to apply a separate bucket and optional stricter limits
-    try:
-        route_path = getattr(getattr(request, "url", None), "path", "") or ""
-    except Exception:
-        route_path = ""
-    is_admin_route = route_path.startswith("/v1/admin") or route_path.startswith("/admin")
-
-    # Allow separate config values for admin routes (optional)
-    try:
-        if is_admin_route:
-            # Per-env override for admin buckets; default to regular limits
-            request.state.rate_limit_long_limit = int(os.getenv("ADMIN_RATE_LIMIT", str(getattr(request.state, "rate_limit_long_limit", RATE_LIMIT) or RATE_LIMIT)))
-            request.state.rate_limit_burst_limit = int(os.getenv("ADMIN_RATE_LIMIT_BURST", str(getattr(request.state, "rate_limit_burst_limit", RATE_LIMIT_BURST) or RATE_LIMIT_BURST)))
-    except Exception:
-        pass
-
-    # Build a stable base key
-    test_salt = os.getenv("PYTEST_RUNNING") or os.getenv("PYTEST_CURRENT_TEST") or ""
-    suffix = f":{test_salt}" if test_salt else ""
-    key: str
-    if uid:
-        # Separate bucket for admin traffic to avoid interference with regular calls
-        key = f"user:{uid}{(':admin' if is_admin_route else '')}{suffix}"
-    else:
-        # Fallback: device-level bucket when device/session identifiers are available
-        did = None
-        try:
-            did = request.headers.get("X-Device-ID") or request.headers.get("X-Session-ID")
-        except Exception:
-            did = None
-        if not did:
-            try:
-                did = request.cookies.get("did") or request.cookies.get("sid")
-            except Exception:
-                did = None
-        if did:
-            key = f"device:{did}{suffix}"
-        else:
-            # Admin routes should never fall back to IP-based identity; keep a user-like anon bucket instead
-            if is_admin_route:
-                key = f"user:anon-admin{suffix}"
-            else:
-                # Prefer X-Forwarded-For first IP when present; else remote address
-                ip = request.headers.get("X-Forwarded-For")
-                ip = (ip.split(",")[0].strip() if ip else (request.client.host if request.client else "anon"))
-                key = f"ip:{ip}{suffix}"
-    # Include route path in the key to avoid cross-route bucket interference
-    key = _compose_key(str(key), request)
-    # Allow per-route overrides via request.state when set by dependencies
-    # Prefer per-request overrides, then module constants; ignore env here so tests
-    # that monkeypatch RATE_LIMIT/RATE_LIMIT_BURST take effect deterministically
-    long_limit = int(getattr(request.state, "rate_limit_long_limit", None) or RATE_LIMIT)
-    burst_limit = int(getattr(request.state, "rate_limit_burst_limit", None) or RATE_LIMIT_BURST)
-    # Optional stricter limits for admin routes via env knobs; defaults to existing values
-    if is_admin_route:
-        try:
-            adm_long = os.getenv("ADMIN_RATE_LIMIT")
-            adm_burst = os.getenv("ADMIN_RATE_LIMIT_BURST")
-            if adm_long is not None:
-                long_limit = int(adm_long)
-            if adm_burst is not None:
-                burst_limit = int(adm_burst)
-        except Exception:
-            pass
-    window = float(getattr(request.state, "rate_limit_window_s", _window) or _window)
-    burst_window = float(getattr(request.state, "rate_limit_burst_window_s", _burst_window) or _burst_window)
-    # Global bypass for configured scopes
-    try:
-        # Prefer payload from verified dependency, but fall back to best-effort decode
-        payload = getattr(request.state, "jwt_payload", None)
-        if not isinstance(payload, dict):
-            payload = _get_request_payload(request)
-        scopes = _payload_scopes(payload)
-        bypass = bool(_bypass_scopes_env() & scopes)
-        if bypass:
-            try:
-                metrics.RATE_LIMIT_ALLOWS.labels("http", "bypass", "n/a").inc()
-            except Exception:
-                pass
-            return
-    except Exception:
-        pass
-
-    # Optional daily cap per user (or per-IP when unauthenticated). Key does not include route.
-    daily_cap = int(os.getenv("DAILY_REQUEST_CAP", "0") or 0)
-    r_daily = await _get_redis()
-    if daily_cap > 0:
-        # Only apply daily cap to authenticated users
-        cap_payload = getattr(request.state, "jwt_payload", None)
-        if not isinstance(cap_payload, dict):
-            cap_payload = _get_request_payload(request)
-        cap_subject = None
-        if isinstance(cap_payload, dict):
-            cap_subject = cap_payload.get("user_id") or cap_payload.get("sub")
-        if cap_subject:
-            base_cap_key = f"user:{cap_subject}"
-            # Use a deterministic per-test key when under pytest to avoid cross-test pollution
-            test_salt = os.getenv("PYTEST_CURRENT_TEST") or ""
-            daily_key = f"{base_cap_key}:{test_salt}" if test_salt else base_cap_key
-            count, ttl = await _daily_incr(r_daily, daily_key)
-            if count > daily_cap:
-                try:
-                    metrics.RATE_LIMIT_BLOCKS.labels("http", "daily", "redis" if r_daily else "memory").inc()
-                except Exception:
-                    pass
-                raise HTTPException(
-                    status_code=429,
-                    detail={"error": "daily_cap_exceeded", "retry_after": int(ttl)},
-                    headers={"Retry-After": str(int(ttl))},
-                )
-
-    # Old bypass block removed; handled above
-    # Prefer distributed backend when available
-    r = await _get_redis()
-    backend_label = "redis" if r is not None else "memory"
-    if r is not None:
-        # Burst bucket first (distributed)
-        test_salt = os.getenv("PYTEST_CURRENT_TEST") or ""
-        suffix = f":{test_salt}" if test_salt else ""
-        burst_key = _rl_key("http", key, "burst") + suffix
-        long_key = _rl_key("http", key, "long") + suffix
-        b_count, b_ttl = await _redis_incr_with_ttl(r, burst_key, burst_window)
-        if b_count == -1:
-            r = None  # fall back to local
-        else:
-            # Update in-memory mirrors for snapshot headers (best-effort)
-            try:
-                http_burst[key] = b_count
-                http_burst["_reset"] = time.time() + max(0, int(b_ttl)) - _burst_window
-            except Exception:
-                pass
-            if b_count > burst_limit:
-                try:
-                    metrics.RATE_LIMIT_BLOCKS.labels("http", "burst", backend_label).inc()
-                except Exception:
-                    pass
-                retry_b = max(0, int(b_ttl))
-                raise HTTPException(
-                    status_code=429,
-                    detail={"error": "rate_limited", "retry_after": retry_b},
-                    headers={"Retry-After": str(retry_b)},
-                )
-            l_count, l_ttl = await _redis_incr_with_ttl(r, long_key, window)
-            if l_count == -1:
-                r = None
-            else:
-                try:
-                    _http_requests[key] = l_count
-                    _http_requests["_reset"] = time.time() + max(0, int(l_ttl)) - _window
-                except Exception:
-                    pass
-                if l_count > long_limit:
-                    try:
-                        metrics.RATE_LIMIT_BLOCKS.labels("http", "long", backend_label).inc()
-                    except Exception:
-                        pass
-                    retry_after = max(0, int(l_ttl))
-                    raise HTTPException(
-                        status_code=429,
-                        detail={"error": "rate_limited", "retry_after": retry_after},
-                        headers={"Retry-After": str(retry_after)},
-                    )
-                try:
-                    metrics.RATE_LIMIT_ALLOWS.labels("http", "pass", backend_label).inc()
-                except Exception:
-                    pass
-                return
-    # Fallback to process-local buckets
-    key_local = str(key)
+    if request.method == "OPTIONS":
+        return
+    
+    _maybe_refresh_settings_for_test()
+    
+    # Read rate limit values dynamically from environment
+    rate_limit_per_min = int(os.getenv("RATE_LIMIT_PER_MIN", os.getenv("RATE_LIMIT", "60")))
+    rate_limit_burst = int(os.getenv("RATE_LIMIT_BURST", "10"))
+    window = float(os.getenv("RATE_LIMIT_WINDOW_S", "60"))
+    burst_window = float(os.getenv("RATE_LIMIT_BURST_WINDOW_S", os.getenv("RATE_LIMIT_BURST_WINDOW", "60")))
+    
+    # Get the user key for rate limiting
+    key = _current_key(request)
+    
+    # Check if we should bypass rate limiting for this request
+    if _should_bypass_rate_limit(request):
+        return
+    
+    # Apply rate limiting
     async with _lock:
-        # Long-first evaluation in in-memory mode to satisfy tests that set long=1
-        ok_long = _bucket_rate_limit(key_local, _http_requests, long_limit, window)
+        # Check long-term rate limit
+        ok_long = _bucket_rate_limit(key, _http_requests, rate_limit_per_min, window)
         retry_long = _bucket_retry_after(_http_requests, window)
-        ok_b = _bucket_rate_limit(key_local, http_burst, burst_limit, burst_window)
-        retry_b = _bucket_retry_after(http_burst, burst_window)
-    if not ok_long:
-        # Include Retry-After header for clients; also JSON detail for compatibility
-        try:
-            metrics.RATE_LIMIT_BLOCKS.labels("http", "long", backend_label).inc()
-        except Exception:
-            pass
-        retry_after = retry_long
-        raise HTTPException(
-            status_code=429,
-            detail={"error": "rate_limited", "retry_after": retry_after},
-            headers={"Retry-After": str(retry_after)},
-        )
-    if not ok_b:
-        try:
-            metrics.RATE_LIMIT_BLOCKS.labels("http", "burst", backend_label).inc()
-        except Exception:
-            pass
-        raise HTTPException(
-            status_code=429,
-            detail={"error": "rate_limited", "retry_after": retry_b},
-            headers={"Retry-After": str(retry_b)},
-        )
-    try:
-        metrics.RATE_LIMIT_ALLOWS.labels("http", "pass", backend_label).inc()
-    except Exception:
-        pass
+        if not ok_long:
+            headers = {
+                "Retry-After": str(retry_long),
+                "RateLimit-Limit": str(rate_limit_per_min),
+                "RateLimit-Remaining": "0",
+                "RateLimit-Reset": str(int(time.time() + retry_long))
+            }
+            raise HTTPException(
+                status_code=429, 
+                detail={"error": "rate_limited", "retry_after": retry_long},
+                headers=headers
+            )
+        
+        # Check burst rate limit
+        ok_burst = _bucket_rate_limit(key, http_burst, rate_limit_burst, burst_window)
+        retry_burst = _bucket_retry_after(http_burst, burst_window)
+        if not ok_burst:
+            headers = {
+                "Retry-After": str(retry_burst),
+                "RateLimit-Limit": str(rate_limit_burst),
+                "RateLimit-Remaining": "0",
+                "RateLimit-Reset": str(int(time.time() + retry_burst))
+            }
+            raise HTTPException(
+                status_code=429, 
+                detail={"error": "rate_limited", "retry_after": retry_burst},
+                headers=headers
+            )
 
 
 async def verify_ws(websocket: WebSocket) -> None:
@@ -1028,6 +895,10 @@ async def require_nonce(request: Request, user_id: str = Depends(_nonce_user_dep
     Enabled when REQUIRE_NONCE env is truthy.
     """
 
+    # Skip CORS preflight requests
+    if str(request.method).upper() == "OPTIONS":
+        return
+
     if os.getenv("REQUIRE_NONCE", "0").lower() not in {"1", "true", "yes"}:
         return
     nonce = request.headers.get("X-Nonce")
@@ -1114,6 +985,10 @@ async def verify_webhook(
     Freshness: when REQUIRE_WEBHOOK_TS is truthy (default), requires X-Timestamp within
     WEBHOOK_MAX_SKEW_S (default 300 seconds) and binds signature to the timestamp.
     """
+
+    # Skip CORS preflight requests
+    if str(request.method).upper() == "OPTIONS":
+        return b""
 
     body = await request.body()
     secrets = _load_webhook_secrets()
@@ -1262,14 +1137,20 @@ def _current_key(request: Request | None) -> str:
 def get_rate_limit_snapshot(request: Request | None) -> dict:
     _maybe_refresh_settings_for_test()
     """Return a snapshot of long and burst rate limit state for headers."""
+    
     key = _current_key(request)
-    long_limit = RATE_LIMIT
-    burst_limit = RATE_LIMIT_BURST
+    
+    # Read rate limit values dynamically from environment
+    long_limit = int(os.getenv("RATE_LIMIT_PER_MIN", os.getenv("RATE_LIMIT", "60")))
+    burst_limit = int(os.getenv("RATE_LIMIT_BURST", "10"))
+    window = float(os.getenv("RATE_LIMIT_WINDOW_S", "60"))
+    burst_window = float(os.getenv("RATE_LIMIT_BURST_WINDOW_S", os.getenv("RATE_LIMIT_BURST_WINDOW", "60")))
+    
     # Snapshot from local mirrors (works for both memory and distributed modes)
     long_count = int(_http_requests.get(key, 0))
-    long_reset = _bucket_retry_after(_http_requests, _window)
+    long_reset = _bucket_retry_after(_http_requests, window)
     burst_count = int(http_burst.get(key, 0))
-    burst_reset = _bucket_retry_after(http_burst, _burst_window)
+    burst_reset = _bucket_retry_after(http_burst, burst_window)
     return {
         "limit": long_limit,
         "remaining": max(0, long_limit - long_count),
@@ -1297,6 +1178,9 @@ def rate_limit_with(long_limit: int | None = None, burst_limit: int | None = Non
     _burst = int(burst_limit) if burst_limit is not None else RATE_LIMIT_BURST
 
     async def _dep(request: Request) -> None:
+        # Skip CORS preflight requests
+        if request.method == "OPTIONS":
+            return
         # Partition key by pytest test id to avoid bleed
         key = _current_key(request)
         test_salt = os.getenv("PYTEST_CURRENT_TEST") or ""
@@ -1368,6 +1252,9 @@ def scope_rate_limit(scope: str, long_limit: int | None = None, burst_limit: int
     _burst = int(burst_limit) if burst_limit is not None else RATE_LIMIT_BURST
 
     async def _dep(request: Request) -> None:
+        # Skip CORS preflight requests
+        if request.method == "OPTIONS":
+            return
         # Partition keys per test id for deterministic unit tests
         payload = _get_request_payload(request)
         scopes = []
@@ -1381,7 +1268,7 @@ def scope_rate_limit(scope: str, long_limit: int | None = None, burst_limit: int
             base_key = f"{_current_key(request)}:scope:{scope}"
             key = f"{base_key}:{test_salt}" if test_salt else base_key
             async with _lock:
-                ok_long = _bucket_rate_limit(key, _override_long, _long, _window)
+                ok_long = _bucket_rate_limit(key, scope_rate_limits, _long, _window)
             if not ok_long:
                 raise HTTPException(status_code=429, detail={"error": "rate_limited"})
             return None
@@ -1430,6 +1317,10 @@ async def rate_limit_problem(request: Request, *, long_limit: int = 1, burst_lim
     blocking, raises an HTTPException with application/problem+json semantics and
     X-RateLimit-Remaining header so clients can show a countdown.
     """
+
+    # Skip CORS preflight requests
+    if request.method == "OPTIONS":
+        return
 
     try:
         # Override knobs for this request only

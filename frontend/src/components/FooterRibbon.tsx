@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { apiFetch } from '@/lib/api';
 
 export default function FooterRibbon() {
     const [lastUser, setLastUser] = useState<string>("");
@@ -8,24 +9,24 @@ export default function FooterRibbon() {
     const [quiet, setQuiet] = useState<boolean>(false);
 
     useEffect(() => {
-        const onToken = (e: any) => {
+        const onToken = (e: Event) => {
             try {
                 const msg = e.detail as { role: 'user' | 'assistant', text: string };
                 if (msg?.role === 'user') setLastUser(msg.text || '');
                 if (msg?.role === 'assistant') setLastBot(msg.text || '');
             } catch { }
         };
-        window.addEventListener('conversation:update', onToken as any);
+        window.addEventListener('conversation:update', onToken as EventListener);
         const i = setInterval(async () => {
             try {
-                const res = await fetch('/v1/status', { credentials: 'include' });
+                const res = await apiFetch('/v1/status', { auth: true });
                 const data = await res.json();
                 const active = Boolean(data?.quiet_hours?.active);
                 setQuiet(active);
                 if (active) document.body.classList.add('quiet-hours'); else document.body.classList.remove('quiet-hours');
             } catch { }
         }, 60000);
-        return () => window.removeEventListener('conversation:update', onToken as any);
+        return () => window.removeEventListener('conversation:update', onToken as EventListener);
     }, []);
 
     const trunc = (s: string) => (s.length > 80 ? s.slice(0, 77) + '…' : s);

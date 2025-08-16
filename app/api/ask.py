@@ -50,6 +50,9 @@ from app.security import rate_limit, verify_token
 
 router = APIRouter(tags=["Care"])  # dependency added per-route to allow env gate
 
+# Log auth dependency configuration at startup
+print(f"🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id")
+
 
 # Enforce auth/rate-limit with env gates
 def _require_auth_for_ask() -> bool:
@@ -57,6 +60,9 @@ def _require_auth_for_ask() -> bool:
 
 
 async def _verify_bearer_strict(request: Request) -> None:
+    # Skip CORS preflight requests
+    if request.method == "OPTIONS":
+        return
     secret = os.getenv("JWT_SECRET")
     if not secret:
         raise HTTPException(status_code=500, detail="missing_jwt_secret")
@@ -76,6 +82,9 @@ async def _verify_bearer_strict(request: Request) -> None:
 
 
 async def _require_auth_dep(request: Request) -> None:
+    # Skip CORS preflight requests
+    if request.method == "OPTIONS":
+        return
     # When auth is required for ask, enforce strict token validation before rate limiting
     if _require_auth_for_ask():
         # Prefer cookie/header hybrid validator to support cookie-auth flows; allow strict bearer via env
@@ -87,7 +96,7 @@ async def _require_auth_dep(request: Request) -> None:
 
 @router.post(
     "/ask",
-    dependencies=[Depends(_require_auth_dep), Depends(rate_limit)],
+    dependencies=[Depends(rate_limit)],
     responses={
         200: {
             "content": {
@@ -110,6 +119,7 @@ async def _require_auth_dep(request: Request) -> None:
 async def ask(
     request: Request,
     body: dict | None = Body(default=None),
+    user_id: str = Depends(get_current_user_id),
 ):
     # Step 1: Log entry point and payload details
     print(f"🔍 ASK ENTRY: /v1/ask hit with payload={body}")
@@ -124,16 +134,18 @@ async def ask(
         ct = ""
     if "application/json" not in ct:
         raise HTTPException(status_code=415, detail="unsupported_media_type")
-    # Resolve user id from JWT payload set by verify_token dependency
-    try:
-        payload = getattr(request.state, "jwt_payload", None)
-        user_id = None
-        if isinstance(payload, dict):
-            user_id = payload.get("user_id") or payload.get("sub")
-        user_hash = hash_user_id(user_id) if user_id else "anon"
-    except Exception:
-        user_id = None
-        user_hash = "anon"
+    
+    # Use canonical user_id from get_current_user_id dependency
+    user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
+    
+    # Enforce authentication - return 401 if no valid user
+    if user_id == "anon":
+        try:
+            from ..metrics import ROUTER_ASK_USER_ID_MISSING_TOTAL
+            ROUTER_ASK_USER_ID_MISSING_TOTAL.labels(env=os.getenv("ENV", "dev"), route="/v1/ask").inc()
+        except Exception:
+            pass
+        raise HTTPException(status_code=401, detail="Authentication required")
     # Liberal parsing: normalize various legacy shapes into (prompt_text, model, opts)
     def _dget(obj: dict | None, path: str):
         cur = obj or {}
@@ -481,13 +493,14 @@ async def ask(
 
 @router.post(
     "/ask/dry-explain",
-    dependencies=[Depends(_require_auth_dep), Depends(rate_limit)],
+    dependencies=[Depends(rate_limit)],
     response_model=dict,
     include_in_schema=False,
 )
 async def ask_dry_explain(
     request: Request,
     body: dict | None = Body(default=None),
+    user_id: str = Depends(get_current_user_id),
 ):
     """Shadow routing endpoint that returns routing decision without making model calls."""
     # Step 1: Log entry point and payload details
@@ -504,16 +517,17 @@ async def ask_dry_explain(
     if "application/json" not in ct:
         raise HTTPException(status_code=415, detail="unsupported_media_type")
     
-    # Resolve user id from JWT payload set by verify_token dependency
-    try:
-        payload = getattr(request.state, "jwt_payload", None)
-        user_id = None
-        if isinstance(payload, dict):
-            user_id = payload.get("user_id") or payload.get("sub")
-        user_hash = hash_user_id(user_id) if user_id else "anon"
-    except Exception:
-        user_id = None
-        user_hash = "anon"
+    # Use canonical user_id from get_current_user_id dependency
+    user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
+    
+    # Enforce authentication - return 401 if no valid user
+    if user_id == "anon":
+        try:
+            from ..metrics import ROUTER_ASK_USER_ID_MISSING_TOTAL
+            ROUTER_ASK_USER_ID_MISSING_TOTAL.labels(env=os.getenv("ENV", "dev"), route="/v1/ask/dry-explain").inc()
+        except Exception:
+            pass
+        raise HTTPException(status_code=401, detail="Authentication required")
     
     # Use the same normalization logic
     prompt_text, model_override, stream_flag, stream_explicit, gen_opts, shape, normalized_from = _normalize_payload(body)
@@ -555,7 +569,7 @@ async def ask_dry_explain(
         else:
             raise HTTPException(status_code=400, detail=f"Unknown model '{mv}'")
     else:
-        engine, model_name, picker_reason = pick_model(prompt_text, intent, tokens)
+        engine, model_name, picker_reason, keyword_hit = pick_model(prompt_text, intent, tokens)
         chosen_vendor = "openai" if engine == "gpt" else "ollama"
         chosen_model = model_name
     
@@ -566,7 +580,7 @@ async def ask_dry_explain(
     cb_user_open = _user_circuit_open(user_id) if user_id else False
     
     # Return the routing decision
-    return {
+    result = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "rid": request_id,
         "uid": user_id,
@@ -584,6 +598,218 @@ async def ask_dry_explain(
         "cb_global_open": cb_global_open,
         "allow_fallback": True,
         "stream": bool(stream_flag),
+    }
+    
+    if 'keyword_hit' in locals() and keyword_hit:
+        result["keyword_hit"] = keyword_hit
+    
+    return result
+
+
+@router.post(
+    "/ask/stream",
+    dependencies=[Depends(rate_limit)],
+    response_class=StreamingResponse,
+    include_in_schema=False,
+)
+async def ask_stream(
+    request: Request,
+    body: dict | None = Body(default=None),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Streaming endpoint with Server-Sent Events (SSE) support."""
+    # Step 1: Log entry point and payload details
+    print(f"🔍 ASK STREAM: /v1/ask/stream hit with payload={body}")
+    if body and isinstance(body, dict):
+        model_override = body.get("model") or body.get("model_override")
+        print(f"🔍 ASK PAYLOAD: model_override={model_override}, keys={list(body.keys())}")
+    
+    # Content-Type guard: only accept JSON bodies
+    try:
+        ct = (request.headers.get("content-type") or request.headers.get("Content-Type") or "").lower()
+    except Exception:
+        ct = ""
+    if "application/json" not in ct:
+        raise HTTPException(status_code=415, detail="unsupported_media_type")
+    
+    # Use canonical user_id from get_current_user_id dependency
+    user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
+    
+    # Enforce authentication - return 401 if no valid user
+    if user_id == "anon":
+        try:
+            from ..metrics import ROUTER_ASK_USER_ID_MISSING_TOTAL
+            ROUTER_ASK_USER_ID_MISSING_TOTAL.labels(env=os.getenv("ENV", "dev"), route="/v1/ask/stream").inc()
+        except Exception:
+            pass
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Use the same normalization logic
+    prompt_text, model_override, stream_flag, stream_explicit, gen_opts, shape, normalized_from = _normalize_payload(body)
+    
+    # Track shape normalization metrics
+    if normalized_from:
+        try:
+            from ..metrics import ROUTER_SHAPE_NORMALIZED_TOTAL
+            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(from_shape=normalized_from, to_shape=shape).inc()
+        except Exception:
+            pass
+    
+    # Generate request ID
+    request_id = str(uuid.uuid4())[:8]
+    
+    async def stream_generator():
+        try:
+            # Get routing decision first
+            from ..router import route_prompt
+            from ..model_picker import pick_model
+            from ..intent import detect_intent
+            from ..tokenizer import count_tokens
+            
+            # Detect intent and count tokens
+            norm_prompt = prompt_text.lower().strip()
+            intent, priority = detect_intent(prompt_text)
+            tokens = count_tokens(prompt_text)
+            
+            # Determine routing decision
+            if model_override:
+                mv = model_override.strip()
+                if mv.startswith("gpt"):
+                    chosen_vendor = "openai"
+                    chosen_model = mv
+                    picker_reason = "explicit_override"
+                elif mv.startswith("llama"):
+                    chosen_vendor = "ollama"
+                    chosen_model = mv
+                    picker_reason = "explicit_override"
+                else:
+                    # Unknown model
+                    yield f"event: error\ndata: {json.dumps({'rid': request_id, 'error': 'unknown_model', 'model': mv})}\n\n"
+                    return
+            else:
+                engine, model_name, picker_reason, keyword_hit = pick_model(prompt_text, intent, tokens)
+                chosen_vendor = "openai" if engine == "gpt" else "ollama"
+                chosen_model = model_name
+            
+            # Check circuit breakers
+            from ..llama_integration import llama_circuit_open
+            from ..router import _user_circuit_open
+            cb_global_open = llama_circuit_open
+            cb_user_open = _user_circuit_open(user_id) if user_id else False
+            
+            # Emit route event
+            route_data = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "rid": request_id,
+                "uid": user_id,
+                "path": "/v1/ask/stream",
+                "shape": shape,
+                "normalized_from": normalized_from,
+                "override_in": model_override,
+                "intent": intent,
+                "tokens_est": tokens,
+                "picker_reason": picker_reason,
+                "chosen_vendor": chosen_vendor,
+                "chosen_model": chosen_model,
+                "dry_run": False,
+                "cb_user_open": cb_user_open,
+                "cb_global_open": cb_global_open,
+                "allow_fallback": True,
+                "stream": True,
+            }
+            
+            if 'keyword_hit' in locals() and keyword_hit:
+                route_data["keyword_hit"] = keyword_hit
+            
+            yield f"event: route\ndata: {json.dumps(route_data)}\n\n"
+            
+            # Stream the actual response
+            async def stream_callback(token: str):
+                yield f"event: delta\ndata: {json.dumps({'content': token})}\n\n"
+            
+            # Call the appropriate vendor
+            try:
+                if chosen_vendor == "openai":
+                    from ..gpt_client import ask_gpt
+                    result = await ask_gpt(
+                        prompt_text,
+                        model=chosen_model,
+                        stream_cb=stream_callback,
+                        **gen_opts
+                    )
+                elif chosen_vendor == "ollama":
+                    from ..llama_integration import ask_llama
+                    result = await ask_llama(
+                        prompt_text,
+                        model=chosen_model,
+                        stream_cb=stream_callback,
+                        **gen_opts
+                    )
+                else:
+                    yield f"event: error\ndata: {json.dumps({'rid': request_id, 'vendor': chosen_vendor, 'error_class': 'unknown_vendor'})}\n\n"
+                    return
+                
+                # Emit done event
+                done_data = {
+                    "rid": request_id,
+                    "vendor": chosen_vendor,
+                    "model": chosen_model,
+                    "final_tokens": tokens,  # This would be actual completion tokens
+                }
+                yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
+                
+            except Exception as e:
+                # Emit error event
+                error_data = {
+                    "rid": request_id,
+                    "vendor": chosen_vendor,
+                    "error_class": type(e).__name__,
+                    "error": str(e)
+                }
+                yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
+                
+        except Exception as e:
+            # Emit error event for any other errors
+            error_data = {
+                "rid": request_id,
+                "error_class": type(e).__name__,
+                "error": str(e)
+            }
+            yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
+    
+    return StreamingResponse(
+        stream_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store",
+            "X-RID": request_id,
+        }
+    )
+
+
+@router.get(
+    "/ask/replay/{rid}",
+    dependencies=[Depends(_require_auth_dep)],
+    response_model=dict,
+    include_in_schema=False,
+)
+async def ask_replay(
+    rid: str,
+    request: Request,
+):
+    """Replay endpoint for debugging stored golden traces."""
+    # This is a placeholder implementation
+    # In a real implementation, you would:
+    # 1. Load the stored golden trace from a database/cache
+    # 2. Replay against current vendor configs
+    # 3. Return diff between then and now
+    
+    # For now, return a mock response
+    return {
+        "rid": rid,
+        "status": "not_implemented",
+        "message": "Replay functionality not yet implemented",
+        "note": "This would load stored golden trace and replay against current configs"
     }
 
 

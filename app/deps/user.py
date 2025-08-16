@@ -21,6 +21,9 @@ def get_current_user_id(
     3. Fallback to anonymous.
     The resolved ID is attached to request/websocket state when authenticated.
     """
+    if request and request.method == "OPTIONS":
+        return "anon"
+    
     target = request or websocket
 
     # 1) Grab or initialize our log record

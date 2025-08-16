@@ -22,9 +22,8 @@ def test_health_and_headers(monkeypatch):
     assert r.status_code == 200
     # Core observability headers present
     assert r.headers.get("X-Request-ID")
-    assert r.headers.get("X-RateLimit-Limit") is not None
-    # Basic security headers present (CSP, nosniff)
-    assert "Content-Security-Policy" in r.headers
+    assert r.headers.get("RateLimit-Limit") is not None
+    # Basic security headers present (CSP handled by frontend, nosniff)
     assert r.headers.get("X-Content-Type-Options") == "nosniff"
 
 

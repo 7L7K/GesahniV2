@@ -11,6 +11,17 @@ const compat = new FlatCompat({
 
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        {
+          "name": "fetch",
+          "message": "Use apiFetch from @/lib/api instead of global fetch"
+        }
+      ]
+    }
+  }
 ];
 
 export default eslintConfig;

@@ -76,6 +76,82 @@ except Exception:  # pragma: no cover - fallback stubs
 
 logger = logging.getLogger(__name__)
 
+# Environment variables for routing configuration
+ROUTER_BUDGET_MS = int(os.getenv("ROUTER_BUDGET_MS", "7000"))
+OPENAI_TIMEOUT_MS = int(os.getenv("OPENAI_TIMEOUT_MS", "6000"))
+OLLAMA_TIMEOUT_MS = int(os.getenv("OLLAMA_TIMEOUT_MS", "4500"))
+
+# Allow-list validation
+ALLOWED_GPT_MODELS = os.getenv("ALLOWED_GPT_MODELS", "gpt-4o,gpt-4o-mini,gpt-4.1-nano").split(",")
+ALLOWED_LLAMA_MODELS = os.getenv("ALLOWED_LLAMA_MODELS", "llama3,llama3.2,llama3.1").split(",")
+
+def _validate_model_allowlist(model: str, vendor: str) -> None:
+    """Validate model against allow-list before any vendor imports."""
+    if vendor == "openai":
+        if model not in ALLOWED_GPT_MODELS:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "model_not_allowed",
+                    "model": model,
+                    "vendor": vendor,
+                    "allowed": ALLOWED_GPT_MODELS
+                }
+            )
+    elif vendor == "ollama":
+        if model not in ALLOWED_LLAMA_MODELS:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "model_not_allowed", 
+                    "model": model,
+                    "vendor": vendor,
+                    "allowed": ALLOWED_LLAMA_MODELS
+                }
+            )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "unknown_model",
+                "model": model,
+                "hint": f"allowed: {', '.join(ALLOWED_GPT_MODELS + ALLOWED_LLAMA_MODELS)}"
+            }
+        )
+
+def _check_vendor_health(vendor: str) -> bool:
+    """Check if vendor is healthy without importing vendor modules."""
+    if vendor == "openai":
+        # Check OpenAI health (implement based on your OpenAI integration)
+        return True  # Placeholder - implement actual health check
+    elif vendor == "ollama":
+        return llama_integration.LLAMA_HEALTHY and not llama_integration.llama_circuit_open
+    return False
+
+def _get_fallback_vendor(vendor: str) -> str:
+    """Get the opposite vendor for fallback."""
+    return "ollama" if vendor == "openai" else "openai"
+
+def _get_fallback_model(vendor: str) -> str:
+    """Get the default model for the fallback vendor."""
+    if vendor == "openai":
+        return "gpt-4o"  # Default GPT model
+    else:
+        return "llama3"  # Default LLaMA model
+
+def _dry(engine: str, model: str) -> str:
+    """Dry run function for testing."""
+    label = model.split(":")[0] if engine == "llama" else model
+    msg = f"[dry-run] would call {engine} {label}"
+    logger.info(msg)
+    return msg
+
+def _user_circuit_open(user_id: str) -> bool:
+    """Check if user-specific circuit breaker is open."""
+    # Implement user-specific circuit breaker logic
+    # For now, return False (circuit closed)
+    return False
+
 import json
 import uuid
 from datetime import datetime, timezone
@@ -97,6 +173,8 @@ def _log_golden_trace(
     cb_global_open: bool,
     allow_fallback: bool,
     stream: bool,
+    tokens_est_method: str = "approx",
+    keyword_hit: str | None = None,
 ) -> None:
     """Emit exactly one post-decision log before adapter call. Make it the law."""
     trace = {
@@ -109,6 +187,7 @@ def _log_golden_trace(
         "override_in": override_in,
         "intent": intent,
         "tokens_est": tokens_est,
+        "tokens_est_method": tokens_est_method,
         "picker_reason": picker_reason,
         "chosen_vendor": chosen_vendor,
         "chosen_model": chosen_model,
@@ -118,6 +197,10 @@ def _log_golden_trace(
         "allow_fallback": allow_fallback,
         "stream": stream,
     }
+    
+    if keyword_hit:
+        trace["keyword_hit"] = keyword_hit
+    
     print(f"🎯 GOLDEN_TRACE: {json.dumps(trace)}")
     
     # Emit metrics
@@ -389,6 +472,7 @@ async def route_prompt(
     stream_hook: Callable[[str], Awaitable[None]] | None = None,
     shape: str = "text",
     normalized_from: str | None = None,
+    allow_fallback: bool = True,
     **gen_opts: Any,
 ) -> Any:
     # Generate unique request ID for tracing
@@ -403,876 +487,270 @@ async def route_prompt(
         model_override,
         user_id,
     )
-    rec = None
-    result = None
-    try:
-        rec = log_record_var.get()
-        norm_prompt = prompt.lower().strip()
-        tokens = count_tokens(prompt)
-        if rec:
-            rec.prompt = prompt
-            rec.embed_tokens = tokens
-            rec.user_id = user_id
-        session_id = rec.session_id if rec and rec.session_id else "default"
-        if stream_hook:
-            if stream_cb:
-                orig_cb = stream_cb
-
-                async def _multi(tok: str) -> None:
-                    await orig_cb(tok)
-                    await stream_hook(tok)
-
-                stream_cb = _multi
-            else:
-                stream_cb = stream_hook
-        # Separate flags: DEBUG_MODEL_ROUTING triggers dry-run; DEBUG toggles PromptBuilder debug
-        debug_route = os.getenv("DEBUG_MODEL_ROUTING", "").lower() in {
-            "1",
-            "true",
-            "yes",
-        }
-        builder_debug = os.getenv("DEBUG", "").lower() in {"1", "true", "yes"}
-
-        rag_client = RAGClient() if _needs_rag(norm_prompt) else None
-
-        def _dry(engine: str, model: str) -> str:
-            # Normalise llama model label to omit ":latest" suffix for stable test output
-            label = model.split(":")[0] if engine == "llama" else model
-            msg = f"[dry-run] would call {engine} {label}"
-            logger.info(msg)
-            if rec:
-                rec.engine_used = engine
-                rec.model_name = label
-                rec.response = msg
-            return msg
-
-        # Keep router health flag in sync with underlying integration so tests that
-        # patch llama_integration propagate here.
-        global LLAMA_HEALTHY
-        LLAMA_HEALTHY = bool(llama_integration.LLAMA_HEALTHY)
-
-        # Circuit breaker flag may be toggled globally; ensure picker stays in sync
-        if llama_circuit_open:
-            _mark_llama_unhealthy()
-            # keep model picker in sync so GPT is selected
-            try:
-                model_picker_module.LLAMA_HEALTHY = False  # type: ignore[attr-defined]
-            except Exception:
-                pass
-
-        # Guard against empty/whitespace prompts
-        if not prompt or not prompt.strip():
-            raise HTTPException(status_code=400, detail="empty_prompt")
-
-        with start_span("router.decide") as _span_decide:
-            intent, priority = detect_intent(prompt)
-        # If intent is unknown/low confidence, optionally ask a quick confirmation
-        # Disabled by default; enable with ENABLE_UNKNOWN_INTENT_CONFIRM=1
-        if intent == "unknown" and os.getenv("ENABLE_UNKNOWN_INTENT_CONFIRM", "0").lower() in {"1", "true", "yes"}:
-            confirm_text = "Did you want weather? [Yes/No]"
-            if rec:
-                rec.engine_used = "confirm"
-                rec.response = confirm_text
-            await append_history(prompt, "confirm", confirm_text)
-            return confirm_text
-
-        # Scam guard heuristic: warn when conversation includes common scam cues
-        try:
-            p = norm_prompt
-            if any(k in p for k in ("bank info", "gift card", "urgent money", "wire money")):
-                warn = (
-                    "I’m concerned this might be a scam. Avoid sharing bank info or buying gift cards. "
-                    "Would you like me to loop in your family? [Yes/No]"
-                )
-                if rec:
-                    rec.engine_used = "safety"
-                    rec.response = warn
-                await append_history(prompt, "safety", warn)
-                return warn
-        except Exception:
-            pass
-        # Token budgeter: clamp excess input per intent
-        prompt = clamp_prompt(prompt, intent)
-        if rec:
-            try:
-                add_trace_event(
-                    rec.req_id, "intent_detected", intent=intent, priority=priority
-                )
-            except Exception:
-                pass
-        # Debug dry-run path: skip external calls and just report selection
-        if debug_route:
-            engine, model = ("gpt", "gpt-4o")
-            if llama_integration.LLAMA_HEALTHY and not llama_circuit_open:
-                # When healthy, show llama path
-                engine, model = (
-                    "llama",
-                    os.getenv("OLLAMA_MODEL", "llama3").split(":")[0],
-                )
-            msg = _dry(engine, model)
-            return msg
-        # If the LLaMA circuit is open, bypass all skills to force model path
-        bypass_skills = bool(llama_circuit_open)
-
-        # Profile facts: KV-first short-ask handling
-        is_pf, pf_key = _classify_profile_question(norm_prompt)
-        if is_pf:
-            # Remember last asked key to accept short confirmations
-            try:
-                profile_store.set_last_asked_key(user_id, pf_key)
-            except Exception:
-                pass
-            value = profile_store.get_value(user_id, pf_key) if pf_key else None
-            if value is not None:
-                # Build minimal prompt with facts block; but answer directly
-                facts = {pf_key: value} if pf_key else {}
-                _built_prompt, ptoks = PromptBuilder.build(
-                    prompt,
-                    session_id=session_id,
-                    user_id=user_id,
-                    small_ask=True,
-                    profile_facts=facts,
-                )
-                if rec:
-                    rec.prompt_tokens = ptoks
-                    rec.prompt_hash = __import__(
-                        "app.memory.env_utils", fromlist=["_normalized_hash"]
-                    )._normalized_hash(norm_prompt)
-                try:
-                    logger.info(
-                        "profile_fact read — key=%s user=%s value=%r facts_block=%r",
-                        pf_key,
-                        user_id,
-                        value,
-                        rec.facts_block if rec else None,
-                    )
-                except Exception:
-                    pass
-                # Answer with the value directly to avoid hedging
-                result = await _finalise("gpt", prompt, str(value), rec)
-                return result
-
-        # 1️⃣ Explicit override (bypass skills like smalltalk)
-        if model_override:
-            mv = model_override.strip()
-            print(f"🔀 MODEL OVERRIDE: {mv} requested - bypassing skills")
-            logger.info("🔀 Model override requested → %s", mv)
-            # GPT override
-            if mv.startswith("gpt"):
-                print(f"🔀 GPT OVERRIDE: calling _call_gpt_override with {mv}")
-                if mv not in ALLOWED_GPT_MODELS:
-                    raise HTTPException(
-                        status_code=400, detail=f"Model '{mv}' not allowed"
-                    )
-                
-                # Log routing decision before adapter call
-                _log_golden_trace(
-                    request_id=request_id,
-                    user_id=user_id,
-                    path="/v1/ask",
-                    shape=shape,
-                    normalized_from=normalized_from,
-                    override_in=mv,
-                    intent=intent,
-                    tokens_est=tokens,
-                    picker_reason="explicit_override",
-                    chosen_vendor="openai",
-                    chosen_model=mv,
-                    dry_run=debug_route,
-                    cb_user_open=_user_circuit_open(user_id),
-                    cb_global_open=llama_circuit_open,
-                    allow_fallback=True,
-                    stream=bool(stream_cb),
-                )
-                
-                try:
-                    result = await _call_gpt_override(
-                        mv,
-                        prompt,
-                        norm_prompt,
-                        session_id,
-                        user_id,
-                        rec,
-                        stream_cb,
-                        rag_client=rag_client,
-                    )
-                    return result
-                except (httpx.HTTPError, RuntimeError) as e:
-                    logger.warning("GPT override failed: %s", e)
-                    if llama_integration.LLAMA_HEALTHY:
-                        fallback_built, fallback_pt = PromptBuilder.build(
-                            prompt,
-                            session_id=session_id,
-                            user_id=user_id,
-                            rag_client=rag_client,
-                            **gen_opts,
-                        )
-                        fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
-                        result = await _call_llama(
-                            prompt=prompt,
-                            built_prompt=fallback_built,
-                            model=fallback_model,
-                            rec=rec,
-                            norm_prompt=norm_prompt,
-                            session_id=session_id,
-                            user_id=user_id,
-                            ptoks=fallback_pt,
-                            stream_cb=stream_cb,
-                            gen_opts=gen_opts,
-                        )
-                        return result
-                    raise HTTPException(
-                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail=f"GPT backend unavailable: {e}",
-                    )
-            # LLaMA override
-            if mv.startswith("llama"):
-                print(f"🔀 LLAMA OVERRIDE: calling _call_llama_override with {mv}")
-                if ALLOWED_LLAMA_MODELS and mv not in ALLOWED_LLAMA_MODELS:
-                    raise HTTPException(
-                        status_code=400, detail=f"Model '{mv}' not allowed"
-                    )
-                if not llama_integration.LLAMA_HEALTHY:
-                    raise HTTPException(
-                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail="LLaMA backend unavailable",
-                    )
-                
-                # Log routing decision before adapter call
-                _log_golden_trace(
-                    request_id=request_id,
-                    user_id=user_id,
-                    path="/v1/ask",
-                    shape=shape,
-                    normalized_from=normalized_from,
-                    override_in=mv,
-                    intent=intent,
-                    tokens_est=tokens,
-                    picker_reason="explicit_override",
-                    chosen_vendor="ollama",
-                    chosen_model=mv,
-                    dry_run=debug_route,
-                    cb_user_open=_user_circuit_open(user_id),
-                    cb_global_open=llama_circuit_open,
-                    allow_fallback=True,
-                    stream=bool(stream_cb),
-                )
-                
-                result = await _call_llama_override(
-                    mv,
-                    prompt,
-                    norm_prompt,
-                    session_id,
-                    user_id,
-                    rec,
-                    stream_cb,
-                    gen_opts,
-                    rag_client=rag_client,
-                )
-                return result
-            raise HTTPException(
-                status_code=400, detail=f"Unknown or disallowed model '{mv}'"
-            )
-
-        # Smalltalk should take precedence over QA cache for greetings
-        if not bypass_skills and intent == "smalltalk":
-            try:
-                skill_resp = await _SMALLTALK.handle(prompt)
-            except Exception:
-                skill_resp = None
-            if skill_resp is not None:
-                if rec:
-                    rec.engine_used = "skill"
-                    rec.response = str(skill_resp)
-                await append_history(prompt, "skill", str(skill_resp))
-                await record("done", source="skill")
-                result = skill_resp
-                return result
-
-        # Handle story recall intent early: search vector store memories
-        if intent == "recall_story":
-            try:
-                # use a slightly larger k for recall but still within budget
-                from .memory.env_utils import _get_mem_top_k
-
-                k = max(3, min(10, _get_mem_top_k() * 2))
-            except Exception:
-                k = 5
-            mems = safe_query_user_memories(user_id, prompt, k=k)
-            if mems:
-                snippet = "\n".join(f"- {m}" for m in mems[:5])
-                text = f"Here are the most relevant past notes I found:\n{snippet}"
-                result = await _finalise("memory", prompt, text, rec)
-                return result
-            # fall through if nothing found
-
-        # Then consult Home Assistant first when command-like; else QA cache
-        # (maintains prior behavior where commands win over cache)
-        ha_resp = handle_command(prompt)
-        if inspect.isawaitable(ha_resp):
-            ha_resp = await ha_resp
-        if ha_resp is not None:
-            # If HA indicates confirmation required, surface that explicitly
-            if getattr(ha_resp, "message", "") == "confirm_required":
-                result = await _finalise(
-                    "ha",
-                    prompt,
-                    "This action requires confirmation. Say 'confirm' to proceed.",
-                    rec,
-                )
-                return result
-            result = await _finalise("ha", prompt, ha_resp.message, rec)
-            return result
-
-        cached = lookup_cached_answer(norm_prompt)
-        if cached is not None:
-            try:
-                await _analytics.record_cache_lookup(True)
-            except Exception:
-                pass
-            if rec:
-                rec.cache_hit = True
-            result = await _finalise("cache", prompt, cached, rec)
-            return result
+    
+        # Detect intent and count tokens
+    norm_prompt = prompt.lower().strip()
+    intent, priority = detect_intent(prompt)
+    tokens = count_tokens(prompt)
+    
+    # Check for debug mode
+    debug_route = bool(os.getenv("DEBUG_MODEL_ROUTING", "0"))
+    
+    # Determine initial routing decision
+    if model_override:
+        # Model override path
+        mv = model_override.strip()
+        print(f"🔀 MODEL OVERRIDE: {mv} requested - bypassing skills")
+        logger.info("🔀 Model override requested → %s", mv)
+        
+        # Determine vendor from model name
+        if mv.startswith("gpt"):
+            chosen_vendor = "openai"
+            chosen_model = mv
+            picker_reason = "explicit_override"
+        elif mv.startswith("llama"):
+            chosen_vendor = "ollama"
+            chosen_model = mv
+            picker_reason = "explicit_override"
         else:
-            try:
-                await _analytics.record_cache_lookup(False)
-            except Exception:
-                pass
-
-        skip_skills = intent == "chat" and priority == "high"
-
-        # 2️⃣ Built‑in skills
-        if not skip_skills and not bypass_skills:
-            for entry in CATALOG:
-                if isinstance(entry, tuple) and len(entry) == 2:
-                    keywords, SkillClass = entry
-                    if any(kw in prompt for kw in keywords):
-                        result = await _run_skill(prompt, SkillClass, rec)
-                        return result
-            skill_resp = await check_builtin_skills(prompt)
-            if skill_resp is not None:
-                result = await _finalise("skill", prompt, skill_resp, rec)
-                return result
-
-        # Intercept simple profile replies to curiosity prompts: "key: value"
-        if ":" in prompt and intent == "chat":
-            try:
-                handle_user_reply(user_id, prompt)
-            except Exception:
-                pass
-        # Also parse simple profile statements proactively
-        try:
-            if _maybe_update_profile_from_statement(user_id, prompt):
-                # Acknowledge fact update without model call
-                ack = "Noted." if not isinstance(prompt, str) else f"Noted: {prompt.strip().rstrip('.')}"
-                result = await _finalise("skill", prompt, ack, rec)
-                return result
-        except Exception:
-            pass
-
-        # Accept confirmations like "it's blue" for the last asked profile key
-        try:
-            pending_key = profile_store.get_last_asked_key(user_id)
-        except Exception:
-            pending_key = None
-        if pending_key:
-            maybe = _maybe_extract_confirmation(prompt)
-            if maybe:
-                try:
-                    profile_store.upsert(user_id, pending_key, maybe, source="utterance")
-                except Exception:
-                    pass
-
-        # 3️⃣ Home‑Assistant (second chance if earlier routing changed state)
-        ha_resp = handle_command(prompt)
-        if inspect.isawaitable(ha_resp):
-            ha_resp = await ha_resp
-        if ha_resp is not None:
-            if getattr(ha_resp, "message", "") == "confirm_required":
-                result = await _finalise(
-                    "ha",
-                    prompt,
-                    "This action requires confirmation. Say 'confirm' to proceed.",
-                    rec,
-                )
-                return result
-            result = await _finalise("ha", prompt, ha_resp.message, rec)
-            return result
-
-        # 4️⃣ Cache (secondary check in case routing above changed state)
-        cached = lookup_cached_answer(norm_prompt)
-        if cached is not None:
-            if rec:
-                rec.cache_hit = True
-            result = await _finalise("cache", prompt, cached, rec)
-            return result
-
-        # 5️⃣ Planning pass (cheap) → Action pass (heavy)
-        # First build the plan (lightweight), then execute action with carry-over.
-        # The planning prompt is intentionally concise and non-streaming.
-        plan_text = None
-        try:
-            plan_prompt = f"Plan task briefly (max 3 bullets) before answering.\nTask: {prompt}"
-            # Keep planning pass cheap: small model, short output
-            plan_text, _pt, _ct, _ = await ask_gpt(plan_prompt, "gpt-5-nano", SYSTEM_PROMPT, stream=False)
-        except Exception:
-            plan_text = None
-
-        # 5️⃣ Deterministic selection (gpt-5-nano baseline)
-        # Apply runtime tone/voice settings from profile (e.g., speed, style)
-        try:
-            prof = profile_store.get(user_id)
-            custom = getattr(rec, "custom_instructions", "") if rec else ""
-            pace = prof.get("speech_rate")
-            tone = prof.get("communication_style")
-            addl = []
-            if pace:
-                addl.append(f"Speak at {float(pace):.2f}x pace with clear pauses.")
-            if tone:
-                addl.append(f"Tone: {tone}.")
-            extra_instr = (custom + ("\n" + " ".join(addl) if addl else "")).strip()
-        except Exception:
-            extra_instr = getattr(rec, "custom_instructions", "") if rec else ""
-
-        built_prompt, ptoks = PromptBuilder.build(
-            prompt,
-            session_id=session_id,
-            user_id=user_id,
-            custom_instructions=extra_instr,
-            debug=builder_debug,
-            # Carry-over plan tokens as debug info for visibility/telemetry
-            debug_info=(getattr(rec, "debug_info", "") + (f"\nPLAN:\n{plan_text}" if plan_text else "")).strip(),
-            rag_client=rag_client,
-            **gen_opts,
-        )
-        if rec:
-            rec.prompt_tokens = ptoks
-
-        # In debug routing mode, short-circuit to a fixed GPT-4o dry-run when LLaMA is unhealthy
-        if debug_route and not (LLAMA_HEALTHY or llama_integration.LLAMA_HEALTHY):
-            result = _dry("gpt", "gpt-4o")
-            return result
-
-        # Determine model deterministically
-        # Retrieve current memories explicitly and feed into deterministic router
-        # Retrieval path: new pipeline when enabled, otherwise legacy memory lookup
-        use_new_pipeline = os.getenv("RETRIEVAL_PIPELINE", "0").lower() in {"1", "true", "yes"}
-        mem_docs: list[str] = []
-        if use_new_pipeline and _run_retrieval_pipeline is not None:
-            try:
-                coll = os.getenv("QDRANT_COLLECTION", "memories")
-                if ":" in coll:
-                    # Temporarily disable retrieval when collection name is invalid per acceptance criteria
-                    logger.warning("retrieval.disabled_invalid_collection name=%s", coll)
-                    if rec:
-                        try:
-                            add_trace_event(rec.req_id, "retrieval_disabled", reason="invalid_collection_name", collection=coll)
-                        except Exception:
-                            pass
-                    mem_docs = []
-                else:
-                    docs, rt = _run_retrieval_pipeline(
-                        user_id=user_id,
-                        query=prompt,
-                        intent=intent,
-                        collection=coll,
-                        explain=True,
-                        extra_filter=None,
-                    )
-                    mem_docs = docs
-                    if rec:
-                        try:
-                            add_trace_event(rec.req_id, "retrieval_trace", trace=rt, flags={
-                                "pipeline": True,
-                                "use_hosted_ce": os.getenv("RETRIEVE_USE_HOSTED_CE", "0"),
-                            })
-                        except Exception:
-                            pass
-            except Exception:
-                # fallback to legacy on any error
-                try:
-                    from .memory.env_utils import _get_mem_top_k
-                    k = _get_mem_top_k()
-                except Exception:
-                    k = 3
-                mem_docs = safe_query_user_memories(user_id, prompt, k=k)
-        else:
-            try:
-                from .memory.env_utils import _get_mem_top_k
-                k = _get_mem_top_k()
-            except Exception:
-                k = 3
-            mem_docs = safe_query_user_memories(user_id, prompt, k=k)
-        # Track retrieval metrics (token approximation kept for telemetry)
-        retrieved_tokens = max(0, ptoks - count_tokens(prompt))
-        if rec:
-            rec.retrieved_tokens = retrieved_tokens
-
-        det_env = os.getenv("DETERMINISTIC_ROUTER", "").lower() in {"1", "true", "yes"}
-        det_enabled = det_env
-        # In pytest, default to legacy router unless explicitly allowed
-        if os.getenv("PYTEST_CURRENT_TEST"):
-            det_enabled = det_env and (
-                os.getenv("ENABLE_DET_ROUTER_IN_TESTS", "").lower()
-                in {"1", "true", "yes"}
-            )
-        if det_enabled:
-            decision = route_text(
-                user_prompt=prompt,
-                prompt_tokens=tokens,
-                retrieved_docs=mem_docs,
-                intent=intent,
-                # Surface attachments_count when present in gen_opts
-                attachments_count=(
-                    int(gen_opts.get("attachments_count", 0)) if gen_opts else 0
-                ),
-            )
-            try:
-                if _span_decide is not None:
-                    _span_decide.set_attribute("rule_id", str(decision.reason))
-                    _span_decide.set_attribute("model_selected", str(decision.model))
-            except Exception:
-                pass
-            if rec:
-                rec.route_reason = decision.reason
-                try:
-                    add_trace_event(
-                        rec.req_id, "deterministic_route", **asdict(decision)
-                    )
-                except Exception:
-                    pass
-
-            # Select system prompt profile: mode override → default file/env
-            sys_mode = getattr(rec, "system_mode", None) if rec else None
-            system_prompt = load_system_prompt(sys_mode) or SYSTEM_PROMPT
-
-            if rec:
-                from .memory.env_utils import _normalized_hash
-
-                rec.rag_doc_ids = [_normalized_hash(m) for m in mem_docs]
-                rec.retrieval_count = len(mem_docs)
-                rec.prompt_hash = __import__(
-                    "app.memory.env_utils", fromlist=["_normalized_hash"]
-                )._normalized_hash(norm_prompt)
-
-            # Compose deterministic cache key: {model, prompt_hash, topk_ids}
-            cache_key = compose_cache_id(decision.model, norm_prompt, mem_docs)
-            try:
-                cached = lookup_cached_answer(cache_key)
-            except TypeError:
-                cached = None
-            if cached is not None:
-                try:
-                    await _analytics.record_cache_lookup(True)
-                except Exception:
-                    pass
-                if rec:
-                    rec.cache_hit = True
-                    rec.cache_similarity = 1.0
-                result = await _finalise("gpt", prompt, cached, rec)
-                return result
-            else:
-                try:
-                    await _analytics.record_cache_lookup(False)
-                except Exception:
-                    pass
-
-            # Call with self-check escalation policy (budget-aware)
-            try:
-                bm = _budget.get_budget_state(user_id)
-            except Exception:
-                bm = {"escalate_allowed": True}
-            max_retries = 0 if not bm.get("escalate_allowed", True) else None
-            with start_span("model.call.gpt", {"model": decision.model}) as _span_call:
-                text, final_model, reason, score, pt, ct, cost, escalated = (
-                    await run_with_self_check(
-                        ask_func=ask_gpt,
-                        model=decision.model,
-                        user_prompt=built_prompt,
-                        system_prompt=system_prompt,
-                        retrieved_docs=mem_docs,
-                        on_token=stream_cb,
-                        stream=bool(stream_cb),
-                        allow_test=True if os.getenv("PYTEST_CURRENT_TEST") else False,
-                        max_retries=max_retries,
-                    )
-                )
-                try:
-                    if _span_call is not None:
-                        _span_call.set_attribute("tokens_in", int(pt))
-                        _span_call.set_attribute("tokens_out", int(ct))
-                        _span_call.set_attribute("cost_usd", float(cost or 0))
-                except Exception:
-                    pass
-            logger.debug(
-                "run_with_self_check result model=%s score=%.3f escalated=%s",
-                final_model,
-                score,
-                escalated,
-            )
-            if rec:
-                rec.model_name = final_model
-                rec.self_check_score = score
-                rec.escalated = escalated
-                rec.prompt_tokens = pt
-                rec.completion_tokens = ct
-                rec.cost_usd = cost
-                rec.response = text
-                try:
-                    add_trace_event(
-                        rec.req_id,
-                        "model_called",
-                        model=final_model,
-                        self_check=score,
-                        escalated=escalated,
-                    )
-                except Exception:
-                    pass
-
-            # Persist cache with composed key to prevent cross-model contamination
-            try:
-                cache_answer(prompt=cache_key, answer=text)
-            except Exception:
-                pass
-            # Update budget usage (best-effort)
-            try:
-                _budget.add_usage(user_id, prompt_tokens=pt, completion_tokens=ct)
-            except Exception:
-                pass
-            # Shadow A/B: 5% of nano traffic executes on gpt-4.1-nano in background
-            try:
-                if final_model == "gpt-5-nano" and rec and (hash(rec.req_id) % 20 == 0):
-                    import asyncio as _asyncio
-
-                    _asyncio.create_task(
-                        _run_shadow(built_prompt, system_prompt, text)
-                    )  # noqa: F821
-            except Exception:
-                pass
-            # Optional curiosity loop: if confidence < tau or missing profile keys
-            try:
-                c_prompt = await maybe_curiosity_prompt(user_id, score)
-                if c_prompt and stream_cb is None:
-                    text = f"{text}\n\n{c_prompt}"
-            except Exception:
-                pass
-            # Answer provenance: append [#chunk:ID] tags where applicable
-            try:
-                text = _annotate_provenance(text, mem_docs)
-            except Exception:
-                pass
-            # Hidden sources block (consumed by frontend for hover snippets)
-            try:
-                if mem_docs:
-                    lines = []
-                    for m in mem_docs:
-                        try:
-                            cid = __import__(
-                                "app.memory.env_utils", fromlist=["_normalized_hash"]
-                            )._normalized_hash(m)[:12]
-                        except Exception:
-                            cid = "unknown"
-                        lines.append(f"- ({cid}) {m}")
-                    block = "\n".join(lines)
-                    text = f"{text}\n\n```sources\n{block}\n```"
-            except Exception:
-                pass
-            return await _finalise("gpt", prompt, text, rec)
-
-        # Legacy probabilistic routing (default when flag disabled)
-        if debug_route and llama_integration.LLAMA_HEALTHY:
-            # Preserve existing dry-run behavior when LLaMA healthy
-            result = _dry("llama", os.getenv("OLLAMA_MODEL", "llama3").split(":")[0])
-            return result
-        engine, model_name, picker_reason = pick_model(prompt, intent, tokens)
-        print(f"🎯 DEFAULT MODEL SELECTION: engine={engine}, model={model_name}, intent={intent}, reason={picker_reason}")
-        if engine == "gpt":
-            print(f"🎯 GPT PATH: calling _call_gpt with {model_name}")
-            
-            # Log routing decision before adapter call
-            _log_golden_trace(
-                request_id=request_id,
-                user_id=user_id,
-                path="/v1/ask",
-                shape=shape,
-                normalized_from=normalized_from,
-                override_in=model_override,
-                intent=intent,
-                tokens_est=tokens,
-                picker_reason=picker_reason,
-                chosen_vendor="openai",
-                chosen_model=model_name,
-                dry_run=debug_route,
-                cb_user_open=_user_circuit_open(user_id),
-                cb_global_open=llama_circuit_open,
-                allow_fallback=True,
-                stream=bool(stream_cb),
-            )
-            
-            if debug_route:
-                result = _dry("gpt", model_name)
-                return result
-            try:
-                with start_span("model.call.gpt", {"model": model_name}):
-                    result = await _call_gpt(
-                    prompt=prompt,
-                    built_prompt=built_prompt,
-                    model=model_name,
-                    rec=rec,
-                    norm_prompt=norm_prompt,
-                    session_id=session_id,
-                    user_id=user_id,
-                    ptoks=ptoks,
-                    stream_cb=stream_cb,
-                    )
-                return result
-            except Exception as e:
-                logger.warning("GPT call failed: %s", e)
-                if llama_integration.LLAMA_HEALTHY:
-                    fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
-                    result = await _call_llama(
-                        prompt=prompt,
-                        built_prompt=built_prompt,
-                        model=fallback_model,
-                        rec=rec,
-                        norm_prompt=norm_prompt,
-                        session_id=session_id,
-                        user_id=user_id,
-                        ptoks=ptoks,
-                        stream_cb=stream_cb,
-                    )
-                    return result
+            # Unknown model - validate before any imports
+            _validate_model_allowlist(mv, "unknown")
+            # This should never be reached due to validation above
+            raise HTTPException(status_code=400, detail=f"Unknown model '{mv}'")
+        
+        # Validate against allow-list before any vendor imports
+        _validate_model_allowlist(chosen_model, chosen_vendor)
+        
+        # Check vendor health
+        if not _check_vendor_health(chosen_vendor):
+            if not allow_fallback:
                 raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="GPT backend unavailable",
+                    status_code=503,
+                    detail={
+                        "error": "vendor_unavailable",
+                        "vendor": chosen_vendor
+                    }
                 )
-
-        if engine == "llama" and llama_integration.LLAMA_HEALTHY:
-            print(f"🎯 LLAMA PATH: calling _call_llama with {model_name}")
-            
-            # Log routing decision before adapter call
-            _log_golden_trace(
-                request_id=request_id,
-                user_id=user_id,
-                path="/v1/ask",
-                shape=shape,
-                normalized_from=normalized_from,
-                override_in=model_override,
-                intent=intent,
-                tokens_est=tokens,
-                picker_reason=picker_reason,
-                chosen_vendor="ollama",
-                chosen_model=model_name,
-                dry_run=debug_route,
-                cb_user_open=_user_circuit_open(user_id),
-                cb_global_open=llama_circuit_open,
-                allow_fallback=True,
-                stream=bool(stream_cb),
-            )
-            
-            # Per-user circuit: short-circuit to GPT if this user has a hot breaker
-            if _user_circuit_open(user_id):
-                print(f"🎯 USER CIRCUIT OPEN: short-circuiting to GPT for user {user_id}")
-                # Execute GPT directly and return
+            else:
+                # Fallback to opposite vendor
+                fallback_vendor = _get_fallback_vendor(chosen_vendor)
+                fallback_model = _get_fallback_model(fallback_vendor)
+                fallback_reason = f"fallback_{fallback_vendor}"
+                
+                # Validate fallback model
+                _validate_model_allowlist(fallback_model, fallback_vendor)
+                
+                # Check fallback vendor health
+                if not _check_vendor_health(fallback_vendor):
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "error": "all_vendors_unavailable",
+                            "primary": chosen_vendor,
+                            "fallback": fallback_vendor
+                        }
+                    )
+                
+                # Use fallback
+                chosen_vendor = fallback_vendor
+                chosen_model = fallback_model
+                picker_reason = fallback_reason
+                
+                # Log fallback metrics
                 try:
-                    result = await _call_gpt(
-                        prompt=prompt,
-                        built_prompt=built_prompt,
-                        model=os.getenv("OPENAI_MODEL", "gpt-4o"),
-                        rec=rec,
-                        norm_prompt=norm_prompt,
-                        session_id=session_id,
-                        user_id=user_id,
-                        ptoks=ptoks,
-                        stream_cb=stream_cb,
-                    )
-                    return result
+                    from .metrics import ROUTER_FALLBACKS_TOTAL
+                    ROUTER_FALLBACKS_TOTAL.labels(
+                        from_vendor=_get_fallback_vendor(chosen_vendor),
+                        to_vendor=chosen_vendor,
+                        reason="vendor_unhealthy"
+                    ).inc()
                 except Exception:
-                    # If GPT fails, fall back to attempting llama once
                     pass
-            if debug_route:
-                result = _dry("llama", model_name)
-                return result
-            try:
-                with start_span("model.call.llama", {"model": model_name}):
-                    result = await _call_llama(
-                prompt=prompt,
-                built_prompt=built_prompt,
-                model=model_name,
-                rec=rec,
-                norm_prompt=norm_prompt,
-                session_id=session_id,
-                user_id=user_id,
-                ptoks=ptoks,
-                stream_cb=stream_cb,
-                        gen_opts=gen_opts,
+    else:
+        # Default picker path
+        engine, model_name, picker_reason, keyword_hit = pick_model(prompt, intent, tokens)
+        print(f"🎯 DEFAULT MODEL SELECTION: engine={engine}, model={model_name}, intent={intent}, reason={picker_reason}")
+        
+        # Determine vendor
+        chosen_vendor = "openai" if engine == "gpt" else "ollama"
+        chosen_model = model_name
+        
+        # Validate against allow-list
+        _validate_model_allowlist(chosen_model, chosen_vendor)
+        
+        # Check vendor health
+        if not _check_vendor_health(chosen_vendor):
+            if not allow_fallback:
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "vendor_unavailable",
+                        "vendor": chosen_vendor
+                    }
+                )
+            else:
+                # Fallback to opposite vendor
+                fallback_vendor = _get_fallback_vendor(chosen_vendor)
+                fallback_model = _get_fallback_model(fallback_vendor)
+                fallback_reason = f"fallback_{fallback_vendor}"
+                
+                # Validate fallback model
+                _validate_model_allowlist(fallback_model, fallback_vendor)
+                
+                # Check fallback vendor health
+                if not _check_vendor_health(fallback_vendor):
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "error": "all_vendors_unavailable",
+                            "primary": chosen_vendor,
+                            "fallback": fallback_vendor
+                        }
                     )
-                # success: reset per-user breaker
-                _user_cb_reset(user_id)
-                return result
-            except HTTPException:
-                # mark failure and re-raise
-                _user_cb_record_failure(user_id)
-                raise
+                
+                # Use fallback
+                chosen_vendor = fallback_vendor
+                chosen_model = fallback_model
+                picker_reason = fallback_reason
+                keyword_hit = None  # Reset keyword for fallback
+                
+                # Log fallback metrics
+                try:
+                    from .metrics import ROUTER_FALLBACKS_TOTAL
+                    ROUTER_FALLBACKS_TOTAL.labels(
+                        from_vendor=_get_fallback_vendor(chosen_vendor),
+                        to_vendor=chosen_vendor,
+                        reason="vendor_unhealthy"
+                    ).inc()
+                except Exception:
+                    pass
 
-        if engine == "llama" and not llama_integration.LLAMA_HEALTHY:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="LLaMA circuit open",
-            )
-
-        # Fallback GPT-4o
-        if debug_route:
-            result = _dry("gpt", "gpt-4o")
-            return result
+    # Check circuit breakers
+    cb_global_open = llama_circuit_open
+    cb_user_open = _user_circuit_open(user_id) if user_id else False
+    
+    # Log the final routing decision
+    _log_golden_trace(
+        request_id=request_id,
+        user_id=user_id,
+        path="/v1/ask",
+        shape=shape,
+        normalized_from=normalized_from,
+        override_in=model_override,
+        intent=intent,
+        tokens_est=tokens,
+        picker_reason=picker_reason,
+        chosen_vendor=chosen_vendor,
+        chosen_model=chosen_model,
+        dry_run=debug_route,
+        cb_user_open=cb_user_open,
+        cb_global_open=cb_global_open,
+        allow_fallback=allow_fallback,
+        stream=bool(stream_cb),
+        keyword_hit=keyword_hit if 'keyword_hit' in locals() else None,
+    )
+    
+    # Execute the chosen vendor
+    if debug_route:
+        result = _dry(chosen_vendor, chosen_model)
+        return result
+    
+    if chosen_vendor == "openai":
+        # Lazy import OpenAI adapter
         try:
-            result = await _call_gpt(
-                prompt=prompt,
-                built_prompt=built_prompt,
-                model="gpt-4o",
-                rec=rec,
-                norm_prompt=norm_prompt,
-                session_id=session_id,
-                user_id=user_id,
-                ptoks=ptoks,
+            from .gpt_client import ask_gpt
+            result = await ask_gpt(
+                prompt,
+                model=chosen_model,
                 stream_cb=stream_cb,
+                **gen_opts
             )
             return result
         except Exception as e:
-            logger.warning("GPT fallback failed: %s", e)
-            if llama_integration.LLAMA_HEALTHY:
-                fallback_model = os.getenv("OLLAMA_MODEL", "llama3")
-                result = await _call_llama(
-                    prompt=prompt,
-                    built_prompt=built_prompt,
-                    model=fallback_model,
-                    rec=rec,
-                    norm_prompt=norm_prompt,
-                    session_id=session_id,
-                    user_id=user_id,
-                    ptoks=ptoks,
-                    stream_cb=stream_cb,
-                    gen_opts=gen_opts,
-                )
-                return result
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="GPT backend unavailable",
+            if allow_fallback and chosen_vendor != _get_fallback_vendor(chosen_vendor):
+                # Try fallback
+                fallback_vendor = _get_fallback_vendor(chosen_vendor)
+                fallback_model = _get_fallback_model(fallback_vendor)
+                
+                # Log fallback metrics
+                try:
+                    from .metrics import ROUTER_FALLBACKS_TOTAL
+                    ROUTER_FALLBACKS_TOTAL.labels(
+                        from_vendor=chosen_vendor,
+                        to_vendor=fallback_vendor,
+                        reason="vendor_error"
+                    ).inc()
+                except Exception:
+                    pass
+                
+                # Try fallback vendor
+                if fallback_vendor == "ollama":
+                    try:
+                        from .llama_integration import ask_llama
+                        result = await ask_llama(
+                            prompt,
+                            model=fallback_model,
+                            stream_cb=stream_cb,
+                            **gen_opts
+                        )
+                        return result
+                    except Exception:
+                        pass
+                
+                # If fallback also fails, raise original error
+                raise e
+            else:
+                raise e
+    
+    elif chosen_vendor == "ollama":
+        # Lazy import Ollama adapter
+        try:
+            from .llama_integration import ask_llama
+            result = await ask_llama(
+                prompt,
+                model=chosen_model,
+                stream_cb=stream_cb,
+                **gen_opts
             )
-    except Exception:
-        logger.exception("route_prompt failed")
-        raise
-    finally:
-        if result is not None:
-            engine = rec.engine_used if rec else None
-            model = getattr(rec, "model_name", None) if rec else None
-            logger.debug(
-                "route_prompt result engine=%s model=%s result=%s",
-                engine,
-                model,
-                result,
-            )
+            return result
+        except Exception as e:
+            if allow_fallback and chosen_vendor != _get_fallback_vendor(chosen_vendor):
+                # Try fallback
+                fallback_vendor = _get_fallback_vendor(chosen_vendor)
+                fallback_model = _get_fallback_model(fallback_vendor)
+                
+                # Log fallback metrics
+                try:
+                    from .metrics import ROUTER_FALLBACKS_TOTAL
+                    ROUTER_FALLBACKS_TOTAL.labels(
+                        from_vendor=chosen_vendor,
+                        to_vendor=fallback_vendor,
+                        reason="vendor_error"
+                    ).inc()
+                except Exception:
+                    pass
+                
+                # Try fallback vendor
+                if fallback_vendor == "openai":
+                    try:
+                        from .gpt_client import ask_gpt
+                        result = await ask_gpt(
+                            prompt,
+                            model=fallback_model,
+                            stream_cb=stream_cb,
+                            **gen_opts
+                        )
+                        return result
+                    except Exception:
+                        pass
+                
+                # If fallback also fails, raise original error
+                raise e
+            else:
+                raise e
+    
+    # This should never be reached
+    raise HTTPException(status_code=500, detail="No valid vendor found")
 
 
 # -------------------------------

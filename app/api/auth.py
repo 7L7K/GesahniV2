@@ -32,6 +32,9 @@ from ..auth_store import (
     create_pat as _create_pat,
     get_pat_by_hash as _get_pat_by_hash,
 )
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
+from ..security import rate_limit
 
 
 router = APIRouter(tags=["Auth"])  # expose in OpenAPI for docs/tests
@@ -247,9 +250,15 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
     }
 
 
+from fastapi.responses import JSONResponse
+
 @router.get("/whoami")
-async def whoami(request: Request) -> Dict[str, Any]:
-    return await whoami_impl(request)
+async def whoami(request: Request, _: None = Depends(rate_limit)) -> JSONResponse:
+    data = await whoami_impl(request)
+    return JSONResponse(
+        content=data,
+        headers={"Vary": "Origin"}
+    )
 
 
 # Device sessions endpoints were moved to app.api.me for canonical shapes.
@@ -475,7 +484,8 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
             reason = "cross_site"
     except Exception:
         pass
-    # Fast path for XHR/POST: Set-Cookie and return 204 (no redirect)
+    # SPA Style: POST returns 204 with Set-Cookie, no redirect
+    # Frontend handles navigation via router.push() after successful POST
     method = str(getattr(request, "method", "")).upper()
     if method == "POST":
         # When SameSite=None (cross-site), require explicit intent header even for finisher POST
@@ -518,7 +528,8 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         except Exception:
             pass
         return resp
-    # Browser GET: redirect to next with cookies attached
+    # Legacy GET: redirect to next with cookies attached (fallback for direct browser navigation)
+    # Note: SPA should use POST /v1/auth/finish for consistent behavior
     resp = RedirectResponse(url=next_path, status_code=302)
     try:
         _append_cookie_with_priority(resp, key="access_token", value=access_token, max_age=token_lifetime, secure=cookie_secure, samesite=cookie_samesite)
@@ -745,32 +756,85 @@ async def login(username: str, request: Request, response: Response):
 
 @router.post(
     "/auth/logout",
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok"}}}}}},
+    responses={204: {"description": "Logout successful"}},
 )
-async def logout(request: Request, response: Response, user_id: str = Depends(get_current_user_id)):
+async def logout(request: Request, response: Response):
     """Logout current session family.
 
     CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
     """
+    
+    # Logout function called
+    print("LOGOUT FUNCTION CALLED")
+    # Set a header to prevent silent refresh middleware from running
+    # Note: Headers are immutable, so we can't modify them directly
     # Revoke refresh family bound to session id (did/sid) when possible
     try:
         from ..token_store import revoke_refresh_family
-        sid = request.headers.get("X-Session-ID") or request.cookies.get("sid") or user_id
+        sid = request.headers.get("X-Session-ID") or request.cookies.get("sid") or "anon"
         # TTL: align with remaining refresh TTL when available; best-effort 7d
         await revoke_refresh_family(sid, ttl_seconds=int(os.getenv("JWT_REFRESH_TTL_SECONDS", "604800")))
     except Exception:
         pass
-    # Clear cookies regardless of Bearer availability
+    
+    # Clear cookies with proper expiration (Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT)
+    # Use same cookie flags as when they were set
     try:
-        response.delete_cookie("access_token", path="/")
-        response.delete_cookie("refresh_token", path="/")
+        print("LOGOUT: Getting cookie flags")
+        cookie_secure, cookie_samesite = _cookie_flags_for(request)
+        print(f"LOGOUT: Cookie flags - secure={cookie_secure}, samesite={cookie_samesite}")
+        
+        # Clear cookies by setting them with Max-Age=0 and expired Expires
+        smap = {"lax": "Lax", "strict": "Strict", "none": "None"}
+        ss = smap.get((cookie_samesite or "lax").lower(), "Lax")
+        
+        # Clear access_token with proper format
+        access_parts = [
+            "access_token=",
+            "HttpOnly",
+            "Max-Age=0",
+            "Path=/",
+            f"SameSite={ss}",
+            "Secure" if cookie_secure else None,
+            "Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+        ]
+        access_header = "; ".join([p for p in access_parts if p])
+        print(f"LOGOUT: Setting access cookie header: {access_header}")
+        response.headers.append("Set-Cookie", access_header)
+        
+        # Clear refresh_token with proper format
+        refresh_parts = [
+            "refresh_token=",
+            "HttpOnly",
+            "Max-Age=0",
+            "Path=/",
+            f"SameSite={ss}",
+            "Secure" if cookie_secure else None,
+            "Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+        ]
+        refresh_header = "; ".join([p for p in refresh_parts if p])
+        print(f"LOGOUT: Setting refresh cookie header: {refresh_header}")
+        response.headers.append("Set-Cookie", refresh_header)
+        
+    except Exception as e:
+        print(f"LOGOUT: Exception in cookie clearing: {e}")
+        # Fallback to delete_cookie
+        try:
+            print("LOGOUT: Using fallback delete_cookie")
+            response.delete_cookie("access_token", path="/", max_age=0, expires="Thu, 01 Jan 1970 00:00:00 GMT")
+            response.delete_cookie("refresh_token", path="/", max_age=0, expires="Thu, 01 Jan 1970 00:00:00 GMT")
+        except Exception as e2:
+            print(f"LOGOUT: Exception in fallback: {e2}")
+            pass
+    
+    try:
+        # Logout clear=both
+        print("LOGOUT CLEARING COOKIES")
     except Exception:
         pass
-    try:
-        print("logout clear=both")
-    except Exception:
-        pass
-    return {"status": "ok"}
+    
+    response.status_code = 204
+    return response
 
 
 @router.post(

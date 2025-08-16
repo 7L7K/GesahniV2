@@ -66,8 +66,7 @@ def test_response_has_security_headers(monkeypatch):
     client = TestClient(app)
     r = client.get("/pong")
     assert r.status_code == 200
-    # Basic hardening headers should be present
-    assert "Content-Security-Policy" in r.headers
+    # Basic hardening headers should be present (CSP handled by frontend)
     assert r.headers.get("X-Content-Type-Options") == "nosniff"
     assert r.headers.get("Referrer-Policy") is not None
     assert r.headers.get("X-Frame-Options") == "DENY"

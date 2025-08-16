@@ -509,28 +509,13 @@ async def refresh(req: RefreshRequest | None = None, request: Request = None, re
 
 _DEPRECATE_LOGOUT_LOGGED = False
 
-# Logout endpoint (legacy path) delegates to modern /v1/auth/logout behavior
-@router.post("/logout", response_model=dict)
-async def logout(request: Request, response: Response) -> dict:
-    global _DEPRECATE_LOGOUT_LOGGED
-    if not _DEPRECATE_LOGOUT_LOGGED:
-        try:
-            print("deprecate route=/v1/logout")
-        except Exception:
-            pass
-        _DEPRECATE_LOGOUT_LOGGED = True
-    # Delegate to canonical cookie-based logout which revokes refresh family
-    try:
-        from .api.auth import logout as _logout  # type: ignore
-        return await _logout(request, response)  # type: ignore[arg-type]
-    except Exception:
-        # Fallback: clear cookies
-        try:
-            response.delete_cookie("access_token", path="/")
-            response.delete_cookie("refresh_token", path="/")
-        except Exception:
-            pass
-        return {"status": "ok"}
+# Logout endpoint (legacy path) - delegate to main logout endpoint
+@router.post("/logout")
+async def logout(request: Request, response: Response):
+    """Legacy logout endpoint - delegates to /v1/auth/logout."""
+    # Import and call the main logout function
+    from ..api.auth import logout as main_logout
+    return await main_logout(request, response)
 
 
 # Forgot/reset password endpoints (opt-in flow for local accounts)

@@ -88,7 +88,7 @@ export default function Page() {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 2000);
         // Avoid sending cookies so an invalid/expired access_token cookie doesn't 401 this probe
-        const r = await fetch('/v1/healthz', { signal: controller.signal, credentials: 'omit', cache: 'no-store' });
+        const r = await apiFetch('/v1/healthz', { signal: controller.signal, auth: false, cache: 'no-store' });
         clearTimeout(t);
         const ok = r && r.ok;
         setBackendOffline(!ok);
@@ -139,9 +139,9 @@ export default function Page() {
             } else {
               // Background whoami to hydrate, do not block UI
               try {
-                const r = await fetch('/v1/whoami', { credentials: 'include' });
+                const r = await apiFetch('/v1/whoami', { auth: true });
                 if (r.ok) {
-                  const b: any = await r.json().catch(() => ({}));
+                  const b: Record<string, unknown> = await r.json().catch(() => ({}));
                   const ok = Boolean(b && (b.is_authenticated || (b.user_id && b.user_id !== 'anon')));
                   setAuthed(ok);
                   setWhoamiOk(ok);
@@ -214,6 +214,8 @@ export default function Page() {
   }, [clerkEnabled, isSignedIn, hasAccessCookie, whoamiOk]);
 
   // Single-shot finisher: when signed-in but cookie missing, mint cookies fast and refresh
+  // SPA Style Auth Finish: POST /v1/auth/finish → 204, then router.push()
+  // Contract: Backend sets HttpOnly cookies, returns 204, frontend handles navigation
   const runFinish = useCallback(async () => {
     if (typeof window === 'undefined') return;
     setFinishBusy(true);
@@ -223,12 +225,18 @@ export default function Page() {
       const controller = new AbortController();
       finishAbortRef.current = controller;
       const t = setTimeout(() => controller.abort(), 5000);
-      const url = new URL('/v1/auth/finish', window.location.origin);
-      url.searchParams.set('next', '/');
-      console.info('AUTH finisher: POST /v1/auth/finish');
-      await fetch(url.toString(), { method: 'POST', redirect: 'follow', credentials: 'include', signal: controller.signal });
+      console.info('AUTH finisher: POST /v1/auth/finish (SPA style)');
+      const res = await apiFetch('/v1/auth/finish', { method: 'POST', auth: false, signal: controller.signal });
       clearTimeout(t);
-    } catch (e: any) {
+
+      if (res.status === 204) {
+        // Success: cookies set by backend, navigate to home
+        console.info('AUTH finisher: success (204), navigating to /');
+        router.push('/');
+      } else {
+        throw new Error(`Unexpected status: ${res.status}`);
+      }
+    } catch (e: unknown) {
       const msg = e?.name === 'AbortError' ? 'Timed out' : (e?.message || 'failed');
       setFinishError(msg);
     } finally {
@@ -236,15 +244,14 @@ export default function Page() {
       setFinishBusy(false);
       setHasAccessCookie(readHasAccessCookie());
       try {
-        const r = await fetch('/v1/whoami', { credentials: 'include' });
+        const r = await apiFetch('/v1/whoami', { auth: true });
         if (r.ok) {
-          const b: any = await r.json().catch(() => ({}));
+          const b: Record<string, unknown> = await r.json().catch(() => ({}));
           const ok = Boolean(b && (b.is_authenticated || (b.user_id && b.user_id !== 'anon')));
           setWhoamiOk(ok);
           if (ok) setAuthed(true);
         }
       } catch { /* ignore */ }
-      try { router.refresh(); } catch { /* noop */ }
     }
   }, [readHasAccessCookie, router]);
 

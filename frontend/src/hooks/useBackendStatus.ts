@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { apiFetch } from '@/lib/api';
 
 type ReadyStatus = 'online' | 'offline';
 type DepsStatus = { status: 'ok' | 'degraded'; checks: Record<string, 'ok' | 'error' | 'skipped'> } | null;
-
-// Use explicit backend origin for health endpoints to bypass frontend routing
-const API_ORIGIN = process.env.NEXT_PUBLIC_API_ORIGIN || 'http://localhost:8000';
 
 export function useBackendStatus() {
     const [ready, setReady] = useState<ReadyStatus>('offline');
@@ -19,10 +17,14 @@ export function useBackendStatus() {
         const pollReady = async () => {
             try {
                 const ctrl = AbortSignal.timeout(2000);
-                const res = await fetch(`${API_ORIGIN}/healthz/ready`, { credentials: 'omit', cache: 'no-store', signal: ctrl });
+                const res = await apiFetch('/healthz/ready', {
+                    auth: false,
+                    signal: ctrl,
+                    cache: 'no-store'
+                });
                 if (!mounted) return;
                 if (res.ok) {
-                    const body = await res.json().catch(() => ({} as any));
+                    const body = await res.json().catch(() => ({} as Record<string, unknown>));
                     setReady(body?.status === 'ok' ? 'online' : 'offline');
                 } else {
                     setReady('offline');
@@ -47,7 +49,11 @@ export function useBackendStatus() {
         const pollDeps = async () => {
             try {
                 const ctrl = AbortSignal.timeout(2000);
-                const res = await fetch(`${API_ORIGIN}/healthz/deps`, { credentials: 'omit', cache: 'no-store', signal: ctrl });
+                const res = await apiFetch('/healthz/deps', {
+                    auth: false,
+                    signal: ctrl,
+                    cache: 'no-store'
+                });
                 if (!mounted) return;
                 if (res.ok) {
                     const body = await res.json().catch(() => null);

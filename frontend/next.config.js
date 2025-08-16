@@ -15,7 +15,7 @@ module.exports = {
     // Prefer explicit config; fall back to site URL; last resort dev localhost
     const raw = process.env.NEXT_PUBLIC_ASSET_PREFIX
       || process.env.ASSET_PREFIX
-      || (isDev ? (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'http://localhost:3000') : '');
+      || (isDev ? (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'http://127.0.0.1:3000') : '');
     if (!raw) return undefined;
     try {
       const u = new URL(raw);
@@ -29,59 +29,18 @@ module.exports = {
   experimental: {
     middlewarePrefetch: 'flexible',
   },
-  async rewrites() {
-    return [
-      {
-        source: '/healthz/:path*',
-        destination: 'http://localhost:8000/healthz/:path*',
-      },
-      {
-        source: '/metrics',
-        destination: 'http://localhost:8000/metrics',
-      },
-      {
-        source: '/capture/:path*',
-        destination: 'http://localhost:8000/capture/:path*',
-      },
-      {
-        source: '/v1/:path*',
-        destination: 'http://localhost:8000/v1/:path*',
-      },
-    ]
-  },
+  // Removed rewrites to eliminate double-layer API calls and cookie site issues
+  // All API calls now go directly to http://127.0.0.1:8000 via NEXT_PUBLIC_API_ORIGIN
   async headers() {
     return [
+      // Global CSP header for all pages
       {
-        source: '/healthz/:path*',
+        source: '/(.*)',
         headers: [
-          { key: 'x-debug-next', value: 'rewrite-to-8000' },
-          { key: 'x-debug-source', value: '/healthz/:path*' },
-          { key: 'cache-control', value: 'no-store' },
-          { key: 'pragma', value: 'no-cache' },
-        ],
-      },
-      {
-        source: '/metrics',
-        headers: [
-          { key: 'x-debug-next', value: 'rewrite-to-8000' },
-          { key: 'x-debug-source', value: '/metrics' },
-          { key: 'cache-control', value: 'no-store' },
-          { key: 'pragma', value: 'no-cache' },
-        ],
-      },
-      // Mark responses that match rewrites to the backend
-      {
-        source: '/v1/:path*',
-        headers: [
-          { key: 'x-debug-next', value: 'rewrite-to-8000' },
-          { key: 'x-debug-source', value: '/v1/:path*' },
-        ],
-      },
-      {
-        source: '/capture/:path*',
-        headers: [
-          { key: 'x-debug-next', value: 'rewrite-to-8000' },
-          { key: 'x-debug-source', value: '/capture/:path*' },
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; connect-src 'self' http://127.0.0.1:8000 ws://127.0.0.1:8000 http://localhost:8000 ws://localhost:8000; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
+          },
         ],
       },
       // Flag Next static assets for quick visibility in devtools

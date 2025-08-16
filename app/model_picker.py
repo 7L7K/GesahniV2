@@ -11,11 +11,13 @@ logger = logging.getLogger(__name__)
 HEAVY_WORD_COUNT = int(os.getenv("MODEL_ROUTER_HEAVY_WORDS", "30"))
 HEAVY_TOKENS = int(os.getenv("MODEL_ROUTER_HEAVY_TOKENS", "1000"))
 
-KEYWORDS = {"code", "research", "analyze", "explain", "diagram", "summarize"}
+# Updated keywords from environment variable
+DEFAULT_KEYWORDS = "code,unit test,analyze,sql,benchmark,vector"
+KEYWORDS = set(os.getenv("MODEL_ROUTER_KEYWORDS", DEFAULT_KEYWORDS).split(","))
 HEAVY_INTENTS = {"analysis", "research"}
 
 
-def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str, str]:
+def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str, str, str | None]:
     """Route prompt to the best engine/model for the task."""
     prompt_lc = prompt.lower()
     words = re.findall(r"\w+", prompt_lc)
@@ -29,7 +31,7 @@ def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str, str]:
             f"Routing to GPT: words={len(words)}, tokens={tokens}, "
             f"intent={intent}, prompt='{prompt[:60]}...'"
         )
-        return "gpt", GPT_HEAVY_MODEL, "heavy_length"
+        return "gpt", GPT_HEAVY_MODEL, "heavy_length", None
     
     if tokens > HEAVY_TOKENS:
         print(f"🎯 PICK_MODEL: HEAVY TASK → GPT (words={len(words)}, tokens={tokens}, intent={intent})")
@@ -37,15 +39,17 @@ def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str, str]:
             f"Routing to GPT: words={len(words)}, tokens={tokens}, "
             f"intent={intent}, prompt='{prompt[:60]}...'"
         )
-        return "gpt", GPT_HEAVY_MODEL, "heavy_tokens"
+        return "gpt", GPT_HEAVY_MODEL, "heavy_tokens", None
     
-    if any(re.search(rf"\b{k}\b", prompt_lc) for k in KEYWORDS):
-        print(f"🎯 PICK_MODEL: HEAVY TASK → GPT (words={len(words)}, tokens={tokens}, intent={intent})")
-        logger.info(
-            f"Routing to GPT: words={len(words)}, tokens={tokens}, "
-            f"intent={intent}, prompt='{prompt[:60]}...'"
-        )
-        return "gpt", GPT_HEAVY_MODEL, "keyword"
+    # Check for keywords
+    for keyword in KEYWORDS:
+        if keyword.lower() in prompt_lc:
+            print(f"🎯 PICK_MODEL: HEAVY TASK → GPT (keyword='{keyword}', tokens={tokens}, intent={intent})")
+            logger.info(
+                f"Routing to GPT: keyword='{keyword}', tokens={tokens}, "
+                f"intent={intent}, prompt='{prompt[:60]}...'"
+            )
+            return "gpt", GPT_HEAVY_MODEL, "keyword", keyword
     
     if intent in HEAVY_INTENTS:
         print(f"🎯 PICK_MODEL: HEAVY TASK → GPT (words={len(words)}, tokens={tokens}, intent={intent})")
@@ -53,7 +57,7 @@ def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str, str]:
             f"Routing to GPT: words={len(words)}, tokens={tokens}, "
             f"intent={intent}, prompt='{prompt[:60]}...'"
         )
-        return "gpt", GPT_HEAVY_MODEL, "heavy_intent"
+        return "gpt", GPT_HEAVY_MODEL, "heavy_intent", None
 
     llama_model = llama_integration.OLLAMA_MODEL or os.getenv(
         "OLLAMA_MODEL", "llama3:latest"
@@ -64,7 +68,7 @@ def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str, str]:
         print(f"🎯 PICK_MODEL: LLAMA UNAVAILABLE → GPT (healthy={llama_integration.LLAMA_HEALTHY}, circuit={llama_integration.llama_circuit_open})")
         logger.info("LLaMA unavailable, routing to GPT")
         reason = "circuit_breaker" if llama_integration.llama_circuit_open else "llama_unhealthy"
-        return "gpt", GPT_HEAVY_MODEL, reason
+        return "gpt", GPT_HEAVY_MODEL, reason, None
     
     print(f"🎯 PICK_MODEL: LIGHT TASK → LLAMA ({llama_model})")
-    return "llama", llama_model, "light_default"
+    return "llama", llama_model, "light_default", None

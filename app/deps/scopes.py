@@ -68,6 +68,9 @@ def require_scope(required: str) -> Callable[[Request], None]:
     """
 
     async def _dep(request: Request) -> None:
+        # Skip CORS preflight requests
+        if str(request.method).upper() == "OPTIONS":
+            return
         # Only enforce when a JWT is in play
         if not os.getenv("JWT_SECRET"):
             return
@@ -109,6 +112,9 @@ def require_any_scope(required: Iterable[str]) -> Callable[[Request], None]:
     required_set = {str(s).strip() for s in required if str(s).strip()}
 
     async def _dep(request: Request) -> None:
+        # Skip CORS preflight requests
+        if str(request.method).upper() == "OPTIONS":
+            return
         import os as _os
 
         if not _os.getenv("JWT_SECRET"):
@@ -167,6 +173,9 @@ def require_scopes(required: Iterable[str]) -> Callable[[Request], None]:
     required_set = {str(s).strip() for s in required if str(s).strip()}
 
     async def _dep(request: Request) -> None:
+        # Skip CORS preflight requests
+        if str(request.method).upper() == "OPTIONS":
+            return
         if not os.getenv("JWT_SECRET"):
             return
         payload = _extract_payload(request)
@@ -190,6 +199,9 @@ def require_any_scopes(required: Iterable[str]) -> Callable[[Request], None]:
     required_set = {str(s).strip() for s in required if str(s).strip()}
 
     async def _dep(request: Request) -> None:
+        # Skip CORS preflight requests
+        if str(request.method).upper() == "OPTIONS":
+            return
         if not os.getenv("JWT_SECRET"):
             return
         payload = _extract_payload(request)

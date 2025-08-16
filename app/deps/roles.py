@@ -64,6 +64,9 @@ def has_roles(request: Request, required: Iterable[str], *, any_of: bool = True)
 
 def require_roles(required: Iterable[str], *, any_of: bool = True):
     async def _dep(request: Request) -> None:
+        # Skip CORS preflight requests
+        if request.method == "OPTIONS":
+            return
         # Ensure authentication was established (401 if not)
         user_id = get_current_user_id(request=request)
         if not user_id or user_id == "anon":

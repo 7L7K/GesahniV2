@@ -125,8 +125,8 @@ def test_middleware_sets_rate_limit_headers_on_healthz():
     r = c.get("/v1/healthz")
     assert r.status_code == 200
     # Headers should be present even if counts are zero
-    assert "X-RateLimit-Limit" in r.headers
-    assert "X-RateLimit-Remaining" in r.headers
+    assert "RateLimit-Limit" in r.headers
+    assert "RateLimit-Remaining" in r.headers
 
 
 @pytest.mark.asyncio

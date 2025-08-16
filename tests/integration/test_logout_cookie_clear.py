@@ -12,7 +12,7 @@ def test_logout_clears_and_blocks_refresh(monkeypatch):
 
     # logout
     r2 = client.post("/v1/auth/logout")
-    assert r2.status_code == HTTPStatus.OK
+    assert r2.status_code == HTTPStatus.NO_CONTENT  # 204 is correct for logout
 
     # cookies should be gone (client-side helper can't read httponly, but server behavior next proves it)
     r3 = client.get("/v1/whoami")

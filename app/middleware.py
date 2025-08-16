@@ -172,311 +172,328 @@ def _anon_user_id(source: Request | str | None) -> str:
     return "anon"
 
 
-async def trace_request(request: Request, call_next):
-    # Unify request id across middlewares and response
-    incoming_id = request.headers.get("X-Request-ID")
-    current_id = req_id_var.get()
-    req_id = incoming_id or (current_id if current_id and current_id != "-" else str(uuid.uuid4()))
-    rec = LogRecord(req_id=req_id)
-    token_req = req_id_var.set(req_id)
-    token_rec = log_record_var.set(rec)
-    # Redact tokens from logs
-    def _redact(s: str | None) -> str | None:
-        if not s:
-            return s
-        if "Bearer " in s:
-            return "Bearer [REDACTED]"
-        return s
-    # Set session/device ids if present
-    rec.session_id = request.headers.get("X-Session-ID")
-    rec.user_id = _anon_user_id(request)
-    # Best-effort user accounting (do not affect request latency on failure)
-    try:
-        await user_store.ensure_user(rec.user_id)
-        await user_store.increment_request(rec.user_id)
-    except Exception:
-        pass
-    rec.channel = request.headers.get("X-Channel")
-    rec.received_at = utc_now().isoformat()
-    rec.started_at = rec.received_at
-    start_time = time.monotonic()
-    response: Response | None = None
-    try:
-        # Create a top-level span for the inbound request
-        route = request.scope.get("route") if hasattr(request, "scope") else None
-        route_path = getattr(route, "path", None) or request.url.path
-        safe_target = getattr(request.url, "path", "/") or "/"
-        with start_span(
-            "http.request",
-            {
-                "http.method": request.method,
-                "http.route": route_path,
-                # Avoid logging query strings
-                "http.target": safe_target,
-                "user.anonymous_id": rec.user_id,
-            },
-        ) as _span:
-            # Remove sensitive headers before passing to app log context
-            try:
-                if "authorization" in request.headers:
-                    request.headers.__dict__["_list"] = [
-                        (k, v if k.decode().lower() != "authorization" else b"Bearer [REDACTED]")
-                        for (k, v) in request.headers.raw
-                    ]
-            except Exception:
-                pass
-            # Skip CORS preflight requests from consuming downstream budget and heavy work
-            if str(request.method).upper() == "OPTIONS":
-                return Response(status_code=204)
-            response = await call_next(request)
-            rec.status = "OK"
-            try:
-                if _span is not None and hasattr(_span, "set_attribute"):
-                    _span.set_attribute("http.status_code", getattr(response, "status_code", 200))
-            except Exception:
-                pass
-    except asyncio.TimeoutError:
-        rec.status = "ERR_TIMEOUT"
-        raise
-    except Exception:
-        # Ensure status reflects generic failures
-        rec.status = "ERR_EXCEPTION"
-        raise
-    finally:
-        rec.latency_ms = int((time.monotonic() - start_time) * 1000)
-        # Keep this synchronous so tests and dashboards see updated p95 immediately
-        await record_latency(rec.latency_ms)
-        try:
-            rec.p95_latency_ms = latency_p95()
-        except Exception:
-            rec.p95_latency_ms = 0
+class TraceRequestMiddleware(BaseHTTPMiddleware):
+    """Trace/logging middleware — never stamp headers on OPTIONS (and strip if inherited)"""
+    
+    async def dispatch(self, request: Request, call_next):
+        # Let CORS handle preflight; do NOTHING here for OPTIONS
+        if request.method == "OPTIONS":
+            # Important: do not create your own response; just pass through
+            # CORS middleware will handle the preflight response
+            return await call_next(request)
 
-        engine = rec.engine_used or "unknown"
-        route = request.scope.get("route") if hasattr(request, "scope") else None
-        route_path = getattr(route, "path", None) or request.url.path
+        # Unify request id across middlewares and response
+        incoming_id = request.headers.get("X-Request-ID")
+        current_id = req_id_var.get()
+        req_id = incoming_id or (current_id if current_id and current_id != "-" else str(uuid.uuid4()))
+        rec = LogRecord(req_id=req_id)
+        token_req = req_id_var.set(req_id)
+        token_rec = log_record_var.set(rec)
+        
+        # Set session/device ids if present
+        rec.session_id = request.headers.get("X-Session-ID")
+        rec.user_id = _anon_user_id(request)
+        
+        # Best-effort user accounting (do not affect request latency on failure)
         try:
-            metrics.REQUEST_COUNT.labels(route_path, request.method, engine).inc()
+            await user_store.ensure_user(rec.user_id)
+            await user_store.increment_request(rec.user_id)
         except Exception:
             pass
-        # Emit canonical counters/histograms too
+            
+        rec.channel = request.headers.get("X-Channel")
+        rec.received_at = utc_now().isoformat()
+        rec.started_at = rec.received_at
+        start_time = time.monotonic()
+        response: Response | None = None
+        
         try:
-            metrics.GESAHNI_REQUESTS_TOTAL.labels(route_path, request.method, str(status_code or 0)).inc()
-        except Exception:
-            pass
-        # Observe with exemplar when possible to jump from Grafana to trace
-        try:
-            trace_id = get_trace_id_hex()
-            hist = metrics.REQUEST_LATENCY.labels(route_path, request.method, engine)
-            observe_with_exemplar(
-                hist,
-                rec.latency_ms / 1000,
-                exemplar_labels={"trace_id": trace_id} if trace_id else None,
-            )
-        except Exception:
-            try:
-                metrics.REQUEST_LATENCY.labels(route_path, request.method, engine).observe(rec.latency_ms / 1000)
-            except Exception:
-                pass
-        try:
-            metrics.GESAHNI_LATENCY_SECONDS.labels(route_path).observe(rec.latency_ms / 1000)
-        except Exception:
-            pass
-        if rec.prompt_cost_usd:
-            metrics.REQUEST_COST.labels(
-                route_path, request.method, engine, "prompt"
-            ).observe(rec.prompt_cost_usd)
-        if rec.completion_cost_usd:
-            metrics.REQUEST_COST.labels(
-                route_path, request.method, engine, "completion"
-            ).observe(rec.completion_cost_usd)
-        if rec.cost_usd:
-            metrics.REQUEST_COST.labels(
-                route_path, request.method, engine, "total"
-            ).observe(rec.cost_usd)
-
-        if isinstance(response, Response):
-            response.headers.setdefault("X-Request-ID", rec.req_id)
-            # Surface current trace id in responses when available
-            try:
-                tid = get_trace_id_hex()
-                if tid:
-                    response.headers["X-Trace-ID"] = tid
-                    # Optional hint for browser devtools
-                    response.headers.setdefault("Server-Timing", f"traceparent;desc={tid}")
-            except Exception:
-                pass
-            # Mark model fallback headers for observability (e.g., llama→gpt)
-            try:
-                rr = rec.route_reason or ""
-                if rr and "fallback_from_llama" in rr:
-                    response.headers.setdefault("X-Fallback", "gpt")
-            except Exception:
-                pass
-            # Make backend origin explicit for debugging across the Next proxy
-            try:
-                response.headers.setdefault("X-Debug-Backend", "fastapi")
-            except Exception:
-                pass
-            # Security headers: HSTS, CSP and other hardening headers
-            try:
-                env = os.getenv("ENV", "").strip().lower()
-                if request.url.scheme == "https" and env in {"prod", "production"}:
-                    response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
-                # Nonce-based CSP and allow WS/connect only to our host
+            # Create a top-level span for the inbound request
+            route = request.scope.get("route") if hasattr(request, "scope") else None
+            route_path = getattr(route, "path", None) or request.url.path
+            safe_target = getattr(request.url, "path", "/") or "/"
+            
+            with start_span(
+                "http.request",
+                {
+                    "http.method": request.method,
+                    "http.route": route_path,
+                    "http.target": safe_target,
+                    "user.anonymous_id": rec.user_id,
+                    "http.request_id": req_id,
+                    "http.origin": request.headers.get("Origin", ""),
+                },
+            ) as _span:
+                # Remove sensitive headers before passing to app log context
                 try:
-                    import secrets as _secrets
-                    csp_nonce = _secrets.token_urlsafe(16)
+                    if "authorization" in request.headers:
+                        request.headers.__dict__["_list"] = [
+                            (k, v if k.decode().lower() != "authorization" else b"Bearer [REDACTED]")
+                            for (k, v) in request.headers.raw
+                        ]
                 except Exception:
-                    csp_nonce = None
+                    pass
+                    
+                response = await call_next(request)
+                rec.status = "OK"
+                
+                # Enhanced tracing for golden trace endpoints
+                status_code = getattr(response, "status_code", 200)
                 try:
-                    host = request.url.hostname or "localhost"
-                    port = request.url.port
-                    hostport = f"{host}:{port}" if port else host
-                    ws_scheme = "wss" if request.url.scheme == "https" else "ws"
-                    ws_origin = f"{ws_scheme}://{hostport}"
-                    https_origin = f"https://{hostport}"
+                    if _span is not None and hasattr(_span, "set_attribute"):
+                        _span.set_attribute("http.status_code", status_code)
+                        
+                        # Golden trace fields for whoami and auth/finish
+                        if route_path in ["/v1/whoami", "/v1/auth/finish"]:
+                            _span.set_attribute("http.rid", req_id)
+                            _span.set_attribute("http.uid", rec.user_id)
+                            _span.set_attribute("http.origin", request.headers.get("Origin", ""))
+                            _span.set_attribute("http.status", status_code)
+                            
+                            # Set cookie flags for auth endpoints
+                            if route_path == "/v1/auth/finish":
+                                set_cookie_headers = response.headers.getlist("set-cookie", [])
+                                cookie_flags = []
+                                for cookie in set_cookie_headers:
+                                    if "access_token" in cookie or "refresh_token" in cookie:
+                                        flags = []
+                                        if "HttpOnly" in cookie:
+                                            flags.append("HttpOnly")
+                                        if "Secure" in cookie:
+                                            flags.append("Secure")
+                                        if "SameSite=" in cookie:
+                                            samesite = cookie.split("SameSite=")[1].split(";")[0]
+                                            flags.append(f"SameSite={samesite}")
+                                        cookie_flags.extend(flags)
+                                if cookie_flags:
+                                    _span.set_attribute("http.cookie_flags", " ".join(cookie_flags))
                 except Exception:
-                    ws_origin = "wss://localhost"
-                    https_origin = "https://localhost"
-                script_src = f"'self' 'nonce-{csp_nonce}'" if csp_nonce else "'self'"
-                style_src = f"'self' 'nonce-{csp_nonce}'" if csp_nonce else "'self'"
-                # Allow local FastAPI (http) and WS in dev via Next.js proxy
-                csp = (
-                    "default-src 'self'; "
-                    + "img-src 'self' data:; "
-                    + f"style-src {style_src}; "
-                    + f"script-src {script_src}; "
-                    + f"connect-src 'self' http://localhost:8000 {https_origin} {ws_origin} ws://localhost:8000; "
-                    + "font-src 'self' data:; frame-ancestors 'none'"
-                )
-                response.headers.setdefault("Content-Security-Policy", csp)
-                if csp_nonce:
-                    response.headers.setdefault("X-CSP-Nonce", str(csp_nonce))
-                response.headers.setdefault("Referrer-Policy", "no-referrer")
-                response.headers.setdefault("X-Content-Type-Options", "nosniff")
-                response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-                response.headers.setdefault("X-Frame-Options", "DENY")
-            except Exception:
-                pass
-            # Offline mode badge for UI: set a cookie when local fallback is in use
-            try:
-                from .llama_integration import LLAMA_HEALTHY as _LL_OK
-                local_mode = (not _LL_OK) and (os.getenv("OPENAI_API_KEY", "") == "")
-                if local_mode:
-                    # Enforce Secure/SameSite in prod; relax in tests/dev (http)
-                    secure = True
+                    pass
+                    
+                # Only stamp RL headers for non-OPTIONS requests
+                # CORS preflight requests should never have rate limit headers
+                if request.method != "OPTIONS":
                     try:
-                        if getattr(request.url, "scheme", "http") != "https":
-                            secure = False
+                        snap = get_rate_limit_snapshot(request)
+                        if snap:
+                            response.headers["ratelimit-limit"] = str(snap.get("limit"))
+                            response.headers["ratelimit-remaining"] = str(snap.get("remaining"))
+                            response.headers["ratelimit-reset"] = str(snap.get("reset"))
+                            response.headers["X-RateLimit-Burst-Limit"] = str(snap.get("burst_limit"))
+                            response.headers["X-RateLimit-Burst-Remaining"] = str(snap.get("burst_remaining"))
+                            response.headers["X-RateLimit-Burst-Reset"] = str(snap.get("burst_reset"))
                     except Exception:
+                        # Silently fail if rate limit snapshot fails
                         pass
-                    response.set_cookie(
-                        "X-Local-Mode",
-                        "1",
-                        max_age=600,
-                        path="/",
-                        secure=secure,
-                        httponly=True,
-                        samesite="Lax",
-                    )
+
+            # Attach a compact logging meta for downstream log formatters and history
+            # Include required fields: latency_ms, status_code, req_id, and router decision tag
+            status_code = 0
+            try:
+                status_code = int(getattr(response, "status_code", 0)) if response is not None else 0
             except Exception:
-                pass
-            # Rate limit visibility headers
+                status_code = 0
+                
+            # Rate limit snapshot for visibility in logs
             try:
                 snap = get_rate_limit_snapshot(request)
-                response.headers["X-RateLimit-Limit"] = str(snap.get("limit"))
-                response.headers["X-RateLimit-Remaining"] = str(snap.get("remaining"))
-                response.headers["X-RateLimit-Reset"] = str(snap.get("reset"))
-                response.headers["X-RateLimit-Burst-Limit"] = str(snap.get("burst_limit"))
-                response.headers["X-RateLimit-Burst-Remaining"] = str(snap.get("burst_remaining"))
-                response.headers["X-RateLimit-Burst-Reset"] = str(snap.get("burst_reset"))
+                limit_bucket = {
+                    "long_limit": snap.get("limit"),
+                    "long_remaining": snap.get("remaining"),
+                    "burst_limit": snap.get("burst_limit"),
+                    "burst_remaining": snap.get("burst_remaining"),
+                }
+            except Exception:
+                limit_bucket = None
+                
+            # Scope info for logs
+            try:
+                payload = getattr(request.state, "jwt_payload", None)
+                scopes = []
+                if isinstance(payload, dict):
+                    raw_scopes = payload.get("scope") or payload.get("scopes") or []
+                    scopes = (raw_scopes.split() if isinstance(raw_scopes, str) else [str(s) for s in raw_scopes])
+            except Exception:
+                scopes = []
+                
+            meta = {
+                "req_id": rec.req_id,
+                "status_code": status_code,
+                "latency_ms": rec.latency_ms,
+                "router_decision": rec.route_reason,
+                "model_used": rec.model_name,
+                "reason": rec.route_reason,
+                "rule": rec.route_reason,  # duplicate for dashboard filters
+                "tokens_in": rec.prompt_tokens,
+                "tokens_out": rec.completion_tokens,
+                "retrieved_tokens": rec.retrieved_tokens,
+                "self_check": rec.self_check_score,
+                "escalated": rec.escalated,
+                "cache_hit": rec.cache_hit,
+                "limit_bucket": limit_bucket,
+                "requests_remaining": (limit_bucket or {}).get("long_remaining") if isinstance(limit_bucket, dict) else None,
+                "enforced_scope": " ".join(sorted(set(scopes))) if scopes else None,
+                # Structured fields
+                "user_id": getattr(request.state, "user_id", None) or rec.user_id,
+                "route": route_path,
+                "error_code": (getattr(getattr(response, "body_iterator", None), "status_code", None) or None),
+            }
+            
+            try:
+                # log via std logging for live dashboards then persist in history
+                import logging, random as _rand
+                env = os.getenv("ENV", "").strip().lower()
+                status_family = (status_code // 100) if status_code else 0
+                # Sample successes in prod; log all non-2xx
+                p = 1.0
+                if env in {"prod", "production"} and status_family == 2:
+                    try:
+                        p = float(os.getenv("OBS_SAMPLE_SUCCESS_RATE", "0.1"))
+                    except Exception:
+                        p = 0.1
+                if status_family != 2 or _rand.random() < p:
+                    logging.getLogger(__name__).info("request_summary", extra={"meta": meta})
             except Exception:
                 pass
+                
+            # Persist structured history
+            full = {**rec.model_dump(exclude_none=True), **{"meta": meta}}
+            try:
+                asyncio.create_task(append_history(full))
+            except Exception:
+                pass
+                
+            # Record latency and metrics
+            rec.latency_ms = int((time.monotonic() - start_time) * 1000)
+            await record_latency(rec.latency_ms)
+            try:
+                rec.p95_latency_ms = latency_p95()
+            except Exception:
+                rec.p95_latency_ms = 0
 
-        # Attach a compact logging meta for downstream log formatters and history
-        # Include required fields: latency_ms, status_code, req_id, and router decision tag
-        status_code = 0
-        try:
-            status_code = int(getattr(response, "status_code", 0)) if response is not None else 0
-        except Exception:
-            status_code = 0
-        # Rate limit snapshot for visibility in logs
-        try:
-            snap = get_rate_limit_snapshot(request)
-            limit_bucket = {
-                "long_limit": snap.get("limit"),
-                "long_remaining": snap.get("remaining"),
-                "burst_limit": snap.get("burst_limit"),
-                "burst_remaining": snap.get("burst_remaining"),
-            }
-        except Exception:
-            limit_bucket = None
-        # Scope info for logs
-        try:
-            payload = getattr(request.state, "jwt_payload", None)
-            scopes = []
-            if isinstance(payload, dict):
-                raw_scopes = payload.get("scope") or payload.get("scopes") or []
-                scopes = (raw_scopes.split() if isinstance(raw_scopes, str) else [str(s) for s in raw_scopes])
-        except Exception:
-            scopes = []
-        meta = {
-            "req_id": rec.req_id,
-            "status_code": status_code,
-            "latency_ms": rec.latency_ms,
-            "router_decision": rec.route_reason,
-            "model_used": rec.model_name,
-            "reason": rec.route_reason,
-            "rule": rec.route_reason,  # duplicate for dashboard filters
-            "tokens_in": rec.prompt_tokens,
-            "tokens_out": rec.completion_tokens,
-            "retrieved_tokens": rec.retrieved_tokens,
-            "self_check": rec.self_check_score,
-            "escalated": rec.escalated,
-            "cache_hit": rec.cache_hit,
-            "limit_bucket": limit_bucket,
-            "requests_remaining": (limit_bucket or {}).get("long_remaining") if isinstance(limit_bucket, dict) else None,
-            "enforced_scope": " ".join(sorted(set(scopes))) if scopes else None,
-            # Structured fields
-            "user_id": getattr(request.state, "user_id", None) or rec.user_id,
-            "route": route_path,
-            "error_code": (getattr(getattr(response, "body_iterator", None), "status_code", None) or None),
-        }
-        try:
-            # log via std logging for live dashboards then persist in history
-            import logging, random as _rand
-            env = os.getenv("ENV", "").strip().lower()
-            status_family = (status_code // 100) if status_code else 0
-            # Sample successes in prod; log all non-2xx
-            p = 1.0
-            if env in {"prod", "production"} and status_family == 2:
+            engine = rec.engine_used or "unknown"
+            route = request.scope.get("route") if hasattr(request, "scope") else None
+            route_path = getattr(route, "path", None) or request.url.path
+            
+            try:
+                metrics.REQUEST_COUNT.labels(route_path, request.method, engine).inc()
+            except Exception:
+                pass
+                
+            # Emit canonical counters/histograms too
+            try:
+                metrics.GESAHNI_REQUESTS_TOTAL.labels(route_path, request.method, str(status_code or 0)).inc()
+            except Exception:
+                pass
+                
+            # Observe with exemplar when possible to jump from Grafana to trace
+            try:
+                trace_id = get_trace_id_hex()
+                hist = metrics.REQUEST_LATENCY.labels(route_path, request.method, engine)
+                observe_with_exemplar(
+                    hist,
+                    rec.latency_ms / 1000,
+                    exemplar_labels={"trace_id": trace_id} if trace_id else None,
+                )
+            except Exception:
                 try:
-                    p = float(os.getenv("OBS_SAMPLE_SUCCESS_RATE", "0.1"))
+                    metrics.REQUEST_LATENCY.labels(route_path, request.method, engine).observe(rec.latency_ms / 1000)
                 except Exception:
-                    p = 0.1
-            if status_family != 2 or _rand.random() < p:
-                logging.getLogger(__name__).info("request_summary", extra={"meta": meta})
+                    pass
+                    
+            try:
+                metrics.GESAHNI_LATENCY_SECONDS.labels(route_path).observe(rec.latency_ms / 1000)
+            except Exception:
+                pass
+                
+            if rec.prompt_cost_usd:
+                metrics.REQUEST_COST.labels(
+                    route_path, request.method, engine, "prompt"
+                ).observe(rec.prompt_cost_usd)
+            if rec.completion_cost_usd:
+                metrics.REQUEST_COST.labels(
+                    route_path, request.method, engine, "completion"
+                ).observe(rec.completion_cost_usd)
+            if rec.cost_usd:
+                metrics.REQUEST_COST.labels(
+                    route_path, request.method, engine, "total"
+                ).observe(rec.cost_usd)
+
+            if isinstance(response, Response):
+                response.headers.setdefault("X-Request-ID", rec.req_id)
+                # Surface current trace id in responses when available
+                try:
+                    tid = get_trace_id_hex()
+                    if tid:
+                        response.headers["X-Trace-ID"] = tid
+                        # Optional hint for browser devtools
+                        response.headers.setdefault("Server-Timing", f"traceparent;desc={tid}")
+                except Exception:
+                    pass
+                    
+                # Mark model fallback headers for observability (e.g., llama→gpt)
+                try:
+                    rr = rec.route_reason or ""
+                    if rr and "fallback_from_llama" in rr:
+                        response.headers.setdefault("X-Fallback", "gpt")
+                except Exception:
+                    pass
+                    
+                # Make backend origin explicit for debugging across the Next proxy
+                try:
+                    response.headers.setdefault("X-Debug-Backend", "fastapi")
+                except Exception:
+                    pass
+                    
+                # Security headers: HSTS, CSP and other hardening headers
+                try:
+                    env = os.getenv("ENV", "").strip().lower()
+                    if request.url.scheme == "https" and env in {"prod", "production"}:
+                        response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+                    # Security headers (CSP handled by frontend)
+                    response.headers.setdefault("Referrer-Policy", "no-referrer")
+                    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+                    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+                    response.headers.setdefault("X-Frame-Options", "DENY")
+                except Exception:
+                    pass
+                    
+                # Offline mode badge for UI: set a cookie when local fallback is in use
+                try:
+                    from .llama_integration import LLAMA_HEALTHY as _LL_OK
+                    local_mode = (not _LL_OK) and (os.getenv("OPENAI_API_KEY", "") == "")
+                    if local_mode:
+                        # Enforce Secure/SameSite in prod; relax in tests/dev (http)
+                        secure = True
+                        try:
+                            if getattr(request.url, "scheme", "http") != "https":
+                                secure = False
+                        except Exception:
+                            pass
+                        response.set_cookie(
+                            "X-Local-Mode",
+                            "1",
+                            max_age=600,
+                            path="/",
+                            secure=secure,
+                            httponly=True,
+                            samesite="Lax",
+                        )
+                except Exception:
+                    pass
+                    
+        except asyncio.TimeoutError:
+            rec.status = "ERR_TIMEOUT"
+            raise
         except Exception:
-            pass
-        # Persist structured history
-        full = {**rec.model_dump(exclude_none=True), **{"meta": meta}}
-        try:
-            asyncio.create_task(append_history(full))
-        except Exception:
-            pass
-        # Also store a compact decision record for admin UI and explain endpoint
-        try:
-            asyncio.create_task(asyncio.to_thread(add_decision, full))
-        except Exception:
-            pass
-        # Ensure at least a minimal trace exists
-        try:
-            asyncio.create_task(asyncio.to_thread(add_trace_event, rec.req_id, "request_end", status=rec.status, latency_ms=rec.latency_ms))
-        except Exception:
-            pass
-        log_record_var.reset(token_rec)
-        req_id_var.reset(token_req)
-    return response
+            # Ensure status reflects generic failures
+            rec.status = "ERR_EXCEPTION"
+            raise
+        finally:
+            log_record_var.reset(token_rec)
+            req_id_var.reset(token_req)
+            
+        return response
 
 
 async def silent_refresh_middleware(request: Request, call_next):
@@ -487,6 +504,7 @@ async def silent_refresh_middleware(request: Request, call_next):
       - JWT_ACCESS_TTL_SECONDS: lifetime of new tokens (default 14d)
       - ACCESS_REFRESH_THRESHOLD_SECONDS: refresh when exp - now < threshold (default 3600s)
     """
+    print("SILENT_REFRESH: Middleware called")
     # Call downstream first; do not swallow exceptions from handlers
     response: Response = await call_next(request)
 
@@ -495,7 +513,27 @@ async def silent_refresh_middleware(request: Request, call_next):
         # Skip static and non-API paths to avoid unnecessary token work
         try:
             path = request.url.path or ""
+            print(f"SILENT_REFRESH: Processing path {path}")
             if not path.startswith("/v1"):
+                print("SILENT_REFRESH: Skipping non-v1 path")
+                return response
+            # Skip logout endpoints to avoid setting new cookies during logout
+            if path.endswith("/logout") or path.endswith("/auth/logout") or request.headers.get("X-Logout") == "true":
+                print("SILENT_REFRESH: Skipping logout path or X-Logout header")
+                return response
+            # Also check if logout was performed by looking at response headers
+            # If any access_token cookie was set with Max-Age=0, skip refresh
+            set_cookies = response.headers.getlist("set-cookie", [])
+            if any("access_token=" in h and "Max-Age=0" in h for h in set_cookies):
+                print("SILENT_REFRESH: Skipping due to Max-Age=0 cookie")
+                return response
+            # Also check if this is a logout response by looking at the status code and path
+            if response.status_code == 204 and (path.endswith("/logout") or path.endswith("/auth/logout")):
+                print("SILENT_REFRESH: Skipping due to logout response")
+                return response
+            # More aggressive: if this is a 204 response, skip refresh entirely
+            if response.status_code == 204:
+                print("SILENT_REFRESH: Skipping due to 204 status code")
                 return response
         except Exception:
             pass
@@ -515,7 +553,9 @@ async def silent_refresh_middleware(request: Request, call_next):
         now = int(time.time())
         exp = int(payload.get("exp", 0))
         threshold = int(os.getenv("ACCESS_REFRESH_THRESHOLD_SECONDS", "3600"))
+        print(f"SILENT_REFRESH: Token expires in {exp - now} seconds, threshold is {threshold}")
         if exp - now <= threshold:
+            print("SILENT_REFRESH: Token needs refresh, proceeding...")
             # Small jitter to avoid stampede when many tabs refresh concurrently
             try:
                 import random as _rand

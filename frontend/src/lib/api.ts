@@ -99,8 +99,13 @@ function requestKey(method: string, url: string, ctx?: string | string[]): strin
   return `${method.toUpperCase()} ${url} ${authNs}${ctxNorm ? ` ${ctxNorm}` : ''}`;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || ""; // when empty, use same-origin in browser
+const API_URL = process.env.NEXT_PUBLIC_API_ORIGIN || "http://127.0.0.1:8000"; // standardized on 127.0.0.1
 const HEADER_AUTH_MODE = (process.env.NEXT_PUBLIC_HEADER_AUTH_MODE || "0").toLowerCase() === "1";
+
+// Boot log for observability
+if (typeof console !== 'undefined') {
+  console.info('[API] Origin:', API_URL);
+}
 
 // --- Auth token helpers ------------------------------------------------------
 export function getToken(): string | null {
@@ -425,18 +430,8 @@ export async function setDevice(device_id: string): Promise<void> {
 }
 
 export function wsUrl(path: string): string {
-  // Align host with the page (localhost vs 127.0.0.1), but keep backend port 8000 in dev when API_URL not set.
-  let httpBase: string;
-  if (API_URL) {
-    httpBase = API_URL;
-  } else if (typeof window !== "undefined") {
-    const proto = window.location.protocol || "http:"; // http: | https:
-    const host = window.location.hostname || "localhost"; // e.g., localhost or 127.0.0.1
-    httpBase = `${proto}//${host}:8000`;
-  } else {
-    httpBase = "http://localhost:8000";
-  }
-  const base = httpBase.replace(/^http/, "ws");
+  // Build WebSocket URL based on API_ORIGIN scheme (ws:// vs wss://)
+  const base = API_URL.replace(/^http/, "ws");
   if (!HEADER_AUTH_MODE) return `${base}${path}`; // cookie-auth for WS
   const token = getToken();
   if (!token) return `${base}${path}`;

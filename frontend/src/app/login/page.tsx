@@ -32,7 +32,7 @@ function LoginPageInner() {
                     const m = document.cookie.split('; ').find(c => c.startsWith('csrf_token='));
                     if (m) headers['X-CSRF-Token'] = decodeURIComponent(m.split('=')[1] || '');
                 } catch { }
-                fetch('/v1/auth/refresh', { method: 'POST', headers, credentials: 'include' }).finally(() => {
+                apiFetch('/v1/auth/refresh', { method: 'POST', headers, auth: false }).finally(() => {
                     router.replace(next);
                 });
             }
@@ -75,7 +75,7 @@ function LoginPageInner() {
             }
             document.cookie = `auth_hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
             router.replace(next);
-        } catch (err) {
+        } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             // Normalize common backend errors for nicer UX
             if (/invalid_username/i.test(msg)) {

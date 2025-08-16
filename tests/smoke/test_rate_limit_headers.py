@@ -13,7 +13,7 @@ def test_rate_limit_headers_present():
     r = c.get("/v1/me")
     assert r.status_code == 200
     # Presence only; values vary by environment
-    assert "X-RateLimit-Limit" in r.headers
-    assert "X-RateLimit-Remaining" in r.headers
-    assert "X-RateLimit-Reset" in r.headers
+    assert "RateLimit-Limit" in r.headers
+    assert "RateLimit-Remaining" in r.headers
+    assert "RateLimit-Reset" in r.headers
 

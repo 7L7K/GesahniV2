@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs';
-import { getToken, clearTokens, getBudget, bumpAuthEpoch } from '@/lib/api';
+import { getToken, clearTokens, getBudget, bumpAuthEpoch, apiFetch } from '@/lib/api';
 import { usePathname, useRouter } from 'next/navigation';
 
 export default function Header() {
@@ -27,7 +27,7 @@ export default function Header() {
             }
             // Cookie mode: ask backend whoami to detect auth
             try {
-                const res = await fetch('/v1/whoami', { credentials: 'include' });
+                const res = await apiFetch('/v1/whoami', { auth: true });
                 if (!cancelled) setAuthed(res.ok && (await res.json()).is_authenticated !== false);
             } catch {
                 if (!cancelled) setAuthed(false);

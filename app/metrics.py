@@ -120,7 +120,7 @@ try:
     ROUTER_FALLBACKS_TOTAL = Counter(
         "gesahni_router_fallbacks_total",
         "Fallbacks between vendors",
-        ["from", "to", "reason"],
+        ["from_vendor", "to_vendor", "reason"],
     )
 except Exception:  # pragma: no cover
     class _C5:
@@ -157,6 +157,20 @@ except Exception:  # pragma: no cover
         def observe(self, *a, **k):
             return None
     ROUTER_DURATION_MS = _H2()  # type: ignore
+
+try:
+    ROUTER_ASK_USER_ID_MISSING_TOTAL = Counter(
+        "gesahni_router_ask_user_id_missing_total",
+        "Count of /v1/ask requests with missing user_id",
+        ["env", "route"],
+    )
+except Exception:  # pragma: no cover
+    class _C7:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    ROUTER_ASK_USER_ID_MISSING_TOTAL = _C7()  # type: ignore
 
 # Histogram for request cost in USD
 REQUEST_COST = Histogram(

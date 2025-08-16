@@ -137,6 +137,9 @@ async def require_user(request: Request) -> str:
 
     On success, attaches claims to ``request.state`` and returns the user id.
     """
+    # Skip CORS preflight requests
+    if request.method == "OPTIONS":
+        return "anon"
     token = _extract_bearer_from_request(request)
     if not token:
         raise _std_401()
