@@ -374,7 +374,7 @@ app.openapi = _custom_openapi  # type: ignore[assignment]
 _cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 
-# Validate single origin configuration for security
+# Security: Use exactly one frontend origin (http://localhost:3000, not both localhost and 127)
 if len(origins) > 1:
     logging.warning("Multiple CORS origins detected. For security, use exactly one frontend origin.")
     # Use the first origin as the primary
@@ -385,6 +385,12 @@ if not origins:
     logging.warning("No CORS origins configured. Defaulting to http://localhost:3000")
     origins = ["http://localhost:3000"]
 
+# Ensure we only allow http://localhost:3000, not 127.0.0.1:3000
+if "http://127.0.0.1:3000" in origins:
+    logging.warning("CORS origin http://127.0.0.1:3000 detected. Replacing with http://localhost:3000 for security.")
+    origins = ["http://localhost:3000"]
+
+# Allow credentials: yes (cookies/tokens)
 allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").strip().lower() in {"1", "true", "yes", "on"}
 
 # Custom handler for HTTP requests to WebSocket endpoints
@@ -1516,13 +1522,15 @@ app.add_middleware(CSRFMiddleware)           # CSRF protection (skips OPTIONS)
 
 # 4) CORS LAST — OUTERMOST
 #    Must be the final add_middleware call.
+#    Preflight: CORS middleware registered as the outermost layer so OPTIONS short-circuits
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=allow_credentials,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["X-Request-ID", "X-CSRF-Token", "Retry-After", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset"],
+    # Expose headers: only what you need (e.g., X-Request-ID), not wildcards
+    expose_headers=["X-Request-ID"],
     max_age=600,
 )
 

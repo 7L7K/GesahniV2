@@ -80,7 +80,8 @@ Set environment variables as needed:
 | `API_TOKEN` | – | no | Static token for legacy clients |
 | `REDIS_URL` | `redis://localhost:6379/0` | no | RQ queue for async tasks (optional; falls back to threads) |
 | `HISTORY_FILE` | `data/history.jsonl` | no | Request history log |
-| `CORS_ALLOW_ORIGINS` | `http://localhost:3000` | no | Allowed web origins |
+| `CORS_ALLOW_ORIGINS` | `http://localhost:3000` | no | Allowed web origins (exactly localhost, not 127.0.0.1) |
+| `CORS_ALLOW_CREDENTIALS` | `true` | no | Allow credentials (cookies/tokens) |
 | `PORT` | `8000` | no | Server port when running `python app/main.py` |
 | `SESSIONS_DIR` | `sessions/` | no | Base directory for session media |
 | `ADMIN_TOKEN` | – | no | Required to read `/config` |

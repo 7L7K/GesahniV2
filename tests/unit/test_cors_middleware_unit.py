@@ -107,6 +107,43 @@ def test_cors_headers_are_present_for_all_origins():
         assert response.headers['access-control-allow-origin'] == origin
 
 
+def test_cors_rejects_127_0_0_1_origin():
+    """Test that CORS rejects http://127.0.0.1:3000 origin for security."""
+    client = TestClient(app)
+    
+    # Test with 127.0.0.1 origin (should be rejected)
+    response = client.options('/v1/auth/logout', headers={
+        'Origin': 'http://127.0.0.1:3000',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type'
+    })
+    
+    # Should return 400 for disallowed origin (security behavior)
+    assert response.status_code == 400
+
+
+def test_cors_exposes_only_required_headers():
+    """Test that CORS only exposes required headers, not wildcards."""
+    client = TestClient(app)
+    
+    # Test actual request (expose headers are only set for actual requests, not preflight)
+    response = client.get('/health/live', headers={
+        'Origin': 'http://localhost:3000'
+    })
+    
+    assert response.status_code == 200
+    
+    # Should expose only X-Request-ID, not wildcards
+    expose_headers = response.headers.get('access-control-expose-headers', '')
+    assert 'X-Request-ID' in expose_headers
+    # Should not expose other headers that were previously exposed
+    assert 'X-CSRF-Token' not in expose_headers
+    assert 'Retry-After' not in expose_headers
+    assert 'RateLimit-Limit' not in expose_headers
+    assert 'RateLimit-Remaining' not in expose_headers
+    assert 'RateLimit-Reset' not in expose_headers
+
+
 def test_cors_handles_preflight_requests_correctly():
     """Test that CORS handles preflight requests correctly."""
     client = TestClient(app)
@@ -180,6 +217,20 @@ def test_cors_credentials_are_handled_correctly():
     
     assert response.status_code == 200
     assert response.headers['access-control-allow-credentials'] == 'true'
+
+
+def test_cors_credentials_are_enabled_by_default():
+    """Test that CORS credentials are enabled by default (cookies/tokens)."""
+    client = TestClient(app)
+    
+    # Test actual request with credentials
+    response = client.get('/health/live', headers={
+        'Origin': 'http://localhost:3000'
+    })
+    
+    assert response.status_code == 200
+    # Should allow credentials for actual requests
+    assert response.headers.get('access-control-allow-credentials') == 'true'
 
 
 def test_cors_max_age_is_set():
