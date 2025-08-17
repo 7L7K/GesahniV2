@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   description: "Gesahni web interface for your AI assistant",
   // Ensure social images resolve to absolute URLs in OG/Twitter tags
   metadataBase: new URL(
-    (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "http://127.0.0.1:3000") as string,
+    (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "http://localhost:3000") as string,
   ),
   openGraph: {
     title: "Gesahni",

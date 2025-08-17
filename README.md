@@ -80,7 +80,7 @@ Set environment variables as needed:
 | `API_TOKEN` | – | no | Static token for legacy clients |
 | `REDIS_URL` | `redis://localhost:6379/0` | no | RQ queue for async tasks (optional; falls back to threads) |
 | `HISTORY_FILE` | `data/history.jsonl` | no | Request history log |
-| `CORS_ALLOW_ORIGINS` | `http://127.0.0.1:3000` | no | Allowed web origins |
+| `CORS_ALLOW_ORIGINS` | `http://localhost:3000` | no | Allowed web origins |
 | `PORT` | `8000` | no | Server port when running `python app/main.py` |
 | `SESSIONS_DIR` | `sessions/` | no | Base directory for session media |
 | `ADMIN_TOKEN` | – | no | Required to read `/config` |
@@ -138,7 +138,7 @@ The single web UI lives in `frontend/` (Next.js 15). A previously experimental `
 ```bash
 cd frontend
 npm install
-npm run dev  # http://127.0.0.1:3000
+npm run dev  # http://localhost:3000
 ```
 
 ### 🎥 Record a Session
@@ -263,7 +263,7 @@ Built-in skills handle common tasks before hitting the language model. The first
 skill that matches your prompt runs:
 
 ```bash
-curl -X POST localhost:8000/ask -d '{"prompt":"turn off kitchen lights"}'
+curl -X POST 127.0.0.1:8000/ask -d '{"prompt":"turn off kitchen lights"}'
 # → OK—kitchen lights off.
 ```
 
@@ -302,7 +302,7 @@ export DAILY_REQUEST_CAP=0
 Health:
 
 ```bash
-curl -s http://localhost:8000/rate_limit_status
+curl -s http://127.0.0.1:8000/rate_limit_status
 ```
 
 Per‑route overrides example:
@@ -361,105 +361,11 @@ pytest -q tests/smoke
 Run k6 load test (with basic SLO thresholds):
 
 ```bash
-k6 run scripts/k6_load_test.js -e BASE_URL=http://localhost:8000
+k6 run scripts/k6_load_test.js -e BASE_URL=http://127.0.0.1:8000
 ```
 
 Locust:
 
 ```bash
-locust -f locustfile.py --host=http://localhost:8000
+locust -f locustfile.py --host=http://127.0.0.1:8000
 ```
-
-Default SLO thresholds (k6 thresholds):
-- p95 http_req_duration < 500ms
-- http_req_failed rate < 1%
-
-### 🛟 Troubleshooting & Logs
-
-* Check logs at `/config` endpoint.
-* Detailed error logs saved locally.
-
-### 🗑️ Invalidate Cached Answers
-
-Remove a stored response from the semantic cache using the CLI:
-
-```bash
-python -m app.vector_store invalidate "your original prompt"
-```
-
-### 🔄 Vector Store Configuration
-
-The system supports multiple vector store backends unified through `VECTOR_DSN`:
-
-#### DSN Formats
-- **Memory (tests)**: `memory://`
-- **Local ChromaDB**: `chroma:///path/to/data`
-- **Chroma Cloud**: `chroma+cloud://tenant.database?api_key=xxx`
-- **Qdrant HTTP**: `qdrant://host:port?api_key=xxx`
-- **Qdrant gRPC**: `qdrant+grpc://host:port?api_key=xxx`
-- **Dual Read**: `dual://qdrant://host:port?api_key=xxx&chroma_path=/path`
-
-#### Examples
-```bash
-# Development default (local ChromaDB)
-export VECTOR_DSN=chroma:///.chroma_data
-
-# Production (Qdrant)
-export VECTOR_DSN=qdrant://qdrant.example.com:6333?api_key=your-key
-
-# Dual mode for migration
-export VECTOR_DSN=dual://qdrant://qdrant.example.com:6333?api_key=your-key&chroma_path=.chroma_data
-
-# Tests
-export VECTOR_DSN=memory://
-```
-
-### 🔄 Migrate from Chroma to Qdrant (Phase 9)
-
-Safe, reversible migration path with dual-read bake period:
-
-1. Inventory Chroma collections:
-```bash
-python -m app.jobs.migrate_chroma_to_qdrant inventory
-```
-2. Export counts (optional):
-```bash
-python -m app.jobs.migrate_chroma_to_qdrant export
-```
-3. Migrate data to Qdrant (re-embeds as needed, preserves checksums):
-```bash
-python -m app.jobs.migrate_chroma_to_qdrant migrate
-```
-4. Enable dual-read for a week to compare traces:
-```bash
-export VECTOR_DSN=dual://qdrant://localhost:6333?chroma_path=.chroma_data&write_both=1&qa_write_both=1
-```
-5. After bake period, switch to Qdrant and retire Chroma:
-```bash
-export VECTOR_DSN=qdrant://localhost:6333
-```
-
-## Event Log
-
-Each `/ask` request writes a JSON object to `data/history.jsonl` capturing core
-metadata and timing. New fields include `session_id`, `latency_ms`, `status` and
-token usage. Missing fields default to `null`.
-
-```json
-{
-  "req_id": "abc123",
-  "session_id": "s-42",
-  "prompt": "turn on hallway light",
-  "engine_used": "LightsSkill",
-  "response": "Done.",
-  "latency_ms": 120,
-  "status": "OK"
-}
-```
-
----
-
-Made by the King, for the King. Let's run it! 🚀🔥
-
-### Contributing
-See `CONTRIBUTING.md` for development workflow, testing, and PR guidelines.

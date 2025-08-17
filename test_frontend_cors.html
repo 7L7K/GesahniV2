@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CORS Test</title>
+</head>
+
+<body>
+    <h1>CORS Test</h1>
+    <button onclick="testCors()">Test CORS</button>
+    <div id="result"></div>
+
+    <script>
+        async function testCors() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+
+            try {
+                // Test 1: Simple GET request
+                console.log('Testing GET request to /healthz/ready');
+                const response = await fetch('http://127.0.0.1:8000/healthz/ready', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('Response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+                const data = await response.json();
+                console.log('Response data:', data);
+
+                resultDiv.innerHTML = `
+                    <h3>Success!</h3>
+                    <p>Status: ${response.status}</p>
+                    <p>Data: ${JSON.stringify(data)}</p>
+                    <p>CORS Headers:</p>
+                    <ul>
+                        ${Array.from(response.headers.entries())
+                        .filter(([key]) => key.toLowerCase().startsWith('access-control'))
+                        .map(([key, value]) => `<li>${key}: ${value}</li>`)
+                        .join('')}
+                    </ul>
+                `;
+
+            } catch (error) {
+                console.error('CORS Error:', error);
+                resultDiv.innerHTML = `
+                    <h3>Error!</h3>
+                    <p>${error.message}</p>
+                    <p>Type: ${error.name}</p>
+                `;
+            }
+        }
+
+        // Auto-test on load
+        window.addEventListener('load', () => {
+            setTimeout(testCors, 1000);
+        });
+    </script>
+</body>
+
+</html>

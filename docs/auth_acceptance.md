@@ -23,7 +23,7 @@ Goal: A new dev can validate sign-in/out, token behavior, per-user rate limits, 
    - Optional: `REDIS_URL=redis://localhost:6379/0`
 
 ## Sign-in / Sign-out
-- Visit `http://127.0.0.1:3000/` signed-out → header shows Sign in/Sign up; homepage shows a signed-out notice.
+- Visit `http://localhost:3000/` signed-out → header shows Sign in/Sign up; homepage shows a signed-out notice.
 - Click Sign in and complete with Clerk → after redirect, `UserButton` is visible in header.
 - Click sign-out in the user menu → header returns to Sign in/Sign up.
 

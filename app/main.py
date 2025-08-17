@@ -271,8 +271,17 @@ _DEV_SERVERS_SNAPSHOT = os.getenv("OPENAPI_DEV_SERVERS")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        await llama_startup()
-        await ha_startup()
+        # Make startup checks non-blocking for development
+        try:
+            await llama_startup()
+        except Exception as e:
+            logger.warning("LLaMA startup failed (non-blocking): %s", e)
+        
+        try:
+            await ha_startup()
+        except Exception as e:
+            logger.warning("Home Assistant startup failed (non-blocking): %s", e)
+        
         # Schedule nightly jobs (no-op if scheduler unavailable)
         try:
             schedule_nightly_jobs()
@@ -362,8 +371,20 @@ def _custom_openapi():
 app.openapi = _custom_openapi  # type: ignore[assignment]
 
 # CORS configuration - will be added as outermost middleware
-_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://127.0.0.1:3000")
+_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+
+# Validate single origin configuration for security
+if len(origins) > 1:
+    logging.warning("Multiple CORS origins detected. For security, use exactly one frontend origin.")
+    # Use the first origin as the primary
+    origins = [origins[0]]
+    logging.info(f"Using primary CORS origin: {origins[0]}")
+
+if not origins:
+    logging.warning("No CORS origins configured. Defaulting to http://localhost:3000")
+    origins = ["http://localhost:3000"]
+
 allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").strip().lower() in {"1", "true", "yes", "on"}
 
 # Custom handler for HTTP requests to WebSocket endpoints
@@ -486,9 +507,14 @@ async def _health_startup() -> dict:
 
 # Dev-only helper page for testing WebSocket connections (hidden in prod)
 if os.getenv("ENV", "").strip().lower() not in {"prod", "production"}:
+    from .url_helpers import build_ws_url
+    
     @app.get("/docs/ws", include_in_schema=False)
     async def _ws_helper_page() -> HTMLResponse:  # pragma: no cover - covered by unit tests
-        html = """
+        # Build WebSocket URL dynamically
+        ws_url = build_ws_url("/v1/ws/care")
+        
+        html = f"""
 <!doctype html>
 <html lang=\"en\">
   <head>
@@ -496,22 +522,22 @@ if os.getenv("ENV", "").strip().lower() not in {"prod", "production"}:
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
     <title>WS Helper • Granny Mode API</title>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color: #111; }
-      input, button, textarea { font-size: 14px; }
-      .row { display: flex; gap: 8px; margin: 6px 0; align-items: center; flex-wrap: wrap; }
-      label { min-width: 120px; font-weight: 600; }
-      #events { border: 1px solid #ddd; padding: 8px; height: 320px; overflow: auto; background: #fafafa; }
-      code, pre { background: #f3f3f3; padding: 2px 4px; border-radius: 4px; }
-      .small { color: #666; font-size: 12px; }
+      body {{ font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color: #111; }}
+      input, button, textarea {{ font-size: 14px; }}
+      .row {{ display: flex; gap: 8px; margin: 6px 0; align-items: center; flex-wrap: wrap; }}
+      label {{ min-width: 120px; font-weight: 600; }}
+      #events {{ border: 1px solid #ddd; padding: 8px; height: 320px; overflow: auto; background: #fafafa; }}
+      code, pre {{ background: #f3f3f3; padding: 2px 4px; border-radius: 4px; }}
+      .small {{ color: #666; font-size: 12px; }}
     </style>
   </head>
   <body>
     <h1>WebSocket helper</h1>
-    <p class=\"small\">Connect to <code>/v1/ws/care</code>, subscribe to a topic like <code>resident:{id}</code>, and view incoming events.</p>
+    <p class=\"small\">Connect to <code>/v1/ws/care</code>, subscribe to a topic like <code>resident:{{id}}</code>, and view incoming events.</p>
 
     <div class=\"row\">
       <label for=\"url\">WS URL</label>
-      <input id=\"url\" size=\"60\" placeholder=\"ws://127.0.0.1:8000/v1/ws/care\" />
+      <input id=\"url\" size=\"60\" placeholder=\"{ws_url}\" />
       <button id=\"btnConnect\">Connect</button>
       <button id=\"btnDisconnect\">Disconnect</button>
     </div>
@@ -526,14 +552,14 @@ if os.getenv("ENV", "").strip().lower() not in {"prod", "production"}:
       <label for=\"resident\">Resident ID</label>
       <input id=\"resident\" size=\"16\" placeholder=\"r1\" />
       <label for=\"topic\">Topic</label>
-      <input id=\"topic\" size=\"24\" placeholder=\"resident:{id}\" />
+      <input id=\"topic\" size=\"24\" placeholder=\"resident:{{id}}\" />
       <button id=\"btnSubscribe\">Subscribe</button>
       <button id=\"btnPing\">Ping</button>
     </div>
 
     <div class=\"row\"> 
       <label>Subscribe payload</label>
-      <code>{\\\"action\\\":\\\"subscribe\\\",\\\"topic\\\":\\\"resident:{id}\\\"}</code>
+      <code>{{"action":"subscribe","topic":"resident:{id}"}}</code>
     </div>
 
     <h3>Events</h3>
@@ -547,57 +573,57 @@ if os.getenv("ENV", "").strip().lower() not in {"prod", "production"}:
       const residentInput = document.getElementById('resident');
       const eventsDiv = document.getElementById('events');
 
-      function defaultUrl() {
-        try {
+      function defaultUrl() {{
+        try {{
           const proto = (location.protocol === 'https:') ? 'wss:' : 'ws:';
           return proto + '//' + location.host + '/v1/ws/care';
-        } catch (e) { return 'ws://127.0.0.1:8000/v1/ws/care'; }
-      }
+        }} catch (e) {{ return '{ws_url}'; }}
+      }}
 
       urlInput.value = defaultUrl();
 
-      function log(kind, data) {
+      function log(kind, data) {{
         const line = document.createElement('div');
         const ts = new Date().toISOString();
         line.textContent = '[' + ts + '] ' + kind + ': ' + data;
         eventsDiv.appendChild(line);
         eventsDiv.scrollTop = eventsDiv.scrollHeight;
-      }
+      }}
 
-      function connect() {
+      function connect() {{
         let u = urlInput.value.trim() || defaultUrl();
         const t = tokenInput.value.trim();
-        if (t) {
+        if (t) {{
           const sep = u.includes('?') ? '&' : '?';
           u = u + sep + 'token=' + encodeURIComponent(t);
-        }
+        }}
         ws = new WebSocket(u);
         ws.addEventListener('open', () => log('open', u));
         ws.addEventListener('close', () => log('close', '')); 
         ws.addEventListener('error', (e) => log('error', JSON.stringify(e))); 
         ws.addEventListener('message', (e) => log('message', e.data));
-      }
+      }}
 
-      function disconnect() {
-        try { ws && ws.close(); } catch (e) {}
-      }
+      function disconnect() {{
+        try {{ ws && ws.close(); }} catch (e) {{}}
+      }}
 
-      function subscribe() {
-        if (!ws || ws.readyState !== 1) { log('warn', 'not connected'); return; }
+      function subscribe() {{
+        if (!ws || ws.readyState !== 1) {{ log('warn', 'not connected'); return; }}
         let topic = topicInput.value.trim();
         const rid = residentInput.value.trim();
-        if (!topic && rid) { topic = 'resident:' + rid; }
-        if (!topic) { log('warn', 'topic required'); return; }
-        const payload = { action: 'subscribe', topic };
+        if (!topic && rid) {{ topic = 'resident:' + rid; }}
+        if (!topic) {{ log('warn', 'topic required'); return; }}
+        const payload = {{ action: 'subscribe', topic }};
         ws.send(JSON.stringify(payload));
         log('send', JSON.stringify(payload));
-      }
+      }}
 
-      function ping() {
-        if (!ws || ws.readyState !== 1) { log('warn', 'not connected'); return; }
+      function ping() {{
+        if (!ws || ws.readyState !== 1) {{ log('warn', 'not connected'); return; }}
         ws.send('ping');
         log('send', 'ping');
-      }
+      }}
 
       document.getElementById('btnConnect').addEventListener('click', connect);
       document.getElementById('btnDisconnect').addEventListener('click', disconnect);
@@ -1495,7 +1521,7 @@ app.add_middleware(
     allow_origins=origins,
     allow_credentials=allow_credentials,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["authorization", "content-type", "x-csrf-token", "x-requested-with", "x-request-id", "x-auth-intent"],
+    allow_headers=["*"],
     expose_headers=["X-Request-ID", "X-CSRF-Token", "Retry-After", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset"],
     max_age=600,
 )

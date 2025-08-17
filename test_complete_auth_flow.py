@@ -10,7 +10,7 @@ import time
 from typing import Dict, Any, List
 
 BASE_URL = "http://127.0.0.1:8000"
-FRONTEND_URL = "http://127.0.0.1:3000"
+FRONTEND_URL = "http://localhost:3000"
 
 def print_section(title: str):
     print(f"\n{'='*60}")
@@ -127,7 +127,7 @@ def test_cors_vs_auth():
     print("Testing CORS headers on 401 responses:")
     
     # Test protected endpoint without auth (with Origin header for CORS)
-    headers = {"Origin": "http://127.0.0.1:3000"}
+    headers = {"Origin": "http://localhost:3000"}
     response = session.get(f"{BASE_URL}/v1/state", headers=headers, timeout=5)
     print(f"GET /v1/state - Status: {response.status_code}")
     

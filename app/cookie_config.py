@@ -42,7 +42,7 @@ def get_cookie_config(request: Request) -> dict:
         "samesite": cookie_samesite,
         "httponly": True,
         "path": "/",
-        # Explicitly no domain for host-only cookies
+        # Explicitly no domain for host-only cookies (one host = one cookie jar)
         "domain": None,
     }
 

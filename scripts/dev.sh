@@ -3,8 +3,8 @@ set -euo pipefail
 
 echo "🚀 Starting Gesahni Development Environment"
 echo "📋 Configuration:"
+echo "  - Frontend: http://localhost:3000 (IPv4-first DNS)"
 echo "  - Backend: http://127.0.0.1:8000 (IPv4 only)"
-echo "  - Frontend: http://127.0.0.1:3000 (IPv4-first DNS)"
 echo "  - API Origin: http://127.0.0.1:8000"
 echo ""
 
@@ -31,20 +31,20 @@ echo "✅ Backend ready at http://127.0.0.1:8000"
 # Start frontend
 echo "🎨 Starting frontend (IPv4-first DNS)..."
 cd frontend
-NODE_OPTIONS="--dns-result-order=ipv4first" pnpm dev &
+NODE_OPTIONS="--dns-result-order=ipv4first --max-old-space-size=4096" NEXT_PUBLIC_SITE_URL=http://localhost:3000 CLERK_SIGN_IN_URL=http://localhost:3000/sign-in CLERK_SIGN_UP_URL=http://localhost:3000/sign-up CLERK_AFTER_SIGN_IN_URL=http://localhost:3000 CLERK_AFTER_SIGN_UP_URL=http://localhost:3000 pnpm dev &
 FRONTEND_PID=$!
 
 # Wait for frontend to be ready
 echo "⏳ Waiting for frontend to be ready..."
-until curl -s http://127.0.0.1:3000 >/dev/null 2>&1; do
+until curl -s http://localhost:3000 >/dev/null 2>&1; do
   sleep 1
 done
-echo "✅ Frontend ready at http://127.0.0.1:3000"
+echo "✅ Frontend ready at http://localhost:3000"
 
 echo ""
 echo "🎉 Development environment started!"
 echo "📊 Backend: http://127.0.0.1:8000"
-echo "🎨 Frontend: http://127.0.0.1:3000"
+echo "🎨 Frontend: http://localhost:3000"
 echo "📈 Metrics: http://127.0.0.1:8000/metrics"
 echo "🏥 Health: http://127.0.0.1:8000/healthz/ready"
 echo ""

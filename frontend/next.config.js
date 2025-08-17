@@ -15,7 +15,7 @@ module.exports = {
     // Prefer explicit config; fall back to site URL; last resort dev localhost
     const raw = process.env.NEXT_PUBLIC_ASSET_PREFIX
       || process.env.ASSET_PREFIX
-      || (isDev ? (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'http://127.0.0.1:3000') : '');
+      || (isDev ? (process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'http://localhost:3000') : '');
     if (!raw) return undefined;
     try {
       const u = new URL(raw);
@@ -25,6 +25,9 @@ module.exports = {
       return undefined;
     }
   })(),
+  // Configure base URL to prevent localhost proxy issues
+  basePath: '',
+  trailingSlash: false,
   // Ensure middleware executes on Vercel/Node runtime
   experimental: {
     middlewarePrefetch: 'flexible',

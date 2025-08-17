@@ -1,13 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
-
-function sanitizeNextPath(raw: string | null | undefined, fallback: string = '/') {
-    const input = (raw || '').trim()
-    if (!input) return fallback
-    if (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(input)) return fallback
-    if (!input.startsWith('/')) return fallback
-    return input.replace(/\/+/, '/')
-}
+import { buildRedirectUrl, sanitizeNextPath } from '@/lib/urls'
 
 const isPublicRoute = createRouteMatcher([
     '/',
@@ -24,9 +17,9 @@ const baseClerkMiddleware = clerkMiddleware(async (auth, req: NextRequest) => {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     if (!isPublicRoute(req) && !userId) {
-        const url = req.nextUrl.clone()
-        url.pathname = '/'
-        url.searchParams.set('next', req.nextUrl.pathname + req.nextUrl.search)
+        const url = buildRedirectUrl(req, '/', {
+            next: req.nextUrl.pathname + req.nextUrl.search
+        })
         return NextResponse.redirect(url)
     }
     // If Clerk finished login on our domain, bounce through server finish route
@@ -34,9 +27,7 @@ const baseClerkMiddleware = clerkMiddleware(async (auth, req: NextRequest) => {
         const pathname = req.nextUrl.pathname
         if (userId && (pathname === '/sign-in' || pathname === '/sign-up')) {
             const next = sanitizeNextPath(req.nextUrl.searchParams.get('next'), '/')
-            const url = req.nextUrl.clone()
-            url.pathname = '/v1/auth/finish'
-            url.searchParams.set('next', next)
+            const url = buildRedirectUrl(req, '/v1/auth/finish', { next })
             return NextResponse.redirect(url)
         }
     } catch { /* ignore */ }

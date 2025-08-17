@@ -10,7 +10,7 @@ export default function GettingStarted() {
             </ul>
             <h2>Login</h2>
             <p>
-                Open the app at http://127.0.0.1:3000 and click Login. Enter your credentials. If you
+                Open the app at http://localhost:3000 and click Login. Enter your credentials. If you
                 do not have an account, create one via the backend or seed users per your setup.
             </p>
             <h2>Your first prompt</h2>

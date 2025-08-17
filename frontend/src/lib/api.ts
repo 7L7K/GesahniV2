@@ -1,6 +1,7 @@
 /* Unified API utilities: single source of truth for base URL, auth, fetch, SSE, and data hooks */
 
 import { useQuery } from "@tanstack/react-query";
+import { buildWebSocketUrl } from '@/lib/urls'
 
 // Cache Key Policy (AUTH-06):
 // - All user-scoped query keys MUST include an auth namespace and relevant context (e.g., device/resident/room)
@@ -99,7 +100,7 @@ function requestKey(method: string, url: string, ctx?: string | string[]): strin
   return `${method.toUpperCase()} ${url} ${authNs}${ctxNorm ? ` ${ctxNorm}` : ''}`;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_ORIGIN || "http://127.0.0.1:8000"; // standardized on 127.0.0.1
+const API_URL = process.env.NEXT_PUBLIC_API_ORIGIN || "http://127.0.0.1:8000"; // standardized on 127.0.0.1 for IPv4 consistency
 const HEADER_AUTH_MODE = (process.env.NEXT_PUBLIC_HEADER_AUTH_MODE || "0").toLowerCase() === "1";
 
 // Boot log for observability
@@ -450,13 +451,13 @@ export async function setDevice(device_id: string): Promise<void> {
 
 export function wsUrl(path: string): string {
   // Build WebSocket URL based on API_ORIGIN scheme (ws:// vs wss://)
-  const base = API_URL.replace(/^http/, "ws");
-  if (!HEADER_AUTH_MODE) return `${base}${path}`; // cookie-auth for WS
+  const baseUrl = buildWebSocketUrl(API_URL, path);
+  if (!HEADER_AUTH_MODE) return baseUrl; // cookie-auth for WS
   const token = getToken();
-  if (!token) return `${base}${path}`;
+  if (!token) return baseUrl;
   const sep = path.includes("?") ? "&" : "?";
   // Backend accepts both token and access_token; prefer access_token for consistency with HTTP
-  return `${base}${path}${sep}access_token=${encodeURIComponent(token)}`;
+  return `${baseUrl}${sep}access_token=${encodeURIComponent(token)}`;
 }
 
 // High-level helpers -----------------------------------------------------------

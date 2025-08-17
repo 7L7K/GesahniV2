@@ -1,6 +1,7 @@
 'use client'
 import { SignIn } from '@clerk/nextjs'
 import { useSearchParams } from 'next/navigation'
+import { buildAuthUrl } from '@/lib/urls'
 
 export default function SignInPage() {
     const params = useSearchParams();
@@ -11,7 +12,7 @@ export default function SignInPage() {
             return raw.replace(/\/+/g, '/');
         } catch { return '/'; }
     })();
-    const finishUrl = `/v1/auth/finish?next=${encodeURIComponent(next)}`;
+    const finishUrl = buildAuthUrl('/v1/auth/finish', next);
     return (
         <div className="mx-auto max-w-md py-10">
             <SignIn routing="path" path="/sign-in" afterSignInUrl={finishUrl} afterSignUpUrl={finishUrl} />

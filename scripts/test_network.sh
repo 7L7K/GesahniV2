@@ -6,14 +6,14 @@
 set -e
 
 BACKEND_URL="http://127.0.0.1:8000"
-FRONTEND_URL="http://127.0.0.1:3000"
+FRONTEND_URL="http://localhost:3000"
 
 echo "🔒 Testing security fixes..."
 
 # Test 1: Origin echo with credentials (CORS)
 echo "📋 Test 1: CORS Origin echo with credentials"
 response=$(curl -s -i \
-  -H 'Origin: http://127.0.0.1:3000' \
+  -H 'Origin: http://localhost:3000' \
   -H 'Content-Type: application/json' \
   -c /tmp/c -b /tmp/c \
   "${BACKEND_URL}/v1/whoami")
@@ -26,7 +26,7 @@ echo "$response" | grep -E "(Access-Control-Allow-Origin|Access-Control-Allow-Cr
 # Test 2: Preflight sanity (OPTIONS)
 echo "📋 Test 2: OPTIONS preflight"
 response=$(curl -s -i -X OPTIONS \
-  -H 'Origin: http://127.0.0.1:3000' \
+  -H 'Origin: http://localhost:3000' \
   -H 'Access-Control-Request-Method: POST' \
   -H 'Access-Control-Request-Headers: content-type,x-csrf-token' \
   "${BACKEND_URL}/v1/ask")
@@ -40,7 +40,7 @@ echo "$response" | grep -E "(Access-Control-Allow-Methods|Access-Control-Allow-H
 echo "📋 Test 3: WebSocket Origin validation"
 if command -v wscat &> /dev/null; then
   # Test valid origin
-  timeout 5s wscat -c "ws://127.0.0.1:8000/v1/ws/health" -H "Origin: http://127.0.0.1:3000" || {
+  timeout 5s wscat -c "ws://127.0.0.1:8000/v1/ws/health" -H "Origin: http://localhost:3000" || {
     echo "❌ Test 3a failed: Valid origin rejected"
     exit 1
   }
@@ -57,7 +57,7 @@ fi
 # Test 4: Fail if Access-Control-Allow-Origin is * while Set-Cookie exists
 echo "📋 Test 4: No wildcard CORS with cookies"
 response=$(curl -s -i \
-  -H 'Origin: http://127.0.0.1:3000' \
+  -H 'Origin: http://localhost:3000' \
   "${BACKEND_URL}/v1/whoami")
 
 if echo "$response" | grep -q "Access-Control-Allow-Origin: \*" && echo "$response" | grep -q "Set-Cookie"; then
@@ -68,7 +68,7 @@ fi
 # Test 5: Vary: Origin when Allow-Origin is set
 echo "📋 Test 5: Vary: Origin header"
 response=$(curl -s -i \
-  -H 'Origin: http://127.0.0.1:3000' \
+  -H 'Origin: http://localhost:3000' \
   "${BACKEND_URL}/v1/whoami")
 
 if echo "$response" | grep -q "Access-Control-Allow-Origin" && ! echo "$response" | grep -q "Vary: Origin"; then
@@ -79,7 +79,7 @@ fi
 # Test 6: OPTIONS returns expected headers
 echo "📋 Test 6: OPTIONS headers validation"
 response=$(curl -s -i -X OPTIONS \
-  -H 'Origin: http://127.0.0.1:3000' \
+  -H 'Origin: http://localhost:3000' \
   -H 'Access-Control-Request-Method: POST' \
   -H 'Access-Control-Request-Headers: content-type,x-csrf-token' \
   "${BACKEND_URL}/v1/ask")

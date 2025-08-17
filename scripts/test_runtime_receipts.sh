@@ -6,7 +6,7 @@
 set -e
 
 BACKEND_URL="http://127.0.0.1:8000"
-FRONTEND_URL="http://127.0.0.1:3000"
+FRONTEND_URL="http://localhost:3000"
 
 echo "🔍 Testing Runtime Receipts..."
 
@@ -21,7 +21,7 @@ echo ""
 # Test 2: Whoami with CORS and auth headers
 echo "📋 Test 2: Whoami endpoint (CORS + auth)"
 response=$(curl -s -i \
-  -H 'Origin: http://127.0.0.1:3000' \
+  -H 'Origin: http://localhost:3000' \
   -H 'Content-Type: application/json' \
   -c /tmp/cookies -b /tmp/cookies \
   "${BACKEND_URL}/v1/whoami")
@@ -33,7 +33,7 @@ echo ""
 # Test 3: Auth finish endpoint (SPA style)
 echo "📋 Test 3: Auth finish endpoint (POST → 204)"
 response=$(curl -s -i -X POST \
-  -H 'Origin: http://127.0.0.1:3000' \
+  -H 'Origin: http://localhost:3000' \
   -H 'Content-Type: application/json' \
   -c /tmp/cookies -b /tmp/cookies \
   "${BACKEND_URL}/v1/auth/finish")
@@ -45,7 +45,7 @@ echo ""
 # Test 4: Rate limiting headers (if implemented)
 echo "📋 Test 4: Rate limiting headers"
 response=$(curl -s -i \
-  -H 'Origin: http://127.0.0.1:3000' \
+  -H 'Origin: http://localhost:3000' \
   "${BACKEND_URL}/v1/ask")
 status=$(echo "$response" | head -n 1 | cut -d' ' -f2)
 echo "Status: $status"
@@ -63,7 +63,7 @@ echo ""
 # Test 6: WebSocket handshake
 echo "📋 Test 6: WebSocket handshake"
 response=$(curl -s -i \
-  -H 'Origin: http://127.0.0.1:3000' \
+  -H 'Origin: http://localhost:3000' \
   -H 'Upgrade: websocket' \
   -H 'Connection: Upgrade' \
   -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \

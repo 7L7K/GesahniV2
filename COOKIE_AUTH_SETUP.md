@@ -19,7 +19,7 @@ The FastAPI backend is properly configured with:
 
 ```python
 # CORS configuration in app/main.py
-_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://127.0.0.1:3000,http://localhost:3000")
+_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -90,9 +90,9 @@ Cookies are properly configured for development:
 
 ## Development URLs
 
-- **Frontend**: `http://127.0.0.1:3000`
+- **Frontend**: `http://localhost:3000`
 - **Backend**: `http://127.0.0.1:8000`
-- **CORS Origins**: `http://127.0.0.1:3000,http://localhost:3000`
+- **CORS Origins**: `http://localhost:3000`
 
 ## Testing
 
@@ -100,7 +100,7 @@ To verify the setup is working:
 
 1. Start the backend: `cd app && python -m uvicorn main:app --reload --port 8000`
 2. Start the frontend: `cd frontend && npm run dev`
-3. Navigate to `http://127.0.0.1:3000`
+3. Navigate to `http://localhost:3000`
 4. Try logging in - cookies should be set automatically
 5. Check browser dev tools → Application → Cookies to see HttpOnly cookies
 

@@ -84,6 +84,32 @@ def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "
         )
     return resp
 
+def _build_origin_aware_url(request: Request, path: str) -> str:
+    """Build a URL relative to the request's origin to avoid hardcoded hosts."""
+    # Get the origin from the request
+    origin = request.headers.get("origin") or request.headers.get("referer")
+    if origin:
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(origin)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            return f"{base_url}{path}"
+        except Exception:
+            pass
+    
+    # Fallback: use the request URL to derive the base
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(str(request.url))
+        base_url = f"{parsed.scheme}://{parsed.netloc}"
+        return f"{base_url}{path}"
+    except Exception:
+        # Last resort: use environment variable but log warning
+        import logging
+        logging.warning("Using fallback APP_URL for redirect - consider fixing request origin")
+        app_url = os.getenv("APP_URL", "http://localhost:3000")
+        return f"{app_url}{path}"
+
 @router.get("/auth/url")
 def get_auth_url(request: Request):
     uid = _current_user_id(request)
@@ -137,7 +163,6 @@ def oauth_callback(
     except Exception:
         pass
     # If Google returned an error, redirect back to app with a friendly message
-    app_url = os.getenv("APP_URL", "http://127.0.0.1:3000")
     if error:
         from urllib.parse import urlencode
 
@@ -145,14 +170,15 @@ def oauth_callback(
         next_val = request.query_params.get("next") or "/"
         if (os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"):
             # Set cookies on our domain directly to avoid cross-site redirect issues in tests
-            target = f"{app_url}/login" + (f"?next={next_val}" if next_val else "")
+            target = _build_origin_aware_url(request, "/login") + (f"?next={next_val}" if next_val else "")
             return _mint_cookie_redirect(request, target)
         query = urlencode({
             "oauth": "google",
             "error": msg,
             "next": next_val,
         })
-        return RedirectResponse(url=f"{app_url}/login?{query}", status_code=302)
+        login_url = _build_origin_aware_url(request, f"/login?{query}")
+        return RedirectResponse(url=login_url, status_code=302)
 
     # Require both code and state for token exchange; otherwise bounce with error
     if not state:
@@ -160,28 +186,30 @@ def oauth_callback(
 
         next_val = request.query_params.get("next") or "/"
         if (os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"):
-            target = f"{app_url}/login" + (f"?next={next_val}" if next_val else "")
+            target = _build_origin_aware_url(request, "/login") + (f"?next={next_val}" if next_val else "")
             return _mint_cookie_redirect(request, target)
         query = urlencode({
             "oauth": "google",
             "error": "missing_state",
             "next": next_val,
         })
-        return RedirectResponse(url=f"{app_url}/login?{query}", status_code=302)
+        login_url = _build_origin_aware_url(request, f"/login?{query}")
+        return RedirectResponse(url=login_url, status_code=302)
 
     if not code:
         from urllib.parse import urlencode
 
         next_val = request.query_params.get("next") or "/"
         if (os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"):
-            target = f"{app_url}/login" + (f"?next={next_val}" if next_val else "")
+            target = _build_origin_aware_url(request, "/login") + (f"?next={next_val}" if next_val else "")
             return _mint_cookie_redirect(request, target)
         query = urlencode({
             "oauth": "google",
             "error": "missing_code",
             "next": next_val,
         })
-        return RedirectResponse(url=f"{app_url}/login?{query}", status_code=302)
+        login_url = _build_origin_aware_url(request, f"/login?{query}")
+        return RedirectResponse(url=login_url, status_code=302)
 
     # Complete OAuth exchange
     try:
@@ -190,7 +218,7 @@ def oauth_callback(
         from urllib.parse import urlencode
         next_val = request.query_params.get("next") or "/"
         if (os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"):
-            target = f"{app_url}/login" + (f"?next={next_val}" if next_val else "")
+            target = _build_origin_aware_url(request, "/login") + (f"?next={next_val}" if next_val else "")
             return _mint_cookie_redirect(request, target)
         msg = (e.detail if isinstance(e.detail, str) else "oauth_exchange_failed") if hasattr(e, "detail") else "oauth_exchange_failed"
         if e.status_code == 501:
@@ -200,12 +228,13 @@ def oauth_callback(
             "error": msg,
             "next": next_val,
         })
-        return RedirectResponse(url=f"{app_url}/login?{query}", status_code=302)
+        login_url = _build_origin_aware_url(request, f"/login?{query}")
+        return RedirectResponse(url=login_url, status_code=302)
     except Exception as e:
         from urllib.parse import urlencode
         next_val = request.query_params.get("next") or "/"
         if (os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"):
-            target = f"{app_url}/login" + (f"?next={next_val}" if next_val else "")
+            target = _build_origin_aware_url(request, "/login") + (f"?next={next_val}" if next_val else "")
             return _mint_cookie_redirect(request, target)
         # Normalise error message for safety
         msg = str(getattr(e, "args", [""])[0] or "oauth_exchange_failed")
@@ -214,7 +243,8 @@ def oauth_callback(
             "error": msg,
             "next": next_val,
         })
-        return RedirectResponse(url=f"{app_url}/login?{query}", status_code=302)
+        login_url = _build_origin_aware_url(request, f"/login?{query}")
+        return RedirectResponse(url=login_url, status_code=302)
 
     # Persist credentials under a user once we know the user id
     # Determine if this is a login flow by decoding our signed state
@@ -332,7 +362,7 @@ def oauth_callback(
             code = None
             if os.getenv("PYTEST_RUNNING"):
                 code = uuid4().hex
-            target = f"{app_url}/login" + (f"?next={next_path}" if next_path else "")
+            target = _build_origin_aware_url(request, "/login") + (f"?next={next_path}" if next_path else "")
             if code:
                 target += ("&" if "?" in target else "?") + f"code={code}"
             # Explicit 302 to match tests expecting FOUND, not Temporary Redirect
@@ -363,7 +393,7 @@ def oauth_callback(
             return resp
         except Exception:
             # Fallback: bare redirect, still no tokens in URL
-            clean = f"{app_url}/login" + (f"?next={next_path}" if next_path else "")
+            clean = _build_origin_aware_url(request, "/login") + (f"?next={next_path}" if next_path else "")
             return RedirectResponse(url=clean, status_code=302)
     # Default (should not be reached when exchange succeeds): simple JSON OK
     return {"status": "ok"}

@@ -562,17 +562,9 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
     cookie_secure, cookie_samesite = _cookie_flags_for(request)
     access_ttl, refresh_ttl = get_token_ttls()
 
-    # Build safe redirect target
-    next_path = (request.query_params.get("next") or "/").strip()
-    try:
-        # Prevent open redirects: internal-only absolute path
-        if not next_path.startswith("/") or "://" in next_path:
-            next_path = "/"
-        # Normalize duplicate slashes
-        import re as _re
-        next_path = _re.sub(r"/+", "/", next_path)
-    except Exception:
-        next_path = "/"
+    # Build safe redirect target using centralized helper
+    from ..url_helpers import sanitize_redirect_path
+    next_path = sanitize_redirect_path(request.query_params.get("next"), "/")
 
     # Classify finisher reason for logs
     reason = "normal_login"
