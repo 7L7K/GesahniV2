@@ -29,7 +29,7 @@ def test_cors_allowlist_exactly_localhost_3000():
     
     # Test with disallowed origin (127.0.0.1) - should be rejected with 400
     response = client.options('/v1/auth/logout', headers={
-        'Origin': 'http://127.0.0.1:3000',
+        'Origin': 'http://localhost:3000',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'content-type'
     })

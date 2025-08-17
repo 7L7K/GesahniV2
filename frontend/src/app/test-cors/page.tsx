@@ -52,7 +52,7 @@ export default function CorsTestPage() {
 
             // Test 2: Font Loading Test
             try {
-                const response = await fetch('http://127.0.0.1:3000/_next/static/media/569ce4b8f30dc480-s.p.woff2', {
+                const response = await fetch('http://localhost:3000/_next/static/media/569ce4b8f30dc480-s.p.woff2', {
                     method: 'GET'
                 });
 

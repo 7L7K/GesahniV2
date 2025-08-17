@@ -113,7 +113,7 @@ def test_cors_rejects_127_0_0_1_origin():
     
     # Test with 127.0.0.1 origin (should be rejected)
     response = client.options('/v1/auth/logout', headers={
-        'Origin': 'http://127.0.0.1:3000',
+        'Origin': 'http://localhost:3000',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'content-type'
     })

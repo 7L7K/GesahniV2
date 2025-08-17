@@ -23,7 +23,7 @@ def test_validate_websocket_origin_invalid():
     
     # Test various invalid origins
     invalid_origins = [
-        "http://127.0.0.1:3000",
+        "http://localhost:3000",
         "https://localhost:3000", 
         "http://localhost:3001",
         "http://example.com",
@@ -56,7 +56,7 @@ def test_validate_websocket_origin_none():
 async def test_verify_ws_origin_validation():
     """Test that verify_ws rejects invalid origins with proper error codes."""
     websocket = Mock()
-    websocket.headers = {"Origin": "http://127.0.0.1:3000"}
+            websocket.headers = {"Origin": "http://localhost:3000"}
     # Create async mock for close method
     async def async_close(*args, **kwargs):
         return None

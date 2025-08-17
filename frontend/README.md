@@ -23,6 +23,7 @@ This directory contains the [Next.js](https://nextjs.org/) web interface for Ges
    NEXT_PUBLIC_API_ORIGIN="http://127.0.0.1:8000"
    ```
    The app defaults to `http://127.0.0.1:8000` for IPv4 consistency and to avoid dual-stack surprises.
+   Visit [http://localhost:3000](http://localhost:3000) to interact with the UI.
 3. Start the development server:
    ```bash
    npm run dev

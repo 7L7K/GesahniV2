@@ -63,4 +63,9 @@ module.exports = {
       },
     ];
   },
+  // Bind to all interfaces (::) and ensure DNS prefers IPv4
+  server: {
+    hostname: '::',
+    port: 3000,
+  },
 };

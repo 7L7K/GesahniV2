@@ -66,7 +66,7 @@ class TestWebSocketIntegration:
         
         # Mock WebSocket with invalid origin
         invalid_ws = type('MockWebSocket', (), {
-            'headers': {'Origin': 'http://127.0.0.1:3000'}
+            'headers': {'Origin': 'http://localhost:3000'}
         })()
         
         # Mock WebSocket without origin (non-browser client)

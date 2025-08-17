@@ -29,7 +29,7 @@ async function test401Fix() {
     try {
         // Navigate to the app
         console.log('Navigating to app...');
-        await page.goto('http://127.0.0.1:3000', { waitUntil: 'networkidle0' });
+        await page.goto('http://localhost:3000', { waitUntil: 'networkidle0' });
 
         // Wait a bit for any initial requests
         await page.waitForTimeout(3000);

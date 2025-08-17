@@ -953,6 +953,14 @@ async def websocket_storytime(
     return await _ws(ws, user_id)  # type: ignore[arg-type]
 
 
+@ws_router.websocket("/health")
+async def websocket_health(ws: WebSocket):
+    """Simple health check WebSocket endpoint for testing."""
+    await ws.accept()
+    await ws.send_text("healthy")
+    await ws.close()
+
+
 @core_router.post(
     "/intent-test",
     responses={200: {"content": {"application/json": {"schema": {"example": {"intent": "test", "prompt": "hello"}}}}}},

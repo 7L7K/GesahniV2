@@ -1,10 +1,15 @@
-import { buildWebSocketUrl } from '@/lib/urls'
+import { buildWebSocketUrl, buildCanonicalWebSocketUrl } from '@/lib/urls'
 
 const API_URL = process.env.NEXT_PUBLIC_API_ORIGIN || "http://127.0.0.1:8000"
 
 // Build WebSocket URLs dynamically
 const WS_URL = buildWebSocketUrl(API_URL, '/v1/ws/care')
 const WS_HEALTH_URL = buildWebSocketUrl(API_URL, '/v1/ws/health')
+
+// Build frontend WebSocket URLs for actual connections
+const FRONTEND_WS_URL = buildCanonicalWebSocketUrl(API_URL, '/v1/transcribe')
+const FRONTEND_WS_CARE_URL = buildCanonicalWebSocketUrl(API_URL, '/v1/ws/care')
+const FRONTEND_WS_HEALTH_URL = buildCanonicalWebSocketUrl(API_URL, '/v1/ws/health')
 
 export function getCSPDirectives(): Record<string, string[]> {
     const isDev = process.env.NODE_ENV === 'development'
@@ -20,7 +25,10 @@ export function getCSPDirectives(): Record<string, string[]> {
                 "'self'",
                 API_URL,
                 WS_URL,
-                WS_HEALTH_URL
+                WS_HEALTH_URL,
+                FRONTEND_WS_URL,
+                FRONTEND_WS_CARE_URL,
+                FRONTEND_WS_HEALTH_URL
             ],
             "frame-src": ["'self'"],
             "object-src": ["'none'"],
