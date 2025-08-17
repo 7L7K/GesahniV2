@@ -156,6 +156,8 @@ describe('api.ts', () => {
         localStorage.setItem('auth:access_token', 'tok');
         const url = wsUrl('/v1/stream');
         expect(url).toMatch(/access_token=/);
+        // WebSocket requirement: Should use canonical frontend origin
+        expect(url).toMatch(/ws:\/\/localhost:3000/);
     });
 
     test('sendPrompt parses json response', async () => {

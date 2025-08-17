@@ -399,6 +399,22 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
         return None
     return None
 
+
+def validate_websocket_origin(websocket: WebSocket) -> bool:
+    """Validate WebSocket origin to ensure only http://localhost:3000 is accepted.
+    
+    WebSocket requirement: Origin checks should accept only http://localhost:3000.
+    
+    Returns:
+        bool: True if origin is valid, False otherwise
+    """
+    origin = websocket.headers.get("Origin")
+    if not origin:
+        # Allow connections without origin header (e.g., non-browser clients)
+        return True
+    return origin == "http://localhost:3000"
+
+
 # Per-user counters used by the HTTP and WS middleware -----------------------
 http_requests: Dict[str, int] = {}
 ws_requests: Dict[str, int] = {}
@@ -742,7 +758,19 @@ async def verify_ws(websocket: WebSocket) -> None:
     that cannot set custom headers during the WebSocket handshake.
     When validated, the decoded payload is attached to ``ws.state.jwt_payload``
     and ``ws.state.user_id`` is set if present in the token.
+    
+    WebSocket requirement: Validates origin to ensure only http://localhost:3000 is accepted.
     """
+
+    # WebSocket requirement: Origin validation - only accept http://localhost:3000
+    origin = websocket.headers.get("Origin")
+    if origin and origin != "http://localhost:3000":
+        # WebSocket requirement: Close with crisp code/reason for origin mismatch
+        await websocket.close(
+            code=1008,  # Policy violation
+            reason="Origin not allowed: only http://localhost:3000 accepted"
+        )
+        return
 
     jwt_secret = os.getenv("JWT_SECRET")
     if not jwt_secret:

@@ -371,23 +371,30 @@ def _custom_openapi():
 app.openapi = _custom_openapi  # type: ignore[assignment]
 
 # CORS configuration - will be added as outermost middleware
+# WebSocket requirement: Only accept http://localhost:3000 for consistent origin validation
 _cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 
-# Security: Use exactly one frontend origin (http://localhost:3000, not both localhost and 127)
+# Security: WebSocket requirement - use exactly http://localhost:3000 (not 127.0.0.1:3000)
+# This ensures consistent origin validation between frontend and backend
 if len(origins) > 1:
-    logging.warning("Multiple CORS origins detected. For security, use exactly one frontend origin.")
-    # Use the first origin as the primary
-    origins = [origins[0]]
-    logging.info(f"Using primary CORS origin: {origins[0]}")
+    logging.warning("Multiple CORS origins detected. WebSocket requirement: use exactly http://localhost:3000")
+    # Use http://localhost:3000 as the canonical origin
+    origins = ["http://localhost:3000"]
+    logging.info(f"Using canonical CORS origin: {origins[0]}")
 
 if not origins:
     logging.warning("No CORS origins configured. Defaulting to http://localhost:3000")
     origins = ["http://localhost:3000"]
 
-# Ensure we only allow http://localhost:3000, not 127.0.0.1:3000
+# WebSocket requirement: Ensure we only allow http://localhost:3000, not 127.0.0.1:3000
 if "http://127.0.0.1:3000" in origins:
-    logging.warning("CORS origin http://127.0.0.1:3000 detected. Replacing with http://localhost:3000 for security.")
+    logging.warning("CORS origin http://127.0.0.1:3000 detected. Replacing with http://localhost:3000 for WebSocket consistency.")
+    origins = ["http://localhost:3000"]
+
+# Final validation: ensure we only have http://localhost:3000
+if origins != ["http://localhost:3000"]:
+    logging.warning(f"WebSocket requirement: CORS origins {origins} not canonical. Using http://localhost:3000")
     origins = ["http://localhost:3000"]
 
 # Allow credentials: yes (cookies/tokens)
@@ -400,7 +407,7 @@ allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").strip().lower() 
 @app.patch("/v1/ws/{path:path}")
 @app.delete("/v1/ws/{path:path}")
 async def websocket_http_handler(request: Request, path: str):
-    """Handle HTTP requests to WebSocket endpoints with proper error response."""
+    """Handle HTTP requests to WebSocket endpoints with crisp error codes and reasons."""
     try:
         record_ws_reconnect_attempt(
             endpoint=f"/v1/ws/{path}",
@@ -410,10 +417,15 @@ async def websocket_http_handler(request: Request, path: str):
     except Exception:
         pass
     
+    # WebSocket requirement: Provide crisp error codes and reasons (no 404 masking)
     response = Response(
         content="WebSocket endpoint requires WebSocket protocol",
         status_code=400,
-        media_type="text/plain"
+        media_type="text/plain",
+        headers={
+            "X-WebSocket-Error": "protocol_required",
+            "X-WebSocket-Reason": "HTTP requests not supported on WebSocket endpoints"
+        }
     )
     return response
 

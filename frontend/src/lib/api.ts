@@ -1,7 +1,7 @@
 /* Unified API utilities: single source of truth for base URL, auth, fetch, SSE, and data hooks */
 
 import { useQuery } from "@tanstack/react-query";
-import { buildWebSocketUrl } from '@/lib/urls'
+import { buildWebSocketUrl, buildCanonicalWebSocketUrl } from '@/lib/urls'
 
 // Cache Key Policy (AUTH-06):
 // - All user-scoped query keys MUST include an auth namespace and relevant context (e.g., device/resident/room)
@@ -450,8 +450,8 @@ export async function setDevice(device_id: string): Promise<void> {
 }
 
 export function wsUrl(path: string): string {
-  // Build WebSocket URL based on API_ORIGIN scheme (ws:// vs wss://)
-  const baseUrl = buildWebSocketUrl(API_URL, path);
+  // Build WebSocket URL using canonical frontend origin for consistent origin validation
+  const baseUrl = buildCanonicalWebSocketUrl(API_URL, path);
   if (!HEADER_AUTH_MODE) return baseUrl; // cookie-auth for WS
   const token = getToken();
   if (!token) return baseUrl;

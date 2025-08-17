@@ -4,6 +4,16 @@
  */
 
 /**
+ * Get the canonical frontend origin for WebSocket URL building
+ * @returns Canonical frontend origin (http://localhost:3000)
+ */
+export function getCanonicalFrontendOrigin(): string {
+    // Use the same canonical origin as the backend expects
+    // This ensures consistency between frontend and backend origin validation
+    return "http://localhost:3000";
+}
+
+/**
  * Build a URL from the current request's nextUrl
  * @param req - NextRequest object
  * @param pathname - Target pathname (defaults to '/')
@@ -74,6 +84,24 @@ export function buildAuthUrl(pathname: string, next?: string): string {
  */
 export function buildWebSocketUrl(apiOrigin: string, path: string): string {
     const parsed = new URL(apiOrigin);
+    const wsScheme = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsBase = `${wsScheme}//${parsed.host}`;
+
+    // Ensure path starts with / and join properly
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `${wsBase}${normalizedPath}`;
+}
+
+/**
+ * Build a WebSocket URL using the canonical frontend origin for consistent origin validation
+ * @param apiOrigin - API origin (e.g., 'http://127.0.0.1:8000')
+ * @param path - WebSocket path
+ * @returns WebSocket URL
+ */
+export function buildCanonicalWebSocketUrl(apiOrigin: string, path: string): string {
+    // Use the canonical frontend origin for consistent origin validation
+    const canonicalOrigin = getCanonicalFrontendOrigin();
+    const parsed = new URL(canonicalOrigin);
     const wsScheme = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsBase = `${wsScheme}//${parsed.host}`;
 
