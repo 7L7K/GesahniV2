@@ -43,3 +43,4 @@ dist/
 web/*
 
 .gitignore
+env.consolidated
