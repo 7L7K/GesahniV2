@@ -1,6 +1,6 @@
 import { buildWebSocketUrl, buildCanonicalWebSocketUrl } from '@/lib/urls'
 
-const API_URL = process.env.NEXT_PUBLIC_API_ORIGIN || "http://127.0.0.1:8000"
+const API_URL = process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000"
 
 // Build WebSocket URLs dynamically
 const WS_URL = buildWebSocketUrl(API_URL, '/v1/ws/care')

@@ -63,9 +63,6 @@ module.exports = {
       },
     ];
   },
-  // Bind to all interfaces (::) and ensure DNS prefers IPv4
-  server: {
-    hostname: '::',
-    port: 3000,
-  },
+  // Note: Server configuration is handled via command line arguments
+  // -H :: binds to all interfaces
 };

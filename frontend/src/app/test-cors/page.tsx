@@ -21,7 +21,7 @@ export default function CorsTestPage() {
 
             // Test 1: Backend Health Check
             try {
-                const response = await fetch('http://127.0.0.1:8000/healthz/ready', {
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_ORIGIN || 'http://localhost:8000'}/healthz/ready`, {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -79,7 +79,7 @@ export default function CorsTestPage() {
 
             // Test 3: API State Endpoint
             try {
-                const response = await fetch('http://127.0.0.1:8000/v1/state', {
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_ORIGIN || 'http://localhost:8000'}/v1/state`, {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',

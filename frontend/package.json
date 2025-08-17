@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_OPTIONS=\"--dns-result-order=ipv4first --max-old-space-size=4096\" NEXT_PUBLIC_SITE_URL=http://localhost:3000 CLERK_SIGN_IN_URL=/sign-in CLERK_SIGN_UP_URL=/sign-up CLERK_AFTER_SIGN_IN_URL=/ CLERK_AFTER_SIGN_UP_URL=/ next dev -H ::",
+    "dev": "NODE_OPTIONS=\"--dns-result-order=ipv4first --max-old-space-size=4096\" NEXT_PUBLIC_SITE_URL=http://localhost:3000 NEXT_PUBLIC_API_ORIGIN=http://localhost:8000 CLERK_SIGN_IN_URL=/sign-in CLERK_SIGN_UP_URL=/sign-up CLERK_AFTER_SIGN_IN_URL=/ CLERK_AFTER_SIGN_UP_URL=/ next dev -H ::",
     "dev:turbo": "NODE_OPTIONS=\"--dns-result-order=ipv4first --max-old-space-size=4096\" NEXT_PUBLIC_SITE_URL=http://localhost:3000 CLERK_SIGN_IN_URL=/sign-in CLERK_SIGN_UP_URL=/sign-up CLERK_AFTER_SIGN_IN_URL=/ CLERK_AFTER_SIGN_UP_URL=/ next dev --turbopack -H ::",
     "build": "next build",
     "start": "next start",
