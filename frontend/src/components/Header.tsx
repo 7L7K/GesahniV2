@@ -1,13 +1,14 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import ThemeToggle from '@/components/ThemeToggle';
-import { Button } from '@/components/ui/button';
-import { SignedIn, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs';
-import { getToken, clearTokens, getBudget, bumpAuthEpoch, apiFetch } from '@/lib/api';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import ThemeToggle from '@/components/ThemeToggle';
+import { SignedIn, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs';
 import { useAuthState } from '@/hooks/useAuth';
+import { getToken, clearTokens, getBudget, bumpAuthEpoch, apiFetch } from '@/lib/api';
+import ClientOnly from './ClientOnly';
 
 export default function Header() {
     const authState = useAuthState();
@@ -66,10 +67,14 @@ export default function Header() {
     useEffect(() => {
         const checkLocalMode = () => {
             try {
-                const isLocal = window.location.hostname === 'localhost' ||
-                    window.location.hostname === '127.0.0.1' ||
-                    window.location.hostname.includes('.local');
-                setLocalMode(isLocal);
+                if (typeof window !== 'undefined' && window.location) {
+                    const isLocal = window.location.hostname === '127.0.0.1' ||
+                        window.location.hostname === 'localhost' ||
+                        window.location.hostname.includes('.local');
+                    setLocalMode(isLocal);
+                } else {
+                    setLocalMode(false);
+                }
             } catch {
                 setLocalMode(false);
             }
@@ -153,18 +158,22 @@ export default function Header() {
                             </>
                         )}
                         <ThemeToggle />
-                        {localMode && (
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                Local
-                            </div>
-                        )}
-                        {nearCap && (
-                            <div className="flex items-center gap-1 text-xs text-orange-600">
-                                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                                Near Cap
-                            </div>
-                        )}
+                        <ClientOnly>
+                            {localMode && (
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                    Local
+                                </div>
+                            )}
+                        </ClientOnly>
+                        <ClientOnly>
+                            {nearCap && (
+                                <div className="flex items-center gap-1 text-xs text-orange-600">
+                                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                                    Near Cap
+                                </div>
+                            )}
+                        </ClientOnly>
                     </nav>
                 </div>
             </div>

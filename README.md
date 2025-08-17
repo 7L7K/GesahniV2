@@ -80,7 +80,7 @@ Set environment variables as needed:
 | `API_TOKEN` | – | no | Static token for legacy clients |
 | `REDIS_URL` | `redis://localhost:6379/0` | no | RQ queue for async tasks (optional; falls back to threads) |
 | `HISTORY_FILE` | `data/history.jsonl` | no | Request history log |
-| `CORS_ALLOW_ORIGINS` | `http://127.0.0.1:3000,http://localhost:3000` | no | Allowed web origins |
+| `CORS_ALLOW_ORIGINS` | `http://127.0.0.1:3000` | no | Allowed web origins |
 | `PORT` | `8000` | no | Server port when running `python app/main.py` |
 | `SESSIONS_DIR` | `sessions/` | no | Base directory for session media |
 | `ADMIN_TOKEN` | – | no | Required to read `/config` |
@@ -138,7 +138,7 @@ The single web UI lives in `frontend/` (Next.js 15). A previously experimental `
 ```bash
 cd frontend
 npm install
-npm run dev  # http://localhost:3000
+npm run dev  # http://127.0.0.1:3000
 ```
 
 ### 🎥 Record a Session
@@ -151,7 +151,7 @@ python record_session.py --duration 5 --output ./sessions
 
 ### 📊 Metrics & Monitoring
 
-* The backend exposes Prometheus metrics at `http://localhost:8000/metrics`.
+* The backend exposes Prometheus metrics at `http://127.0.0.1:8000/metrics`.
 * Metrics include request volume, latency histograms, and request cost.
 * Import `grafana_dashboard.json` into Grafana for a sample dashboard with latency,
   cache hit rate, cost, and request volume panels.
@@ -170,7 +170,7 @@ and expire after `JWT_EXPIRE_MINUTES` (default 30 minutes); refresh tokens
 expire after `JWT_REFRESH_EXPIRE_MINUTES` (default 1440 minutes).
 
 ```bash
-curl -X POST localhost:8000/login \
+curl -X POST 127.0.0.1:8000/login \
      -H "Content-Type: application/json" \
      -d '{"username":"alice","password":"wonderland"}'
 ```
@@ -178,7 +178,7 @@ curl -X POST localhost:8000/login \
 Use the refresh token to obtain a new pair of tokens by POSTing to `/refresh`:
 
 ```bash
-curl -X POST localhost:8000/refresh \
+curl -X POST 127.0.0.1:8000/refresh \
      -H "Content-Type: application/json" \
      -d '{"refresh_token":"<token>"}'
 ```
@@ -187,7 +187,7 @@ To explicitly revoke a token, call `/logout` with the token in the Authorization
 header. Revoked token IDs are stored in memory and cannot be reused.
 
 ```bash
-curl -X POST localhost:8000/logout -H "Authorization: Bearer <refresh_token>"
+curl -X POST 127.0.0.1:8000/logout -H "Authorization: Bearer <refresh_token>"
 ```
 
 ### Clerk (JWT) backend verification
@@ -223,8 +223,8 @@ Endpoints:
 - `POST /v1/devices/{id}/revoke` (owner): revokes a device token. Body may include `{ jti }` or header `X-Device-Token-ID`.
 
 Simulate pairing:
-1) User (browser): `curl -H "Authorization: Bearer <user_jwt>" -H "X-Device-Label: tv-livingroom" -X POST http://localhost:8000/v1/devices/pair/start`
-2) TV/device: `curl -X POST http://localhost:8000/v1/devices/pair/complete -H 'Content-Type: application/json' -d '{"code":"<code>"}'`
+1) User (browser): `curl -H "Authorization: Bearer <user_jwt>" -H "X-Device-Label: tv-livingroom" -X POST http://127.0.0.1:8000/v1/devices/pair/start`
+2) TV/device: `curl -X POST http://127.0.0.1:8000/v1/devices/pair/complete -H 'Content-Type: application/json' -d '{"code":"<code>"}'`
 3) TV stores `access_token` and uses it as Bearer for resident‑scoped endpoints (e.g., `/v1/care/*`). Admin endpoints remain 403.
 
 Revocation:

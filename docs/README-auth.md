@@ -13,7 +13,7 @@ This guide covers Clerk setup, environment variables, roles configuration, redir
    - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
    - `CLERK_SECRET_KEY` (frontend not used directly but kept for completeness)
 3) Allowed redirect URLs:
-   - `http://localhost:3000/sign-in` and `http://localhost:3000/sign-up`
+   - `http://127.0.0.1:3000/sign-in` and `http://127.0.0.1:3000/sign-up`
    - Add prod URLs when deploying (e.g., `https://app.example.com/sign-in`).
 4) Optional: Enable Magic Links or Passkeys in Clerk → affects sign-in experience only.
 5) Roles:
@@ -22,7 +22,7 @@ This guide covers Clerk setup, environment variables, roles configuration, redir
 
 ## Frontend `.env.local`
 ```
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
@@ -59,7 +59,7 @@ cd frontend
 npm install
 npm run dev
 ```
-Visit `http://localhost:3000`.
+Visit `http://127.0.0.1:3000`.
 
 ## Production notes
 - Ensure HTTPS and proper `NEXT_PUBLIC_SITE_URL` (if used) for social/OG tags.

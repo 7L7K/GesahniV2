@@ -26,7 +26,7 @@ export function useBackendStatus() {
                     auth: false,
                     signal: controller.signal,
                     cache: 'no-store',
-                    credentials: 'omit'
+                    credentials: 'include'
                 });
 
                 clearTimeout(timeoutId);
@@ -73,7 +73,7 @@ export function useBackendStatus() {
                     auth: false,
                     signal: controller.signal,
                     cache: 'no-store',
-                    credentials: 'omit'
+                    credentials: 'include'
                 });
 
                 clearTimeout(timeoutId);

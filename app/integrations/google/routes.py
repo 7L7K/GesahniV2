@@ -137,7 +137,7 @@ def oauth_callback(
     except Exception:
         pass
     # If Google returned an error, redirect back to app with a friendly message
-    app_url = os.getenv("APP_URL", "http://localhost:3000")
+    app_url = os.getenv("APP_URL", "http://127.0.0.1:3000")
     if error:
         from urllib.parse import urlencode
 
@@ -322,14 +322,9 @@ def oauth_callback(
         if not isinstance(next_path, str) or not next_path.startswith("/"):
             next_path = "/"
         try:
-            cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
-            cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-            # In dev/test over http, disable Secure unless SameSite=None which requires Secure
-            try:
-                if getattr(request.url, "scheme", "http") != "https" and cookie_samesite != "none":
-                    cookie_secure = False
-            except Exception:
-                pass
+            # Use centralized cookie configuration
+            from app.cookie_config import get_cookie_config
+            cookie_config = get_cookie_config(request)
             # Convert configured minutes to seconds for cookie max_age
             access_max_age = int(APP_JWT_EXPIRE_MINUTES) * 60
             refresh_max_age = int(APP_REFRESH_EXPIRE_MINUTES) * 60
@@ -344,15 +339,15 @@ def oauth_callback(
             resp = RedirectResponse(url=target, status_code=302)
             try:
                 from app.api.auth import _append_cookie_with_priority as _append
-                _append(resp, key="access_token", value=access_token, max_age=access_max_age, secure=cookie_secure, samesite=cookie_samesite)
-                _append(resp, key="refresh_token", value=refresh_token, max_age=refresh_max_age, secure=cookie_secure, samesite=cookie_samesite)
+                _append(resp, key="access_token", value=access_token, max_age=access_max_age, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+                _append(resp, key="refresh_token", value=refresh_token, max_age=refresh_max_age, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
             except Exception:
                 resp.set_cookie(
                     key="access_token",
                     value=access_token,
                     httponly=True,
-                    secure=cookie_secure,
-                    samesite=cookie_samesite,
+                    secure=cookie_config["secure"],
+                    samesite=cookie_config["samesite"],
                     max_age=access_max_age,
                     path="/",
                 )
@@ -360,8 +355,8 @@ def oauth_callback(
                     key="refresh_token",
                     value=refresh_token,
                     httponly=True,
-                    secure=cookie_secure,
-                    samesite=cookie_samesite,
+                    secure=cookie_config["secure"],
+                    samesite=cookie_config["samesite"],
                     max_age=refresh_max_age,
                     path="/",
                 )

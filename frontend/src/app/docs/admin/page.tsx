@@ -31,8 +31,8 @@ export default function AdminDocs() {
                 Use the included scripts to validate performance:
             </p>
             <ul>
-                <li>k6: <code>k6 run scripts/k6_load_test.js -e BASE_URL=http://localhost:8000</code></li>
-                <li>Locust: <code>locust -f locustfile.py --host=http://localhost:8000</code></li>
+                <li>k6: <code>k6 run scripts/k6_load_test.js -e BASE_URL=http://127.0.0.1:8000</code></li>
+                <li>Locust: <code>locust -f locustfile.py --host=http://127.0.0.1:8000</code></li>
             </ul>
             <p>
                 Default SLOs (k6 thresholds): p95 &lt; 500ms, &lt;1% error rate. Adjust to fit your deployment.

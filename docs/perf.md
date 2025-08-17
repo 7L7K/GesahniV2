@@ -3,7 +3,7 @@ Performance and Load Testing
 ## k6
 
 - Install: `brew install k6`
-- Run smoke: `BASE_URL=http://localhost:8000 k6 run perf/k6/smoke.js`
+- Run smoke: `BASE_URL=http://127.0.0.1:8000 k6 run perf/k6/smoke.js`
 - Env:
   - `K6_VUS` (default 5)
   - `K6_DURATION` (default 1m)
@@ -12,7 +12,7 @@ Performance and Load Testing
 ## Locust
 
 - Install: `pip install locust`
-- Run: `locust -f perf/locust/locustfile.py --host=http://localhost:8000`
+- Run: `locust -f perf/locust/locustfile.py --host=http://127.0.0.1:8000`
 - Env:
   - `LOCUST_SLO_P95_MS` (default 500)
 

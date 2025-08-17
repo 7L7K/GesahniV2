@@ -346,7 +346,7 @@ def _custom_openapi():
     if _IS_DEV_ENV:
         servers_env = _DEV_SERVERS_SNAPSHOT or os.getenv(
             "OPENAPI_DEV_SERVERS",
-            "http://localhost:8000, http://127.0.0.1:8000",
+            "http://127.0.0.1:8000",
         )
         servers = [
             {"url": s.strip()}
@@ -362,7 +362,7 @@ def _custom_openapi():
 app.openapi = _custom_openapi  # type: ignore[assignment]
 
 # CORS configuration - will be added as outermost middleware
-_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://127.0.0.1:3000,http://localhost:3000")
+_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://127.0.0.1:3000")
 origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -511,7 +511,7 @@ if os.getenv("ENV", "").strip().lower() not in {"prod", "production"}:
 
     <div class=\"row\">
       <label for=\"url\">WS URL</label>
-      <input id=\"url\" size=\"60\" placeholder=\"ws://localhost:8000/v1/ws/care\" />
+      <input id=\"url\" size=\"60\" placeholder=\"ws://127.0.0.1:8000/v1/ws/care\" />
       <button id=\"btnConnect\">Connect</button>
       <button id=\"btnDisconnect\">Disconnect</button>
     </div>
@@ -551,7 +551,7 @@ if os.getenv("ENV", "").strip().lower() not in {"prod", "production"}:
         try {
           const proto = (location.protocol === 'https:') ? 'wss:' : 'ws:';
           return proto + '//' + location.host + '/v1/ws/care';
-        } catch (e) { return 'ws://localhost:8000/v1/ws/care'; }
+        } catch (e) { return 'ws://127.0.0.1:8000/v1/ws/care'; }
       }
 
       urlInput.value = defaultUrl();
@@ -928,8 +928,19 @@ async def get_csrf(request: Request) -> dict:
         tok = await _get_csrf_token()
         # Set cookie for double-submit; not HttpOnly so client can echo back
         from fastapi.responses import JSONResponse
+        from .cookie_config import get_cookie_config
+        
         resp = JSONResponse({"csrf_token": tok})
-        resp.set_cookie("csrf_token", tok, max_age=600, path="/")
+        cookie_config = get_cookie_config(request)
+        resp.set_cookie(
+            "csrf_token", 
+            tok, 
+            max_age=600, 
+            path="/",
+            secure=cookie_config["secure"],
+            samesite=cookie_config["samesite"],
+            httponly=False  # CSRF tokens need to be accessible to JavaScript
+        )
         return resp
     except Exception:
         from fastapi.responses import JSONResponse

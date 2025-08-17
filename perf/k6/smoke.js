@@ -10,7 +10,7 @@ export let options = {
   },
 };
 
-const BASE = __ENV.BASE_URL || 'http://localhost:8000';
+const BASE = __ENV.BASE_URL || 'http://127.0.0.1:8000';
 
 export default function () {
   let res = http.get(`${BASE}/v1/healthz`);

@@ -13,7 +13,7 @@ Goal: A new dev can validate sign-in/out, token behavior, per-user rate limits, 
    - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...`
    - `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in`
    - `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up`
-   - `NEXT_PUBLIC_API_URL=http://localhost:8000`
+   - `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000`
 2) Backend env:
    - `JWT_SECRET=change-me`
    - Clerk JWKS:
@@ -23,7 +23,7 @@ Goal: A new dev can validate sign-in/out, token behavior, per-user rate limits, 
    - Optional: `REDIS_URL=redis://localhost:6379/0`
 
 ## Sign-in / Sign-out
-- Visit `http://localhost:3000/` signed-out → header shows Sign in/Sign up; homepage shows a signed-out notice.
+- Visit `http://127.0.0.1:3000/` signed-out → header shows Sign in/Sign up; homepage shows a signed-out notice.
 - Click Sign in and complete with Clerk → after redirect, `UserButton` is visible in header.
 - Click sign-out in the user menu → header returns to Sign in/Sign up.
 
@@ -35,29 +35,29 @@ Goal: A new dev can validate sign-in/out, token behavior, per-user rate limits, 
 ## Per-user rate limits (keyed by user → device → IP)
 - Terminal A (User A) get a token (via Clerk) and call a safe endpoint:
   ```bash
-  curl -i -H "Authorization: Bearer $A" http://localhost:8000/v1/profile
+  curl -i -H "Authorization: Bearer $A" http://127.0.0.1:8000/v1/profile
   ```
   Observe `X-RateLimit-*` headers.
 - Terminal B (User B) same IP, different token:
   ```bash
-  curl -i -H "Authorization: Bearer $B" http://localhost:8000/v1/profile
+  curl -i -H "Authorization: Bearer $B" http://127.0.0.1:8000/v1/profile
   ```
   Headers show independent counters (no shared `remaining`).
 - Admin routes use a separate bucket. Compare:
   ```bash
-  curl -i -H "Authorization: Bearer $A" http://localhost:8000/v1/admin/metrics
+  curl -i -H "Authorization: Bearer $A" http://127.0.0.1:8000/v1/admin/metrics
   ```
   vs non-admin route; buckets are distinct (admin bucket suffix).
 
 ## Role gates (401 vs 403)
 - Admin route (no admin role):
   ```bash
-  curl -i -H "Authorization: Bearer $NON_ADMIN" http://localhost:8000/v1/admin/metrics
+  curl -i -H "Authorization: Bearer $NON_ADMIN" http://127.0.0.1:8000/v1/admin/metrics
   ```
   Expect `403 Forbidden`.
 - Admin route (admin role present in JWT `roles`):
   ```bash
-  curl -i -H "Authorization: Bearer $ADMIN" http://localhost:8000/v1/admin/metrics
+  curl -i -H "Authorization: Bearer $ADMIN" http://127.0.0.1:8000/v1/admin/metrics
   ```
   Expect 200.
 - Caregiver/resident routes (examples):
@@ -68,12 +68,12 @@ Goal: A new dev can validate sign-in/out, token behavior, per-user rate limits, 
 - Start pairing (signed-in user):
   ```bash
   CODE=$(curl -s -X POST -H "Authorization: Bearer $USER" -H "X-Device-Label: tv-livingroom" \
-    http://localhost:8000/v1/devices/pair/start | jq -r .code)
+    http://127.0.0.1:8000/v1/devices/pair/start | jq -r .code)
   echo $CODE
   ```
 - Complete pairing (device):
   ```bash
-  DEV=$(curl -s -X POST http://localhost:8000/v1/devices/pair/complete \
+  DEV=$(curl -s -X POST http://127.0.0.1:8000/v1/devices/pair/complete \
     -H 'Content-Type: application/json' -d '{"code":"'$CODE'"}')
   echo "$DEV" | jq
   DEV_TOKEN=$(echo "$DEV" | jq -r .access_token)
@@ -81,17 +81,17 @@ Goal: A new dev can validate sign-in/out, token behavior, per-user rate limits, 
   The device token is restricted to resident scope (`care:resident`, role `resident`).
 - Test resident-scoped access:
   ```bash
-  curl -i -H "Authorization: Bearer $DEV_TOKEN" http://localhost:8000/v1/care/alerts
+  curl -i -H "Authorization: Bearer $DEV_TOKEN" http://127.0.0.1:8000/v1/care/alerts
   ```
 - Test admin denial with device token:
   ```bash
-  curl -i -H "Authorization: Bearer $DEV_TOKEN" http://localhost:8000/v1/admin/metrics
+  curl -i -H "Authorization: Bearer $DEV_TOKEN" http://127.0.0.1:8000/v1/admin/metrics
   ```
   Expect 403.
 - Revoke device token:
   ```bash
   curl -i -X POST -H "Authorization: Bearer $USER" \
-    http://localhost:8000/v1/devices/tv-livingroom/revoke \
+    http://127.0.0.1:8000/v1/devices/tv-livingroom/revoke \
     -H 'Content-Type: application/json' -d '{"jti":"<copied-from-device-token>"}'
   ```
   Subsequent calls with revoked token should fail with 401.

@@ -69,15 +69,15 @@ async def apple_start(request: Request) -> Response:
     )
     resp = Response(status_code=302)
     resp.headers["Location"] = f"https://appleid.apple.com/auth/authorize?{qs}"
-    cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-    try:
-        secure = getattr(request.url, "scheme", "http") == "https"
-    except Exception:
-        secure = False
+    
+    # Use centralized cookie configuration
+    from ..cookie_config import get_cookie_config
+    cookie_config = get_cookie_config(request)
+    
     # Double-submit: persist state and next target for 10 minutes
     # Ensure cookies follow parity rules
-    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, path="/", samesite=cookie_samesite, secure=secure)
-    resp.set_cookie("oauth_next", next_url, max_age=600, httponly=False, path="/", samesite=cookie_samesite, secure=secure)
+    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, path="/", samesite=cookie_config["samesite"], secure=cookie_config["secure"])
+    resp.set_cookie("oauth_next", next_url, max_age=600, httponly=False, path="/", samesite=cookie_config["samesite"], secure=cookie_config["secure"])
     return resp
 
 

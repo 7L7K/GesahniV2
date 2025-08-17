@@ -149,7 +149,7 @@ export default function CorsTestPage() {
                 <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <h3 className="text-lg font-semibold text-blue-900 mb-2">Test Information</h3>
                     <p className="text-blue-800 text-sm">
-                        This page tests CORS functionality between the frontend (localhost:3000) and backend (127.0.0.1:8000).
+                        This page tests CORS functionality between the frontend (127.0.0.1:3000) and backend (127.0.0.1:8000).
                         The font loading test verifies that static assets are served with proper CORS headers.
                     </p>
                 </div>

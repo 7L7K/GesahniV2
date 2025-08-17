@@ -5,6 +5,7 @@ import asyncio
 import logging
 import time
 import json
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Dict, Optional
 
 import httpx
@@ -19,7 +20,7 @@ from .otel_utils import start_span
 
 # ---- ENV --------------------------------------------------------------------
 # Default to local Ollama to avoid import-time crashes when env isn’t set.
-OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:latest")
 
 # Health-check timeout (seconds). Remote or cold models may take longer than
@@ -203,7 +204,7 @@ async def _schedule_next_health_check() -> None:
     scheduler.add_job(
         _check_and_set_flag,
         "date",
-        run_date=time.time() + delay,
+        run_date=datetime.fromtimestamp(time.time() + delay, tz=timezone.utc),
         id="llama_health_check",
         replace_existing=True
     )

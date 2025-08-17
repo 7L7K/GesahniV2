@@ -15,7 +15,7 @@ def test_options_refresh_without_cors_headers(client: TestClient):
 def test_options_refresh_with_cors_headers(client: TestClient):
     """Test that CORS preflight OPTIONS request returns 200 with CORS headers."""
     headers = {
-        "Origin": "http://localhost:3000",
+        "Origin": "http://127.0.0.1:3000",
         "Access-Control-Request-Method": "POST",
         "Access-Control-Request-Headers": "content-type,x-auth-intent"
     }
@@ -26,7 +26,7 @@ def test_options_refresh_with_cors_headers(client: TestClient):
     assert "access-control-allow-methods" in response.headers
     assert "access-control-allow-headers" in response.headers
     assert "access-control-allow-credentials" in response.headers
-    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:3000"
     assert "POST" in response.headers["access-control-allow-methods"]
     assert "x-auth-intent" in response.headers["access-control-allow-headers"]
 
@@ -34,7 +34,7 @@ def test_options_refresh_with_cors_headers(client: TestClient):
 def test_options_refresh_cors_credentials(client: TestClient):
     """Test that CORS preflight includes credentials support."""
     headers = {
-        "Origin": "http://localhost:3000",
+        "Origin": "http://127.0.0.1:3000",
         "Access-Control-Request-Method": "POST",
         "Access-Control-Request-Headers": "content-type,x-auth-intent"
     }

@@ -25,7 +25,7 @@ def test_cors_is_outermost_middleware():
     
     # Test OPTIONS request with proper CORS headers
     response = client.options('/v1/auth/logout', headers={
-        'Origin': 'http://localhost:3000',
+        'Origin': 'http://127.0.0.1:3000',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'content-type'
     })
@@ -50,7 +50,7 @@ def test_options_requests_bypass_custom_middleware():
     
     # Test OPTIONS request
     response = client.options('/v1/auth/logout', headers={
-        'Origin': 'http://localhost:3000',
+        'Origin': 'http://127.0.0.1:3000',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'content-type'
     })
@@ -94,7 +94,7 @@ def test_cors_headers_are_present_for_all_origins():
     client = TestClient(app)
     
     # Test with different origins
-    origins = ['http://localhost:3000', 'http://127.0.0.1:3000']
+    origins = ['http://127.0.0.1:3000']
     
     for origin in origins:
         response = client.options('/v1/auth/logout', headers={
@@ -113,7 +113,7 @@ def test_cors_handles_preflight_requests_correctly():
     
     # Test preflight request with various headers
     response = client.options('/v1/auth/logout', headers={
-        'Origin': 'http://localhost:3000',
+        'Origin': 'http://127.0.0.1:3000',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'authorization,content-type,x-csrf-token'
     })
@@ -134,7 +134,7 @@ def test_middleware_order_is_correct():
     
     # Test OPTIONS request
     response = client.options('/v1/auth/logout', headers={
-        'Origin': 'http://localhost:3000',
+        'Origin': 'http://127.0.0.1:3000',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'content-type'
     })
@@ -154,7 +154,7 @@ def test_x_request_id_header_is_present():
     
     # Test OPTIONS request - should NOT have X-Request-ID (CORS short-circuits before middleware)
     response = client.options('/v1/auth/logout', headers={
-        'Origin': 'http://localhost:3000',
+        'Origin': 'http://127.0.0.1:3000',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'content-type'
     })
@@ -173,7 +173,7 @@ def test_cors_credentials_are_handled_correctly():
     
     # Test OPTIONS request with credentials
     response = client.options('/v1/auth/logout', headers={
-        'Origin': 'http://localhost:3000',
+        'Origin': 'http://127.0.0.1:3000',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'content-type'
     })
@@ -188,7 +188,7 @@ def test_cors_max_age_is_set():
     
     # Test OPTIONS request
     response = client.options('/v1/auth/logout', headers={
-        'Origin': 'http://localhost:3000',
+        'Origin': 'http://127.0.0.1:3000',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'content-type'
     })

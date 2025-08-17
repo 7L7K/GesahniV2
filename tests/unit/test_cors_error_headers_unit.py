@@ -6,13 +6,13 @@ from fastapi.testclient import TestClient
 
 def test_401_response_has_cors_headers(client: TestClient):
     """Test that 401 Unauthorized responses include CORS headers."""
-    headers = {"Origin": "http://localhost:3000"}
+    headers = {"Origin": "http://127.0.0.1:3000"}
     response = client.get("/config", headers=headers)  # Requires admin token
     assert response.status_code == 403
     
     # Should have CORS headers for actual requests (not preflight)
     assert "access-control-allow-origin" in response.headers
-    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:3000"
     # Other CORS headers are only added for preflight requests, not actual requests
 
 
@@ -25,13 +25,13 @@ def test_429_response_has_cors_headers(client: TestClient):
 
 def test_403_response_has_cors_headers(client: TestClient):
     """Test that 403 Forbidden responses include CORS headers."""
-    headers = {"Origin": "http://localhost:3000"}
+    headers = {"Origin": "http://127.0.0.1:3000"}
     response = client.get("/config", headers=headers)  # Requires admin token
     assert response.status_code == 403
     
     # Should have CORS headers for actual requests (not preflight)
     assert "access-control-allow-origin" in response.headers
-    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:3000"
     # Other CORS headers are only added for preflight requests, not actual requests
 
 

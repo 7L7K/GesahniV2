@@ -123,7 +123,7 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `RATE_LIMIT_PER_MIN` | `60` | no | Requests per minute per IP |
 | `REDIS_URL` | `redis://localhost:6379/0` | no | RQ queue for async tasks (optional; falls back to threads) |
 | `HISTORY_FILE` | `data/history.jsonl` | no | Request history log |
-| `CORS_ALLOW_ORIGINS` | `http://127.0.0.1:3000,http://localhost:3000` | no | Allowed web origins |
+| `CORS_ALLOW_ORIGINS` | `http://127.0.0.1:3000` | no | Allowed web origins |
 | `PORT` | `8000` | no | Server port when running `python app/main.py` |
 | `SESSIONS_DIR` | `sessions/` | no | Base directory for session media |
 | `ADMIN_TOKEN` | – | no | Required to read `/config` |
@@ -187,11 +187,11 @@ pytest -q tests/smoke
 ### Load testing
 - k6 (with basic SLO thresholds):
 ```bash
-k6 run scripts/k6_load_test.js -e BASE_URL=http://localhost:8000
+k6 run scripts/k6_load_test.js -e BASE_URL=http://127.0.0.1:8000
 ```
 - Locust:
 ```bash
-locust -f locustfile.py --host=http://localhost:8000
+locust -f locustfile.py --host=http://127.0.0.1:8000
 ```
 
 ## Model Routing Rules

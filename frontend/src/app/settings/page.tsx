@@ -6,6 +6,10 @@ import { updateProfile, UserProfile, useProfile, listSessions, revokeSession, li
 import { getBudget } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { useAuthState } from '@/hooks/useAuth';
+import { unstable_noStore as noStore } from 'next/cache';
+
+// Force dynamic rendering to prevent SSR issues
+noStore();
 
 function SettingsPageInner() {
     const [profile, setProfile] = useState<UserProfile | null>(null);

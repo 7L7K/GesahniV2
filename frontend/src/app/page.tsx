@@ -539,7 +539,11 @@ export default function Page() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.location) {
+                window.location.reload();
+              }
+            }}
             className="mt-2"
           >
             Retry

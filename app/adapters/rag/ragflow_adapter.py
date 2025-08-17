@@ -22,7 +22,7 @@ class RAGClient:
     """
 
     def __init__(self, base_url: str | None = None, timeout: float = 15.0) -> None:
-        self.base_url = base_url or os.getenv("RAGFLOW_URL", "http://localhost:8001")
+        self.base_url = base_url or os.getenv("RAGFLOW_URL", "http://127.0.0.1:8001")
         self.timeout = timeout
         self._client = httpx.Client(base_url=self.base_url, timeout=timeout)
 

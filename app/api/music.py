@@ -479,7 +479,7 @@ async def _build_state_payload(user_id: str) -> StateResponse:
 async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
     # Validate WebSocket Origin explicitly
     origin = ws.headers.get("Origin")
-    allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://127.0.0.1:3000,http://localhost:3000")
+    allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://127.0.0.1:3000")
     origins = [o.strip() for o in allowed_origins.split(",") if o.strip()]
     
     if origin and origin not in origins:

@@ -112,7 +112,7 @@ async def ws_care_docs(_user_id: str = Depends(get_current_user_id)):
 async def ws_care(ws: WebSocket, _user_id: str = Depends(get_current_user_id), _roles=Depends(require_roles(["caregiver", "resident"]))):
     # Validate WebSocket Origin explicitly
     origin = ws.headers.get("Origin")
-    allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://127.0.0.1:3000,http://localhost:3000")
+    allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://127.0.0.1:3000")
     origins = [o.strip() for o in allowed_origins.split(",") if o.strip()]
     
     if origin and origin not in origins:

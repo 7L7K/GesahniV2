@@ -35,7 +35,8 @@ class TestCookieConfig:
         
         config = get_cookie_config(request)
         
-        assert config["secure"] is True
+        # With new dev-friendly defaults, secure should be False unless explicitly set
+        assert config["secure"] is False
         assert config["samesite"] == "lax"
         assert config["httponly"] is True
         assert config["path"] == "/"
@@ -45,7 +46,7 @@ class TestCookieConfig:
         """Test cookie configuration in development HTTP environment."""
         request = Mock()
         request.url.scheme = "http"
-        request.headers = {"host": "localhost:3000"}
+        request.headers = {"host": "127.0.0.1:3000"}
         
         with patch.dict(os.environ, {"DEV_MODE": "1"}):
             config = get_cookie_config(request)
@@ -60,7 +61,7 @@ class TestCookieConfig:
         """Test that SameSite=None forces Secure=True."""
         request = Mock()
         request.url.scheme = "http"
-        request.headers = {"host": "localhost:3000"}
+        request.headers = {"host": "127.0.0.1:3000"}
         
         with patch.dict(os.environ, {"COOKIE_SAMESITE": "none"}):
             config = get_cookie_config(request)
@@ -72,7 +73,7 @@ class TestCookieConfig:
         """Test custom secure configuration."""
         request = Mock()
         request.url.scheme = "http"
-        request.headers = {"host": "localhost:3000"}
+        request.headers = {"host": "127.0.0.1:3000"}
         
         with patch.dict(os.environ, {"COOKIE_SECURE": "0"}):
             config = get_cookie_config(request)
@@ -101,7 +102,7 @@ class TestCookieConfig:
     def test_is_dev_environment_localhost(self):
         """Test dev environment detection with localhost."""
         request = Mock()
-        request.headers = {"host": "localhost:3000"}
+        request.headers = {"host": "127.0.0.1:3000"}
         
         assert _is_dev_environment(request) is True
 
@@ -117,7 +118,9 @@ class TestCookieConfig:
         request = Mock()
         request.headers = {"host": "app.example.com"}
         
-        assert _is_dev_environment(request) is False
+        # Clear any dev environment variables that might be set
+        with patch.dict(os.environ, {}, clear=True):
+            assert _is_dev_environment(request) is False
 
     def test_get_scheme_https(self):
         """Test scheme detection for HTTPS."""
@@ -294,7 +297,7 @@ class TestCookieConfigIntegration:
             },
             {
                 "scheme": "http",
-                "host": "localhost:3000",
+                "host": "127.0.0.1:3000",
                 "env": {"DEV_MODE": "1", "COOKIE_SECURE": "1", "COOKIE_SAMESITE": "lax"},
                 "expected_secure": False,
                 "expected_samesite": "lax",

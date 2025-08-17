@@ -181,11 +181,12 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
             const isAuthenticated = Boolean(data.is_authenticated);
             const sessionReady = Boolean(data.session_ready);
 
-            // Stable whoamiOk state - only update if authentication status actually changed
+            // Stable whoamiOk state - reflects JWT validity (sessionReady)
+            // Only update if session readiness actually changed to prevent oscillation
             let whoamiOk = this.state.whoamiOk;
-            if (isAuthenticated !== this.state.isAuthenticated) {
-                whoamiOk = isAuthenticated;
-                console.info(`AUTH Orchestrator: Authentication status changed from ${this.state.isAuthenticated} to ${isAuthenticated}`);
+            if (sessionReady !== this.state.sessionReady) {
+                whoamiOk = sessionReady;
+                console.info(`AUTH Orchestrator: Session readiness changed from ${this.state.sessionReady} to ${sessionReady}, whoamiOk: ${whoamiOk}`);
             }
 
             this.setState({

@@ -240,7 +240,7 @@ export async function apiFetch(
   const { auth = true, headers, dedupe = true, shortCacheMs, contextKey, credentials = 'include', ...rest } = init as any;
   const isAbsolute = /^(?:https?:)?\/\//i.test(path);
   const isBrowser = typeof window !== "undefined";
-  const base = API_URL || (isBrowser ? "" : "http://localhost:8000");
+  const base = API_URL || (isBrowser ? "" : "http://127.0.0.1:8000");
   const url = isAbsolute ? path : `${base}${path}`;
 
   // Debug logging for health check requests
@@ -331,7 +331,9 @@ export async function apiFetch(
     } else {
       clearTokens();
       if (typeof document !== "undefined") {
-        document.cookie = "auth_hint=0; path=/; max-age=300";
+        try {
+          document.cookie = "auth_hint=0; path=/; max-age=300";
+        } catch { /* ignore SSR errors */ }
       }
       if (refreshRes) {
         res = refreshRes; // propagate refresh response (e.g., 400)

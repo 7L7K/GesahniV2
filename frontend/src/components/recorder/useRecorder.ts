@@ -290,7 +290,7 @@ export function useRecorder(): RecorderExports {
         const settleMs = 8000;
         setTimeout(() => {
             try {
-                if (document && (window as any).location && (window as any).location.pathname === '/capture') {
+                if (typeof window !== 'undefined' && window.location && document && window.location.pathname === '/capture') {
                     // Signal ambient mode; consumer can route or dim UI
                     const ev = new CustomEvent('ambient:settle');
                     window.dispatchEvent(ev);

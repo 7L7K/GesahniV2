@@ -57,13 +57,13 @@ pytest -q tests/smoke
 Run a lightweight scenario with k6 (requires `k6` installed):
 
 ```bash
-k6 run scripts/k6_load_test.js -e BASE_URL=http://localhost:8000
+k6 run scripts/k6_load_test.js -e BASE_URL=http://127.0.0.1:8000
 ```
 
 Or with Locust:
 
 ```bash
-locust -f locustfile.py --host=http://localhost:8000
+locust -f locustfile.py --host=http://127.0.0.1:8000
 ```
 
 ## Branching and Commits

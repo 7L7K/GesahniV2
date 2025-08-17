@@ -7,7 +7,7 @@ import httpx
 from .base import Skill
 from ..telemetry import log_record_var
 
-TRANSLATE_URL = os.getenv("TRANSLATE_URL", "http://localhost:5000")
+TRANSLATE_URL = os.getenv("TRANSLATE_URL", "http://127.0.0.1:5000")
 
 
 class TranslateSkill(Skill):

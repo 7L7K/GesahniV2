@@ -203,7 +203,7 @@ async def _get_redis():
     except Exception:
         return None
     try:
-        url = _REDIS_URL or "redis://localhost:6379/0"
+        url = _REDIS_URL or "redis://127.0.0.1:6379/0"
         _redis_client = redis.from_url(url, encoding="utf-8", decode_responses=True)
         return _redis_client
     except Exception:

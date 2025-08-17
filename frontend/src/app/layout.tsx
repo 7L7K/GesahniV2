@@ -12,6 +12,7 @@ import { queryClient } from "@/lib/queryClient";
 import { getCSPPolicy, generateNonce } from "@/lib/csp";
 import WsBootstrap from "@/components/WsBootstrap";
 import AuthProvider from "@/components/AuthProvider";
+import ClientOnly from "@/components/ClientOnly";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -64,7 +65,9 @@ export default function RootLayout({
                 <AuthProvider>
                   <div className="min-h-screen grid grid-rows-[auto_1fr]">
                     <WsBootstrap />
-                    <Header />
+                    <ClientOnly>
+                      <Header />
+                    </ClientOnly>
                     <BackendBanner />
                     <DegradedNotice />
                     <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-primary text-primary-foreground rounded px-3 py-2">Skip to content</a>
@@ -83,7 +86,9 @@ export default function RootLayout({
               <AuthProvider>
                 <div className="min-h-screen grid grid-rows-[auto_1fr]">
                   <WsBootstrap />
-                  <Header />
+                  <ClientOnly>
+                    <Header />
+                  </ClientOnly>
                   <BackendBanner />
                   <DegradedNotice />
                   <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-primary text-primary-foreground rounded px-3 py-2">Skip to content</a>

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-API="${API:-http://localhost:8000}"
+API="${API:-http://127.0.0.1:8000}"
 
 # Set environment to bypass auth for testing
 export REQUIRE_AUTH_FOR_ASK=0

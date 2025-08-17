@@ -67,16 +67,13 @@ async def google_start(request: Request) -> Response:
             }
         )
     )
-    # TTL 10 minutes; enforce explicit SameSite and Secure where appropriate
-    cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-    same = cookie_samesite if cookie_samesite in {"lax", "strict", "none"} else "lax"
-    try:
-        secure = getattr(request.url, "scheme", "http") == "https"
-    except Exception:
-        secure = False
-    resp.set_cookie("pkce_verifier", code_verifier, max_age=600, httponly=True, path="/", samesite=same, secure=secure)
-    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, path="/", samesite=same, secure=secure)
-    resp.set_cookie("oauth_next", next_url, max_age=600, httponly=False, path="/", samesite=same, secure=secure)
+    # Use centralized cookie configuration
+    from ..cookie_config import get_cookie_config
+    cookie_config = get_cookie_config(request)
+    
+    resp.set_cookie("pkce_verifier", code_verifier, max_age=600, httponly=True, path="/", samesite=cookie_config["samesite"], secure=cookie_config["secure"])
+    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, path="/", samesite=cookie_config["samesite"], secure=cookie_config["secure"])
+    resp.set_cookie("oauth_next", next_url, max_age=600, httponly=False, path="/", samesite=cookie_config["samesite"], secure=cookie_config["secure"])
     return resp
 
 
