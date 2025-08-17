@@ -98,6 +98,11 @@ try:
 except Exception:  # pragma: no cover - optional
     google_router = None  # type: ignore
 from .decisions import get_recent as decisions_recent, get_explain as decisions_get
+
+try:
+    from .auth_monitoring import record_ws_reconnect_attempt
+except Exception:  # pragma: no cover - optional
+    record_ws_reconnect_attempt = lambda *a, **k: None
 from .transcription import (
     TranscriptionStream,
     close_whisper_client,
@@ -369,6 +374,15 @@ allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").strip().lower() 
 @app.delete("/v1/ws/{path:path}")
 async def websocket_http_handler(request: Request, path: str):
     """Handle HTTP requests to WebSocket endpoints with proper error response."""
+    try:
+        record_ws_reconnect_attempt(
+            endpoint=f"/v1/ws/{path}",
+            reason="http_request_to_ws_endpoint",
+            user_id="unknown"
+        )
+    except Exception:
+        pass
+    
     response = Response(
         content="WebSocket endpoint requires WebSocket protocol",
         status_code=400,
@@ -730,84 +744,7 @@ async def _require_auth_dep_for_core(request: Request) -> None:
         await _vt(request)
 
 
-@core_router.post(
-    "/ask",
-    dependencies=[Depends(_require_auth_dep_for_core), Depends(rate_limit)],
-    responses={
-        200: {
-            "content": {
-                "text/plain": {"schema": {"example": "hello world"}},
-                "text/event-stream": {"schema": {"example": "data: hello\n\n"}},
-                "application/json": {"schema": {"example": {"status": "ok"}}},
-            }
-        }
-    },
-    openapi_extra={
-        "requestBody": {
-            "content": {
-                "application/json": {"schema": {"$ref": "#/components/schemas/AskRequest"}}
-            }
-        }
-    },
-)
-# Let CORS middleware handle OPTIONS requests - no manual handler needed
-async def ask(
-    req: AskRequest, request: Request
-):
-    """Deprecated: moved to app.api.ask. Kept for backward-compatibility via include order."""
-    from .api.ask import ask as _ask  # lazy import to avoid circular deps
-    # Content-Type guard: only accept JSON
-    try:
-        ct = (request.headers.get("content-type") or request.headers.get("Content-Type") or "").lower()
-    except Exception:
-        ct = ""
-    if "application/json" not in ct:
-        raise HTTPException(status_code=415, detail="unsupported_media_type")
-    # Normalize prompt shape: string → messages[]; array passes through
-    prompt_val = req.prompt
-    if isinstance(prompt_val, str):
-        norm_prompt = [{"role": "user", "content": prompt_val}]
-        prompt_shape = "text"
-        tok_src = prompt_val
-    else:
-        norm_prompt = prompt_val
-        prompt_shape = "array"
-        try:
-            tok_src = "\n".join(
-                [
-                    (m.get("content") if isinstance(m, dict) else str(getattr(m, "content", "")))
-                    for m in (norm_prompt or [])
-                ]
-            )
-        except Exception:
-            tok_src = ""
-    model = req.model_override
-    body = {"prompt": norm_prompt, "model": model, "stream": bool(req.stream)}
-    # Telemetry breadcrumb: log once with model, prompt shape, tokens est, user_id, and req id
-    try:
-        rid = request.headers.get("x-request-id")
-        payload = getattr(request.state, "jwt_payload", None)
-        user_id = None
-        if isinstance(payload, dict):
-            user_id = payload.get("user_id") or payload.get("sub")
-        from .token_utils import count_tokens as _ct
-        tokens_est = int(_ct(tok_src or "")) if tok_src else 0
-        logger.info(
-            "ask.adapter",
-            extra={
-                "meta": {
-                    "model": model or "auto",
-                    "prompt_shape": prompt_shape,
-                    "tokens_est": tokens_est,
-                    "user_id": user_id or "anon",
-                    "req_id": rid,
-                    "stream": bool(req.stream),
-                }
-            },
-        )
-    except Exception:
-        pass
-    return await _ask(request, body)  # type: ignore[arg-type]
+
 
 
 @protected_router.post(
@@ -1437,6 +1374,13 @@ try:
 except Exception:
     pass
 
+try:
+    from .api.ask import router as ask_router
+    app.include_router(ask_router, prefix="/v1")
+    app.include_router(ask_router, include_in_schema=False)
+except Exception:
+    pass
+
 # Optional diagnostic/auxiliary routers -------------------------------------
 try:
     from .api.care import router as care_router
@@ -1517,25 +1461,37 @@ if music_router is not None:
 # MIDDLEWARE REGISTRATION (AFTER ALL ROUTERS)
 # ============================================================================
 
-# 1) CORS FIRST (outermost) - it will short-circuit OPTIONS with 204
+# 1) Include routers FIRST (handlers + dependencies live here)
+#    Routers are already included above with their dependencies
+
+# 2) Your custom middlewares (inner → outer as you go DOWN)
+#    These WILL be skipped for OPTIONS by your own checks.
+app.add_middleware(RequestIDMiddleware)      # innermost - sets request ID
+app.add_middleware(DedupMiddleware)          # deduplicates requests
+app.add_middleware(TraceRequestMiddleware)   # traces/logs requests (skips OPTIONS)
+app.add_middleware(CSRFMiddleware)           # CSRF protection (skips OPTIONS)
+
+
+
+# 3) Third-party middlewares (still INSIDE CORS)
+#    Configure them to skip OPTIONS if they can.
+#    Note: Currently no third-party middlewares like GZipMiddleware are used
+
+# 4) CORS LAST — OUTERMOST
+#    Must be the final add_middleware call.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=allow_credentials,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["authorization", "content-type", "x-csrf-token", "x-requested-with", "x-request-id"],
+    allow_headers=["authorization", "content-type", "x-csrf-token", "x-requested-with", "x-request-id", "x-auth-intent"],
     expose_headers=["X-Request-ID", "X-CSRF-Token", "Retry-After", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset"],
     max_age=600,
 )
 
-# 2) Register all custom middleware (inner layers)
-app.add_middleware(CSRFMiddleware)
-app.add_middleware(TraceRequestMiddleware)
-app.add_middleware(DedupMiddleware)
-app.add_middleware(RequestIDMiddleware)
-# app.middleware("http")(silent_refresh_middleware)  # Temporarily disabled for testing
 # Note: reload_env_middleware is a simple function, not a class, so we use the decorator
 app.middleware("http")(reload_env_middleware)
+app.middleware("http")(silent_refresh_middleware)  # Re-enabled to prevent 401s during app boot
 
 # Debug middleware order dump
 def _dump_mw_stack(app):

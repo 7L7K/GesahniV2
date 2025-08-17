@@ -423,44 +423,63 @@ async def login(
 
     # Set HttpOnly cookies for browser clients (unified flow: header + cookie)
     try:
-        cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
-        # In test/dev over HTTP, force non-secure so TestClient sends cookies
-        try:
-            if request is not None and getattr(request.url, "scheme", "http") != "https":
-                cookie_secure = False
-        except Exception:
-            pass
-        cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-        try:
-            from .api.auth import _append_cookie_with_priority as _append  # reuse helper
-            _append(response, key="access_token", value=access_token, max_age=EXPIRE_MINUTES * 60, secure=cookie_secure, samesite=cookie_samesite)
-            _append(response, key="refresh_token", value=refresh_token, max_age=REFRESH_EXPIRE_MINUTES * 60, secure=cookie_secure, samesite=cookie_samesite)
-        except Exception:
-            pass
-        # Always set via Starlette API as well for compatibility with cookie jars that ignore Priority
+        from .cookie_config import get_cookie_config, get_token_ttls, format_cookie_header
+        
+        # Get consistent cookie configuration
+        cookie_config = get_cookie_config(request)
+        access_ttl, refresh_ttl = get_token_ttls()
+        
+        # Set cookies with consistent configuration
+        access_header = format_cookie_header(
+            key="access_token",
+            value=access_token,
+            max_age=access_ttl,
+            secure=cookie_config["secure"],
+            samesite=cookie_config["samesite"],
+            path=cookie_config["path"],
+            httponly=cookie_config["httponly"],
+            domain=cookie_config["domain"],
+        )
+        response.headers.append("Set-Cookie", access_header)
+        
+        refresh_header = format_cookie_header(
+            key="refresh_token",
+            value=refresh_token,
+            max_age=refresh_ttl,
+            secure=cookie_config["secure"],
+            samesite=cookie_config["samesite"],
+            path=cookie_config["path"],
+            httponly=cookie_config["httponly"],
+            domain=cookie_config["domain"],
+        )
+        response.headers.append("Set-Cookie", refresh_header)
+        
+        # Also set via Starlette API for compatibility
         response.set_cookie(
             key="access_token",
             value=access_token,
             httponly=True,
-            secure=cookie_secure,
-            samesite=cookie_samesite,
-            max_age=EXPIRE_MINUTES * 60,
+            secure=cookie_config["secure"],
+            samesite=cookie_config["samesite"],
+            max_age=access_ttl,
             path="/",
         )
         response.set_cookie(
             key="refresh_token",
             value=refresh_token,
             httponly=True,
-            secure=cookie_secure,
-            samesite=cookie_samesite,
-            max_age=REFRESH_EXPIRE_MINUTES * 60,
+            secure=cookie_config["secure"],
+            samesite=cookie_config["samesite"],
+            max_age=refresh_ttl,
             path="/",
         )
+        
         try:
-            print(f"login.set_cookie secure={cookie_secure} samesite={cookie_samesite}")
+            print(f"login.set_cookie secure={cookie_config['secure']} samesite={cookie_config['samesite']} ttl={access_ttl}s/{refresh_ttl}s")
         except Exception:
             pass
-    except Exception:
+    except Exception as e:
+        print(f"login.set_cookie error: {e}")
         pass
 
     return TokenResponse(

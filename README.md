@@ -100,15 +100,16 @@ Set environment variables as needed:
 | `SIM_THRESHOLD` | `0.24` | no | Vector similarity cutoff |
 | `MEM_TOP_K` | `3` | no | Memories returned from vector store |
 | `DISABLE_QA_CACHE` | `false` | no | Skip semantic cache when set |
-| `VECTOR_STORE` | `chroma` | no | Vector store backend (`memory`, `chroma`, `qdrant`, `dual`, or `cloud` for Chroma Cloud) |
+| `VECTOR_DSN` | `chroma:///.chroma_data` | no | Unified vector store configuration (see formats below) |
 | `STRICT_VECTOR_STORE` | `0` | no | When `1/true/yes`, any init error is fatal (no silent fallback), regardless of `ENV`. |
-| `CHROMA_PATH` | `.chroma_data` | no | ChromaDB storage directory |
-| `QDRANT_URL` | – | no | Qdrant base URL |
-| `QDRANT_API_KEY` | – | no | Qdrant API key |
-| `QDRANT_COLLECTION` | `kb:default` | no | Default Qdrant collection for pipelines |
-| `EMBED_DIM` | `1536` | no | Embedding vector dimension used for Qdrant collections |
-| `VECTOR_DUAL_WRITE_BOTH` | `0` | no | When `VECTOR_STORE=dual`, mirror writes to Chroma |
-| `VECTOR_DUAL_QA_WRITE_BOTH` | `0` | no | When `VECTOR_STORE=dual`, mirror QA cache writes to Chroma |
+| `EMBED_DIM` | `1536` | no | Embedding vector dimension used for vector collections |
+| `VECTOR_STORE` | `chroma` | no | **Deprecated**: Use `VECTOR_DSN` instead |
+| `CHROMA_PATH` | `.chroma_data` | no | **Deprecated**: Use `VECTOR_DSN` instead |
+| `QDRANT_URL` | – | no | **Deprecated**: Use `VECTOR_DSN` instead |
+| `QDRANT_API_KEY` | – | no | **Deprecated**: Use `VECTOR_DSN` instead |
+| `QDRANT_COLLECTION` | `kb:default` | no | **Deprecated**: Use `VECTOR_DSN` instead |
+| `VECTOR_DUAL_WRITE_BOTH` | `0` | no | **Deprecated**: Use `VECTOR_DSN` instead |
+| `VECTOR_DUAL_QA_WRITE_BOTH` | `0` | no | **Deprecated**: Use `VECTOR_DSN` instead |
 | `RAGFLOW_URL` | `http://localhost:8001` | no | Base URL for RAGFlow server |
 | `RAGFLOW_COLLECTION` | `demo` | no | Default RAGFlow collection name |
 | `USERS_DB` | `users.db` | no | SQLite path for auth users |
@@ -386,6 +387,33 @@ Remove a stored response from the semantic cache using the CLI:
 python -m app.vector_store invalidate "your original prompt"
 ```
 
+### 🔄 Vector Store Configuration
+
+The system supports multiple vector store backends unified through `VECTOR_DSN`:
+
+#### DSN Formats
+- **Memory (tests)**: `memory://`
+- **Local ChromaDB**: `chroma:///path/to/data`
+- **Chroma Cloud**: `chroma+cloud://tenant.database?api_key=xxx`
+- **Qdrant HTTP**: `qdrant://host:port?api_key=xxx`
+- **Qdrant gRPC**: `qdrant+grpc://host:port?api_key=xxx`
+- **Dual Read**: `dual://qdrant://host:port?api_key=xxx&chroma_path=/path`
+
+#### Examples
+```bash
+# Development default (local ChromaDB)
+export VECTOR_DSN=chroma:///.chroma_data
+
+# Production (Qdrant)
+export VECTOR_DSN=qdrant://qdrant.example.com:6333?api_key=your-key
+
+# Dual mode for migration
+export VECTOR_DSN=dual://qdrant://qdrant.example.com:6333?api_key=your-key&chroma_path=.chroma_data
+
+# Tests
+export VECTOR_DSN=memory://
+```
+
 ### 🔄 Migrate from Chroma to Qdrant (Phase 9)
 
 Safe, reversible migration path with dual-read bake period:
@@ -404,13 +432,11 @@ python -m app.jobs.migrate_chroma_to_qdrant migrate
 ```
 4. Enable dual-read for a week to compare traces:
 ```bash
-export VECTOR_STORE=dual
-export VECTOR_DUAL_WRITE_BOTH=1
-export VECTOR_DUAL_QA_WRITE_BOTH=1
+export VECTOR_DSN=dual://qdrant://localhost:6333?chroma_path=.chroma_data&write_both=1&qa_write_both=1
 ```
 5. After bake period, switch to Qdrant and retire Chroma:
 ```bash
-export VECTOR_STORE=qdrant
+export VECTOR_DSN=qdrant://localhost:6333
 ```
 
 ## Event Log

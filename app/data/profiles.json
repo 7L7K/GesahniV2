@@ -21,18 +21,16 @@
       "source": "api"
     },
     "communication_style": {
-      "value": "technical",
-      "updated_at": 1755010358.904133,
-      "source": "import"
+      "value": "casual",
+      "updated_at": 1755341133.5377579,
+      "source": "api"
     },
     "interests": {
       "value": [
-        "Technology",
-        "Travel",
-        "Environment"
+        "Politics"
       ],
-      "updated_at": 1755010358.904133,
-      "source": "import"
+      "updated_at": 1755341133.539039,
+      "source": "api"
     },
     "occupation": {
       "value": "yo momma",
@@ -45,23 +43,23 @@
       "source": "import"
     },
     "preferred_model": {
-      "value": "gpt-4o-mini",
-      "updated_at": 1755121652.340503,
+      "value": "auto",
+      "updated_at": 1755341133.540311,
       "source": "api"
     },
     "calendar_integration": {
       "value": false,
-      "updated_at": 1755210904.899767,
+      "updated_at": 1755341133.5414941,
       "source": "api"
     },
     "gmail_integration": {
       "value": false,
-      "updated_at": 1755210904.900903,
+      "updated_at": 1755341133.543133,
       "source": "api"
     },
     "onboarding_completed": {
-      "value": false,
-      "updated_at": 1755210904.902053,
+      "value": true,
+      "updated_at": 1755341133.566258,
       "source": "api"
     },
     "favorite_color": {

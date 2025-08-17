@@ -13,6 +13,7 @@ const isPublicRoute = createRouteMatcher([
     '/',
     '/docs(.*)',
     '/login',
+    '/debug',
 ])
 
 const baseClerkMiddleware = clerkMiddleware(async (auth, req: NextRequest) => {

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Auth Test</title>
+</head>
+
+<body>
+    <h1>Authentication Test</h1>
+    <div id="status">Loading...</div>
+    <button onclick="testLogin()">Test Login</button>
+    <button onclick="testWhoami()">Test Whoami</button>
+    <button onclick="testState()">Test State</button>
+    <div id="output"></div>
+
+    <script>
+        const API_URL = 'http://127.0.0.1:8000';
+
+        function log(message) {
+            console.log(message);
+            document.getElementById('output').innerHTML += '<div>' + message + '</div>';
+        }
+
+        async function testLogin() {
+            log('Testing login...');
+            try {
+                const response = await fetch(`${API_URL}/v1/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'demo', password: 'secret123' })
+                });
+                const data = await response.json();
+                log(`Login status: ${response.status}`);
+                log(`Login response: ${JSON.stringify(data, null, 2)}`);
+
+                if (response.ok && data.access_token) {
+                    // Store token in localStorage
+                    localStorage.setItem('auth:access_token', data.access_token);
+                    if (data.refresh_token) {
+                        localStorage.setItem('auth:refresh_token', data.refresh_token);
+                    }
+                    log('Tokens stored in localStorage');
+                }
+            } catch (error) {
+                log(`Login error: ${error.message}`);
+            }
+        }
+
+        async function testWhoami() {
+            log('Testing whoami...');
+            try {
+                const token = localStorage.getItem('auth:access_token');
+                const headers = {};
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                    log('Using Authorization header');
+                } else {
+                    log('No token found');
+                }
+
+                const response = await fetch(`${API_URL}/v1/whoami`, { headers });
+                const data = await response.json();
+                log(`Whoami status: ${response.status}`);
+                log(`Whoami response: ${JSON.stringify(data, null, 2)}`);
+            } catch (error) {
+                log(`Whoami error: ${error.message}`);
+            }
+        }
+
+        async function testState() {
+            log('Testing state...');
+            try {
+                const token = localStorage.getItem('auth:access_token');
+                const headers = {};
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                    log('Using Authorization header');
+                } else {
+                    log('No token found');
+                }
+
+                const response = await fetch(`${API_URL}/v1/state`, { headers });
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`State status: ${response.status}`);
+                    log(`State response: ${JSON.stringify(data, null, 2)}`);
+                } else {
+                    log(`State error: ${response.status} - ${await response.text()}`);
+                }
+            } catch (error) {
+                log(`State error: ${error.message}`);
+            }
+        }
+
+        // Check environment
+        log('Environment check:');
+        log(`API_URL: ${API_URL}`);
+        log(`localStorage available: ${typeof localStorage !== 'undefined'}`);
+
+        // Test initial whoami
+        testWhoami();
+    </script>
+</body>
+
+</html>

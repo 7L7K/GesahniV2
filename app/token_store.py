@@ -29,12 +29,6 @@ async def _get_redis():
     url = os.getenv("REDIS_URL")
     if not url:
         return None
-async def has_redis() -> bool:
-    try:
-        return (await _get_redis()) is not None
-    except Exception:
-        return False
-
     try:
         import redis.asyncio as redis  # type: ignore
     except Exception:
@@ -44,6 +38,13 @@ async def has_redis() -> bool:
         return _redis_client
     except Exception:
         return None
+
+
+async def has_redis() -> bool:
+    try:
+        return (await _get_redis()) is not None
+    except Exception:
+        return False
 
 
 # ------------------------- Refresh token rotation ----------------------------

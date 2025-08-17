@@ -116,11 +116,8 @@ async def _require_auth_dep(request: Request) -> None:
         }
     },
 )
-async def ask(
-    request: Request,
-    body: dict | None = Body(default=None),
-    user_id: str = Depends(get_current_user_id),
-):
+async def _ask(request: Request, body: dict | None, user_id: str = Depends(get_current_user_id)):
+    """Internal ask function that accepts resolved user_id parameter."""
     # Step 1: Log entry point and payload details
     print(f"🔍 ASK ENTRY: /v1/ask hit with payload={body}")
     if body and isinstance(body, dict):
@@ -135,7 +132,7 @@ async def ask(
     if "application/json" not in ct:
         raise HTTPException(status_code=415, detail="unsupported_media_type")
     
-    # Use canonical user_id from get_current_user_id dependency
+    # Use canonical user_id from resolved parameter
     user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
     
     # Enforce authentication - return 401 if no valid user
@@ -489,6 +486,15 @@ async def ask(
         except Exception:
             pass
     return resp
+
+
+async def ask(
+    request: Request,
+    body: dict | None = Body(default=None),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Public ask endpoint that resolves dependencies and calls internal _ask function."""
+    return await _ask(request, body)
 
 
 @router.post(

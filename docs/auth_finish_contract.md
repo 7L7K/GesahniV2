@@ -19,7 +19,7 @@ The auth finish endpoint bridges external authentication (Clerk) to internal app
 - CSRF: Required when `CSRF_ENABLED=1`
 
 **Response**:
-- Status: `204 No Content`
+- Status: `204 No Content` (LOCKED CONTRACT: Always returns 204)
 - Headers: 
   - `Set-Cookie: access_token=<jwt>; HttpOnly; Secure; SameSite=Lax`
   - `Set-Cookie: refresh_token=<jwt>; HttpOnly; Secure; SameSite=Lax`
@@ -27,9 +27,10 @@ The auth finish endpoint bridges external authentication (Clerk) to internal app
 
 **Behavior**:
 1. Verify Clerk session via `require_user_or_dev` dependency
-2. Mint new access and refresh tokens
+2. Mint new access and refresh tokens (unless valid tokens already exist for user)
 3. Set HttpOnly cookies with proper security flags
 4. Return 204 (no redirect)
+5. **IDEMPOTENT**: Safe to call multiple times - if valid cookies already exist for the user, returns 204 without setting new cookies
 
 ### Frontend Contract
 
@@ -71,7 +72,8 @@ if (res.status === 204) {
 1. **CSRF Protection**: POST requests require CSRF token when enabled
 2. **Cookie Security**: HttpOnly, Secure, SameSite flags set appropriately
 3. **Session Validation**: Clerk session verified server-side before minting tokens
-4. **Token Rotation**: New tokens minted on each finish call
+4. **Token Rotation**: New tokens minted on each finish call (unless idempotent skip)
+5. **Idempotency**: Safe to call multiple times without side effects
 
 ## Testing
 
@@ -85,9 +87,11 @@ This validates:
 - Set-Cookie headers present
 - CORS headers configured
 - No redirects on POST
+- Idempotency (multiple calls return 204)
 
 ## Migration Notes
 
 - Legacy GET support maintained for direct browser navigation
 - SPA should use POST for consistent behavior
 - Frontend handles all navigation after successful auth finish
+- **LOCKED CONTRACT**: Endpoint always returns 204 for POST, is idempotent

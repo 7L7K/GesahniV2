@@ -1,0 +1,152 @@
+"""
+Centralized cookie configuration for sharp and consistent cookie handling.
+
+This module provides a single source of truth for cookie configuration,
+ensuring all cookies are set with consistent attributes:
+- Host-only cookies (no Domain)
+- Path=/
+- SameSite=Lax (configurable)
+- HttpOnly=True
+- Secure=False in dev HTTP, True in production
+- Consistent TTLs for access/refresh tokens
+"""
+
+import os
+from typing import Tuple
+from fastapi import Request
+
+
+def get_cookie_config(request: Request) -> dict:
+    """
+    Get consistent cookie configuration for the current request.
+    
+    Returns:
+        dict: Cookie configuration with secure, samesite, and other flags
+    """
+    # Base configuration from environment
+    cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
+    cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+    dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
+    
+    # Development mode detection: force Secure=False for HTTP in dev
+    if dev_mode or _is_dev_environment(request):
+        if _get_scheme(request) != "https":
+            cookie_secure = False
+    
+    # SameSite=None requires Secure=True
+    if cookie_samesite == "none":
+        cookie_secure = True
+    
+    return {
+        "secure": cookie_secure,
+        "samesite": cookie_samesite,
+        "httponly": True,
+        "path": "/",
+        # Explicitly no domain for host-only cookies
+        "domain": None,
+    }
+
+
+def _is_dev_environment(request: Request) -> bool:
+    """Detect if we're in a development environment."""
+    # Check for common dev indicators
+    dev_indicators = [
+        os.getenv("PYTEST_CURRENT_TEST"),  # Running tests
+        os.getenv("FLASK_ENV") == "development",
+        os.getenv("ENVIRONMENT") == "development",
+        os.getenv("NODE_ENV") == "development",
+    ]
+    
+    if any(dev_indicators):
+        return True
+    
+    # Check request host for localhost/dev patterns
+    try:
+        host = request.headers.get("host", "").lower()
+        dev_hosts = ["localhost", "127.0.0.1", "0.0.0.0", "dev.", "local."]
+        if any(dev_host in host for dev_host in dev_hosts):
+            return True
+    except Exception:
+        pass
+    
+    return False
+
+
+def _get_scheme(request: Request) -> str:
+    """Get the request scheme, with fallback to http."""
+    try:
+        return getattr(request.url, "scheme", "http")
+    except Exception:
+        return "http"
+
+
+def get_token_ttls() -> Tuple[int, int]:
+    """
+    Get consistent TTLs for access and refresh tokens.
+    
+    Returns:
+        Tuple[int, int]: (access_ttl_seconds, refresh_ttl_seconds)
+    """
+    # Access token TTL (default: 30 minutes)
+    access_minutes = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
+    access_ttl = access_minutes * 60
+    
+    # Refresh token TTL (default: 24 hours)
+    refresh_minutes = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
+    refresh_ttl = refresh_minutes * 60
+    
+    return access_ttl, refresh_ttl
+
+
+def format_cookie_header(
+    key: str,
+    value: str,
+    max_age: int,
+    secure: bool,
+    samesite: str,
+    path: str = "/",
+    httponly: bool = True,
+    domain: str = None,
+) -> str:
+    """
+    Format a Set-Cookie header with consistent attributes.
+    
+    Args:
+        key: Cookie name
+        value: Cookie value
+        max_age: Max age in seconds
+        secure: Whether cookie is secure
+        samesite: SameSite attribute (lax, strict, none)
+        path: Cookie path
+        httponly: Whether cookie is HttpOnly
+        domain: Cookie domain (None for host-only)
+    
+    Returns:
+        str: Formatted Set-Cookie header
+    """
+    # Normalize SameSite value
+    samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
+    ss = samesite_map.get(samesite.lower(), "Lax")
+    
+    parts = [
+        f"{key}={value}",
+        f"Max-Age={int(max_age)}",
+        f"Path={path}",
+        f"SameSite={ss}",
+    ]
+    
+    if httponly:
+        parts.append("HttpOnly")
+    
+    if secure:
+        parts.append("Secure")
+    
+    if domain:
+        parts.append(f"Domain={domain}")
+    
+    # Add Priority=High for critical auth cookies
+    if key in ["access_token", "refresh_token"]:
+        parts.append("Priority=High")
+    
+    return "; ".join(parts)
+

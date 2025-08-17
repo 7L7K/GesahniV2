@@ -2,32 +2,48 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { useAuthState } from '@/hooks/useAuth';
 
 export default function FooterRibbon() {
     const [lastUser, setLastUser] = useState<string>("");
     const [lastBot, setLastBot] = useState<string>("");
     const [quiet, setQuiet] = useState<boolean>(false);
+    const authState = useAuthState();
 
     useEffect(() => {
         const onToken = (e: Event) => {
             try {
-                const msg = e.detail as { role: 'user' | 'assistant', text: string };
+                const msg = (e as CustomEvent).detail as { role: 'user' | 'assistant', text: string };
                 if (msg?.role === 'user') setLastUser(msg.text || '');
                 if (msg?.role === 'assistant') setLastBot(msg.text || '');
             } catch { }
         };
         window.addEventListener('conversation:update', onToken as EventListener);
-        const i = setInterval(async () => {
-            try {
-                const res = await apiFetch('/v1/status', { auth: true });
-                const data = await res.json();
-                const active = Boolean(data?.quiet_hours?.active);
-                setQuiet(active);
-                if (active) document.body.classList.add('quiet-hours'); else document.body.classList.remove('quiet-hours');
-            } catch { }
-        }, 60000);
-        return () => window.removeEventListener('conversation:update', onToken as EventListener);
-    }, []);
+
+        // DISABLED: Status polling should be controlled by orchestrator
+        // Only start status polling if authenticated
+        // const checkAuthAndPoll = () => {
+        //     if (!authState.isAuthenticated) return null;
+
+        //     const i = setInterval(async () => {
+        //         try {
+        //             const res = await apiFetch('/v1/status', { auth: true });
+        //             const data = await res.json();
+        //             const active = Boolean(data?.quiet_hours?.active);
+        //             setQuiet(active);
+        //             if (active) document.body.classList.add('quiet-hours'); else document.body.classList.remove('quiet-hours');
+        //         } catch { }
+        //     }, 60000);
+
+        //     return i;
+        // };
+
+        // const intervalId = checkAuthAndPoll();
+        return () => {
+            window.removeEventListener('conversation:update', onToken as EventListener);
+            // if (intervalId) clearInterval(intervalId);
+        };
+    }, [authState.isAuthenticated]); // Re-run when auth state changes
 
     const trunc = (s: string) => (s.length > 80 ? s.slice(0, 77) + '…' : s);
 

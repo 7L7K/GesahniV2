@@ -63,8 +63,8 @@ except Exception:  # pragma: no cover
 try:
     HEALTH_CHECK_DURATION_SECONDS = Histogram(
         "gesahni_health_check_duration_seconds",
-        "Health check duration (seconds)",
-        ["check"],
+        "Health check duration in seconds",
+        ["check_type"],
     )
 except Exception:  # pragma: no cover
     class _H2:
@@ -73,6 +73,78 @@ except Exception:  # pragma: no cover
         def observe(self, *a, **k):
             return None
     HEALTH_CHECK_DURATION_SECONDS = _H2()  # type: ignore
+
+# Authentication metrics -------------------------------------------------------
+try:
+    WHOAMI_CALLS_TOTAL = Counter(
+        "whoami_calls_total",
+        "Total number of whoami endpoint calls",
+        ["status", "source", "boot_phase"],
+    )
+except Exception:  # pragma: no cover
+    class _C2:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    WHOAMI_CALLS_TOTAL = _C2()  # type: ignore
+
+try:
+    FINISH_CALLS_TOTAL = Counter(
+        "finish_calls_total",
+        "Total number of auth finish endpoint calls",
+        ["status", "method", "reason"],
+    )
+except Exception:  # pragma: no cover
+    class _C3:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    FINISH_CALLS_TOTAL = _C3()  # type: ignore
+
+try:
+    PRIVILEGED_CALLS_BLOCKED_TOTAL = Counter(
+        "privileged_calls_blocked_total",
+        "Total number of privileged calls blocked due to authentication",
+        ["endpoint", "reason"],
+    )
+except Exception:  # pragma: no cover
+    class _C4:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    PRIVILEGED_CALLS_BLOCKED_TOTAL = _C4()  # type: ignore
+
+try:
+    WS_RECONNECT_ATTEMPTS_TOTAL = Counter(
+        "ws_reconnect_attempts_total",
+        "Total number of WebSocket reconnection attempts",
+        ["endpoint", "reason"],
+    )
+except Exception:  # pragma: no cover
+    class _C5:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    WS_RECONNECT_ATTEMPTS_TOTAL = _C5()  # type: ignore
+
+# Authentication event timing
+try:
+    AUTH_EVENT_DURATION_SECONDS = Histogram(
+        "auth_event_duration_seconds",
+        "Authentication event duration in seconds",
+        ["event_type", "status"],
+    )
+except Exception:  # pragma: no cover
+    class _H3:
+        def labels(self, *a, **k):
+            return self
+        def observe(self, *a, **k):
+            return None
+    AUTH_EVENT_DURATION_SECONDS = _H3()  # type: ignore
 
 try:
     HEALTH_READY_FAILURES_TOTAL = Counter(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { getSessionState } from "@/lib/api";
+import { getSessionState, getToken } from "@/lib/api";
 import { wsHub } from "@/services/wsHub";
 
 export default function WsBootstrap() {
@@ -9,12 +9,18 @@ export default function WsBootstrap() {
         let started = false;
         let lastReadyEventAt = 0;
         // Initial probe to avoid starting sockets before sessionReady
-        (async () => {
-            try {
-                const s = await getSessionState();
-                if (s.sessionReady && !started) { wsHub.start({ music: true, care: false }); started = true; }
-            } catch { /* noop */ }
-        })();
+        // Only check if we have some indication of auth
+        const hasToken = getToken();
+        const hasCookie = typeof document !== 'undefined' && document.cookie.includes('auth_hint=1');
+
+        if (hasToken || hasCookie) {
+            (async () => {
+                try {
+                    const s = await getSessionState();
+                    if (s.sessionReady && !started) { wsHub.start({ music: true, care: false }); started = true; }
+                } catch { /* noop */ }
+            })();
+        }
         const onAuthReady = (ev: Event) => {
             try {
                 const ready = (ev as CustomEvent).detail?.ready === true;

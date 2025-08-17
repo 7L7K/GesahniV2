@@ -6,8 +6,8 @@ import ChatBubble from '../components/ChatBubble';
 import LoadingBubble from '../components/LoadingBubble';
 import InputBar from '../components/InputBar';
 import { Button } from '@/components/ui/button';
-import { SignedIn, SignedOut, SignInButton, SignUpButton, useUser, useAuth } from '@clerk/nextjs';
-import { sendPrompt, getToken, getMusicState, type MusicState } from '@/lib/api';
+import { SignInButton, SignUpButton, useUser, useAuth } from '@clerk/nextjs';
+import { sendPrompt, getToken, getMusicState, type MusicState, apiFetch } from '@/lib/api';
 import { wsHub } from '@/services/wsHub';
 import NowPlayingCard from '@/components/music/NowPlayingCard';
 import DiscoveryCard from '@/components/music/DiscoveryCard';
@@ -15,6 +15,10 @@ import MoodDial from '@/components/music/MoodDial';
 import QueueCard from '@/components/music/QueueCard';
 import DevicePicker from '@/components/music/DevicePicker';
 import { RateLimitToast } from '@/components/ui/toast';
+import { WebSocketStatus } from '@/components/WebSocketStatus';
+import { useAuthState, useAuthOrchestrator } from '@/hooks/useAuth';
+import { useBootstrapManager } from '@/hooks/useBootstrap';
+import Link from 'next/link';
 
 interface ChatMessage {
   id: string;
@@ -25,12 +29,13 @@ interface ChatMessage {
 
 export default function Page() {
   const router = useRouter();
-  const [authed, setAuthed] = useState<boolean>(false);
+  const authState = useAuthState();
+  const authOrchestrator = useAuthOrchestrator();
+  const bootstrapManager = useBootstrapManager();
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [sessionReady, setSessionReady] = useState<boolean>(false);
   const [backendOffline, setBackendOffline] = useState<boolean>(false);
   const [hasAccessCookie, setHasAccessCookie] = useState<boolean>(false);
-  const [whoamiOk, setWhoamiOk] = useState<boolean>(false);
   const authBootOnce = useRef<boolean>(false);
   const finishOnceRef = useRef<boolean>(false);
   const [finishBusy, setFinishBusy] = useState<boolean>(false);
@@ -41,275 +46,358 @@ export default function Page() {
   const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
   const { isSignedIn } = useUser();
   const { isLoaded } = useAuth();
+
+  // Use centralized auth state
+  const authed = authState.isAuthenticated;
+
+  // For Clerk mode, we need to check both Clerk's state and backend state
+  // Only show auth buttons if Clerk is loaded and user is not signed in
+  const shouldShowAuthButtons = clerkEnabled ? (isLoaded && !isSignedIn) : !authed;
+
+  // Model state
+  const [model, setModel] = useState<string>('auto');
+
+  // Use centralized whoamiOk state from auth orchestrator instead of local debounced state
+  const whoamiOk = authState.whoamiOk;
+
   const createInitialMessage = (): ChatMessage => ({
     id: crypto.randomUUID(),
     role: 'assistant',
-    content: "Hey King, what’s good?",
+    content: "Hey King, what's good?",
   });
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [musicState, setMusicState] = useState<MusicState | null>(null);
   // 'auto' lets the backend route to skills/LLM; user can still force a model
-  const [model, setModel] = useState('auto');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Helpers: scope storage keys per user id for privacy
-  const getScopedKey = (base: string): string => {
-    try {
-      const token = getToken();
-      if (!token) return `${base}:guest`;
-      const parts = token.split('.')
-      if (parts.length >= 2 && typeof window !== 'undefined') {
-        const json = JSON.parse(atob(parts[1]));
-        const sub = json?.sub || json?.user_id || json?.uid || 'anon';
-        return `${base}:${String(sub)}`;
+  const historyKey = `chat_history_${authState.user?.id || 'anon'}`;
+  const modelKey = `selected_model_${authState.user?.id || 'anon'}`;
+
+  // Update session ready based on centralized auth state
+  useEffect(() => {
+    setSessionReady(authState.sessionReady);
+  }, [authState.sessionReady]);
+
+  // Initialize bootstrap and auth state on mount
+  useEffect(() => {
+    if (authBootOnce.current) return;
+    authBootOnce.current = true;
+
+    // Initialize bootstrap manager first
+    bootstrapManager.initialize().then((success) => {
+      if (success) {
+        console.info('Page: Bootstrap manager initialized successfully');
+      } else {
+        console.error('Page: Bootstrap manager initialization failed');
       }
-      return `${base}:anon`;
-    } catch {
-      return `${base}:anon`;
+    });
+
+    // Check for header token first
+    const hasHeaderToken = Boolean(getToken());
+    if (hasHeaderToken) {
+      setSessionReady(true);
+    } else {
+      // Cookie mode: rely on auth hint or centralized auth state
+      const hinted = document.cookie.includes('auth_hint=1');
+      if (hinted) {
+        setSessionReady(true);
+      }
+      // Auth Orchestrator will handle the whoami call
     }
-  };
-  const historyKey = getScopedKey('chat-history');
-  const modelKey = getScopedKey('selected-model');
+
+    setIsOnline(navigator.onLine);
+    const onUp = () => setIsOnline(true);
+    const onDown = () => setIsOnline(false);
+    window.addEventListener('online', onUp);
+    window.addEventListener('offline', onDown);
+    const stored = localStorage.getItem(historyKey);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        // Validate that parsed data has the correct structure
+        if (Array.isArray(parsed)) {
+          type StoredMessage = Partial<ChatMessage> & { content?: unknown; role?: unknown };
+          const validMessages: ChatMessage[] = (parsed as StoredMessage[])
+            .filter((m) => m && typeof m === 'object' &&
+              typeof m.content === 'string' &&
+              (m.role === 'user' || m.role === 'assistant'))
+            .map((m) => ({
+              id: m.id ?? crypto.randomUUID(),
+              role: m.role as 'user' | 'assistant',
+              content: m.content as string,
+              loading: Boolean(m.loading)
+            }));
+          setMessages(validMessages);
+        }
+      } catch (error) {
+        console.error('Failed to parse stored messages:', error);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('online', onUp);
+      window.removeEventListener('offline', onDown);
+    };
+  }, [bootstrapManager]);
 
   // Helper to read cookie presence client-side
   const readHasAccessCookie = useCallback(() => {
-    try { return typeof document !== 'undefined' && document.cookie.includes('access_token='); } catch { return false; }
-  }, []);
-
-  // Startup probe: ping healthz with a 2s timeout and backoff when offline
-  useEffect(() => {
-    let cancelled = false;
-    let backoff = 2000;
-    const ping = async () => {
-      if (cancelled) return;
-      try {
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 2000);
-        // Avoid sending cookies so an invalid/expired access_token cookie doesn't 401 this probe
-        const r = await apiFetch('/v1/healthz', { signal: controller.signal, auth: false, cache: 'no-store' });
-        clearTimeout(t);
-        const ok = r && r.ok;
-        setBackendOffline(!ok);
-        window.dispatchEvent(new CustomEvent('auth:backend', { detail: { online: ok } }));
-        if (prevBackendOnlineRef.current !== ok) {
-          try { console.info(`AUTH backend: online=${ok}`); } catch { /* noop */ }
-          prevBackendOnlineRef.current = ok;
-        }
-        if (!ok) {
-          setTimeout(ping, backoff);
-          backoff = Math.min(15000, Math.floor(backoff * 1.6));
-        }
-      } catch {
-        setBackendOffline(true);
-        window.dispatchEvent(new CustomEvent('auth:backend', { detail: { online: false } }));
-        if (prevBackendOnlineRef.current !== false) {
-          try { console.info(`AUTH backend: online=false`); } catch { /* noop */ }
-          prevBackendOnlineRef.current = false;
-        }
-        setTimeout(ping, backoff);
-        backoff = Math.min(15000, Math.floor(backoff * 1.6));
-      }
-    };
-    ping();
-    return () => { cancelled = true; };
-  }, []);
-
-  // Hydrate from localStorage on mount; if none, seed with initial assistant msg
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const hasHeaderToken = Boolean(getToken());
-      const cookiePresent = readHasAccessCookie();
-      setHasAccessCookie(cookiePresent);
-      if (cookiePresent) {
-        setAuthed(true);
-      }
-      if (hasHeaderToken) {
-        setAuthed(true);
-        setSessionReady(true);
-      } else {
-        // Cookie mode: rely on auth hint or backend whoami
-        if (!authBootOnce.current) (async () => {
-          try {
-            const hinted = document.cookie.includes('auth_hint=1');
-            if (hinted) {
-              setAuthed(true);
-              setSessionReady(true);
-            } else {
-              // Background whoami to hydrate, do not block UI
-              try {
-                const r = await apiFetch('/v1/whoami', { auth: true });
-                if (r.ok) {
-                  const b: Record<string, unknown> = await r.json().catch(() => ({}));
-                  const ok = Boolean(b && (b.is_authenticated || (b.user_id && b.user_id !== 'anon')));
-                  setAuthed(ok);
-                  setWhoamiOk(ok);
-                  window.dispatchEvent(new CustomEvent('auth:whoami', { detail: { ok } }));
-                }
-              } catch { /* ignore */ }
-            }
-          } catch {
-            setAuthed(false);
-          }
-        })();
-      }
-      setIsOnline(navigator.onLine);
-      const onUp = () => setIsOnline(true);
-      const onDown = () => setIsOnline(false);
-      window.addEventListener('online', onUp);
-      window.addEventListener('offline', onDown);
-      const stored = localStorage.getItem(historyKey);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          // Validate that parsed data has the correct structure
-          if (Array.isArray(parsed)) {
-            type StoredMessage = Partial<ChatMessage> & { content?: unknown; role?: unknown };
-            const validMessages: ChatMessage[] = (parsed as StoredMessage[])
-              .filter((m) => m && typeof m === 'object' &&
-                typeof m.content === 'string' &&
-                (m.role === 'user' || m.role === 'assistant'))
-              .map((m) => ({
-                id: m.id ?? crypto.randomUUID(),
-                role: m.role as 'user' | 'assistant',
-                content: m.content as string,
-                loading: Boolean(m.loading),
-              }));
-            setMessages(validMessages.length > 0 ? validMessages.slice(-100) : [createInitialMessage()]);
-          } else {
-            setMessages([createInitialMessage()]);
-          }
-        } catch {
-          setMessages([createInitialMessage()]);
-        }
-      } else {
-        setMessages([createInitialMessage()]);
-      }
-
-      // Also hydrate the model selection
-      const storedModel = localStorage.getItem(modelKey);
-      if (storedModel) {
-        setModel(storedModel);
-      }
-      return () => {
-        window.removeEventListener('online', onUp);
-        window.removeEventListener('offline', onDown);
-      }
-    }
-  }, [readHasAccessCookie]);
-
-  // Compute readiness for Clerk: isSignedIn AND (cookie present OR whoami says ok)
-  useEffect(() => {
-    if (!clerkEnabled) return;
-    const ready = Boolean(isSignedIn && (hasAccessCookie || whoamiOk));
-    setSessionReady(ready);
-    try { window.dispatchEvent(new CustomEvent('auth:ready', { detail: { ready } })); } catch { /* noop */ }
-    if (prevReadyRef.current !== ready) {
-      try {
-        console.info(`AUTH ready: signedIn=${Boolean(isSignedIn)} cookie=${Boolean(hasAccessCookie)} whoamiOk=${Boolean(whoamiOk)}`);
-      } catch { /* noop */ }
-      prevReadyRef.current = ready;
-    }
-  }, [clerkEnabled, isSignedIn, hasAccessCookie, whoamiOk]);
-
-  // Single-shot finisher: when signed-in but cookie missing, mint cookies fast and refresh
-  // SPA Style Auth Finish: POST /v1/auth/finish → 204, then router.push()
-  // Contract: Backend sets HttpOnly cookies, returns 204, frontend handles navigation
-  const runFinish = useCallback(async () => {
-    if (typeof window === 'undefined') return;
-    setFinishBusy(true);
-    setFinishError(null);
     try {
-      try { finishAbortRef.current?.abort(); } catch { /* noop */ }
-      const controller = new AbortController();
-      finishAbortRef.current = controller;
-      const t = setTimeout(() => controller.abort(), 5000);
-      console.info('AUTH finisher: POST /v1/auth/finish (SPA style)');
-      const res = await apiFetch('/v1/auth/finish', { method: 'POST', auth: false, signal: controller.signal });
-      clearTimeout(t);
-
-      if (res.status === 204) {
-        // Success: cookies set by backend, navigate to home
-        console.info('AUTH finisher: success (204), navigating to /');
-        router.push('/');
-      } else {
-        throw new Error(`Unexpected status: ${res.status}`);
-      }
-    } catch (e: unknown) {
-      const msg = e?.name === 'AbortError' ? 'Timed out' : (e?.message || 'failed');
-      setFinishError(msg);
-    } finally {
-      finishAbortRef.current = null;
-      setFinishBusy(false);
-      setHasAccessCookie(readHasAccessCookie());
-      try {
-        const r = await apiFetch('/v1/whoami', { auth: true });
-        if (r.ok) {
-          const b: Record<string, unknown> = await r.json().catch(() => ({}));
-          const ok = Boolean(b && (b.is_authenticated || (b.user_id && b.user_id !== 'anon')));
-          setWhoamiOk(ok);
-          if (ok) setAuthed(true);
-        }
-      } catch { /* ignore */ }
+      return document.cookie.includes('auth_hint=1');
+    } catch {
+      return false;
     }
-  }, [readHasAccessCookie, router]);
-
-  useEffect(() => {
-    if (!clerkEnabled) return;
-    if (finishOnceRef.current) return;
-    if (isSignedIn && !hasAccessCookie) {
-      try { console.info('AUTH finisher.trigger reason=cookie.missing'); } catch { }
-      finishOnceRef.current = true;
-      runFinish();
-    }
-  }, [clerkEnabled, isSignedIn, hasAccessCookie, runFinish]);
-  // Music: initial load + subscribe to hub events
-  useEffect(() => {
-    (async () => {
-      try { setMusicState(await getMusicState()); } catch { }
-    })();
-    const onState = (ev: Event) => {
-      try { const detail = (ev as CustomEvent).detail as MusicState; setMusicState(detail || null); } catch { }
-    };
-    window.addEventListener('music.state', onState as EventListener);
-    return () => { window.removeEventListener('music.state', onState as EventListener); };
   }, []);
-
-
-  // Check onboarding status when authed
-  useEffect(() => {
-    const checkOnboarding = async () => {
-      if (authed && !authBootOnce.current) {
-        try {
-          const { getOnboardingStatus } = await import('@/lib/api');
-          const status = await getOnboardingStatus();
-          if (!status.completed) {
-            router.push('/onboarding');
-          }
-        } catch (error) {
-          console.error('Failed to check onboarding status:', error);
-          // If there's an error, assume onboarding is needed
-          router.push('/onboarding');
-        }
-        authBootOnce.current = true;
-      }
-    };
-
-    checkOnboarding();
-  }, [authed, router]);
 
   // React to auth token changes (login/logout in other tabs)
   useEffect(() => {
-    const onSet = () => setAuthed(Boolean(getToken()));
-    const onClear = () => setAuthed(Boolean(getToken()));
-    window.addEventListener('auth:tokens_set', onSet);
-    window.addEventListener('auth:tokens_cleared', onClear);
-    return () => {
-      window.removeEventListener('auth:tokens_set', onSet);
-      window.removeEventListener('auth:tokens_cleared', onClear);
+    const handleStorageChange = () => {
+      const newHasCookie = readHasAccessCookie();
+      if (newHasCookie !== hasAccessCookie) {
+        setHasAccessCookie(newHasCookie);
+      }
     };
-  }, []);
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [readHasAccessCookie, hasAccessCookie]);
+
+  // Compute readiness for Clerk: isSignedIn AND (whoamiOk OR auth hint present)
+  useEffect(() => {
+    if (!clerkEnabled) return;
+    const ready = Boolean(isSignedIn && (whoamiOk || hasAccessCookie));
+    if (ready !== sessionReady) {
+      setSessionReady(ready);
+    }
+  }, [clerkEnabled, isSignedIn, hasAccessCookie, whoamiOk, sessionReady]);
+
+  // Auth finish handling for Clerk
+  useEffect(() => {
+    if (!clerkEnabled || !isLoaded) return;
+
+    const handleAuthFinish = async () => {
+      if (finishOnceRef.current || finishBusy) return;
+      finishOnceRef.current = true;
+      setFinishBusy(true);
+      setFinishError(null);
+
+      // Cancel any existing request
+      if (finishAbortRef.current) {
+        finishAbortRef.current.abort();
+      }
+      finishAbortRef.current = new AbortController();
+
+      try {
+        // Signal auth finish start via bootstrap manager
+        bootstrapManager.setAuthFinishInProgress(true);
+        window.dispatchEvent(new CustomEvent('auth:finish_start'));
+
+        console.info('AUTH finisher: POST /v1/auth/finish (SPA style)');
+        const res = await apiFetch('/v1/auth/finish', { method: 'POST', auth: false, signal: finishAbortRef.current.signal });
+
+        if (res.status === 204) {
+          console.info('AUTH finisher: success, navigating to home');
+          router.push('/');
+        } else {
+          throw new Error(`Unexpected status: ${res.status}`);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.info('AUTH finisher: aborted');
+          return;
+        }
+        console.error('AUTH finisher: error', error);
+        setFinishError(error instanceof Error ? error.message : 'Unknown error');
+        finishOnceRef.current = false; // Allow retry
+      } finally {
+        setFinishBusy(false);
+        // Signal auth finish end via bootstrap manager
+        bootstrapManager.setAuthFinishInProgress(false);
+        window.dispatchEvent(new CustomEvent('auth:finish_end'));
+      }
+    };
+
+    // Check if we need to finish auth
+    if (isSignedIn && !authed && !authState.isLoading) {
+      handleAuthFinish();
+    }
+  }, [clerkEnabled, isLoaded, isSignedIn, authed, authState.isLoading, router, bootstrapManager]);
+
+  // Music state management
+  useEffect(() => {
+    if (!authed) return;
+
+    const fetchMusicState = async () => {
+      try {
+        const state = await getMusicState();
+        setMusicState(state);
+      } catch (error) {
+        console.error('Failed to fetch music state:', error);
+      }
+    };
+
+    fetchMusicState();
+
+    // Listen for music state updates
+    const handleMusicState = (event: CustomEvent) => {
+      setMusicState(event.detail);
+    };
+
+    window.addEventListener('music.state', handleMusicState as EventListener);
+    return () => {
+      window.removeEventListener('music.state', handleMusicState as EventListener);
+    };
+  }, [authed]);
+
+  // WebSocket connection - only when authenticated
+  useEffect(() => {
+    if (!authed) {
+      // Stop WebSocket connections when not authenticated
+      try {
+        wsHub.stop({ music: true, care: true });
+      } catch (error) {
+        console.error('Failed to stop WebSocket connections:', error);
+      }
+      return;
+    }
+
+    // Start WebSocket connections only when authenticated
+    try {
+      wsHub.start({ music: true, care: true });
+    } catch (error) {
+      console.error('Failed to start WebSocket connections:', error);
+    }
+
+    return () => {
+      try {
+        wsHub.stop({ music: true, care: true });
+      } catch (error) {
+        console.error('Failed to stop WebSocket connections:', error);
+      }
+    };
+  }, [authed]);
+
+  // Backend status check with bootstrap coordination
+  useEffect(() => {
+    // DISABLED: Health polling should be controlled by orchestrator
+    // Health check state tracking
+    // const healthCheckState = {
+    //   hasEverSucceeded: false,
+    //   lastSuccessTs: 0,
+    //   lastCheckTs: 0,
+    //   consecutiveFailures: 0,
+    //   nextCheckDelay: 5000, // Start with 5 seconds
+    //   maxCheckDelay: 300000, // Max 5 minutes
+    //   successThrottleDelay: 60000, // 1 minute after success
+    // };
+
+    // const checkBackend = async () => {
+    //   // Check if health polling is allowed by bootstrap manager
+    //   if (!bootstrapManager.startHealthPolling()) {
+    //     console.info('Page: Health polling blocked by bootstrap manager');
+    //     return;
+    //   }
+
+    //   const now = Date.now();
+
+    //   // Check if we should skip this health check due to throttling
+    //   if (healthCheckState.hasEverSucceeded) {
+    //     const timeSinceSuccess = now - healthCheckState.lastSuccessTs;
+    //     if (timeSinceSuccess < healthCheckState.successThrottleDelay) {
+    //       console.debug('Skipping health check - throttled after success (%dms remaining)',
+    //         healthCheckState.successThrottleDelay - timeSinceSuccess);
+    //       return;
+    //     }
+    //   }
+
+    //   // Check if we should skip due to exponential backoff
+    //   const timeSinceLastCheck = now - healthCheckState.lastCheckTs;
+    //   if (!healthCheckState.hasEverSucceeded && timeSinceLastCheck < healthCheckState.nextCheckDelay) {
+    //     console.debug('Skipping health check - exponential backoff (%dms remaining)',
+    //       healthCheckState.nextCheckDelay - timeSinceLastCheck);
+    //     return;
+    //   }
+
+    //   healthCheckState.lastCheckTs = now;
+
+    //   try {
+    //     const response = await apiFetch('/v1/status', { method: 'GET', auth: false });
+    //     const isOnline = response.ok;
+    //     setBackendOffline(!isOnline);
+
+    //     if (isOnline) {
+    //       // Success - update state
+    //       healthCheckState.hasEverSucceeded = true;
+    //       healthCheckState.lastSuccessTs = now;
+    //       healthCheckState.consecutiveFailures = 0;
+    //       healthCheckState.nextCheckDelay = 5000; // Reset to initial delay
+    //       console.debug('Backend health check successful');
+    //     } else {
+    //       // Failure
+    //       healthCheckState.consecutiveFailures += 1;
+
+    //       // Exponential backoff: double the delay, capped at max_delay
+    //       if (!healthCheckState.hasEverSucceeded) {
+    //         healthCheckState.nextCheckDelay = Math.min(
+    //           healthCheckState.nextCheckDelay * 2,
+    //           healthCheckState.maxCheckDelay
+    //         );
+    //         console.warn('Backend health check failed (attempt %d, next check in %dms)',
+    //           healthCheckState.consecutiveFailures,
+    //           healthCheckState.nextCheckDelay);
+    //       } else {
+    //         console.warn('Backend health check failed after previous success');
+    //       }
+    //     }
+    //   } catch {
+    //     setBackendOffline(true);
+    //     healthCheckState.consecutiveFailures += 1;
+
+    //     // Exponential backoff: double the delay, capped at max_delay
+    //     if (!healthCheckState.hasEverSucceeded) {
+    //       healthCheckState.nextCheckDelay = Math.min(
+    //         healthCheckState.nextCheckDelay * 2,
+    //         healthCheckState.maxCheckDelay
+    //       );
+    //       console.warn('Backend health check failed (attempt %d, next check in %dms)',
+    //         healthCheckState.consecutiveFailures,
+    //         healthCheckState.nextCheckDelay);
+    //     } else {
+    //       console.warn('Backend health check failed after previous success');
+    //     }
+    //   } finally {
+    //     // Always stop health polling when done
+    //     bootstrapManager.stopHealthPolling();
+    //   }
+    // };
+
+    // checkBackend();
+
+    // // Use a more intelligent interval that adapts based on health check state
+    // const interval = setInterval(() => {
+    //   const now = Date.now();
+    //   let delay = 30000; // Default 30 seconds
+
+    //   if (healthCheckState.hasEverSucceeded) {
+    //     // After success: throttle to once per minute
+    //     delay = healthCheckState.successThrottleDelay;
+    //   } else {
+    //     // Before success: use exponential backoff
+    //     delay = healthCheckState.nextCheckDelay;
+    //   }
+
+    //   // Schedule next check
+    //   setTimeout(checkBackend, delay);
+    // }, 30000); // Check every 30 seconds initially, then adapt
+
+    // return () => {
+    //   clearInterval(interval);
+    //   bootstrapManager.stopHealthPolling();
+    // };
+  }, [bootstrapManager]);
 
   // Persist messages after each update & auto‑scroll
   useEffect(() => {
@@ -329,59 +417,44 @@ export default function Page() {
     }
   }, [model]);
 
-  const handleSend = async (text: string) => {
-    if (!text.trim()) return;
-    if (!(authed && (sessionReady || !clerkEnabled))) {
-      // Prevent sending when unauthenticated
-      setMessages(prev => ([
-        ...prev,
-        { id: crypto.randomUUID(), role: 'assistant', content: 'Please sign in to chat.', loading: false },
-      ]));
-      return;
-    }
-    if (!isOnline) {
-      setMessages(prev => ([
-        ...prev,
-        { id: crypto.randomUUID(), role: 'assistant', content: 'You are offline. I will send this when you are back online.', loading: false },
-      ]));
-      return;
-    }
+  const handleSend = async (content: string) => {
+    if (!content.trim() || loading) return;
 
-    const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text };
-    const assistantId = crypto.randomUUID();
-    const placeholder: ChatMessage = { id: assistantId, role: 'assistant', content: '', loading: true };
-    setMessages(prev => [
-      ...prev,
-      userMessage,
-      placeholder,
-    ]);
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: content.trim(),
+    };
+
+    const assistantMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: '',
+      loading: true,
+    };
+
+    setMessages(prev => [...prev, userMessage, assistantMessage]);
     setLoading(true);
 
     try {
-      const full = await sendPrompt(text, model, chunk => {
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === assistantId
-              ? { ...m, loading: false, content: m.content + chunk }
-              : m,
-          ),
-        );
-      });
-      // Ensure final content is set even if the backend didn't stream tokens
-      if (typeof full === 'string') {
-        setMessages(prev =>
-          prev.map(m => (m.id === assistantId ? { ...m, loading: false, content: full } : m)),
-        );
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setMessages(prev =>
-        prev.map(m =>
-          m.id === assistantId
-            ? { ...m, loading: false, content: `❌ ${message}` }
-            : m,
-        ),
-      );
+      const response = await sendPrompt(content.trim(), 'auto');
+
+      setMessages(prev => prev.map(msg =>
+        msg.id === assistantMessage.id
+          ? { ...msg, content: response, loading: false }
+          : msg
+      ));
+
+      // Save to localStorage
+      const updatedMessages = [...messages, userMessage, { ...assistantMessage, content: response, loading: false }];
+      localStorage.setItem(historyKey, JSON.stringify(updatedMessages));
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      setMessages(prev => prev.map(msg =>
+        msg.id === assistantMessage.id
+          ? { ...msg, content: 'Sorry, I encountered an error. Please try again.', loading: false }
+          : msg
+      ));
     } finally {
       setLoading(false);
     }
@@ -389,122 +462,141 @@ export default function Page() {
 
   const clearHistory = () => {
     setMessages([createInitialMessage()]);
+    localStorage.removeItem(historyKey);
   };
 
-  return (
-    (clerkEnabled && !isLoaded) ? (
-      <main className="mx-auto max-w-3xl px-4">
-        <div className="flex min-h-[calc(100vh-56px)] items-center justify-center text-xs text-muted-foreground">Loading…</div>
-      </main>
-    ) : (
-      <main className="mx-auto max-w-3xl px-4">
-        <div className="flex min-h-[calc(100vh-56px)] flex-col">
-          {authed && musicState && (
-            <section className="py-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-2 space-y-4">
-                  <NowPlayingCard state={musicState} />
-                  {/* Emphasize Discovery when higher energy */}
-                  {musicState.vibe.energy >= 0.5 ? (
-                    <DiscoveryCard />
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <DiscoveryCard />
-                      <div className="hidden md:block" />
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-4">
-                  <MoodDial />
-                  <QueueCard />
-                  <DevicePicker />
-                </div>
-              </div>
-            </section>
-          )}
-          {/* chat scroll area */}
-          <section className="flex-1 overflow-y-auto py-6">
-            {clerkEnabled ? (
-              <SignedOut>
-                <div className="mb-4 rounded-xl border p-4 text-sm bg-card/50">
-                  <p className="mb-2">You&apos;re not signed in. Please sign in to enable full features.</p>
-                  <div className="flex gap-2">
-                    <SignInButton mode="modal">
-                      <Button size="sm" variant="secondary">Sign in</Button>
-                    </SignInButton>
-                    <SignUpButton mode="modal">
-                      <Button size="sm">Sign up</Button>
-                    </SignUpButton>
-                  </div>
-                </div>
-              </SignedOut>
-            ) : (
-              !authed && (
-                <div className="mb-4 rounded-xl border p-4 text-sm bg-card/50">
-                  <p className="mb-2">You&apos;re not signed in. Please sign in to enable full features.</p>
-                  <a
-                    href="/login"
-                    className="inline-flex items-center rounded-md bg-primary px-3 py-1 text-primary-foreground hover:opacity-90"
-                  >
-                    Go to Login
-                  </a>
-                </div>
-              )
-            )}
-            {messages.map(m =>
-              m.loading ? (
-                <LoadingBubble key={m.id} />
-              ) : (
-                <ChatBubble key={m.id} role={m.role} text={m.content} />
-              )
-            )}
-            <div ref={bottomRef} />
-          </section>
-
-          {/* input pinned bottom */}
-          <footer className="sticky bottom-0 w-full border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="mx-auto max-w-2xl py-4">
-              <InputBar
-                onSend={handleSend}
-                loading={loading}
-                model={model}
-                onModelChange={setModel}
-                authed={authed && (sessionReady || !clerkEnabled)}
-              />
-              {backendOffline ? (
-                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                  <div>Backend offline — retrying…</div>
-                </div>
-              ) : (!authed || (clerkEnabled && !sessionReady)) ? (
-                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                  <div>
-                    {clerkEnabled ? (sessionReady ? '' : 'Finalizing sign-in…') : (!authed ? 'Sign in required' : '')}
-                  </div>
-                  {clerkEnabled && isSignedIn && !hasAccessCookie && (
-                    <div className="flex items-center gap-3">
-                      {finishError ? <span className="text-red-600">{finishError}</span> : null}
-                      <button className="underline disabled:opacity-60" disabled={finishBusy} onClick={() => { try { console.info('AUTH finisher.retry reason=manual'); } catch { }; runFinish(); }}>
-                        {finishBusy ? 'Retrying…' : 'Retry sign-in'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-              <div className="mt-2 flex justify-end">
-                <Button
-                  onClick={clearHistory}
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs"
-                >
-                  Clear history
-                </Button>
-              </div>
-            </div>
-          </footer>
+  // Show loading state while auth is being determined
+  if (authState.isLoading || (clerkEnabled && !isLoaded)) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Checking authentication...</p>
         </div>
-        <RateLimitToast />
-      </main>
-    )
+      </div>
+    );
+  }
+
+  // Show auth error if there is one
+  if (authState.error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-destructive mb-4">Authentication error: {authState.error}</p>
+          <Button onClick={() => authOrchestrator.refreshAuth()}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login prompt if not authenticated
+  if (!authed) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center max-w-md mx-auto p-6">
+          <h1 className="text-2xl font-bold mb-4">Welcome to Gesahni</h1>
+          <p className="text-muted-foreground mb-6">
+            Please sign in to start chatting with your AI assistant.
+          </p>
+          {clerkEnabled ? (
+            <div className="space-y-3">
+              {shouldShowAuthButtons ? (
+                <>
+                  <SignInButton mode="modal">
+                    <Button className="w-full">Sign In</Button>
+                  </SignInButton>
+                  <SignUpButton mode="modal">
+                    <Button variant="outline" className="w-full">Sign Up</Button>
+                  </SignUpButton>
+                </>
+              ) : (
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">Checking authentication...</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link href="/login">
+              <Button className="w-full">Login</Button>
+            </Link>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <RateLimitToast />
+
+      {/* Auth Finish Error */}
+      {finishError && (
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-2 text-center">
+          <p className="text-sm">Authentication failed: {finishError}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.location.reload()}
+            className="mt-2"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {/* Backend Offline Notice */}
+      {backendOffline && (
+        <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 dark:text-yellow-300 px-4 py-2 text-center">
+          <p className="text-sm">Backend is offline. Some features may be unavailable.</p>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-6 p-6">
+        {/* Chat Section */}
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+            {messages.length === 0 ? (
+              <ChatBubble role="assistant" text={createInitialMessage().content} />
+            ) : (
+              messages.map((message) => (
+                <ChatBubble key={message.id} role={message.role} text={message.content} />
+              ))
+            )}
+            {loading && <LoadingBubble />}
+          </div>
+          <InputBar
+            onSend={handleSend}
+            loading={loading}
+            model={model}
+            onModelChange={setModel}
+            authed={authed}
+          />
+          <div className="flex justify-between items-center mt-4 text-sm text-muted-foreground">
+            <span>Connected as {authState.user?.id || 'Unknown'}</span>
+            <div className="flex items-center gap-4">
+              <WebSocketStatus showDetails={true} />
+              <Button variant="ghost" size="sm" onClick={clearHistory}>
+                Clear History
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Music Section */}
+        {musicState && (
+          <div className="w-full lg:w-80 space-y-4">
+            <NowPlayingCard state={musicState} />
+            <DiscoveryCard />
+            <MoodDial />
+            <QueueCard />
+            <DevicePicker />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

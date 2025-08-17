@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Auth Race Condition Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .log {
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        .error {
+            color: red;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .warning {
+            color: orange;
+        }
+
+        .info {
+            color: blue;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Auth Race Condition Test</h1>
+    <div id="log"></div>
+
+    <script>
+        const log = document.getElementById('log');
+        let whoamiCallCount = 0;
+        let whoamiOkChanges = 0;
+        let lastWhoamiOkState = null;
+
+        function addLog(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            log.appendChild(div);
+        }
+
+        // Monitor whoami calls and state changes
+        function monitorAuthFlow() {
+            // Override console.info to capture auth-related logs
+            const originalConsoleInfo = console.info;
+            console.info = function (...args) {
+                const message = args.join(' ');
+                if (message.includes('whoami') || message.includes('auth')) {
+                    addLog(`CONSOLE: ${message}`, 'info');
+
+                    // Count whoami calls
+                    if (message.includes('making whoami call') || message.includes('whoami.authenticated')) {
+                        whoamiCallCount++;
+                    }
+
+                    // Track whoamiOk changes
+                    if (message.includes('whoamiOk update blocked') || message.includes('whoami skipped')) {
+                        addLog(`✅ Race condition prevented`, 'success');
+                    }
+                }
+                originalConsoleInfo.apply(console, args);
+            };
+
+            // Monitor fetch calls
+            const originalFetch = window.fetch;
+            window.fetch = function (...args) {
+                const url = args[0];
+                if (url.includes('/v1/whoami')) {
+                    addLog(`FETCH: ${url}`, 'warning');
+                }
+                return originalFetch.apply(this, args);
+            };
+        }
+
+        // Start monitoring
+        monitorAuthFlow();
+
+        addLog('Auth race condition test started', 'info');
+        addLog('Expected behavior:', 'info');
+        addLog('1. signedIn=false cookie=true whoamiOk=unknown', 'info');
+        addLog('2. SPA finisher triggers', 'info');
+        addLog('3. Other whoami calls should be blocked during finish', 'info');
+        addLog('4. whoamiOk should transition cleanly to true', 'info');
+        addLog('5. No rapid flipping should occur', 'info');
+
+        // Instructions for manual testing
+        addLog('', 'info');
+        addLog('To test manually:', 'info');
+        addLog('1. Open the app in another tab', 'info');
+        addLog('2. Open browser dev tools console', 'info');
+        addLog('3. Sign in with Clerk', 'info');
+        addLog('4. Watch for whoami call logs and state changes', 'info');
+        addLog('5. Should see "whoami skipped during auth finish" messages', 'info');
+    </script>
+</body>
+
+</html>

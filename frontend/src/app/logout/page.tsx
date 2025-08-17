@@ -9,11 +9,26 @@ export default function LogoutPage() {
     const { signOut } = useClerk()
     useEffect(() => {
         (async () => {
-            try { await apiFetch('/v1/auth/logout', { method: 'POST' }) } catch { /* ignore */ }
-            try { await signOut?.() } catch { /* ignore */ }
+            // Start all logout operations concurrently
+            const logoutPromises = [
+                // Backend logout
+                apiFetch('/v1/auth/logout', { method: 'POST' }).catch(() => { }),
+                // Clerk signOut (non-blocking)
+                signOut?.().catch(() => { }),
+            ]
+
+            // Wait for backend logout to complete, but don't wait for Clerk
+            await logoutPromises[0]
+
+            // Clear local tokens and cookies immediately
             try { clearTokens() } catch { /* ignore */ }
             try { document.cookie = 'auth_hint=0; path=/; max-age=300' } catch { /* ignore */ }
+
+            // Navigate immediately
             router.replace('/sign-in')
+
+            // Let Clerk signOut complete in background
+            logoutPromises[1].catch(() => { })
         })()
     }, [router, signOut])
     return (

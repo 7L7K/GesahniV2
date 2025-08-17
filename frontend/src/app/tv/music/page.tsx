@@ -2,16 +2,24 @@
 
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { getAuthOrchestrator } from "@/services/authOrchestrator";
 
 export default function Music() {
     const presets = ["Gospel Mornings", "Quiet Afternoons", "Night Jazz"];
     const [status, setStatus] = useState<string>("");
     const play = async (p: string) => {
+        // Only make music API calls when authenticated
+        const authState = getAuthOrchestrator().getState();
+        if (!authState.isAuthenticated) {
+            setStatus("Not authenticated. Please log in.");
+            return;
+        }
+
         try {
             await apiFetch(`/v1/tv/music/play?preset=${encodeURIComponent(p)}`, { method: "POST" });
             setStatus(`Playing: ${p}`);
         } catch {
-            setStatus("Offline. Couldn’t start playback.");
+            setStatus("Offline. Couldn't start playback.");
         }
     };
     return (

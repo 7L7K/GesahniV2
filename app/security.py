@@ -24,6 +24,12 @@ try:
     from app.deps.clerk_auth import verify_clerk_token as _verify_clerk
 except Exception:  # pragma: no cover - optional
     _verify_clerk = None  # type: ignore
+
+try:
+    from .auth_monitoring import record_privileged_call_blocked, record_auth_lock_event
+except Exception:  # pragma: no cover - optional
+    record_privileged_call_blocked = lambda *a, **k: None
+    record_auth_lock_event = lambda *a, **k: None
 # Problem+JSON passthrough for HTTPException when explicitly requested
 try:
     import fastapi.exception_handlers as _fastapi_eh  # type: ignore
@@ -539,10 +545,26 @@ async def verify_token(request: Request) -> None:
     if not token:
         # If JWT is required, enforce 401 even under tests
         if require_jwt:
+            try:
+                record_privileged_call_blocked(
+                    endpoint=request.url.path,
+                    reason="missing_token",
+                    user_id="unknown"
+                )
+            except Exception:
+                pass
             raise HTTPException(status_code=401, detail="Unauthorized")
         # Otherwise allow anonymous when tests indicate JWT is optional OR when scopes enforcement is disabled.
         if test_bypass or os.getenv("ENFORCE_JWT_SCOPES", "1").strip() in {"0", "false", "no"}:
             return
+        try:
+            record_privileged_call_blocked(
+                endpoint=request.url.path,
+                reason="missing_token",
+                user_id="unknown"
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         # Enforce iss/aud in prod if configured
@@ -560,8 +582,24 @@ async def verify_token(request: Request) -> None:
         request.state.jwt_payload = payload
     except jwt.ExpiredSignatureError:
         # Allow caller to distinguish expiry for logging
+        try:
+            record_privileged_call_blocked(
+                endpoint=request.url.path,
+                reason="token_expired",
+                user_id="unknown"
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=401, detail="token_expired")
     except jwt.PyJWTError:
+        try:
+            record_privileged_call_blocked(
+                endpoint=request.url.path,
+                reason="invalid_token",
+                user_id="unknown"
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -587,11 +625,27 @@ async def verify_token_strict(request: Request) -> None:
     if auth and auth.startswith("Bearer "):
         token = auth.split(" ", 1)[1]
     if not token:
+        try:
+            record_privileged_call_blocked(
+                endpoint=request.url.path,
+                reason="missing_token_strict",
+                user_id="unknown"
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         payload = jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
         request.state.jwt_payload = payload
     except jwt.PyJWTError:
+        try:
+            record_privileged_call_blocked(
+                endpoint=request.url.path,
+                reason="invalid_token_strict",
+                user_id="unknown"
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 

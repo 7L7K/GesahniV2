@@ -66,6 +66,17 @@ llama_failures: int = 0
 llama_last_failure_ts: float = 0.0
 llama_circuit_open: bool = False
 
+# Health check state tracking
+llama_health_check_state = {
+    "has_ever_succeeded": False,
+    "last_success_ts": 0.0,
+    "last_check_ts": 0.0,
+    "consecutive_failures": 0,
+    "next_check_delay": 5.0,  # Start with 5 seconds
+    "max_check_delay": 300.0,  # Max 5 minutes
+    "success_throttle_delay": 60.0,  # 1 minute after success
+}
+
 # Concurrency limit
 _MAX_STREAMS = int(os.getenv("LLAMA_MAX_STREAMS", "2"))
 _sema = asyncio.Semaphore(_MAX_STREAMS)
@@ -80,6 +91,26 @@ async def _empty_gen():
 async def _check_and_set_flag() -> None:
     """Attempt a tiny generation and update ``LLAMA_HEALTHY`` accordingly."""
     global LLAMA_HEALTHY
+    
+    now = time.monotonic()
+    
+    # Check if we should skip this health check due to throttling
+    if llama_health_check_state["has_ever_succeeded"]:
+        time_since_success = now - llama_health_check_state["last_success_ts"]
+        if time_since_success < llama_health_check_state["success_throttle_delay"]:
+            logger.debug("Skipping health check - throttled after success (%.1fs remaining)", 
+                        llama_health_check_state["success_throttle_delay"] - time_since_success)
+            return
+    
+    # Check if we should skip due to exponential backoff
+    time_since_last_check = now - llama_health_check_state["last_check_ts"]
+    if not llama_health_check_state["has_ever_succeeded"] and time_since_last_check < llama_health_check_state["next_check_delay"]:
+        logger.debug("Skipping health check - exponential backoff (%.1fs remaining)", 
+                    llama_health_check_state["next_check_delay"] - time_since_last_check)
+        return
+    
+    llama_health_check_state["last_check_ts"] = now
+    
     try:
         if not OLLAMA_MODEL:
             # No model configured yet; mark unhealthy without doing a network call
@@ -103,21 +134,41 @@ async def _check_and_set_flag() -> None:
         # Simulate what test expects (returns models list, not including selected)
         if isinstance(data, dict) and "models" in data:
             if OLLAMA_MODEL not in data["models"]:
-                LLAMA_HEALTHY = False
-                logger.warning("Model '%s' missing on Ollama at %s", OLLAMA_MODEL, OLLAMA_URL)
-                return
-
+                raise RuntimeError(f"model {OLLAMA_MODEL} not in available models")
         if err or not isinstance(data, dict) or not data.get("response"):
             raise RuntimeError(err or "empty_response")
+        
+        # Success - update state
         LLAMA_HEALTHY = True
-        logger.debug("Ollama generation successful")
+        llama_health_check_state["has_ever_succeeded"] = True
+        llama_health_check_state["last_success_ts"] = now
+        llama_health_check_state["consecutive_failures"] = 0
+        llama_health_check_state["next_check_delay"] = 5.0  # Reset to initial delay
+        
+        logger.debug("Ollama health check successful")
+        
     except Exception as e:
         LLAMA_HEALTHY = False
-        logger.warning("Cannot generate with Ollama at %s – %s", OLLAMA_URL, e)
+        llama_health_check_state["consecutive_failures"] += 1
+        
+        # Exponential backoff: double the delay, capped at max_delay
+        if not llama_health_check_state["has_ever_succeeded"]:
+            llama_health_check_state["next_check_delay"] = min(
+                llama_health_check_state["next_check_delay"] * 2,
+                llama_health_check_state["max_check_delay"]
+            )
+            logger.warning("Ollama health check failed (attempt %d, next check in %.1fs): %s", 
+                          llama_health_check_state["consecutive_failures"], 
+                          llama_health_check_state["next_check_delay"], e)
+        else:
+            logger.warning("Ollama health check failed after previous success: %s", e)
+    
+    # Schedule the next health check
+    await _schedule_next_health_check()
 
 def _record_failure() -> None:
     """Update circuit breaker failure counters."""
-    global llama_failures, llama_last_failure_ts, llama_circuit_open
+    global llama_failures, llama_circuit_open
     now = time.monotonic()
     if now - llama_last_failure_ts > 60:
         llama_failures = 1
@@ -132,6 +183,32 @@ def _reset_failures() -> None:
     global llama_failures, llama_circuit_open
     llama_failures = 0
     llama_circuit_open = False
+
+async def _schedule_next_health_check() -> None:
+    """Schedule the next health check based on current state."""
+    if llama_health_check_state["has_ever_succeeded"]:
+        # After success: throttle to once per minute
+        delay = llama_health_check_state["success_throttle_delay"]
+    else:
+        # Before success: use exponential backoff
+        delay = llama_health_check_state["next_check_delay"]
+    
+    # Remove existing health check job if it exists
+    try:
+        scheduler.remove_job("llama_health_check")
+    except Exception:
+        pass
+    
+    # Schedule next check
+    scheduler.add_job(
+        _check_and_set_flag,
+        "date",
+        run_date=time.time() + delay,
+        id="llama_health_check",
+        replace_existing=True
+    )
+    
+    logger.debug("Scheduled next LLaMA health check in %.1f seconds", delay)
 
 async def startup_check() -> None:
     """
@@ -150,11 +227,11 @@ async def startup_check() -> None:
         )
         return
 
-    # Initial health check (won’t crash on failure)
+    # Initial health check (won't crash on failure)
     await _check_and_set_flag()
-
-    # Schedule periodic re-checks every 5 minutes
-    scheduler.add_job(_check_and_set_flag, "interval", minutes=5)
+    
+    # Schedule the next health check based on the result
+    await _schedule_next_health_check()
     scheduler_start()
 
 async def get_status() -> Dict[str, Any]:

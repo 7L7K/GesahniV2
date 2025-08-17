@@ -5,6 +5,7 @@ import { setTokens, apiFetch, bumpAuthEpoch } from '@/lib/api';
 import { sanitizeNextPath } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { getAuthOrchestrator } from '@/services/authOrchestrator';
 
 function LoginPageInner() {
     const [username, setUsername] = useState('');
@@ -33,140 +34,142 @@ function LoginPageInner() {
                     if (m) headers['X-CSRF-Token'] = decodeURIComponent(m.split('=')[1] || '');
                 } catch { }
                 apiFetch('/v1/auth/refresh', { method: 'POST', headers, auth: false }).finally(() => {
-                    router.replace(next);
+                    // Trigger Auth Orchestrator refresh after successful login
+                    const authOrchestrator = getAuthOrchestrator();
+                    authOrchestrator.refreshAuth().finally(() => {
+                        router.replace(next);
+                    });
                 });
             }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [params, next, router]);
 
-    const submit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setLoading(true);
+
         try {
-            const uname = username.trim().toLowerCase();
-            if (!/^[a-z0-9_.-]{3,64}$/.test(uname)) {
-                throw new Error('Invalid username. Use 3-64 chars: a-z, 0-9, _, ., -');
-            }
-            // Require minimum 8 characters for stronger default security
-            if (password.trim().length < 8) {
-                throw new Error('Password too short');
-            }
-            // Use direct API calls since we simplified api lib
-            const endpoint = mode === 'login' ? '/v1/login' : '/v1/register'
-            const res = await apiFetch(endpoint, { auth: false, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: uname, password }) })
-            const body = await res.json().catch(() => ({} as Record<string, unknown>))
-            if (!res.ok) {
-                const detail = body?.detail || body?.error || 'Login failed'
-                throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
-            }
-            // For login, persist tokens
-            if (mode === 'login') {
-                const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string }
-                if (access_token) setTokens(access_token, refresh_token)
+            const endpoint = mode === 'login' ? '/v1/login' : '/v1/register';
+            const response = await apiFetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password }),
+                auth: false,
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setTokens(data.access_token, data.refresh_token);
+                document.cookie = `auth_hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
+                bumpAuthEpoch();
+
+                // Trigger Auth Orchestrator refresh after successful login
+                const authOrchestrator = getAuthOrchestrator();
+                await authOrchestrator.refreshAuth();
+
+                router.replace(next);
             } else {
-                // After register, login
-                const res2 = await apiFetch('/v1/login', { auth: false, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: uname, password }) })
-                const body2 = await res2.json().catch(() => ({} as Record<string, unknown>))
-                if (!res2.ok) throw new Error('Login failed')
-                const { access_token, refresh_token } = body2 as { access_token?: string; refresh_token?: string }
-                if (access_token) setTokens(access_token, refresh_token)
+                const errorData = await response.json().catch(() => ({}));
+                setError(errorData.detail || `Failed to ${mode}`);
             }
-            document.cookie = `auth_hint=1; path=/; max-age=${14 * 24 * 60 * 60}`;
-            router.replace(next);
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            // Normalize common backend errors for nicer UX
-            if (/invalid_username/i.test(msg)) {
-                setError('Invalid username. Use 3–64 chars: a-z, 0-9, _, ., -');
-            } else if (/weak_password|too short/i.test(msg)) {
-                setError('Password is too weak. Use at least 8 characters.');
-            } else if (/username_taken/i.test(msg)) {
-                setError('That username is already taken.');
-            } else if (/invalid credentials/i.test(msg)) {
-                setError('Incorrect username or password.');
-            } else if (/rate_limited/i.test(msg)) {
-                setError('Too many attempts. Please wait and try again.');
-            } else {
-                setError(msg);
-            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : `Failed to ${mode}`);
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <main className="mx-auto max-w-md px-4 py-10">
-            <div className="rounded-2xl border bg-card p-6 shadow-sm">
-                <h1 className="mb-6 text-xl font-semibold">{mode === 'login' ? 'Sign in' : 'Create account'}</h1>
-                <form onSubmit={submit} className="space-y-4">
-                    <div>
-                        <label htmlFor="username" className="mb-1 block text-sm">Username</label>
-                        <input
-                            id="username"
-                            className="w-full rounded-md border px-3 py-2"
-                            value={username}
-                            onChange={e => setUsername(e.target.value)}
-                            required
-                            autoComplete="username"
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="password" className="mb-1 block text-sm">Password</label>
-                        <input
-                            id="password"
-                            type="password"
-                            className="w-full rounded-md border px-3 py-2"
-                            value={password}
-                            onChange={e => setPassword(e.target.value)}
-                            required
-                            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                        />
-                    </div>
-                    {error && <p className="text-sm text-red-600">{error}</p>}
-                    <Button type="submit" disabled={loading} className="w-full">
-                        {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
-                    </Button>
-                </form>
-                <div className="my-4 text-center text-xs text-muted-foreground">or</div>
-                <Button
-                    variant="outline"
-                    className="w-full"
-                    type="button"
-                    onClick={async () => {
-                        try {
-                            const res = await apiFetch(`/v1/google/auth/login_url?next=${encodeURIComponent(next)}`, { auth: false });
-                            if (!res.ok) throw new Error('Failed to start Google login');
-                            const { auth_url } = await res.json();
-                            if (typeof window !== 'undefined' && typeof window.location?.assign === 'function') {
-                                window.location.assign(auth_url);
-                            } else {
-                                (window as any).location.href = auth_url;
-                            }
-                        } catch (err) {
-                            const msg = err instanceof Error ? err.message : String(err);
-                            setError(msg || 'Google sign-in is temporarily unavailable.');
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+            <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+                <div className="text-center">
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+                        {mode === 'login' ? 'Sign In' : 'Create Account'}
+                    </h2>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        {mode === 'login'
+                            ? 'Welcome back to Gesahni'
+                            : 'Join Gesahni to get started'
                         }
-                    }}
-                >
-                    Continue with Google
-                </Button>
-                <div className="mt-4 text-center text-sm">
-                    {mode === 'login' ? (
-                        <button className="underline" onClick={() => setMode('register')}>Need an account? Register</button>
-                    ) : (
-                        <button className="underline" onClick={() => setMode('login')}>Already have an account? Sign in</button>
-                    )}
+                    </p>
                 </div>
+
+                <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+                    <div className="space-y-4">
+                        <div>
+                            <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Username
+                            </label>
+                            <input
+                                id="username"
+                                name="username"
+                                type="text"
+                                required
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+                                placeholder="Enter your username"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Password
+                            </label>
+                            <input
+                                id="password"
+                                name="password"
+                                type="password"
+                                required
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+                                placeholder="Enter your password"
+                            />
+                        </div>
+                    </div>
+
+                    {error && (
+                        <div className="text-red-600 dark:text-red-400 text-sm text-center">
+                            {error}
+                        </div>
+                    )}
+
+                    <div>
+                        <Button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                        >
+                            {loading ? 'Processing...' : (mode === 'login' ? 'Sign In' : 'Create Account')}
+                        </Button>
+                    </div>
+
+                    <div className="text-center">
+                        <button
+                            type="button"
+                            onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+                            className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500"
+                        >
+                            {mode === 'login'
+                                ? "Don't have an account? Sign up"
+                                : "Already have an account? Sign in"
+                            }
+                        </button>
+                    </div>
+                </form>
             </div>
-        </main>
+        </div>
     );
 }
 
 export default function LoginPage() {
     return (
-        <Suspense fallback={<main className="mx-auto max-w-md px-4 py-10"><div className="text-sm text-muted-foreground">Loading…</div></main>}>
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+        }>
             <LoginPageInner />
         </Suspense>
     );

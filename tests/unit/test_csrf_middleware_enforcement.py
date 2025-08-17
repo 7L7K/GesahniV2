@@ -17,6 +17,6 @@ def test_csrf_allows_with_header_and_cookie(monkeypatch):
     # Set csrf cookie and send matching header
     client.cookies.set('csrf_token', 'abc')
     r = client.post('/v1/auth/logout', headers={'X-CSRF-Token': 'abc'})
-    assert r.status_code in (200, 401)
+    assert r.status_code in (200, 204, 401)  # 204 is correct for successful logout
 
 

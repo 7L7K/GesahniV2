@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Union
 from contextvars import ContextVar
 from hashlib import sha256
 
 from pydantic import BaseModel
 
 
-def hash_user_id(user_id: str) -> str:
+def hash_user_id(user_id: Optional[Union[str, bytes]]) -> str:
     """Return a stable hash for a user identifier."""
-    return sha256(user_id.encode("utf-8")).hexdigest()[:32]
+    if user_id is None:
+        return "anon"
+    if isinstance(user_id, bytes):
+        data = user_id
+    else:
+        data = str(user_id).encode("utf-8")
+    return sha256(data).hexdigest()[:32]
 
 
 def utc_now() -> datetime:
@@ -72,8 +78,16 @@ class LogRecord(BaseModel):
     retrieved_tokens: Optional[int] = None
     self_check_score: Optional[float] = None
     escalated: Optional[bool] = None
-    prompt_hash: Optional[str] = None
-    cache_similarity: Optional[float] = None
+
+    # authentication events
+    auth_event_type: Optional[str] = None  # "finish.start", "finish.end", "whoami.start", "whoami.end", "lock.on", "lock.off", "authed.change"
+    auth_user_id: Optional[str] = None
+    auth_source: Optional[str] = None  # "cookie", "header", "clerk"
+    auth_jwt_status: Optional[str] = None  # "ok", "invalid", "missing"
+    auth_session_ready: Optional[bool] = None
+    auth_is_authenticated: Optional[bool] = None
+    auth_lock_reason: Optional[str] = None  # For lock events
+    auth_boot_phase: Optional[bool] = None  # True if during boot phase
 
     # profile facts / KV observability
     profile_facts_keys: Optional[List[str]] = None

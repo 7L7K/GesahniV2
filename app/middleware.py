@@ -70,6 +70,12 @@ from .security import get_rate_limit_snapshot
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # Let CORS handle preflight; do NOTHING here for OPTIONS
+        if request.method == "OPTIONS":
+            # Important: do not create your own response; just pass through
+            # CORS middleware will handle the preflight response
+            return await call_next(request)
+            
         # Prefer client-provided ID to enable end-to-end correlation
         req_id = request.headers.get("X-Request-ID") or req_id_var.get()
         if not req_id or req_id == "-":
@@ -118,6 +124,12 @@ class DedupMiddleware(BaseHTTPMiddleware):
         self._lock = asyncio.Lock()
 
     async def dispatch(self, request: Request, call_next):
+        # Let CORS handle preflight; do NOTHING here for OPTIONS
+        if request.method == "OPTIONS":
+            # Important: do not create your own response; just pass through
+            # CORS middleware will handle the preflight response
+            return await call_next(request)
+            
         now = time.monotonic()
         req_id = request.headers.get("X-Request-ID")
         if req_id:
@@ -560,7 +572,7 @@ async def silent_refresh_middleware(request: Request, call_next):
             try:
                 import random as _rand
                 import asyncio as _asyncio
-                await _asyncio.sleep(_rand.uniform(0.05, 0.25))
+                await _asyncio.sleep(_rand.uniform(0.01, 0.05))
             except Exception:
                 pass
             # Rotate token, preserving custom claims
@@ -572,29 +584,23 @@ async def silent_refresh_middleware(request: Request, call_next):
             base_claims["user_id"] = user_id
             new_payload = {**base_claims, "iat": now, "exp": now + lifetime}
             new_token = jwt.encode(new_payload, secret, algorithm="HS256")
-            # Canonicalize SameSite and decide Secure based on scheme
-            raw_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes"}
-            raw_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-            samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
-            cookie_samesite = samesite_map.get(raw_samesite, "Lax")
-            cookie_secure = True if cookie_samesite == "None" else raw_secure
-            # In dev over http, prefer not Secure unless SameSite=None is explicitly requested
-            try:
-                if getattr(request.url, "scheme", "http") != "https" and cookie_samesite != "None":
-                    cookie_secure = False
-            except Exception:
-                pass
+            # Use centralized cookie configuration
+            from .cookie_config import get_cookie_config, get_token_ttls
+            
+            cookie_config = get_cookie_config(request)
+            access_ttl, _ = get_token_ttls()
+            
             try:
                 from .api.auth import _append_cookie_with_priority as _append
-                _append(response, key="access_token", value=new_token, max_age=lifetime, secure=cookie_secure, samesite=cookie_samesite)
+                _append(response, key="access_token", value=new_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
             except Exception:
                 response.set_cookie(
                     key="access_token",
                     value=new_token,
                     httponly=True,
-                    secure=cookie_secure,
-                    samesite=cookie_samesite,
-                    max_age=lifetime,
+                    secure=cookie_config["secure"],
+                    samesite=cookie_config["samesite"],
+                    max_age=access_ttl,
                     path="/",
                 )
             # Optionally extend refresh cookie if present (best-effort) with jitter to avoid herd
@@ -609,19 +615,19 @@ async def silent_refresh_middleware(request: Request, call_next):
                     if r_life > 0:
                         # Jitter write ordering
                         try:
-                            await asyncio.sleep(_rand.uniform(0.05, 0.25))  # type: ignore[name-defined]
+                            await asyncio.sleep(_rand.uniform(0.01, 0.05))  # type: ignore[name-defined]
                         except Exception:
                             pass
                         try:
                             from .api.auth import _append_cookie_with_priority as _append
-                            _append(response, key="refresh_token", value=rtok, max_age=r_life, secure=cookie_secure, samesite=cookie_samesite)
+                            _append(response, key="refresh_token", value=rtok, max_age=r_life, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
                         except Exception:
                             response.set_cookie(
                                 key="refresh_token",
                                 value=rtok,
                                 httponly=True,
-                                secure=cookie_secure,
-                                samesite=cookie_samesite,
+                                secure=cookie_config["secure"],
+                                samesite=cookie_config["samesite"],
                                 max_age=r_life,
                                 path="/",
                             )

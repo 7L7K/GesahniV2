@@ -161,11 +161,18 @@ export async function getSessionState(): Promise<SessionState> {
   try {
     if (typeof document !== 'undefined') cookiePresent = /access_token=/.test(document.cookie);
   } catch { cookiePresent = false; }
+
+  // Use centralized auth state instead of making direct whoami calls
+  // This function should be deprecated in favor of useAuthState hook
   let whoamiOk = false;
   try {
-    const res = await apiFetch('/v1/whoami', { method: 'GET', auth: false });
-    whoamiOk = res.ok;
+    // Check if auth orchestrator is available and use its state
+    if (typeof window !== 'undefined' && (window as any).__authOrchestrator) {
+      const authState = (window as any).__authOrchestrator.getState();
+      whoamiOk = authState.whoamiOk;
+    }
   } catch { whoamiOk = false; }
+
   const sessionReady = Boolean((signedIn || cookiePresent) && whoamiOk);
   return { signedIn, cookiePresent, whoamiOk, sessionReady };
 }
@@ -228,13 +235,23 @@ async function tryRefresh(): Promise<Response | null> {
 // Centralized fetch that targets the backend API base and handles 401→refresh
 export async function apiFetch(
   path: string,
-  init: (RequestInit & { auth?: boolean; dedupe?: boolean; shortCacheMs?: number; contextKey?: string | string[] }) = {}
+  init: (RequestInit & { auth?: boolean; dedupe?: boolean; shortCacheMs?: number; contextKey?: string | string[]; credentials?: RequestCredentials }) = {}
 ): Promise<Response> {
-  const { auth = true, headers, dedupe = true, shortCacheMs, contextKey, ...rest } = init as any;
+  const { auth = true, headers, dedupe = true, shortCacheMs, contextKey, credentials = 'include', ...rest } = init as any;
   const isAbsolute = /^(?:https?:)?\/\//i.test(path);
   const isBrowser = typeof window !== "undefined";
   const base = API_URL || (isBrowser ? "" : "http://localhost:8000");
   const url = isAbsolute ? path : `${base}${path}`;
+
+  // Debug logging for health check requests
+  if (path === '/healthz/ready') {
+    console.log('[apiFetch] Health check request:', { path, base, url, isAbsolute });
+    console.log('[apiFetch] Environment check:', {
+      NEXT_PUBLIC_API_ORIGIN: process.env.NEXT_PUBLIC_API_ORIGIN,
+      API_URL,
+      isBrowser: typeof window !== "undefined"
+    });
+  }
 
   const mergedHeaders: HeadersInit = { ...(headers || {}) };
   const isFormData = rest.body instanceof FormData;
@@ -272,7 +289,7 @@ export async function apiFetch(
       try { return r.clone(); } catch { return r; }
     }
     const p = (async () => {
-      const r = await fetch(url, { ...rest, method, headers: mergedHeaders, credentials: 'include' });
+      const r = await fetch(url, { ...rest, method, headers: mergedHeaders, credentials });
       // Only cache successful/non-error responses for a very short horizon
       try { if (r.ok && r.status < 400) SHORT_CACHE.set(key, { ts: Date.now(), res: r.clone() }); } catch { /* ignore */ }
       return r;
@@ -281,8 +298,8 @@ export async function apiFetch(
     p.finally(() => { try { setTimeout(() => INFLIGHT_REQUESTS.delete(key), DEFAULT_DEDUPE_MS); } catch { /* noop */ } }).catch(() => { });
     res = await p;
   } else {
-    // Always include cookies
-    res = await fetch(url, { ...rest, headers: mergedHeaders, credentials: 'include' });
+    // Use specified credentials (default to include for cookies)
+    res = await fetch(url, { ...rest, headers: mergedHeaders, credentials });
   }
   // Surface rate limit UX with countdown via custom event for the app
   if (res.status === 429) {
@@ -308,7 +325,7 @@ export async function apiFetch(
       if (retryHasBody && !isFormData && !("Content-Type" in (retryHeaders as Record<string, string>))) {
         (retryHeaders as Record<string, string>)["Content-Type"] = "application/json";
       }
-      res = await fetch(url, { ...rest, headers: retryHeaders, credentials: 'include' });
+      res = await fetch(url, { ...rest, headers: retryHeaders, credentials });
       // In test environments, some mocks always return 401; surface the refresh result as success
       if (res.status === 401) return refreshRes;
     } else {

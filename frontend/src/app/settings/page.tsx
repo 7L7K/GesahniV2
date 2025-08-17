@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { updateProfile, UserProfile, useProfile, listSessions, revokeSession, listPATs, createPAT } from '@/lib/api';
 import { getBudget } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { useAuthState } from '@/hooks/useAuth';
 
 function SettingsPageInner() {
     const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -13,6 +14,7 @@ function SettingsPageInner() {
     const [saveError, setSaveError] = useState<string | null>(null);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const router = useRouter();
+    const authState = useAuthState();
 
     useEffect(() => {
         if (error) {
@@ -29,8 +31,11 @@ function SettingsPageInner() {
     const [budget, setBudget] = useState<{ tts?: { spent_usd: number; cap_usd: number; ratio: number } } | null>(null);
 
     useEffect(() => {
+        // Only fetch budget if authenticated
+        if (!authState.isAuthenticated) return;
+
         getBudget().then((b) => setBudget(b as any)).catch(() => setBudget(null));
-    }, []);
+    }, [authState.isAuthenticated]);
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -56,6 +61,24 @@ function SettingsPageInner() {
             setProfile(prev => prev ? { ...prev, [field]: value } : null);
         }
     };
+
+    // Show loading while checking auth
+    if (authState.isLoading) {
+        return (
+            <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Checking authentication...</p>
+                </div>
+            </main>
+        );
+    }
+
+    // Redirect if not authenticated
+    if (!authState.isAuthenticated) {
+        router.replace('/login?next=%2Fsettings');
+        return null;
+    }
 
     if (isLoading) {
         return (

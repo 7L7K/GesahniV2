@@ -9,6 +9,7 @@ type DepsStatus = { status: 'ok' | 'degraded'; checks: Record<string, 'ok' | 'er
 export function useBackendStatus() {
     const [ready, setReady] = useState<ReadyStatus>('offline');
     const [deps, setDeps] = useState<DepsStatus>(null);
+    const [hasChecked, setHasChecked] = useState(false);
     const readyTimer = useRef<number | null>(null);
     const depsTimer = useRef<number | null>(null);
 
@@ -16,25 +17,41 @@ export function useBackendStatus() {
         let mounted = true;
         const pollReady = async () => {
             try {
-                const ctrl = AbortSignal.timeout(2000);
+                console.log('[BackendStatus] Polling /healthz/ready...');
+                // Use AbortController instead of AbortSignal.timeout() for better browser compatibility
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+
                 const res = await apiFetch('/healthz/ready', {
                     auth: false,
-                    signal: ctrl,
-                    cache: 'no-store'
+                    signal: controller.signal,
+                    cache: 'no-store',
+                    credentials: 'omit'
                 });
+
+                clearTimeout(timeoutId);
+
+                console.log('[BackendStatus] Response:', res.status, res.ok);
+
                 if (!mounted) return;
+                setHasChecked(true);
                 if (res.ok) {
                     const body = await res.json().catch(() => ({} as Record<string, unknown>));
+                    console.log('[BackendStatus] Body:', body);
                     setReady(body?.status === 'ok' ? 'online' : 'offline');
                 } else {
+                    console.log('[BackendStatus] Response not ok, setting offline');
                     setReady('offline');
                 }
-            } catch {
+            } catch (error) {
+                console.log('[BackendStatus] Error:', error);
                 if (!mounted) return;
+                setHasChecked(true);
                 setReady('offline');
             } finally {
                 if (!mounted) return;
-                readyTimer.current = window.setTimeout(pollReady, 3000);
+                // DISABLED: Health polling should be controlled by orchestrator
+                // readyTimer.current = window.setTimeout(pollReady, 3000);
             }
         };
         pollReady();
@@ -48,12 +65,19 @@ export function useBackendStatus() {
         let mounted = true;
         const pollDeps = async () => {
             try {
-                const ctrl = AbortSignal.timeout(2000);
+                // Use AbortController instead of AbortSignal.timeout() for better browser compatibility
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+
                 const res = await apiFetch('/healthz/deps', {
                     auth: false,
-                    signal: ctrl,
-                    cache: 'no-store'
+                    signal: controller.signal,
+                    cache: 'no-store',
+                    credentials: 'omit'
                 });
+
+                clearTimeout(timeoutId);
+
                 if (!mounted) return;
                 if (res.ok) {
                     const body = await res.json().catch(() => null);
@@ -64,7 +88,8 @@ export function useBackendStatus() {
                 // keep last snapshot
             } finally {
                 if (!mounted) return;
-                depsTimer.current = window.setTimeout(pollDeps, 10000);
+                // DISABLED: Health polling should be controlled by orchestrator
+                // depsTimer.current = window.setTimeout(pollDeps, 10000);
             }
         };
         pollDeps();
@@ -74,7 +99,7 @@ export function useBackendStatus() {
         };
     }, []);
 
-    return { ready, deps };
+    return { ready, deps, hasChecked };
 }
 
 export type { ReadyStatus, DepsStatus };

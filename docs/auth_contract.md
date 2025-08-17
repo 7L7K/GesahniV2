@@ -2,10 +2,13 @@
 
 ## Endpoints (canonical)
 - GET /v1/whoami → 200 JSON { is_authenticated:boolean, session_ready:boolean, user:{ id, email }|null, source:"cookie|header|missing", version:1 }
+  - **LOCKED CONTRACT**: Always returns 200, never 401, never redirects, no caching
 - GET /v1/sessions → 200 JSON [Session]
 - GET /v1/sessions/paginated → 200 JSON { items:[Session], next_cursor?:string }
 - POST /v1/auth/refresh → 200 JSON { access_token? } | 204 No Content
 - POST /v1/auth/logout → 200 JSON { status:"ok" }
+- POST /v1/auth/finish → 204 No Content
+  - **LOCKED CONTRACT**: Always returns 204, idempotent (safe to call twice)
 
 ### Deprecated delegates (logged once)
 - POST /v1/refresh → delegates to /v1/auth/refresh on 404/501 only
@@ -30,7 +33,8 @@
 - Local fallback for counters operates when Redis absent.
 
 ## Status Codes (normative)
-- whoami: 200 | 401 (no/invalid token)
+- whoami: 200 (never 401, never redirect, no caching)
+- auth/finish: 204 (always, idempotent)
 - refresh: 200/204 | 401 (missing/expired/replay) | 429 (rate limit)
 - logout: 200 | 401
 

@@ -135,20 +135,19 @@ async def google_callback(request: Request, response: Response) -> Response:
     access = jwt.encode(access_payload, SECRET_KEY, algorithm=ALGORITHM)
     refresh = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
 
-    cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
-    try:
-        if getattr(request.url, "scheme", "http") != "https":
-            cookie_secure = False
-    except Exception:
-        pass
-    cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+    # Use centralized cookie configuration for sharp and consistent cookies
+    from ..cookie_config import get_cookie_config, get_token_ttls
+    
+    cookie_config = get_cookie_config(request)
+    access_ttl, refresh_ttl = get_token_ttls()
+    
     try:
         from .auth import _append_cookie_with_priority as _append
-        _append(response, key="access_token", value=access, max_age=EXPIRE_MINUTES * 60, secure=cookie_secure, samesite=cookie_samesite)
-        _append(response, key="refresh_token", value=refresh, max_age=REFRESH_EXPIRE_MINUTES * 60, secure=cookie_secure, samesite=cookie_samesite)
+        _append(response, key="access_token", value=access, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+        _append(response, key="refresh_token", value=refresh, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
     except Exception:
-        response.set_cookie("access_token", access, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=EXPIRE_MINUTES * 60, path="/")
-        response.set_cookie("refresh_token", refresh, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=REFRESH_EXPIRE_MINUTES * 60, path="/")
+        response.set_cookie("access_token", access, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+        response.set_cookie("refresh_token", refresh, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
 
     # Audit
     try:

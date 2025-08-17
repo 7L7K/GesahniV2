@@ -52,40 +52,34 @@ def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "
     }
     refresh_token = jose_jwt.encode(refresh_payload, APP_JWT_SECRET, algorithm=APP_JWT_ALG)
 
-    # Cookie flags
-    cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
-    raw_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-    samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
-    cookie_samesite = samesite_map.get(raw_samesite, "Lax")
-    try:
-        if getattr(request.url, "scheme", "http") != "https" and raw_samesite != "none":
-            cookie_secure = False
-    except Exception:
-        pass
-    access_max_age = int(APP_JWT_EXPIRE_MINUTES) * 60
-    refresh_max_age = int(APP_REFRESH_EXPIRE_MINUTES) * 60
+    # Use centralized cookie configuration
+    from app.cookie_config import get_cookie_config, get_token_ttls
+    
+    cookie_config = get_cookie_config(request)
+    access_ttl, refresh_ttl = get_token_ttls()
+    
     resp = RedirectResponse(url=target_url, status_code=302)
     try:
         from app.api.auth import _append_cookie_with_priority as _append
-        _append(resp, key="access_token", value=access_token, max_age=access_max_age, secure=cookie_secure, samesite=cookie_samesite)
-        _append(resp, key="refresh_token", value=refresh_token, max_age=refresh_max_age, secure=cookie_secure, samesite=cookie_samesite)
+        _append(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+        _append(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
     except Exception:
         resp.set_cookie(
             key="access_token",
             value=access_token,
             httponly=True,
-            secure=cookie_secure,
-            samesite=cookie_samesite,
-            max_age=access_max_age,
+            secure=cookie_config["secure"],
+            samesite=cookie_config["samesite"],
+            max_age=access_ttl,
             path="/",
         )
         resp.set_cookie(
             key="refresh_token",
             value=refresh_token,
             httponly=True,
-            secure=cookie_secure,
-            samesite=cookie_samesite,
-            max_age=refresh_max_age,
+            secure=cookie_config["secure"],
+            samesite=cookie_config["samesite"],
+            max_age=refresh_ttl,
             path="/",
         )
     return resp

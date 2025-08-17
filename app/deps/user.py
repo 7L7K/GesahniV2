@@ -18,7 +18,8 @@ def get_current_user_id(
     Preference order:
     1. Existing log record set by middleware.
     2. JWT "user_id" claim when API token/secret is configured.
-    3. Fallback to anonymous.
+    3. Clerk JWT token when Clerk is configured.
+    4. Fallback to anonymous.
     The resolved ID is attached to request/websocket state when authenticated.
     """
     if request and request.method == "OPTIONS":
@@ -63,6 +64,18 @@ def get_current_user_id(
         except Exception:
             token = None
 
+    # 3) Try Clerk authentication if traditional JWT failed
+    clerk_token = None
+    if not token and request is not None:
+        # Check for Clerk session cookies
+        clerk_token = request.cookies.get("__session") or request.cookies.get("session")
+    if not clerk_token and auth_header and auth_header.startswith("Bearer "):
+        # Check if the Authorization header contains a Clerk token
+        potential_clerk_token = auth_header.split(" ", 1)[1]
+        # Basic check if it looks like a Clerk JWT (has 3 parts separated by dots)
+        if potential_clerk_token.count(".") == 2:
+            clerk_token = potential_clerk_token
+
     secret = JWT_SECRET or os.getenv("JWT_SECRET")
     # Default to not requiring JWT in dev unless explicitly enabled
     require_jwt = os.getenv("REQUIRE_JWT", "0").strip().lower() in {"1", "true", "yes", "on"}
@@ -81,6 +94,8 @@ def get_current_user_id(
     if not secret and is_test_mode:
         secret = None
         require_jwt = False
+    
+    # Try traditional JWT first
     if token and secret:
         try:
             payload = jwt.decode(token, secret, algorithms=["HS256"])
@@ -93,6 +108,17 @@ def get_current_user_id(
     elif token and not secret and require_jwt:
         # Token provided but no secret configured while required → fail-closed
         raise HTTPException(status_code=500, detail="missing_jwt_secret")
+    
+    # Try Clerk authentication if traditional JWT failed
+    if not user_id and clerk_token:
+        try:
+            from ..deps.clerk_auth import verify_clerk_token
+            claims = verify_clerk_token(clerk_token)
+            user_id = str(claims.get("sub") or claims.get("user_id") or "")
+        except Exception:
+            # For WebSocket handshakes, proceed as anonymous on invalid token
+            if websocket is None:
+                raise HTTPException(status_code=401, detail="Invalid Clerk authentication token")
 
     if not user_id:
         user_id = "anon"

@@ -33,22 +33,16 @@ module.exports = {
   // All API calls now go directly to http://127.0.0.1:8000 via NEXT_PUBLIC_API_ORIGIN
   async headers() {
     return [
-      // Global CSP header for all pages
-      {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: "default-src 'self'; connect-src 'self' http://127.0.0.1:8000 ws://127.0.0.1:8000 http://localhost:8000 ws://localhost:8000; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
-          },
-        ],
-      },
       // Flag Next static assets for quick visibility in devtools
       {
         source: '/_next/static/:path*',
         headers: [
           { key: 'x-debug-static', value: 'true' },
           { key: 'cache-control', value: 'public, max-age=0, must-revalidate' },
+          // Add CORS headers for static assets to fix font loading issues
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type' },
         ],
       },
       // Public assets

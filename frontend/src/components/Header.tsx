@@ -4,130 +4,171 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs';
+import { SignedIn, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs';
 import { getToken, clearTokens, getBudget, bumpAuthEpoch, apiFetch } from '@/lib/api';
 import { usePathname, useRouter } from 'next/navigation';
+import { useAuthState } from '@/hooks/useAuth';
 
 export default function Header() {
-    const [authed, setAuthed] = useState(false);
+    const authState = useAuthState();
     const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
     const router = useRouter();
     const pathname = usePathname();
     // Note: useAuth() must only be used within ClerkProvider.
     // We render a small child component inside <SignedIn> to bump auth epoch on user changes.
+    const { isSignedIn, isLoaded } = useAuth();
 
-    useEffect(() => {
-        let cancelled = false;
-        const update = async () => {
-            // Prefer header mode token when present
-            const hasHeaderToken = Boolean(getToken());
-            if (hasHeaderToken) {
-                if (!cancelled) setAuthed(true);
-                return;
-            }
-            // Cookie mode: ask backend whoami to detect auth
-            try {
-                const res = await apiFetch('/v1/whoami', { auth: true });
-                if (!cancelled) setAuthed(res.ok && (await res.json()).is_authenticated !== false);
-            } catch {
-                if (!cancelled) setAuthed(false);
-            }
-        };
-        update();
-        return () => { cancelled = true };
-    }, [pathname])
+    // Use centralized auth state instead of making direct whoami calls
+    const authed = authState.isAuthenticated;
+
+    // For Clerk mode, we need to check both Clerk's state and backend state
+    // Only show auth buttons if Clerk is loaded and user is not signed in
+    const shouldShowAuthButtons = clerkEnabled ? (isLoaded && !isSignedIn) : !authed;
 
     const doLogout = async () => {
-        try { clearTokens() } finally {
-            setAuthed(false)
-            document.cookie = 'auth_hint=0; path=/; max-age=300'
-            router.push('/')
+        // Clear tokens and state immediately for better UX
+        try { clearTokens() } catch { /* ignore */ }
+        try { document.cookie = 'auth_hint=0; path=/; max-age=300' } catch { /* ignore */ }
+
+        // Navigate immediately
+        router.push('/')
+
+        // Fire-and-forget backend logout
+        try {
+            await apiFetch('/v1/auth/logout', { method: 'POST' })
+        } catch {
+            /* ignore - user already navigated away */
         }
     }
 
     const [localMode, setLocalMode] = useState(false);
     const [nearCap, setNearCap] = useState(false);
+
+    // Budget check (only when authenticated)
     useEffect(() => {
-        // Heuristic: server can set a cookie X-Local-Mode=1 via a middleware in offline mode.
-        if (typeof document !== 'undefined') {
-            setLocalMode(/X-Local-Mode=1/.test(document.cookie));
-        }
-        // Fetch budget hint for banner
-        getBudget().then(b => setNearCap(Boolean(b.near_cap))).catch(() => setNearCap(false));
-    }, [pathname]);
+        if (!authed) return;
+        let cancelled = false;
+        const checkBudget = async () => {
+            try {
+                const budget = await getBudget();
+                if (!cancelled) {
+                    setNearCap(budget.near_cap || false);
+                }
+            } catch {
+                if (!cancelled) setNearCap(false);
+            }
+        };
+        checkBudget();
+        return () => { cancelled = true };
+    }, [authed]);
+
+    // Local mode detection
+    useEffect(() => {
+        const checkLocalMode = () => {
+            try {
+                const isLocal = window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1' ||
+                    window.location.hostname.includes('.local');
+                setLocalMode(isLocal);
+            } catch {
+                setLocalMode(false);
+            }
+        };
+        checkLocalMode();
+    }, []);
 
     return (
-        <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded bg-primary" />
-                    <Link href="/" className="font-semibold tracking-tight">Gesahni</Link>
-                    {localMode && (
-                        <span className="ml-2 text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 bg-yellow-500/20 text-yellow-900 dark:text-yellow-200">
-                            Local mode
+        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="container flex h-14 items-center">
+                <div className="mr-4 hidden md:flex">
+                    <Link href="/" className="mr-6 flex items-center space-x-2">
+                        <span className="hidden font-bold sm:inline-block">
+                            Gesahni
                         </span>
-                    )}
+                    </Link>
+                    <nav className="flex items-center space-x-6 text-sm font-medium">
+                        <Link
+                            href="/"
+                            className={`transition-colors hover:text-foreground/80 ${pathname === "/" ? "text-foreground" : "text-foreground/60"
+                                }`}
+                        >
+                            Chat
+                        </Link>
+                        <Link
+                            href="/capture"
+                            className={`transition-colors hover:text-foreground/80 ${pathname === "/capture" ? "text-foreground" : "text-foreground/60"
+                                }`}
+                        >
+                            Capture
+                        </Link>
+                        <Link
+                            href="/tv"
+                            className={`transition-colors hover:text-foreground/80 ${pathname === "/tv" ? "text-foreground" : "text-foreground/60"
+                                }`}
+                        >
+                            TV
+                        </Link>
+                    </nav>
                 </div>
-                <nav className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <Link href="/tv" className="hover:text-foreground">TV</Link>
-                    <Link href="/docs" className="hover:text-foreground">Docs</Link>
-                    {clerkEnabled ? (
-                        <>
-                            <SignedIn>
-                                <ClerkEpochBump />
-                                <Link href="/capture" className="hover:text-foreground">Capture</Link>
-                                <Link href="/settings" className="hover:text-foreground">Settings</Link>
-                                <Link href="/admin" className="hover:text-foreground">Admin</Link>
-                            </SignedIn>
-                            <SignedOut>
-                                <SignInButton mode="modal">
-                                    <Button size="sm" variant="ghost">Sign in</Button>
-                                </SignInButton>
-                                <SignUpButton mode="modal">
-                                    <Button size="sm">Sign up</Button>
-                                </SignUpButton>
-                            </SignedOut>
-                            <SignedIn>
-                                <div className="flex items-center gap-2">
-                                    <Link href="/logout" className="hover:text-foreground">Logout</Link>
-                                    <UserButton appearance={{ elements: { userButtonAvatarBox: 'h-6 w-6' } }} afterSignOutUrl="/" />
-                                </div>
-                            </SignedIn>
-                        </>
-                    ) : (
-                        <>
-                            {authed && (
-                                <>
-                                    <Link href="/capture" className="hover:text-foreground">Capture</Link>
-                                    <Link href="/settings" className="hover:text-foreground">Settings</Link>
-                                    <Link href="/admin" className="hover:text-foreground">Admin</Link>
-                                </>
-                            )}
-                            {!authed ? (
-                                <Link href={`/login?next=${encodeURIComponent(pathname || '/')}`} className="hover:text-foreground">Login</Link>
-                            ) : (
-                                <Button size="sm" variant="ghost" onClick={doLogout}>Logout</Button>
-                            )}
-                        </>
-                    )}
-                    <ThemeToggle />
-                </nav>
+                <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
+                    <div className="w-full flex-1 md:w-auto md:flex-none">
+                    </div>
+                    <nav className="flex items-center space-x-2">
+                        {clerkEnabled ? (
+                            <>
+                                {!isLoaded ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                                ) : shouldShowAuthButtons ? (
+                                    <>
+                                        <SignInButton mode="modal">
+                                            <Button variant="ghost" size="sm">
+                                                Sign In
+                                            </Button>
+                                        </SignInButton>
+                                        <SignUpButton mode="modal">
+                                            <Button size="sm">
+                                                Sign Up
+                                            </Button>
+                                        </SignUpButton>
+                                    </>
+                                ) : (
+                                    <SignedIn>
+                                        <UserButton afterSignOutUrl="/" />
+                                    </SignedIn>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                {authed ? (
+                                    <Button variant="ghost" size="sm" onClick={doLogout}>
+                                        Logout
+                                    </Button>
+                                ) : (
+                                    <Link href="/login">
+                                        <Button variant="ghost" size="sm">
+                                            Login
+                                        </Button>
+                                    </Link>
+                                )}
+                            </>
+                        )}
+                        <ThemeToggle />
+                        {localMode && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                Local
+                            </div>
+                        )}
+                        {nearCap && (
+                            <div className="flex items-center gap-1 text-xs text-orange-600">
+                                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                                Near Cap
+                            </div>
+                        )}
+                    </nav>
+                </div>
             </div>
-            {nearCap && (
-                <div className="mx-auto max-w-3xl px-4 py-1 text-[12px] bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100">
-                    You’re nearing your daily budget. Responses may be shorter or use LLaMA.
-                </div>
-            )}
         </header>
     );
-}
-
-
-function ClerkEpochBump() {
-    const { userId } = useAuth();
-    useEffect(() => {
-        try { bumpAuthEpoch(); } catch { /* noop */ }
-    }, [userId]);
-    return null;
 }
 

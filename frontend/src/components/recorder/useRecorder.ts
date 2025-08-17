@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, wsUrl } from "@/lib/api";
+import { getAuthOrchestrator } from '@/services/authOrchestrator';
 
 export type RecorderState =
     | { status: "idle"; error?: string }
@@ -147,6 +148,15 @@ export function useRecorder(): RecorderExports {
             setState({ status: "error", message: "Failed to start recording." });
             return;
         }
+        // Check authentication before creating WebSocket
+        const authOrchestrator = getAuthOrchestrator();
+        const authState = authOrchestrator.getState();
+
+        if (!authState.isAuthenticated) {
+            setState({ status: "error", message: "Not authenticated. Please sign in to use recording features." });
+            return;
+        }
+
         const ws = new WebSocket(wsUrl("/v1/transcribe"));
         setWsOpen(false);
         ws.onopen = () => {
@@ -175,6 +185,17 @@ export function useRecorder(): RecorderExports {
         ws.onclose = () => {
             setWsOpen(false);
             if (connectTimerRef.current) { clearTimeout(connectTimerRef.current); connectTimerRef.current = null; }
+            // DO NOT call whoami on close - use global auth store instead
+            // Surface connection failure for UI hint
+            try {
+                window.dispatchEvent(new CustomEvent("ws:connection_failed", {
+                    detail: { name: "transcribe", reason: "Transcription connection lost", timestamp: Date.now() }
+                }));
+            } catch { /* noop */ }
+        };
+        ws.onerror = () => {
+            // DO NOT call whoami on error - let onclose handle the logic
+            try { ws.close(); } catch { /* noop */ }
         };
         wsRef.current = ws;
 

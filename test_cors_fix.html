@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .success {
+            color: green;
+        }
+
+        .error {
+            color: red;
+        }
+
+        .loading {
+            color: orange;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>CORS Test Results</h1>
+
+    <div class="test-section">
+        <h2>Backend Health Check</h2>
+        <div id="health-result" class="loading">Testing...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Font Loading Test</h2>
+        <div id="font-result" class="loading">Testing...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>API State Endpoint (Unauthorized Expected)</h2>
+        <div id="state-result" class="loading">Testing...</div>
+    </div>
+
+    <script>
+        async function testHealth() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/healthz/ready', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('health-result').innerHTML =
+                        `<span class="success">✓ Success: ${JSON.stringify(data)}</span>`;
+                } else {
+                    document.getElementById('health-result').innerHTML =
+                        `<span class="error">✗ Error: ${response.status} ${response.statusText}</span>`;
+                }
+            } catch (error) {
+                document.getElementById('health-result').innerHTML =
+                    `<span class="error">✗ CORS Error: ${error.message}</span>`;
+            }
+        }
+
+        async function testFont() {
+            try {
+                const response = await fetch('http://127.0.0.1:3000/_next/static/media/569ce4b8f30dc480-s.p.woff2', {
+                    method: 'GET'
+                });
+
+                if (response.ok) {
+                    document.getElementById('font-result').innerHTML =
+                        `<span class="success">✓ Font loaded successfully (${response.headers.get('content-length')} bytes)</span>`;
+                } else {
+                    document.getElementById('font-result').innerHTML =
+                        `<span class="error">✗ Font Error: ${response.status} ${response.statusText}</span>`;
+                }
+            } catch (error) {
+                document.getElementById('font-result').innerHTML =
+                    `<span class="error">✗ Font CORS Error: ${error.message}</span>`;
+            }
+        }
+
+        async function testState() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/v1/state', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (response.status === 401) {
+                    document.getElementById('state-result').innerHTML =
+                        `<span class="success">✓ Expected 401 Unauthorized (authentication required)</span>`;
+                } else {
+                    document.getElementById('state-result').innerHTML =
+                        `<span class="error">✗ Unexpected: ${response.status} ${response.statusText}</span>`;
+                }
+            } catch (error) {
+                document.getElementById('state-result').innerHTML =
+                    `<span class="error">✗ CORS Error: ${error.message}</span>`;
+            }
+        }
+
+        // Run tests
+        testHealth();
+        testFont();
+        testState();
+    </script>
+</body>
+
+</html>

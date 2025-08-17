@@ -149,18 +149,18 @@ def test_middleware_order_is_correct():
 
 
 def test_x_request_id_header_is_present():
-    """Test that X-Request-ID header is present for both OPTIONS and non-OPTIONS requests."""
+    """Test that X-Request-ID header is present for non-OPTIONS requests, but not for OPTIONS requests."""
     client = TestClient(app)
     
-    # Test OPTIONS request - should have X-Request-ID (middleware runs after CORS)
+    # Test OPTIONS request - should NOT have X-Request-ID (CORS short-circuits before middleware)
     response = client.options('/v1/auth/logout', headers={
         'Origin': 'http://localhost:3000',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'content-type'
     })
     
-    # OPTIONS requests should have X-Request-ID (middleware runs after CORS processes)
-    assert 'x-request-id' in response.headers
+    # OPTIONS requests should NOT have X-Request-ID (CORS handles them before middleware)
+    assert 'x-request-id' not in response.headers
     
     # Test POST request - should have X-Request-ID
     response = client.post('/v1/auth/logout')

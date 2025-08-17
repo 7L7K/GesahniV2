@@ -7,7 +7,7 @@ device sessions without interactive login on the TV.
 import os
 import time
 import jwt
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Response, Request
 
 router = APIRouter(prefix="/device", tags=["Auth"])
 
@@ -19,30 +19,35 @@ async def get_device_session() -> dict:
 
 
 @router.post("/trust")
-async def trust_device(response: Response) -> dict:
+async def trust_device(request: Request, response: Response) -> dict:
     """Issue a device-trusted session.
 
     If JWT_SECRET is configured, set an access_token cookie with a long TTL.
     Otherwise, set a lightweight marker cookie so the UI can behave consistently
     in test/dev environments. The silent refresh middleware rotates as needed.
     """
+    from ..cookie_config import get_cookie_config, get_token_ttls
+    
     now = int(time.time())
-    lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))  # default 14d
-    cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes"}
-    cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
+    access_ttl, _ = get_token_ttls()
+    cookie_config = get_cookie_config(request)
     secret = os.getenv("JWT_SECRET")
     if secret:
-        payload = {"user_id": "device", "iat": now, "exp": now + lifetime}
+        payload = {"user_id": "device", "iat": now, "exp": now + access_ttl}
         token = jwt.encode(payload, secret, algorithm="HS256")
-        response.set_cookie(
-            key="access_token",
-            value=token,
-            httponly=True,
-            secure=cookie_secure,
-            samesite=cookie_samesite,
-            max_age=lifetime,
-            path="/",
-        )
+        try:
+            from ..api.auth import _append_cookie_with_priority as _append
+            _append(response, key="access_token", value=token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+        except Exception:
+            response.set_cookie(
+                key="access_token",
+                value=token,
+                httponly=True,
+                secure=cookie_config["secure"],
+                samesite=cookie_config["samesite"],
+                max_age=access_ttl,
+                path="/",
+            )
         return {"status": "ok", "trusted": True, "cookie": "access_token"}
     # Fallback marker cookie for environments without JWT configured
     # Harden: in production, refuse to set non-HttpOnly/non-Secure device_trust
@@ -59,7 +64,7 @@ async def trust_device(response: Response) -> dict:
         httponly=False,
         secure=False,
         samesite="lax",
-        max_age=lifetime,
+        max_age=access_ttl,
         path="/",
     )
     return {"status": "ok", "trusted": True, "cookie": "device_trust"}
