@@ -143,9 +143,10 @@ def build_auth_url(
     )
     return f"https://accounts.google.com/o/oauth2/v2/auth?{q}", signed
 
-def exchange_code(code: str, signed_state: str):
-    # Validate CSRF state we sent earlier
-    _ = _verify_state(signed_state)
+def exchange_code(code: str, signed_state: str, verify_state: bool = True):
+    # Validate CSRF state we sent earlier unless caller already validated it
+    if verify_state:
+        _ = _verify_state(signed_state)
     if not _GOOGLE_AVAILABLE or _Flow is None:  # pragma: no cover - env-dependent
         # Environments without google libraries should override this function in tests
         raise HTTPException(status_code=501, detail="google oauth exchange unavailable")

@@ -26,7 +26,15 @@ def get_app_url() -> str:
     port = os.getenv("PORT", "8000")
     scheme = "https" if os.getenv("FORCE_HTTPS", "0").lower() in {"1", "true", "yes", "on"} else "http"
     
-    return f"{scheme}://{host}:{port}"
+    # Ensure we always return a valid URL, never None or undefined
+    result = f"{scheme}://{host}:{port}"
+    
+    # Log when we have to fall back to derived URL so we can spot it early
+    if not app_url:
+        import logging
+        logging.warning(f"APP_URL not configured, using derived URL: {result}. Consider setting APP_URL explicitly.")
+    
+    return result
 
 
 def get_frontend_url() -> str:

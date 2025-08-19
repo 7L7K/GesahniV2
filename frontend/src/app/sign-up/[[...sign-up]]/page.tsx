@@ -2,16 +2,11 @@
 import { SignUp } from '@clerk/nextjs'
 import { useSearchParams } from 'next/navigation'
 import { buildAuthUrl } from '@/lib/urls'
+import { sanitizeNextPath } from '@/lib/utils'
 
 export default function SignUpPage() {
     const params = useSearchParams();
-    const next = (() => {
-        const raw = (params.get('next') || '/').trim();
-        try {
-            if (!raw.startsWith('/') || raw.includes('://')) return '/';
-            return raw.replace(/\/+/g, '/');
-        } catch { return '/'; }
-    })();
+    const next = sanitizeNextPath(params.get('next'), '/');
     const finishUrl = buildAuthUrl('/v1/auth/finish', next);
     return (
         <div className="mx-auto max-w-md py-10">

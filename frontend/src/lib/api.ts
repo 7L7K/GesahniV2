@@ -1,7 +1,7 @@
 /* Unified API utilities: single source of truth for base URL, auth, fetch, SSE, and data hooks */
 
 import { useQuery } from "@tanstack/react-query";
-import { buildWebSocketUrl, buildCanonicalWebSocketUrl } from '@/lib/urls'
+import { buildWebSocketUrl, buildCanonicalWebSocketUrl, sanitizeNextPath } from '@/lib/urls'
 
 // Utility function to check if an error is an AbortError
 function isAbortError(error: unknown): boolean {
@@ -1026,11 +1026,15 @@ export async function putTvConfig(residentId: string, token: string, cfg: TvConf
 
 // Google OAuth functions
 export async function getGoogleAuthUrl(next?: string): Promise<string> {
+  // Sanitize the next parameter to prevent open redirects
+  const sanitizedNext = next ? sanitizeNextPath(next, '/') : '/';
+
   const params = new URLSearchParams();
-  if (next) params.append('next', next);
+  params.append('next', sanitizedNext);
 
   const response = await apiFetch(`/v1/google/auth/login_url?${params.toString()}`, {
     method: 'GET',
+    credentials: 'include', // Ensure cookies are sent for g_state cookie
   });
 
   if (!response.ok) {
@@ -1038,11 +1042,13 @@ export async function getGoogleAuthUrl(next?: string): Promise<string> {
   }
 
   const data = await response.json();
-  return data.auth_url;
+  // Backend returns {"url": oauth_url} but we expect {"auth_url": oauth_url}
+  return data.url || data.auth_url;
 }
 
 export async function initiateGoogleSignIn(next?: string): Promise<void> {
   const authUrl = await getGoogleAuthUrl(next);
+  // Perform a top-level navigation to the returned URL so Google takes over
   window.location.href = authUrl;
 }
 

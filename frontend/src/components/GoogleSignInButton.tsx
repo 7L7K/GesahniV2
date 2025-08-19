@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { initiateGoogleSignIn } from '@/lib/api';
+import { sanitizeNextPath } from '@/lib/utils';
 
 interface GoogleSignInButtonProps {
     next?: string;
@@ -21,7 +22,9 @@ export default function GoogleSignInButton({
 
         setLoading(true);
         try {
-            await initiateGoogleSignIn(next);
+            // Ensure next is never undefined - default to '/' if empty
+            const sanitizedNext = next ? sanitizeNextPath(next, '/') : '/';
+            await initiateGoogleSignIn(sanitizedNext);
         } catch (error) {
             console.error('Google sign-in failed:', error);
             setLoading(false);

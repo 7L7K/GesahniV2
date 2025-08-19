@@ -56,7 +56,10 @@ except Exception:  # pragma: no cover - fallback implementation
         def __len__(self) -> int:  # pragma: no cover - convenience
             return len(self._data)
 
+import logging
 from .logging_config import req_id_var
+
+logger = logging.getLogger(__name__)
 from .telemetry import LogRecord, log_record_var, utc_now
 from .decisions import add_decision, add_trace_event
 from .history import append_history
@@ -516,7 +519,7 @@ async def silent_refresh_middleware(request: Request, call_next):
       - JWT_ACCESS_TTL_SECONDS: lifetime of new tokens (default 14d)
       - ACCESS_REFRESH_THRESHOLD_SECONDS: refresh when exp - now < threshold (default 3600s)
     """
-    print("SILENT_REFRESH: Middleware called")
+    logger.debug("SILENT_REFRESH: Middleware called")
     # Call downstream first; do not swallow exceptions from handlers
     response: Response = await call_next(request)
 
@@ -525,27 +528,27 @@ async def silent_refresh_middleware(request: Request, call_next):
         # Skip static and non-API paths to avoid unnecessary token work
         try:
             path = request.url.path or ""
-            print(f"SILENT_REFRESH: Processing path {path}")
+            logger.debug("SILENT_REFRESH: Processing path %s", path)
             if not path.startswith("/v1"):
-                print("SILENT_REFRESH: Skipping non-v1 path")
+                logger.debug("SILENT_REFRESH: Skipping non-v1 path")
                 return response
             # Skip logout endpoints to avoid setting new cookies during logout
             if path.endswith("/logout") or path.endswith("/auth/logout") or request.headers.get("X-Logout") == "true":
-                print("SILENT_REFRESH: Skipping logout path or X-Logout header")
+                logger.debug("SILENT_REFRESH: Skipping logout path or X-Logout header")
                 return response
             # Also check if logout was performed by looking at response headers
             # If any access_token cookie was set with Max-Age=0, skip refresh
             set_cookies = response.headers.getlist("set-cookie", [])
             if any("access_token=" in h and "Max-Age=0" in h for h in set_cookies):
-                print("SILENT_REFRESH: Skipping due to Max-Age=0 cookie")
+                logger.debug("SILENT_REFRESH: Skipping due to Max-Age=0 cookie")
                 return response
             # Also check if this is a logout response by looking at the status code and path
             if response.status_code == 204 and (path.endswith("/logout") or path.endswith("/auth/logout")):
-                print("SILENT_REFRESH: Skipping due to logout response")
+                logger.debug("SILENT_REFRESH: Skipping due to logout response")
                 return response
             # More aggressive: if this is a 204 response, skip refresh entirely
             if response.status_code == 204:
-                print("SILENT_REFRESH: Skipping due to 204 status code")
+                logger.debug("SILENT_REFRESH: Skipping due to 204 status code")
                 return response
         except Exception:
             pass
@@ -565,9 +568,9 @@ async def silent_refresh_middleware(request: Request, call_next):
         now = int(time.time())
         exp = int(payload.get("exp", 0))
         threshold = int(os.getenv("ACCESS_REFRESH_THRESHOLD_SECONDS", "3600"))
-        print(f"SILENT_REFRESH: Token expires in {exp - now} seconds, threshold is {threshold}")
+        logger.debug("SILENT_REFRESH: Token expires in %s seconds, threshold is %s", exp - now, threshold)
         if exp - now <= threshold:
-            print("SILENT_REFRESH: Token needs refresh, proceeding...")
+            logger.debug("SILENT_REFRESH: Token needs refresh, proceeding...")
             # Small jitter to avoid stampede when many tabs refresh concurrently
             try:
                 import random as _rand

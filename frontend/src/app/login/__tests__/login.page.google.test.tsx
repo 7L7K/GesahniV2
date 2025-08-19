@@ -97,7 +97,7 @@ describe('LoginPage with Google Sign-in', () => {
 
         render(<LoginPage />);
 
-        expect(screen.getByText('Google sign-in failed: access_denied')).toBeInTheDocument();
+        expect(screen.getByText('OAuth error: access_denied')).toBeInTheDocument();
     });
 
     it('handles Google OAuth redirect with tokens in URL', async () => {
@@ -145,6 +145,7 @@ describe('LoginPage with Google Sign-in', () => {
         const { apiFetch, setTokens, bumpAuthEpoch } = require('@/lib/api');
         (apiFetch as jest.Mock).mockResolvedValue({
             ok: true,
+            headers: new Headers(),
             json: () => Promise.resolve({
                 access_token: 'fake-access',
                 refresh_token: 'fake-refresh'

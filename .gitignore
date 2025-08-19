@@ -46,3 +46,5 @@ web/*
 
 .gitignore
 env.consolidated
+frontend/.env.local
+frontend/.env*

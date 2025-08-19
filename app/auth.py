@@ -34,11 +34,17 @@ if "PYTEST_CURRENT_TEST" in os.environ and not os.getenv("USERS_DB"):
 AUTH_TABLE = os.getenv("AUTH_TABLE", "auth_users")
 ALGORITHM = "HS256"
 SECRET_KEY = os.getenv("JWT_SECRET")
-if not SECRET_KEY or SECRET_KEY.strip() == "":
-    raise ValueError("JWT_SECRET environment variable must be set")
-# Security check: prevent use of default/placeholder secrets
-if SECRET_KEY.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
-    raise ValueError("JWT_SECRET cannot use insecure default values")
+# Defer strict validation of the JWT secret until token creation time so imports
+# don't raise during routes that may be conditionally executed. Handlers that
+# attempt to create tokens will receive a clear ValueError if the secret is
+# missing or insecure.
+
+def _ensure_jwt_secret_present() -> None:
+    """Raise a clear ValueError if JWT_SECRET is missing or insecure."""
+    if not SECRET_KEY or not SECRET_KEY.strip():
+        raise ValueError("JWT_SECRET environment variable must be set")
+    if SECRET_KEY.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
+        raise ValueError("JWT_SECRET cannot use insecure default values")
 EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
 REFRESH_EXPIRE_MINUTES = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
 JWT_ISS = os.getenv("JWT_ISS")
@@ -91,6 +97,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     Returns:
         JWT access token string
     """
+    # Ensure secret is available and appears secure before encoding
+    _ensure_jwt_secret_present()
+
+    # Ensure secret is available and appears secure before encoding
+    _ensure_jwt_secret_present()
+
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -131,6 +143,9 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) 
     Returns:
         JWT refresh token string
     """
+    # Ensure secret is available and appears secure before encoding
+    _ensure_jwt_secret_present()
+
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta

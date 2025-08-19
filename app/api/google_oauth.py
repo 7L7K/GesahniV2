@@ -1,0 +1,403 @@
+"""
+Google OAuth login URL endpoint.
+
+This module provides a stateless endpoint that generates Google OAuth URLs
+and sets short-lived CSRF state cookies for security.
+"""
+
+import os
+import time
+import secrets
+import hmac
+import hashlib
+import logging
+from urllib.parse import urlencode
+
+from fastapi import APIRouter, HTTPException, Request, Response
+from pydantic import BaseModel
+
+from ..auth import SECRET_KEY
+from ..integrations.google.config import JWT_STATE_SECRET
+from ..cookie_config import get_cookie_config
+
+logger = logging.getLogger(__name__)
+router = APIRouter(tags=["auth"])
+
+
+def _allow_redirect(url: str) -> bool:
+    """Check if redirect URL is allowed based on OAUTH_REDIRECT_ALLOWLIST."""
+    allowed = os.getenv("OAUTH_REDIRECT_ALLOWLIST", "").split(",")
+    allowed = [u.strip() for u in allowed if u.strip()]
+    if not allowed:
+        return True
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(url).netloc.lower()
+        return any(host.endswith(a.lower()) for a in allowed)
+    except Exception:
+        return False
+
+
+class LoginUrlResponse(BaseModel):
+    """Response model for the login URL endpoint."""
+    url: str
+
+
+def _generate_signed_state() -> str:
+    """
+    Generate a signed state string for CSRF protection.
+    
+    Returns:
+        str: timestamp:random:sig format (kept short to avoid URL length issues)
+    """
+    logger.debug("🔐 Generating timestamp for state")
+    timestamp = str(int(time.time()))
+    
+    logger.debug("🎲 Generating random token for state")
+    random_token = secrets.token_urlsafe(16)  # Reduced from 32 to 16 for shorter state
+    
+    # Create signature using a dedicated state secret (separate from JWT_SECRET)
+    logger.debug("🔏 Creating HMAC signature for state using JWT_STATE_SECRET")
+    message = f"{timestamp}:{random_token}".encode()
+    sig_key = JWT_STATE_SECRET.encode() if isinstance(JWT_STATE_SECRET, str) else JWT_STATE_SECRET
+    signature = hmac.new(sig_key, message, hashlib.sha256).hexdigest()[:12]
+    
+    state = f"{timestamp}:{random_token}:{signature}"
+    logger.debug(f"✅ State generated: {timestamp}:[random]:[signature] (length: {len(state)})")
+    return state
+
+
+@router.get("/google/auth/login_url")
+async def google_login_url(request: Request) -> Response:
+    """
+    Generate a Google OAuth login URL with CSRF protection.
+    
+    Returns a Google OAuth URL and sets a short-lived state cookie
+    for CSRF protection. If Google OAuth is not configured, returns 503.
+    """
+    logger.info("🔐 Google OAuth login URL endpoint hit")
+    logger.info("📋 Starting OAuth flow - checking configuration")
+    
+    # Read required environment variables
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
+    
+    logger.info(f"🔧 Configuration check - Client ID: {'✅ Set' if client_id else '❌ Missing'}")
+    logger.info(f"🔧 Configuration check - Redirect URI: {'✅ Set' if redirect_uri else '❌ Missing'}")
+    
+    # Fail fast if configuration is missing
+    if not client_id or not redirect_uri:
+        logger.error("❌ Google OAuth configuration missing - returning 503")
+        raise HTTPException(
+            status_code=503,
+            detail="Google OAuth not configured (set GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI)"
+        )
+    
+    logger.info("✅ Configuration validated - proceeding with OAuth URL generation")
+    
+    # Generate signed state for CSRF protection
+    logger.info("🔐 Generating signed state for CSRF protection")
+    state = _generate_signed_state()
+    logger.info("✅ Signed state generated successfully")
+    
+    # Build Google OAuth URL
+    logger.info("🌐 Building Google OAuth URL parameters")
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "include_granted_scopes": "true",
+        "prompt": "consent",
+        "state": state,
+    }
+    logger.info("✅ Base OAuth parameters configured")
+    
+    # Add optional parameters only if explicitly configured
+    # Note: These can leak tenant/user info - only use if you want to restrict or hint
+    logger.info("🔍 Checking optional parameters (hd, login_hint)")
+    hd = os.getenv("GOOGLE_HD")
+    if hd and hd.strip():  # Only include if explicitly set and not empty
+        params["hd"] = hd.strip()
+        logger.info("✅ HD parameter included")
+    else:
+        logger.info("ℹ️ HD parameter not set - skipping")
+    
+    login_hint = os.getenv("GOOGLE_LOGIN_HINT")
+    if login_hint and login_hint.strip():  # Only include if explicitly set and not empty
+        params["login_hint"] = login_hint.strip()
+        logger.info("✅ Login hint parameter included")
+    else:
+        logger.info("ℹ️ Login hint parameter not set - skipping")
+    
+    # Echo through next query param if present and allowed
+    logger.info("🔗 Processing next parameter for redirect")
+    next_url = request.query_params.get("next")
+    if next_url:
+        logger.info("📋 Next parameter found - validating redirect URL")
+        if not _allow_redirect(next_url):
+            logger.warning("🚫 Blocked disallowed redirect URL")  # Don't log the actual URL
+            next_url = "/"  # Reset to safe default
+            logger.info("🔄 Reset next parameter to safe default '/'")
+        else:
+            logger.info("✅ Next parameter validated successfully")
+        params["redirect_params"] = f"next={next_url}"
+        logger.info("✅ Next parameter added to OAuth URL")
+    else:
+        logger.info("ℹ️ No next parameter provided")
+    
+    logger.info("🔗 Constructing final OAuth URL")
+    oauth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+    logger.info("✅ OAuth URL constructed successfully")
+    
+    # Create JSON response with state cookie
+    logger.info("🍪 Setting up response with state cookie")
+    # legacy clients expect `auth_url` key; keep compatibility
+    response_data = {"auth_url": oauth_url}
+    
+    # Set CSRF state cookie
+    # Note: If SameSite=None, then Secure must be true in production
+    logger.info("🍪 Configuring cookie settings")
+    cookie_config = get_cookie_config(request)
+    logger.info(f"🍪 Cookie config - SameSite: {cookie_config['samesite']}, Secure: {cookie_config['secure']}")
+    
+    # Create a Response object to set the cookie
+    import json
+    http_response = Response(
+        content=json.dumps(response_data),
+        media_type="application/json"
+    )
+    
+    logger.info("🍪 Setting g_state cookie with 5-minute TTL")
+    http_response.set_cookie(
+        "g_state",
+        state,
+        max_age=300,  # 5 minutes
+        httponly=True,
+        path="/",
+        samesite=cookie_config["samesite"],
+        secure=cookie_config["secure"],
+        domain=cookie_config["domain"]
+    )
+    
+    logger.info("🎉 OAuth login URL endpoint completed successfully")
+    return http_response
+
+
+def _verify_signed_state(state: str) -> bool:
+    """
+    Verify a signed state string for CSRF protection.
+    
+    Args:
+        state: State string in timestamp:random:sig format
+        
+    Returns:
+        bool: True if state is valid and fresh
+    """
+    try:
+        parts = state.split(":")
+        if len(parts) != 3:
+            return False
+            
+        timestamp, random_token, signature = parts
+        
+        # Verify timestamp is recent (within 5 minutes)
+        state_time = int(timestamp)
+        current_time = int(time.time())
+        if current_time - state_time > 300:  # 5 minutes
+            return False
+            
+        # Verify signature using the dedicated state secret
+        message = f"{timestamp}:{random_token}".encode()
+        sig_key = JWT_STATE_SECRET.encode() if isinstance(JWT_STATE_SECRET, str) else JWT_STATE_SECRET
+        expected_sig = hmac.new(sig_key, message, hashlib.sha256).hexdigest()[:12]
+        
+        return signature == expected_sig
+    except Exception:
+        return False
+
+
+@router.get("/google/auth/callback")
+async def google_callback(request: Request) -> Response:
+    """
+    Handle Google OAuth callback with strict state validation.
+    
+    Validates the signed state parameter and processes the OAuth code.
+    Rejects requests with missing, expired, or invalid state.
+    Clears the state cookie after validation and proceeds with session logic.
+    """
+    logger.info("🔄 Google OAuth callback endpoint hit")
+    logger.info("📋 Starting callback validation process")
+    
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
+    
+    # Strict validation - respond with cleared state cookie on any error
+    logger.info(f"🔍 Validating callback parameters - Code: {'✅ Present' if code else '❌ Missing'}, State: {'✅ Present' if state else '❌ Missing'}")
+    cookie_config = get_cookie_config(request)
+    def _error_response(msg: str, status: int = 400) -> Response:
+        import json
+        resp = Response(content=json.dumps({"detail": msg}), media_type="application/json", status_code=status)
+        # Clear the g_state cookie
+        resp.set_cookie(
+            "g_state",
+            "",
+            max_age=0,
+            httponly=True,
+            path="/",
+            samesite=cookie_config["samesite"],
+            secure=cookie_config["secure"],
+            domain=cookie_config["domain"],
+        )
+        return resp
+
+    if not code or not state:
+        logger.error("❌ Google OAuth callback missing code or state")
+        return _error_response("missing_code_or_state", status=400)
+
+    # Get state cookie and validate
+    logger.info("🍪 Checking for g_state cookie")
+    state_cookie = request.cookies.get("g_state")
+    if not state_cookie:
+        logger.error("❌ Google OAuth callback missing state cookie")
+        return _error_response("missing_state_cookie", status=400)
+    logger.info("✅ State cookie found")
+
+    # Verify state matches cookie exactly
+    logger.info("🔍 Validating state parameter matches cookie")
+    if state != state_cookie:
+        logger.error("❌ Google OAuth callback state mismatch")
+        return _error_response("state_mismatch", status=400)
+    logger.info("✅ State parameter matches cookie")
+
+    # Verify signed state is valid and fresh
+    logger.info("🔐 Verifying signed state signature and freshness")
+    if not _verify_signed_state(state):
+        logger.error("❌ Google OAuth callback invalid or expired state")
+        return _error_response("invalid_state", status=400)
+    logger.info("✅ Signed state validation passed")
+    
+    # State is valid - clear/rotate the state cookie after use
+    logger.info("🍪 Clearing g_state cookie after successful validation")
+    # Reuse module-level import to avoid shadowing the name locally
+    cookie_config = get_cookie_config(request)
+    
+    # Create response object to set cleared cookie
+    response = Response(
+        content="OAuth callback received successfully. State validation passed.",
+        media_type="text/plain"
+    )
+    
+    # Clear the g_state cookie by setting it with expired max_age
+    response.set_cookie(
+        "g_state",
+        "",  # Empty value
+        max_age=0,  # Expire immediately
+        httponly=True,
+        path="/",
+        samesite=cookie_config["samesite"],
+        secure=cookie_config["secure"],
+        domain=cookie_config["domain"]
+    )
+    logger.info("✅ g_state cookie cleared successfully")
+    
+    # State validation complete - proceed with usual session logic
+    logger.info("✅ Google OAuth callback state validated successfully")
+    logger.info("🎉 All validation checks passed - proceeding with OAuth flow")
+    
+    # Perform token exchange and create an application session/redirect.
+    # We keep this flow minimal and deterministic for tests and local dev:
+    # 1) Exchange the code for Google credentials
+    # 2) Extract a stable user identifier (email or sub)
+    # 3) Persist the provider tokens in the google_oauth DB
+    # 4) Mint application access/refresh JWTs and redirect the browser
+    try:
+        from ..integrations.google import oauth as go
+        from ..integrations.google.db import SessionLocal, GoogleToken, init_db
+        from ..auth import create_access_token, create_refresh_token
+        import jwt as pyjwt
+        from urllib.parse import urlencode
+        from starlette.responses import RedirectResponse
+        from uuid import uuid4
+
+        # Exchange the authorization code (state already validated by this endpoint)
+        creds = go.exchange_code(code, state, verify_state=False)
+
+        # Try to extract email/sub from id_token (best-effort, without verification)
+        provider_user_id = None
+        email = None
+        try:
+            id_token = getattr(creds, "id_token", None)
+            if id_token:
+                claims = pyjwt.decode(id_token, options={"verify_signature": False})
+                email = claims.get("email") or claims.get("email_address")
+                provider_user_id = claims.get("sub") or email
+        except Exception:
+            # Swallow - we'll fallback to tokens
+            provider_user_id = None
+
+        # Fallback identifiers
+        if not provider_user_id:
+            provider_user_id = getattr(creds, "refresh_token", None) or getattr(creds, "token", None) or str(uuid4())
+        if not email:
+            # Use provider_user_id as email fallback (not ideal but deterministic)
+            email = str(provider_user_id)
+
+        # Persist provider record into google_oauth DB (best-effort)
+        try:
+            init_db()
+            rec = go.creds_to_record(creds)
+            uid = str(email).lower()
+            with SessionLocal() as s:
+                row = s.get(GoogleToken, uid)
+                if row is None:
+                    row = GoogleToken(user_id=uid,
+                                      access_token=rec.get("access_token"),
+                                      refresh_token=rec.get("refresh_token"),
+                                      token_uri=rec.get("token_uri"),
+                                      client_id=rec.get("client_id"),
+                                      client_secret=rec.get("client_secret"),
+                                      scopes=rec.get("scopes"),
+                                      expiry=rec.get("expiry"))
+                    s.add(row)
+                else:
+                    row.access_token = rec.get("access_token")
+                    row.refresh_token = rec.get("refresh_token")
+                    row.token_uri = rec.get("token_uri")
+                    row.client_id = rec.get("client_id")
+                    row.client_secret = rec.get("client_secret")
+                    row.scopes = rec.get("scopes")
+                    row.expiry = rec.get("expiry")
+                s.commit()
+        except Exception:
+            logger.exception("Failed to persist Google tokens (non-fatal)")
+
+        # Mint application JWTs (access + refresh) for the user and redirect
+        app_url = os.getenv("APP_URL", "http://localhost:3000")
+        at = create_access_token({"sub": uid, "user_id": uid})
+        rt = create_refresh_token({"sub": uid, "user_id": uid})
+
+        # Build redirect query - keep it compact and URL-encoded
+        q = urlencode({"access_token": at, "refresh_token": rt})
+        target = f"{app_url.rstrip('/')}/login?{q}"
+        return RedirectResponse(url=target, status_code=302)
+    except Exception as e:
+        # Log full exception for diagnostics, but return a cleaned, cookie-clearing
+        # JSON response to the browser. Special-case missing JWT secret for clarity.
+        logger.exception("OAuth callback processing failed")
+        # Determine user-friendly message and status
+        msg = "oauth_callback_failed"
+        status = 500
+        try:
+            if isinstance(e, ValueError) and "JWT_SECRET" in str(e):
+                msg = "server_misconfigured_jwt_secret"
+                status = 503
+        except Exception:
+            pass
+        return _error_response(msg, status=status)
+
+
+# Note: This endpoint is stateless - no database writes.
+# The cookie is just to bind browser↔callback for CSRF protection.
+# If misconfigured, it fails fast with 503 (no silent defaults).

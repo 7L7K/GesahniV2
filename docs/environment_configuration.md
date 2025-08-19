@@ -27,6 +27,8 @@ Each environment file defines the following key variables that change between en
 - `COOKIE_SECURE` - Whether cookies require HTTPS (0=no, 1=yes)
 - `COOKIE_SAMESITE` - SameSite cookie policy (lax, strict, none)
 
+**⚠️ CRITICAL SECURITY WARNING ⚠️**: If you set `COOKIE_SAMESITE=none` to allow cross-site cookies, you **MUST** also set `COOKIE_SECURE=1` or modern browsers will reject the cookies. This requires HTTPS in production.
+
 ### Authentication Mode
 - `NEXT_PUBLIC_HEADER_AUTH_MODE` - Authentication mode (0=cookie, 1=header)
 

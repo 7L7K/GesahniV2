@@ -137,6 +137,32 @@ def configure_logging() -> None:
         ):
             logging.getLogger(noisy).setLevel(logging.WARNING)
 
+    # Quiet SQLite and SQL-related noise by default
+    # This silences noisy logs coming from the stdlib sqlite3 module,
+    # the async wrapper `aiosqlite`, and SQLAlchemy engine/pool logs.
+    for sql_noisy in (
+        "sqlite3",
+        "aiosqlite",
+        "sqlalchemy",
+        "sqlalchemy.engine",
+        "sqlalchemy.pool",
+    ):
+        try:
+            logging.getLogger(sql_noisy).setLevel(logging.WARNING)
+        except Exception:
+            # Best-effort: don't allow logging setup to fail
+            pass
+
+    # Additional targeted quieting for noisy network/connect logs
+    try:
+        logging.getLogger("httpcore.connection").setLevel(logging.WARNING)
+    except Exception:
+        pass
+    try:
+        logging.getLogger("app.http_utils").setLevel(logging.WARNING)
+    except Exception:
+        pass
+
 
 def get_last_errors(n: int = 50) -> List[Dict[str, Any]]:
     # Return newest-last list

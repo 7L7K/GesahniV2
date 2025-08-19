@@ -75,10 +75,8 @@ try:
     from .api.preflight import router as preflight_router
 except Exception:
     preflight_router = None  # type: ignore
-try:
-    from .api.oauth_google import router as oauth_google_router
-except Exception:
-    oauth_google_router = None  # type: ignore
+from .api.oauth_google import router as oauth_google_router
+from .api.google_oauth import router as google_oauth_router
 try:
     from .api.oauth_apple import router as oauth_apple_router
 except Exception:
@@ -96,10 +94,7 @@ try:
 except Exception:
     device_auth_router = None  # type: ignore
 from .session_store import SessionStatus, list_sessions as list_session_store
-try:
-    from .integrations.google.routes import router as google_router
-except Exception:  # pragma: no cover - optional
-    google_router = None  # type: ignore
+from .integrations.google.routes import router as google_router
 from .decisions import get_recent as decisions_recent, get_explain as decisions_get
 
 try:
@@ -481,6 +476,10 @@ _DEV_SERVERS_SNAPSHOT = os.getenv("OPENAPI_DEV_SERVERS")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
+        # Verify secret usage on boot
+        from .secret_verification import log_secret_summary
+        log_secret_summary()
+        
         # Make startup checks non-blocking for development
         try:
             await llama_startup()
@@ -611,38 +610,78 @@ logging.info(f"  CORS_ALLOW_CREDENTIALS: {repr(os.getenv('CORS_ALLOW_CREDENTIALS
 _cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 logging.info(f"Raw CORS origins from env: {repr(_cors_origins)}")
 
+# Parse and normalize entries
 origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
-logging.info(f"Parsed CORS origins: {origins}")
+logging.info(f"Parsed CORS origins (pre-sanitize): {origins}")
 
-# Security: Allow multiple origins for development flexibility
-# Replace 127.0.0.1 with localhost for consistency
-origins = [o.replace("http://127.0.0.1:", "http://localhost:") for o in origins]
+# Normalize common localhost variants (127.0.0.1 -> localhost)
+origins = [
+    o.replace("http://127.0.0.1:", "http://localhost:").replace("https://127.0.0.1:", "https://localhost:")
+    for o in origins
+]
 
-# Handle special origins for development
-if os.getenv("DEV_MODE", "0") == "1":
-    # In dev mode, allow null origin for local file testing
-    origins.append("null")
+# Remove any literal 'null' tokens (case-insensitive)
+origins = [o for o in origins if o and o.lower() != "null"]
+
+# Strict sanitization: prefer the single canonical localhost origin when
+# any localhost-style origin is present; otherwise, strip obvious
+# unwanted entries (raw IPs and common non-frontend ports like 8080).
+from urllib.parse import urlparse
+import re
+
+sanitized = []
+found_localhost = False
+for o in origins:
+    try:
+        p = urlparse(o)
+        host = p.hostname or ""
+        port = p.port
+        scheme = p.scheme or "http"
+        # Map any localhost or 127.0.0.1 entry to the canonical frontend origin
+        if host in ("localhost", "127.0.0.1"):
+            if port is None or port == 3000 or scheme == "http":
+                found_localhost = True
+                continue
+        # Skip raw IP addresses (e.g. 10.0.0.138) to avoid leaking LAN IPs
+        if re.match(r"^\d+(?:\.\d+){3}$", host):
+            continue
+        # Skip alternate common dev ports that are not the frontend (e.g. :8080)
+        if port == 8080:
+            continue
+        # Keep everything else (likely legitimate production origins)
+        sanitized.append(o)
+    except Exception:
+        # If unparsable, drop it
+        continue
+
+if found_localhost:
+    origins = ["http://localhost:3000"]
+else:
+    # Deduplicate but preserve order-ish
+    seen = set()
+    out = []
+    for o in sanitized:
+        if o in seen:
+            continue
+        seen.add(o)
+        out.append(o)
+    origins = out or ["http://localhost:3000"]
 
 if not origins:
     logging.warning("No CORS origins configured. Defaulting to http://localhost:3000")
     origins = ["http://localhost:3000"]
     logging.info(f"Set default CORS origin: {origins[0]}")
 
-# Validate origins are in the same address family (localhost or IP)
 def is_same_address_family(origin_list):
     """Check if all origins are in the same address family (localhost or IP)"""
     if not origin_list:
         return True
-    
-    # Check if all are localhost or all are IP addresses
-    localhost_count = sum(1 for o in origin_list if "localhost" in o)
+    localhost_count = sum(1 for o in origin_list if "localhost" in o or "127.0.0.1" in o)
     ip_count = sum(1 for o in origin_list if "localhost" not in o and "127.0.0.1" not in o)
-    
-    # All should be localhost OR all should be IP addresses
     return localhost_count == 0 or ip_count == 0
 
 if not is_same_address_family(origins):
-    logging.warning(f"Mixed address families detected in CORS origins: {origins}")
+    logging.warning("Mixed address families detected in CORS origins (post-sanitize).")
     logging.warning("This may cause WebSocket connection issues. Consider using consistent addressing.")
 
 # Allow credentials: yes (cookies/tokens)
@@ -1610,9 +1649,10 @@ if device_auth_router is not None:
     app.include_router(device_auth_router, prefix="/v1")
     app.include_router(device_auth_router, include_in_schema=False)
 # Removed duplicate inclusion of app.api.auth router to avoid route shadowing
-if oauth_google_router is not None:
-    app.include_router(oauth_google_router, prefix="/v1")
-    app.include_router(oauth_google_router, include_in_schema=False)
+app.include_router(oauth_google_router, prefix="/v1")
+app.include_router(oauth_google_router, include_in_schema=False)
+app.include_router(google_oauth_router, prefix="/v1")
+app.include_router(google_oauth_router, include_in_schema=False)
 if oauth_apple_router is not None:
     app.include_router(oauth_apple_router, prefix="/v1")
     app.include_router(oauth_apple_router, include_in_schema=False)
@@ -1621,10 +1661,9 @@ if auth_password_router is not None:
     app.include_router(auth_password_router, include_in_schema=False)
 
 # Google integration (optional)
-if google_router is not None:
-    # Provide both versioned and unversioned, under /google to match redirect defaults
-    app.include_router(google_router, prefix="/v1/google")
-    app.include_router(google_router, prefix="/google", include_in_schema=False)
+# Provide both versioned and unversioned, under /google to match redirect defaults
+app.include_router(google_router, prefix="/v1/google")
+app.include_router(google_router, prefix="/google", include_in_schema=False)
 
 # New modular routers for HA and profile/admin
 try:
