@@ -6,9 +6,10 @@ import ChatBubble from '../components/ChatBubble';
 import LoadingBubble from '../components/LoadingBubble';
 import InputBar from '../components/InputBar';
 import { Button } from '@/components/ui/button';
-import { SignInButton, SignUpButton, useUser, useAuth } from '@clerk/nextjs';
-import { sendPrompt, getToken, getMusicState, type MusicState, apiFetch } from '@/lib/api';
+import { SignInButton, SignUpButton } from '@clerk/nextjs';
+import { sendPrompt, getToken, getMusicState, type MusicState, apiFetch, isAuthed, handleAuthError } from '@/lib/api';
 import { wsHub } from '@/services/wsHub';
+import { getAuthOrchestrator } from '@/services/authOrchestrator';
 import NowPlayingCard from '@/components/music/NowPlayingCard';
 import DiscoveryCard from '@/components/music/DiscoveryCard';
 import MoodDial from '@/components/music/MoodDial';
@@ -27,6 +28,29 @@ interface ChatMessage {
   loading?: boolean;
 }
 
+// Custom hook to safely use Clerk hooks only when Clerk is enabled
+function useClerkAuth() {
+  const isClerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
+  if (!isClerkEnabled) {
+    return { isSignedIn: false, isLoaded: true, clerkEnabled: false };
+  }
+
+  // Dynamically import Clerk hooks only when needed
+  try {
+    const { useUser, useAuth } = require('@clerk/nextjs');
+    const { isSignedIn } = useUser();
+    const { isLoaded } = useAuth();
+    return { isSignedIn, isLoaded, clerkEnabled: true };
+  } catch (error) {
+    // Suppress console warnings for expected Clerk errors
+    if (!error.message.includes('ClerkProvider')) {
+      console.warn('Clerk hooks not available:', error);
+    }
+    return { isSignedIn: false, isLoaded: true, clerkEnabled: false };
+  }
+}
+
 export default function Page() {
   const router = useRouter();
   const authState = useAuthState();
@@ -35,7 +59,7 @@ export default function Page() {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [sessionReady, setSessionReady] = useState<boolean>(false);
   const [backendOffline, setBackendOffline] = useState<boolean>(false);
-  const [hasAccessCookie, setHasAccessCookie] = useState<boolean>(false);
+
   const authBootOnce = useRef<boolean>(false);
   const finishOnceRef = useRef<boolean>(false);
   const [finishBusy, setFinishBusy] = useState<boolean>(false);
@@ -43,9 +67,7 @@ export default function Page() {
   const finishAbortRef = useRef<AbortController | null>(null);
   const prevReadyRef = useRef<boolean>(false);
   const prevBackendOnlineRef = useRef<boolean | null>(null);
-  const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-  const { isSignedIn } = useUser();
-  const { isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, clerkEnabled } = useClerkAuth();
 
   // Use centralized auth state
   const authed = authState.isAuthenticated;
@@ -69,8 +91,10 @@ export default function Page() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [musicState, setMusicState] = useState<MusicState | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   // 'auto' lets the backend route to skills/LLM; user can still force a model
   const bottomRef = useRef<HTMLDivElement>(null);
+  const musicStateFetchAttempted = useRef<boolean>(false);
 
   // Helpers: scope storage keys per user id for privacy
   const historyKey = `chat_history_${authState.user?.id || 'anon'}`;
@@ -95,18 +119,12 @@ export default function Page() {
       }
     });
 
-    // Check for header token first
+    // Check for header token
     const hasHeaderToken = Boolean(getToken());
     if (hasHeaderToken) {
       setSessionReady(true);
-    } else {
-      // Cookie mode: rely on auth hint or centralized auth state
-      const hinted = document.cookie.includes('auth_hint=1');
-      if (hinted) {
-        setSessionReady(true);
-      }
-      // Auth Orchestrator will handle the whoami call
     }
+    // Auth Orchestrator will handle the whoami call
 
     setIsOnline(navigator.onLine);
     const onUp = () => setIsOnline(true);
@@ -143,36 +161,24 @@ export default function Page() {
     };
   }, [bootstrapManager]);
 
-  // Helper to read cookie presence client-side
-  const readHasAccessCookie = useCallback(() => {
-    try {
-      return document.cookie.includes('auth_hint=1');
-    } catch {
-      return false;
-    }
-  }, []);
-
   // React to auth token changes (login/logout in other tabs)
   useEffect(() => {
     const handleStorageChange = () => {
-      const newHasCookie = readHasAccessCookie();
-      if (newHasCookie !== hasAccessCookie) {
-        setHasAccessCookie(newHasCookie);
-      }
+      // Token changes are handled by the auth orchestrator
     };
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [readHasAccessCookie, hasAccessCookie]);
+  }, []);
 
-  // Compute readiness for Clerk: isSignedIn AND (whoamiOk OR auth hint present)
+  // Compute readiness for Clerk: isSignedIn AND whoamiOk
   useEffect(() => {
     if (!clerkEnabled) return;
-    const ready = Boolean(isSignedIn && (whoamiOk || hasAccessCookie));
+    const ready = Boolean(isSignedIn && whoamiOk);
     if (ready !== sessionReady) {
       setSessionReady(ready);
     }
-  }, [clerkEnabled, isSignedIn, hasAccessCookie, whoamiOk, sessionReady]);
+  }, [clerkEnabled, isSignedIn, whoamiOk, sessionReady]);
 
   // Auth finish handling for Clerk
   useEffect(() => {
@@ -228,18 +234,54 @@ export default function Page() {
 
   // Music state management
   useEffect(() => {
-    if (!authed) return;
+    if (!authed) {
+      musicStateFetchAttempted.current = false;
+      return;
+    }
 
-    const fetchMusicState = async () => {
+    const fetchMusicState = async (retryCount = 0) => {
       try {
+        // Pre-check authentication status
+        if (!authed) {
+          console.warn('Skipping music state fetch - not authenticated');
+          return;
+        }
+
         const state = await getMusicState();
         setMusicState(state);
+        musicStateFetchAttempted.current = true;
+        setAuthError(null); // Clear any auth errors on success
       } catch (error) {
         console.error('Failed to fetch music state:', error);
+
+        // Handle authentication errors
+        if (error instanceof Error) {
+          const errorMessage = error.message;
+
+          // Check if this is an authentication error
+          if (errorMessage.includes('Unauthorized') || errorMessage.includes('401')) {
+            setAuthError('Authentication required. Please sign in to access music features.');
+
+            // Only retry once and with longer delay to prevent rate limiting
+            if (retryCount < 1) {
+              console.info('Retrying music state fetch after auth refresh');
+              setTimeout(() => {
+                fetchMusicState(retryCount + 1);
+              }, 3000); // Increased from 1000 to 3000ms to reduce rate limiting
+            }
+            return;
+          }
+
+          // Handle other errors
+          await handleAuthError(error, 'music state fetch');
+        }
       }
     };
 
-    fetchMusicState();
+    // Only fetch if we haven't already attempted or if auth state changed
+    if (!musicStateFetchAttempted.current) {
+      fetchMusicState();
+    }
 
     // Listen for music state updates
     const handleMusicState = (event: CustomEvent) => {
@@ -250,7 +292,34 @@ export default function Page() {
     return () => {
       window.removeEventListener('music.state', handleMusicState as EventListener);
     };
+  }, [authed, authOrchestrator]);
+
+  // Listen for authentication state changes to retry music state fetch
+  useEffect(() => {
+    if (authed && !musicStateFetchAttempted.current) {
+      // Auth was restored, retry music state fetch
+      const fetchMusicState = async () => {
+        try {
+          const state = await getMusicState();
+          setMusicState(state);
+          musicStateFetchAttempted.current = true;
+          setAuthError(null); // Clear any auth errors when successful
+        } catch (error) {
+          console.error('Failed to fetch music state after auth restore:', error);
+          // Don't retry here to prevent oscillation - let the main effect handle it
+        }
+      };
+
+      fetchMusicState();
+    }
   }, [authed]);
+
+  // Clear auth error when authentication is successful
+  useEffect(() => {
+    if (authed && authError) {
+      setAuthError(null);
+    }
+  }, [authed, authError]);
 
   // WebSocket connection - only when authenticated
   useEffect(() => {
@@ -264,11 +333,16 @@ export default function Page() {
       return;
     }
 
-    // Start WebSocket connections only when authenticated
-    try {
-      wsHub.start({ music: true, care: true });
-    } catch (error) {
-      console.error('Failed to start WebSocket connections:', error);
+    // Only start WebSocket connections when authenticated and auth state is stable
+    const authOrchestrator = getAuthOrchestrator();
+    const authState = authOrchestrator.getState();
+
+    if (authState.isAuthenticated && authState.sessionReady) {
+      try {
+        wsHub.start({ music: true, care: true });
+      } catch (error) {
+        console.error('Failed to start WebSocket connections:', error);
+      }
     }
 
     return () => {
@@ -591,7 +665,29 @@ export default function Page() {
         </div>
 
         {/* Music Section */}
-        {musicState && (
+        {authError && (
+          <div className="w-full lg:w-80">
+            <div className="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-lg">
+              <p className="text-sm font-medium mb-2">Music Access Required</p>
+              <p className="text-xs mb-3">{authError}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setAuthError(null);
+                  musicStateFetchAttempted.current = false;
+                  // Trigger a fresh auth check
+                  authOrchestrator.refreshAuth();
+                }}
+                className="w-full"
+              >
+                Retry
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {musicState && !authError && (
           <div className="w-full lg:w-80 space-y-4">
             <NowPlayingCard state={musicState} />
             <DiscoveryCard />

@@ -26,6 +26,7 @@ from app.models.tv import TvConfig, TvConfigResponse, QuietHours, TVConfigUpdate
 from app.jobs.qdrant_lifecycle import bootstrap_collection as _q_bootstrap, collection_stats as _q_stats
 from app.jobs.migrate_chroma_to_qdrant import main as _migrate_cli  # type: ignore
 from app.logging_config import get_last_errors
+from app.token_store import get_storage_stats
 try:
     from app.proactive_engine import get_self_review as _get_self_review  # type: ignore
 except Exception:  # pragma: no cover - optional
@@ -535,6 +536,20 @@ async def admin_vs_stats(
     coll = name or (os.getenv("QDRANT_COLLECTION") or "kb:default")
     try:
         return _q_stats(coll)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/token_store/stats")
+async def admin_token_store_stats(
+    token: str | None = Query(default=None),
+    request: Request = None,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Get token store statistics including Redis availability and local storage usage."""
+    _check_admin(token, request)
+    try:
+        return await get_storage_stats()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

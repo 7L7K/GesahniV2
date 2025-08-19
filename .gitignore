@@ -11,6 +11,8 @@ ollama.log
 .direnv/*
 data/*
 sessions/*
+.env.*
+*.env
 
 .envrc
 users.db

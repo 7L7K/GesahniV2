@@ -3,9 +3,23 @@
 import { useQuery } from "@tanstack/react-query";
 import { buildWebSocketUrl, buildCanonicalWebSocketUrl } from '@/lib/urls'
 
+// Utility function to check if an error is an AbortError
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+// Utility function to handle AbortError gracefully
+function handleAbortError(error: unknown, context: string): boolean {
+  if (isAbortError(error)) {
+    console.info(`${context}: Request aborted`);
+    return true; // Indicates this was an AbortError
+  }
+  return false; // Indicates this was not an AbortError
+}
+
 // Cache Key Policy (AUTH-06):
 // - All user-scoped query keys MUST include an auth namespace and relevant context (e.g., device/resident/room)
-// - Auth namespace changes on token changes (header mode) or epoch bumps (cookie mode)
+// - Auth namespace changes on token changes (header mode)
 // - Device/room context is included in both React Query keys and fetch coalescing keys
 // - Only GET requests dedupe inflight; mutating requests are never deduped
 
@@ -67,19 +81,15 @@ export function bumpAuthEpoch(): void {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('auth:epoch_bumped'));
       // Emit single-line observability for flips
-      try { console.info(`AUTH ready: signedIn=${Boolean(getToken())} cookie=true whoamiOk=unknown`); } catch { }
+      try { console.info(`AUTH ready: signedIn=${Boolean(getToken())} whoamiOk=unknown`); } catch { }
     }
   } catch { /* noop */ }
 }
 
 function getAuthNamespace(): string {
-  if (HEADER_AUTH_MODE) {
-    const tok = getToken();
-    const suffix = tok ? tok.slice(-8) : 'anon';
-    return `hdr:${suffix}`;
-  }
-  const epoch = getAuthEpoch();
-  return `ck:${epoch || '0'}`;
+  const tok = getToken();
+  const suffix = tok ? tok.slice(-8) : 'anon';
+  return `hdr:${suffix}`;
 }
 
 export function buildQueryKey(base: string, extra?: any, ctx?: string | string[]): any[] {
@@ -101,7 +111,6 @@ function requestKey(method: string, url: string, ctx?: string | string[]): strin
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000"; // canonical API origin for localhost consistency
-const HEADER_AUTH_MODE = (process.env.NEXT_PUBLIC_HEADER_AUTH_MODE || "0").toLowerCase() === "1";
 
 // Boot log for observability
 if (typeof console !== 'undefined') {
@@ -110,58 +119,190 @@ if (typeof console !== 'undefined') {
 
 // --- Auth token helpers ------------------------------------------------------
 export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  if (!HEADER_AUTH_MODE) return null;
-  return getLocalStorage("auth:access_token");
+  try {
+    // First check if Clerk is enabled and get Clerk token
+    const isClerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
+    if (isClerkEnabled && typeof window !== 'undefined') {
+      try {
+        // Try to get Clerk token from Clerk's session using dynamic import
+        // This avoids issues with SSR and module loading
+        const clerkToken = (window as any).__clerkToken;
+
+        if (clerkToken) {
+          console.debug('TOKENS get.clerk_mode', {
+            hasToken: !!clerkToken,
+            tokenLength: clerkToken?.length || 0,
+            timestamp: new Date().toISOString(),
+          });
+          return clerkToken;
+        }
+      } catch (error) {
+        // If Clerk is not available or fails, fall back to localStorage
+        console.debug('TOKENS get.clerk_fallback', {
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Fall back to localStorage tokens
+    const token = getLocalStorage("auth:access");
+    if (token) {
+      console.debug('TOKENS get.header_mode', {
+        hasToken: !!token,
+        tokenLength: token?.length || 0,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return token;
+  } catch (e) {
+    console.error('TOKENS get.error', {
+      error: e instanceof Error ? e.message : String(e),
+      timestamp: new Date().toISOString(),
+    });
+    return null;
+  }
 }
 
 export function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  if (!HEADER_AUTH_MODE) return null;
-  return getLocalStorage("auth:refresh_token");
+  try {
+    const token = getLocalStorage("auth:refresh");
+    if (token) {
+      console.debug('TOKENS get_refresh.header_mode', {
+        hasToken: !!token,
+        tokenLength: token?.length || 0,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return token;
+  } catch (e) {
+    console.error('TOKENS get_refresh.error', {
+      error: e instanceof Error ? e.message : String(e),
+      timestamp: new Date().toISOString(),
+    });
+    return null;
+  }
 }
 
-export function setTokens(access: string, refresh?: string) {
-  if (typeof window === "undefined") return;
-  if (!HEADER_AUTH_MODE) return; // do not persist tokens when cookie mode
-  setLocalStorage("auth:access_token", access);
-  if (refresh) setLocalStorage("auth:refresh_token", refresh);
+export function setTokens(access: string, refresh?: string): void {
   try {
-    window.dispatchEvent(new Event("auth:tokens_set"));
-  } catch { }
-  bumpAuthEpoch();
+    // Check if Clerk is enabled
+    const isClerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
+    if (isClerkEnabled && typeof window !== 'undefined') {
+      try {
+        // For Clerk mode, we don't store tokens in localStorage
+        // Clerk manages its own token storage
+        console.info('TOKENS set.clerk_mode', {
+          hasAccessToken: !!access,
+          hasRefreshToken: !!refresh,
+          accessTokenLength: access?.length || 0,
+          refreshTokenLength: refresh?.length || 0,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.debug('TOKENS set.clerk_fallback', {
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        });
+        // Fall back to localStorage if Clerk fails
+        setLocalStorage("auth:access", access);
+        if (refresh) setLocalStorage("auth:refresh", refresh);
+      }
+    } else {
+      // Header mode - store in localStorage
+      setLocalStorage("auth:access", access);
+      if (refresh) setLocalStorage("auth:refresh", refresh);
+      console.info('TOKENS set.header_mode', {
+        hasAccessToken: !!access,
+        hasRefreshToken: !!refresh,
+        accessTokenLength: access?.length || 0,
+        refreshTokenLength: refresh?.length || 0,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Bump auth epoch when tokens change
+    bumpAuthEpoch();
+  } catch (e) {
+    console.error('TOKENS set.error', {
+      error: e instanceof Error ? e.message : String(e),
+      timestamp: new Date().toISOString(),
+    });
+  }
 }
 
-export function clearTokens() {
-  if (typeof window === "undefined") return;
-  removeLocalStorage("auth:access_token");
-  removeLocalStorage("auth:refresh_token");
+export function clearTokens(): void {
   try {
-    window.dispatchEvent(new Event("auth:tokens_cleared"));
-  } catch { }
-  bumpAuthEpoch();
+    // Check if Clerk is enabled
+    const isClerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
+    if (isClerkEnabled && typeof window !== 'undefined') {
+      try {
+        // For Clerk mode, we don't clear localStorage tokens
+        // Clerk manages its own token storage
+        console.info('TOKENS clear.clerk_mode', {
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.debug('TOKENS clear.clerk_fallback', {
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        });
+        // Fall back to localStorage if Clerk fails
+        removeLocalStorage("auth:access");
+        removeLocalStorage("auth:refresh");
+      }
+    } else {
+      // Header mode - clear localStorage
+      removeLocalStorage("auth:access");
+      removeLocalStorage("auth:refresh");
+      console.info('TOKENS clear.header_mode', {
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Bump auth epoch when tokens are cleared
+    bumpAuthEpoch();
+  } catch (e) {
+    console.error('TOKENS clear.error', {
+      error: e instanceof Error ? e.message : String(e),
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
+// Utility function to handle authentication errors
+export async function handleAuthError(error: Error, context: string = 'unknown'): Promise<void> {
+  const errorMessage = error.message;
+
+  if (errorMessage.includes('Unauthorized') || errorMessage.includes('401')) {
+    console.warn(`Authentication error in ${context}, triggering auth refresh`);
+
+    // Import auth orchestrator dynamically to avoid circular dependencies
+    try {
+      const { getAuthOrchestrator } = await import('@/services/authOrchestrator');
+      const authOrchestrator = getAuthOrchestrator();
+      await authOrchestrator.refreshAuth();
+    } catch (authError) {
+      console.error('Failed to refresh authentication state:', authError);
+    }
+  }
 }
 
 export function isAuthed(): boolean {
-  // Optimistic: header mode checks token presence; cookie mode does not assert readiness
-  if (!HEADER_AUTH_MODE) return true;
   return Boolean(getToken());
 }
 
 type SessionState = {
   signedIn: boolean;
-  cookiePresent: boolean;
   whoamiOk: boolean;
   sessionReady: boolean;
 };
 
 export async function getSessionState(): Promise<SessionState> {
   const signedIn = Boolean(getToken());
-  // Cookie presence hint
-  let cookiePresent = false;
-  try {
-    if (typeof document !== 'undefined') cookiePresent = /access_token=/.test(document.cookie);
-  } catch { cookiePresent = false; }
 
   // Use centralized auth state instead of making direct whoami calls
   // This function should be deprecated in favor of useAuthState hook
@@ -174,75 +315,83 @@ export async function getSessionState(): Promise<SessionState> {
     }
   } catch { whoamiOk = false; }
 
-  const sessionReady = Boolean((signedIn || cookiePresent) && whoamiOk);
-  return { signedIn, cookiePresent, whoamiOk, sessionReady };
+  const sessionReady = Boolean(signedIn && whoamiOk);
+  return { signedIn, whoamiOk, sessionReady };
 }
 
 export function useSessionState() {
   const [state, setState] = (typeof window !== 'undefined') ? (window as any).__useSessionStateHook?.() ?? [] : [];
   // Fallback minimal polyfill when hook infra is not present (tests)
-  return state || { signedIn: Boolean(getToken()), cookiePresent: true, whoamiOk: false, sessionReady: false } as SessionState;
+  return state || { signedIn: Boolean(getToken()), whoamiOk: false, sessionReady: false } as SessionState;
 }
 
 function authHeaders() {
-  if (!HEADER_AUTH_MODE) return {};
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-// No manual refresh; rely on server silent refresh
-
+// Header mode: no refresh endpoint calls - redirect to sign-in on 401
 async function tryRefresh(): Promise<Response | null> {
-  if (!HEADER_AUTH_MODE) return null;
-  const refresh = getRefreshToken();
-  // Prefer new bridge endpoint; fall back for older backends (404/501 only)
-  const endpoints = [
-    `${API_URL || ""}/v1/auth/refresh`,
-    `${API_URL || ""}/v1/refresh`,
-  ];
-  for (let i = 0; i < endpoints.length; i++) {
-    const url = endpoints[i];
-    try {
-      const headers: Record<string, string> = { "Content-Type": "application/json", "X-Auth-Intent": "refresh" };
-      // Attach CSRF if cookie present
-      try {
-        const csrf = (typeof document !== 'undefined') ? (document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '') : '';
-        if (csrf) headers["X-CSRF-Token"] = decodeURIComponent(csrf);
-      } catch { /* noop */ }
-      const res = await fetch(url, {
-        method: "POST",
-        headers,
-        body: refresh ? JSON.stringify({ refresh_token: refresh }) : undefined,
-        credentials: 'include',
-      } as RequestInit);
-      if (res.ok) {
-        const body = await res.json().catch(() => ({} as Record<string, unknown>));
-        const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string };
-        if (access_token) setTokens(access_token, refresh_token);
-        return res;
-      }
-      // Only fall back from /v1/auth/refresh to /v1/refresh on 404/501
-      if (i === 0) {
-        if (res.status === 404 || res.status === 501) continue;
-        // For 401/403 or other auth errors, do not fall back
-        return res;
-      }
-      if (res.status >= 500) return res;
-    } catch { /* try next */ }
-  }
+  // In header mode, we don't call refresh endpoints
+  // 401 means access token is missing or expired - redirect to sign-in
   return null;
 }
+
+// List of public endpoints that don't require authentication
+const PUBLIC_ENDPOINTS = [
+  '/v1/whoami',
+  '/v1/login',
+  '/v1/register',
+  '/v1/models',
+  '/v1/status',
+  '/health/live',
+  '/health/ready',
+  '/health/startup',
+  '/healthz/ready',
+  '/healthz/deps',
+  '/debug/config',
+  '/metrics',
+  '/v1/auth/finish',
+  '/v1/google/auth/login_url',
+];
 
 // Centralized fetch that targets the backend API base and handles 401→refresh
 export async function apiFetch(
   path: string,
   init: (RequestInit & { auth?: boolean; dedupe?: boolean; shortCacheMs?: number; contextKey?: string | string[]; credentials?: RequestCredentials }) = {}
 ): Promise<Response> {
-  const { auth = true, headers, dedupe = true, shortCacheMs, contextKey, credentials = 'include', ...rest } = init as any;
+  // In header mode, don't include browser cookies for API calls
+  const defaultCredentials = 'omit';
+
+  // Determine if this is a public endpoint
+  const isPublicEndpoint = PUBLIC_ENDPOINTS.some(endpoint => path.includes(endpoint));
+
+  // For public endpoints, default to no auth unless explicitly specified
+  const defaultAuth = isPublicEndpoint ? false : true;
+
+  const { auth = defaultAuth, headers, dedupe = true, shortCacheMs, contextKey, credentials = defaultCredentials, ...rest } = init as any;
   const isAbsolute = /^(?:https?:)?\/\//i.test(path);
   const isBrowser = typeof window !== "undefined";
-  const base = API_URL || (isBrowser ? "" : "http://127.0.0.1:8000");
+  const base = API_URL || (isBrowser ? "" : "http://localhost:8000");
   const url = isAbsolute ? path : `${base}${path}`;
+
+  // Enhanced logging for auth-related requests
+  const isAuthRequest = path.includes('/login') || path.includes('/register') || path.includes('/whoami') || path.includes('/refresh');
+  if (isAuthRequest) {
+    console.info('API_FETCH auth.request', {
+      path,
+      method: rest.method || 'GET',
+      auth,
+      isPublicEndpoint,
+      dedupe,
+      isAbsolute,
+      base,
+      url,
+      hasBody: !!rest.body,
+      bodyType: rest.body ? typeof rest.body : 'none',
+      timestamp: new Date().toISOString(),
+    });
+  }
 
   // Debug logging for health check requests
   if (path === '/healthz/ready') {
@@ -264,13 +413,14 @@ export async function apiFetch(
     (mergedHeaders as Record<string, string>)["Content-Type"] = "application/json";
   }
   if (auth) Object.assign(mergedHeaders as Record<string, string>, authHeaders());
-  // CSRF header for mutating requests (cookie-based)
-  if (hasMethodBody) {
-    try {
-      const csrf = (typeof document !== 'undefined') ? (document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '') : '';
 
-      if (csrf) (mergedHeaders as Record<string, string>)["X-CSRF-Token"] = decodeURIComponent(csrf);
-    } catch { /* ignore */ }
+  if (isAuthRequest) {
+    console.info('API_FETCH auth.headers', {
+      path,
+      mergedHeaders: Object.fromEntries(Object.entries(mergedHeaders)),
+      hasAuthHeader: !!mergedHeaders && typeof mergedHeaders === 'object' && 'Authorization' in mergedHeaders,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   // Dedupe + short cache only for safe idempotent GET requests
@@ -299,9 +449,20 @@ export async function apiFetch(
     p.finally(() => { try { setTimeout(() => INFLIGHT_REQUESTS.delete(key), DEFAULT_DEDUPE_MS); } catch { /* noop */ } }).catch(() => { });
     res = await p;
   } else {
-    // Use specified credentials (default to include for cookies)
+    // Use specified credentials (default to omit for header mode)
     res = await fetch(url, { ...rest, headers: mergedHeaders, credentials });
   }
+
+  if (isAuthRequest) {
+    console.info('API_FETCH auth.response', {
+      path,
+      status: res.status,
+      statusText: res.statusText,
+      ok: res.ok,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   // Surface rate limit UX with countdown via custom event for the app
   if (res.status === 429) {
     try {
@@ -319,26 +480,21 @@ export async function apiFetch(
     } catch { /* ignore */ }
   }
   if (res.status === 401 && auth) {
-    const refreshRes = await tryRefresh();
-    if (refreshRes && refreshRes.ok) {
-      const retryHeaders: HeadersInit = { ...(headers || {}), ...(authHeaders() as Record<string, string>) };
-      const retryHasBody = hasMethodBody && typeof rest.body !== "undefined" && rest.body !== null;
-      if (retryHasBody && !isFormData && !("Content-Type" in (retryHeaders as Record<string, string>))) {
-        (retryHeaders as Record<string, string>)["Content-Type"] = "application/json";
-      }
-      res = await fetch(url, { ...rest, headers: retryHeaders, credentials });
-      // In test environments, some mocks always return 401; surface the refresh result as success
-      if (res.status === 401) return refreshRes;
-    } else {
-      clearTokens();
-      if (typeof document !== "undefined") {
-        try {
-          document.cookie = "auth_hint=0; path=/; max-age=300";
-        } catch { /* ignore SSR errors */ }
-      }
-      if (refreshRes) {
-        res = refreshRes; // propagate refresh response (e.g., 400)
-      }
+    if (isAuthRequest) {
+      console.info('API_FETCH auth.401_header_mode', {
+        path,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // In header mode, 401 means access token is missing or expired
+    // Clear tokens and redirect to sign-in
+    clearTokens();
+    if (typeof document !== "undefined") {
+      try {
+        // Redirect to sign-in page
+        window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+      } catch { /* ignore SSR errors */ }
     }
   }
   return res;
@@ -392,7 +548,29 @@ export async function setVibe(v: Partial<{
 export async function getMusicState(): Promise<MusicState> {
   const device = getActiveDeviceId();
   const res = await apiFetch(`/v1/state`, { auth: true, contextKey: device ? [`device:${device}`] : undefined })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) {
+    const errorText = await res.text();
+    let errorMessage = errorText;
+
+    // Try to parse JSON error response
+    try {
+      const errorData = JSON.parse(errorText);
+      errorMessage = errorData.detail || errorData.message || errorText;
+    } catch {
+      // If not JSON, use the raw text
+    }
+
+    // Provide more specific error messages
+    if (res.status === 401) {
+      throw new Error(`Unauthorized: ${errorMessage}`);
+    } else if (res.status === 403) {
+      throw new Error(`Forbidden: ${errorMessage}`);
+    } else if (res.status >= 500) {
+      throw new Error(`Server error: ${errorMessage}`);
+    } else {
+      throw new Error(`Failed to fetch music state: ${errorMessage}`);
+    }
+  }
   return (await res.json()) as MusicState
 }
 
@@ -452,7 +630,6 @@ export async function setDevice(device_id: string): Promise<void> {
 export function wsUrl(path: string): string {
   // Build WebSocket URL using canonical frontend origin for consistent origin validation
   const baseUrl = buildCanonicalWebSocketUrl(API_URL, path);
-  if (!HEADER_AUTH_MODE) return baseUrl; // cookie-auth for WS
   const token = getToken();
   if (!token) return baseUrl;
   const sep = path.includes("?") ? "&" : "?";
@@ -589,7 +766,7 @@ export async function sendPrompt(
 }
 
 export async function login(username: string, password: string) {
-  const res = await apiFetch("/v1/login", { method: "POST", auth: false, body: JSON.stringify({ username, password }) });
+  const res = await apiFetch("/v1/login", { method: "POST", body: JSON.stringify({ username, password }) });
   const body = await res.json().catch(() => ({} as Record<string, unknown>));
   if (!res.ok) {
     const detail = (body?.detail || body?.error || "Login failed");
@@ -597,24 +774,22 @@ export async function login(username: string, password: string) {
     throw new Error(message || "Login failed");
   }
   const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string };
-  if (access_token && HEADER_AUTH_MODE) setTokens(access_token, refresh_token);
-  // In cookie-auth mode, a successful login sets cookies server-side.
+  if (access_token) setTokens(access_token, refresh_token);
   // Bump the auth epoch to invalidate short caches and switch namespace immediately.
-  if (!HEADER_AUTH_MODE) bumpAuthEpoch();
+  bumpAuthEpoch();
   return { access_token, refresh_token } as any;
 }
 
 export async function register(username: string, password: string) {
-  const res = await apiFetch("/v1/register", { method: "POST", auth: false, body: JSON.stringify({ username, password }) });
+  const res = await apiFetch("/v1/register", { method: "POST", body: JSON.stringify({ username, password }) });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { detail?: unknown; error?: unknown } | null;
     const raw = (body && (typeof body.detail === 'string' ? body.detail : body.error)) || res.statusText;
     throw new Error(String(raw));
   }
   const out = await res.json();
-  // If the server logs the user in as part of registration (common for cookie-auth),
-  // bump the auth epoch so future GETs use the new auth namespace immediately.
-  if (!HEADER_AUTH_MODE) bumpAuthEpoch();
+  // Bump the auth epoch so future GETs use the new auth namespace immediately.
+  bumpAuthEpoch();
   return out;
 }
 
@@ -692,7 +867,7 @@ export async function getBudgetDetails(): Promise<{ tokens_used: number; minutes
 
 export interface ModelItem { engine: string; name: string }
 export async function getModels(): Promise<{ items: ModelItem[] }> {
-  const res = await apiFetch("/v1/models", { method: "GET", auth: false });
+  const res = await apiFetch("/v1/models", { method: "GET" });
   if (!res.ok) throw new Error("models_failed");
   return res.json();
 }
@@ -847,5 +1022,27 @@ export async function putTvConfig(residentId: string, token: string, cfg: TvConf
   const res = await apiFetch(`/v1/tv/config${qs}`, { method: 'PUT', body: JSON.stringify(cfg), headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<{ status: string; config: TvConfig }>;
+}
+
+// Google OAuth functions
+export async function getGoogleAuthUrl(next?: string): Promise<string> {
+  const params = new URLSearchParams();
+  if (next) params.append('next', next);
+
+  const response = await apiFetch(`/v1/google/auth/login_url?${params.toString()}`, {
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to get Google auth URL');
+  }
+
+  const data = await response.json();
+  return data.auth_url;
+}
+
+export async function initiateGoogleSignIn(next?: string): Promise<void> {
+  const authUrl = await getGoogleAuthUrl(next);
+  window.location.href = authUrl;
 }
 

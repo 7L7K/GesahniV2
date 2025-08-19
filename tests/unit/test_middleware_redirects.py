@@ -110,7 +110,7 @@ class TestSecurityFeatures:
         
         # Should use the origin, not hardcoded localhost
         assert "localhost" not in result
-        assert "127.0.0.1" not in result
+        assert "localhost" in result
         assert result == "https://app.example.com/login"
     
     def test_open_redirect_prevention(self):

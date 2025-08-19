@@ -39,7 +39,18 @@ async def with_timeout(
 
 async def check_jwt_secret() -> HealthResult:
     # Required readiness: JWT secret configured for auth flows
-    return "ok" if (os.getenv("JWT_SECRET") or os.getenv("JWT_PUBLIC_KEY")) else "error"
+    jwt_secret = os.getenv("JWT_SECRET")
+    jwt_public_key = os.getenv("JWT_PUBLIC_KEY")
+    
+    # Check if JWT_SECRET is configured
+    if not jwt_secret and not jwt_public_key:
+        return "error"
+    
+    # Security check: detect insecure default values
+    if jwt_secret and jwt_secret.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
+        return "error"
+    
+    return "ok"
 
 
 async def check_db() -> HealthResult:

@@ -230,5 +230,4 @@ const WS_MOCK = jest.fn(function (this: any, url: string) {
 (global as any).WebSocket.CLOSING = 2;
 (global as any).WebSocket.CLOSED = 3;
 
-// Force header-auth mode in tests so token helpers are active
-process.env.NEXT_PUBLIC_HEADER_AUTH_MODE = '1';
+// Header auth mode is now the default

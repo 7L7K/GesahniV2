@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import os
+import logging
 from functools import lru_cache
 from typing import Any, Dict, Optional, Tuple
 
 from fastapi import HTTPException, Request, WebSocket
 import jwt
 from jwt import PyJWKClient
+
+logger = logging.getLogger(__name__)
 
 
 def _std_401() -> HTTPException:
@@ -60,35 +63,97 @@ def _jwks_client() -> Tuple[PyJWKClient, str, Optional[str]]:
 
 
 def _extract_bearer_from_request(request: Request) -> Optional[str]:
+    token = None
+    token_source = "none"
+    
+    # 1) Try access_token first (Authorization header or cookie)
     auth = request.headers.get("Authorization")
     if auth and auth.startswith("Bearer "):
-        return auth.split(" ", 1)[1]
-    # Clerk SSR cookie (when proxied) — best-effort; JWT is not stored in our own cookies
-    cookie = request.cookies.get("__session") or request.cookies.get("session")
-    if cookie and cookie.count(".") >= 2:
-        return cookie
-    return None
+        token = auth.split(" ", 1)[1]
+        token_source = "authorization_header"
+    
+    # Fallback to access_token cookie
+    if not token:
+        token = request.cookies.get("access_token")
+        if token:
+            token_source = "access_token_cookie"
+    
+    # 2) Try __session cookie if access_token failed
+    if not token:
+        token = request.cookies.get("__session") or request.cookies.get("session")
+        if token:
+            token_source = "__session_cookie"
+    
+    # Log which cookie/token source authenticated the request
+    if token:
+        logger.info("auth.token_source", extra={
+            "token_source": token_source,
+            "has_token": bool(token),
+            "token_length": len(token) if token else 0,
+            "request_path": getattr(request, "url", {}).path if hasattr(getattr(request, "url", {}), "path") else "unknown",
+            "auth_method": "clerk",
+        })
+    
+    return token
 
 
 def _extract_bearer_from_ws(ws: WebSocket) -> Optional[str]:
+    token = None
+    token_source = "none"
+    
+    # 1) Try access_token first (Authorization header, query param, or cookie)
     auth = ws.headers.get("Authorization")
     if auth and auth.startswith("Bearer "):
-        return auth.split(" ", 1)[1]
-    try:
-        tok = ws.query_params.get("token") or ws.query_params.get("access_token") or ws.query_params.get("__session")
-        if tok:
-            return tok
-    except Exception:
-        pass
-    try:
-        raw_cookie = ws.headers.get("Cookie") or ""
-        parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
-        for p in parts:
-            if p.startswith("__session="):
-                return p.split("=", 1)[1]
-    except Exception:
-        pass
-    return None
+        token = auth.split(" ", 1)[1]
+        token_source = "authorization_header"
+    
+    # WS query param fallback for browser WebSocket handshakes
+    if not token:
+        try:
+            qp = ws.query_params
+            token = qp.get("access_token") or qp.get("token")
+            if token:
+                token_source = "websocket_query_param"
+        except Exception:
+            token = None
+    
+    # Cookie header fallback for WS handshakes
+    if not token:
+        try:
+            raw_cookie = ws.headers.get("Cookie") or ""
+            parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
+            for p in parts:
+                if p.startswith("access_token="):
+                    token = p.split("=", 1)[1]
+                    token_source = "websocket_access_token_cookie"
+                    break
+        except Exception:
+            token = None
+    
+    # 2) Try __session cookie if access_token failed
+    if not token:
+        try:
+            raw_cookie = ws.headers.get("Cookie") or ""
+            parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
+            for p in parts:
+                if p.startswith("__session="):
+                    token = p.split("=", 1)[1]
+                    token_source = "websocket_session_cookie"
+                    break
+        except Exception:
+            token = None
+    
+    # Log which cookie/token source authenticated the request
+    if token:
+        logger.info("auth.token_source", extra={
+            "token_source": token_source,
+            "has_token": bool(token),
+            "token_length": len(token) if token else 0,
+            "request_path": "websocket",
+            "auth_method": "clerk",
+        })
+    
+    return token
 
 
 def _claims_to_state(request_or_ws: Any, claims: Dict[str, Any]) -> None:

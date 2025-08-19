@@ -68,9 +68,9 @@ def test_register_username_taken(monkeypatch):
     assert r.status_code == 400
 
 
-def test_logout_invalid_token_returns_401(monkeypatch):
+def test_logout_invalid_token_returns_204(monkeypatch):
     client = _client(monkeypatch)
     r = client.post("/logout", headers={"Authorization": "Bearer notatoken"})
-    assert r.status_code == 401
+    assert r.status_code == 204
 
 

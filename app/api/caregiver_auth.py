@@ -18,7 +18,14 @@ def _hmac(data: str, key: str) -> str:
 
 
 def _secret() -> str:
-    return os.getenv("CARE_ACK_SECRET", os.getenv("JWT_SECRET", "change-me"))
+    # Prefer CARE_ACK_SECRET, fallback to JWT_SECRET
+    secret = os.getenv("CARE_ACK_SECRET") or os.getenv("JWT_SECRET")
+    if not secret or secret.strip() == "":
+        raise HTTPException(status_code=500, detail="missing_care_secret")
+    # Security check: prevent use of default/placeholder secrets
+    if secret.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
+        raise HTTPException(status_code=500, detail="insecure_care_secret")
+    return secret
 
 
 @router.get("/care/ack_token")

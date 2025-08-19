@@ -22,6 +22,6 @@ def test_logout_clears_cookies(monkeypatch):
         # CSRF enabled path
         client.cookies.set('csrf_token', 'abc')
         r = client.post('/v1/auth/logout', headers={'X-CSRF-Token': 'abc'})
-        assert r.status_code in (200, 401)
+        assert r.status_code == 204  # 204 No Content is correct for logout
 
 

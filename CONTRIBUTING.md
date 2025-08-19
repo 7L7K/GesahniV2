@@ -21,7 +21,7 @@ Thanks for your interest in contributing! This guide explains how to set up your
    Alternatively: `bash app/setup.sh`
 3. Start the backend:
    ```bash
-   uvicorn app.main:app --reload
+   uvicorn app.main:app --host :: --port 8000 --reload
    ```
 4. Start the frontend (in another shell):
    ```bash

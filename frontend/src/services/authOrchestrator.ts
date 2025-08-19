@@ -60,6 +60,21 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
     private finisherCallCount = 0;
     private authFinishInProgress = false;
 
+    // Rate limiting and backoff state
+    private consecutiveFailures = 0;
+    private backoffUntil = 0;
+    private readonly MIN_CALL_INTERVAL = 5000; // Increased from 2000 to 5000ms to reduce rate limiting
+    private readonly MAX_BACKOFF = 60000; // Increased from 30000 to 60000ms
+    private readonly BASE_BACKOFF = 2000; // Increased from 1000 to 2000ms
+
+    // Oscillation prevention
+    private pendingAuthCheck: Promise<void> | null = null;
+    private debounceTimer: NodeJS.Timeout | null = null;
+    private readonly DEBOUNCE_DELAY = 1000; // Increased from 500 to 1000ms
+    private lastSuccessfulState: Partial<AuthState> | null = null;
+    private oscillationDetectionCount = 0;
+    private readonly MAX_OSCILLATION_COUNT = 2; // Reduced from 3 to 2 to trigger backoff sooner
+
     constructor() {
         // Subscribe to bootstrap manager for auth finish coordination
         this.bootstrapManager.subscribe((bootstrapState) => {
@@ -110,6 +125,21 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
         const prevState = this.state;
         this.state = { ...this.state, ...updates };
 
+        // Check for oscillation - rapid state changes
+        // Only check after we have a successful state to compare against and after initialization
+        if (this.lastSuccessfulState && this.initialized && this.detectOscillation(prevState, this.state)) {
+            this.oscillationDetectionCount++;
+            console.warn(`AUTH Orchestrator: Oscillation detected (${this.oscillationDetectionCount}/${this.MAX_OSCILLATION_COUNT})`);
+
+            if (this.oscillationDetectionCount >= this.MAX_OSCILLATION_COUNT) {
+                console.error('AUTH Orchestrator: Max oscillation count reached, applying extended backoff');
+                this.applyOscillationBackoff();
+            }
+        } else if (this.state.error === null && this.state.isAuthenticated) {
+            // Reset oscillation count on successful authentication
+            this.oscillationDetectionCount = 0;
+        }
+
         // Only notify if state actually changed
         if (JSON.stringify(prevState) !== JSON.stringify(this.state)) {
             this.subscribers.forEach(callback => {
@@ -120,6 +150,72 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
                 }
             });
         }
+    }
+
+    private detectOscillation(prevState: AuthState, newState: AuthState): boolean {
+        // Only detect oscillation if we have a last successful state to compare against
+        if (!this.lastSuccessfulState) {
+            return false;
+        }
+
+        // Don't detect oscillation during initial state setup
+        if (prevState.lastChecked === 0) {
+            return false;
+        }
+
+        // Check for rapid whoamiOk flips
+        if (prevState.whoamiOk !== newState.whoamiOk) {
+            const timeSinceLastChange = Date.now() - this.lastWhoamiCall;
+            return timeSinceLastChange < 10000; // Increased from 5000 to 10000ms threshold
+        }
+
+        // Check for rapid authentication state changes
+        if (prevState.isAuthenticated !== newState.isAuthenticated ||
+            prevState.sessionReady !== newState.sessionReady) {
+            const timeSinceLastChange = Date.now() - this.lastWhoamiCall;
+            return timeSinceLastChange < 5000; // Increased from 3000 to 5000ms threshold
+        }
+
+        return false;
+    }
+
+    private applyOscillationBackoff(): void {
+        // Apply extended backoff when oscillation is detected
+        const extendedBackoff = Math.min(this.MAX_BACKOFF * 2, 60000); // Up to 60 seconds
+        this.backoffUntil = Date.now() + extendedBackoff;
+        this.oscillationDetectionCount = 0; // Reset counter
+        console.warn(`AUTH Orchestrator: Applied oscillation backoff for ${extendedBackoff}ms`);
+    }
+
+    private shouldThrottleCall(): boolean {
+        const now = Date.now();
+
+        // Check if we're in backoff period
+        if (now < this.backoffUntil) {
+            const remaining = this.backoffUntil - now;
+            console.info(`AUTH Orchestrator: In backoff period, ${remaining}ms remaining`);
+            return true;
+        }
+
+        // Check minimum interval between calls
+        if (now - this.lastWhoamiCall < this.MIN_CALL_INTERVAL) {
+            const remaining = this.MIN_CALL_INTERVAL - (now - this.lastWhoamiCall);
+            console.info(`AUTH Orchestrator: Too soon since last call, ${remaining}ms remaining`);
+            return true;
+        }
+
+        return false;
+    }
+
+    private calculateBackoff(): number {
+        // Exponential backoff with jitter
+        const backoff = Math.min(
+            this.BASE_BACKOFF * Math.pow(1.5, this.consecutiveFailures), // Changed from 2 to 1.5 for gentler backoff
+            this.MAX_BACKOFF
+        );
+        // Add jitter (±15% instead of ±20%)
+        const jitter = backoff * 0.15 * (Math.random() - 0.5);
+        return Math.max(2000, backoff + jitter); // Increased minimum from 1000 to 2000ms
     }
 
     async initialize(): Promise<void> {
@@ -136,107 +232,245 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
     }
 
     async checkAuth(): Promise<void> {
-        if (this.state.isLoading) {
-            console.info('AUTH Orchestrator: Auth check already in progress, skipping');
+        if (this.authFinishInProgress) {
+            console.info('AUTH Orchestrator: Skipping whoami - auth finish in progress');
             return;
         }
 
-        // Check bootstrap manager for auth finish state
-        const bootstrapState = this.bootstrapManager.getState();
-        if (bootstrapState.authFinishInProgress || this.authFinishInProgress) {
-            console.info('AUTH Orchestrator: Skipping whoami during auth finish');
-            return;
-        }
-
-        // Prevent rapid successive whoami calls
         const now = Date.now();
-        if (now - this.lastWhoamiCall < 1000) { // 1 second minimum between calls
-            console.info('AUTH Orchestrator: Skipping whoami - too soon since last call');
+
+        // Rate limiting check
+        if (now < this.backoffUntil) {
+            const remaining = this.backoffUntil - now;
+            console.info(`AUTH Orchestrator: Rate limited, skipping whoami. Remaining: ${remaining}ms`);
             return;
         }
 
-        // Coordinate with bootstrap manager
-        if (!this.bootstrapManager.startAuthBootstrap()) {
-            console.info('AUTH Orchestrator: Auth bootstrap blocked by bootstrap manager');
+        // Minimum interval check
+        if (now - this.lastWhoamiCall < this.MIN_CALL_INTERVAL) {
+            console.info(`AUTH Orchestrator: Too soon since last whoami call. Last: ${this.lastWhoamiCall}, Now: ${now}, Min interval: ${this.MIN_CALL_INTERVAL}`);
             return;
         }
 
-        this.setState({ isLoading: true, error: null });
+        // Debounce rapid calls
+        if (this.debounceTimer) {
+            console.info('AUTH Orchestrator: Debouncing rapid whoami call');
+            clearTimeout(this.debounceTimer);
+        }
+
+        this.debounceTimer = setTimeout(async () => {
+            await this._performWhoamiCheck();
+        }, this.DEBOUNCE_DELAY);
+    }
+
+    async refreshAuth(): Promise<void> {
+        console.info('AUTH Orchestrator: refreshAuth called', {
+            timestamp: new Date().toISOString(),
+            currentState: this.state,
+        });
+
+        if (this.authFinishInProgress) {
+            console.info('AUTH Orchestrator: Skipping refresh - auth finish in progress');
+            return;
+        }
+
+        // Clear any pending debounced calls
+        if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+            this.debounceTimer = null;
+        }
+
+        await this._performWhoamiCheck();
+    }
+
+    private async _performWhoamiCheck(): Promise<void> {
+        if (this.pendingAuthCheck) {
+            console.info('AUTH Orchestrator: Whoami check already in progress, waiting');
+            await this.pendingAuthCheck;
+            return;
+        }
+
+        this.pendingAuthCheck = this._doWhoamiCheck();
+        try {
+            await this.pendingAuthCheck;
+        } finally {
+            this.pendingAuthCheck = null;
+        }
+    }
+
+    private async _doWhoamiCheck(): Promise<void> {
+        const now = Date.now();
         this.lastWhoamiCall = now;
         this.whoamiCallCount++;
 
+        console.info(`AUTH Orchestrator: Starting whoami check #${this.whoamiCallCount}`, {
+            timestamp: new Date().toISOString(),
+            consecutiveFailures: this.consecutiveFailures,
+            backoffUntil: this.backoffUntil,
+        });
+
+        // Update loading state
+        this.setState({
+            isLoading: true,
+            error: null,
+        });
+
         try {
-            console.info(`AUTH Orchestrator: Calling /v1/whoami (call #${this.whoamiCallCount})`);
             const response = await apiFetch('/v1/whoami', {
                 method: 'GET',
-                auth: false, // Don't add auth headers, let the endpoint handle it
-                dedupe: true // Dedupe multiple simultaneous calls
+                dedupe: false, // Always make fresh request for auth checks
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            const isAuthenticated = Boolean(data.is_authenticated);
-            const sessionReady = Boolean(data.session_ready);
-
-            // Stable whoamiOk state - reflects JWT validity (sessionReady)
-            // Only update if session readiness actually changed to prevent oscillation
-            let whoamiOk = this.state.whoamiOk;
-            if (sessionReady !== this.state.sessionReady) {
-                whoamiOk = sessionReady;
-                console.info(`AUTH Orchestrator: Session readiness changed from ${this.state.sessionReady} to ${sessionReady}, whoamiOk: ${whoamiOk}`);
-            }
-
-            this.setState({
-                isAuthenticated,
-                sessionReady,
-                user: data.user || null,
-                source: data.source || 'missing',
-                version: data.version || 1,
-                lastChecked: Date.now(),
-                isLoading: false,
-                error: null,
-                whoamiOk,
+            console.info(`AUTH Orchestrator: Whoami response #${this.whoamiCallCount}`, {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok,
+                headers: Object.fromEntries(response.headers.entries()),
+                timestamp: new Date().toISOString(),
             });
 
-            console.info(`AUTH Orchestrator: Auth check complete - authenticated: ${this.state.isAuthenticated}, source: ${this.state.source}, whoamiOk: ${whoamiOk}`);
+            if (response.ok) {
+                const data = await response.json();
+                console.info(`AUTH Orchestrator: Whoami success #${this.whoamiCallCount}`, {
+                    userId: data.user_id,
+                    hasUser: !!data.user_id,
+                    data,
+                    timestamp: new Date().toISOString(),
+                });
+
+                // Reset failure tracking on success
+                this.consecutiveFailures = 0;
+                this.backoffUntil = 0;
+
+                const newState: AuthState = {
+                    isAuthenticated: true,
+                    sessionReady: true,
+                    user: {
+                        id: data.user_id,
+                        email: data.email || null,
+                    },
+                    source: 'cookie', // Assuming cookie-based auth
+                    version: this.state.version + 1,
+                    lastChecked: now,
+                    isLoading: false,
+                    error: null,
+                    whoamiOk: true,
+                };
+
+                // Check for oscillation
+                if (this.detectOscillation(this.state, newState)) {
+                    console.warn(`AUTH Orchestrator: Potential oscillation detected #${this.oscillationDetectionCount + 1}`, {
+                        previousState: this.lastSuccessfulState,
+                        newState,
+                        timestamp: new Date().toISOString(),
+                    });
+                    this.oscillationDetectionCount++;
+
+                    if (this.oscillationDetectionCount >= this.MAX_OSCILLATION_COUNT) {
+                        console.error('AUTH Orchestrator: Max oscillation count reached, applying backoff', {
+                            timestamp: new Date().toISOString(),
+                        });
+                        this.applyOscillationBackoff();
+                        return;
+                    }
+                } else {
+                    // Reset oscillation counter on stable state
+                    this.oscillationDetectionCount = 0;
+                }
+
+                this.lastSuccessfulState = { ...newState };
+                this.setState(newState);
+
+                console.info(`AUTH Orchestrator: Whoami check #${this.whoamiCallCount} completed successfully`, {
+                    timestamp: new Date().toISOString(),
+                });
+
+            } else {
+                console.warn(`AUTH Orchestrator: Whoami failed #${this.whoamiCallCount}`, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    timestamp: new Date().toISOString(),
+                });
+
+                this.consecutiveFailures++;
+
+                // Special handling for rate limit errors
+                if (response.status === 429) {
+                    console.warn('AUTH Orchestrator: Rate limit hit, applying extended backoff');
+                    this.backoffUntil = Date.now() + 30000; // 30 second backoff for rate limits
+                } else {
+                    this.applyOscillationBackoff();
+                }
+
+                const newState: AuthState = {
+                    isAuthenticated: false,
+                    sessionReady: false,
+                    user: null,
+                    source: 'missing',
+                    version: this.state.version + 1,
+                    lastChecked: now,
+                    isLoading: false,
+                    error: `HTTP ${response.status}: ${response.statusText}`,
+                    whoamiOk: false,
+                };
+
+                this.setState(newState);
+
+                console.info(`AUTH Orchestrator: Whoami check #${this.whoamiCallCount} failed`, {
+                    consecutiveFailures: this.consecutiveFailures,
+                    backoffUntil: this.backoffUntil,
+                    timestamp: new Date().toISOString(),
+                });
+            }
+
         } catch (error) {
-            console.error('AUTH Orchestrator: Auth check failed:', error);
-            this.setState({
+            console.error(`AUTH Orchestrator: Whoami exception #${this.whoamiCallCount}`, {
+                error: error instanceof Error ? error.message : String(error),
+                errorType: error instanceof Error ? error.constructor.name : typeof error,
+                stack: error instanceof Error ? error.stack : undefined,
+                timestamp: new Date().toISOString(),
+            });
+
+            this.consecutiveFailures++;
+            this.applyOscillationBackoff();
+
+            const newState: AuthState = {
                 isAuthenticated: false,
                 sessionReady: false,
                 user: null,
                 source: 'missing',
-                lastChecked: Date.now(),
+                version: this.state.version + 1,
+                lastChecked: now,
                 isLoading: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
+                error: error instanceof Error ? error.message : String(error),
                 whoamiOk: false,
+            };
+
+            this.setState(newState);
+
+            console.info(`AUTH Orchestrator: Whoami check #${this.whoamiCallCount} exception`, {
+                consecutiveFailures: this.consecutiveFailures,
+                backoffUntil: this.backoffUntil,
+                timestamp: new Date().toISOString(),
             });
-        } finally {
-            // Always stop auth bootstrap when done
-            this.bootstrapManager.stopAuthBootstrap();
         }
-    }
-
-    async refreshAuth(): Promise<void> {
-        console.info('AUTH Orchestrator: Refreshing auth state');
-
-        // Check if auth finish just ended and we should refresh
-        const bootstrapState = this.bootstrapManager.getState();
-        if (bootstrapState.authFinishInProgress || this.authFinishInProgress) {
-            console.info('AUTH Orchestrator: Skipping refresh during auth finish');
-            return;
-        }
-
-        await this.checkAuth();
     }
 
     cleanup(): void {
         console.info('AUTH Orchestrator: Cleaning up');
         this.subscribers.clear();
         this.initialized = false;
+        this.consecutiveFailures = 0;
+        this.backoffUntil = 0;
+        this.oscillationDetectionCount = 0;
+        this.lastSuccessfulState = null;
+
+        // Clear any pending operations
+        if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+            this.debounceTimer = null;
+        }
+        this.pendingAuthCheck = null;
     }
 }
 
@@ -263,15 +497,100 @@ export function __resetAuthOrchestrator(): void {
 
 // Development helper to detect direct whoami calls
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    // Track legitimate whoami calls from AuthOrchestrator
+    const legitimateWhoamiCalls = new Set<number>();
+    let callIdCounter = 0;
+
+    // Mark legitimate calls from AuthOrchestrator
+    const markLegitimateCall = () => {
+        const callId = ++callIdCounter;
+        legitimateWhoamiCalls.add(callId);
+
+        // Clean up the call ID after a short delay
+        setTimeout(() => {
+            legitimateWhoamiCalls.delete(callId);
+        }, 1000);
+
+        return callId;
+    };
+
+    // Override the AuthOrchestrator's checkAuth method to mark calls as legitimate
+    const originalCheckAuth = AuthOrchestratorImpl.prototype.checkAuth;
+    AuthOrchestratorImpl.prototype.checkAuth = async function (...args: any[]) {
+        const callId = markLegitimateCall();
+        try {
+            return await originalCheckAuth.apply(this, args as []);
+        } finally {
+            // The call ID will be cleaned up by the timeout
+        }
+    };
+
     const originalFetch = window.fetch;
     window.fetch = function (...args) {
         const url = args[0];
         if (typeof url === 'string' && url.includes('/v1/whoami')) {
-            console.warn('🚨 DIRECT WHOAMI CALL DETECTED!', {
-                url,
-                stack: new Error().stack,
-                message: 'Use AuthOrchestrator instead of calling whoami directly'
-            });
+            // Check if this is a legitimate call from AuthOrchestrator
+            const requestInit = args[1] || {};
+            const callId = (requestInit as any)._legitimateWhoamiCallId;
+
+            if (!callId || !legitimateWhoamiCalls.has(callId)) {
+                // This is likely a direct call - analyze the stack trace more thoroughly
+                const stack = new Error().stack || '';
+                const stackLines = stack.split('\n');
+
+                // Look for AuthOrchestrator-related patterns in the stack
+                const authOrchestratorPatterns = [
+                    /AuthOrchestrator/,
+                    /authOrchestrator/,
+                    /checkAuth/,
+                    /apiFetch/,
+                    /getAuthOrchestrator/,
+                    /refreshAuth/,
+                    /AuthOrchestratorImpl/
+                ];
+
+                // Check if any line in the stack contains AuthOrchestrator patterns
+                const hasAuthOrchestratorCall = stackLines.some(line =>
+                    authOrchestratorPatterns.some(pattern => pattern.test(line))
+                );
+
+                // Additional check: look for common legitimate call patterns
+                const legitimateCallPatterns = [
+                    /useAuth/,
+                    /useAuthState/,
+                    /AuthProvider/,
+                    /authOrchestrator\.ts/,
+                    /getAuthOrchestrator/
+                ];
+
+                const hasLegitimateCallPattern = stackLines.some(line =>
+                    legitimateCallPatterns.some(pattern => pattern.test(line))
+                );
+
+                // Check for specific legitimate call paths
+                const isLegitimateCall = hasAuthOrchestratorCall || hasLegitimateCallPattern;
+
+                if (!isLegitimateCall) {
+                    console.warn('🚨 DIRECT WHOAMI CALL DETECTED!', {
+                        url,
+                        stack,
+                        stackLines: stackLines.slice(0, 10), // Show first 10 lines for debugging
+                        message: 'Use AuthOrchestrator instead of calling whoami directly',
+                        suggestion: 'Call getAuthOrchestrator().checkAuth() or use the useAuth hook',
+                        detectedAt: new Date().toISOString()
+                    });
+
+                    // In development, you might want to throw an error to make this more visible
+                    if (process.env.NODE_ENV === 'development' && process.env.STRICT_WHOAMI_DETECTION === 'true') {
+                        throw new Error('Direct whoami call detected! Use AuthOrchestrator instead.');
+                    }
+                }
+            }
+
+            // Remove the call ID from the request before sending
+            if (requestInit && (requestInit as any)._legitimateWhoamiCallId) {
+                delete (requestInit as any)._legitimateWhoamiCallId;
+            }
         }
         return originalFetch.apply(this, args);
     };

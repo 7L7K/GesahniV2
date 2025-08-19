@@ -6,7 +6,7 @@ import { getAuthOrchestrator } from '@/services/authOrchestrator';
 jest.mock('@/services/authOrchestrator');
 jest.mock('@/lib/api', () => ({
     apiFetch: jest.fn(),
-    wsUrl: jest.fn((path) => `ws://127.0.0.1:8000${path}`),
+    wsUrl: jest.fn((path) => `ws://localhost:8000${path}`),
 }));
 
 const mockGetAuthOrchestrator = getAuthOrchestrator as jest.MockedFunction<typeof getAuthOrchestrator>;
@@ -137,7 +137,7 @@ describe('useRecorder WebSocket Discipline', () => {
 
             expect(result.current.state.status).toBe('recording');
             expect((global as any).WebSocket).toHaveBeenCalledWith(
-                'ws://127.0.0.1:8000/v1/transcribe'
+                'ws://localhost:8000/v1/transcribe'
             );
         });
     });

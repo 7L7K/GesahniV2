@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Flow Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Authentication Flow Test</h1>
+
+    <div class="test-section info">
+        <h3>Test Status</h3>
+        <div id="status">Initializing...</div>
+    </div>
+
+    <div class="test-section">
+        <h3>Backend Tests</h3>
+        <button onclick="testBackend()">Test Backend Connection</button>
+        <button onclick="testWhoami()">Test Whoami Endpoint</button>
+        <div id="backend-results"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Frontend Tests</h3>
+        <button onclick="testFrontend()">Test Frontend Connection</button>
+        <button onclick="testClerkIntegration()">Test Clerk Integration</button>
+        <div id="frontend-results"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Authentication Flow</h3>
+        <button onclick="testAuthFlow()">Test Complete Auth Flow</button>
+        <div id="auth-results"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        const FRONTEND_URL = 'http://[::1]:3000';
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<span class="${type}">${message}</span>`;
+        }
+
+        function addResult(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = `<pre>${new Date().toLocaleTimeString()}: ${message}</pre>`;
+            container.appendChild(div);
+        }
+
+        async function testBackend() {
+            addResult('backend-results', 'Testing backend connection...', 'info');
+            try {
+                const response = await fetch(`${API_URL}/v1/whoami`);
+                const data = await response.json();
+                addResult('backend-results', `✅ Backend connected successfully\nResponse: ${JSON.stringify(data, null, 2)}`, 'success');
+            } catch (error) {
+                addResult('backend-results', `❌ Backend connection failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testWhoami() {
+            addResult('backend-results', 'Testing whoami endpoint...', 'info');
+            try {
+                const response = await fetch(`${API_URL}/v1/whoami`);
+                const data = await response.json();
+
+                if (data.source === 'missing' && !data.is_authenticated) {
+                    addResult('backend-results', `✅ Whoami working correctly (unauthenticated)\nResponse: ${JSON.stringify(data, null, 2)}`, 'success');
+                } else {
+                    addResult('backend-results', `⚠️ Whoami responded with unexpected state\nResponse: ${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                addResult('backend-results', `❌ Whoami test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testFrontend() {
+            addResult('frontend-results', 'Testing frontend connection...', 'info');
+            try {
+                const response = await fetch(FRONTEND_URL);
+                if (response.ok) {
+                    addResult('frontend-results', '✅ Frontend is accessible', 'success');
+                } else {
+                    addResult('frontend-results', `⚠️ Frontend responded with status: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                addResult('frontend-results', `❌ Frontend connection failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testClerkIntegration() {
+            addResult('frontend-results', 'Testing Clerk integration...', 'info');
+            try {
+                // Check if Clerk is loaded
+                if (typeof window.Clerk !== 'undefined') {
+                    addResult('frontend-results', '✅ Clerk is loaded in browser', 'success');
+                } else {
+                    addResult('frontend-results', '⚠️ Clerk not detected in browser', 'error');
+                }
+
+                // Check for Clerk environment variables
+                const hasPublishableKey = window.location.href.includes('clerk.accounts.dev');
+                addResult('frontend-results', `Clerk publishable key detected: ${hasPublishableKey ? 'Yes' : 'No'}`, 'info');
+
+            } catch (error) {
+                addResult('frontend-results', `❌ Clerk integration test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testAuthFlow() {
+            addResult('auth-results', 'Testing complete authentication flow...', 'info');
+
+            // Step 1: Check initial state
+            try {
+                const initialResponse = await fetch(`${API_URL}/v1/whoami`);
+                const initialData = await initialResponse.json();
+                addResult('auth-results', `Initial state: ${JSON.stringify(initialData, null, 2)}`, 'info');
+
+                if (initialData.is_authenticated) {
+                    addResult('auth-results', '⚠️ User is already authenticated', 'error');
+                    return;
+                }
+
+                addResult('auth-results', '✅ User is not authenticated (expected)', 'success');
+
+            } catch (error) {
+                addResult('auth-results', `❌ Failed to check initial state: ${error.message}`, 'error');
+                return;
+            }
+
+            // Step 2: Instructions for manual testing
+            addResult('auth-results', `
+Manual Testing Instructions:
+1. Open http://localhost:3000 in a new tab
+2. Click "Sign In" or "Sign Up"
+3. Complete the Clerk authentication flow
+4. Return to this page and click "Test Auth Flow" again
+5. Check if the user is now authenticated
+            `, 'info');
+        }
+
+        // Initialize
+        updateStatus('Ready for testing');
+
+        // Auto-run basic tests
+        setTimeout(() => {
+            testBackend();
+            testFrontend();
+        }, 1000);
+    </script>
+</body>
+
+</html>

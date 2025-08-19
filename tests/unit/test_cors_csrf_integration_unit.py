@@ -127,7 +127,7 @@ def test_cors_csrf_disallowed_origin_rejected():
     
     # Test OPTIONS request with disallowed origin
     response = client.options('/v1/auth/logout', headers={
-        'Origin': 'http://localhost:3000',
+        'Origin': 'http://malicious-site.com',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'content-type'
     })
@@ -140,7 +140,7 @@ def test_cors_csrf_disallowed_origin_rejected():
     # Preflight requests are rejected with 400, but actual requests may still be processed
     # This is a limitation of the current CORS implementation
     response = client.get('/health/live', headers={
-        'Origin': 'http://localhost:3000'
+        'Origin': 'http://malicious-site.com'
     })
     
     # The actual request behavior may vary depending on the CORS implementation

@@ -579,7 +579,7 @@ async def silent_refresh_middleware(request: Request, call_next):
             user_id = str(payload.get("user_id") or "")
             if not user_id:
                 return response
-            lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))
+            lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", str(int(os.getenv("JWT_EXPIRE_MINUTES", "30")) * 60)))
             base_claims = {k: v for k, v in payload.items() if k not in {"iat", "exp", "nbf", "jti"}}
             base_claims["user_id"] = user_id
             new_payload = {**base_claims, "iat": now, "exp": now + lifetime}

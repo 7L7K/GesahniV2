@@ -43,35 +43,6 @@ export default function middleware(req: NextRequest, ev: NextFetchEvent) {
     }
 
     const hasClerk = Boolean(process.env.CLERK_SECRET_KEY || process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
-    const { searchParams } = req.nextUrl
-    // Preserve legacy token capture for backend cookie auth
-    if (pathname === '/login' && (searchParams.has('access_token') || searchParams.has('refresh_token'))) {
-        const access = searchParams.get('access_token') || ''
-        const refresh = searchParams.get('refresh_token') || ''
-        const next = sanitizeNextPath(searchParams.get('next'), '/')
-        const res = NextResponse.redirect(new URL(next, req.url))
-        if (access) {
-            res.cookies.set('access_token', access, {
-                httpOnly: true,
-                sameSite: (process.env.COOKIE_SAMESITE || 'lax').toLowerCase() as any,
-                secure: (process.env.NODE_ENV === 'production') || (process.env.COOKIE_SECURE || '1').toLowerCase() === '1',
-                path: '/',
-                maxAge: Number(process.env.NEXT_PUBLIC_JWT_EXPIRE_MINUTES || process.env.JWT_EXPIRE_MINUTES || 30) * 60,
-            })
-        }
-        if (refresh) {
-            const refreshMinutes = Number(process.env.NEXT_PUBLIC_JWT_REFRESH_EXPIRE_MINUTES || process.env.JWT_REFRESH_EXPIRE_MINUTES || 1440)
-            res.cookies.set('refresh_token', refresh, {
-                httpOnly: true,
-                sameSite: (process.env.COOKIE_SAMESITE || 'lax').toLowerCase() as any,
-                secure: (process.env.NODE_ENV === 'production') || (process.env.COOKIE_SECURE || '1').toLowerCase() === '1',
-                path: '/',
-                maxAge: refreshMinutes * 60,
-            })
-        }
-        res.cookies.set('auth_hint', '1', { path: '/', maxAge: 14 * 24 * 60 * 60 })
-        return res
-    }
     if (hasClerk) {
         return baseClerkMiddleware(req, ev)
     }

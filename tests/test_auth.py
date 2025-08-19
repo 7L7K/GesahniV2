@@ -93,7 +93,7 @@ def test_refresh_and_logout(monkeypatch):
     # Logout with latest refresh token
     latest_refresh = new_tokens["refresh_token"]
     r4 = client.post("/logout", headers={"Authorization": f"Bearer {latest_refresh}"})
-    assert r4.status_code == 200
+    assert r4.status_code == 204
 
     # Token cannot be used after logout
     r5 = client.post("/refresh", json={"refresh_token": latest_refresh})

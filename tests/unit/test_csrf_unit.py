@@ -3,13 +3,26 @@ from __future__ import annotations
 import os
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
 
 from app.csrf import CSRFMiddleware
 
 
 def _app():
-    os.environ.setdefault("CSRF_ENABLED", "1")
+    # Explicitly set CSRF_ENABLED to ensure it's enabled
+    os.environ["CSRF_ENABLED"] = "1"
     a = FastAPI()
+    
+    # Add CORS middleware first (handles preflights)
+    a.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000"],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+    )
+    
+    # Add CSRF middleware after CORS (handles non-OPTIONS requests)
     a.add_middleware(CSRFMiddleware)
 
     @a.get("/ping")

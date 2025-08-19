@@ -96,7 +96,7 @@ async def _require_auth_dep(request: Request) -> None:
 
 @router.post(
     "/ask",
-    dependencies=[Depends(rate_limit)],
+    dependencies=[Depends(verify_token), Depends(rate_limit)],
     responses={
         200: {
             "content": {

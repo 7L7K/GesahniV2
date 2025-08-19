@@ -23,7 +23,6 @@ export function useBackendStatus() {
                 const timeoutId = setTimeout(() => controller.abort(), 2000);
 
                 const res = await apiFetch('/healthz/ready', {
-                    auth: false,
                     signal: controller.signal,
                     cache: 'no-store',
                     credentials: 'include'
@@ -46,6 +45,13 @@ export function useBackendStatus() {
             } catch (error) {
                 console.log('[BackendStatus] Error:', error);
                 if (!mounted) return;
+
+                // Handle AbortError specifically - don't treat as offline if request was aborted
+                if (error instanceof Error && error.name === 'AbortError') {
+                    console.log('[BackendStatus] Request aborted, not treating as offline');
+                    return;
+                }
+
                 setHasChecked(true);
                 setReady('offline');
             } finally {
@@ -70,7 +76,6 @@ export function useBackendStatus() {
                 const timeoutId = setTimeout(() => controller.abort(), 2000);
 
                 const res = await apiFetch('/healthz/deps', {
-                    auth: false,
                     signal: controller.signal,
                     cache: 'no-store',
                     credentials: 'include'
@@ -83,8 +88,15 @@ export function useBackendStatus() {
                     const body = await res.json().catch(() => null);
                     setDeps(body);
                 }
-            } catch {
+            } catch (error) {
                 if (!mounted) return;
+
+                // Handle AbortError specifically - don't treat as error if request was aborted
+                if (error instanceof Error && error.name === 'AbortError') {
+                    console.log('[BackendStatus] Dependencies request aborted, keeping last snapshot');
+                    return;
+                }
+
                 // keep last snapshot
             } finally {
                 if (!mounted) return;

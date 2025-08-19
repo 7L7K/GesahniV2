@@ -125,7 +125,8 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
 | `HISTORY_FILE` | `data/history.jsonl` | no | Request history log |
 | `CORS_ALLOW_ORIGINS` | `http://localhost:3000` | no | Allowed web origins (exactly localhost, not 127.0.0.1) |
 | `CORS_ALLOW_CREDENTIALS` | `true` | no | Allow credentials (cookies/tokens) |
-| `PORT` | `8000` | no | Server port when running `python app/main.py` |
+| `HOST` | `localhost` | no | Server host when running `python app.main:app` |
+| `PORT` | `8000` | no | Server port when running `python app.main.py` |
 | `SESSIONS_DIR` | `sessions/` | no | Base directory for session media |
 | `ADMIN_TOKEN` | – | no | Required to read `/config` |
 | `INTENT_THRESHOLD` | `0.7` | no | Intent classification cutoff |
@@ -170,7 +171,7 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
    ```
 3. **Start backend**
    ```bash
-   uvicorn app.main:app --reload
+   uvicorn app.main:app --host :: --port 8000 --reload
    ```
 4. **Start frontend**
    ```bash

@@ -9,7 +9,7 @@ async def test_cors():
         # Test 1: Simple GET request with Origin header
         print("Test 1: GET request with Origin header")
         response = await client.get(
-            "http://127.0.0.1:8000/healthz/ready",
+            "http://localhost:8000/healthz/ready",
             headers={"Origin": "http://localhost:3000"}
         )
         print(f"Status: {response.status_code}")
@@ -18,7 +18,7 @@ async def test_cors():
         # Test 2: OPTIONS preflight request
         print("\nTest 2: OPTIONS preflight request")
         response = await client.options(
-            "http://127.0.0.1:8000/healthz/ready",
+            "http://localhost:8000/healthz/ready",
             headers={
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "GET",

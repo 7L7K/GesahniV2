@@ -9,7 +9,7 @@ import json
 import time
 from typing import Dict, Any, List
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "http://localhost:8000"
 FRONTEND_URL = "http://localhost:3000"
 
 def print_section(title: str):

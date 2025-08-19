@@ -5,7 +5,7 @@
 
 set -e
 
-BACKEND_URL="http://127.0.0.1:8000"
+BACKEND_URL="http://localhost:8000"
 FRONTEND_URL="http://localhost:3000"
 
 echo "🔒 Testing security fixes..."
@@ -40,13 +40,13 @@ echo "$response" | grep -E "(Access-Control-Allow-Methods|Access-Control-Allow-H
 echo "📋 Test 3: WebSocket Origin validation"
 if command -v wscat &> /dev/null; then
   # Test valid origin
-  timeout 5s wscat -c "ws://127.0.0.1:8000/v1/ws/health" -H "Origin: http://localhost:3000" || {
+  timeout 5s wscat -c "ws://localhost:8000/v1/ws/health" -H "Origin: http://localhost:3000" || {
     echo "❌ Test 3a failed: Valid origin rejected"
     exit 1
   }
   
   # Test invalid origin (should be rejected)
-  timeout 5s wscat -c "ws://127.0.0.1:8000/v1/ws/health" -H "Origin: http://evil.com" && {
+  timeout 5s wscat -c "ws://localhost:8000/v1/ws/health" -H "Origin: http://evil.com" && {
     echo "❌ Test 3b failed: Invalid origin accepted"
     exit 1
   } || true

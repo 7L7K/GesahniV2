@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import os
+import logging
 from typing import Any, Callable, Iterable, List
 
 from fastapi import HTTPException, Request, Security, WebSocket
 from fastapi.security import OAuth2PasswordBearer
+
+logger = logging.getLogger(__name__)
 
 
 OAUTH2_SCOPES: dict[str, str] = {
@@ -77,11 +80,13 @@ def require_scope(required: str) -> Callable[[Request], None]:
         payload = _extract_payload(request)
         if not isinstance(payload, dict):
             # verify_token dependency should have populated this already
+            logger.warning("deny: missing_scope scope=<%s> reason=no_payload", required)
             raise HTTPException(status_code=401, detail="Unauthorized")
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
         if required not in set(scopes):
+            logger.warning("deny: missing_scope scope=<%s> available=<%s>", required, ",".join(scopes))
             raise HTTPException(status_code=403, detail="Forbidden: missing scope")
 
     return _dep
@@ -121,11 +126,13 @@ def require_any_scope(required: Iterable[str]) -> Callable[[Request], None]:
             return
         payload = _extract_payload(request)
         if not isinstance(payload, dict):
+            logger.warning("deny: missing_scope scopes=<%s> reason=no_payload", ",".join(required_set))
             raise HTTPException(status_code=401, detail="Unauthorized")
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
         if not (set(scopes) & required_set):
+            logger.warning("deny: missing_scope required=<%s> available=<%s>", ",".join(required_set), ",".join(scopes))
             raise HTTPException(status_code=403, detail="Forbidden: missing scope")
 
     return _dep
@@ -180,11 +187,13 @@ def require_scopes(required: Iterable[str]) -> Callable[[Request], None]:
             return
         payload = _extract_payload(request)
         if not isinstance(payload, dict):
+            logger.warning("deny: missing_scope scopes=<%s> reason=no_payload", ",".join(required_set))
             raise HTTPException(status_code=401, detail="Unauthorized")
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
         if not required_set <= set(scopes):
+            logger.warning("deny: missing_scope required=<%s> available=<%s>", ",".join(required_set), ",".join(scopes))
             raise HTTPException(status_code=403, detail="Forbidden: missing scope")
 
     return _dep
@@ -206,11 +215,13 @@ def require_any_scopes(required: Iterable[str]) -> Callable[[Request], None]:
             return
         payload = _extract_payload(request)
         if not isinstance(payload, dict):
+            logger.warning("deny: missing_scope scopes=<%s> reason=no_payload", ",".join(required_set))
             raise HTTPException(status_code=401, detail="Unauthorized")
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
         if not (set(scopes) & required_set):
+            logger.warning("deny: missing_scope required=<%s> available=<%s>", ",".join(required_set), ",".join(scopes))
             raise HTTPException(status_code=403, detail="Forbidden: missing scope")
 
     return _dep

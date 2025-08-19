@@ -9,6 +9,7 @@ with it directly.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 import datetime as _dt
@@ -16,6 +17,8 @@ from typing import Dict, List, Optional, Tuple
 import hmac
 import hashlib
 from fastapi import Header
+
+logger = logging.getLogger(__name__)
 
 import jwt
 from fastapi import HTTPException, Request, WebSocket, WebSocketException, Depends
@@ -203,7 +206,7 @@ async def _get_redis():
     except Exception:
         return None
     try:
-        url = _REDIS_URL or "redis://127.0.0.1:6379/0"
+        url = _REDIS_URL or "redis://localhost:6379/0"
         _redis_client = redis.from_url(url, encoding="utf-8", decode_responses=True)
         return _redis_client
     except Exception:
@@ -308,55 +311,89 @@ def _get_request_payload(request: Request | None) -> dict | None:
     payload = getattr(request.state, "jwt_payload", None)
     if isinstance(payload, dict):
         return payload
-    # Try Authorization: Bearer first
+    
+    token: str | None = None
+    token_source = "none"
+    
+    # 1) Try access_token first (Authorization header or cookie)
     try:
         auth = request.headers.get("Authorization")
+        if auth and auth.startswith("Bearer "):
+            token = auth.split(" ", 1)[1]
+            token_source = "authorization_header"
     except Exception:
         auth = None
-    token: str | None = None
-    if auth and auth.startswith("Bearer "):
-        token = auth.split(" ", 1)[1]
-    # Fallback to cookie-based token for cookie-auth flows
+    
+    # Fallback to access_token cookie
     if not token:
         try:
             token = request.cookies.get("access_token")
+            if token:
+                token_source = "access_token_cookie"
         except Exception:
             token = None
+    
+    # 2) Try __session cookie if access_token failed
+    if not token:
+        try:
+            token = request.cookies.get("__session") or request.cookies.get("session")
+            if token:
+                token_source = "__session_cookie"
+        except Exception:
+            token = None
+    
     if not token:
         return None
-    # Prefer Clerk RS256 verification when configured
-    try:
-        if _verify_clerk and (
-            os.getenv("CLERK_JWKS_URL")
-            or os.getenv("CLERK_ISSUER")
-            or os.getenv("CLERK_DOMAIN")
-        ):
-            try:
-                claims = _verify_clerk(token)  # type: ignore[misc]
-                if isinstance(claims, dict):
-                    return claims
-            except Exception:
-                # fall back to local JWT handling
-                pass
-    except Exception:
-        pass
+    
+    # 3) Try traditional JWT first (same secret/issuer checks for both access_token and __session)
     secret = os.getenv("JWT_SECRET")
-    # If a secret is configured, verify signature; otherwise decode payload only
     if secret:
         try:
-            return jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+            # Enforce iss/aud in prod if configured
+            opts = {}
+            iss = os.getenv("JWT_ISSUER")
+            aud = os.getenv("JWT_AUDIENCE")
+            if iss:
+                opts["issuer"] = iss
+            if aud:
+                opts["audience"] = aud
+            
+            if opts:
+                return jwt.decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
+            else:
+                return jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
         except Exception:
-            # Fall back to non-verifying decode for best-effort introspection
-            try:
-                return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
-            except Exception:
-                return None
+            # Traditional JWT failed, try Clerk if enabled and appropriate
+            pass
     else:
+        # If no secret configured, try non-verifying decode for best-effort introspection
         try:
             return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
         except Exception:
-            return None
+            pass
     
+    # 4) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
+    # AND the token source is NOT __session (unless Clerk is enabled)
+    clerk_enabled = bool(
+        os.getenv("CLERK_JWKS_URL")
+        or os.getenv("CLERK_ISSUER")
+        or os.getenv("CLERK_DOMAIN")
+    )
+    is_authorization_header = token_source == "authorization_header"
+    is_session_cookie = token_source == "__session_cookie"
+    
+    # Never try to validate __session as a Clerk token unless Clerk is enabled
+    if (clerk_enabled or is_authorization_header) and not (is_session_cookie and not clerk_enabled):
+        try:
+            if _verify_clerk:
+                claims = _verify_clerk(token)  # type: ignore[misc]
+                if isinstance(claims, dict):
+                    return claims
+        except Exception:
+            pass
+    
+    # All authentication methods failed
+    return None
 
 
 def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
@@ -365,38 +402,106 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
     payload = getattr(websocket.state, "jwt_payload", None)
     if isinstance(payload, dict):
         return payload
+    
+    token: str | None = None
+    token_source = "none"
+    
+    # 1) Try access_token first (Authorization header, query param, or cookie)
     try:
         auth = websocket.headers.get("Authorization")
         if auth and auth.startswith("Bearer "):
             token = auth.split(" ", 1)[1]
-            # Prefer Clerk RS256 verification when configured
-            if _verify_clerk and (
-                os.getenv("CLERK_JWKS_URL")
-                or os.getenv("CLERK_ISSUER")
-                or os.getenv("CLERK_DOMAIN")
-            ):
-                try:
-                    claims = _verify_clerk(token)  # type: ignore[misc]
-                    if isinstance(claims, dict):
-                        return claims
-                except Exception:
-                    pass
-            secret = os.getenv("JWT_SECRET")
-            if secret:
-                try:
-                    return jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
-                except Exception:
-                    try:
-                        return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
-                    except Exception:
-                        return None
-            else:
-                try:
-                    return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
-                except Exception:
-                    return None
+            token_source = "authorization_header"
     except Exception:
+        auth = None
+    
+    # WS query param fallback for browser WebSocket handshakes
+    if not token:
+        try:
+            qp = websocket.query_params
+            token = qp.get("access_token") or qp.get("token")
+            if token:
+                token_source = "websocket_query_param"
+        except Exception:
+            token = None
+    
+    # Cookie header fallback for WS handshakes
+    if not token:
+        try:
+            raw_cookie = websocket.headers.get("Cookie") or ""
+            parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
+            for p in parts:
+                if p.startswith("access_token="):
+                    token = p.split("=", 1)[1]
+                    token_source = "websocket_access_token_cookie"
+                    break
+        except Exception:
+            token = None
+    
+    # 2) Try __session cookie if access_token failed
+    if not token:
+        try:
+            raw_cookie = websocket.headers.get("Cookie") or ""
+            parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
+            for p in parts:
+                if p.startswith("__session="):
+                    token = p.split("=", 1)[1]
+                    token_source = "websocket_session_cookie"
+                    break
+        except Exception:
+            token = None
+    
+    if not token:
         return None
+    
+    # 3) Try traditional JWT first (same secret/issuer checks for both access_token and __session)
+    secret = os.getenv("JWT_SECRET")
+    if secret:
+        try:
+            # Enforce iss/aud in prod if configured
+            opts = {}
+            iss = os.getenv("JWT_ISSUER")
+            aud = os.getenv("JWT_AUDIENCE")
+            if iss:
+                opts["issuer"] = iss
+            if aud:
+                opts["audience"] = aud
+            
+            if opts:
+                return jwt.decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
+            else:
+                return jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+        except Exception:
+            # Traditional JWT failed, try Clerk if enabled and appropriate
+            pass
+    else:
+        # If no secret configured, try non-verifying decode for best-effort introspection
+        try:
+            return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
+        except Exception:
+            pass
+    
+    # 4) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
+    # AND the token source is NOT __session (unless Clerk is enabled)
+    clerk_enabled = bool(
+        os.getenv("CLERK_JWKS_URL")
+        or os.getenv("CLERK_ISSUER")
+        or os.getenv("CLERK_DOMAIN")
+    )
+    is_authorization_header = token_source == "authorization_header"
+    is_session_cookie = token_source in ["websocket_session_cookie"]
+    
+    # Never try to validate __session as a Clerk token unless Clerk is enabled
+    if (clerk_enabled or is_authorization_header) and not (is_session_cookie and not clerk_enabled):
+        try:
+            if _verify_clerk:
+                claims = _verify_clerk(token)  # type: ignore[misc]
+                if isinstance(claims, dict):
+                    return claims
+        except Exception:
+            pass
+    
+    # All authentication methods failed
     return None
 
 
@@ -461,6 +566,19 @@ def _should_bypass_rate_limit(request: Request) -> bool:
     except Exception:
         pass
     
+    # Development mode: bypass rate limits for authenticated users
+    dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
+    if dev_mode:
+        try:
+            payload = getattr(request.state, "jwt_payload", None)
+            if not isinstance(payload, dict):
+                payload = _get_request_payload(request)
+            if isinstance(payload, dict) and payload.get("user_id"):
+                # Bypass rate limits for authenticated users in dev mode
+                return True
+        except Exception:
+            pass
+    
     # Check for bypass scopes
     try:
         payload = getattr(request.state, "jwt_payload", None)
@@ -521,8 +639,12 @@ async def _apply_rate_limit(key: str, record: bool = True) -> bool:
 async def verify_token(request: Request) -> None:
     """Validate JWT from Authorization header or HttpOnly cookie when configured.
 
-    Prefers Authorization: Bearer token; falls back to ``access_token`` cookie for
-    kiosk/TV devices where headers aren't available from the web UI.
+    Token reading order:
+    1. access_token (Authorization header or cookie)
+    2. __session cookie (fallback)
+    3. Never try to validate __session as a Clerk token unless Clerk is enabled
+    4. Use the same JWT secret/issuer checks for both
+    5. Log which cookie authenticated the request
     """
 
     # Skip CORS preflight requests
@@ -548,16 +670,41 @@ async def verify_token(request: Request) -> None:
     if not jwt_secret:
         # Fail-closed when required
         if require_jwt:
+            logger.error("deny: missing_jwt_secret")
             raise HTTPException(status_code=500, detail="missing_jwt_secret")
         # Otherwise operate in pass-through mode (dev/test)
         return
-    auth = request.headers.get("Authorization")
+
     token = None
+    token_source = "none"
+
+    # 1) Try access_token first (Authorization header or cookie)
+    auth = request.headers.get("Authorization")
     if auth and auth.startswith("Bearer "):
         token = auth.split(" ", 1)[1]
-    # Fallback to secure cookie set by device trust flow
+        token_source = "authorization_header"
+    
+    # Fallback to access_token cookie
     if not token:
         token = request.cookies.get("access_token")
+        if token:
+            token_source = "access_token_cookie"
+    
+    # 2) Try __session cookie if access_token failed
+    if not token:
+        token = request.cookies.get("__session") or request.cookies.get("session")
+        if token:
+            token_source = "__session_cookie"
+
+    # Log which cookie/token source authenticated the request
+    if token:
+        logger.info("auth.token_source", extra={
+            "token_source": token_source,
+            "has_token": bool(token),
+            "token_length": len(token) if token else 0,
+            "request_path": getattr(request, "url", {}).path if hasattr(getattr(request, "url", {}), "path") else "unknown",
+        })
+
     if not token:
         # If JWT is required, enforce 401 even under tests
         if require_jwt:
@@ -569,6 +716,7 @@ async def verify_token(request: Request) -> None:
                 )
             except Exception:
                 pass
+            logger.warning("deny: missing_token")
             raise HTTPException(status_code=401, detail="Unauthorized")
         # Otherwise allow anonymous when tests indicate JWT is optional OR when scopes enforcement is disabled.
         if test_bypass or os.getenv("ENFORCE_JWT_SCOPES", "1").strip() in {"0", "false", "no"}:
@@ -581,7 +729,10 @@ async def verify_token(request: Request) -> None:
             )
         except Exception:
             pass
+        logger.warning("deny: missing_token")
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # 3) Try traditional JWT first (same secret/issuer checks for both access_token and __session)
     try:
         # Enforce iss/aud in prod if configured
         opts = {}
@@ -596,6 +747,7 @@ async def verify_token(request: Request) -> None:
         else:
             payload = jwt.decode(token, jwt_secret, algorithms=["HS256"], leeway=skew)
         request.state.jwt_payload = payload
+        return  # Success with traditional JWT
     except jwt.ExpiredSignatureError:
         # Allow caller to distinguish expiry for logging
         try:
@@ -606,17 +758,47 @@ async def verify_token(request: Request) -> None:
             )
         except Exception:
             pass
+        logger.warning("deny: token_expired")
         raise HTTPException(status_code=401, detail="token_expired")
     except jwt.PyJWTError:
-        try:
-            record_privileged_call_blocked(
-                endpoint=request.url.path,
-                reason="invalid_token",
-                user_id="unknown"
-            )
-        except Exception:
-            pass
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        # Traditional JWT failed, try Clerk if enabled and appropriate
+        pass
+
+    # 4) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
+    # AND the token source is NOT __session (unless Clerk is enabled)
+    clerk_enabled = bool(
+        os.getenv("CLERK_JWKS_URL")
+        or os.getenv("CLERK_ISSUER")
+        or os.getenv("CLERK_DOMAIN")
+    )
+    is_authorization_header = token_source == "authorization_header"
+    is_session_cookie = token_source == "__session_cookie"
+    
+    # Never try to validate __session as a Clerk token unless Clerk is enabled
+    if (clerk_enabled or is_authorization_header) and not (is_session_cookie and not clerk_enabled):
+        # Basic check if it looks like a Clerk JWT (has 3 parts separated by dots)
+        if token.count(".") == 2:
+            try:
+                if _verify_clerk:
+                    claims = _verify_clerk(token)  # type: ignore[misc]
+                    if isinstance(claims, dict):
+                        request.state.jwt_payload = claims
+                        return  # Success with Clerk JWT
+            except Exception:
+                # Clerk validation failed, fall through to final error
+                pass
+
+    # All authentication methods failed
+    try:
+        record_privileged_call_blocked(
+            endpoint=request.url.path,
+            reason="invalid_token",
+            user_id="unknown"
+        )
+    except Exception:
+        pass
+    logger.warning("deny: invalid_token")
+    raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 async def verify_token_strict(request: Request) -> None:
@@ -635,6 +817,7 @@ async def verify_token_strict(request: Request) -> None:
 
     secret = os.getenv("JWT_SECRET")
     if not secret:
+        logger.error("deny: missing_jwt_secret")
         raise HTTPException(status_code=500, detail="missing_jwt_secret")
     auth = request.headers.get("Authorization")
     token: Optional[str] = None
@@ -649,6 +832,7 @@ async def verify_token_strict(request: Request) -> None:
             )
         except Exception:
             pass
+        logger.warning("deny: missing_token_strict")
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         payload = jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
@@ -662,6 +846,7 @@ async def verify_token_strict(request: Request) -> None:
             )
         except Exception:
             pass
+        logger.warning("deny: invalid_token_strict")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -721,6 +906,8 @@ async def rate_limit(request: Request) -> None:
         ok_long = _bucket_rate_limit(key, _http_requests, rate_limit_per_min, window)
         retry_long = _bucket_retry_after(_http_requests, window)
         if not ok_long:
+            logger.warning("deny: rate_limit_exceeded key=<%s> limit=<%d> window=<%.1fs> retry_after=<%ds>", 
+                          key, rate_limit_per_min, window, retry_long)
             headers = {
                 "Retry-After": str(retry_long),
                 "RateLimit-Limit": str(rate_limit_per_min),
@@ -737,6 +924,8 @@ async def rate_limit(request: Request) -> None:
         ok_burst = _bucket_rate_limit(key, http_burst, rate_limit_burst, burst_window)
         retry_burst = _bucket_retry_after(http_burst, burst_window)
         if not ok_burst:
+            logger.warning("deny: rate_limit_burst_exceeded key=<%s> limit=<%d> window=<%.1fs> retry_after=<%ds>", 
+                          key, rate_limit_burst, burst_window, retry_burst)
             headers = {
                 "Retry-After": str(retry_burst),
                 "RateLimit-Limit": str(rate_limit_burst),
@@ -765,6 +954,7 @@ async def verify_ws(websocket: WebSocket) -> None:
     # WebSocket requirement: Origin validation - only accept http://localhost:3000
     origin = websocket.headers.get("Origin")
     if origin and origin != "http://localhost:3000":
+        logger.warning("deny: origin_not_allowed origin=<%s>", origin)
         # WebSocket requirement: Close with crisp code/reason for origin mismatch
         await websocket.close(
             code=1008,  # Policy violation
@@ -994,7 +1184,8 @@ async def require_nonce(request: Request, user_id: str = Depends(_nonce_user_dep
             _nonce_store.pop(n, None)
         # Namespace by user/session and test id to prevent cross-user reuse
         try:
-            sid = request.headers.get("X-Session-ID") or request.cookies.get("sid")
+            from ..deps.user import resolve_session_id
+            sid = resolve_session_id(request=request)
             did = request.headers.get("X-Device-ID") or request.cookies.get("did")
         except Exception:
             sid, did = None, None

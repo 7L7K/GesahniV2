@@ -126,6 +126,13 @@ class BootstrapManagerImpl implements BootstrapManager {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.error('Bootstrap Manager: Initialization failed:', error);
+
+            // Handle AbortError specifically - don't treat as initialization failure if request was aborted
+            if (error instanceof Error && error.name === 'AbortError') {
+                console.info('Bootstrap Manager: Initialization aborted');
+                return false;
+            }
+
             this.setState({ bootstrapError: errorMessage });
             return false;
         } finally {

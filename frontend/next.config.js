@@ -32,8 +32,15 @@ module.exports = {
   experimental: {
     middlewarePrefetch: 'flexible',
   },
+  // Reduce development noise
+  onDemandEntries: {
+    // period (in ms) where the server will keep pages in the buffer
+    maxInactiveAge: 25 * 1000,
+    // number of pages that should be kept simultaneously without being disposed
+    pagesBufferLength: 2,
+  },
   // Removed rewrites to eliminate double-layer API calls and cookie site issues
-  // All API calls now go directly to http://127.0.0.1:8000 via NEXT_PUBLIC_API_ORIGIN
+  // All API calls now go directly to http://localhost:8000 via NEXT_PUBLIC_API_ORIGIN
   async headers() {
     return [
       // Flag Next static assets for quick visibility in devtools

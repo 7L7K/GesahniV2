@@ -14,7 +14,7 @@ def get_app_url() -> str:
     Get the base URL for the application.
     
     Returns:
-        str: Base URL (e.g., 'http://127.0.0.1:8000')
+        str: Base URL (e.g., 'http://localhost:8000')
     """
     # Check for explicit APP_URL configuration
     app_url = os.getenv("APP_URL")
@@ -22,7 +22,7 @@ def get_app_url() -> str:
         return app_url.rstrip('/')
     
     # Derive from host and port
-    host = os.getenv("HOST", "127.0.0.1")
+    host = os.getenv("HOST", "localhost")
     port = os.getenv("PORT", "8000")
     scheme = "https" if os.getenv("FORCE_HTTPS", "0").lower() in {"1", "true", "yes", "on"} else "http"
     

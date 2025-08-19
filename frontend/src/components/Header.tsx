@@ -5,19 +5,40 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import ThemeToggle from '@/components/ThemeToggle';
-import { SignedIn, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs';
+import { SignedIn, SignInButton, SignUpButton, UserButton } from '@clerk/nextjs';
 import { useAuthState } from '@/hooks/useAuth';
 import { getToken, clearTokens, getBudget, bumpAuthEpoch, apiFetch } from '@/lib/api';
 import ClientOnly from './ClientOnly';
 
+// Custom hook to safely use Clerk hooks only when Clerk is enabled
+function useClerkAuth() {
+    const isClerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
+    if (!isClerkEnabled) {
+        return { isSignedIn: false, isLoaded: true, clerkEnabled: false };
+    }
+
+    // Dynamically import Clerk hooks only when needed
+    try {
+        const { useAuth } = require('@clerk/nextjs');
+        const { isSignedIn, isLoaded } = useAuth();
+        return { isSignedIn, isLoaded, clerkEnabled: true };
+    } catch (error) {
+        // Suppress console warnings for expected Clerk errors
+        if (!error.message.includes('ClerkProvider')) {
+            console.warn('Clerk hooks not available:', error);
+        }
+        return { isSignedIn: false, isLoaded: true, clerkEnabled: false };
+    }
+}
+
 export default function Header() {
     const authState = useAuthState();
-    const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
     const router = useRouter();
     const pathname = usePathname();
     // Note: useAuth() must only be used within ClerkProvider.
     // We render a small child component inside <SignedIn> to bump auth epoch on user changes.
-    const { isSignedIn, isLoaded } = useAuth();
+    const { isSignedIn, isLoaded, clerkEnabled } = useClerkAuth();
 
     // Use centralized auth state instead of making direct whoami calls
     const authed = authState.isAuthenticated;
@@ -29,7 +50,6 @@ export default function Header() {
     const doLogout = async () => {
         // Clear tokens and state immediately for better UX
         try { clearTokens() } catch { /* ignore */ }
-        try { document.cookie = 'auth_hint=0; path=/; max-age=300' } catch { /* ignore */ }
 
         // Navigate immediately
         router.push('/')
@@ -68,7 +88,7 @@ export default function Header() {
         const checkLocalMode = () => {
             try {
                 if (typeof window !== 'undefined' && window.location) {
-                    const isLocal = window.location.hostname === '127.0.0.1' ||
+                    const isLocal = window.location.hostname === 'localhost' ||
                         window.location.hostname === 'localhost' ||
                         window.location.hostname.includes('.local');
                     setLocalMode(isLocal);
@@ -119,11 +139,9 @@ export default function Header() {
                     <div className="w-full flex-1 md:w-auto md:flex-none">
                     </div>
                     <nav className="flex items-center space-x-2">
-                        {clerkEnabled ? (
+                        {clerkEnabled && isLoaded ? (
                             <>
-                                {!isLoaded ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                                ) : shouldShowAuthButtons ? (
+                                {shouldShowAuthButtons ? (
                                     <>
                                         <SignInButton mode="modal">
                                             <Button variant="ghost" size="sm">

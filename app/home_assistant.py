@@ -20,7 +20,7 @@ from .policy import moderation_precheck
 # ---------------------------------------------------------------------------
 # Use localhost by default so the module can import even if the env var is
 # missing. 8123 is the standard HA port.
-HOME_ASSISTANT_URL = os.getenv("HOME_ASSISTANT_URL", "http://127.0.0.1:8123")
+HOME_ASSISTANT_URL = os.getenv("HOME_ASSISTANT_URL", "http://localhost:8123")
 HOME_ASSISTANT_TOKEN = os.getenv("HOME_ASSISTANT_TOKEN")
 
 logger = logging.getLogger(__name__)

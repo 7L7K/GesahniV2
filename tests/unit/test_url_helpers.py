@@ -32,19 +32,19 @@ class TestGetAppUrl:
         """Test with default host and port values."""
         with patch.dict(os.environ, {}, clear=True):
             result = get_app_url()
-            assert result == "http://127.0.0.1:8000"
+            assert result == "http://localhost:8000"
 
     def test_get_app_url_custom_host_port(self):
         """Test with custom host and port."""
         with patch.dict(os.environ, {"HOST": "0.0.0.0", "PORT": "9000"}, clear=True):
             result = get_app_url()
-            assert result == "http://0.0.0.0:9000"
+            assert result == "http://localhost:9000"
 
     def test_get_app_url_force_https(self):
         """Test with FORCE_HTTPS enabled."""
         with patch.dict(os.environ, {"FORCE_HTTPS": "1"}, clear=True):
             result = get_app_url()
-            assert result == "https://127.0.0.1:8000"
+            assert result == "https://localhost:8000"
 
 
 class TestGetFrontendUrl:
@@ -80,8 +80,8 @@ class TestBuildWsUrl:
 
     def test_build_ws_url_http_to_ws(self):
         """Test converting HTTP to WebSocket."""
-        result = build_ws_url("/v1/ws/care", "http://127.0.0.1:8000")
-        assert result == "ws://127.0.0.1:8000/v1/ws/care"
+        result = build_ws_url("/v1/ws/care", "http://localhost:8000")
+        assert result == "ws://localhost:8000/v1/ws/care"
 
     def test_build_ws_url_https_to_wss(self):
         """Test converting HTTPS to WSS."""
@@ -90,14 +90,14 @@ class TestBuildWsUrl:
 
     def test_build_ws_url_with_base_url_none(self):
         """Test with base_url=None (should use get_app_url)."""
-        with patch('app.url_helpers.get_app_url', return_value="http://127.0.0.1:8000"):
+        with patch('app.url_helpers.get_app_url', return_value="http://localhost:8000"):
             result = build_ws_url("/v1/ws/care")
-            assert result == "ws://127.0.0.1:8000/v1/ws/care"
+            assert result == "ws://localhost:8000/v1/ws/care"
 
     def test_build_ws_url_with_existing_path(self):
         """Test with base URL that has existing path."""
-        result = build_ws_url("/v1/ws/care", "http://127.0.0.1:8000/api")
-        assert result == "ws://127.0.0.1:8000/v1/ws/care"
+        result = build_ws_url("/v1/ws/care", "http://localhost:8000/api")
+        assert result == "ws://localhost:8000/v1/ws/care"
 
 
 class TestBuildApiUrl:
@@ -105,19 +105,19 @@ class TestBuildApiUrl:
 
     def test_build_api_url_simple(self):
         """Test building simple API URL."""
-        result = build_api_url("/v1/auth/login", "http://127.0.0.1:8000")
-        assert result == "http://127.0.0.1:8000/v1/auth/login"
+        result = build_api_url("/v1/auth/login", "http://localhost:8000")
+        assert result == "http://localhost:8000/v1/auth/login"
 
     def test_build_api_url_with_base_url_none(self):
         """Test with base_url=None (should use get_app_url)."""
-        with patch('app.url_helpers.get_app_url', return_value="http://127.0.0.1:8000"):
+        with patch('app.url_helpers.get_app_url', return_value="http://localhost:8000"):
             result = build_api_url("/v1/auth/login")
-            assert result == "http://127.0.0.1:8000/v1/auth/login"
+            assert result == "http://localhost:8000/v1/auth/login"
 
     def test_build_api_url_with_existing_path(self):
         """Test with base URL that has existing path."""
-        result = build_api_url("/v1/auth/login", "http://127.0.0.1:8000/api")
-        assert result == "http://127.0.0.1:8000/v1/auth/login"
+        result = build_api_url("/v1/auth/login", "http://localhost:8000/api")
+        assert result == "http://localhost:8000/v1/auth/login"
 
 
 class TestIsDevEnvironment:

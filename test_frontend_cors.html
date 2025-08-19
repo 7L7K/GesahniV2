@@ -18,7 +18,7 @@
             try {
                 // Test 1: Simple GET request
                 console.log('Testing GET request to /healthz/ready');
-                const response = await fetch('http://127.0.0.1:8000/healthz/ready', {
+                const response = await fetch('http://localhost:8000/healthz/ready', {
                     method: 'GET',
                     credentials: 'include',
                     headers: {

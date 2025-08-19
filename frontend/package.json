@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_OPTIONS=\"--dns-result-order=ipv4first --max-old-space-size=4096\" NEXT_PUBLIC_SITE_URL=http://localhost:3000 NEXT_PUBLIC_API_ORIGIN=http://localhost:8000 CLERK_SIGN_IN_URL=/sign-in CLERK_SIGN_UP_URL=/sign-up CLERK_AFTER_SIGN_IN_URL=/ CLERK_AFTER_SIGN_UP_URL=/ next dev -H ::",
-    "dev:turbo": "NODE_OPTIONS=\"--dns-result-order=ipv4first --max-old-space-size=4096\" NEXT_PUBLIC_SITE_URL=http://localhost:3000 CLERK_SIGN_IN_URL=/sign-in CLERK_SIGN_UP_URL=/sign-up CLERK_AFTER_SIGN_IN_URL=/ CLERK_AFTER_SIGN_UP_URL=/ next dev --turbopack -H ::",
+    "dev": "NODE_OPTIONS=\"--dns-result-order=ipv4first --max-old-space-size=4096\" next dev -H :: -p 3000",
+    "dev:turbo": "NODE_OPTIONS=\"--dns-result-order=ipv4first --max-old-space-size=4096\" next dev --turbopack -H :: -p 3000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -17,6 +17,7 @@
     "@tanstack/react-query-devtools": "^5.59.16",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^17.2.1",
     "lucide-react": "^0.533.0",
     "next": "15.4.4",
     "next-themes": "^0.4.3",

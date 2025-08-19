@@ -78,7 +78,7 @@ export function buildAuthUrl(pathname: string, next?: string): string {
 
 /**
  * Build a WebSocket URL from the API origin
- * @param apiOrigin - API origin (e.g., 'http://127.0.0.1:8000')
+ * @param apiOrigin - API origin (e.g., 'http://localhost:8000')
  * @param path - WebSocket path
  * @returns WebSocket URL
  */
@@ -94,7 +94,7 @@ export function buildWebSocketUrl(apiOrigin: string, path: string): string {
 
 /**
  * Build a WebSocket URL using the canonical frontend origin for consistent origin validation
- * @param apiOrigin - API origin (e.g., 'http://127.0.0.1:8000')
+ * @param apiOrigin - API origin (e.g., 'http://localhost:8000')
  * @param path - WebSocket path
  * @returns WebSocket URL
  */

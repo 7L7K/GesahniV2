@@ -1,9 +1,11 @@
 import os
 import re
 import time
+import asyncio
+import random
 from datetime import datetime, timedelta
 from uuid import uuid4
-from typing import Dict, Set, Tuple
+from typing import Dict, Set, Tuple, Optional
 import logging
 
 import aiosqlite
@@ -31,7 +33,12 @@ if "PYTEST_CURRENT_TEST" in os.environ and not os.getenv("USERS_DB"):
         DB_PATH = str(Path("test_auth.db").resolve())
 AUTH_TABLE = os.getenv("AUTH_TABLE", "auth_users")
 ALGORITHM = "HS256"
-SECRET_KEY = os.getenv("JWT_SECRET", "change-me")
+SECRET_KEY = os.getenv("JWT_SECRET")
+if not SECRET_KEY or SECRET_KEY.strip() == "":
+    raise ValueError("JWT_SECRET environment variable must be set")
+# Security check: prevent use of default/placeholder secrets
+if SECRET_KEY.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
+    raise ValueError("JWT_SECRET cannot use insecure default values")
 EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
 REFRESH_EXPIRE_MINUTES = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
 JWT_ISS = os.getenv("JWT_ISS")
@@ -39,10 +46,17 @@ JWT_AUD = os.getenv("JWT_AUD")
 
 # Revocation store
 revoked_tokens: Set[str] = set()
+
+# Rate limiting configuration
 _attempts: Dict[str, Tuple[int, float]] = {}
 _ATTEMPT_WINDOW = int(os.getenv("LOGIN_ATTEMPT_WINDOW_SECONDS", "300"))
 _ATTEMPT_MAX = int(os.getenv("LOGIN_ATTEMPT_MAX", "5"))
 _LOCKOUT_SECONDS = int(os.getenv("LOGIN_LOCKOUT_SECONDS", "60"))
+# Additional rate limiting constants
+_EXPONENTIAL_BACKOFF_START = int(os.getenv("LOGIN_BACKOFF_START_MS", "200"))
+_EXPONENTIAL_BACKOFF_MAX = int(os.getenv("LOGIN_BACKOFF_MAX_MS", "1000"))
+_EXPONENTIAL_BACKOFF_THRESHOLD = int(os.getenv("LOGIN_BACKOFF_THRESHOLD", "3"))
+_HARD_LOCKOUT_THRESHOLD = int(os.getenv("LOGIN_HARD_LOCKOUT_THRESHOLD", "6"))
 
 # Password hashing: prefer bcrypt if a working backend is present; otherwise pbkdf2
 _TEST_ENV = "PYTEST_CURRENT_TEST" in os.environ
@@ -65,6 +79,86 @@ except Exception:  # pragma: no cover - defensive
 # Router
 router = APIRouter(tags=["Auth"])
 logger = logging.getLogger(__name__)
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a JWT access token with the given data.
+    
+    Args:
+        data: Dictionary containing token claims
+        expires_delta: Optional expiration delta (defaults to EXPIRE_MINUTES)
+    
+    Returns:
+        JWT access token string
+    """
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
+    
+    to_encode.update({
+        "exp": expire,
+        "jti": uuid4().hex,
+        "type": "access",
+        "scopes": data.get("scopes", ["care:resident", "music:control"]),
+    })
+    
+    if JWT_ISS:
+        to_encode["iss"] = JWT_ISS
+    if JWT_AUD:
+        to_encode["aud"] = JWT_AUD
+    
+    logger.debug("auth.create_access_token", extra={
+        "meta": {
+            "user_id": data.get("sub"),
+            "expires_at": expire.isoformat(),
+            "jti": to_encode["jti"],
+            "scopes": to_encode["scopes"],
+        }
+    })
+    
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a JWT refresh token with the given data.
+    
+    Args:
+        data: Dictionary containing token claims
+        expires_delta: Optional expiration delta (defaults to REFRESH_EXPIRE_MINUTES)
+    
+    Returns:
+        JWT refresh token string
+    """
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=REFRESH_EXPIRE_MINUTES)
+    
+    to_encode.update({
+        "exp": expire,
+        "jti": uuid4().hex,
+        "type": "refresh",
+        "scopes": data.get("scopes", ["care:resident", "music:control"]),
+    })
+    
+    if JWT_ISS:
+        to_encode["iss"] = JWT_ISS
+    if JWT_AUD:
+        to_encode["aud"] = JWT_AUD
+    
+    logger.debug("auth.create_refresh_token", extra={
+        "meta": {
+            "user_id": data.get("sub"),
+            "expires_at": expire.isoformat(),
+            "jti": to_encode["jti"],
+            "scopes": to_encode["scopes"],
+        }
+    })
+    
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 # Pydantic models
@@ -228,31 +322,141 @@ def _validate_password(password: str) -> None:
 
 
 def _record_attempt(key: str, *, success: bool) -> None:
-    now = time.time()
-    count, ts = _attempts.get(key, (0, now))
-    if now - ts > _ATTEMPT_WINDOW:
-        count = 0
-        ts = now
-    if success:
-        _attempts.pop(key, None)
-    else:
-        _attempts[key] = (count + 1, ts)
-
-
-def _throttled(key: str) -> int | None:
-    """Return seconds to wait if throttled; None if allowed.
-
-    Simple lockout once attempts exceed max within window.
+    """Record a login attempt for rate limiting.
+    
+    Args:
+        key: Rate limiting key (user or IP)
+        success: Whether the login was successful
     """
     now = time.time()
     count, ts = _attempts.get(key, (0, now))
+    
+    # Reset counter if window has expired
+    if now - ts > _ATTEMPT_WINDOW:
+        count = 0
+        ts = now
+    
+    if success:
+        # Clear successful attempts immediately
+        _attempts.pop(key, None)
+    else:
+        # Increment failed attempt counter
+        _attempts[key] = (count + 1, ts)
+
+
+def _throttled(key: str) -> Optional[int]:
+    """Return seconds to wait if throttled; None if allowed.
+    
+    Args:
+        key: Rate limiting key (user or IP)
+        
+    Returns:
+        Seconds to wait if throttled, None if allowed
+    """
+    now = time.time()
+    attempt_data = _attempts.get(key, (0, now))
+    
+    # Handle malformed data gracefully
+    try:
+        count, ts = attempt_data
+        if not isinstance(count, (int, float)) or not isinstance(ts, (int, float)):
+            # Reset malformed data
+            _attempts.pop(key, None)
+            return None
+    except (TypeError, ValueError):
+        # Reset malformed data
+        _attempts.pop(key, None)
+        return None
+    
+    # Reset if window has expired
     if now - ts > _ATTEMPT_WINDOW:
         return None
+    
+    # Check if we've exceeded the attempt limit
     if count >= _ATTEMPT_MAX:
         elapsed = now - ts
         remaining = max(0, _LOCKOUT_SECONDS - int(elapsed))
-        return remaining or _LOCKOUT_SECONDS
+        # Ensure we return at least 1 second to prevent immediate retry
+        return max(1, remaining)
+    
     return None
+
+
+def _get_throttle_status(user_key: str, ip_key: str) -> Tuple[Optional[int], Optional[int]]:
+    """Get throttling status for both user and IP keys.
+    
+    Args:
+        user_key: Rate limiting key for username
+        ip_key: Rate limiting key for IP address
+        
+    Returns:
+        Tuple of (user_throttle_seconds, ip_throttle_seconds)
+    """
+    user_throttle = _throttled(user_key)
+    ip_throttle = _throttled(ip_key)
+    return user_throttle, ip_throttle
+
+
+def _should_apply_backoff(user_key: str) -> bool:
+    """Check if exponential backoff should be applied.
+    
+    Args:
+        user_key: Rate limiting key for username
+        
+    Returns:
+        True if backoff should be applied
+    """
+    count, _ = _attempts.get(user_key, (0, 0))
+    return count >= _EXPONENTIAL_BACKOFF_THRESHOLD
+
+
+def _should_hard_lockout(user_key: str) -> bool:
+    """Check if hard lockout should be applied.
+    
+    Args:
+        user_key: Rate limiting key for username
+        
+    Returns:
+        True if hard lockout should be applied
+    """
+    count, _ = _attempts.get(user_key, (0, 0))
+    return count >= _HARD_LOCKOUT_THRESHOLD
+
+
+def _clear_rate_limit_data(key: str = None) -> None:
+    """Clear rate limiting data for testing or admin purposes.
+    
+    Args:
+        key: Specific key to clear, or None to clear all
+    """
+    if key:
+        _attempts.pop(key, None)
+    else:
+        _attempts.clear()
+
+
+def _get_rate_limit_stats(key: str) -> Optional[Dict[str, any]]:
+    """Get rate limiting statistics for a key.
+    
+    Args:
+        key: Rate limiting key
+        
+    Returns:
+        Dictionary with count and timestamp, or None if not found
+    """
+    if key not in _attempts:
+        return None
+    
+    count, ts = _attempts[key]
+    now = time.time()
+    return {
+        "count": count,
+        "timestamp": ts,
+        "window_expires": ts + _ATTEMPT_WINDOW,
+        "time_remaining": max(0, ts + _ATTEMPT_WINDOW - now),
+        "is_throttled": count >= _ATTEMPT_MAX,
+        "throttle_remaining": _throttled(key)
+    }
 
 
 def _client_ip(request: Request) -> str:
@@ -331,6 +535,26 @@ async def register(req: RegisterRequest, user_id: str = Depends(get_current_user
     return {"status": "ok"}
 
 
+# Admin endpoint to view rate limiting statistics
+@router.get("/admin/rate-limits/{key}")
+async def get_rate_limit_stats(key: str, user_id: str = Depends(get_current_user_id)):
+    """Get rate limiting statistics for a specific key (admin only)."""
+    # In a real implementation, you'd check admin permissions here
+    stats = _get_rate_limit_stats(key)
+    if stats is None:
+        raise HTTPException(status_code=404, detail="Rate limit data not found")
+    return {"key": key, "stats": stats}
+
+
+# Admin endpoint to clear rate limiting data
+@router.delete("/admin/rate-limits/{key}")
+async def clear_rate_limit_data(key: str = None, user_id: str = Depends(get_current_user_id)):
+    """Clear rate limiting data for a specific key or all keys (admin only)."""
+    # In a real implementation, you'd check admin permissions here
+    _clear_rate_limit_data(key)
+    return {"status": "ok", "message": f"Cleared rate limit data for key: {key or 'all'}"}
+
+
 # Login endpoint with backoff after failures
 @router.post("/login", response_model=TokenResponse)
 async def login(
@@ -340,49 +564,169 @@ async def login(
 
     CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
     """
+    logger.info("auth.login_start", extra={
+        "meta": {
+            "username": req.username,
+            "ip": _client_ip(request),
+            "user_agent": request.headers.get("User-Agent", "unknown"),
+            "content_type": request.headers.get("Content-Type", "unknown"),
+            "has_csrf": bool(request.headers.get("X-CSRF-Token")),
+            "has_cookie": bool(request.cookies.get("csrf_token")),
+        }
+    })
+    
     await _ensure_table()
     norm_user = _sanitize_username(req.username)
-    # Basic lockout per username and per IP address
+    logger.info("auth.login_username_normalized", extra={
+        "meta": {
+            "original_username": req.username,
+            "normalized_username": norm_user,
+            "ip": _client_ip(request),
+        }
+    })
+    
+    # Rate limiting keys
     user_key = f"user:{norm_user}"
     ip_key = f"ip:{_client_ip(request)}"
-    remain = _throttled(user_key) or _throttled(ip_key)
-    if remain:
-        raise HTTPException(status_code=429, detail={"error": "rate_limited", "retry_after": remain})
+    
+    # Check throttling status for both user and IP
+    user_throttle, ip_throttle = _get_throttle_status(user_key, ip_key)
+    logger.info("auth.login_rate_limit_check", extra={
+        "meta": {
+            "username": norm_user,
+            "ip": _client_ip(request),
+            "user_throttle": user_throttle,
+            "ip_throttle": ip_throttle,
+            "user_key": user_key,
+            "ip_key": ip_key,
+        }
+    })
+    
+    # Apply the most restrictive throttling (longest wait time)
+    if user_throttle is not None or ip_throttle is not None:
+        max_throttle = max(user_throttle or 0, ip_throttle or 0)
+        logger.warning("auth.login_rate_limited", extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "user_throttle": user_throttle,
+                "ip_throttle": ip_throttle,
+                "max_throttle": max_throttle,
+            }
+        })
+        raise HTTPException(
+            status_code=429, 
+            detail={"error": "rate_limited", "retry_after": max_throttle}
+        )
+    
+    # Apply exponential backoff before authentication to prevent timing attacks
+    if _should_apply_backoff(user_key):
+        delay_ms = random.randint(_EXPONENTIAL_BACKOFF_START, _EXPONENTIAL_BACKOFF_MAX)
+        logger.info("auth.login_applying_backoff", extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "delay_ms": delay_ms,
+            }
+        })
+        await asyncio.sleep(delay_ms / 1000.0)
+    
+    # Check for hard lockout before attempting authentication
+    if _should_hard_lockout(user_key):
+        logger.warning("auth.login_hard_lockout", extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "lockout_seconds": _LOCKOUT_SECONDS,
+            }
+        })
+        raise HTTPException(
+            status_code=429, 
+            detail={"error": "rate_limited", "retry_after": _LOCKOUT_SECONDS}
+        )
+    
+    # Perform authentication
+    logger.info("auth.login_attempting_authentication", extra={
+        "meta": {
+            "username": norm_user,
+            "ip": _client_ip(request),
+            "db_path": DB_PATH,
+        }
+    })
+    
     async with aiosqlite.connect(DB_PATH) as db:
         # Try both auth table and legacy users table
         hashed = await _fetch_password_hash(db, norm_user)
+        logger.info("auth.login_password_hash_fetched", extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "hash_found": bool(hashed),
+                "hash_length": len(hashed) if hashed else 0,
+            }
+        })
 
     valid = False
     if hashed:
         try:
             valid = bool(pwd_context.verify(req.password, hashed))
-        except UnknownHashError:
+            logger.info("auth.login_password_verification", extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "password_valid": valid,
+                    "hash_algorithm": hashed.split('$')[1] if hashed and '$' in hashed else "unknown",
+                }
+            })
+        except UnknownHashError as e:
             # Treat unrecognized/badly formatted hashes as invalid credentials
+            logger.error("auth.login_unknown_hash_error", extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "error": str(e),
+                    "hash_preview": hashed[:20] + "..." if hashed else "none",
+                }
+            })
             valid = False
-        except Exception:
+        except Exception as e:
+            logger.error("auth.login_password_verification_error", extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }
+            })
             valid = False
+    
     if not valid:
+        # Record failed attempts for both user and IP
         _record_attempt(user_key, success=False)
         _record_attempt(ip_key, success=False)
-        # Exponential backoff with jitter: after 3 failures add 200–1000ms delay; after 6 lock for 60s
-        try:
-            import asyncio as _asyncio
-            import random as _rand
-            count, ts = _attempts.get(user_key, (0, 0))
-            if count >= 6:
-                # Lock out for 60s
-                raise HTTPException(status_code=429, detail={"error": "rate_limited", "retry_after": 60})
-            if count >= 3:
-                delay_ms = _rand.randint(200, 1000)
-                await _asyncio.sleep(delay_ms / 1000.0)
-        except HTTPException:
-            raise
-        except Exception:
-            pass
-        logger.warning("auth.login_failed", extra={"meta": {"username": norm_user, "ip": _client_ip(request)}})
+        
+        logger.warning("auth.login_failed", extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "reason": "invalid_credentials",
+                "hash_found": bool(hashed),
+            }
+        })
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Record successful attempts for both user and IP
     _record_attempt(user_key, success=True)
     _record_attempt(ip_key, success=True)
+
+    logger.info("auth.login_creating_tokens", extra={
+        "meta": {
+            "username": norm_user,
+            "ip": _client_ip(request),
+            "expire_minutes": EXPIRE_MINUTES,
+            "refresh_expire_minutes": REFRESH_EXPIRE_MINUTES,
+        }
+    })
 
     # Create access token
     expire = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
@@ -393,6 +737,7 @@ async def login(
         "exp": expire,
         "jti": jti,
         "type": "access",
+        "scopes": ["care:resident", "music:control"],  # Default scopes for regular users
     }
     if JWT_ISS:
         access_payload["iss"] = JWT_ISS
@@ -409,6 +754,7 @@ async def login(
         "exp": refresh_expire,
         "jti": refresh_jti,
         "type": "refresh",
+        "scopes": ["care:resident", "music:control"],  # Default scopes for regular users
     }
     if JWT_ISS:
         refresh_payload["iss"] = JWT_ISS
@@ -416,10 +762,27 @@ async def login(
         refresh_payload["aud"] = JWT_AUD
     refresh_token = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
 
+    logger.info("auth.login_tokens_created", extra={
+        "meta": {
+            "username": norm_user,
+            "ip": _client_ip(request),
+            "access_token_length": len(access_token),
+            "refresh_token_length": len(refresh_token),
+            "access_jti": jti,
+            "refresh_jti": refresh_jti,
+        }
+    })
+
     await user_store.ensure_user(user_id)
     await user_store.increment_login(user_id)
     stats = await user_store.get_stats(user_id) or {}
-    logger.info("auth.login_success", extra={"meta": {"username": norm_user, "ip": _client_ip(request)}})
+    logger.info("auth.login_success", extra={
+        "meta": {
+            "username": norm_user,
+            "ip": _client_ip(request),
+            "user_stats": stats,
+        }
+    })
 
     # Set HttpOnly cookies for browser clients (unified flow: header + cookie)
     try:
@@ -429,7 +792,18 @@ async def login(
         cookie_config = get_cookie_config(request)
         access_ttl, refresh_ttl = get_token_ttls()
         
-        # Set cookies with consistent configuration
+        logger.info("auth.login_cookie_config", extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "cookie_config": cookie_config,
+                "access_ttl": access_ttl,
+                "refresh_ttl": refresh_ttl,
+            }
+        })
+        
+        # Set all three cookies with consistent configuration using header append method
+        # This provides better control over cookie attributes and avoids duplicates
         access_header = format_cookie_header(
             key="access_token",
             value=access_token,
@@ -454,33 +828,102 @@ async def login(
         )
         response.headers.append("Set-Cookie", refresh_header)
         
-        # Also set via Starlette API for compatibility
-        response.set_cookie(
-            key="access_token",
+        # Set __session cookie with same value as access_token for consistent session management
+        session_header = format_cookie_header(
+            key="__session",
             value=access_token,
-            httponly=True,
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
             max_age=access_ttl,
-            path="/",
-        )
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
             secure=cookie_config["secure"],
             samesite=cookie_config["samesite"],
-            max_age=refresh_ttl,
-            path="/",
+            path=cookie_config["path"],
+            httponly=cookie_config["httponly"],
+            domain=cookie_config["domain"],
         )
+        response.headers.append("Set-Cookie", session_header)
+        
+        logger.info("auth.login_cookies_set", extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "secure": cookie_config["secure"],
+                "samesite": cookie_config["samesite"],
+                "access_ttl": access_ttl,
+                "refresh_ttl": refresh_ttl,
+                "domain": cookie_config["domain"],
+                "cookies_set": ["access_token", "refresh_token", "__session"],
+            }
+        })
         
         try:
-            print(f"login.set_cookie secure={cookie_config['secure']} samesite={cookie_config['samesite']} ttl={access_ttl}s/{refresh_ttl}s")
+            print(f"login.set_cookie secure={cookie_config['secure']} samesite={cookie_config['samesite']} ttl={access_ttl}s/{refresh_ttl}s cookies=3")
         except Exception:
             pass
     except Exception as e:
+        logger.error("auth.login_cookie_set_error", extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "error": str(e),
+                "error_type": type(e).__name__,
+            }
+        })
         print(f"login.set_cookie error: {e}")
-        pass
+        # Fallback to Starlette set_cookie if header append fails
+        try:
+            response.set_cookie(
+                key="access_token",
+                value=access_token,
+                httponly=True,
+                secure=cookie_config["secure"],
+                samesite=cookie_config["samesite"],
+                max_age=access_ttl,
+                path="/",
+            )
+            response.set_cookie(
+                key="refresh_token",
+                value=refresh_token,
+                httponly=True,
+                secure=cookie_config["secure"],
+                samesite=cookie_config["samesite"],
+                max_age=refresh_ttl,
+                path="/",
+            )
+            # Set __session cookie with same value as access_token
+            response.set_cookie(
+                key="__session",
+                value=access_token,
+                httponly=True,
+                secure=cookie_config["secure"],
+                samesite=cookie_config["samesite"],
+                max_age=access_ttl,
+                path="/",
+            )
+            logger.info("auth.login_cookie_fallback_success", extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "cookies_set": ["access_token", "refresh_token", "__session"],
+                }
+            })
+        except Exception as fallback_error:
+            logger.error("auth.login_cookie_fallback_error", extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "error": str(fallback_error),
+                    "error_type": type(fallback_error).__name__,
+                }
+            })
+            print(f"login.set_cookie fallback error: {fallback_error}")
+            pass
+
+    logger.info("auth.login_complete", extra={
+        "meta": {
+            "username": norm_user,
+            "ip": _client_ip(request),
+            "response_status": 200,
+        }
+    })
 
     return TokenResponse(
         access_token=access_token,
@@ -533,7 +976,7 @@ _DEPRECATE_LOGOUT_LOGGED = False
 async def logout(request: Request, response: Response):
     """Legacy logout endpoint - delegates to /v1/auth/logout."""
     # Import and call the main logout function
-    from ..api.auth import logout as main_logout
+    from app.api.auth import logout as main_logout
     return await main_logout(request, response)
 
 

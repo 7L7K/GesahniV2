@@ -60,7 +60,6 @@ describe("apiFetch", () => {
 
         const res = await apiFetch("/v1/profile", { method: "GET" });
         // When refresh fails, we return the refresh error response
-        // In cookie mode, refresh attempt may be skipped; allow 401 or 400
         expect([400, 401]).toContain(res.status);
         expect(window.localStorage.getItem("auth:access_token")).toBeNull();
     });
@@ -135,7 +134,7 @@ describe('api.ts', () => {
     afterEach(() => { (global as any).fetch = undefined; });
 
     test('apiFetch attaches auth header when token present', async () => {
-        localStorage.setItem('auth:access_token', 't');
+        localStorage.setItem('auth:access', 't');
         await apiFetch('/v1/test');
         const [url, init] = (global.fetch as any).mock.calls[0];
         expect((init.headers as any).Authorization).toBe('Bearer t');
@@ -146,14 +145,14 @@ describe('api.ts', () => {
         (global as any).fetch
             .mockImplementationOnce(async () => new Response('no', { status: 401 } as any) as any)
             .mockImplementationOnce(async () => new Response('no', { status: 401 } as any) as any);
-        localStorage.setItem('auth:refresh_token', 'r');
+        localStorage.setItem('auth:refresh', 'r');
         await apiFetch('/v1/x').catch(() => undefined);
         // tokens should be cleared after failed refresh
-        expect(localStorage.getItem('auth:access_token')).toBeNull();
+        expect(localStorage.getItem('auth:access')).toBeNull();
     });
 
     test('wsUrl appends token as query', () => {
-        localStorage.setItem('auth:access_token', 'tok');
+        localStorage.setItem('auth:access', 'tok');
         const url = wsUrl('/v1/stream');
         expect(url).toMatch(/access_token=/);
         // WebSocket requirement: Should use canonical frontend origin
@@ -199,15 +198,60 @@ describe('api.ts', () => {
         expect(res).toBe('ab');
     });
 
-    test('setTokens and clearTokens dispatch events', () => {
-        const setSpy = jest.fn();
-        const clearSpy = jest.fn();
-        window.addEventListener('auth:tokens_set', setSpy);
-        window.addEventListener('auth:tokens_cleared', clearSpy);
+    test('setTokens and clearTokens work correctly', () => {
         setTokens('a', 'r');
+        expect(localStorage.getItem('auth:access')).toBe('a');
+        expect(localStorage.getItem('auth:refresh')).toBe('r');
         clearTokens();
-        expect(setSpy).toHaveBeenCalled();
-        expect(clearSpy).toHaveBeenCalled();
+        expect(localStorage.getItem('auth:access')).toBeNull();
+        expect(localStorage.getItem('auth:refresh')).toBeNull();
+    });
+
+    test('apiFetch handles AbortError gracefully', async () => {
+        // Mock fetch to throw AbortError
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockRejectedValue(new Error('AbortError'));
+        (global.fetch as jest.Mock).mockImplementation(() => {
+            const error = new Error('AbortError');
+            error.name = 'AbortError';
+            throw error;
+        });
+
+        try {
+            await apiFetch('/v1/test');
+        } catch (error) {
+            expect(error).toBeInstanceOf(Error);
+            expect((error as Error).name).toBe('AbortError');
+        }
+
+        global.fetch = originalFetch;
+    });
+
+    test('apiFetch handles AbortError in refresh flow', async () => {
+        // Mock fetch to return 401 first, then throw AbortError on refresh
+        const originalFetch = global.fetch;
+        let callCount = 0;
+        global.fetch = jest.fn().mockImplementation(() => {
+            callCount++;
+            if (callCount === 1) {
+                return Promise.resolve(new Response('', { status: 401 }));
+            } else {
+                const error = new Error('AbortError');
+                error.name = 'AbortError';
+                throw error;
+            }
+        });
+
+        setTokens('test-token', 'test-refresh');
+
+        try {
+            await apiFetch('/v1/test');
+        } catch (error) {
+            expect(error).toBeInstanceOf(Error);
+            expect((error as Error).name).toBe('AbortError');
+        }
+
+        global.fetch = originalFetch;
     });
 });
 

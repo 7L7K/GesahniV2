@@ -286,7 +286,7 @@ class WsHub {
         } catch { /* swallow to keep socket alive */ }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         // DO NOT call whoami on close - use global auth store instead
         if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
 
@@ -298,27 +298,28 @@ class WsHub {
           this.connections[name].timer = setTimeout(() => this.connect(name, path, onOpenExtra, onMessage, retry), delay);
         } else {
           // Max attempts reached or not authenticated - surface failure
-          if (authState.isAuthenticated) {
-            this.surfaceConnectionFailure(name, "Connection lost and max reconnection attempts reached");
-          } else {
+          if (!authState.isAuthenticated) {
             this.surfaceConnectionFailure(name, "Connection lost - not authenticated");
+          } else {
+            this.surfaceConnectionFailure(name, "Connection lost - max reconnection attempts reached");
           }
         }
       };
 
-      ws.onerror = () => {
-        // DO NOT call whoami on error - let onclose handle the reconnect logic
-        // Ensure socket is closed to trigger onclose
-        try { ws.close(); } catch { /* noop */ }
+      ws.onerror = (event) => {
+        // Log error but don't surface it immediately - let onclose handle reconnection logic
+        // Only log in development to reduce console noise
+        if (process.env.NODE_ENV === 'development') {
+          console.debug(`WS ${name}: Connection error`, event);
+        }
       };
+
     } catch (error) {
-      this.connections[name].reconnectAttempts += 1;
-      if (this.connections[name].reconnectAttempts < this.connections[name].maxReconnectAttempts) {
-        const delay = this.jitteredDelayFor(retry++);
-        this.connections[name].timer = setTimeout(() => this.connect(name, path, onOpenExtra, onMessage, retry), delay);
-      } else {
-        this.surfaceConnectionFailure(name, "Failed to create WebSocket connection");
+      // Only log in development to reduce console noise
+      if (process.env.NODE_ENV === 'development') {
+        console.error(`WS ${name}: Failed to create WebSocket connection`, error);
       }
+      this.surfaceConnectionFailure(name, "Failed to create connection");
     }
   }
 

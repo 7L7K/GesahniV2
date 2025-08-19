@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend-Backend Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .log {
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+
+        .error {
+            background: #ffe6e6;
+            color: #d32f2f;
+        }
+
+        .success {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        .info {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Frontend-Backend Debug Test</h1>
+    <p>This page helps debug CORS and configuration issues.</p>
+
+    <div>
+        <button onclick="testHealth()">Test Health Endpoint</button>
+        <button onclick="testConfig()">Test Debug Config</button>
+        <button onclick="testCORS()">Test CORS</button>
+        <button onclick="testState()">Test State API</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+
+    <div id="logs"></div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        const FRONTEND_URL = 'http://localhost:3000';
+
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const logDiv = document.createElement('div');
+            logDiv.className = `log ${type}`;
+            logDiv.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            logsDiv.appendChild(logDiv);
+            console.log(message);
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        async function testHealth() {
+            try {
+                log('Testing health endpoint...', 'info');
+                const response = await fetch(`${API_URL}/healthz/ready`, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': FRONTEND_URL
+                    }
+                });
+
+                log(`Health response: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+                log(`Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`, 'info');
+
+                const text = await response.text();
+                log(`Response body: ${text}`, 'info');
+
+            } catch (error) {
+                log(`Health test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testConfig() {
+            try {
+                log('Testing debug config endpoint...', 'info');
+                const response = await fetch(`${API_URL}/debug/config`, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': FRONTEND_URL
+                    }
+                });
+
+                log(`Config response: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+
+                if (response.ok) {
+                    const config = await response.json();
+                    log(`Backend config: ${JSON.stringify(config, null, 2)}`, 'info');
+                }
+
+            } catch (error) {
+                log(`Config test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testCORS() {
+            try {
+                log('Testing CORS preflight...', 'info');
+
+                // Test preflight
+                const preflightResponse = await fetch(`${API_URL}/v1/state`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': FRONTEND_URL,
+                        'Access-Control-Request-Method': 'GET',
+                        'Access-Control-Request-Headers': 'Content-Type'
+                    }
+                });
+
+                log(`Preflight response: ${preflightResponse.status} ${preflightResponse.statusText}`, preflightResponse.ok ? 'success' : 'error');
+                log(`Preflight headers: ${JSON.stringify(Object.fromEntries(preflightResponse.headers.entries()))}`, 'info');
+
+            } catch (error) {
+                log(`CORS test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testState() {
+            try {
+                log('Testing state API...', 'info');
+                const response = await fetch(`${API_URL}/v1/state`, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': FRONTEND_URL
+                    }
+                });
+
+                log(`State response: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+                log(`Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`, 'info');
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`State data: ${JSON.stringify(data, null, 2)}`, 'info');
+                }
+
+            } catch (error) {
+                log(`State test failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run tests on page load
+        window.addEventListener('load', () => {
+            log('Page loaded. Ready to test.', 'info');
+            log(`API URL: ${API_URL}`, 'info');
+            log(`Frontend URL: ${FRONTEND_URL}`, 'info');
+        });
+    </script>
+</body>
+
+</html>

@@ -4,13 +4,16 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
+# Use a proper test secret instead of insecure fallback
+TEST_JWT_SECRET = "test-secret-key-for-unit-tests-only"
+
 
 def _decode(token: str) -> dict:
-    return jwt.decode(token, os.getenv("JWT_SECRET", "change-me"), algorithms=["HS256"])
+    return jwt.decode(token, TEST_JWT_SECRET, algorithms=["HS256"])
 
 
 def test_token_endpoint_returns_bearer_token(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "change-me")
+    monkeypatch.setenv("JWT_SECRET", TEST_JWT_SECRET)
     c = TestClient(app)
     r = c.post("/v1/auth/token", data={"username": "alice", "password": "x"})
     assert r.status_code == 200
@@ -22,7 +25,7 @@ def test_token_endpoint_returns_bearer_token(monkeypatch):
 
 
 def test_token_endpoint_accepts_scopes(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "change-me")
+    monkeypatch.setenv("JWT_SECRET", TEST_JWT_SECRET)
     c = TestClient(app)
     r = c.post(
         "/v1/auth/token",
@@ -36,7 +39,7 @@ def test_token_endpoint_accepts_scopes(monkeypatch):
 
 
 def test_token_endpoint_can_be_disabled(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "change-me")
+    monkeypatch.setenv("JWT_SECRET", TEST_JWT_SECRET)
     monkeypatch.setenv("DISABLE_DEV_TOKEN", "1")
     c = TestClient(app)
     r = c.post("/v1/auth/token", data={"username": "c"})
@@ -44,7 +47,7 @@ def test_token_endpoint_can_be_disabled(monkeypatch):
 
 
 def test_examples_endpoint_lists_scopes_and_redacted_jwt(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "change-me")
+    monkeypatch.setenv("JWT_SECRET", TEST_JWT_SECRET)
     c = TestClient(app)
     r = c.get("/v1/auth/examples")
     assert r.status_code == 200
@@ -54,7 +57,7 @@ def test_examples_endpoint_lists_scopes_and_redacted_jwt(monkeypatch):
 
 
 def test_openapi_contains_password_flow(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "change-me")
+    monkeypatch.setenv("JWT_SECRET", TEST_JWT_SECRET)
     c = TestClient(app)
     schema = c.get("/openapi.json").json()
     comps = schema.get("components", {}).get("securitySchemes", {})
@@ -63,7 +66,7 @@ def test_openapi_contains_password_flow(monkeypatch):
 
 
 def test_authorize_docs_lists_defined_scopes(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "change-me")
+    monkeypatch.setenv("JWT_SECRET", TEST_JWT_SECRET)
     c = TestClient(app)
     schema = c.get("/openapi.json").json()
     scopes = (
@@ -74,7 +77,7 @@ def test_authorize_docs_lists_defined_scopes(monkeypatch):
 
 
 def test_admin_routes_show_locks_in_docs(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "change-me")
+    monkeypatch.setenv("JWT_SECRET", TEST_JWT_SECRET)
     c = TestClient(app)
     schema = c.get("/openapi.json").json()
     # Pick an admin path we include
@@ -85,4 +88,20 @@ def test_admin_routes_show_locks_in_docs(monkeypatch):
             sec = item[methods[0]].get("security", [])
             assert any("OAuth2" in d for d in sec)
             break
+
+
+def test_missing_jwt_secret_raises_error(monkeypatch):
+    monkeypatch.delenv("JWT_SECRET", raising=False)
+    c = TestClient(app)
+    r = c.post("/v1/auth/token", data={"username": "alice", "password": "x"})
+    assert r.status_code == 500
+    assert "missing_jwt_secret" in r.json()["detail"]
+
+
+def test_insecure_jwt_secret_raises_error(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "change-me")
+    c = TestClient(app)
+    r = c.post("/v1/auth/token", data={"username": "alice", "password": "x"})
+    assert r.status_code == 500
+    assert "insecure_jwt_secret" in r.json()["detail"]
 

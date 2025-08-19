@@ -2,11 +2,26 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { clearTokens, apiFetch } from '@/lib/api'
-import { useClerk } from '@clerk/nextjs'
-
 export default function LogoutPage() {
     const router = useRouter()
-    const { signOut } = useClerk()
+
+    // Safely get Clerk signOut function only when Clerk is enabled
+    const getSignOut = () => {
+        const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+        if (!clerkEnabled) {
+            return () => Promise.resolve();
+        }
+        try {
+            const { useClerk } = require('@clerk/nextjs');
+            const { signOut } = useClerk();
+            return signOut;
+        } catch (error) {
+            console.warn('Clerk not available:', error);
+            return () => Promise.resolve();
+        }
+    };
+
+    const signOut = getSignOut();
     useEffect(() => {
         (async () => {
             // Start all logout operations concurrently
@@ -20,9 +35,8 @@ export default function LogoutPage() {
             // Wait for backend logout to complete, but don't wait for Clerk
             await logoutPromises[0]
 
-            // Clear local tokens and cookies immediately
+            // Clear local tokens immediately
             try { clearTokens() } catch { /* ignore */ }
-            try { document.cookie = 'auth_hint=0; path=/; max-age=300' } catch { /* ignore */ }
 
             // Navigate immediately
             router.replace('/sign-in')

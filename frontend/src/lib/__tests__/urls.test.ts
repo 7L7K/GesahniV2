@@ -86,9 +86,9 @@ describe('URL Helper Functions', () => {
 
     describe('buildWebSocketUrl', () => {
         it('should convert HTTP to WebSocket', () => {
-            const url = buildWebSocketUrl('http://127.0.0.1:8000', '/v1/ws/care')
+            const url = buildWebSocketUrl('http://localhost:8000', '/v1/ws/care')
 
-            expect(url).toBe('ws://127.0.0.1:8000/v1/ws/care')
+            expect(url).toBe('ws://localhost:8000/v1/ws/care')
         })
 
         it('should convert HTTPS to WSS', () => {
@@ -98,9 +98,9 @@ describe('URL Helper Functions', () => {
         })
 
         it('should handle URLs with existing paths', () => {
-            const url = buildWebSocketUrl('http://127.0.0.1:8000/api', '/v1/ws/care')
+            const url = buildWebSocketUrl('http://localhost:8000/api', '/v1/ws/care')
 
-            expect(url).toBe('ws://127.0.0.1:8000/v1/ws/care')
+            expect(url).toBe('ws://localhost:8000/v1/ws/care')
         })
     })
 

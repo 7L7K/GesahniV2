@@ -19,13 +19,13 @@ describe('CSP Configuration', () => {
 
         it('should include backend API URL in connect-src', () => {
             const directives = getCSPDirectives();
-            expect(directives['connect-src']).toContain('http://127.0.0.1:8000');
+            expect(directives['connect-src']).toContain('http://localhost:8000');
         });
 
         it('should include backend WebSocket URLs in connect-src', () => {
             const directives = getCSPDirectives();
-            expect(directives['connect-src']).toContain('ws://127.0.0.1:8000/v1/ws/care');
-            expect(directives['connect-src']).toContain('ws://127.0.0.1:8000/v1/ws/health');
+            expect(directives['connect-src']).toContain('ws://localhost:8000/v1/ws/care');
+            expect(directives['connect-src']).toContain('ws://localhost:8000/v1/ws/health');
         });
 
         it('should include frontend WebSocket URLs in connect-src', () => {
@@ -48,7 +48,7 @@ describe('CSP Configuration', () => {
             const policy = getCSPPolicy();
             expect(typeof policy).toBe('string');
             expect(policy).toContain('connect-src');
-            expect(policy).toContain('http://127.0.0.1:8000');
+            expect(policy).toContain('http://localhost:8000');
             expect(policy).toContain('ws://localhost:3000');
         });
     });
@@ -66,7 +66,7 @@ describe('CSP Configuration', () => {
 
         it('should not include development URLs in production', () => {
             const directives = getCSPDirectives();
-            expect(directives['connect-src']).not.toContain('http://127.0.0.1:8000');
+            expect(directives['connect-src']).not.toContain('http://localhost:8000');
             expect(directives['connect-src']).not.toContain('ws://localhost:3000');
         });
     });

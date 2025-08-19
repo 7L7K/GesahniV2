@@ -107,9 +107,9 @@ class TestCookieConfig:
         assert _is_dev_environment(request) is True
 
     def test_is_dev_environment_127_0_0_1(self):
-        """Test dev environment detection with 127.0.0.1."""
+        """Test dev environment detection with localhost."""
         request = Mock()
-        request.headers = {"host": "127.0.0.1:8000"}
+        request.headers = {"host": "localhost:8000"}
         
         assert _is_dev_environment(request) is True
 

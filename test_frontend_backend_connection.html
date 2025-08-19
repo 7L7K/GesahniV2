@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend-Backend Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Frontend-Backend Connection Test</h1>
+
+    <div class="test-section info">
+        <h3>Configuration</h3>
+        <p><strong>Backend URL:</strong> <span id="backend-url">http://localhost:8000</span></p>
+        <p><strong>Frontend URL:</strong> <span id="frontend-url">http://localhost:3000</span></p>
+        <p><strong>Auth Mode:</strong> <span id="auth-mode">Header Mode</span></p>
+    </div>
+
+    <div class="test-section">
+        <h3>1. CORS Test</h3>
+        <button onclick="testCorsPreflight()">Test CORS</button>
+        <div id="cors-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. Authentication Test</h3>
+        <button onclick="testWhoami()">Test /whoami (No Auth)</button>
+        <button onclick="testLogin()">Test Login</button>
+        <button onclick="testWhoamiWithAuth()">Test /whoami (With Auth)</button>
+        <div id="auth-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. Token Management</h3>
+        <button onclick="showTokens()">Show Current Tokens</button>
+        <button onclick="clearTokens()">Clear Tokens</button>
+        <div id="token-result"></div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'http://localhost:8000';
+        const FRONTEND_URL = window.location.origin;
+        let currentTokens = { access: null, refresh: null };
+
+        function log(message, type = 'info') {
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+
+        function displayResult(elementId, content, isSuccess = true) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<pre class="${isSuccess ? 'success' : 'error'}">${content}</pre>`;
+        }
+
+        async function testCorsPreflight() {
+            try {
+                log('Testing CORS preflight...');
+
+                // Test 1: Simple GET request (browser will handle preflight automatically)
+                const response = await fetch(`${BACKEND_URL}/v1/whoami`, {
+                    method: 'GET',
+                    headers: {
+                        'Origin': FRONTEND_URL,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const headers = {};
+                response.headers.forEach((value, key) => {
+                    headers[key] = value;
+                });
+
+                const result = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: headers,
+                    corsHeaders: {
+                        'access-control-allow-origin': headers['access-control-allow-origin'],
+                        'access-control-allow-credentials': headers['access-control-allow-credentials'],
+                        'access-control-allow-methods': headers['access-control-allow-methods'],
+                        'access-control-allow-headers': headers['access-control-allow-headers']
+                    }
+                };
+
+                displayResult('cors-result', JSON.stringify(result, null, 2), response.ok);
+                log('CORS test completed', response.ok ? 'success' : 'error');
+            } catch (error) {
+                displayResult('cors-result', `Error: ${error.message}`, false);
+                log(`CORS error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testWhoami() {
+            try {
+                log('Testing /whoami without authentication...');
+                const response = await fetch(`${BACKEND_URL}/v1/whoami`, {
+                    method: 'GET',
+                    headers: {
+                        'Origin': FRONTEND_URL,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                const result = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: data,
+                    headers: {
+                        'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
+                        'access-control-allow-credentials': response.headers.get('access-control-allow-credentials')
+                    }
+                };
+
+                displayResult('auth-result', JSON.stringify(result, null, 2), response.ok);
+                log('Whoami test completed', response.ok ? 'success' : 'error');
+            } catch (error) {
+                displayResult('auth-result', `Error: ${error.message}`, false);
+                log(`Whoami error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testLogin() {
+            try {
+                log('Testing login...');
+                const response = await fetch(`${BACKEND_URL}/v1/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Origin': FRONTEND_URL,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'testuser',
+                        password: 'testpass123'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.access_token) {
+                    currentTokens.access = data.access_token;
+                    currentTokens.refresh = data.refresh_token;
+                    log('Login successful, tokens stored', 'success');
+                }
+
+                const result = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: {
+                        ...data,
+                        access_token: data.access_token ? `${data.access_token.substring(0, 20)}...` : null,
+                        refresh_token: data.refresh_token ? `${data.refresh_token.substring(0, 20)}...` : null
+                    },
+                    headers: {
+                        'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
+                        'access-control-allow-credentials': response.headers.get('access-control-allow-credentials')
+                    }
+                };
+
+                displayResult('auth-result', JSON.stringify(result, null, 2), response.ok);
+                log('Login test completed', response.ok ? 'success' : 'error');
+            } catch (error) {
+                displayResult('auth-result', `Error: ${error.message}`, false);
+                log(`Login error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testWhoamiWithAuth() {
+            if (!currentTokens.access) {
+                displayResult('auth-result', 'No access token available. Please login first.', false);
+                return;
+            }
+
+            try {
+                log('Testing /whoami with authentication...');
+                const response = await fetch(`${BACKEND_URL}/v1/whoami`, {
+                    method: 'GET',
+                    headers: {
+                        'Origin': FRONTEND_URL,
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentTokens.access}`
+                    }
+                });
+
+                const data = await response.json();
+                const result = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: data,
+                    headers: {
+                        'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
+                        'access-control-allow-credentials': response.headers.get('access-control-allow-credentials')
+                    }
+                };
+
+                displayResult('auth-result', JSON.stringify(result, null, 2), response.ok);
+                log('Authenticated whoami test completed', response.ok ? 'success' : 'error');
+            } catch (error) {
+                displayResult('auth-result', `Error: ${error.message}`, false);
+                log(`Authenticated whoami error: ${error.message}`, 'error');
+            }
+        }
+
+        function showTokens() {
+            const result = {
+                hasAccessToken: !!currentTokens.access,
+                hasRefreshToken: !!currentTokens.refresh,
+                accessTokenPreview: currentTokens.access ? `${currentTokens.access.substring(0, 20)}...` : null,
+                refreshTokenPreview: currentTokens.refresh ? `${currentTokens.refresh.substring(0, 20)}...` : null
+            };
+
+            displayResult('token-result', JSON.stringify(result, null, 2), true);
+            log('Token status displayed', 'info');
+        }
+
+        function clearTokens() {
+            currentTokens = { access: null, refresh: null };
+            displayResult('token-result', 'Tokens cleared', true);
+            log('Tokens cleared', 'info');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function () {
+            log('Frontend-Backend connection test page loaded', 'info');
+        });
+    </script>
+</body>
+
+</html>

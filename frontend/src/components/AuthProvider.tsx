@@ -1,38 +1,73 @@
 'use client';
 
-import { useEffect, ReactNode } from 'react';
-import { getAuthOrchestrator } from '@/services/authOrchestrator';
+import { useEffect } from 'react';
+import { ClerkProvider } from '@clerk/nextjs';
 
-interface AuthProviderProps {
-    children: ReactNode;
-}
-
-/**
- * Auth Provider - Initializes the Auth Orchestrator on app mount
- * 
- * This component should be placed at the root of the app to ensure
- * the Auth Orchestrator is initialized once and manages all auth state.
- */
-export default function AuthProvider({ children }: AuthProviderProps) {
+// Custom hook to manage Clerk token integration
+function useClerkTokenIntegration() {
     useEffect(() => {
-        // Initialize the Auth Orchestrator on mount
-        const orchestrator = getAuthOrchestrator();
-
-        const initAuth = async () => {
+        const updateClerkToken = async () => {
             try {
-                await orchestrator.initialize();
+                // Check if Clerk is available
+                if (typeof window !== 'undefined' && window.Clerk) {
+                    const token = await window.Clerk.session?.getToken();
+                    if (token) {
+                        // Set the token on window for the getToken function to access
+                        (window as any).__clerkToken = token;
+                        console.debug('CLERK_TOKEN_INTEGRATION: Token set', {
+                            hasToken: !!token,
+                            tokenLength: token?.length || 0,
+                            timestamp: new Date().toISOString(),
+                        });
+                    } else {
+                        // Clear the token if no session
+                        delete (window as any).__clerkToken;
+                        console.debug('CLERK_TOKEN_INTEGRATION: Token cleared', {
+                            timestamp: new Date().toISOString(),
+                        });
+                    }
+                }
             } catch (error) {
-                console.error('Failed to initialize Auth Orchestrator:', error);
+                console.debug('CLERK_TOKEN_INTEGRATION: Error updating token', {
+                    error: error instanceof Error ? error.message : String(error),
+                    timestamp: new Date().toISOString(),
+                });
             }
         };
 
-        initAuth();
+        // Update token immediately
+        updateClerkToken();
 
-        // Cleanup on unmount
+        // Set up listener for Clerk session changes
+        if (typeof window !== 'undefined' && window.Clerk) {
+            window.Clerk.addListener(({ user, session }) => {
+                updateClerkToken();
+            });
+        }
+
+        // Cleanup
         return () => {
-            orchestrator.cleanup();
+            if (typeof window !== 'undefined' && window.Clerk) {
+                window.Clerk.removeListener(({ user, session }) => {
+                    updateClerkToken();
+                });
+            }
         };
     }, []);
+}
 
-    return <>{children}</>;
+export default function AuthProvider({ children }: { children: React.ReactNode }) {
+    useClerkTokenIntegration();
+
+    return (
+        <ClerkProvider
+            publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!}
+            signInUrl="/sign-in"
+            signUpUrl="/sign-up"
+            afterSignInUrl="/"
+            afterSignUpUrl="/"
+        >
+            {children}
+        </ClerkProvider>
+    );
 }

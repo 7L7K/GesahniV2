@@ -9,11 +9,10 @@ export default function WsBootstrap() {
         let started = false;
         let lastReadyEventAt = 0;
         // Initial probe to avoid starting sockets before sessionReady
-        // Only check if we have some indication of auth
+        // Only check if we have a token
         const hasToken = getToken();
-        const hasCookie = typeof document !== 'undefined' && document.cookie.includes('auth_hint=1');
 
-        if (hasToken || hasCookie) {
+        if (hasToken) {
             (async () => {
                 try {
                     const s = await getSessionState();

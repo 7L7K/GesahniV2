@@ -74,21 +74,58 @@ def configure_logging() -> None:
     """
     level = os.getenv("LOG_LEVEL", "INFO").upper()
 
-    # By default, do not stream logs to stdout (quiet terminal). Opt-in via LOG_TO_STDOUT=1.
+    # Enhanced debugging: Always show logs to stdout for debugging
     force_stdout = os.getenv("LOG_TO_STDOUT", "").lower() in {"1", "true", "yes", "on"}
-    if force_stdout:
+    debug_mode = os.getenv("DEBUG_MODE", "").lower() in {"1", "true", "yes", "on"}
+    verbose_logging = os.getenv("VERBOSE_LOGGING", "").lower() in {"1", "true", "yes", "on"}
+    
+    # Force DEBUG level if verbose logging is enabled
+    if verbose_logging and level != "DEBUG":
+        level = "DEBUG"
+        logging.info("Verbose logging enabled - setting level to DEBUG")
+    
+    if force_stdout or debug_mode or verbose_logging:
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(JsonFormatter())
+        logging.info(f"Logging enabled: level={level}, stdout={force_stdout}, debug_mode={debug_mode}, verbose={verbose_logging}")
     else:
         handler = logging.NullHandler()
+        logging.info(f"Logging disabled: level={level}, stdout={force_stdout}, debug_mode={debug_mode}, verbose={verbose_logging}")
 
     root = logging.getLogger()
     root.handlers = [handler, _ErrorBufferHandler()]  # blow away default handlers, add buffer
     root.setLevel(level)
     root.filters = [RequestIdFilter()]
 
-    # Reduce third-party verbosity unless LOG_LEVEL is DEBUG
-    if level != "DEBUG":
+    # Enhanced logging for specific modules when in debug mode
+    if level == "DEBUG" or verbose_logging:
+        # Enable detailed logging for auth, API, and core modules
+        for module in [
+            "app.auth",
+            "app.api",
+            "app.security", 
+            "app.middleware",
+            "app.router",
+            "app.memory",
+            "app.vector_store",
+            "app.llama_integration",
+            "app.gpt_client",
+            "app.transcription",
+            "app.voice",
+            "app.skills",
+        ]:
+            logging.getLogger(module).setLevel(logging.DEBUG)
+        
+        # Enable HTTP request/response logging
+        logging.getLogger("httpx").setLevel(logging.DEBUG)
+        logging.getLogger("httpcore").setLevel(logging.DEBUG)
+        
+        # Enable uvicorn access logs
+        logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+        
+        logging.info("Debug logging enabled for core modules")
+    else:
+        # Reduce third-party verbosity unless LOG_LEVEL is DEBUG
         for noisy in (
             "httpx",
             "httpcore",

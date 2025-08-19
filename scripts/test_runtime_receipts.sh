@@ -5,7 +5,7 @@
 
 set -e
 
-BACKEND_URL="http://127.0.0.1:8000"
+BACKEND_URL="http://localhost:8000"
 FRONTEND_URL="http://localhost:3000"
 
 echo "🔍 Testing Runtime Receipts..."

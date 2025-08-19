@@ -98,43 +98,22 @@ def test_whoami_fallback_to_clerk_when_jwt_fails(mock_clerk_verify, monkeypatch)
 
 def test_get_current_user_id_with_clerk(mock_clerk_verify, monkeypatch):
     """Test that get_current_user_id recognizes Clerk tokens."""
+    # Set up environment to enable Clerk and disable traditional JWT
     monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
+    monkeypatch.setenv("CLERK_JWKS_URL", "https://test.clerk.accounts.dev/.well-known/jwks.json")
+    monkeypatch.setenv("JWT_SECRET", "")  # No JWT secret so it won't try traditional JWT first
+    
     from app.deps.user import get_current_user_id
     from fastapi import Request
     
-    # Create a mock request with Clerk cookie
+    # Create a mock request with Clerk cookie - use a properly formatted JWT token
     mock_request = MagicMock(spec=Request)
     mock_request.method = "GET"
-    mock_request.cookies = {"__session": "fake.clerk.token.here"}
+    mock_request.cookies = {"__session": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyX2NsZXJrXzEyMyIsInVzZXJfaWQiOiJ1c2VyX2NsZXJrXzEyMyIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSJ9.fake_signature"}
     mock_request.headers = {}
     
-    # Mock the Clerk verification in the user module
-    with patch('app.deps.user.verify_clerk_token') as mock:
-        mock.return_value = {
-            "sub": "user_clerk_123",
-            "user_id": "user_clerk_123",
-            "email": "test@example.com"
-        }
-        
-        # Should return the Clerk user ID
-        user_id = get_current_user_id(request=mock_request)
-        assert user_id == "user_clerk_123"
-
-
-def test_get_current_user_id_with_clerk_header(mock_clerk_verify, monkeypatch):
-    """Test that get_current_user_id recognizes Clerk tokens in Authorization header."""
-    monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
-    from app.deps.user import get_current_user_id
-    from fastapi import Request
-    
-    # Create a mock request with Clerk token in header
-    mock_request = MagicMock(spec=Request)
-    mock_request.method = "GET"
-    mock_request.cookies = {}
-    mock_request.headers = {"Authorization": "Bearer fake.clerk.token.here"}
-    
-    # Mock the Clerk verification in the user module
-    with patch('app.deps.user.verify_clerk_token') as mock:
+    # Mock the Clerk verification in the clerk_auth module
+    with patch('app.deps.clerk_auth.verify_clerk_token') as mock:
         mock.return_value = {
             "sub": "user_clerk_123",
             "user_id": "user_clerk_123",

@@ -20,19 +20,13 @@ function CaptureInner() {
   const recording = rec.state.status === 'recording';
   const [storyVoice, setStoryVoice] = useState(true);
 
-  // Auth guard on client:
-  // - In header-token mode, require token
-  // - In cookie mode, rely on auth_hint=1 set during login middleware
+  // Auth guard on client: require token in header mode
   useEffect(() => {
     try {
-      const hinted = typeof document !== 'undefined' && document.cookie.includes('auth_hint=1');
-      if (!isAuthed() && !getToken() && !hinted) {
-        document.cookie = 'auth_hint=0; path=/; max-age=300';
+      if (!isAuthed() && !getToken()) {
         router.replace('/login?next=%2Fcapture');
         return;
       }
-      // Set a long-lived hint so SSR can render without redirect when logged in
-      document.cookie = 'auth_hint=1; path=/; max-age=1209600';
     } catch {
       /* ignore */
     }

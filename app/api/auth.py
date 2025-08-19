@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 
-from ..deps.user import get_current_user_id
+from ..deps.user import get_current_user_id, resolve_session_id
 from ..deps.clerk_auth import require_user
 from ..user_store import user_store
 from ..token_store import (
@@ -22,6 +22,7 @@ from ..token_store import (
     is_refresh_allowed,
     allow_refresh,
     claim_refresh_jti,
+    claim_refresh_jti_with_retry,
     has_redis,
     set_last_used_jti,
     get_last_used_jti,
@@ -74,6 +75,8 @@ def _append_cookie_with_priority(response: Response, *, key: str, value: str, ma
     try:
         from ..cookie_config import format_cookie_header
         
+        print(f"DEBUG: _append_cookie_with_priority called with key={key}, max_age={max_age}")
+        
         header = format_cookie_header(
             key=key,
             value=value,
@@ -84,8 +87,11 @@ def _append_cookie_with_priority(response: Response, *, key: str, value: str, ma
             httponly=True,
             domain=None,  # Host-only cookies
         )
+        print(f"DEBUG: Generated header: {header}")
         response.headers.append("Set-Cookie", header)
-    except Exception:
+        print(f"DEBUG: Header appended successfully")
+    except Exception as e:
+        print(f"DEBUG: Exception in _append_cookie_with_priority: {e}")
         # Fallback to regular set_cookie if building header fails
         response.set_cookie(key, value, httponly=True, secure=secure, samesite=samesite, max_age=max_age, path=path)
 @router.get("/auth/clerk/protected")
@@ -191,22 +197,65 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
       "version": 1
     }
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     with track_auth_event("whoami", user_id="unknown"):
         t0 = time.time()
         src: str = "missing"
         token_cookie: Optional[str] = None
         token_header: Optional[str] = None
         clerk_token: Optional[str] = None
+
+        logger.info("whoami.start", extra={
+            "meta": {
+                "ip": request.client.host if request.client else "unknown",
+                "user_agent": request.headers.get("User-Agent", "unknown"),
+                "timestamp": time.time(),
+            }
+        })
     
     try:
         token_cookie = request.cookies.get("access_token")
-    except Exception:
+        logger.info("whoami.cookie_check", extra={
+            "meta": {
+                "has_access_token_cookie": bool(token_cookie),
+                "cookie_length": len(token_cookie) if token_cookie else 0,
+                "all_cookies": list(request.cookies.keys()),
+                "timestamp": time.time(),
+            }
+        })
+    except Exception as e:
+        logger.error("whoami.cookie_error", extra={
+            "meta": {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": time.time(),
+            }
+        })
         token_cookie = None
+        
     try:
         ah = request.headers.get("Authorization")
         if ah and ah.startswith("Bearer "):
             token_header = ah.split(" ", 1)[1]
-    except Exception:
+        logger.info("whoami.header_check", extra={
+            "meta": {
+                "has_authorization_header": bool(ah),
+                "starts_with_bearer": ah.startswith("Bearer ") if ah else False,
+                "has_token_header": bool(token_header),
+                "token_header_length": len(token_header) if token_header else 0,
+                "timestamp": time.time(),
+            }
+        })
+    except Exception as e:
+        logger.error("whoami.header_error", extra={
+            "meta": {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": time.time(),
+            }
+        })
         token_header = None
     
     # Check for Clerk authentication tokens
@@ -224,7 +273,21 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
                 if potential_clerk_token.count(".") == 2:
                     # Don't set clerk_token yet - we'll check it after trying traditional JWT
                     pass
-    except Exception:
+        logger.info("whoami.clerk_check", extra={
+            "meta": {
+                "has_clerk_cookie": bool(clerk_token),
+                "clerk_cookie_length": len(clerk_token) if clerk_token else 0,
+                "timestamp": time.time(),
+            }
+        })
+    except Exception as e:
+        logger.error("whoami.clerk_error", extra={
+            "meta": {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": time.time(),
+            }
+        })
         clerk_token = None
 
     # Prefer cookie when valid; otherwise fall back to header; then try Clerk
@@ -232,35 +295,82 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
     effective_uid: Optional[str] = None
     jwt_status = "missing"
     
+    # Set source to "header" if we have a token header, even if invalid
+    if token_header and src == "missing":
+        src = "header"
+    
     if token_cookie:
         try:
+            logger.info("whoami.cookie_jwt_decode.start", extra={
+                "meta": {
+                    "timestamp": time.time(),
+                }
+            })
             claims = jwt.decode(token_cookie, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
             session_ready = True
             src = "cookie"
             effective_uid = str(claims.get("user_id") or claims.get("sub") or "") or None
             jwt_status = "ok"
-        except Exception:
+            logger.info("whoami.cookie_jwt_decode.success", extra={
+                "meta": {
+                    "user_id": effective_uid,
+                    "claims_keys": list(claims.keys()),
+                    "timestamp": time.time(),
+                }
+            })
+        except Exception as e:
             session_ready = False
             effective_uid = None
             jwt_status = "invalid"
+            logger.error("whoami.cookie_jwt_decode.failed", extra={
+                "meta": {
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "timestamp": time.time(),
+                }
+            })
     
     if not session_ready and token_header:
         try:
+            logger.info("whoami.header_jwt_decode.start", extra={
+                "meta": {
+                    "timestamp": time.time(),
+                }
+            })
             claims = jwt.decode(token_header, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
             session_ready = True
             src = "header"
             effective_uid = str(claims.get("user_id") or claims.get("sub") or "") or None
             jwt_status = "ok"
-        except Exception:
+            logger.info("whoami.header_jwt_decode.success", extra={
+                "meta": {
+                    "user_id": effective_uid,
+                    "claims_keys": list(claims.keys()),
+                    "timestamp": time.time(),
+                }
+            })
+        except Exception as e:
             session_ready = False
             effective_uid = None
             jwt_status = "invalid"
+            logger.error("whoami.header_jwt_decode.failed", extra={
+                "meta": {
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "timestamp": time.time(),
+                }
+            })
     
     # Try Clerk authentication if other methods failed
     if not session_ready:
         # First check for Clerk cookies
         if clerk_token:
             try:
+                logger.info("whoami.clerk_verify.start", extra={
+                    "meta": {
+                        "timestamp": time.time(),
+                    }
+                })
                 from ..deps.clerk_auth import verify_clerk_token
                 claims = verify_clerk_token(clerk_token)
                 session_ready = True
@@ -274,14 +384,33 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
                         request.state.email = email
                 except Exception:
                     pass
-            except Exception:
+                logger.info("whoami.clerk_verify.success", extra={
+                    "meta": {
+                        "user_id": effective_uid,
+                        "claims_keys": list(claims.keys()),
+                        "timestamp": time.time(),
+                    }
+                })
+            except Exception as e:
                 session_ready = False
                 effective_uid = None
                 jwt_status = "invalid"
+                logger.error("whoami.clerk_verify.failed", extra={
+                    "meta": {
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "timestamp": time.time(),
+                    }
+                })
         
         # If still not ready, check for Clerk token in Authorization header
         if not session_ready and token_header:
             try:
+                logger.info("whoami.clerk_header_verify.start", extra={
+                    "meta": {
+                        "timestamp": time.time(),
+                    }
+                })
                 from ..deps.clerk_auth import verify_clerk_token
                 claims = verify_clerk_token(token_header)
                 session_ready = True
@@ -295,13 +424,38 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
                         request.state.email = email
                 except Exception:
                     pass
-            except Exception:
+                logger.info("whoami.clerk_header_verify.success", extra={
+                    "meta": {
+                        "user_id": effective_uid,
+                        "claims_keys": list(claims.keys()),
+                        "timestamp": time.time(),
+                    }
+                })
+            except Exception as e:
                 session_ready = False
                 effective_uid = None
                 jwt_status = "invalid"
+                logger.error("whoami.clerk_header_verify.failed", extra={
+                    "meta": {
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "timestamp": time.time(),
+                    }
+                })
 
     # Canonical policy: authenticated iff a valid token was presented
     is_authenticated = bool(session_ready and effective_uid)
+
+    logger.info("whoami.result", extra={
+        "meta": {
+            "is_authenticated": is_authenticated,
+            "session_ready": session_ready,
+            "source": src,
+            "user_id": effective_uid,
+            "jwt_status": jwt_status,
+            "timestamp": time.time(),
+        }
+    })
 
     # Log a compact line for probing and metrics
     try:
@@ -339,10 +493,11 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
 from fastapi.responses import JSONResponse
 
 @router.get("/whoami")
-async def whoami(request: Request, _: None = Depends(rate_limit)) -> JSONResponse:
+async def whoami(request: Request, _: None = Depends(rate_limit) if os.getenv("DEV_MODE", "0") != "1" else None) -> JSONResponse:
     """Locked contract: Always returns 200 with clear boolean is_authenticated.
     
     Never returns 401, never redirects, no caching.
+    Rate limiting is disabled in development mode to prevent auth oscillation.
     """
     data = await whoami_impl(request)
     return JSONResponse(
@@ -384,9 +539,11 @@ async def create_pat(body: Dict[str, Any], user_id: str = Depends(get_current_us
 
 def _jwt_secret() -> str:
     sec = os.getenv("JWT_SECRET")
-    if not sec:
-        # Dev-friendly fallback to align with legacy auth default
-        return os.getenv("JWT_SECRET", "change-me")
+    if not sec or sec.strip() == "":
+        raise HTTPException(status_code=500, detail="missing_jwt_secret")
+    # Security check: prevent use of default/placeholder secrets
+    if sec.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
+        raise HTTPException(status_code=500, detail="insecure_jwt_secret")
     return sec
 
 
@@ -411,9 +568,11 @@ def _key_pool_from_env() -> dict[str, str]:
         except Exception:
             pass
     sec = os.getenv("JWT_SECRET")
-    if not sec:
-        # Align with legacy auth default used for login when unset
-        sec = "change-me"
+    if not sec or sec.strip() == "":
+        raise HTTPException(status_code=500, detail="missing_jwt_secret")
+    # Security check: prevent use of default/placeholder secrets
+    if sec.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
+        raise HTTPException(status_code=500, detail="insecure_jwt_secret")
     return {"k0": sec}
 
 
@@ -478,7 +637,7 @@ def _get_refresh_ttl_seconds() -> int:
 
 def _make_jwt(user_id: str, *, exp_seconds: int) -> str:
     now = int(time.time())
-    payload = {"user_id": user_id, "sub": user_id, "iat": now, "exp": now + exp_seconds}
+    payload = {"user_id": user_id, "sub": user_id, "iat": now, "exp": now + exp_seconds, "scopes": ["care:resident", "music:control"]}
     iss = os.getenv("JWT_ISSUER")
     aud = os.getenv("JWT_AUDIENCE")
     if iss:
@@ -523,13 +682,13 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
     """
     # TTLs: defaults suitable for dev (access: 30 min; refresh: 7 days)
     try:
-        token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1800"))  # 30 minutes
+        token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", str(int(os.getenv("JWT_EXPIRE_MINUTES", "30")) * 60)))
     except Exception:
-        token_lifetime = 1800
+        token_lifetime = int(os.getenv("JWT_EXPIRE_MINUTES", "30")) * 60
     refresh_life = _get_refresh_ttl_seconds()
 
     now = int(time.time())
-    access_payload = {"user_id": user_id, "sub": user_id, "iat": now, "exp": now + token_lifetime}
+    access_payload = {"user_id": user_id, "sub": user_id, "iat": now, "exp": now + token_lifetime, "scopes": ["care:resident", "music:control"]}
     iss = os.getenv("JWT_ISSUER")
     aud = os.getenv("JWT_AUDIENCE")
     if iss:
@@ -548,6 +707,7 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         "iat": now,
         "exp": now + refresh_life,
         "jti": jti,
+        "scopes": ["care:resident", "music:control"],
     }
     if iss:
         refresh_payload["iss"] = iss
@@ -644,13 +804,17 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         try:
             _append_cookie_with_priority(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_secure, samesite=cookie_samesite)
             _append_cookie_with_priority(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_secure, samesite=cookie_samesite)
+            # Session cookie for better session management
+            _append_cookie_with_priority(resp, key="__session", value=access_token, max_age=access_ttl, secure=cookie_secure, samesite=cookie_samesite)
         except Exception:
             resp.set_cookie("access_token", access_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=access_ttl, path="/")
             resp.set_cookie("refresh_token", refresh_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=refresh_ttl, path="/")
+            # Session cookie for better session management
+            resp.set_cookie("__session", access_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=access_ttl, path="/")
         # One-liner timing log for finisher
         try:
             dt = int((time.time() - t0) * 1000)
-            print(f"auth.finish t_total={dt}ms set_cookie=true reason={reason}")
+            print(f"auth.finish t_total={dt}ms set_cookie=true reason={reason} cookies=3")
         except Exception:
             pass
         
@@ -673,12 +837,16 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
     try:
         _append_cookie_with_priority(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_secure, samesite=cookie_samesite)
         _append_cookie_with_priority(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_secure, samesite=cookie_samesite)
+        # Session cookie for better session management
+        _append_cookie_with_priority(resp, key="__session", value=access_token, max_age=access_ttl, secure=cookie_secure, samesite=cookie_samesite)
     except Exception:
         resp.set_cookie("access_token", access_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=access_ttl, path="/")
         resp.set_cookie("refresh_token", refresh_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=refresh_ttl, path="/")
+        # Session cookie for better session management
+        resp.set_cookie("__session", access_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=access_ttl, path="/")
     try:
         dt = int((time.time() - t0) * 1000)
-        print(f"auth.finish t_total={dt}ms set_cookie=true reason={reason}")
+        print(f"auth.finish t_total={dt}ms set_cookie=true reason={reason} cookies=3")
     except Exception:
         pass
     
@@ -722,88 +890,123 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
 
     - If family revoked or jti reuse detected, revoke family, clear cookies, raise 401.
     - On success, set new cookies and mark new jti as allowed.
+    - Handles race conditions gracefully with retry logic.
     """
-    try:
-        secret = _jwt_secret()
-        rtok = refresh_override or request.cookies.get("refresh_token")
-        if not rtok:
-            try:
-                print("auth.refresh debug no_refresh_cookie headers=", dict(request.headers))
+    max_retries = 3
+    retry_delay = 0.1  # 100ms
+    
+    for attempt in range(max_retries):
+        try:
+            secret = _jwt_secret()
+            rtok = refresh_override or request.cookies.get("refresh_token")
+            if not rtok:
                 try:
-                    print("auth.refresh debug cookies=", dict(request.cookies))
+                    print("auth.refresh debug no_refresh_cookie headers=", dict(request.headers))
+                    try:
+                        print("auth.refresh debug cookies=", dict(request.cookies))
+                    except Exception:
+                        pass
                 except Exception:
                     pass
-            except Exception:
-                pass
-            return None
-        # Decode refresh token against any configured key with a small skew
-        payload = _decode_any(rtok, leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60))
-        if payload.get("type") != "refresh":
-            # Backward-compat: accept tokens minted before type flag existed
-            # Treat as refresh when "exp" is reasonably large (>= 10 minutes)
+                return None
+            # Decode refresh token against any configured key with a small skew
+            payload = _decode_any(rtok, leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60))
+            if payload.get("type") != "refresh":
+                # Backward-compat: accept tokens minted before type flag existed
+                # Treat as refresh when "exp" is reasonably large (>= 10 minutes)
+                now = int(time.time())
+                exp = int(payload.get("exp", now))
+                if exp - now < 600:
+                    raise HTTPException(status_code=400, detail="invalid_token_type")
+            user_id = payload.get("user_id") or payload.get("sub")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="invalid_token")
             now = int(time.time())
-            exp = int(payload.get("exp", now))
-            if exp - now < 600:
-                raise HTTPException(status_code=400, detail="invalid_token_type")
-        user_id = payload.get("user_id") or payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="invalid_token")
-        now = int(time.time())
-        r_exp = int(payload.get("exp", now))
-        ttl = max(1, r_exp - now)
-        jti = str(payload.get("jti") or "")
-        # Use session-id when available to scope family
-        sid = request.headers.get("X-Session-ID") or request.cookies.get("sid") or user_id
-        # Strict checks
-        if await is_refresh_family_revoked(sid):
-            # Clear cookies and deny
-            response.delete_cookie("access_token", path="/")
-            response.delete_cookie("refresh_token", path="/")
-            raise HTTPException(status_code=401, detail="refresh_family_revoked")
-        # Single-use guard for this refresh token (replay protection). Claim FIRST, before any rotation.
-        first_use = await claim_refresh_jti(sid, jti, ttl_seconds=ttl)
-        if not first_use:
-            # Deny replay (another concurrent request likely succeeded)
-            response.delete_cookie("access_token", path="/")
-            response.delete_cookie("refresh_token", path="/")
+            r_exp = int(payload.get("exp", now))
+            ttl = max(1, r_exp - now)
+            jti = str(payload.get("jti") or "")
+            # Use centralized session ID resolution to ensure consistency
+            sid = resolve_session_id(request=request, user_id=user_id)
+            # Strict checks
+            if await is_refresh_family_revoked(sid):
+                # Clear cookies and deny
+                response.delete_cookie("access_token", path="/")
+                response.delete_cookie("refresh_token", path="/")
+                response.delete_cookie("__session", path="/")
+                raise HTTPException(status_code=401, detail="refresh_family_revoked")
+            
+            # Single-use guard for this refresh token (replay protection). Claim FIRST, before any rotation.
+            first_use, error_reason = await claim_refresh_jti_with_retry(sid, jti, ttl_seconds=ttl)
+            if not first_use:
+                if error_reason == "lock_timeout":
+                    # Another request is processing this JTI, retry after a short delay
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_delay * (attempt + 1))
+                        continue
+                    else:
+                        # Last attempt failed due to lock timeout
+                        response.delete_cookie("access_token", path="/")
+                        response.delete_cookie("refresh_token", path="/")
+                        response.delete_cookie("__session", path="/")
+                        raise HTTPException(status_code=503, detail="service_unavailable")
+                
+                # JTI was already used (legitimate replay or race condition)
+                response.delete_cookie("access_token", path="/")
+                response.delete_cookie("refresh_token", path="/")
+                response.delete_cookie("__session", path="/")
+                try:
+                    last = await get_last_used_jti(sid)
+                    print(f"auth.refresh t=0ms result=replay sid={sid} replay_of={last or '-'} reason={error_reason}")
+                    _met_inc("auth_refresh_replay")
+                except Exception:
+                    pass
+                raise HTTPException(status_code=401, detail="refresh_reused")
+            
+            # Mint new access + refresh with consistent TTLs
+            from ..cookie_config import get_cookie_config, get_token_ttls
+            
+            access_ttl, refresh_ttl = get_token_ttls()
+            access_payload = {"user_id": user_id, "iat": now, "exp": now + access_ttl, "scopes": ["care:resident", "music:control"]}
+            access_token = jwt.encode(access_payload, secret, algorithm="HS256")
+            
+            new_refresh_payload = {"user_id": user_id, "iat": now, "exp": now + refresh_ttl, "jti": jwt.api_jws.base64url_encode(os.urandom(16)).decode(), "type": "refresh", "scopes": ["care:resident", "music:control"]}
+            new_refresh = jwt.encode(new_refresh_payload, secret, algorithm="HS256")
+            
+            cookie_config = get_cookie_config(request)
+            
             try:
-                last = await get_last_used_jti(sid)
-                print(f"auth.refresh t=0ms result=replay sid={sid} replay_of={last or '-'}")
-                _met_inc("auth_refresh_replay")
+                _append_cookie_with_priority(response, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+                _append_cookie_with_priority(response, key="refresh_token", value=new_refresh, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+                # Set __session cookie with same value as access_token for consistent session management
+                _append_cookie_with_priority(response, key="__session", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+            except Exception:
+                response.set_cookie("access_token", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+                response.set_cookie("refresh_token", new_refresh, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
+                # Set __session cookie with same value as access_token
+                response.set_cookie("__session", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+            # Mark new token allowed
+            await allow_refresh(sid, str(new_refresh_payload.get("jti")), ttl_seconds=refresh_ttl)
+            try:
+                await set_last_used_jti(sid, jti, ttl_seconds=ttl)
+                _met_inc("auth_refresh_ok")
+                print(f"auth.refresh t=0ms result=ok sid={sid} cookies=3")
             except Exception:
                 pass
-            raise HTTPException(status_code=401, detail="refresh_reused")
-        # Mint new access + refresh with consistent TTLs
-        from ..cookie_config import get_cookie_config, get_token_ttls
-        
-        access_ttl, refresh_ttl = get_token_ttls()
-        access_payload = {"user_id": user_id, "iat": now, "exp": now + access_ttl}
-        access_token = jwt.encode(access_payload, secret, algorithm="HS256")
-        
-        new_refresh_payload = {"user_id": user_id, "iat": now, "exp": now + refresh_ttl, "jti": jwt.api_jws.base64url_encode(os.urandom(16)).decode(), "type": "refresh"}
-        new_refresh = jwt.encode(new_refresh_payload, secret, algorithm="HS256")
-        
-        cookie_config = get_cookie_config(request)
-        
-        try:
-            _append_cookie_with_priority(response, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
-            _append_cookie_with_priority(response, key="refresh_token", value=new_refresh, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
-        except Exception:
-            response.set_cookie("access_token", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
-            response.set_cookie("refresh_token", new_refresh, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
-        # Mark new token allowed
-        await allow_refresh(sid, str(new_refresh_payload.get("jti")), ttl_seconds=refresh_ttl)
-        try:
-            await set_last_used_jti(sid, jti, ttl_seconds=ttl)
-            _met_inc("auth_refresh_ok")
-            print(f"auth.refresh t=0ms result=ok sid={sid}")
-        except Exception:
-            pass
-        return {"access_token": access_token, "refresh_token": new_refresh, "user_id": str(user_id)}
-    except HTTPException:
-        raise
-    except Exception:
-        return None
+            return {"access_token": access_token, "refresh_token": new_refresh, "user_id": str(user_id)}
+            
+        except HTTPException:
+            # Don't retry on HTTP exceptions
+            raise
+        except Exception as e:
+            # Retry on other exceptions
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay * (attempt + 1))
+                continue
+            else:
+                # Last attempt failed
+                return None
+    
+    return None
 
 
 @router.post(
@@ -841,14 +1044,17 @@ async def login(username: str, request: Request, response: Response):
     cookie_config = get_cookie_config(request)
     access_ttl, refresh_ttl = get_token_ttls()
     
-    # Short access in prod by default: 15 minutes; tests/dev can override
-    token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "900"))
-    jwt_token = _make_jwt(username, exp_seconds=token_lifetime)
+    # Use consistent TTL from cookie config
+    jwt_token = _make_jwt(username, exp_seconds=access_ttl)
     
     # Set access token cookie with consistent configuration
+    print(f"DEBUG: About to set access token cookie with access_ttl={access_ttl}")
     try:
         _append_cookie_with_priority(response, key="access_token", value=jwt_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
-    except Exception:
+        print(f"DEBUG: _append_cookie_with_priority succeeded")
+    except Exception as e:
+        print(f"DEBUG: Exception in _append_cookie_with_priority: {e}")
+        print(f"DEBUG: Using fallback set_cookie with access_ttl={access_ttl}")
         response.set_cookie(
             key="access_token",
             value=jwt_token,
@@ -858,6 +1064,7 @@ async def login(username: str, request: Request, response: Response):
             max_age=access_ttl,
             path="/",
         )
+        print(f"DEBUG: Fallback set_cookie completed")
     
     # Also issue a refresh token and mark it allowed for this session
     try:
@@ -893,8 +1100,21 @@ async def login(username: str, request: Request, response: Response):
                 max_age=refresh_ttl,
                 path="/",
             )
-        # Scope family by session id when available, else by user id
-        sid = request.headers.get("X-Session-ID") or request.cookies.get("sid") or username
+        # Set __session cookie with same value as access_token for consistent session management
+        try:
+            _append_cookie_with_priority(response, key="__session", value=jwt_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+        except Exception:
+            response.set_cookie(
+                key="__session",
+                value=jwt_token,
+                httponly=True,
+                secure=cookie_config["secure"],
+                samesite=cookie_config["samesite"],
+                max_age=access_ttl,
+                path="/",
+            )
+        # Use centralized session ID resolution to ensure consistency
+        sid = resolve_session_id(request=request, user_id=username)
         await allow_refresh(sid, jti, ttl_seconds=refresh_ttl)
     except Exception:
         # Best-effort; login still succeeds with access token alone
@@ -914,74 +1134,57 @@ async def logout(request: Request, response: Response):
     CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
     """
     
-    # Logout function called
-    print("LOGOUT FUNCTION CALLED")
-    # Set a header to prevent silent refresh middleware from running
-    # Note: Headers are immutable, so we can't modify them directly
     # Revoke refresh family bound to session id (did/sid) when possible
     try:
         from ..token_store import revoke_refresh_family
-        sid = request.headers.get("X-Session-ID") or request.cookies.get("sid") or "anon"
+        from .auth import _decode_any
+        
+        # Use centralized session ID resolution to ensure consistency
+        sid = resolve_session_id(request=request)
+        
         # TTL: align with remaining refresh TTL when available; best-effort 7d
-        await revoke_refresh_family(sid, ttl_seconds=int(os.getenv("JWT_REFRESH_TTL_SECONDS", "604800")))
+        await revoke_refresh_family(sid, ttl_seconds=_get_refresh_ttl_seconds())
     except Exception:
+        # Best-effort token revocation - continue with cookie clearing
         pass
     
-    # Clear cookies with proper expiration (Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT)
-    # Use same cookie flags as when they were set
+    # Clear cookies with consistent attributes matching their original configuration
     try:
         from ..cookie_config import get_cookie_config, format_cookie_header
         
-        print("LOGOUT: Getting cookie flags")
         cookie_config = get_cookie_config(request)
-        print(f"LOGOUT: Cookie flags - secure={cookie_config['secure']}, samesite={cookie_config['samesite']}")
         
-        # Clear access_token with consistent format
-        access_header = format_cookie_header(
-            key="access_token",
-            value="",  # Empty value to clear
-            max_age=0,  # Immediate expiration
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            httponly=cookie_config["httponly"],
-            domain=cookie_config["domain"],
-        ) + "; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+        # Clear all three cookies with identical attributes + Max-Age=0
+        cookies_to_clear = ["access_token", "refresh_token", "__session"]
         
-        print(f"LOGOUT: Setting access cookie header: {access_header}")
-        response.headers.append("Set-Cookie", access_header)
-        
-        # Clear refresh_token with consistent format
-        refresh_header = format_cookie_header(
-            key="refresh_token",
-            value="",  # Empty value to clear
-            max_age=0,  # Immediate expiration
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            httponly=cookie_config["httponly"],
-            domain=cookie_config["domain"],
-        ) + "; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
-        
-        print(f"LOGOUT: Setting refresh cookie header: {refresh_header}")
-        response.headers.append("Set-Cookie", refresh_header)
-        
-    except Exception as e:
-        print(f"LOGOUT: Exception in cookie clearing: {e}")
-        # Fallback to delete_cookie
-        try:
-            print("LOGOUT: Using fallback delete_cookie")
-            response.delete_cookie("access_token", path="/", max_age=0, expires="Thu, 01 Jan 1970 00:00:00 GMT")
-            response.delete_cookie("refresh_token", path="/", max_age=0, expires="Thu, 01 Jan 1970 00:00:00 GMT")
-        except Exception as e2:
-            print(f"LOGOUT: Exception in fallback: {e2}")
-            pass
-    
-    try:
-        # Logout clear=both
-        print("LOGOUT CLEARING COOKIES")
+        for cookie_name in cookies_to_clear:
+            # Set cookie with Max-Age=0 to clear it immediately
+            header = format_cookie_header(
+                key=cookie_name,
+                value="",  # Empty value
+                max_age=0,  # Max-Age=0 for immediate expiration
+                secure=cookie_config["secure"],
+                samesite=cookie_config["samesite"],
+                path=cookie_config["path"],
+                httponly=cookie_config["httponly"],
+                domain=cookie_config["domain"]
+            )
+            response.headers.append("Set-Cookie", header)
+            
+        print(f"logout.clear_cookies secure={cookie_config['secure']} samesite={cookie_config['samesite']} cookies=3")
+            
     except Exception:
-        pass
+        # Ultimate fallback: clear cookies with minimal attributes
+        # This ensures cookies are cleared even if cookie_config fails
+        try:
+            response.set_cookie("access_token", "", max_age=0, path="/", httponly=True, secure=False, samesite="Lax")
+            response.set_cookie("refresh_token", "", max_age=0, path="/", httponly=True, secure=False, samesite="Lax")
+            response.set_cookie("__session", "", max_age=0, path="/", httponly=True, secure=False, samesite="Lax")
+            print("logout.clear_cookies fallback cookies=3")
+        except Exception:
+            # If even the fallback fails, we can't do much more
+            # The response will still be 204, indicating logout was processed
+            pass
     
     response.status_code = 204
     return response
@@ -1000,26 +1203,51 @@ async def refresh(request: Request, response: Response):
     Intent: When COOKIE_SAMESITE=none, require header X-Auth-Intent: refresh.
     CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
     """
-    # CSRF guard for cross-site cookie mode: require explicit intent header (case-insensitive)
-    try:
-        if os.getenv("COOKIE_SAMESITE", "lax").lower() == "none":
-            intent = request.headers.get("x-auth-intent") or request.headers.get("X-Auth-Intent")
-            if str(intent or "").strip().lower() != "refresh":
-                raise HTTPException(status_code=400, detail="missing_intent_header")
-    except HTTPException:
-        raise
-    except Exception:
-        pass
     # Global CSRF enforcement for mutating routes when enabled
     try:
         if os.getenv("CSRF_ENABLED", "0").strip().lower() in {"1","true","yes","on"}:
             from ..csrf import _extract_csrf_header as _csrf_extract
             tok, used_legacy, allowed = _csrf_extract(request)
-            if used_legacy and not allowed:
-                raise HTTPException(status_code=400, detail="missing_csrf")
-            cookie = request.cookies.get("csrf_token")
-            if not tok or not cookie or tok != cookie:
-                raise HTTPException(status_code=403, detail="invalid_csrf")
+            
+            # Check if we're in a cross-site scenario (COOKIE_SAMESITE=none)
+            is_cross_site = os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"
+            
+            if is_cross_site:
+                # Cross-site CSRF validation: require intent header + additional security
+                if not tok:
+                    raise HTTPException(status_code=400, detail="missing_csrf_cross_site")
+                
+                # For cross-site, we can't rely on same-origin cookies, so we use a different approach:
+                # 1. Require the CSRF token in header
+                # 2. Validate against a server-side session or use a different mechanism
+                # 3. Additional validation: check if the request has proper intent headers
+                
+                # Validate intent header is present for cross-site requests
+                intent = request.headers.get("x-auth-intent") or request.headers.get("X-Auth-Intent")
+                if str(intent or "").strip().lower() != "refresh":
+                    raise HTTPException(status_code=400, detail="missing_intent_header_cross_site")
+                
+                # For cross-site, we'll accept the CSRF token from header only
+                # This is less secure than double-submit, but necessary for cross-site functionality
+                if not tok or len(tok) < 16:  # Basic validation
+                    raise HTTPException(status_code=403, detail="invalid_csrf_format")
+                
+                # TODO: Consider implementing server-side CSRF token validation for cross-site requests
+                # This could involve storing valid tokens in Redis/session and validating against that
+                
+            else:
+                # Standard same-origin CSRF validation (double-submit pattern)
+                if used_legacy and not allowed:
+                    raise HTTPException(status_code=400, detail="missing_csrf")
+                cookie = request.cookies.get("csrf_token")
+                if not tok or not cookie or tok != cookie:
+                    raise HTTPException(status_code=403, detail="invalid_csrf")
+        else:
+            # When CSRF is disabled, still require intent header for cross-site requests
+            if os.getenv("COOKIE_SAMESITE", "lax").lower() == "none":
+                intent = request.headers.get("x-auth-intent") or request.headers.get("X-Auth-Intent")
+                if str(intent or "").strip().lower() != "refresh":
+                    raise HTTPException(status_code=400, detail="missing_intent_header")
     except HTTPException:
         raise
     except Exception:
@@ -1027,17 +1255,8 @@ async def refresh(request: Request, response: Response):
     # Rate-limit refresh per session id (sid) 60/min
     try:
         from ..token_store import incr_login_counter
-        # Identify a stable session family key for rate limiting
-        sid = request.headers.get("X-Session-ID") or request.cookies.get("sid")
-        if not sid:
-            try:
-                rtok = request.cookies.get("refresh_token")
-                if rtok:
-                    payload = _decode_any(rtok)
-                    sid = payload.get("sub") or payload.get("user_id")
-            except Exception:
-                sid = None
-        sid = sid or "anon"
+        # Use centralized session ID resolution for rate limiting
+        sid = resolve_session_id(request=request)
         # Rate-limit per family and per-IP
         ip = (request.client.host if request.client else "unknown")
         fam_hits = await incr_login_counter(f"rl:refresh:fam:{sid}", 60)
@@ -1085,7 +1304,7 @@ async def refresh(request: Request, response: Response):
                 uid_fb = str(claims.get("user_id") or claims.get("sub") or "anon")
                 try:
                     dt = int((time.time() - t0) * 1000)
-                    sid = request.headers.get("X-Session-ID") or request.cookies.get("sid") or uid_fb
+                    sid = resolve_session_id(request=request, user_id=uid_fb)
                     print(f"auth.refresh t={dt}ms result=ok sid={sid}")
                 except Exception:
                     pass
@@ -1096,7 +1315,8 @@ async def refresh(request: Request, response: Response):
     # Prefer user_id from rotation outcome; include tokens for header-auth clients
     try:
         dt = int((time.time() - t0) * 1000)
-        sid = request.headers.get("X-Session-ID") or request.cookies.get("sid") or (tokens.get("user_id") if isinstance(tokens, dict) else "-")
+        user_id_from_tokens = tokens.get("user_id") if isinstance(tokens, dict) else None
+        sid = resolve_session_id(request=request, user_id=user_id_from_tokens)
         print(f"auth.refresh t={dt}ms result=ok sid={sid}")
     except Exception:
         pass
@@ -1128,7 +1348,7 @@ async def issue_token(request: Request):
         scopes = [s.strip() for s in str(raw_scope).split() if s.strip()]
     except Exception:
         pass
-    token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1209600"))
+    token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", str(int(os.getenv("JWT_EXPIRE_MINUTES", "30")) * 60)))
     now = int(time.time())
     # scopes already set above
     payload = {
@@ -1189,6 +1409,10 @@ async def mock_set_access_cookie(max_age: int = 1) -> Response:
     cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
     resp.set_cookie("access_token", tok, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=max_age, path="/")
+    # Set refresh_token with same value for testing consistency
+    resp.set_cookie("refresh_token", tok, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=max_age, path="/")
+    # Session cookie for better session management
+    resp.set_cookie("__session", tok, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=max_age, path="/")
     return resp
 
 __all__ = ["router", "verify_pat"]

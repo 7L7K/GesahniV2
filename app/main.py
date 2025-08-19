@@ -11,6 +11,9 @@ import hashlib
 import inspect
 from contextlib import asynccontextmanager
 from pathlib import Path
+import time
+import traceback
+from datetime import datetime
 
 
 from fastapi import (
@@ -28,7 +31,7 @@ from fastapi import (
 )
 from starlette.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import StreamingResponse, HTMLResponse, Response
+from fastapi.responses import StreamingResponse, HTMLResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -62,7 +65,7 @@ from .home_assistant import (
 from .alias_store import get_all as alias_all, set as alias_set, delete as alias_delete
 from .history import get_record_by_req_id
 from .llama_integration import startup_check as llama_startup
-from .logging_config import configure_logging, get_last_errors
+from .logging_config import configure_logging, req_id_var, get_last_errors
 from .csrf import CSRFMiddleware
 from .otel_utils import init_tracing, shutdown_tracing
 from .status import router as status_router
@@ -201,13 +204,220 @@ def _anon_user_id(auth_header: str | None) -> str:
     return hashlib.md5(token.encode()).hexdigest()
 
 
+# Configure logging first
+from .logging_config import configure_logging, req_id_var, get_last_errors
+
 configure_logging()
-# Initialize tracing early (best-effort; no-op if disabled/unavailable)
-try:
-    init_tracing()
-except Exception:
-    pass
 logger = logging.getLogger(__name__)
+
+# Global error tracking
+_startup_errors = []
+_runtime_errors = []
+
+def _record_error(error: Exception, context: str = "unknown"):
+    """Record an error for monitoring and debugging."""
+    error_info = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "error_type": type(error).__name__,
+        "error_message": str(error),
+        "context": context,
+        "traceback": "".join(traceback.format_exception(type(error), error, error.__traceback__)),
+    }
+    _runtime_errors.append(error_info)
+    if len(_runtime_errors) > 100:  # Keep only last 100 errors
+        _runtime_errors.pop(0)
+    logger.error(f"Error in {context}: {error}", exc_info=True)
+
+# Enhanced startup with comprehensive error tracking
+async def _enhanced_startup():
+    """Enhanced startup with comprehensive error tracking and logging."""
+    startup_start = time.time()
+    logger.info("Starting enhanced application startup")
+    
+    try:
+        # Initialize core components with error tracking
+        components = [
+            ("Database", _init_database),
+            ("Vector Store", _init_vector_store),
+            ("LLaMA Integration", _init_llama),
+            ("Home Assistant", _init_home_assistant),
+            ("Memory Store", _init_memory_store),
+            ("Scheduler", _init_scheduler),
+        ]
+        
+        for name, init_func in components:
+            try:
+                logger.info(f"Initializing {name}")
+                await init_func()
+                logger.info(f"{name} initialized successfully")
+            except Exception as e:
+                error_msg = f"Failed to initialize {name}: {e}"
+                logger.error(error_msg, exc_info=True)
+                _record_error(e, f"startup.{name.lower().replace(' ', '_')}")
+                # Continue startup even if some components fail
+                continue
+        
+        startup_time = time.time() - startup_start
+        logger.info(f"Application startup completed in {startup_time:.2f}s")
+        
+    except Exception as e:
+        error_msg = f"Critical startup failure: {e}"
+        logger.error(error_msg, exc_info=True)
+        _record_error(e, "startup.critical")
+        raise
+
+async def _init_database():
+    """Initialize database connections and verify connectivity."""
+    try:
+        # Test database connectivity
+        from .auth import _ensure_table
+        await _ensure_table()
+        logger.debug("Database initialization successful")
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        raise
+
+async def _init_vector_store():
+    """Initialize vector store with enhanced error handling."""
+    try:
+        from .memory.api import _get_store
+        store = _get_store()
+        # Test vector store connectivity
+        await store.add_memory("test", "test memory", "test-user", metadata={"test": True})
+        await store.search_memories("test", "test-user", limit=1)
+        logger.debug("Vector store initialization successful")
+    except Exception as e:
+        logger.error(f"Vector store initialization failed: {e}")
+        raise
+
+async def _init_llama():
+    """Initialize LLaMA integration with health check."""
+    try:
+        from .llama_integration import _check_and_set_flag
+        await _check_and_set_flag()
+        logger.debug("LLaMA integration initialization successful")
+    except Exception as e:
+        logger.error(f"LLaMA integration initialization failed: {e}")
+        raise
+
+async def _init_home_assistant():
+    """Initialize Home Assistant integration."""
+    try:
+        from .home_assistant import get_states
+        # Test HA connectivity if configured
+        if os.getenv("HOME_ASSISTANT_URL"):
+            await get_states()
+            logger.debug("Home Assistant integration initialization successful")
+        else:
+            logger.debug("Home Assistant not configured, skipping initialization")
+    except Exception as e:
+        logger.error(f"Home Assistant initialization failed: {e}")
+        raise
+
+async def _init_memory_store():
+    """Initialize memory store."""
+    try:
+        from .memory.api import _get_store
+        store = _get_store()
+        logger.debug("Memory store initialization successful")
+    except Exception as e:
+        logger.error(f"Memory store initialization failed: {e}")
+        raise
+
+async def _init_scheduler():
+    """Initialize scheduler."""
+    try:
+        from .deps.scheduler import scheduler
+        if scheduler.running:
+            logger.debug("Scheduler already running")
+        else:
+            await scheduler.start()
+            logger.debug("Scheduler initialization successful")
+    except Exception as e:
+        logger.error(f"Scheduler initialization failed: {e}")
+        raise
+
+# Enhanced error handling middleware
+async def enhanced_error_handling(request: Request, call_next):
+    """Enhanced error handling middleware with comprehensive logging."""
+    start_time = time.time()
+    req_id = req_id_var.get()
+    
+    try:
+        logger.debug(f"Request started: {request.method} {request.url.path} (ID: {req_id})")
+        
+        # Log request details in debug mode
+        if logger.isEnabledFor(logging.DEBUG):
+            headers = dict(request.headers)
+            # Redact sensitive headers
+            for key in ["authorization", "cookie", "x-api-key"]:
+                if key in headers:
+                    headers[key] = "[REDACTED]"
+            
+            logger.debug(f"Request details: {request.method} {request.url.path}", extra={
+                "meta": {
+                    "req_id": req_id,
+                    "headers": headers,
+                    "query_params": dict(request.query_params),
+                    "client_ip": request.client.host if request.client else None,
+                }
+            })
+        
+        response = await call_next(request)
+        
+        # Log response details
+        duration = time.time() - start_time
+        logger.info(f"Request completed: {request.method} {request.url.path} -> {response.status_code} ({duration:.3f}s)", extra={
+            "meta": {
+                "req_id": req_id,
+                "status_code": response.status_code,
+                "duration_ms": duration * 1000,
+            }
+        })
+        
+        return response
+        
+    except Exception as e:
+        duration = time.time() - start_time
+        error_msg = f"Request failed: {request.method} {request.url.path} -> {type(e).__name__}: {e}"
+        logger.error(error_msg, exc_info=True, extra={
+            "meta": {
+                "req_id": req_id,
+                "duration_ms": duration * 1000,
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+            }
+        })
+        _record_error(e, f"request.{request.method.lower()}.{request.url.path.replace('/', '_')}")
+        
+        # Return a proper error response
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Internal server error",
+                "req_id": req_id,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
+
+
+
+# Enhanced startup event
+async def enhanced_startup_event():
+    """Enhanced startup event with comprehensive initialization."""
+    app.state._start_time = time.time()
+    logger.info("Enhanced startup event triggered")
+    
+    try:
+        await _enhanced_startup()
+        logger.info("Enhanced startup completed successfully")
+    except Exception as e:
+        logger.error(f"Enhanced startup failed: {e}", exc_info=True)
+        _record_error(e, "startup.event")
+        # Don't raise here - let the app start even with some failures
+
+# Startup will be handled by the existing startup functions
+# Enhanced startup is available but not automatically triggered
 
 
 tags_metadata = [
@@ -304,6 +514,14 @@ async def lifespan(app: FastAPI):
             asyncio.create_task(sms_worker())
         except Exception:
             logger.debug("sms_worker not started", exc_info=True)
+        
+        # Start token store cleanup task
+        try:
+            from .token_store import start_cleanup_task
+            await start_cleanup_task()
+        except Exception:
+            logger.debug("token store cleanup task not started", exc_info=True)
+        
         yield
     finally:
         # Log health flip to offline on shutdown
@@ -328,6 +546,13 @@ async def lifespan(app: FastAPI):
             shutdown_tracing()
         except Exception:
             pass
+        
+        # Stop token store cleanup task
+        try:
+            from .token_store import stop_cleanup_task
+            await stop_cleanup_task()
+        except Exception:
+            logger.debug("token store cleanup task shutdown failed", exc_info=True)
 
 
 app = FastAPI(
@@ -355,7 +580,7 @@ def _custom_openapi():
     if _IS_DEV_ENV:
         servers_env = _DEV_SERVERS_SNAPSHOT or os.getenv(
             "OPENAPI_DEV_SERVERS",
-            "http://127.0.0.1:8000",
+            "http://localhost:8000",
         )
         servers = [
             {"url": s.strip()}
@@ -372,33 +597,63 @@ app.openapi = _custom_openapi  # type: ignore[assignment]
 
 # CORS configuration - will be added as outermost middleware
 # WebSocket requirement: Only accept http://localhost:3000 for consistent origin validation
-_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
-origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 
-# Security: WebSocket requirement - use exactly http://localhost:3000 (not 127.0.0.1:3000)
-# This ensures consistent origin validation between frontend and backend
-if len(origins) > 1:
-    logging.warning("Multiple CORS origins detected. WebSocket requirement: use exactly http://localhost:3000")
-    # Use http://localhost:3000 as the canonical origin
-    origins = ["http://localhost:3000"]
-    logging.info(f"Using canonical CORS origin: {origins[0]}")
+# Enhanced logging for debugging configuration issues
+logging.info("=== CORS CONFIGURATION DEBUG ===")
+logging.info(f"Environment variables:")
+logging.info(f"  CORS_ALLOW_ORIGINS: {repr(os.getenv('CORS_ALLOW_ORIGINS'))}")
+logging.info(f"  APP_URL: {repr(os.getenv('APP_URL'))}")
+logging.info(f"  API_URL: {repr(os.getenv('API_URL'))}")
+logging.info(f"  HOST: {repr(os.getenv('HOST'))}")
+logging.info(f"  PORT: {repr(os.getenv('PORT'))}")
+logging.info(f"  CORS_ALLOW_CREDENTIALS: {repr(os.getenv('CORS_ALLOW_CREDENTIALS'))}")
+
+_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+logging.info(f"Raw CORS origins from env: {repr(_cors_origins)}")
+
+origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+logging.info(f"Parsed CORS origins: {origins}")
+
+# Security: Allow multiple origins for development flexibility
+# Replace 127.0.0.1 with localhost for consistency
+origins = [o.replace("http://127.0.0.1:", "http://localhost:") for o in origins]
+
+# Handle special origins for development
+if os.getenv("DEV_MODE", "0") == "1":
+    # In dev mode, allow null origin for local file testing
+    origins.append("null")
 
 if not origins:
     logging.warning("No CORS origins configured. Defaulting to http://localhost:3000")
     origins = ["http://localhost:3000"]
+    logging.info(f"Set default CORS origin: {origins[0]}")
 
-# WebSocket requirement: Ensure we only allow http://localhost:3000, not 127.0.0.1:3000
-if "http://127.0.0.1:3000" in origins:
-    logging.warning("CORS origin http://127.0.0.1:3000 detected. Replacing with http://localhost:3000 for WebSocket consistency.")
-    origins = ["http://localhost:3000"]
+# Validate origins are in the same address family (localhost or IP)
+def is_same_address_family(origin_list):
+    """Check if all origins are in the same address family (localhost or IP)"""
+    if not origin_list:
+        return True
+    
+    # Check if all are localhost or all are IP addresses
+    localhost_count = sum(1 for o in origin_list if "localhost" in o)
+    ip_count = sum(1 for o in origin_list if "localhost" not in o and "127.0.0.1" not in o)
+    
+    # All should be localhost OR all should be IP addresses
+    return localhost_count == 0 or ip_count == 0
 
-# Final validation: ensure we only have http://localhost:3000
-if origins != ["http://localhost:3000"]:
-    logging.warning(f"WebSocket requirement: CORS origins {origins} not canonical. Using http://localhost:3000")
-    origins = ["http://localhost:3000"]
+if not is_same_address_family(origins):
+    logging.warning(f"Mixed address families detected in CORS origins: {origins}")
+    logging.warning("This may cause WebSocket connection issues. Consider using consistent addressing.")
 
 # Allow credentials: yes (cookies/tokens)
-allow_credentials = os.getenv("CORS_ALLOW_CREDENTIALS", "true").strip().lower() in {"1", "true", "yes", "on"}
+allow_credentials_raw = os.getenv("CORS_ALLOW_CREDENTIALS", "true")
+allow_credentials = allow_credentials_raw.strip().lower() in {"1", "true", "yes", "on"}
+logging.info(f"CORS allow_credentials: raw={repr(allow_credentials_raw)}, parsed={allow_credentials}")
+
+logging.info(f"Final CORS configuration:")
+logging.info(f"  origins: {origins}")
+logging.info(f"  allow_credentials: {allow_credentials}")
+logging.info("=== END CORS CONFIGURATION DEBUG ===")
 
 # Custom handler for HTTP requests to WebSocket endpoints
 @app.get("/v1/ws/{path:path}")
@@ -428,6 +683,31 @@ async def websocket_http_handler(request: Request, path: str):
         }
     )
     return response
+
+# Debug endpoint to check current configuration
+@app.get("/debug/config", include_in_schema=False)
+async def debug_config():
+    """Debug endpoint to check current configuration values."""
+    return {
+        "environment": {
+            "CORS_ALLOW_ORIGINS": os.getenv("CORS_ALLOW_ORIGINS"),
+            "APP_URL": os.getenv("APP_URL"),
+            "API_URL": os.getenv("API_URL"),
+            "HOST": os.getenv("HOST"),
+            "PORT": os.getenv("PORT"),
+            "CORS_ALLOW_CREDENTIALS": os.getenv("CORS_ALLOW_CREDENTIALS"),
+        },
+        "runtime": {
+            "cors_origins": origins,
+            "allow_credentials": allow_credentials,
+            "server_host": os.getenv("HOST", "0.0.0.0"),
+            "server_port": os.getenv("PORT", "8000"),
+        },
+        "frontend": {
+            "expected_origin": "http://localhost:3000",
+            "next_public_api_origin": os.getenv("NEXT_PUBLIC_API_ORIGIN"),
+        }
+    }
 
 # Removed legacy unversioned /whoami to ensure a single canonical /v1/whoami
 
@@ -499,7 +779,22 @@ if os.getenv("PROMETHEUS_ENABLED", "1").strip().lower() in {"1", "true", "yes", 
 
 _HEALTH_LAST: dict[str, bool] = {"online": True}
 
+# Root endpoint
+@app.get("/", include_in_schema=False)
+async def root() -> dict:
+    """Root endpoint for basic connectivity check."""
+    return {
+        "status": "ok", 
+        "message": "Gesahni API is running",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0.0"
+    }
+
 # Health endpoint is handled by status.py router
+@app.get("/health", include_in_schema=False)
+async def _health_main() -> dict:
+    """Main health endpoint with basic status."""
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
 
 # K8s-friendly health group (no auth)
 @app.get("/health/live", include_in_schema=False)
@@ -515,8 +810,83 @@ async def _health_live() -> dict:
 
 @app.get("/health/ready", include_in_schema=False)
 async def _health_ready() -> dict:
-    # Optionally expand with dependency checks
-    return {"status": "ok"}
+    """Enhanced health check with detailed system status."""
+    health_start = time.time()
+    
+    try:
+        # Basic system checks
+        checks = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "uptime": time.time() - getattr(app.state, "_start_time", 0),
+            "version": "1.0.0",
+        }
+        
+        # Component health checks
+        component_health = {}
+        
+        # Database health
+        try:
+            from .auth import _ensure_table
+            await _ensure_table()
+            component_health["database"] = {"status": "healthy"}
+        except Exception as e:
+            component_health["database"] = {"status": "unhealthy", "error": str(e)}
+        
+        # Vector store health
+        try:
+            from .memory.api import _get_store
+            store = _get_store()
+            component_health["vector_store"] = {"status": "healthy", "type": type(store).__name__}
+        except Exception as e:
+            component_health["vector_store"] = {"status": "unhealthy", "error": str(e)}
+        
+        # LLaMA health
+        try:
+            from .llama_integration import LLAMA_HEALTHY
+            component_health["llama"] = {"status": "healthy" if LLAMA_HEALTHY else "unhealthy"}
+        except Exception as e:
+            component_health["llama"] = {"status": "unhealthy", "error": str(e)}
+        
+        checks["components"] = component_health
+        
+        # Error statistics
+        checks["errors"] = {
+            "startup_errors": len(_startup_errors),
+            "runtime_errors": len(_runtime_errors),
+            "recent_errors": len(get_last_errors(10)),
+        }
+        
+        # Performance metrics
+        health_duration = time.time() - health_start
+        checks["performance"] = {
+            "health_check_duration_ms": health_duration * 1000,
+        }
+        
+        # Determine overall health
+        unhealthy_components = [c for c in component_health.values() if c.get("status") == "unhealthy"]
+        overall_status = "healthy" if not unhealthy_components else "degraded"
+        
+        logger.info(f"Health check completed: {overall_status} ({health_duration:.3f}s)", extra={
+            "meta": {
+                "health_status": overall_status,
+                "unhealthy_components": len(unhealthy_components),
+                "duration_ms": health_duration * 1000,
+            }
+        })
+        
+        return {
+            "status": overall_status,
+            **checks
+        }
+        
+    except Exception as e:
+        logger.error(f"Health check failed: {e}", exc_info=True)
+        _record_error(e, "health_check")
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
 
 @app.get("/health/startup", include_in_schema=False)
 async def _health_startup() -> dict:
@@ -984,13 +1354,24 @@ async def get_csrf(request: Request) -> dict:
         
         resp = JSONResponse({"csrf_token": tok})
         cookie_config = get_cookie_config(request)
+        
+        # For cross-site scenarios (COOKIE_SAMESITE=none), ensure CSRF token cookie
+        # is also set with SameSite=None to be accessible in cross-site requests
+        csrf_samesite = cookie_config["samesite"]
+        if csrf_samesite == "none":
+            # Ensure Secure=True when SameSite=None
+            csrf_secure = True
+        else:
+            # For same-origin scenarios, use standard configuration
+            csrf_secure = cookie_config["secure"]
+        
         resp.set_cookie(
             "csrf_token", 
             tok, 
             max_age=600, 
             path="/",
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
+            secure=csrf_secure,
+            samesite=csrf_samesite,
             httponly=False  # CSRF tokens need to be accessible to JavaScript
         )
         return resp
@@ -1527,12 +1908,36 @@ if music_router is not None:
 # 1) Include routers FIRST (handlers + dependencies live here)
 #    Routers are already included above with their dependencies
 
-# 2) Your custom middlewares (inner → outer as you go DOWN)
+# 2) Core middlewares (inner → outer as you go DOWN)
 #    These WILL be skipped for OPTIONS by your own checks.
+#    Order: [ RequestID ] → [ Trace ] → [ CSRF ] → [ CORS ] → [ RateLimit / Router / Handlers ]
 app.add_middleware(RequestIDMiddleware)      # innermost - sets request ID
 app.add_middleware(DedupMiddleware)          # deduplicates requests
 app.add_middleware(TraceRequestMiddleware)   # traces/logs requests (skips OPTIONS)
-app.add_middleware(CSRFMiddleware)           # CSRF protection (skips OPTIONS)
+
+# Add CORS debug middleware
+@app.middleware("http")
+async def cors_debug_middleware(request: Request, call_next):
+    """Debug middleware to log CORS-related information."""
+    origin = request.headers.get("origin")
+    method = request.method
+    
+    if origin:
+        logging.info(f"CORS DEBUG: Request from origin={origin}, method={method}, path={request.url.path}")
+        if origin not in origins:
+            logging.warning(f"CORS DEBUG: Origin {origin} not in allowed origins {origins}")
+    
+    if method == "OPTIONS":
+        logging.info(f"CORS DEBUG: Preflight request for path={request.url.path}")
+    
+    response = await call_next(request)
+    
+    # Log CORS headers in response
+    cors_headers = {k: v for k, v in response.headers.items() if k.lower().startswith('access-control-')}
+    if cors_headers:
+        logging.info(f"CORS DEBUG: Response headers: {cors_headers}")
+    
+    return response
 
 
 
@@ -1540,23 +1945,38 @@ app.add_middleware(CSRFMiddleware)           # CSRF protection (skips OPTIONS)
 #    Configure them to skip OPTIONS if they can.
 #    Note: Currently no third-party middlewares like GZipMiddleware are used
 
-# 4) CORS LAST — OUTERMOST
-#    Must be the final add_middleware call.
-#    Preflight: CORS middleware registered as the outermost layer so OPTIONS short-circuits
+# 4) CSRF protection BEFORE CORS (inner)
+#    CSRF middleware handles non-OPTIONS requests before CORS processes them
+app.add_middleware(CSRFMiddleware)           # CSRF protection (skips OPTIONS)
+logging.info("=== CSRF MIDDLEWARE REGISTERED ===")
+
+# Note: reload_env_middleware is a simple function, not a class, so we use the decorator
+app.middleware("http")(reload_env_middleware)
+app.middleware("http")(silent_refresh_middleware)  # Re-enabled to prevent 401s during app boot
+app.middleware("http")(enhanced_error_handling)  # Enhanced error handling and logging
+
+# 5) CORS AS OUTERMOST MIDDLEWARE — HANDLES ALL RESPONSES
+#    CORS middleware must be the outermost to ensure all responses (including errors) get ACAO headers
+logging.info("=== REGISTERING CORS MIDDLEWARE (OUTERMOST) ===")
+logging.info(f"Adding CORSMiddleware with:")
+logging.info(f"  allow_origins: {origins}")
+logging.info(f"  allow_credentials: {allow_credentials}")
+logging.info(f"  allow_methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']")
+logging.info(f"  allow_headers: ['*']")
+logging.info(f"  expose_headers: ['X-Request-ID']")
+logging.info(f"  max_age: 600")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=allow_credentials,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["*", "Authorization"],
     # Expose headers: only what you need (e.g., X-Request-ID), not wildcards
     expose_headers=["X-Request-ID"],
     max_age=600,
 )
-
-# Note: reload_env_middleware is a simple function, not a class, so we use the decorator
-app.middleware("http")(reload_env_middleware)
-app.middleware("http")(silent_refresh_middleware)  # Re-enabled to prevent 401s during app boot
+logging.info("=== CORS MIDDLEWARE REGISTERED (OUTERMOST) ===")
 
 # Debug middleware order dump
 def _dump_mw_stack(app):
@@ -1568,8 +1988,21 @@ def _dump_mw_stack(app):
 
 _dump_mw_stack(app)
 
+# Final startup logging
+logging.info("=== FINAL STARTUP CONFIGURATION ===")
+logging.info(f"Server will start on: {os.getenv('HOST', '0.0.0.0')}:{os.getenv('PORT', '8000')}")
+logging.info(f"Frontend origin: http://localhost:3000")
+logging.info(f"Backend origin: http://localhost:8000")
+logging.info(f"CORS origins: {origins}")
+logging.info(f"CORS allow_credentials: {allow_credentials}")
+logging.info("=== STARTUP COMPLETE ===")
+
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+    # Read host and port from environment variables
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", 8000))
+    
+    uvicorn.run(app, host=host, port=port)

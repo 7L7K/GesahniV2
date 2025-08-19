@@ -24,7 +24,7 @@ def get_cookie_config(request: Request) -> dict:
         dict: Cookie configuration with secure, samesite, and other flags
     """
     # Base configuration from environment
-    cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
+    cookie_secure = os.getenv("COOKIE_SECURE", "0").lower() in {"1", "true", "yes", "on"}
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
     dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
     
@@ -63,7 +63,7 @@ def _is_dev_environment(request: Request) -> bool:
     # Check request host for localhost/dev patterns
     try:
         host = request.headers.get("host", "").lower()
-        dev_hosts = ["localhost", "127.0.0.1", "0.0.0.0", "dev.", "local."]
+        dev_hosts = ["localhost", "0.0.0.0", "dev.", "local."]
         if any(dev_host in host for dev_host in dev_hosts):
             return True
     except Exception:
@@ -87,12 +87,12 @@ def get_token_ttls() -> Tuple[int, int]:
     Returns:
         Tuple[int, int]: (access_ttl_seconds, refresh_ttl_seconds)
     """
-    # Access token TTL (default: 30 minutes)
-    access_minutes = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
+    # Access token TTL (default: 15 minutes)
+    access_minutes = int(os.getenv("JWT_EXPIRE_MINUTES", "15"))
     access_ttl = access_minutes * 60
     
-    # Refresh token TTL (default: 24 hours)
-    refresh_minutes = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
+    # Refresh token TTL (default: 30 days)
+    refresh_minutes = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "43200"))
     refresh_ttl = refresh_minutes * 60
     
     return access_ttl, refresh_ttl
@@ -124,7 +124,7 @@ def format_cookie_header(
     Returns:
         str: Formatted Set-Cookie header
     """
-    # Normalize SameSite value
+    # Normalize SameSite value - use proper case
     samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
     ss = samesite_map.get(samesite.lower(), "Lax")
     
@@ -145,7 +145,7 @@ def format_cookie_header(
         parts.append(f"Domain={domain}")
     
     # Add Priority=High for critical auth cookies
-    if key in ["access_token", "refresh_token"]:
+    if key in ["access_token", "refresh_token", "__session"]:
         parts.append("Priority=High")
     
     return "; ".join(parts)

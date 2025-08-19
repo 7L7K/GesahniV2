@@ -55,81 +55,88 @@ bash app/setup.sh
 ```
 
 ### 🔑 3. Configure Environment
-Set environment variables as needed:
 
-| Var | Default | Required | Purpose |
-| --- | --- | --- | --- |
-| `OPENAI_API_KEY` | – | yes | OpenAI auth for GPT & Whisper |
-| `OPENAI_MODEL` | `gpt-4o` | no | Default GPT model |
-| `OPENAI_TRANSCRIBE_MODEL` | `whisper-1` | no | Async Whisper model |
-| `WHISPER_MODEL` | `whisper-1` | no | Sync Whisper model |
-| `ALLOWED_GPT_MODELS` | `gpt-4o,gpt-4,gpt-3.5-turbo` | no | Valid `/ask` model overrides |
-| `ALLOWED_LLAMA_MODELS` | `llama3:latest,llama3` | no | Valid `/ask` LLaMA overrides |
-| `DEBUG` | – | no | Enable extra prompt debug info |
-| `DEBUG_MODEL_ROUTING` | – | no | Log model path without external calls |
-| `LOG_LEVEL` | `INFO` | no | Logging verbosity |
-| `FOLLOW_UPS_FILE` | `data/follow_ups.json` | no | Stored follow-up reminders |
-| `OLLAMA_URL` | `http://localhost:11434` | no | Ollama base URL |
-| `OLLAMA_MODEL` | `llama3:latest` | no | LLaMA model name |
-| `OLLAMA_FORCE_IPV6` | – | no | Force IPv6 for Ollama requests |
-| `LLAMA_MAX_STREAMS` | `2` | no | Max concurrent LLaMA streams |
-| `JWT_SECRET` | `change-me` | no | JWT secret for protected endpoints |
-| `JWT_EXPIRE_MINUTES` | `30` | no | Access token lifetime |
-| `JWT_REFRESH_EXPIRE_MINUTES` | `1440` | no | Refresh token lifetime |
-| `RATE_LIMIT_PER_MIN` | `60` | no | Requests per minute per IP |
-| `API_TOKEN` | – | no | Static token for legacy clients |
-| `REDIS_URL` | `redis://localhost:6379/0` | no | RQ queue for async tasks (optional; falls back to threads) |
-| `HISTORY_FILE` | `data/history.jsonl` | no | Request history log |
-| `CORS_ALLOW_ORIGINS` | `http://localhost:3000` | no | Allowed web origins (exactly localhost, not 127.0.0.1) |
-| `CORS_ALLOW_CREDENTIALS` | `true` | no | Allow credentials (cookies/tokens) |
-| `PORT` | `8000` | no | Server port when running `python app/main.py` |
-| `SESSIONS_DIR` | `sessions/` | no | Base directory for session media |
-| `ADMIN_TOKEN` | – | no | Required to read `/config` |
-| `HOME_ASSISTANT_URL` | `http://localhost:8123` | no | Home Assistant base URL |
-| `HOME_ASSISTANT_TOKEN` | – | yes | HA long-lived token |
-| `INTENT_THRESHOLD` | `0.7` | no | Intent confidence cutoff |
-| `LLAMA_EMBEDDINGS_MODEL` | – | yes* | Path to GGUF when using llama embeddings |
-| `EMBED_MODEL` | `text-embedding-3-small` | no | OpenAI embedding model |
-| `EMBEDDING_BACKEND` | `openai` | no | Embedding provider (`openai` or `llama`) |
-| `ROUTER_RULES_PATH` | `router_rules.yaml` | no | Path to deterministic router rules |
-| `TRANSLATE_URL` | `http://localhost:5000` | no | Translation microservice |
-| `OPENWEATHER_API_KEY` | – | yes | Weather and forecast lookups |
-| `CITY_NAME` | `Detroit,US` | no | Default weather city |
-| `NOTES_DB` | `notes.db` | no | SQLite file for notes skill |
-| `CALENDAR_FILE` | `data/calendar.json` | no | Calendar events source |
-| `MAX_UPLOAD_BYTES` | `10485760` | no | Max upload size for session media |
-| `SIM_THRESHOLD` | `0.24` | no | Vector similarity cutoff |
-| `MEM_TOP_K` | `3` | no | Memories returned from vector store |
-| `DISABLE_QA_CACHE` | `false` | no | Skip semantic cache when set |
-| `VECTOR_DSN` | `chroma:///.chroma_data` | no | Unified vector store configuration (see formats below) |
-| `STRICT_VECTOR_STORE` | `0` | no | When `1/true/yes`, any init error is fatal (no silent fallback), regardless of `ENV`. |
-| `EMBED_DIM` | `1536` | no | Embedding vector dimension used for vector collections |
-| `VECTOR_STORE` | `chroma` | no | **Deprecated**: Use `VECTOR_DSN` instead |
-| `CHROMA_PATH` | `.chroma_data` | no | **Deprecated**: Use `VECTOR_DSN` instead |
-| `QDRANT_URL` | – | no | **Deprecated**: Use `VECTOR_DSN` instead |
-| `QDRANT_API_KEY` | – | no | **Deprecated**: Use `VECTOR_DSN` instead |
-| `QDRANT_COLLECTION` | `kb:default` | no | **Deprecated**: Use `VECTOR_DSN` instead |
-| `VECTOR_DUAL_WRITE_BOTH` | `0` | no | **Deprecated**: Use `VECTOR_DSN` instead |
-| `VECTOR_DUAL_QA_WRITE_BOTH` | `0` | no | **Deprecated**: Use `VECTOR_DSN` instead |
-| `RAGFLOW_URL` | `http://localhost:8001` | no | Base URL for RAGFlow server |
-| `RAGFLOW_COLLECTION` | `demo` | no | Default RAGFlow collection name |
-| `USERS_DB` | `users.db` | no | SQLite path for auth users |
+GesahniV2 uses a multi-environment configuration system to eliminate configuration drift. Choose your environment and configure it:
 
-*Required only when `EMBEDDING_BACKEND=llama`.
-
-Set `GPT_SYSTEM_PROMPT` to tweak the assistant's default persona. For example:
+#### Quick Start (Development)
 
 ```bash
-export GPT_SYSTEM_PROMPT="You are a pirate who talks like a pirate."
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Switch to development environment
+./scripts/switch_env.sh dev
+
+# Edit .env to add your API keys and secrets
+nano .env
 ```
+
+#### Environment Options
+
+- **Development** (`env.dev`): Local development with HTTP and relaxed security
+- **Staging** (`env.staging`): Test environment with HTTPS and production-like security  
+- **Production** (`env.prod`): Production environment with HTTPS and strict security
+
+#### Environment-Specific Variables
+
+Each environment configures these key variables:
+
+| Variable | Dev | Staging | Production | Purpose |
+|----------|-----|---------|------------|---------|
+| `APP_URL` | `http://localhost:3000` | `https://staging.gesahni.com` | `https://app.gesahni.com` | Frontend base URL |
+| `API_URL` | `http://localhost:8000` | `https://api-staging.gesahni.com` | `https://api.gesahni.com` | Backend base URL |
+| `CORS_ALLOW_ORIGINS` | `http://localhost:3000` | `https://staging.gesahni.com` | `https://app.gesahni.com` | Allowed frontend origins |
+| `COOKIE_SECURE` | `0` | `1` | `1` | Require HTTPS for cookies |
+| `COOKIE_SAMESITE` | `lax` | `lax` | `strict` | Cookie SameSite policy |
+| `NEXT_PUBLIC_HEADER_AUTH_MODE` | `0` | `0` | `0` | Auth mode (0=cookie, 1=header) |
+
+#### Required Configuration
+
+After switching environments, you must configure:
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `OPENAI_API_KEY` | Yes | OpenAI authentication for GPT & Whisper |
+| `JWT_SECRET` | Yes | JWT secret for protected endpoints |
+| `HOME_ASSISTANT_TOKEN` | Yes* | Home Assistant long-lived token |
+| `OPENWEATHER_API_KEY` | Yes* | Weather and forecast lookups |
+| `SPOTIFY_CLIENT_ID` | No* | Spotify integration |
+| `SPOTIFY_CLIENT_SECRET` | No* | Spotify integration |
+
+*Required only if using those features.
+
+#### Manual Configuration
+
+If you prefer manual setup:
+
+```bash
+# Copy the appropriate environment file
+cp env.dev .env      # For development
+cp env.staging .env  # For staging  
+cp env.prod .env     # For production
+
+# Edit .env to add your secrets and API keys
+nano .env
+```
+
+#### Environment Loading
+
+The system loads environment variables in this order (highest precedence first):
+1. `.env` - Your local configuration (overrides everything)
+2. `env.example` - Default values (fills missing keys only)
+3. `env.dev`/`env.staging`/`env.prod` - Environment-specific defaults
+
+For complete documentation, see [Environment Configuration](docs/environment_configuration.md).
 
 ### 🌐 4. Launch Backend
 
 Start FastAPI:
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host :: --port 8000
+```
+
+Or use environment variables:
+
+```bash
+HOST=:: PORT=8000 uvicorn app.main:app
 ```
 
 ### 📦 Frontend
