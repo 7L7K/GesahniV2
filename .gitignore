@@ -53,3 +53,4 @@ env.localhost
 .gitignore
 env.prod
 env.staging
+env.dev
