@@ -54,3 +54,4 @@ env.localhost
 env.prod
 env.staging
 env.dev
+.chroma_data
