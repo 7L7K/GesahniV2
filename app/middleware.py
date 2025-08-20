@@ -518,7 +518,13 @@ async def silent_refresh_middleware(request: Request, call_next):
       - JWT_SECRET: required to decode/encode
       - JWT_ACCESS_TTL_SECONDS: lifetime of new tokens (default 14d)
       - ACCESS_REFRESH_THRESHOLD_SECONDS: refresh when exp - now < threshold (default 3600s)
+      - DISABLE_SILENT_REFRESH: set to "1" to disable this middleware
     """
+    # Check if silent refresh is disabled via environment variable
+    if os.getenv("DISABLE_SILENT_REFRESH", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        logger.debug("SILENT_REFRESH: Disabled via environment variable")
+        return await call_next(request)
+    
     logger.debug("SILENT_REFRESH: Middleware called")
     # Call downstream first; do not swallow exceptions from handlers
     response: Response = await call_next(request)
@@ -533,20 +539,18 @@ async def silent_refresh_middleware(request: Request, call_next):
                 logger.debug("SILENT_REFRESH: Skipping non-v1 path")
                 return response
             # Skip logout endpoints to avoid setting new cookies during logout
-            if path.endswith("/logout") or path.endswith("/auth/logout") or request.headers.get("X-Logout") == "true":
+            # Broadened: skip any path that is logout-ish (ends with /logout or contains /auth/logout), regardless of status code
+            if path.endswith("/logout") or "/auth/logout" in path or request.headers.get("X-Logout") == "true":
                 logger.debug("SILENT_REFRESH: Skipping logout path or X-Logout header")
                 return response
-            # Also check if logout was performed by looking at response headers
-            # If any access_token cookie was set with Max-Age=0, skip refresh
+            # Skip refresh if the response includes any Set-Cookie that deletes an auth cookie
+            # (access_token, refresh_token, or __session)—i.e., a delete with Max-Age=0
             set_cookies = response.headers.getlist("set-cookie", [])
-            if any("access_token=" in h and "Max-Age=0" in h for h in set_cookies):
-                logger.debug("SILENT_REFRESH: Skipping due to Max-Age=0 cookie")
+            auth_cookies = ["access_token", "refresh_token", "__session"]
+            if any(any(cookie in h and "Max-Age=0" in h for cookie in auth_cookies) for h in set_cookies):
+                logger.debug("SILENT_REFRESH: Skipping due to auth cookie deletion (Max-Age=0)")
                 return response
-            # Also check if this is a logout response by looking at the status code and path
-            if response.status_code == 204 and (path.endswith("/logout") or path.endswith("/auth/logout")):
-                logger.debug("SILENT_REFRESH: Skipping due to logout response")
-                return response
-            # More aggressive: if this is a 204 response, skip refresh entirely
+            # Skip on 204 responses
             if response.status_code == 204:
                 logger.debug("SILENT_REFRESH: Skipping due to 204 status code")
                 return response
@@ -595,7 +599,7 @@ async def silent_refresh_middleware(request: Request, call_next):
             
             try:
                 from .api.auth import _append_cookie_with_priority as _append
-                _append(response, key="access_token", value=new_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+                _append(response, key="access_token", value=new_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
             except Exception:
                 response.set_cookie(
                     key="access_token",
@@ -623,7 +627,7 @@ async def silent_refresh_middleware(request: Request, call_next):
                             pass
                         try:
                             from .api.auth import _append_cookie_with_priority as _append
-                            _append(response, key="refresh_token", value=rtok, max_age=r_life, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+                            _append(response, key="refresh_token", value=rtok, max_age=r_life, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
                         except Exception:
                             response.set_cookie(
                                 key="refresh_token",

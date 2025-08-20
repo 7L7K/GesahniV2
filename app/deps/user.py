@@ -141,8 +141,55 @@ def get_current_user_id(
         secret = None
         require_jwt = False
     
+    # Handle session fingerprint verification for __session cookies
+    if token and token_source in ["__session_cookie", "websocket_session_cookie"]:
+        # For session cookies, we need to verify the fingerprint against the access token
+        # First, try to get the access token from the same request
+        access_token = None
+        if request is not None:
+            access_token = request.cookies.get("access_token")
+        elif websocket is not None:
+            try:
+                raw_cookie = websocket.headers.get("Cookie") or ""
+                parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
+                for p in parts:
+                    if p.startswith("access_token="):
+                        access_token = p.split("=", 1)[1]
+                        break
+            except Exception:
+                pass
+        
+        if access_token and secret:
+            try:
+                # Decode the access token to get user_id and timestamp
+                payload = jwt.decode(access_token, secret, algorithms=["HS256"])
+                user_id_from_token = payload.get("user_id") or payload.get("sub")
+                iat = payload.get("iat", 0)  # Issued at timestamp
+                
+                if user_id_from_token:
+                    # Import session ID verification
+                    from ..auth import _verify_session_id
+                    jti = payload.get("jti")
+                    if jti and _verify_session_id(token, jti):
+                        user_id = user_id_from_token
+                        # Store JWT payload in request state for scope enforcement
+                        if target and isinstance(payload, dict):
+                            target.state.jwt_payload = payload
+                        logger.info("auth.session_id_verified", extra={
+                            "user_id": user_id,
+                            "token_source": token_source,
+                        })
+                    else:
+                        logger.warning("auth.session_id_invalid", extra={
+                            "token_source": token_source,
+                        })
+            except jwt.PyJWTError:
+                logger.warning("auth.session_fingerprint_decode_failed", extra={
+                    "token_source": token_source,
+                })
+    
     # Try traditional JWT first (same secret/issuer checks for both access_token and __session)
-    if token and secret:
+    if not user_id and token and secret and token_source not in ["__session_cookie", "websocket_session_cookie"]:
         try:
             # Enforce iss/aud in prod if configured
             opts = {}

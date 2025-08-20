@@ -123,13 +123,13 @@ export function getToken(): string | null {
     // Since we disabled Clerk, always use localStorage tokens
     const token = getLocalStorage("auth:access");
     if (token) {
-      console.debug('TOKENS get.header_mode', {
+      console.info('TOKENS get.header_mode', {
         hasToken: !!token,
         tokenLength: token?.length || 0,
         timestamp: new Date().toISOString(),
       });
     } else {
-      console.debug('TOKENS get.header_mode', {
+      console.info('TOKENS get.header_mode', {
         hasToken: false,
         timestamp: new Date().toISOString(),
       });
@@ -189,33 +189,14 @@ export function setTokens(access: string, refresh?: string): void {
 
 export function clearTokens(): void {
   try {
-    // Check if Clerk is enabled
-    const isClerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+    // Always clear localStorage tokens regardless of Clerk configuration
+    // This ensures logout works in both header mode and Clerk mode
+    removeLocalStorage("auth:access");
+    removeLocalStorage("auth:refresh");
 
-    if (isClerkEnabled && typeof window !== 'undefined') {
-      try {
-        // For Clerk mode, we don't clear localStorage tokens
-        // Clerk manages its own token storage
-        console.info('TOKENS clear.clerk_mode', {
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.debug('TOKENS clear.clerk_fallback', {
-          error: error instanceof Error ? error.message : String(error),
-          timestamp: new Date().toISOString(),
-        });
-        // Fall back to localStorage if Clerk fails
-        removeLocalStorage("auth:access");
-        removeLocalStorage("auth:refresh");
-      }
-    } else {
-      // Header mode - clear localStorage
-      removeLocalStorage("auth:access");
-      removeLocalStorage("auth:refresh");
-      console.info('TOKENS clear.header_mode', {
-        timestamp: new Date().toISOString(),
-      });
-    }
+    console.info('TOKENS clear.success', {
+      timestamp: new Date().toISOString(),
+    });
 
     // Bump auth epoch when tokens are cleared
     bumpAuthEpoch();
@@ -280,7 +261,13 @@ export function useSessionState() {
 }
 
 function authHeaders() {
-  // Token-based Authorization header is disabled: use cookie-based auth instead
+  // Get the access token for header-based authentication
+  const token = getToken();
+  if (token) {
+    return {
+      'Authorization': `Bearer ${token}`
+    };
+  }
   return {};
 }
 
@@ -748,12 +735,40 @@ export async function register(username: string, password: string) {
 
 export async function logout(): Promise<void> {
   try {
+    // Call logout endpoint to clear server-side session
     const res = await apiFetch("/v1/auth/logout", { method: "POST" });
     if (!res.ok) throw new Error("Logout failed");
   } catch {
     // best-effort; still clear local tokens
   } finally {
+    // Clear local tokens and state
     clearTokens();
+
+    // Remove any token query parameters from the URL
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        const paramsToRemove = ['access_token', 'refresh_token', 'token', 'logout'];
+        paramsToRemove.forEach(param => url.searchParams.delete(param));
+
+        // Update URL without token parameters
+        const newUrl = url.toString();
+        if (newUrl !== window.location.href) {
+          window.history.replaceState({}, '', newUrl);
+        }
+      } catch (e) {
+        console.warn('Failed to clean URL parameters during logout:', e);
+      }
+    }
+
+    // Clear any cached auth-related data
+    try {
+      // Clear short cache and inflight requests
+      SHORT_CACHE.clear();
+      INFLIGHT_REQUESTS.clear();
+    } catch (e) {
+      console.warn('Failed to clear auth cache during logout:', e);
+    }
   }
 }
 

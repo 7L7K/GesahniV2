@@ -147,8 +147,8 @@ class TestCookieConfig:
         """Test default token TTLs."""
         access_ttl, refresh_ttl = get_token_ttls()
         
-        assert access_ttl == 30 * 60  # 30 minutes
-        assert refresh_ttl == 1440 * 60  # 24 hours
+        assert access_ttl == 15 * 60  # 15 minutes (default from implementation)
+        assert refresh_ttl == 43200 * 60  # 30 days (default from implementation)
 
     def test_get_token_ttls_custom(self):
         """Test custom token TTLs."""

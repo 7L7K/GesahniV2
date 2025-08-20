@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import random
 import secrets
 import time
 from datetime import datetime, timezone
 import json
 import asyncio
+import logging
 from typing import Any, Dict, List, Optional
 
 import jwt
@@ -45,6 +47,7 @@ from ..auth_monitoring import (
 
 
 router = APIRouter(tags=["Auth"])  # expose in OpenAPI for docs/tests
+logger = logging.getLogger(__name__)
 # Minimal metrics counters (dumped every ~60s)
 _MET: dict[str, int] = {
     "auth_refresh_ok": 0,
@@ -71,7 +74,7 @@ def _met_inc(key: str) -> None:
         pass
 
 
-def _append_cookie_with_priority(response: Response, *, key: str, value: str, max_age: int, secure: bool, samesite: str, path: str = "/") -> None:
+def _append_cookie_with_priority(response: Response, *, key: str, value: str, max_age: int, secure: bool, samesite: str, path: str = "/", domain: str = None) -> None:
     try:
         from ..cookie_config import format_cookie_header
         
@@ -85,7 +88,7 @@ def _append_cookie_with_priority(response: Response, *, key: str, value: str, ma
             samesite=samesite,
             path=path,
             httponly=True,
-            domain=None,  # Host-only cookies
+            domain=domain,
         )
         print(f"DEBUG: Generated header: {header}")
         response.headers.append("Set-Cookie", header)
@@ -299,6 +302,7 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
     if token_header and src == "missing":
         src = "header"
     
+    # Priority 1: Try access_token cookie first (most secure)
     if token_cookie:
         try:
             logger.info("whoami.cookie_jwt_decode.start", extra={
@@ -330,6 +334,59 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
                 }
             })
     
+    # Priority 2: Try session fingerprint verification if access_token cookie failed
+    if not session_ready and clerk_token:
+        try:
+            logger.info("whoami.session_fingerprint.start", extra={
+                "meta": {
+                    "timestamp": time.time(),
+                }
+            })
+            
+            # Import session fingerprint verification
+            from ..auth import _verify_session_fingerprint
+            
+            # Get the access token from the same request
+            access_token = request.cookies.get("access_token")
+            if access_token:
+                # Decode the access token to get user_id and timestamp
+                access_claims = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
+                user_id_from_token = access_claims.get("user_id") or access_claims.get("sub")
+                iat = access_claims.get("iat", 0)  # Issued at timestamp
+                
+                if user_id_from_token and _verify_session_fingerprint(clerk_token, user_id_from_token, access_token, iat):
+                    session_ready = True
+                    src = "cookie"  # Still cookie-based
+                    effective_uid = user_id_from_token
+                    jwt_status = "ok"
+                    logger.info("whoami.session_fingerprint.success", extra={
+                        "meta": {
+                            "user_id": effective_uid,
+                            "timestamp": time.time(),
+                        }
+                    })
+                else:
+                    logger.warning("whoami.session_fingerprint.invalid", extra={
+                        "meta": {
+                            "timestamp": time.time(),
+                        }
+                    })
+            else:
+                logger.warning("whoami.session_fingerprint.no_access_token", extra={
+                    "meta": {
+                        "timestamp": time.time(),
+                    }
+                })
+        except Exception as e:
+            logger.error("whoami.session_fingerprint.failed", extra={
+                "meta": {
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "timestamp": time.time(),
+                }
+            })
+    
+    # Priority 3: Try Authorization header only if cookie authentication failed
     if not session_ready and token_header:
         try:
             logger.info("whoami.header_jwt_decode.start", extra={
@@ -361,47 +418,45 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
                 }
             })
     
-    # Try Clerk authentication if other methods failed
-    if not session_ready:
-        # First check for Clerk cookies
-        if clerk_token:
+    # Priority 4: Try Clerk authentication if all other methods failed
+    if not session_ready and clerk_token:
+        try:
+            logger.info("whoami.clerk_verify.start", extra={
+                "meta": {
+                    "timestamp": time.time(),
+                }
+            })
+            from ..deps.clerk_auth import verify_clerk_token
+            claims = verify_clerk_token(clerk_token)
+            session_ready = True
+            src = "clerk"
+            effective_uid = str(claims.get("sub") or claims.get("user_id") or "") or None
+            jwt_status = "ok"
+            # Set email in request state for Clerk authentication
             try:
-                logger.info("whoami.clerk_verify.start", extra={
-                    "meta": {
-                        "timestamp": time.time(),
-                    }
-                })
-                from ..deps.clerk_auth import verify_clerk_token
-                claims = verify_clerk_token(clerk_token)
-                session_ready = True
-                src = "clerk"
-                effective_uid = str(claims.get("sub") or claims.get("user_id") or "") or None
-                jwt_status = "ok"
-                # Set email in request state for Clerk authentication
-                try:
-                    email = claims.get("email") or claims.get("email_address")
-                    if email:
-                        request.state.email = email
-                except Exception:
-                    pass
-                logger.info("whoami.clerk_verify.success", extra={
-                    "meta": {
-                        "user_id": effective_uid,
-                        "claims_keys": list(claims.keys()),
-                        "timestamp": time.time(),
-                    }
-                })
-            except Exception as e:
-                session_ready = False
-                effective_uid = None
-                jwt_status = "invalid"
-                logger.error("whoami.clerk_verify.failed", extra={
-                    "meta": {
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                        "timestamp": time.time(),
-                    }
-                })
+                email = claims.get("email") or claims.get("email_address")
+                if email:
+                    request.state.email = email
+            except Exception:
+                pass
+            logger.info("whoami.clerk_verify.success", extra={
+                "meta": {
+                    "user_id": effective_uid,
+                    "claims_keys": list(claims.keys()),
+                    "timestamp": time.time(),
+                }
+            })
+        except Exception as e:
+            session_ready = False
+            effective_uid = None
+            jwt_status = "invalid"
+            logger.error("whoami.clerk_verify.failed", extra={
+                "meta": {
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "timestamp": time.time(),
+                }
+            })
         
         # If still not ready, check for Clerk token in Authorization header
         if not session_ready and token_header:
@@ -717,9 +772,9 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
     refresh_token = jwt.encode(refresh_payload, sec, algorithm="HS256", headers={"kid": kid})
 
     # Use centralized cookie configuration for sharp and consistent cookies
-    from ..cookie_config import get_token_ttls
+    from ..cookie_config import get_cookie_config, get_token_ttls
     
-    cookie_secure, cookie_samesite = _cookie_flags_for(request)
+    cookie_config = get_cookie_config(request)
     access_ttl, refresh_ttl = get_token_ttls()
 
     # Build safe redirect target using centralized helper
@@ -802,15 +857,15 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         resp = _Resp(status_code=204)
         # High-priority cookies to avoid eviction under pressure
         try:
-            _append_cookie_with_priority(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_secure, samesite=cookie_samesite)
-            _append_cookie_with_priority(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_secure, samesite=cookie_samesite)
+            _append_cookie_with_priority(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
+            _append_cookie_with_priority(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
             # Session cookie for better session management
-            _append_cookie_with_priority(resp, key="__session", value=access_token, max_age=access_ttl, secure=cookie_secure, samesite=cookie_samesite)
+            _append_cookie_with_priority(resp, key="__session", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
         except Exception:
-            resp.set_cookie("access_token", access_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=access_ttl, path="/")
-            resp.set_cookie("refresh_token", refresh_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=refresh_ttl, path="/")
+            resp.set_cookie("access_token", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+            resp.set_cookie("refresh_token", refresh_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
             # Session cookie for better session management
-            resp.set_cookie("__session", access_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=access_ttl, path="/")
+            resp.set_cookie("__session", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
         # One-liner timing log for finisher
         try:
             dt = int((time.time() - t0) * 1000)
@@ -835,15 +890,15 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
     # Note: SPA should use POST /v1/auth/finish for consistent behavior
     resp = RedirectResponse(url=next_path, status_code=302)
     try:
-        _append_cookie_with_priority(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_secure, samesite=cookie_samesite)
-        _append_cookie_with_priority(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_secure, samesite=cookie_samesite)
+        _append_cookie_with_priority(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
+        _append_cookie_with_priority(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
         # Session cookie for better session management
-        _append_cookie_with_priority(resp, key="__session", value=access_token, max_age=access_ttl, secure=cookie_secure, samesite=cookie_samesite)
+        _append_cookie_with_priority(resp, key="__session", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
     except Exception:
-        resp.set_cookie("access_token", access_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=access_ttl, path="/")
-        resp.set_cookie("refresh_token", refresh_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=refresh_ttl, path="/")
+        resp.set_cookie("access_token", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+        resp.set_cookie("refresh_token", refresh_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
         # Session cookie for better session management
-        resp.set_cookie("__session", access_token, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=access_ttl, path="/")
+        resp.set_cookie("__session", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
     try:
         dt = int((time.time() - t0) * 1000)
         print(f"auth.finish t_total={dt}ms set_cookie=true reason={reason} cookies=3")
@@ -975,15 +1030,53 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
             cookie_config = get_cookie_config(request)
             
             try:
-                _append_cookie_with_priority(response, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
-                _append_cookie_with_priority(response, key="refresh_token", value=new_refresh, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
-                # Set __session cookie with same value as access_token for consistent session management
-                _append_cookie_with_priority(response, key="__session", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+                _append_cookie_with_priority(response, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
+                _append_cookie_with_priority(response, key="refresh_token", value=new_refresh, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
+                # Create a session ID mapped to the access token JTI
+                from ..auth import _create_session_id
+                try:
+                    # Decode the access token to get the JTI
+                    import jwt
+                    from ..auth import SECRET_KEY, ALGORITHM
+                    payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+                    jti = payload.get("jti")
+                    expires_at = payload.get("exp", time.time() + access_ttl)
+                    
+                    if jti:
+                        session_id = _create_session_id(jti, expires_at)
+                    else:
+                        # Fallback if no JTI found
+                        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+                except Exception as e:
+                    logger.warning(f"Failed to decode access token for session creation: {e}")
+                    # Fallback session ID
+                    session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+                
+                _append_cookie_with_priority(response, key="__session", value=session_id, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
             except Exception:
                 response.set_cookie("access_token", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
                 response.set_cookie("refresh_token", new_refresh, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
-                # Set __session cookie with same value as access_token
-                response.set_cookie("__session", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+                # Create a session ID mapped to the access token JTI
+                from ..auth import _create_session_id
+                try:
+                    # Decode the access token to get the JTI
+                    import jwt
+                    from ..auth import SECRET_KEY, ALGORITHM
+                    payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+                    jti = payload.get("jti")
+                    expires_at = payload.get("exp", time.time() + access_ttl)
+                    
+                    if jti:
+                        session_id = _create_session_id(jti, expires_at)
+                    else:
+                        # Fallback if no JTI found
+                        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+                except Exception as e:
+                    logger.warning(f"Failed to decode access token for session creation (fallback): {e}")
+                    # Fallback session ID
+                    session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+                
+                response.set_cookie("__session", session_id, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
             # Mark new token allowed
             await allow_refresh(sid, str(new_refresh_payload.get("jti")), ttl_seconds=refresh_ttl)
             try:
@@ -1050,7 +1143,7 @@ async def login(username: str, request: Request, response: Response):
     # Set access token cookie with consistent configuration
     print(f"DEBUG: About to set access token cookie with access_ttl={access_ttl}")
     try:
-        _append_cookie_with_priority(response, key="access_token", value=jwt_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+        _append_cookie_with_priority(response, key="access_token", value=jwt_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
         print(f"DEBUG: _append_cookie_with_priority succeeded")
     except Exception as e:
         print(f"DEBUG: Exception in _append_cookie_with_priority: {e}")
@@ -1089,7 +1182,7 @@ async def login(username: str, request: Request, response: Response):
             refresh_payload["aud"] = aud
         refresh_token = jwt.encode(refresh_payload, _jwt_secret(), algorithm="HS256")
         try:
-            _append_cookie_with_priority(response, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+            _append_cookie_with_priority(response, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
         except Exception:
             response.set_cookie(
                 key="refresh_token",
@@ -1102,7 +1195,7 @@ async def login(username: str, request: Request, response: Response):
             )
         # Set __session cookie with same value as access_token for consistent session management
         try:
-            _append_cookie_with_priority(response, key="__session", value=jwt_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+            _append_cookie_with_priority(response, key="__session", value=jwt_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
         except Exception:
             response.set_cookie(
                 key="__session",
@@ -1147,6 +1240,21 @@ async def logout(request: Request, response: Response):
     except Exception:
         # Best-effort token revocation - continue with cookie clearing
         pass
+    
+    # Delete session from session store
+    try:
+        from ..auth import _delete_session_id
+        
+        # Get session ID from __session cookie
+        session_id = request.cookies.get("__session")
+        if session_id:
+            _delete_session_id(session_id)
+            logger.info("auth.session_deleted", extra={
+                "session_id": session_id,
+            })
+    except Exception as e:
+        logger.warning(f"Failed to delete session: {e}")
+        # Continue with cookie clearing even if session deletion fails
     
     # Clear cookies with consistent attributes matching their original configuration
     try:

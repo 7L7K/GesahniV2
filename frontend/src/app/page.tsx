@@ -119,12 +119,18 @@ export default function Page() {
       }
     });
 
+    // Initialize Auth Orchestrator
+    authOrchestrator.initialize().then(() => {
+      console.info('Page: Auth Orchestrator initialized successfully');
+    }).catch((error) => {
+      console.error('Page: Auth Orchestrator initialization failed:', error);
+    });
+
     // Check for header token
     const hasHeaderToken = Boolean(getToken());
     if (hasHeaderToken) {
       setSessionReady(true);
     }
-    // Auth Orchestrator will handle the whoami call
 
     setIsOnline(navigator.onLine);
     const onUp = () => setIsOnline(true);
@@ -158,8 +164,10 @@ export default function Page() {
     return () => {
       window.removeEventListener('online', onUp);
       window.removeEventListener('offline', onDown);
+      // Cleanup Auth Orchestrator
+      authOrchestrator.cleanup();
     };
-  }, [bootstrapManager]);
+  }, [bootstrapManager, authOrchestrator]);
 
   // React to auth token changes (login/logout in other tabs)
   useEffect(() => {

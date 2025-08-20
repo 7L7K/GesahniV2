@@ -33,19 +33,37 @@ try:
 except Exception:  # pragma: no cover - optional
     record_privileged_call_blocked = lambda *a, **k: None
     record_auth_lock_event = lambda *a, **k: None
-# Problem+JSON passthrough for HTTPException when explicitly requested
-try:
-    import fastapi.exception_handlers as _fastapi_eh  # type: ignore
-    from fastapi.responses import JSONResponse  # type: ignore
-    from starlette.requests import Request as _StarRequest  # type: ignore
 
-    if not getattr(_fastapi_eh, "_gesahni_problem_handler", False):  # pragma: no cover - glue
-        _orig_http_exception_handler = _fastapi_eh.http_exception_handler
+def _safe_request_path(request: Request | None) -> str:
+    """Safely extract request path without getattr tricks."""
+    if request is None:
+        return "unknown"
+    try:
+        if hasattr(request, "url") and request.url is not None:
+            return request.url.path
+        return "unknown"
+    except Exception:
+        return "unknown"
 
-        async def _problem_aware_http_exception_handler(request: _StarRequest, exc: Exception):  # type: ignore[override]
+
+def register_problem_handler(app) -> None:
+    """Register problem+JSON handler for HTTPException when ENABLE_PROBLEM_HANDLER=1.
+    
+    This replaces the import-time monkey-patching with explicit app-scoped registration.
+    """
+    if not os.getenv("ENABLE_PROBLEM_HANDLER", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        return
+    
+    try:
+        from fastapi.responses import JSONResponse
+        from starlette.exceptions import HTTPException as StarletteHTTPException
+        from starlette.requests import Request as StarletteRequest
+        
+        @app.exception_handler(StarletteHTTPException)
+        async def problem_aware_http_exception_handler(request: StarletteRequest, exc: StarletteHTTPException):
             # Skip CORS preflight requests - don't touch headers
-            if str(getattr(request, "method", "")).upper() == "OPTIONS":
-                return await _orig_http_exception_handler(request, exc)  # type: ignore[misc]
+            if request.method.upper() == "OPTIONS":
+                return None  # Let default handler deal with it
             
             headers = getattr(exc, "headers", None)
             detail = getattr(exc, "detail", None)
@@ -53,36 +71,17 @@ try:
             if isinstance(headers, dict):
                 content_type = headers.get("Content-Type", "") or headers.get("content-type", "")
             if isinstance(detail, dict) and content_type.startswith("application/problem+json"):
-                return JSONResponse(detail, status_code=getattr(exc, "status_code", 500), headers=headers, media_type="application/problem+json")
-            return await _orig_http_exception_handler(request, exc)  # type: ignore[misc]
+                return JSONResponse(
+                    detail, 
+                    status_code=getattr(exc, "status_code", 500), 
+                    headers=headers, 
+                    media_type="application/problem+json"
+                )
+            return None  # Let default handler deal with it
+    except Exception:
+        pass
 
-        _fastapi_eh.http_exception_handler = _problem_aware_http_exception_handler  # type: ignore[assignment]
-        _fastapi_eh._gesahni_problem_handler = True  # type: ignore[attr-defined]
-except Exception:
-    pass
 
-# Ensure newly created FastAPI apps use our problem-aware handler
-try:
-    from fastapi import FastAPI as _FastAPIClass  # type: ignore
-    from starlette.exceptions import HTTPException as _SHTTP  # type: ignore
-    import fastapi.exception_handlers as _feh  # type: ignore
-
-    if not getattr(_FastAPIClass, "_gesahni_init_wrapped", False):  # pragma: no cover - glue
-        _orig_init_fastapi = _FastAPIClass.__init__
-
-        def _init_wrapper(self, *args, **kwargs):  # type: ignore[no-redef]
-            _orig_init_fastapi(self, *args, **kwargs)
-            try:
-                # Bind whatever is currently in fastapi.exception_handlers.http_exception_handler
-                # which we may have replaced above.
-                self.exception_handlers[_SHTTP] = _feh.http_exception_handler  # type: ignore[index]
-            except Exception:
-                pass
-
-        _FastAPIClass.__init__ = _init_wrapper  # type: ignore[assignment]
-        _FastAPIClass._gesahni_init_wrapped = True  # type: ignore[attr-defined]
-except Exception:
-    pass
 # Scope enforcement dependency
 def scope_required(*required_scopes: str):
     async def _dep(request: Request) -> None:
@@ -94,7 +93,6 @@ def scope_required(*required_scopes: str):
             raise HTTPException(status_code=403, detail="insufficient_scope")
     return _dep
 from . import metrics
-from .token_store import _key_login_ip, _key_login_user, incr_login_counter
 
 JWT_SECRET: str | None = None  # backwards compat; actual value read from env
 API_TOKEN = os.getenv("API_TOKEN")
@@ -366,11 +364,14 @@ def _get_request_payload(request: Request | None) -> dict | None:
             # Traditional JWT failed, try Clerk if enabled and appropriate
             pass
     else:
-        # If no secret configured, try non-verifying decode for best-effort introspection
-        try:
-            return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
-        except Exception:
-            pass
+        # If no secret configured, try non-verifying decode only in dev/test mode
+        dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
+        test_mode = os.getenv("ENV", "").strip().lower() == "test" or os.getenv("PYTEST_RUNNING")
+        if dev_mode or test_mode:
+            try:
+                return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
+            except Exception:
+                pass
     
     # 4) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
     # AND the token source is NOT __session (unless Clerk is enabled)
@@ -475,11 +476,14 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
             # Traditional JWT failed, try Clerk if enabled and appropriate
             pass
     else:
-        # If no secret configured, try non-verifying decode for best-effort introspection
-        try:
-            return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
-        except Exception:
-            pass
+        # If no secret configured, try non-verifying decode only in dev/test mode
+        dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
+        test_mode = os.getenv("ENV", "").strip().lower() == "test" or os.getenv("PYTEST_RUNNING")
+        if dev_mode or test_mode:
+            try:
+                return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
+            except Exception:
+                pass
     
     # 4) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
     # AND the token source is NOT __session (unless Clerk is enabled)
@@ -528,6 +532,8 @@ http_burst: Dict[str, int] = {}
 ws_burst: Dict[str, int] = {}
 # Scope-based rate limiting buckets
 scope_rate_limits: Dict[str, int] = {}
+# Legacy compatibility for _apply_rate_limit
+_requests: Dict[str, List[float]] = {}
 # Backwards-compatible aliases expected by some tests
 _http_requests = http_requests
 _ws_requests = ws_requests
@@ -535,8 +541,7 @@ _ws_requests = ws_requests
 _http_burst = http_burst
 _ws_burst = ws_burst
 
-# Rate limiting lock
-_lock = asyncio.Lock()
+
 
 def _current_key(request: Request) -> str:
     """Get the current rate limiting key for the request."""
@@ -702,7 +707,7 @@ async def verify_token(request: Request) -> None:
             "token_source": token_source,
             "has_token": bool(token),
             "token_length": len(token) if token else 0,
-            "request_path": getattr(request, "url", {}).path if hasattr(getattr(request, "url", {}), "path") else "unknown",
+            "request_path": _safe_request_path(request),
         })
 
     if not token:
@@ -859,12 +864,9 @@ def _compose_key(base: str, request: Request | None) -> str:
     # Refresh settings per test to avoid cross-test leakage
     _maybe_refresh_settings_for_test()
     if _KEY_SCOPE == "route" and request is not None:
-        try:
-            path = getattr(request, "url", None)
-            path = path.path if path is not None else getattr(request, "url_path", "")
+        path = _safe_request_path(request)
+        if path != "unknown":
             return f"{base}:{path}"
-        except Exception:
-            return base
     return base
 
 
@@ -893,8 +895,9 @@ async def rate_limit(request: Request) -> None:
     window = float(os.getenv("RATE_LIMIT_WINDOW_S", "60"))
     burst_window = float(os.getenv("RATE_LIMIT_BURST_WINDOW_S", os.getenv("RATE_LIMIT_BURST_WINDOW", "60")))
     
-    # Get the user key for rate limiting
-    key = _current_key(request)
+    # Get the user key for rate limiting with proper scoping
+    base_key = _current_key(request)
+    key = _compose_key(base_key, request)
     
     # Check if we should bypass rate limiting for this request
     if _should_bypass_rate_limit(request):
@@ -912,7 +915,7 @@ async def rate_limit(request: Request) -> None:
                 "Retry-After": str(retry_long),
                 "RateLimit-Limit": str(rate_limit_per_min),
                 "RateLimit-Remaining": "0",
-                "RateLimit-Reset": str(int(time.time() + retry_long))
+                "RateLimit-Reset": str(retry_long)
             }
             raise HTTPException(
                 status_code=429, 
@@ -930,7 +933,7 @@ async def rate_limit(request: Request) -> None:
                 "Retry-After": str(retry_burst),
                 "RateLimit-Limit": str(rate_limit_burst),
                 "RateLimit-Remaining": "0",
-                "RateLimit-Reset": str(int(time.time() + retry_burst))
+                "RateLimit-Reset": str(retry_burst)
             }
             raise HTTPException(
                 status_code=429, 
@@ -952,8 +955,8 @@ async def verify_ws(websocket: WebSocket) -> None:
     """
 
     # WebSocket requirement: Origin validation - only accept http://localhost:3000
-    origin = websocket.headers.get("Origin")
-    if origin and origin != "http://localhost:3000":
+    if not validate_websocket_origin(websocket):
+        origin = websocket.headers.get("Origin", "unknown")
         logger.warning("deny: origin_not_allowed origin=<%s>", origin)
         # WebSocket requirement: Close with crisp code/reason for origin mismatch
         await websocket.close(
@@ -1025,16 +1028,25 @@ async def rate_limit_ws(websocket: WebSocket) -> None:
         payload = getattr(websocket.state, "jwt_payload", None)
         if isinstance(payload, dict):
             uid = payload.get("user_id") or payload.get("sub")
+    
+    # Build base key (user or IP)
     if uid:
-        test_salt = os.getenv("PYTEST_RUNNING") or os.getenv("PYTEST_CURRENT_TEST") or ""
-        suffix = f":{test_salt}" if test_salt else ""
-        key = f"user:{uid}{suffix}"
+        base_key = f"user:{uid}"
     else:
-        ip = websocket.headers.get("X-Forwarded-For") if _TRUST_XFF else websocket.headers.get("X-Forwarded-For")
-        ip = (ip.split(",")[0].strip() if ip else (websocket.client.host if websocket.client else "anon"))
-        test_salt = os.getenv("PYTEST_RUNNING") or os.getenv("PYTEST_CURRENT_TEST") or ""
-        suffix = f":{test_salt}" if test_salt else ""
-        key = f"ip:{ip}{suffix}"
+        # Fix WS XFF: when _TRUST_XFF is false, use websocket.client.host; when true, parse the first X-Forwarded-For
+        if _TRUST_XFF:
+            ip = websocket.headers.get("X-Forwarded-For")
+            ip = ip.split(",")[0].strip() if ip else (websocket.client.host if websocket.client else "anon")
+        else:
+            ip = websocket.client.host if websocket.client else "anon"
+        base_key = f"ip:{ip}"
+    
+    # Add test salt for deterministic testing
+    test_salt = os.getenv("PYTEST_CURRENT_TEST") or ""
+    if test_salt:
+        key = f"{base_key}:{test_salt}"
+    else:
+        key = base_key
     # Global bypass for configured scopes on WS too
     try:
         payload = getattr(websocket.state, "jwt_payload", None)
@@ -1354,6 +1366,7 @@ __all__ = [
     "require_nonce",
     "verify_webhook",
     "rotate_webhook_secret",
+    "register_problem_handler",
     "_apply_rate_limit",
     "_http_requests",
     "_ws_requests",
@@ -1364,7 +1377,7 @@ __all__ = [
 # Public helpers for rate limit metadata
 # ---------------------------------------------------------------------------
 
-def _current_key(request: Request | None) -> str:
+def _current_key_for_headers(request: Request | None) -> str:
     # Keep this helper independent of per-route scoping for determinism in tests
     _maybe_refresh_settings_for_test()
     if request is None:
@@ -1378,10 +1391,7 @@ def _current_key(request: Request | None) -> str:
         if isinstance(payload, dict):
             uid = payload.get("user_id") or payload.get("sub")
     # Admin routes should never report IP-backed keys in headers
-    try:
-        path = getattr(getattr(request, "url", None), "path", "") or ""
-    except Exception:
-        path = ""
+    path = _safe_request_path(request)
     is_admin_route = path.startswith("/v1/admin") or path.startswith("/admin")
     if uid:
         return f"user:{uid}{':admin' if is_admin_route else ''}"
@@ -1411,7 +1421,7 @@ def get_rate_limit_snapshot(request: Request | None) -> dict:
     _maybe_refresh_settings_for_test()
     """Return a snapshot of long and burst rate limit state for headers."""
     
-    key = _current_key(request)
+    key = _current_key_for_headers(request)
     
     # Read rate limit values dynamically from environment
     long_limit = int(os.getenv("RATE_LIMIT_PER_MIN", os.getenv("RATE_LIMIT", "60")))
@@ -1551,34 +1561,6 @@ def scope_rate_limit(scope: str, long_limit: int | None = None, burst_limit: int
     return _dep
 
 
-async def get_rate_limit_backend_status() -> dict:
-    """Return current rate limit backend configuration and health.
-
-    Includes: backend, enabled, connected (if redis), limits, windows, prefix.
-    """
-    backend = "redis" if _should_use_redis() else "memory"
-    enabled = _should_use_redis()
-    connected = False
-    try:
-        r = await _get_redis()
-        if r is not None:
-            try:
-                pong = await r.ping()  # type: ignore[attr-defined]
-                connected = bool(pong)
-            except Exception:
-                connected = False
-    except Exception:
-        connected = False
-    return {
-        "backend": backend,
-        "enabled": enabled,
-        "connected": connected,
-        "limits": {"long": RATE_LIMIT, "burst": RATE_LIMIT_BURST},
-        "windows_s": {"long": _window, "burst": _burst_window},
-        "prefix": _RL_PREFIX,
-    }
-
-
 # ---------------------------------------------------------------------------
 # Route-local helper: strict rate limit with custom window + RFC7807 on block
 # ---------------------------------------------------------------------------
@@ -1619,7 +1601,7 @@ async def rate_limit_problem(request: Request, *, long_limit: int = 1, burst_lim
             "title": "Too Many Requests",
             "status": 429,
             "detail": None,
-            "instance": getattr(getattr(request, "url", None), "path", "/") or "/",
+            "instance": _safe_request_path(request) or "/",
             "retry_after": retry_after,
         }
         # Preserve original detail under nested key to keep both forms available

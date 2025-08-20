@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from random import getrandbits
+import random
 from time import time_ns
-from typing import Any, List
+from typing import Any, List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Base directory for session metadata and media
 SESSIONS_DIR = Path(
@@ -29,9 +33,145 @@ class SessionStatus(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# Basic file helpers
+# Session Cookie Store (for __session cookie management)
 # ---------------------------------------------------------------------------
 
+class SessionCookieStore:
+    """Store for mapping __session cookie IDs to access token JTIs.
+    
+    Uses Redis if available, falls back to in-memory storage for development/testing.
+    """
+    
+    def __init__(self):
+        self._redis_client = None
+        self._memory_store = {}  # session_id -> (jti, expires_at)
+        self._init_redis()
+    
+    def _init_redis(self):
+        """Initialize Redis client if available."""
+        try:
+            redis_url = os.getenv("REDIS_URL")
+            if redis_url:
+                from redis import Redis
+                self._redis_client = Redis.from_url(redis_url, decode_responses=True)
+                # Test connection
+                self._redis_client.ping()
+                logger.info("Session store using Redis backend")
+            else:
+                logger.info("Session store using in-memory backend (no REDIS_URL)")
+        except Exception as e:
+            logger.warning(f"Redis unavailable for session store, using in-memory: {e}")
+            self._redis_client = None
+    
+    def _get_key(self, session_id: str) -> str:
+        """Get Redis key for session."""
+        return f"session:{session_id}"
+    
+    def create_session(self, jti: str, expires_at: float) -> str:
+        """Create a new session ID and store it mapped to the JTI.
+        
+        Args:
+            jti: JWT ID from access token
+            expires_at: Unix timestamp when session expires
+            
+        Returns:
+            str: New session ID
+        """
+        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        
+        if self._redis_client:
+            # Store in Redis with TTL
+            ttl = int(expires_at - time.time())
+            if ttl > 0:
+                self._redis_client.setex(
+                    self._get_key(session_id), 
+                    ttl, 
+                    json.dumps({"jti": jti, "expires_at": expires_at})
+                )
+        else:
+            # Store in memory
+            self._memory_store[session_id] = (jti, expires_at)
+        
+        logger.debug(f"Created session {session_id} for JTI {jti}")
+        return session_id
+    
+    def get_session(self, session_id: str) -> Optional[str]:
+        """Get the JTI for a session ID.
+        
+        Args:
+            session_id: Session ID from __session cookie
+            
+        Returns:
+            str: JTI if session exists and is valid, None otherwise
+        """
+        if self._redis_client:
+            try:
+                data = self._redis_client.get(self._get_key(session_id))
+                if data:
+                    session_data = json.loads(data)
+                    if session_data["expires_at"] > time.time():
+                        return session_data["jti"]
+                    else:
+                        # Expired, clean up
+                        self._redis_client.delete(self._get_key(session_id))
+            except Exception as e:
+                logger.warning(f"Redis error getting session {session_id}: {e}")
+        else:
+            # Check in-memory store
+            if session_id in self._memory_store:
+                jti, expires_at = self._memory_store[session_id]
+                if expires_at > time.time():
+                    return jti
+                else:
+                    # Expired, clean up
+                    del self._memory_store[session_id]
+        
+        return None
+    
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a session.
+        
+        Args:
+            session_id: Session ID to delete
+            
+        Returns:
+            bool: True if session was deleted, False if not found
+        """
+        if self._redis_client:
+            try:
+                return bool(self._redis_client.delete(self._get_key(session_id)))
+            except Exception as e:
+                logger.warning(f"Redis error deleting session {session_id}: {e}")
+                return False
+        else:
+            if session_id in self._memory_store:
+                del self._memory_store[session_id]
+                return True
+            return False
+    
+    def cleanup_expired(self):
+        """Clean up expired sessions from memory store."""
+        if not self._redis_client:
+            current_time = time.time()
+            expired = [sid for sid, (_, expires_at) in self._memory_store.items() 
+                      if expires_at <= current_time]
+            for sid in expired:
+                del self._memory_store[sid]
+            if expired:
+                logger.debug(f"Cleaned up {len(expired)} expired sessions")
+
+
+# Global session store instance
+_session_store = SessionCookieStore()
+
+def get_session_store() -> SessionCookieStore:
+    """Get the global session store instance."""
+    return _session_store
+
+
+# ---------------------------------------------------------------------------
+# Basic file helpers
+# ---------------------------------------------------------------------------
 
 def session_path(session_id: str) -> Path:
     return SESSIONS_DIR / session_id
@@ -50,14 +190,13 @@ def load_meta(session_id: str) -> dict[str, Any]:
 
 def save_meta(session_id: str, meta: dict[str, Any]) -> None:
     mp = meta_path(session_id)
-    mp.parent.mkdir(parents=True, exist_ok=True)
+
     mp.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
 # Store operations
 # ---------------------------------------------------------------------------
-
 
 def create_session() -> dict[str, Any]:
     """Create a new session entry and return its metadata."""
@@ -87,10 +226,7 @@ def update_status(session_id: str, status: SessionStatus) -> dict[str, Any]:
 
 def append_error(session_id: str, error: str) -> dict[str, Any]:
     meta = load_meta(session_id)
-    errors = meta.setdefault("errors", [])
-    errors.append(error)
-    retry = meta.get("retry_count", 0) + 1
-    meta["retry_count"] = retry
+    meta.setdefault("errors", []).append(error)
     save_meta(session_id, meta)
     return meta
 
@@ -100,18 +236,13 @@ def get_session(session_id: str) -> dict[str, Any]:
 
 
 def list_sessions(status: SessionStatus | None = None) -> List[dict[str, Any]]:
-    """Return all sessions, optionally filtering by ``status``."""
-    sessions: List[dict[str, Any]] = []
-    for d in SESSIONS_DIR.iterdir():
-        if not d.is_dir():
-            continue
-        meta = load_meta(d.name)
-        if not meta:
-            continue
-        if status is None or meta.get("status") == status.value:
-            sessions.append(meta)
-    sessions.sort(key=lambda m: m.get("created_at", ""), reverse=True)
-    return sessions
+    sessions = []
+    for session_dir in SESSIONS_DIR.iterdir():
+        if session_dir.is_dir():
+            meta = load_meta(session_dir.name)
+            if meta and (status is None or meta.get("status") == status.value):
+                sessions.append(meta)
+    return sorted(sessions, key=lambda x: x.get("created_at", ""), reverse=True)
 
 
 __all__ = [

@@ -7,7 +7,7 @@
  * Integrates with BootstrapManager to prevent race conditions during auth finish.
  */
 
-import { apiFetch } from '@/lib/api';
+import { apiFetch, getToken } from '@/lib/api';
 import { getBootstrapManager } from './bootstrapManager';
 
 export interface AuthState {
@@ -239,11 +239,21 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
             return;
         }
 
-        console.info('AUTH Orchestrator: Initializing');
+        console.info('AUTH Orchestrator: Initializing', {
+            timestamp: new Date().toISOString(),
+            hasToken: Boolean(getToken()),
+        });
+
+        // Set loading state immediately when starting initialization
+        this.setState({
+            isLoading: true,
+            error: null,
+        });
+
         this.initialized = true;
 
-        // Initial auth check on mount
-        await this.checkAuth();
+        // Initial auth check on mount - bypass rate limiting for initialization
+        await this._performWhoamiCheck();
     }
 
     async checkAuth(): Promise<void> {
@@ -350,6 +360,9 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
                 console.info(`AUTH Orchestrator: Whoami success #${this.whoamiCallCount}`, {
                     userId: data.user_id,
                     hasUser: !!data.user_id,
+                    isAuthenticated: data.is_authenticated,
+                    sessionReady: data.session_ready,
+                    source: data.source,
                     data,
                     timestamp: new Date().toISOString(),
                 });

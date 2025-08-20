@@ -61,8 +61,8 @@ def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "
     resp = RedirectResponse(url=target_url, status_code=302)
     try:
         from app.api.auth import _append_cookie_with_priority as _append
-        _append(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
-        _append(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+        _append(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
+        _append(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
     except Exception:
         resp.set_cookie(
             key="access_token",

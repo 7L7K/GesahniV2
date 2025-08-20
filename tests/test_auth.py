@@ -56,21 +56,29 @@ def test_login_bad_credentials(monkeypatch):
     assert resp.status_code == 401
 
 
-def test_login_sets_user_id(monkeypatch):
+def test_login_is_public_endpoint(monkeypatch):
+    """Test that login endpoint is public and doesn't require authentication."""
     client = _client(monkeypatch)
 
-    captured: dict[str, str] = {}
-
-    def fake_user_id(request: Request) -> str:
-        request.state.user_id = "abc"
-        captured["user_id"] = request.state.user_id
-        return "abc"
-
-    client.app.dependency_overrides[get_current_user_id] = fake_user_id
-
+    # Login should work without any authentication
     resp = client.post("/login", json={"username": "alice", "password": "wonderland"})
     assert resp.status_code == 200
-    assert captured["user_id"] == "abc"
+    data = resp.json()
+
+    # Verify tokens are returned
+    assert "access_token" in data
+    assert "refresh_token" in data
+    
+    # Verify token contents
+    token = data["access_token"]
+    refresh = data["refresh_token"]
+
+    payload = jwt.decode(token, "testsecret", algorithms=["HS256"])
+    assert payload["sub"] == "alice"
+    assert payload["type"] == "access"
+
+    payload_r = jwt.decode(refresh, "testsecret", algorithms=["HS256"])
+    assert payload_r["type"] == "refresh"
 
 
 def test_refresh_and_logout(monkeypatch):

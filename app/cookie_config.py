@@ -37,16 +37,9 @@ def get_cookie_config(request: Request) -> dict:
     if cookie_samesite == "none":
         cookie_secure = True
     
-    # For localhost development, allow cookies to work across subdomains
+    # Always use host-only cookies (no Domain) for better security and Safari compatibility
+    # Ports don't matter for cookies; Domain does. Host-only is the least-surprising choice.
     domain = None
-    if dev_mode or _is_dev_environment(request):
-        try:
-            host = request.headers.get("host", "").lower()
-            if "localhost" in host or "127.0.0.1" in host:
-                # Allow cookies to work across localhost ports
-                domain = "localhost"
-        except Exception:
-            pass
     
     return {
         "secure": cookie_secure,

@@ -8,6 +8,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { SignedIn, SignInButton, SignUpButton, UserButton } from '@clerk/nextjs';
 import { useAuthState } from '@/hooks/useAuth';
 import { getToken, clearTokens, getBudget, bumpAuthEpoch, apiFetch } from '@/lib/api';
+import { getAuthOrchestrator } from '@/services/authOrchestrator';
 import ClientOnly from './ClientOnly';
 
 // Custom hook to safely use Clerk hooks only when Clerk is enabled
@@ -49,10 +50,24 @@ export default function Header() {
 
     const doLogout = async () => {
         // Clear tokens and state immediately for better UX
-        try { clearTokens() } catch { /* ignore */ }
+        try {
+            clearTokens()
+            console.info('LOGOUT: Tokens cleared');
+        } catch (error) {
+            console.error('LOGOUT: Error clearing tokens:', error);
+        }
 
-        // Navigate immediately
-        router.push('/')
+        // Trigger auth refresh to update state
+        try {
+            const authOrchestrator = getAuthOrchestrator();
+            await authOrchestrator.refreshAuth();
+            console.info('LOGOUT: Auth state refreshed');
+        } catch (error) {
+            console.error('LOGOUT: Error refreshing auth state:', error);
+        }
+
+        // Navigate immediately with logout parameter to prevent token recreation
+        router.push('/login?logout=true')
 
         // Fire-and-forget backend logout
         try {

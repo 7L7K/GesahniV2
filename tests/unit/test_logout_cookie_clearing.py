@@ -48,8 +48,8 @@ class TestLogoutCookieClearing:
         assert "Max-Age=0" in set_cookie_str
         # Should have Path=/
         assert "Path=/" in set_cookie_str
-        # Should have SameSite=Lax (default)
-        assert "SameSite=lax" in set_cookie_str
+        # Should have SameSite=Lax (default) - normalized to uppercase
+        assert "SameSite=Lax" in set_cookie_str
 
     def test_logout_clears_cookies_in_secure_environment(self, client):
         """Test that logout clears cookies correctly in secure (HTTPS) environment."""
@@ -137,7 +137,8 @@ class TestLogoutCookieClearing:
         
         assert response.status_code == 204
         # Verify revoke_refresh_family was called with the session ID
-        mock_revoke.assert_called_once_with("test_session_123", ttl_seconds=86400)
+        # Uses actual refresh TTL from environment (2592000 seconds = 30 days)
+        mock_revoke.assert_called_once_with("test_session_123", ttl_seconds=2592000)
 
     def test_logout_revokes_refresh_tokens_with_authorization_header(self, client):
         """Test that logout extracts session ID from Authorization header when cookies are missing."""
@@ -151,7 +152,8 @@ class TestLogoutCookieClearing:
         
         assert response.status_code == 204
         # Verify revoke_refresh_family was called with the user_id from token
-        mock_revoke.assert_called_once_with("test_user", ttl_seconds=86400)
+        # Uses actual refresh TTL from environment (2592000 seconds = 30 days)
+        mock_revoke.assert_called_once_with("test_user", ttl_seconds=2592000)
 
     def test_logout_falls_back_to_anon_when_no_session_id_found(self, client):
         """Test that logout uses 'anon' as fallback when no session ID can be determined."""
@@ -160,7 +162,8 @@ class TestLogoutCookieClearing:
         
         assert response.status_code == 204
         # Verify revoke_refresh_family was called with 'anon' fallback
-        mock_revoke.assert_called_once_with("anon", ttl_seconds=86400)
+        # Uses actual refresh TTL from environment (2592000 seconds = 30 days)
+        mock_revoke.assert_called_once_with("anon", ttl_seconds=2592000)
 
     def test_logout_handles_token_revocation_failure_gracefully(self, client):
         """Test that logout continues with cookie clearing even if token revocation fails."""

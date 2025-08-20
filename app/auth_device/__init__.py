@@ -37,7 +37,7 @@ async def trust_device(request: Request, response: Response) -> dict:
         token = jwt.encode(payload, secret, algorithm="HS256")
         try:
             from ..api.auth import _append_cookie_with_priority as _append
-            _append(response, key="access_token", value=token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"])
+            _append(response, key="access_token", value=token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
         except Exception:
             response.set_cookie(
                 key="access_token",

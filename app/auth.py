@@ -3,6 +3,7 @@ import re
 import time
 import asyncio
 import random
+import hashlib
 from datetime import datetime, timedelta
 from uuid import uuid4
 from typing import Dict, Set, Tuple, Optional
@@ -35,20 +36,13 @@ AUTH_TABLE = os.getenv("AUTH_TABLE", "auth_users")
 ALGORITHM = "HS256"
 SECRET_KEY = os.getenv("JWT_SECRET")
 # Defer strict validation of the JWT secret until token creation time so imports
-# don't raise during routes that may be conditionally executed. Handlers that
-# attempt to create tokens will receive a clear ValueError if the secret is
-# missing or insecure.
-
-def _ensure_jwt_secret_present() -> None:
-    """Raise a clear ValueError if JWT_SECRET is missing or insecure."""
-    if not SECRET_KEY or not SECRET_KEY.strip():
-        raise ValueError("JWT_SECRET environment variable must be set")
-    if SECRET_KEY.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
-        raise ValueError("JWT_SECRET cannot use insecure default values")
-EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
-REFRESH_EXPIRE_MINUTES = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
+# don't fail in tests that don't need JWT functionality
 JWT_ISS = os.getenv("JWT_ISS")
 JWT_AUD = os.getenv("JWT_AUD")
+
+# Token expiration times
+EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
+REFRESH_EXPIRE_MINUTES = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
 
 # Revocation store
 revoked_tokens: Set[str] = set()
@@ -85,6 +79,62 @@ except Exception:  # pragma: no cover - defensive
 # Router
 router = APIRouter(tags=["Auth"])
 logger = logging.getLogger(__name__)
+
+
+def _ensure_jwt_secret_present() -> None:
+    """Raise a clear ValueError if JWT_SECRET is missing or insecure."""
+    if not SECRET_KEY or not SECRET_KEY.strip():
+        raise ValueError("JWT_SECRET environment variable must be set")
+    if SECRET_KEY.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
+        raise ValueError("JWT_SECRET cannot use insecure default values")
+
+
+def _create_session_id(jti: str, expires_at: float) -> str:
+    """
+    Create a new session ID and store it mapped to the access token JTI.
+    
+    Args:
+        jti: JWT ID from access token
+        expires_at: Unix timestamp when session expires
+        
+    Returns:
+        str: New session ID
+    """
+    from .session_store import get_session_store
+    store = get_session_store()
+    return store.create_session(jti, expires_at)
+
+
+def _verify_session_id(session_id: str, jti: str) -> bool:
+    """
+    Verify a session ID against the expected JTI.
+    
+    Args:
+        session_id: The session ID from __session cookie
+        jti: The JWT ID from access token
+        
+    Returns:
+        bool: True if the session is valid and matches the JTI
+    """
+    from .session_store import get_session_store
+    store = get_session_store()
+    stored_jti = store.get_session(session_id)
+    return stored_jti == jti
+
+
+def _delete_session_id(session_id: str) -> bool:
+    """
+    Delete a session ID.
+    
+    Args:
+        session_id: The session ID to delete
+        
+    Returns:
+        bool: True if session was deleted, False if not found
+    """
+    from .session_store import get_session_store
+    store = get_session_store()
+    return store.delete_session(session_id)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -493,7 +543,7 @@ def _client_ip(request: Request) -> str:
 
 # Register endpoint
 @router.post("/register", response_model=dict)
-async def register(req: RegisterRequest, user_id: str = Depends(get_current_user_id)):
+async def register(req: RegisterRequest):
     await _ensure_table()
     # Normalize and validate
     norm_user = _sanitize_username(req.username)
@@ -573,7 +623,7 @@ async def clear_rate_limit_data(key: str = None, user_id: str = Depends(get_curr
 # Login endpoint with backoff after failures
 @router.post("/login", response_model=TokenResponse)
 async def login(
-    req: LoginRequest, request: Request, response: Response, user_id: str = Depends(get_current_user_id)
+    req: LoginRequest, request: Request, response: Response
 ) -> TokenResponse:
     """Password login for local accounts.
 
@@ -788,9 +838,9 @@ async def login(
         }
     })
 
-    await user_store.ensure_user(user_id)
-    await user_store.increment_login(user_id)
-    stats = await user_store.get_stats(user_id) or {}
+    await user_store.ensure_user(norm_user)
+    await user_store.increment_login(norm_user)
+    stats = await user_store.get_stats(norm_user) or {}
     logger.info("auth.login_success", extra={
         "meta": {
             "username": norm_user,
@@ -843,10 +893,27 @@ async def login(
         )
         response.headers.append("Set-Cookie", refresh_header)
         
-        # Set __session cookie with same value as access_token for consistent session management
+        # Create a session ID mapped to the access token JTI
+        # This provides better security by using an opaque session ID
+        try:
+            # Decode the access token to get the JTI
+            payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+            jti = payload.get("jti")
+            expires_at = payload.get("exp", time.time() + access_ttl)
+            
+            if jti:
+                session_id = _create_session_id(jti, expires_at)
+            else:
+                # Fallback if no JTI found
+                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        except Exception as e:
+            logger.warning(f"Failed to decode access token for session creation: {e}")
+            # Fallback session ID
+            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        
         session_header = format_cookie_header(
             key="__session",
-            value=access_token,
+            value=session_id,
             max_age=access_ttl,
             secure=cookie_config["secure"],
             samesite=cookie_config["samesite"],
@@ -903,10 +970,26 @@ async def login(
                 max_age=refresh_ttl,
                 path="/",
             )
-            # Set __session cookie with same value as access_token
+            # Set __session cookie with session ID instead of fingerprint
+            try:
+                # Decode the access token to get the JTI
+                payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+                jti = payload.get("jti")
+                expires_at = payload.get("exp", time.time() + access_ttl)
+                
+                if jti:
+                    session_id = _create_session_id(jti, expires_at)
+                else:
+                    # Fallback if no JTI found
+                    session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+            except Exception as e:
+                logger.warning(f"Failed to decode access token for session creation (fallback): {e}")
+                # Fallback session ID
+                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+            
             response.set_cookie(
                 key="__session",
-                value=access_token,
+                value=session_id,
                 httponly=True,
                 secure=cookie_config["secure"],
                 samesite=cookie_config["samesite"],

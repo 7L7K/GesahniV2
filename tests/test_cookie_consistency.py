@@ -87,10 +87,14 @@ def test_login_sets_cookies_once(monkeypatch):
     assert "SameSite=Lax" in refresh_cookie
     assert "SameSite=Lax" in session_cookie
     
-    # Check that __session has same value as access_token
+    # Check that __session has opaque fingerprint (different from access_token)
     access_value = access_cookie.split(";")[0].split("=", 1)[1]
     session_value = session_cookie.split(";")[0].split("=", 1)[1]
-    assert access_value == session_value
+    # Session cookie should contain a fingerprint, not the access token
+    assert access_value != session_value
+    # Session fingerprint should be a 32-character hex string
+    assert len(session_value) == 32
+    assert all(c in '0123456789abcdef' for c in session_value)
 
 
 def test_refresh_sets_cookies_once(monkeypatch):
@@ -140,10 +144,14 @@ def test_refresh_sets_cookies_once(monkeypatch):
     assert "SameSite=Lax" in refresh_cookie
     assert "SameSite=Lax" in session_cookie
     
-    # Check that __session has same value as access_token
+    # Check that __session has opaque fingerprint (different from access_token)
     access_value = access_cookie.split(";")[0].split("=", 1)[1]
     session_value = session_cookie.split(";")[0].split("=", 1)[1]
-    assert access_value == session_value
+    # Session cookie should contain a fingerprint, not the access token
+    assert access_value != session_value
+    # Session fingerprint should be a 32-character hex string
+    assert len(session_value) == 32
+    assert all(c in '0123456789abcdef' for c in session_value)
 
 
 def test_logout_clears_cookies_properly(monkeypatch):

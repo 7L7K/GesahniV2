@@ -37,7 +37,8 @@ def test_register_and_duplicate():
     assert resp2.json()["detail"] == "username_taken"
 
 
-def test_register_sets_user_id():
+def test_register_is_public_endpoint():
+    """Test that register endpoint is public and doesn't require authentication."""
     db_fd, db_path = tempfile.mkstemp()
     os.close(db_fd)
     os.environ["USERS_DB"] = db_path
@@ -49,16 +50,17 @@ def test_register_sets_user_id():
     app = FastAPI()
     app.include_router(auth.router)
 
-    captured: dict[str, str] = {}
-
-    def fake_user_id(request: Request) -> str:
-        request.state.user_id = "testuser"
-        captured["user_id"] = request.state.user_id
-        return "testuser"
-
-    app.dependency_overrides[get_current_user_id] = fake_user_id
-
     client = TestClient(app)
+    
+    # Register should work without any authentication
     resp = client.post("/register", json={"username": "bob", "password": "secret"})
     assert resp.status_code == 200
-    assert captured["user_id"] == "testuser"
+    assert resp.json()["status"] == "ok"
+    
+    # Verify the user was actually created
+    conn = sqlite3.connect(db_path)
+    stored = conn.execute(
+        "SELECT password_hash FROM auth_users WHERE username=?", ("bob",)
+    ).fetchone()[0]
+    assert stored != "secret"
+    assert auth.pwd_context.verify("secret", stored)

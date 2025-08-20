@@ -22,7 +22,9 @@ function LoginPageInner() {
     useEffect(() => {
         const access = params.get('access_token');
         const refresh = params.get('refresh_token') || undefined;
-        if (access) {
+
+        // Only set tokens if they're actually from OAuth (not from logout redirect)
+        if (access && !params.get('logout')) {
             console.info('LOGIN oauth.tokens_in_query', {
                 hasAccessToken: !!access,
                 hasRefreshToken: !!refresh,
@@ -46,6 +48,8 @@ function LoginPageInner() {
                 });
                 router.replace(next);
             });
+        } else if (params.get('logout')) {
+            console.info('LOGIN logout_redirect: Skipping token setup due to logout parameter');
         }
     }, [params, next, router]);
 

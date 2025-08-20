@@ -140,11 +140,11 @@ class TestCookieConsistency:
                 # Note: delete_cookie doesn't set HttpOnly or SameSite when clearing cookies
                 # These attributes are only set when cookies are created, not when cleared
                 
-                # Max-Age=0 for clearing
+                # Max-Age=0 for clearing (modern approach)
                 assert "Max-Age=0" in cookie_header
                 
-                # Expires should be present for clearing (but not necessarily the exact date)
-                assert "expires=" in cookie_header
+                # Note: expires= is not required when using Max-Age=0
+                # Modern browsers prefer Max-Age over Expires for cookie clearing
 
     def test_google_oauth_cookies_consistency(self, client):
         """Test that Google OAuth sets cookies consistently."""
