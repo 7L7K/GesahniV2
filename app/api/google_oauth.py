@@ -259,24 +259,39 @@ async def google_callback(request: Request) -> Response:
     # Get state cookie and validate
     logger.info("🍪 Checking for g_state cookie")
     state_cookie = request.cookies.get("g_state")
-    if not state_cookie:
+    
+    # For local development, bypass state cookie validation if cookie is missing
+    dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
+    if not state_cookie and dev_mode:
+        logger.warning("⚠️ Development mode: Bypassing state cookie validation")
+        logger.info("✅ State cookie validation bypassed for development")
+    elif not state_cookie:
         logger.error("❌ Google OAuth callback missing state cookie")
         return _error_response("missing_state_cookie", status=400)
-    logger.info("✅ State cookie found")
+    else:
+        logger.info("✅ State cookie found")
 
-    # Verify state matches cookie exactly
-    logger.info("🔍 Validating state parameter matches cookie")
-    if state != state_cookie:
-        logger.error("❌ Google OAuth callback state mismatch")
-        return _error_response("state_mismatch", status=400)
-    logger.info("✅ State parameter matches cookie")
+    # Verify state matches cookie exactly (skip in dev mode if no cookie)
+    if state_cookie:
+        logger.info("🔍 Validating state parameter matches cookie")
+        if state != state_cookie:
+            logger.error("❌ Google OAuth callback state mismatch")
+            return _error_response("state_mismatch", status=400)
+        logger.info("✅ State parameter matches cookie")
+    else:
+        logger.info("⚠️ Development mode: Skipping state parameter validation")
 
     # Verify signed state is valid and fresh
     logger.info("🔐 Verifying signed state signature and freshness")
     if not _verify_signed_state(state):
-        logger.error("❌ Google OAuth callback invalid or expired state")
-        return _error_response("invalid_state", status=400)
-    logger.info("✅ Signed state validation passed")
+        if dev_mode:
+            logger.warning("⚠️ Development mode: Bypassing signed state validation")
+            logger.info("✅ Signed state validation bypassed for development")
+        else:
+            logger.error("❌ Google OAuth callback invalid or expired state")
+            return _error_response("invalid_state", status=400)
+    else:
+        logger.info("✅ Signed state validation passed")
     
     # State is valid - clear/rotate the state cookie after use
     logger.info("🍪 Clearing g_state cookie after successful validation")
@@ -380,12 +395,70 @@ async def google_callback(request: Request) -> Response:
 
         # Build redirect query - keep it compact and URL-encoded
         q = urlencode({"access_token": at, "refresh_token": rt})
-        target = f"{app_url.rstrip('/')}/login?{q}"
-        return RedirectResponse(url=target, status_code=302)
+
+        # If APP_URL appears to point at this backend (common in local dev),
+        # prefer the browser origin or referer so the redirect lands on the
+        # frontend (e.g. http://localhost:3000) instead of the backend port.
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(app_url)
+            host_matches_backend = False
+            try:
+                host_matches_backend = (parsed.hostname == request.url.hostname) and (parsed.port == request.url.port)
+            except Exception:
+                host_matches_backend = False
+
+            if host_matches_backend:
+                origin = request.headers.get("origin") or request.headers.get("referer")
+                if origin:
+                    op = urlparse(origin)
+                    app_url = f"{op.scheme}://{op.netloc}"
+        except Exception:
+            # Best-effort only; fall back to APP_URL env value
+            pass
+
+        # Set tokens as HttpOnly cookies and redirect to frontend root
+        # Determine final frontend origin similar to earlier logic
+        final_root = f"{app_url.rstrip('/')}/"
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(app_url)
+            host_matches_backend = False
+            try:
+                host_matches_backend = (parsed.hostname == request.url.hostname) and (parsed.port == request.url.port)
+            except Exception:
+                host_matches_backend = False
+            if host_matches_backend:
+                origin = request.headers.get("origin") or request.headers.get("referer")
+                if origin:
+                    op = urlparse(origin)
+                    final_root = f"{op.scheme}://{op.netloc}/"
+        except Exception:
+            pass
+
+        resp = RedirectResponse(url=final_root, status_code=302)
+        # Cookie attributes per dev requirements
+        cookie_kwargs = dict(path='/', httponly=True, samesite='lax', secure=False)
+        # Set access and refresh cookies
+        resp.set_cookie('access_token', at, max_age=None, **cookie_kwargs)
+        resp.set_cookie('refresh_token', rt, max_age=None, **cookie_kwargs)
+        # Optional legacy __session cookie for integrations
+        if os.getenv('ENABLE_SESSION_COOKIE', '') in ('1', 'true', 'yes'):
+            resp.set_cookie('__session', at, max_age=None, **cookie_kwargs)
+        logger.info("🔁 Redirecting user to %s (cookies set)", final_root)
+        return resp
     except Exception as e:
-        # Log full exception for diagnostics, but return a cleaned, cookie-clearing
-        # JSON response to the browser. Special-case missing JWT secret for clarity.
-        logger.exception("OAuth callback processing failed")
+        # Log the exception type/message (always)
+        logger.error("OAuth callback processing failed: %s: %s", type(e).__name__, e)
+
+        # Log full traceback (guarantees stacktrace to configured logger)
+        import traceback
+        tb = traceback.format_exc()
+        logger.error("Full traceback:\n%s", tb)
+
+        # Also use logger.exception for any handlers that include exc_info
+        logger.exception("OAuth callback exception for diagnostics")
+
         # Determine user-friendly message and status
         msg = "oauth_callback_failed"
         status = 500
@@ -395,6 +468,13 @@ async def google_callback(request: Request) -> Response:
                 status = 503
         except Exception:
             pass
+
+        # If running locally, return trace in the HTTP response for quick debugging.
+        # WARNING: do NOT enable this in production.
+        if os.getenv("ENV", "").lower() in ("dev", "development", "local", "test"):
+            return _error_response(f"{msg}: {type(e).__name__}: {e}\n{tb}", status=status)
+
+        # Otherwise, return sanitized cookie-clearing response (no internals leaked)
         return _error_response(msg, status=status)
 
 

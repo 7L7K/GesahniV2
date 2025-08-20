@@ -138,7 +138,7 @@ export default function AdminPage() {
 function TileCache({ token }: { token: string }) {
     const [rate, setRate] = useState<number>(0)
     useEffect(() => {
-        const headers: HeadersInit | undefined = token ? { Authorization: `Bearer ${token}` } : undefined
+        const headers: HeadersInit | undefined = undefined
         apiFetch(`/v1/admin/metrics`, { headers }).then(r => r.json()).then(b => setRate(Number(b?.cache_hit_rate || 0))).catch(() => setRate(0))
     }, [token])
     return <div className="rounded border p-3 bg-white/50 dark:bg-zinc-900/50"><div className="text-xs text-muted-foreground">Cache hit-rate</div><div className="font-medium">{rate.toFixed(2)}%</div></div>
@@ -170,7 +170,7 @@ function SelfReview() {
             setLoading(true)
             setErr(null)
             try {
-                const headers: HeadersInit | undefined = token ? { Authorization: `Bearer ${token}` } : undefined
+                const headers: HeadersInit | undefined = undefined
                 const [eRes, rRes] = await Promise.all([
                     apiFetch(`/v1/admin/errors`, { headers }),
                     apiFetch(`/v1/admin/self_review`, { headers }),

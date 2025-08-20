@@ -254,7 +254,14 @@ async def _enhanced_startup():
         
         startup_time = time.time() - startup_start
         logger.info(f"Application startup completed in {startup_time:.2f}s")
-        
+        # Validate critical runtime secrets (non-blocking): JWT secret
+        try:
+            from .auth import _ensure_jwt_secret_present
+            _ensure_jwt_secret_present()
+            logger.info("JWT secret validation passed")
+        except Exception as e:
+            logger.error("JWT secret validation failed: %s", e)
+            _record_error(e, "startup.jwt_secret")
     except Exception as e:
         error_msg = f"Critical startup failure: {e}"
         logger.error(error_msg, exc_info=True)

@@ -37,13 +37,23 @@ def get_cookie_config(request: Request) -> dict:
     if cookie_samesite == "none":
         cookie_secure = True
     
+    # For localhost development, allow cookies to work across subdomains
+    domain = None
+    if dev_mode or _is_dev_environment(request):
+        try:
+            host = request.headers.get("host", "").lower()
+            if "localhost" in host or "127.0.0.1" in host:
+                # Allow cookies to work across localhost ports
+                domain = "localhost"
+        except Exception:
+            pass
+    
     return {
         "secure": cookie_secure,
         "samesite": cookie_samesite,
         "httponly": True,
         "path": "/",
-        # Explicitly no domain for host-only cookies (one host = one cookie jar)
-        "domain": None,
+        "domain": domain,
     }
 
 

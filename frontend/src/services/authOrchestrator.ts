@@ -90,22 +90,37 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
             }
         });
 
+        // Bind event handlers to this instance
+        this.handleAuthFinishStart = this.handleAuthFinishStart.bind(this);
+        this.handleAuthFinishEnd = this.handleAuthFinishEnd.bind(this);
+        this.handleAuthEpochBumped = this.handleAuthEpochBumped.bind(this);
+
         // Listen for auth finish events
         if (typeof window !== 'undefined') {
-            window.addEventListener('auth:finish_start', () => {
-                this.finisherCallCount++;
-                console.info(`AUTH Orchestrator: Finisher call #${this.finisherCallCount} started`);
-                this.authFinishInProgress = true;
-            });
-
-            window.addEventListener('auth:finish_end', () => {
-                console.info(`AUTH Orchestrator: Finisher call #${this.finisherCallCount} ended`);
-                this.authFinishInProgress = false;
-                // Trigger immediate whoami after auth finish completes
-                setTimeout(() => this.checkAuth(), 100);
-            });
+            window.addEventListener('auth:finish_start', this.handleAuthFinishStart);
+            window.addEventListener('auth:finish_end', this.handleAuthFinishEnd);
+            window.addEventListener('auth:epoch_bumped', this.handleAuthEpochBumped);
         }
     }
+
+    private handleAuthFinishStart = () => {
+        this.finisherCallCount++;
+        console.info(`AUTH Orchestrator: Finisher call #${this.finisherCallCount} started`);
+        this.authFinishInProgress = true;
+    };
+
+    private handleAuthFinishEnd = () => {
+        console.info(`AUTH Orchestrator: Finisher call #${this.finisherCallCount} ended`);
+        this.authFinishInProgress = false;
+        // Trigger immediate whoami after auth finish completes
+        setTimeout(() => this.checkAuth(), 100);
+    };
+
+    private handleAuthEpochBumped = () => {
+        console.info('AUTH Orchestrator: Auth epoch bumped, refreshing auth state');
+        // Force immediate auth check when tokens change
+        this.refreshAuth();
+    };
 
     getState(): AuthState {
         return { ...this.state };
@@ -318,6 +333,7 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
         try {
             const response = await apiFetch('/v1/whoami', {
                 method: 'GET',
+                auth: true, // Explicitly require authentication
                 dedupe: false, // Always make fresh request for auth checks
             });
 
@@ -471,6 +487,13 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
             this.debounceTimer = null;
         }
         this.pendingAuthCheck = null;
+
+        // Remove event listeners to prevent memory leaks
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('auth:finish_start', this.handleAuthFinishStart);
+            window.removeEventListener('auth:finish_end', this.handleAuthFinishEnd);
+            window.removeEventListener('auth:epoch_bumped', this.handleAuthEpochBumped);
+        }
     }
 }
 

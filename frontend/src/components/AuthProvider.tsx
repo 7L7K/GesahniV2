@@ -57,11 +57,18 @@ function useClerkTokenIntegration() {
 }
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
+    const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+    // If Clerk is not configured, just return children without Clerk integration
+    if (!publishableKey) {
+        return <>{children}</>;
+    }
+
     useClerkTokenIntegration();
 
     return (
         <ClerkProvider
-            publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!}
+            publishableKey={publishableKey}
             signInUrl="/sign-in"
             signUpUrl="/sign-up"
             afterSignInUrl="/"

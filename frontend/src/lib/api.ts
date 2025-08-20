@@ -120,38 +120,17 @@ if (typeof console !== 'undefined') {
 // --- Auth token helpers ------------------------------------------------------
 export function getToken(): string | null {
   try {
-    // First check if Clerk is enabled and get Clerk token
-    const isClerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-
-    if (isClerkEnabled && typeof window !== 'undefined') {
-      try {
-        // Try to get Clerk token from Clerk's session using dynamic import
-        // This avoids issues with SSR and module loading
-        const clerkToken = (window as any).__clerkToken;
-
-        if (clerkToken) {
-          console.debug('TOKENS get.clerk_mode', {
-            hasToken: !!clerkToken,
-            tokenLength: clerkToken?.length || 0,
-            timestamp: new Date().toISOString(),
-          });
-          return clerkToken;
-        }
-      } catch (error) {
-        // If Clerk is not available or fails, fall back to localStorage
-        console.debug('TOKENS get.clerk_fallback', {
-          error: error instanceof Error ? error.message : String(error),
-          timestamp: new Date().toISOString(),
-        });
-      }
-    }
-
-    // Fall back to localStorage tokens
+    // Since we disabled Clerk, always use localStorage tokens
     const token = getLocalStorage("auth:access");
     if (token) {
       console.debug('TOKENS get.header_mode', {
         hasToken: !!token,
         tokenLength: token?.length || 0,
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      console.debug('TOKENS get.header_mode', {
+        hasToken: false,
         timestamp: new Date().toISOString(),
       });
     }
@@ -187,41 +166,16 @@ export function getRefreshToken(): string | null {
 
 export function setTokens(access: string, refresh?: string): void {
   try {
-    // Check if Clerk is enabled
-    const isClerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-
-    if (isClerkEnabled && typeof window !== 'undefined') {
-      try {
-        // For Clerk mode, we don't store tokens in localStorage
-        // Clerk manages its own token storage
-        console.info('TOKENS set.clerk_mode', {
-          hasAccessToken: !!access,
-          hasRefreshToken: !!refresh,
-          accessTokenLength: access?.length || 0,
-          refreshTokenLength: refresh?.length || 0,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.debug('TOKENS set.clerk_fallback', {
-          error: error instanceof Error ? error.message : String(error),
-          timestamp: new Date().toISOString(),
-        });
-        // Fall back to localStorage if Clerk fails
-        setLocalStorage("auth:access", access);
-        if (refresh) setLocalStorage("auth:refresh", refresh);
-      }
-    } else {
-      // Header mode - store in localStorage
-      setLocalStorage("auth:access", access);
-      if (refresh) setLocalStorage("auth:refresh", refresh);
-      console.info('TOKENS set.header_mode', {
-        hasAccessToken: !!access,
-        hasRefreshToken: !!refresh,
-        accessTokenLength: access?.length || 0,
-        refreshTokenLength: refresh?.length || 0,
-        timestamp: new Date().toISOString(),
-      });
-    }
+    // Since we disabled Clerk, always use localStorage
+    setLocalStorage("auth:access", access);
+    if (refresh) setLocalStorage("auth:refresh", refresh);
+    console.info('TOKENS set.header_mode', {
+      hasAccessToken: !!access,
+      hasRefreshToken: !!refresh,
+      accessTokenLength: access?.length || 0,
+      refreshTokenLength: refresh?.length || 0,
+      timestamp: new Date().toISOString(),
+    });
 
     // Bump auth epoch when tokens change
     bumpAuthEpoch();
@@ -326,8 +280,8 @@ export function useSessionState() {
 }
 
 function authHeaders() {
-  const token = getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  // Token-based Authorization header is disabled: use cookie-based auth instead
+  return {};
 }
 
 // Header mode: no refresh endpoint calls - redirect to sign-in on 401
@@ -339,7 +293,6 @@ async function tryRefresh(): Promise<Response | null> {
 
 // List of public endpoints that don't require authentication
 const PUBLIC_ENDPOINTS = [
-  '/v1/whoami',
   '/v1/login',
   '/v1/register',
   '/v1/models',
@@ -361,7 +314,7 @@ export async function apiFetch(
   init: (RequestInit & { auth?: boolean; dedupe?: boolean; shortCacheMs?: number; contextKey?: string | string[]; credentials?: RequestCredentials }) = {}
 ): Promise<Response> {
   // In header mode, don't include browser cookies for API calls
-  const defaultCredentials = 'omit';
+  const defaultCredentials = 'include';
 
   // Determine if this is a public endpoint
   const isPublicEndpoint = PUBLIC_ENDPOINTS.some(endpoint => path.includes(endpoint));
@@ -886,7 +839,7 @@ export function useAdminMetrics(token: string) {
   return useQuery<{ metrics: Record<string, number>; cache_hit_rate: number; top_skills: [string, number][] }, Error>({
     queryKey: ["admin_metrics", token],
     queryFn: async () => {
-      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const headers: HeadersInit = {};
       const res = await apiFetch(`/v1/admin/metrics`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
@@ -908,7 +861,7 @@ export function useRouterDecisions(
       for (const [k, v] of Object.entries(params)) {
         if (v !== undefined && v !== null && v !== "") usp.set(k, String(v));
       }
-      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const headers: HeadersInit = {};
       const res = await apiFetch(`/v1/admin/router/decisions?${usp.toString()}`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
@@ -922,7 +875,7 @@ export function useAdminErrors(token: string) {
   return useQuery<{ errors: { timestamp: string; level: string; component: string; msg: string }[] }, Error>({
     queryKey: ["admin_errors", token],
     queryFn: async () => {
-      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const headers: HeadersInit = {};
       const res = await apiFetch(`/v1/admin/errors`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
@@ -935,7 +888,7 @@ export function useSelfReview(token: string) {
   return useQuery<Record<string, unknown> | { status: string }, Error>({
     queryKey: ["self_review", token],
     queryFn: async () => {
-      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const headers: HeadersInit = {};
       const res = await apiFetch(`/v1/admin/self_review`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
@@ -1010,7 +963,7 @@ export type TvConfig = {
 
 export async function getTvConfig(residentId: string, token: string) {
   const qs = `?resident_id=${encodeURIComponent(residentId)}`;
-  const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers: HeadersInit = {};
   const res = await apiFetch(`/v1/tv/config${qs}`, { method: 'GET', headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<{ status: string; config: TvConfig }>;
@@ -1018,7 +971,7 @@ export async function getTvConfig(residentId: string, token: string) {
 
 export async function putTvConfig(residentId: string, token: string, cfg: TvConfig) {
   const qs = `?resident_id=${encodeURIComponent(residentId)}`;
-  const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers: HeadersInit = {};
   const res = await apiFetch(`/v1/tv/config${qs}`, { method: 'PUT', body: JSON.stringify(cfg), headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json() as Promise<{ status: string; config: TvConfig }>;

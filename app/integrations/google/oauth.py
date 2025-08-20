@@ -148,9 +148,11 @@ def exchange_code(code: str, signed_state: str, verify_state: bool = True):
     if verify_state:
         _ = _verify_state(signed_state)
     if not _GOOGLE_AVAILABLE or _Flow is None:  # pragma: no cover - env-dependent
-        # Environments without google libraries should override this function in tests
-        raise HTTPException(status_code=501, detail="google oauth exchange unavailable")
-    # First try via official client
+        # Optional google libs are unavailable; fall back to manual token exchange below.
+        # We still attempt the manual HTTP token exchange to support lightweight environments.
+        import logging
+        logging.getLogger(__name__).warning("google oauth client libs unavailable; using manual token exchange")
+    # First try via official client (if available)
     try:
         flow = create_flow()
         flow.fetch_token(code=code)
@@ -158,23 +160,45 @@ def exchange_code(code: str, signed_state: str, verify_state: bool = True):
     except Exception:
         # Fallback: manual token exchange to avoid oauthlib scope_changed issues
         try:
-            import requests
-            from datetime import datetime, timezone, timedelta
+            # Prefer requests if available for simplicity
+            try:
+                import requests
+                from datetime import datetime, timezone, timedelta
 
-            resp = requests.post(
-                CLIENT_CONFIG["web"]["token_uri"],
-                data={
+                resp = requests.post(
+                    CLIENT_CONFIG["web"]["token_uri"],
+                    data={
+                        "code": code,
+                        "client_id": CLIENT_CONFIG["web"]["client_id"],
+                        "client_secret": CLIENT_CONFIG["web"]["client_secret"],
+                        "redirect_uri": CLIENT_CONFIG["web"]["redirect_uris"][0],
+                        "grant_type": "authorization_code",
+                    },
+                    timeout=10,
+                )
+                if not resp.ok:
+                    raise HTTPException(status_code=400, detail="oauth_exchange_failed")
+                data = resp.json()
+            except ModuleNotFoundError:
+                # Fall back to stdlib when requests isn't installed
+                import urllib.request, urllib.parse, json as _json
+                from datetime import datetime, timezone, timedelta
+
+                post_data = urllib.parse.urlencode({
                     "code": code,
                     "client_id": CLIENT_CONFIG["web"]["client_id"],
                     "client_secret": CLIENT_CONFIG["web"]["client_secret"],
                     "redirect_uri": CLIENT_CONFIG["web"]["redirect_uris"][0],
                     "grant_type": "authorization_code",
-                },
-                timeout=10,
-            )
-            if not resp.ok:
-                raise HTTPException(status_code=400, detail="oauth_exchange_failed")
-            data = resp.json()
+                }).encode()
+                req = urllib.request.Request(
+                    CLIENT_CONFIG["web"]["token_uri"],
+                    data=post_data,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    body = resp.read().decode()
+                    data = _json.loads(body)
 
             class _SimpleCreds:
                 def __init__(self, d):
