@@ -155,13 +155,41 @@ async def apple_callback(request: Request, response: Response) -> Response:
         from .auth import _append_cookie_with_priority as _append
         _append(response, key="access_token", value=access, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
         _append(response, key="refresh_token", value=refresh, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-        # Session cookie for better session management
-        _append(response, key="__session", value=access, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
+        # Create opaque session ID instead of using JWT
+        try:
+            from ..auth import _create_session_id
+            import jwt
+            payload = jwt.decode(access, SECRET_KEY, algorithms=[ALGORITHM])
+            jti = payload.get("jti")
+            expires_at = payload.get("exp", time.time() + access_ttl)
+            if jti:
+                session_id = _create_session_id(jti, expires_at)
+            else:
+                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to create session ID: {e}")
+            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        _append(response, key="__session", value=session_id, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
     except Exception:
         response.set_cookie("access_token", access, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
         response.set_cookie("refresh_token", refresh, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
-        # Session cookie for better session management
-        response.set_cookie("__session", access, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+        # Create opaque session ID instead of using JWT
+        try:
+            from ..auth import _create_session_id
+            import jwt
+            payload = jwt.decode(access, SECRET_KEY, algorithms=[ALGORITHM])
+            jti = payload.get("jti")
+            expires_at = payload.get("exp", time.time() + access_ttl)
+            if jti:
+                session_id = _create_session_id(jti, expires_at)
+            else:
+                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to create session ID: {e}")
+            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        response.set_cookie("__session", session_id, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
 
     try:
         import logging

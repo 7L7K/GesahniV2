@@ -8,6 +8,7 @@ and sets short-lived CSRF state cookies for security.
 import os
 import time
 import secrets
+import random
 import hmac
 import hashlib
 import logging
@@ -444,7 +445,22 @@ async def google_callback(request: Request) -> Response:
         resp.set_cookie('refresh_token', rt, max_age=None, **cookie_kwargs)
         # Optional legacy __session cookie for integrations
         if os.getenv('ENABLE_SESSION_COOKIE', '') in ('1', 'true', 'yes'):
-            resp.set_cookie('__session', at, max_age=None, **cookie_kwargs)
+            # Create opaque session ID instead of using JWT
+            try:
+                from ..auth import _create_session_id
+                import jwt
+                payload = jwt.decode(at, os.getenv("JWT_SECRET"), algorithms=["HS256"])
+                jti = payload.get("jti")
+                expires_at = payload.get("exp", time.time() + 900)  # 15 minutes default
+                if jti:
+                    session_id = _create_session_id(jti, expires_at)
+                else:
+                    session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to create session ID: {e}")
+                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+            resp.set_cookie('__session', session_id, max_age=None, **cookie_kwargs)
         logger.info("🔁 Redirecting user to %s (cookies set)", final_root)
         return resp
     except Exception as e:

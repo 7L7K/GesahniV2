@@ -859,13 +859,39 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         try:
             _append_cookie_with_priority(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
             _append_cookie_with_priority(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-            # Session cookie for better session management
-            _append_cookie_with_priority(resp, key="__session", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
+            # Create opaque session ID instead of using JWT
+            try:
+                from ..auth import _create_session_id
+                import jwt
+                payload = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
+                jti = payload.get("jti")
+                expires_at = payload.get("exp", time.time() + access_ttl)
+                if jti:
+                    session_id = _create_session_id(jti, expires_at)
+                else:
+                    session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+            except Exception as e:
+                logger.warning(f"Failed to create session ID: {e}")
+                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+            _append_cookie_with_priority(resp, key="__session", value=session_id, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
         except Exception:
             resp.set_cookie("access_token", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
             resp.set_cookie("refresh_token", refresh_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
-            # Session cookie for better session management
-            resp.set_cookie("__session", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+            # Create opaque session ID instead of using JWT
+            try:
+                from ..auth import _create_session_id
+                import jwt
+                payload = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
+                jti = payload.get("jti")
+                expires_at = payload.get("exp", time.time() + access_ttl)
+                if jti:
+                    session_id = _create_session_id(jti, expires_at)
+                else:
+                    session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+            except Exception as e:
+                logger.warning(f"Failed to create session ID: {e}")
+                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+            resp.set_cookie("__session", session_id, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
         # One-liner timing log for finisher
         try:
             dt = int((time.time() - t0) * 1000)
@@ -892,13 +918,39 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
     try:
         _append_cookie_with_priority(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
         _append_cookie_with_priority(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-        # Session cookie for better session management
-        _append_cookie_with_priority(resp, key="__session", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
+        # Create opaque session ID instead of using JWT
+        try:
+            from ..auth import _create_session_id
+            import jwt
+            payload = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
+            jti = payload.get("jti")
+            expires_at = payload.get("exp", time.time() + access_ttl)
+            if jti:
+                session_id = _create_session_id(jti, expires_at)
+            else:
+                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        except Exception as e:
+            logger.warning(f"Failed to create session ID: {e}")
+            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        _append_cookie_with_priority(resp, key="__session", value=session_id, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
     except Exception:
         resp.set_cookie("access_token", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
         resp.set_cookie("refresh_token", refresh_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
-        # Session cookie for better session management
-        resp.set_cookie("__session", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+        # Create opaque session ID instead of using JWT
+        try:
+            from ..auth import _create_session_id
+            import jwt
+            payload = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
+            jti = payload.get("jti")
+            expires_at = payload.get("exp", time.time() + access_ttl)
+            if jti:
+                session_id = _create_session_id(jti, expires_at)
+            else:
+                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        except Exception as e:
+            logger.warning(f"Failed to create session ID: {e}")
+            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        resp.set_cookie("__session", session_id, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
     try:
         dt = int((time.time() - t0) * 1000)
         print(f"auth.finish t_total={dt}ms set_cookie=true reason={reason} cookies=3")
@@ -1193,13 +1245,27 @@ async def login(username: str, request: Request, response: Response):
                 max_age=refresh_ttl,
                 path="/",
             )
-        # Set __session cookie with same value as access_token for consistent session management
+        # Create opaque session ID instead of using JWT
         try:
-            _append_cookie_with_priority(response, key="__session", value=jwt_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
+            from ..auth import _create_session_id
+            import jwt
+            payload = jwt.decode(jwt_token, _jwt_secret(), algorithms=["HS256"])
+            jti = payload.get("jti")
+            expires_at = payload.get("exp", time.time() + access_ttl)
+            if jti:
+                session_id = _create_session_id(jti, expires_at)
+            else:
+                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        except Exception as e:
+            logger.warning(f"Failed to create session ID: {e}")
+            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        
+        try:
+            _append_cookie_with_priority(response, key="__session", value=session_id, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
         except Exception:
             response.set_cookie(
                 key="__session",
-                value=jwt_token,
+                value=session_id,
                 httponly=True,
                 secure=cookie_config["secure"],
                 samesite=cookie_config["samesite"],
