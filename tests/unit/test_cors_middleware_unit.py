@@ -108,10 +108,10 @@ def test_cors_headers_are_present_for_all_origins():
 
 
 def test_cors_rejects_127_0_0_1_origin():
-            """Test that CORS rejects http://localhost:3000 origin for security."""
+    """Test that CORS rejects http://localhost:3000 origin for security."""
     client = TestClient(app)
     
-            # Test with localhost origin (should be rejected)
+    # Test with localhost origin (should be rejected)
     response = client.options('/v1/auth/logout', headers={
         'Origin': 'http://localhost:3000',
         'Access-Control-Request-Method': 'POST',

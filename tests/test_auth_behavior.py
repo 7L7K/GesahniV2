@@ -36,7 +36,7 @@ import jwt
 import json
 
 from app.main import app
-from app.auth import create_access_token, create_refresh_token
+from app.tokens import create_access_token, create_refresh_token
 from app.deps.user import get_current_user_id
 
 

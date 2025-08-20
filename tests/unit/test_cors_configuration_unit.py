@@ -14,7 +14,7 @@ from app.main import app
 
 
 def test_cors_allowlist_exactly_localhost_3000():
-            """Test that CORS allowlist contains exactly http://localhost:3000."""
+    """Test that CORS allowlist contains exactly http://localhost:3000."""
     client = TestClient(app)
     
     # Test with allowed origin
@@ -27,7 +27,7 @@ def test_cors_allowlist_exactly_localhost_3000():
     assert response.status_code == 200
     assert response.headers['access-control-allow-origin'] == 'http://localhost:3000'
     
-            # Test with disallowed origin - should be rejected with 400
+    # Test with disallowed origin - should be rejected with 400
     response = client.options('/v1/auth/logout', headers={
         'Origin': 'http://localhost:3000',
         'Access-Control-Request-Method': 'POST',

@@ -31,8 +31,10 @@ def _client(monkeypatch):
     monkeypatch.setenv("DEV_MODE", "1")  # Enable dev mode for testing
     sys.modules.pop("app.auth", None)
     auth = import_module("app.auth")
+    from app.api.auth import router as auth_api_router
     app = FastAPI()
     app.include_router(auth.router)
+    app.include_router(auth_api_router, prefix="/v1")
     client = TestClient(app)
     
     # Override the user dependency like in the original test
@@ -92,9 +94,9 @@ def test_login_sets_cookies_once(monkeypatch):
     session_value = session_cookie.split(";")[0].split("=", 1)[1]
     # Session cookie should contain a fingerprint, not the access token
     assert access_value != session_value
-    # Session fingerprint should be a 32-character hex string
-    assert len(session_value) == 32
-    assert all(c in '0123456789abcdef' for c in session_value)
+    # Session fingerprint should start with "sess_" and contain timestamp and hex
+    assert session_value.startswith("sess_")
+    assert len(session_value) > 20  # Reasonable length for session ID
 
 
 def test_refresh_sets_cookies_once(monkeypatch):
@@ -107,7 +109,7 @@ def test_refresh_sets_cookies_once(monkeypatch):
     tokens = login_resp.json()
     
     # Refresh and capture response
-    refresh_resp = client.post("/refresh", json={"refresh_token": tokens["refresh_token"]})
+    refresh_resp = client.post("/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
     assert refresh_resp.status_code == 200
     
     # Check that Set-Cookie headers are present
@@ -149,9 +151,9 @@ def test_refresh_sets_cookies_once(monkeypatch):
     session_value = session_cookie.split(";")[0].split("=", 1)[1]
     # Session cookie should contain a fingerprint, not the access token
     assert access_value != session_value
-    # Session fingerprint should be a 32-character hex string
-    assert len(session_value) == 32
-    assert all(c in '0123456789abcdef' for c in session_value)
+    # Session fingerprint should start with "sess_" and contain timestamp and hex
+    assert session_value.startswith("sess_")
+    assert len(session_value) > 20  # Reasonable length for session ID
 
 
 def test_logout_clears_cookies_properly(monkeypatch):
@@ -164,7 +166,7 @@ def test_logout_clears_cookies_properly(monkeypatch):
     tokens = login_resp.json()
     
     # Refresh to get new tokens
-    refresh_resp = client.post("/refresh", json={"refresh_token": tokens["refresh_token"]})
+    refresh_resp = client.post("/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
     assert refresh_resp.status_code == 200
     new_tokens = refresh_resp.json()
     
@@ -203,7 +205,7 @@ def test_logout_clears_cookies_properly(monkeypatch):
     assert "Max-Age=0" in session_cookie
     
     # Verify that the refresh token is no longer valid
-    invalid_refresh_resp = client.post("/refresh", json={"refresh_token": new_tokens["refresh_token"]})
+    invalid_refresh_resp = client.post("/v1/auth/refresh", json={"refresh_token": new_tokens["refresh_token"]})
     assert invalid_refresh_resp.status_code == 401
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+import random
 from datetime import datetime, timedelta
 from typing import Dict
 from urllib.parse import urlencode
@@ -74,10 +75,16 @@ async def apple_start(request: Request) -> Response:
     from ..cookie_config import get_cookie_config
     cookie_config = get_cookie_config(request)
     
-    # Double-submit: persist state and next target for 10 minutes
-    # Ensure cookies follow parity rules
-    resp.set_cookie("oauth_state", state, max_age=600, httponly=True, path="/", samesite=cookie_config["samesite"], secure=cookie_config["secure"])
-    resp.set_cookie("oauth_next", next_url, max_age=600, httponly=False, path="/", samesite=cookie_config["samesite"], secure=cookie_config["secure"])
+    # Set OAuth state cookies using centralized cookie surface
+    from ..cookies import set_oauth_state_cookies
+    set_oauth_state_cookies(
+        resp=resp,
+        state=state,
+        next_url=next_url,
+        request=request,
+        ttl=600,  # 10 minutes
+        provider="oauth"  # Apple uses default oauth prefix
+    )
     return resp
 
 
@@ -140,10 +147,11 @@ async def apple_callback(request: Request, response: Response) -> Response:
     sess = await sessions_store.create_session(user_id)
     sid, did = sess["sid"], sess["did"]
     now = datetime.utcnow()
-    access_payload = {"sub": user_id, "user_id": user_id, "sid": sid, "did": did, "type": "access", "exp": now + timedelta(minutes=EXPIRE_MINUTES)}
-    refresh_payload = {"sub": user_id, "user_id": user_id, "sid": sid, "did": did, "type": "refresh", "exp": now + timedelta(minutes=REFRESH_EXPIRE_MINUTES)}
-    access = jwt.encode(access_payload, SECRET_KEY, algorithm=ALGORITHM)
-    refresh = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
+    # Use tokens.py facade instead of direct JWT encoding
+    from ..tokens import make_access, make_refresh
+    # Use default TTLs from tokens.py
+    access = make_access({"user_id": user_id, "sid": sid, "did": did})
+    refresh = make_refresh({"user_id": user_id, "sid": sid, "did": did})
 
     # Use centralized cookie configuration for sharp and consistent cookies
     from ..cookie_config import get_cookie_config, get_token_ttls
@@ -151,45 +159,28 @@ async def apple_callback(request: Request, response: Response) -> Response:
     cookie_config = get_cookie_config(request)
     access_ttl, refresh_ttl = get_token_ttls()
     
+    # Create opaque session ID instead of using JWT
     try:
-        from .auth import _append_cookie_with_priority as _append
-        _append(response, key="access_token", value=access, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-        _append(response, key="refresh_token", value=refresh, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-        # Create opaque session ID instead of using JWT
-        try:
-            from ..auth import _create_session_id
-            import jwt
-            payload = jwt.decode(access, SECRET_KEY, algorithms=[ALGORITHM])
-            jti = payload.get("jti")
-            expires_at = payload.get("exp", time.time() + access_ttl)
-            if jti:
-                session_id = _create_session_id(jti, expires_at)
-            else:
-                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Failed to create session ID: {e}")
+        from ..auth import _create_session_id
+        import jwt
+        payload = jwt.decode(access, SECRET_KEY, algorithms=[ALGORITHM])
+        jti = payload.get("jti")
+        expires_at = payload.get("exp", time.time() + access_ttl)
+        if jti:
+            session_id = _create_session_id(jti, expires_at)
+        else:
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        _append(response, key="__session", value=session_id, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-    except Exception:
-        response.set_cookie("access_token", access, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
-        response.set_cookie("refresh_token", refresh, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
-        # Create opaque session ID instead of using JWT
-        try:
-            from ..auth import _create_session_id
-            import jwt
-            payload = jwt.decode(access, SECRET_KEY, algorithms=[ALGORITHM])
-            jti = payload.get("jti")
-            expires_at = payload.get("exp", time.time() + access_ttl)
-            if jti:
-                session_id = _create_session_id(jti, expires_at)
-            else:
-                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Failed to create session ID: {e}")
-            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        response.set_cookie("__session", session_id, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to create session ID: {e}")
+        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+    
+    # Use centralized cookie functions
+    from ..cookies import set_auth_cookies, clear_oauth_state_cookies
+    set_auth_cookies(response, access=access, refresh=refresh, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
+    
+    # Clear OAuth state cookies after successful authentication
+    clear_oauth_state_cookies(response, request, provider="oauth")
 
     try:
         import logging

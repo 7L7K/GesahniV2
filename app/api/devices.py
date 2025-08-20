@@ -70,7 +70,9 @@ async def pair_complete(body: Dict[str, Any]) -> Dict[str, Any]:
         "device": label or "tv",
         "type": "device",
     }
-    token = jwt.encode(claims, _jwt_secret(), algorithm="HS256")
+    # Use tokens.py facade instead of direct JWT encoding
+    from ..tokens import make_access
+    token = make_access({"user_id": owner_id, "jti": jti, "device": label or "tv"}, ttl_s=ttl)
     # Persist token id for revocation and metadata lookup
     await upsert_device_token(jti, owner_id, label or "tv", ttl)
     return {"access_token": token, "token_type": "bearer", "expires_in": ttl}

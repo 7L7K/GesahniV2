@@ -485,14 +485,17 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                                 secure = False
                         except Exception:
                             pass
-                        response.set_cookie(
-                            "X-Local-Mode",
-                            "1",
-                            max_age=600,
-                            path="/",
-                            secure=secure,
+                        # Use centralized cookie functions for local mode indicator
+                        from .cookies import set_named_cookie
+                        set_named_cookie(
+                            resp=response,
+                            name="X-Local-Mode",
+                            value="1",
+                            ttl=600,
+                            request=request,
                             httponly=True,
-                            samesite="Lax",
+                            secure=secure,
+                            samesite="Lax"  # Keep Lax for local mode indicator
                         )
                 except Exception:
                     pass
@@ -586,30 +589,25 @@ async def silent_refresh_middleware(request: Request, call_next):
             user_id = str(payload.get("user_id") or "")
             if not user_id:
                 return response
-            lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", str(int(os.getenv("JWT_EXPIRE_MINUTES", "30")) * 60)))
+            # Use centralized TTL from tokens.py
+            from .tokens import get_default_access_ttl
+            lifetime = get_default_access_ttl()
             base_claims = {k: v for k, v in payload.items() if k not in {"iat", "exp", "nbf", "jti"}}
             base_claims["user_id"] = user_id
-            new_payload = {**base_claims, "iat": now, "exp": now + lifetime}
-            new_token = jwt.encode(new_payload, secret, algorithm="HS256")
+            # Use tokens.py facade instead of direct JWT encoding
+            from .tokens import make_access
+            new_token = make_access({"user_id": user_id}, ttl_s=lifetime)
             # Use centralized cookie configuration
             from .cookie_config import get_cookie_config, get_token_ttls
             
             cookie_config = get_cookie_config(request)
             access_ttl, _ = get_token_ttls()
             
-            try:
-                from .api.auth import _append_cookie_with_priority as _append
-                _append(response, key="access_token", value=new_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-            except Exception:
-                response.set_cookie(
-                    key="access_token",
-                    value=new_token,
-                    httponly=True,
-                    secure=cookie_config["secure"],
-                    samesite=cookie_config["samesite"],
-                    max_age=access_ttl,
-                    path="/",
-                )
+            # Use centralized cookie functions for access token
+            from .cookies import set_auth_cookies
+            # For silent refresh, we only update the access token, keep existing refresh token
+            # and don't set session cookie (it should already exist)
+            set_auth_cookies(response, access=new_token, refresh="", session_id=None, access_ttl=access_ttl, refresh_ttl=0, request=request)
             # Optionally extend refresh cookie if present (best-effort) with jitter to avoid herd
             try:
                 rtok = request.cookies.get("refresh_token")
@@ -625,18 +623,31 @@ async def silent_refresh_middleware(request: Request, call_next):
                             await asyncio.sleep(_rand.uniform(0.01, 0.05))  # type: ignore[name-defined]
                         except Exception:
                             pass
+                        # For refresh token extension, we need to set it individually
+                        # since set_auth_cookies expects both access and refresh tokens
                         try:
-                            from .api.auth import _append_cookie_with_priority as _append
-                            _append(response, key="refresh_token", value=rtok, max_age=r_life, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-                        except Exception:
-                            response.set_cookie(
-                                key="refresh_token",
+                            from .cookies import set_named_cookie
+                            set_named_cookie(
+                                resp=response,
+                                name="refresh_token",
                                 value=rtok,
-                                httponly=True,
-                                secure=cookie_config["secure"],
-                                samesite=cookie_config["samesite"],
-                                max_age=r_life,
-                                path="/",
+                                ttl=r_life,
+                                request=request,
+                                httponly=cookie_config["httponly"]
+                            )
+                        except Exception:
+                            # Fallback to centralized cookie functions
+                            from .cookies import set_auth_cookies
+                            # For refresh token extension, we need to set it individually
+                            # since set_auth_cookies expects both access and refresh tokens
+                            set_auth_cookies(
+                                response, 
+                                access="", 
+                                refresh=rtok, 
+                                session_id=None, 
+                                access_ttl=0, 
+                                refresh_ttl=r_life, 
+                                request=request
                             )
             except Exception:
                 pass

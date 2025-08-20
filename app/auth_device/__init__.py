@@ -33,21 +33,31 @@ async def trust_device(request: Request, response: Response) -> dict:
     cookie_config = get_cookie_config(request)
     secret = os.getenv("JWT_SECRET")
     if secret:
-        payload = {"user_id": "device", "iat": now, "exp": now + access_ttl}
-        token = jwt.encode(payload, secret, algorithm="HS256")
+        # Use tokens.py facade instead of direct JWT encoding
+        from ..tokens import make_access
+        token = make_access({"user_id": "device"}, ttl_s=access_ttl)
+        
+        # Generate an opaque session ID for device trust
+        from ..session_store import get_session_store
+        store = get_session_store()
+        # Extract JTI from the token for session mapping
         try:
-            from ..api.auth import _append_cookie_with_priority as _append
-            _append(response, key="access_token", value=token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
+            payload = jwt.decode(token, secret, algorithms=["HS256"])
+            jti = payload.get("jti")
+            expires_at = payload.get("exp")
+            if jti and expires_at:
+                session_id = store.create_session(jti, expires_at)
+            else:
+                # Fallback: generate a session ID without JTI mapping
+                session_id = f"device_{int(time.time())}_{os.getpid()}"
         except Exception:
-            response.set_cookie(
-                key="access_token",
-                value=token,
-                httponly=True,
-                secure=cookie_config["secure"],
-                samesite=cookie_config["samesite"],
-                max_age=access_ttl,
-                path="/",
-            )
+            # Fallback: generate a session ID without JTI mapping
+            session_id = f"device_{int(time.time())}_{os.getpid()}"
+        
+        # Use centralized cookie functions
+        from ..cookies import set_auth_cookies
+        # For device trust, we set both access token and session cookie
+        set_auth_cookies(response, access=token, refresh="", session_id=session_id, access_ttl=access_ttl, refresh_ttl=0, request=request)
         return {"status": "ok", "trusted": True, "cookie": "access_token"}
     # Fallback marker cookie for environments without JWT configured
     # Harden: in production, refuse to set non-HttpOnly/non-Secure device_trust
@@ -58,14 +68,14 @@ async def trust_device(request: Request, response: Response) -> dict:
         except Exception:
             pass
         return {"status": "ok", "trusted": False, "cookie": None}  # type: ignore[return-value]
-    response.set_cookie(
-        key="device_trust",
+    # Use centralized cookie functions for device trust
+    from ..cookies import set_device_cookie
+    set_device_cookie(
+        resp=response,
         value="1",
-        httponly=False,
-        secure=False,
-        samesite="lax",
-        max_age=access_ttl,
-        path="/",
+        ttl=access_ttl,
+        request=request,
+        cookie_name="device_trust"
     )
     return {"status": "ok", "trusted": True, "cookie": "device_trust"}
 

@@ -21,8 +21,10 @@ def _make_auth_app(monkeypatch, extra_env: dict | None = None):
     # ensure a fresh module read of env constants
     sys.modules.pop("app.auth", None)
     auth = import_module("app.auth")
+    from app.api.auth import router as auth_api_router
     app = FastAPI()
     app.include_router(auth.router)
+    app.include_router(auth_api_router, prefix="/v1")
     client = TestClient(app)
     return auth, client
 
@@ -96,7 +98,7 @@ def test_refresh_with_access_token_rejected(monkeypatch):
 
     login = client.post("/login", json={"username": "dana", "password": "abcd1234"}).json()
     access = login["access_token"]
-    r = client.post("/refresh", json={"refresh_token": access})
+    r = client.post("/v1/auth/refresh", json={"refresh_token": access})
     assert r.status_code == 400
     assert r.json()["detail"] == "Invalid token type"
 
@@ -115,10 +117,12 @@ def test_refresh_issuer_mismatch(monkeypatch):
 
     login = client.post("/login", json={"username": "erin", "password": "abcd1234"}).json()
     # Craft a refresh token with wrong issuer
+    from jose import jwt
     payload = jwt.get_unverified_claims(login["refresh_token"])
     payload["iss"] = "bad"
+    # Use jwt.encode directly for this test since we need to preserve the modified issuer
     bad_refresh = jwt.encode(payload, "secret", algorithm="HS256")
-    r = client.post("/refresh", json={"refresh_token": bad_refresh})
+    r = client.post("/v1/auth/refresh", json={"refresh_token": bad_refresh})
     assert r.status_code == 401
     assert r.json()["detail"] == "Invalid token issuer"
 

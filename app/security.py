@@ -343,35 +343,37 @@ def _get_request_payload(request: Request | None) -> dict | None:
     if not token:
         return None
     
-    # 3) Try traditional JWT first (same secret/issuer checks for both access_token and __session)
-    secret = os.getenv("JWT_SECRET")
-    if secret:
-        try:
-            # Enforce iss/aud in prod if configured
-            opts = {}
-            iss = os.getenv("JWT_ISSUER")
-            aud = os.getenv("JWT_AUDIENCE")
-            if iss:
-                opts["issuer"] = iss
-            if aud:
-                opts["audience"] = aud
-            
-            if opts:
-                return jwt.decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
-            else:
-                return jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
-        except Exception:
-            # Traditional JWT failed, try Clerk if enabled and appropriate
-            pass
-    else:
-        # If no secret configured, try non-verifying decode only in dev/test mode
-        dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
-        test_mode = os.getenv("ENV", "").strip().lower() == "test" or os.getenv("PYTEST_RUNNING")
-        if dev_mode or test_mode:
+    # 3) Try traditional JWT first (only for non-session cookies)
+    # __session cookies contain opaque session IDs only, never JWTs
+    if token_source not in ["websocket_session_cookie"]:
+        secret = os.getenv("JWT_SECRET")
+        if secret:
             try:
-                return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
+                # Enforce iss/aud in prod if configured
+                opts = {}
+                iss = os.getenv("JWT_ISSUER")
+                aud = os.getenv("JWT_AUDIENCE")
+                if iss:
+                    opts["issuer"] = iss
+                if aud:
+                    opts["audience"] = aud
+                
+                if opts:
+                    return jwt.decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
+                else:
+                    return jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
             except Exception:
+                # Traditional JWT failed, try Clerk if enabled and appropriate
                 pass
+        else:
+            # If no secret configured, try non-verifying decode only in dev/test mode
+            dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
+            test_mode = os.getenv("ENV", "").strip().lower() == "test" or os.getenv("PYTEST_RUNNING")
+            if dev_mode or test_mode:
+                try:
+                    return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
+                except Exception:
+                    pass
     
     # 4) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
     # AND the token source is NOT __session (unless Clerk is enabled)
@@ -455,35 +457,37 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
     if not token:
         return None
     
-    # 3) Try traditional JWT first (same secret/issuer checks for both access_token and __session)
-    secret = os.getenv("JWT_SECRET")
-    if secret:
-        try:
-            # Enforce iss/aud in prod if configured
-            opts = {}
-            iss = os.getenv("JWT_ISSUER")
-            aud = os.getenv("JWT_AUDIENCE")
-            if iss:
-                opts["issuer"] = iss
-            if aud:
-                opts["audience"] = aud
-            
-            if opts:
-                return jwt.decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
-            else:
-                return jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
-        except Exception:
-            # Traditional JWT failed, try Clerk if enabled and appropriate
-            pass
-    else:
-        # If no secret configured, try non-verifying decode only in dev/test mode
-        dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
-        test_mode = os.getenv("ENV", "").strip().lower() == "test" or os.getenv("PYTEST_RUNNING")
-        if dev_mode or test_mode:
+    # 3) Try traditional JWT first (only for non-session cookies)
+    # __session cookies contain opaque session IDs only, never JWTs
+    if token_source not in ["websocket_session_cookie"]:
+        secret = os.getenv("JWT_SECRET")
+        if secret:
             try:
-                return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
+                # Enforce iss/aud in prod if configured
+                opts = {}
+                iss = os.getenv("JWT_ISSUER")
+                aud = os.getenv("JWT_AUDIENCE")
+                if iss:
+                    opts["issuer"] = iss
+                if aud:
+                    opts["audience"] = aud
+                
+                if opts:
+                    return jwt.decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
+                else:
+                    return jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
             except Exception:
+                # Traditional JWT failed, try Clerk if enabled and appropriate
                 pass
+        else:
+            # If no secret configured, try non-verifying decode only in dev/test mode
+            dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
+            test_mode = os.getenv("ENV", "").strip().lower() == "test" or os.getenv("PYTEST_RUNNING")
+            if dev_mode or test_mode:
+                try:
+                    return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
+                except Exception:
+                    pass
     
     # 4) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
     # AND the token source is NOT __session (unless Clerk is enabled)
@@ -737,37 +741,39 @@ async def verify_token(request: Request) -> None:
         logger.warning("deny: missing_token")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # 3) Try traditional JWT first (same secret/issuer checks for both access_token and __session)
-    try:
-        # Enforce iss/aud in prod if configured
-        opts = {}
-        iss = os.getenv("JWT_ISSUER")
-        aud = os.getenv("JWT_AUDIENCE")
-        if iss:
-            opts["issuer"] = iss
-        if aud:
-            opts["audience"] = aud
-        if opts:
-            payload = jwt.decode(token, jwt_secret, algorithms=["HS256"], leeway=skew, **opts)
-        else:
-            payload = jwt.decode(token, jwt_secret, algorithms=["HS256"], leeway=skew)
-        request.state.jwt_payload = payload
-        return  # Success with traditional JWT
-    except jwt.ExpiredSignatureError:
-        # Allow caller to distinguish expiry for logging
+    # 3) Try traditional JWT first (only for non-session cookies)
+    # __session cookies contain opaque session IDs only, never JWTs
+    if token_source != "__session_cookie":
         try:
-            record_privileged_call_blocked(
-                endpoint=request.url.path,
-                reason="token_expired",
-                user_id="unknown"
-            )
-        except Exception:
+            # Enforce iss/aud in prod if configured
+            opts = {}
+            iss = os.getenv("JWT_ISSUER")
+            aud = os.getenv("JWT_AUDIENCE")
+            if iss:
+                opts["issuer"] = iss
+            if aud:
+                opts["audience"] = aud
+            if opts:
+                payload = jwt.decode(token, jwt_secret, algorithms=["HS256"], leeway=skew, **opts)
+            else:
+                payload = jwt.decode(token, jwt_secret, algorithms=["HS256"], leeway=skew)
+            request.state.jwt_payload = payload
+            return  # Success with traditional JWT
+        except jwt.ExpiredSignatureError:
+            # Allow caller to distinguish expiry for logging
+            try:
+                record_privileged_call_blocked(
+                    endpoint=request.url.path,
+                    reason="token_expired",
+                    user_id="unknown"
+                )
+            except Exception:
+                pass
+            logger.warning("deny: token_expired")
+            raise HTTPException(status_code=401, detail="token_expired")
+        except jwt.PyJWTError:
+            # Traditional JWT failed, try Clerk if enabled and appropriate
             pass
-        logger.warning("deny: token_expired")
-        raise HTTPException(status_code=401, detail="token_expired")
-    except jwt.PyJWTError:
-        # Traditional JWT failed, try Clerk if enabled and appropriate
-        pass
 
     # 4) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
     # AND the token source is NOT __session (unless Clerk is enabled)

@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 import app.security as security
 import app.deps.user as user_deps
+from app.tokens import create_access_token
 
 
 def _build_client(monkeypatch):
@@ -21,10 +22,7 @@ def _build_client(monkeypatch):
 
     @app.post("/login")
     def login():
-        exp = datetime.utcnow() + timedelta(minutes=5)
-        token = jwt.encode(
-            {"user_id": "alice", "exp": exp}, "secret", algorithm="HS256"
-        )
+        token = create_access_token({"user_id": "alice"})
         return {"access_token": token}
 
     @app.post("/capture/start")
@@ -53,7 +51,7 @@ def test_capture_start_sets_user_id_from_token(monkeypatch):
 
 def test_capture_start_invalid_token(monkeypatch):
     client, _ = _build_client(monkeypatch)
-    exp = datetime.utcnow() - timedelta(minutes=5)
-    token = jwt.encode({"user_id": "alice", "exp": exp}, "secret", algorithm="HS256")
+    # Create an expired token by using a very short TTL
+    token = create_access_token({"user_id": "alice"}, expires_delta=timedelta(seconds=-10))
     resp = client.post("/capture/start", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 401

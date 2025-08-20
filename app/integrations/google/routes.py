@@ -39,18 +39,14 @@ def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "
         "jti": jti,
         "type": "access",
     }
-    access_token = jose_jwt.encode(access_payload, APP_JWT_SECRET, algorithm=APP_JWT_ALG)
+    # Use tokens.py facade instead of direct JWT encoding
+    from app.tokens import make_access, make_refresh
+    
+    # Use default TTLs from tokens.py (override with environment if needed)
+    access_token = make_access({"user_id": user_id, "jti": jti})
 
-    refresh_exp = datetime.utcnow() + timedelta(minutes=APP_REFRESH_EXPIRE_MINUTES)
     rjti = uuid4().hex
-    refresh_payload = {
-        "sub": user_id,
-        "user_id": user_id,
-        "exp": refresh_exp,
-        "jti": rjti,
-        "type": "refresh",
-    }
-    refresh_token = jose_jwt.encode(refresh_payload, APP_JWT_SECRET, algorithm=APP_JWT_ALG)
+    refresh_token = make_refresh({"user_id": user_id, "jti": rjti})
 
     # Use centralized cookie configuration
     from app.cookie_config import get_cookie_config, get_token_ttls
@@ -59,29 +55,26 @@ def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "
     access_ttl, refresh_ttl = get_token_ttls()
     
     resp = RedirectResponse(url=target_url, status_code=302)
+    
+    # Create session ID for the access token
     try:
-        from app.api.auth import _append_cookie_with_priority as _append
-        _append(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-        _append(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-    except Exception:
-        resp.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            max_age=access_ttl,
-            path="/",
-        )
-        resp.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            max_age=refresh_ttl,
-            path="/",
-        )
+        from app.auth import _create_session_id
+        import jwt
+        payload = jwt.decode(access_token, os.getenv("JWT_SECRET"), algorithms=["HS256"])
+        jti = payload.get("jti")
+        expires_at = payload.get("exp", time.time() + access_ttl)
+        if jti:
+            session_id = _create_session_id(jti, expires_at)
+        else:
+            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to create session ID: {e}")
+        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+    
+    # Use centralized cookie functions
+    from app.cookies import set_auth_cookies
+    set_auth_cookies(resp, access=access_token, refresh=refresh_token, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
     return resp
 
 def _build_origin_aware_url(request: Request, path: str) -> str:

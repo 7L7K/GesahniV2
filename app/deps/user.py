@@ -29,7 +29,7 @@ def get_current_user_id(
 
     Token reading order:
     1. access_token (Authorization header, query param, or cookie)
-    2. __session cookie (fallback)
+    2. __session cookie (fallback) - contains opaque session ID only
     3. Never try to validate __session as a Clerk token unless Clerk is enabled
     4. Use the same JWT secret/issuer checks for both
     5. Log which cookie authenticated the request
@@ -89,7 +89,7 @@ def get_current_user_id(
         except Exception:
             token = None
 
-    # 3) Try __session cookie if access_token failed
+    # 3) Try __session cookie if access_token failed (contains opaque session ID only)
     if not token and request is not None:
         session_token = request.cookies.get("__session") or request.cookies.get("session")
         if session_token:
@@ -141,52 +141,70 @@ def get_current_user_id(
         secret = None
         require_jwt = False
     
-    # Handle session fingerprint verification for __session cookies
+    # Handle opaque session ID resolution for __session cookies
     if token and token_source in ["__session_cookie", "websocket_session_cookie"]:
-        # For session cookies, we need to verify the fingerprint against the access token
-        # First, try to get the access token from the same request
-        access_token = None
-        if request is not None:
-            access_token = request.cookies.get("access_token")
-        elif websocket is not None:
-            try:
-                raw_cookie = websocket.headers.get("Cookie") or ""
-                parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
-                for p in parts:
-                    if p.startswith("access_token="):
-                        access_token = p.split("=", 1)[1]
-                        break
-            except Exception:
-                pass
+        # For __session cookies, we expect an opaque session ID (never a JWT)
+        # Use the canonical session resolver to get the JTI
+        from ..session_store import get_session_store
+        store = get_session_store()
+        jti = store.get_session(token)
         
-        if access_token and secret:
-            try:
-                # Decode the access token to get user_id and timestamp
-                payload = jwt.decode(access_token, secret, algorithms=["HS256"])
-                user_id_from_token = payload.get("user_id") or payload.get("sub")
-                iat = payload.get("iat", 0)  # Issued at timestamp
-                
-                if user_id_from_token:
-                    # Import session ID verification
-                    from ..auth import _verify_session_id
-                    jti = payload.get("jti")
-                    if jti and _verify_session_id(token, jti):
+        if jti:
+            # Found valid session, now get the access token to extract user_id
+            access_token = None
+            if request is not None:
+                access_token = request.cookies.get("access_token")
+            elif websocket is not None:
+                try:
+                    raw_cookie = websocket.headers.get("Cookie") or ""
+                    parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
+                    for p in parts:
+                        if p.startswith("access_token="):
+                            access_token = p.split("=", 1)[1]
+                            break
+                except Exception:
+                    pass
+            
+            if access_token and secret:
+                try:
+                    # Decode the access token to get user_id
+                    payload = jwt.decode(access_token, secret, algorithms=["HS256"])
+                    user_id_from_token = payload.get("user_id") or payload.get("sub")
+                    
+                    if user_id_from_token:
                         user_id = user_id_from_token
                         # Store JWT payload in request state for scope enforcement
                         if target and isinstance(payload, dict):
                             target.state.jwt_payload = payload
-                        logger.info("auth.session_id_verified", extra={
+                        logger.info("auth.opaque_session_resolved", extra={
                             "user_id": user_id,
+                            "session_id": token,
+                            "jti": jti,
                             "token_source": token_source,
                         })
                     else:
-                        logger.warning("auth.session_id_invalid", extra={
+                        logger.warning("auth.opaque_session_no_user_id", extra={
+                            "session_id": token,
+                            "jti": jti,
                             "token_source": token_source,
                         })
-            except jwt.PyJWTError:
-                logger.warning("auth.session_fingerprint_decode_failed", extra={
+                except jwt.PyJWTError:
+                    logger.warning("auth.opaque_session_token_decode_failed", extra={
+                        "session_id": token,
+                        "jti": jti,
+                        "token_source": token_source,
+                    })
+            else:
+                logger.warning("auth.opaque_session_no_access_token", extra={
+                    "session_id": token,
+                    "jti": jti,
                     "token_source": token_source,
                 })
+        else:
+            logger.warning("auth.opaque_session_invalid", extra={
+                "session_id": token,
+                "token_source": token_source,
+            })
     
     # Try traditional JWT first (same secret/issuer checks for both access_token and __session)
     if not user_id and token and secret and token_source not in ["__session_cookie", "websocket_session_cookie"]:
@@ -280,21 +298,59 @@ def get_current_session_device(request: Request | None = None, websocket: WebSoc
 
 def resolve_session_id(request: Request | None = None, websocket: WebSocket | None = None, user_id: str | None = None) -> str:
     """
-    Centralized function to resolve session ID consistently across the codebase.
+    Canonical function to resolve session ID consistently across the codebase.
+    
+    This function expects opaque session IDs from the __session cookie and provides
+    a single representation and resolver for session management.
     
     Priority order:
-    1. X-Session-ID header (primary source)
-    2. sid cookie (fallback)
-    3. user_id from Authorization header (if available)
-    4. user_id parameter (if provided and not None)
-    5. "anon" (ultimate fallback)
+    1. __session cookie (contains opaque session ID only, never JWT)
+    2. X-Session-ID header (primary source for non-cookie scenarios)
+    3. sid cookie (fallback)
+    4. user_id from Authorization header (if available)
+    5. user_id parameter (if provided and not None)
+    6. "anon" (ultimate fallback)
     
-    This ensures refresh token families are properly aligned regardless of which code path
-    is taken to resolve the session ID.
+    The __session cookie always contains an opaque session ID that maps to a JWT ID (JTI)
+    in the session store. This ensures consistent session lifecycle management.
     """
     target = request or websocket
     
-    # Try X-Session-ID header first (primary source)
+    # 1. Try __session cookie first (contains opaque session ID only)
+    try:
+        if isinstance(request, Request):
+            session_id = request.cookies.get("__session") or request.cookies.get("session")
+            if session_id:
+                # Validate that this is an opaque session ID (not a JWT)
+                if not session_id.count(".") == 2:  # JWT has 3 parts separated by dots
+                    return session_id
+                else:
+                    logger.warning("auth.session_cookie_contains_jwt", extra={
+                        "session_id": session_id,
+                    })
+    except Exception:
+        pass
+    
+    # 2. Try __session cookie for WebSocket handshakes
+    try:
+        if websocket is not None:
+            raw_cookie = websocket.headers.get("Cookie") or ""
+            parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
+            for p in parts:
+                if p.startswith("__session="):
+                    session_id = p.split("=", 1)[1]
+                    # Validate that this is an opaque session ID (not a JWT)
+                    if not session_id.count(".") == 2:  # JWT has 3 parts separated by dots
+                        return session_id
+                    else:
+                        logger.warning("auth.websocket_session_cookie_contains_jwt", extra={
+                            "session_id": session_id,
+                        })
+                    break
+    except Exception:
+        pass
+    
+    # 3. Try X-Session-ID header (primary source for non-cookie scenarios)
     try:
         if target is not None:
             sid = target.headers.get("X-Session-ID")
@@ -303,7 +359,7 @@ def resolve_session_id(request: Request | None = None, websocket: WebSocket | No
     except Exception:
         pass
     
-    # Try sid cookie (fallback)
+    # 4. Try sid cookie (fallback)
     try:
         if isinstance(request, Request):
             sid = request.cookies.get("sid")
@@ -312,7 +368,7 @@ def resolve_session_id(request: Request | None = None, websocket: WebSocket | No
     except Exception:
         pass
     
-    # Try websocket query param
+    # 5. Try websocket query param
     try:
         if websocket is not None:
             sid = websocket.query_params.get("sid")
@@ -321,7 +377,7 @@ def resolve_session_id(request: Request | None = None, websocket: WebSocket | No
     except Exception:
         pass
     
-    # Try to extract user_id from Authorization header
+    # 6. Try to extract user_id from Authorization header
     try:
         if isinstance(request, Request):
             auth_header = request.headers.get("Authorization", "")
@@ -336,11 +392,11 @@ def resolve_session_id(request: Request | None = None, websocket: WebSocket | No
     except Exception:
         pass
     
-    # Use provided user_id if available and not None
+    # 7. Use provided user_id if available and not None
     if user_id is not None and user_id != "anon":
         return user_id
     
-    # Ultimate fallback
+    # 8. Ultimate fallback
     return "anon"
 
 

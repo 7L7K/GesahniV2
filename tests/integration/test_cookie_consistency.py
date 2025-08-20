@@ -13,6 +13,7 @@ from unittest.mock import patch
 import re
 
 from app.main import app
+from tests.test_helpers import assert_cookies_present, assert_cookies_cleared, assert_session_opaque
 
 
 class TestCookieConsistency:
@@ -35,8 +36,11 @@ class TestCookieConsistency:
         if isinstance(set_cookie_headers, str):
             set_cookie_headers = [set_cookie_headers]
         
-        # Should have at least access_token cookie
-        assert any("access_token=" in header for header in set_cookie_headers)
+        # Should have all three auth cookies
+        assert_cookies_present(response)
+        
+        # Check that __session is opaque
+        assert_session_opaque(response)
         
         # Parse and verify cookie attributes
         access_cookie = None
@@ -126,7 +130,7 @@ class TestCookieConsistency:
             set_cookie_headers = [set_cookie_headers]
         
         # Should have cookies being cleared
-        assert len(set_cookie_headers) >= 1
+        assert_cookies_cleared(response)
         
         # Verify consistent attributes for cleared cookies
         for cookie_header in set_cookie_headers:

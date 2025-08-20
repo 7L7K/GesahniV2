@@ -44,7 +44,8 @@ class TestWhoamiLockedContract:
                 "iat": int(time.time()),
                 "exp": int(time.time()) + 3600
             }
-            token = jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
+            from app.tokens import create_access_token
+            token = create_access_token(payload)
             
             response = client.get("/v1/whoami", headers={"Authorization": f"Bearer {token}"})
             assert response.status_code == 200
@@ -149,7 +150,8 @@ class TestAuthFinishLockedContract:
                 "iat": int(time.time()),
                 "exp": int(time.time()) + 3600
             }
-            token = jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
+            from app.tokens import create_access_token
+            token = create_access_token(payload)
             
             # Call with cookies for different user
             response = client.post("/v1/auth/finish", cookies={"access_token": token})

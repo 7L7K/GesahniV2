@@ -36,7 +36,8 @@ def _app_with_security(monkeypatch, extra_env: dict | None = None):
 
 
 def _auth_header(uid: str = "u") -> dict:
-    token = jwt.encode({"user_id": uid}, "secret", algorithm="HS256")
+    from app.tokens import create_access_token
+    token = create_access_token({"user_id": uid})
     return {"Authorization": f"Bearer {token}"}
 
 

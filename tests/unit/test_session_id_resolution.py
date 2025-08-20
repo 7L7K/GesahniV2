@@ -13,8 +13,39 @@ from app.deps.user import resolve_session_id, get_current_session_device
 class TestResolveSessionId:
     """Test the centralized session ID resolution function."""
 
-    def test_x_session_id_header_priority(self):
-        """Test that X-Session-ID header takes highest priority."""
+    def test_session_cookie_priority(self):
+        """Test that __session cookie takes highest priority."""
+        request = Mock(spec=Request)
+        request.headers = {"X-Session-ID": "header_session_123"}
+        request.cookies = {"__session": "sess_1234567890_abcdef12", "sid": "cookie_session_456"}
+        
+        result = resolve_session_id(request=request, user_id="user_789")
+        
+        assert result == "sess_1234567890_abcdef12"
+
+    def test_session_cookie_opaque_validation(self):
+        """Test that __session cookie must contain opaque session ID (not JWT)."""
+        request = Mock(spec=Request)
+        request.headers = {"X-Session-ID": "header_session_123"}
+        request.cookies = {"__session": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"}
+        
+        result = resolve_session_id(request=request, user_id="user_789")
+        
+        # Should fall back to header since __session contains JWT
+        assert result == "header_session_123"
+
+    def test_session_cookie_legacy_name(self):
+        """Test that legacy 'session' cookie name is supported."""
+        request = Mock(spec=Request)
+        request.headers = {"X-Session-ID": "header_session_123"}
+        request.cookies = {"session": "sess_1234567890_abcdef12"}
+        
+        result = resolve_session_id(request=request, user_id="user_789")
+        
+        assert result == "sess_1234567890_abcdef12"
+
+    def test_x_session_id_header_secondary_priority(self):
+        """Test that X-Session-ID header takes secondary priority after __session cookie."""
         request = Mock(spec=Request)
         request.headers = {"X-Session-ID": "header_session_123"}
         request.cookies = {"sid": "cookie_session_456"}
@@ -24,7 +55,7 @@ class TestResolveSessionId:
         assert result == "header_session_123"
 
     def test_sid_cookie_fallback(self):
-        """Test that sid cookie is used when X-Session-ID header is not present."""
+        """Test that sid cookie is used when higher priority sources are not present."""
         request = Mock(spec=Request)
         request.headers = {}
         request.cookies = {"sid": "cookie_session_456"}
@@ -34,7 +65,7 @@ class TestResolveSessionId:
         assert result == "cookie_session_456"
 
     def test_user_id_fallback(self):
-        """Test that user_id is used when neither header nor cookie is present."""
+        """Test that user_id is used when no session sources are present."""
         request = Mock(spec=Request)
         request.headers = {}
         request.cookies = {}
@@ -63,8 +94,29 @@ class TestResolveSessionId:
         
         assert result == "anon"
 
-    def test_websocket_query_param(self):
-        """Test that websocket query parameter is used when available."""
+    def test_websocket_session_cookie_priority(self):
+        """Test that websocket __session cookie takes priority."""
+        websocket = Mock()
+        websocket.query_params = {"sid": "websocket_session_123"}
+        websocket.headers = {"Cookie": "__session=sess_1234567890_abcdef12; sid=cookie_session_456"}
+        
+        result = resolve_session_id(websocket=websocket)
+        
+        assert result == "sess_1234567890_abcdef12"
+
+    def test_websocket_session_cookie_opaque_validation(self):
+        """Test that websocket __session cookie must contain opaque session ID (not JWT)."""
+        websocket = Mock()
+        websocket.query_params = {"sid": "websocket_session_123"}
+        websocket.headers = {"Cookie": "__session=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"}
+        
+        result = resolve_session_id(websocket=websocket)
+        
+        # Should fall back to query param since __session contains JWT
+        assert result == "websocket_session_123"
+
+    def test_websocket_query_param_fallback(self):
+        """Test that websocket query parameter is used when __session cookie is not present."""
         websocket = Mock()
         websocket.query_params = {"sid": "websocket_session_123"}
         websocket.headers = {}
@@ -74,7 +126,7 @@ class TestResolveSessionId:
         assert result == "websocket_session_123"
 
     def test_websocket_priority_over_user_id(self):
-        """Test that websocket query parameter takes priority over user_id."""
+        """Test that websocket sources take priority over user_id."""
         websocket = Mock()
         websocket.query_params = {"sid": "websocket_session_123"}
         websocket.headers = {}
@@ -84,7 +136,7 @@ class TestResolveSessionId:
         assert result == "websocket_session_123"
 
     def test_request_priority_over_websocket(self):
-        """Test that request headers take priority over websocket query params."""
+        """Test that request sources take priority over websocket sources."""
         request = Mock(spec=Request)
         request.headers = {"X-Session-ID": "header_session_123"}
         request.cookies = {}
@@ -93,6 +145,16 @@ class TestResolveSessionId:
         websocket.query_params = {"sid": "websocket_session_456"}
         
         result = resolve_session_id(request=request, websocket=websocket)
+        
+        assert result == "header_session_123"
+
+    def test_exception_handling_session_cookie(self):
+        """Test that exceptions in __session cookie access are handled gracefully."""
+        request = Mock(spec=Request)
+        request.cookies.get.side_effect = Exception("Cookie access error")
+        request.headers = {"X-Session-ID": "header_session_123"}
+        
+        result = resolve_session_id(request=request)
         
         assert result == "header_session_123"
 
@@ -136,7 +198,7 @@ class TestResolveSessionId:
         """Test that empty string values are treated as missing."""
         request = Mock(spec=Request)
         request.headers = {"X-Session-ID": ""}
-        request.cookies = {"sid": ""}
+        request.cookies = {"__session": "", "sid": ""}
         
         result = resolve_session_id(request=request, user_id="user_789")
         
@@ -150,12 +212,12 @@ class TestGetCurrentSessionDevice:
         """Test that session_id uses the centralized resolution function."""
         request = Mock(spec=Request)
         request.headers = {"X-Session-ID": "header_session_123", "X-Device-ID": "device_456"}
-        request.cookies = {"sid": "cookie_session_789", "did": "device_999"}
+        request.cookies = {"__session": "sess_1234567890_abcdef12", "sid": "cookie_session_789", "did": "device_999"}
         
         result = get_current_session_device(request=request)
         
-        # Should use header session ID (highest priority)
-        assert result["session_id"] == "header_session_123"
+        # Should use __session cookie session ID (highest priority)
+        assert result["session_id"] == "sess_1234567890_abcdef12"
         # Should use header device ID (highest priority)
         assert result["device_id"] == "device_456"
 
@@ -210,10 +272,10 @@ class TestIntegrationWithAuthEndpoints:
 
     def test_logout_endpoint_uses_centralized_resolution(self, client):
         """Test that the logout endpoint uses centralized session ID resolution."""
-        cookies = {"sid": "cookie_session_123"}
+        cookies = {"__session": "sess_1234567890_abcdef12", "sid": "cookie_session_123"}
         headers = {"X-Session-ID": "header_session_456"}
         
-        # The logout endpoint should use header session ID (highest priority)
+        # The logout endpoint should use __session cookie session ID (highest priority)
         # This test verifies the endpoint doesn't crash with the new centralized resolution
         response = client.post("/v1/auth/logout", cookies=cookies, headers=headers)
         

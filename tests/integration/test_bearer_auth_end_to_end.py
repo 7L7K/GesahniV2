@@ -8,13 +8,12 @@ from app.main import app
 
 def create_test_token(user_id: str = "test_user", secret: str = "test_secret", **kwargs):
     """Create a test JWT token."""
+    from app.tokens import create_access_token
     payload = {
         "user_id": user_id,
-        "exp": datetime.utcnow() + timedelta(hours=1),
-        "iat": datetime.utcnow(),
         **kwargs
     }
-    return jwt.encode(payload, secret, algorithm="HS256")
+    return create_access_token(payload)
 
 
 class TestBearerAuthEndToEnd:

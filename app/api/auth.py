@@ -11,7 +11,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Response, Request
+from fastapi import APIRouter, Depends, HTTPException, Response, Request, Query
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 
@@ -75,28 +75,15 @@ def _met_inc(key: str) -> None:
 
 
 def _append_cookie_with_priority(response: Response, *, key: str, value: str, max_age: int, secure: bool, samesite: str, path: str = "/", domain: str = None) -> None:
-    try:
-        from ..cookie_config import format_cookie_header
-        
-        print(f"DEBUG: _append_cookie_with_priority called with key={key}, max_age={max_age}")
-        
-        header = format_cookie_header(
-            key=key,
-            value=value,
-            max_age=max_age,
-            secure=secure,
-            samesite=samesite,
-            path=path,
-            httponly=True,
-            domain=domain,
-        )
-        print(f"DEBUG: Generated header: {header}")
-        response.headers.append("Set-Cookie", header)
-        print(f"DEBUG: Header appended successfully")
-    except Exception as e:
-        print(f"DEBUG: Exception in _append_cookie_with_priority: {e}")
-        # Fallback to regular set_cookie if building header fails
-        response.set_cookie(key, value, httponly=True, secure=secure, samesite=samesite, max_age=max_age, path=path)
+    """Append a cookie header with priority using the centralized cookie configuration.
+    
+    This function should be replaced with calls to the centralized cookie facade
+    in app/cookies.py. This is a legacy function that will be removed.
+    """
+    # This function is deprecated and should not be used.
+    # Use the centralized cookie functions from app/cookies.py instead.
+    # For example: set_named_cookie(), set_auth_cookies(), etc.
+    raise DeprecationWarning("_append_cookie_with_priority is deprecated. Use centralized cookie functions from app/cookies.py")
 @router.get("/auth/clerk/protected")
 async def clerk_protected(user_id: str = Depends(require_user)) -> Dict[str, Any]:
     return {"ok": True, "user_id": user_id}
@@ -690,19 +677,6 @@ def _get_refresh_ttl_seconds() -> int:
     return 7 * 24 * 60 * 60
 
 
-def _make_jwt(user_id: str, *, exp_seconds: int) -> str:
-    now = int(time.time())
-    payload = {"user_id": user_id, "sub": user_id, "iat": now, "exp": now + exp_seconds, "scopes": ["care:resident", "music:control"]}
-    iss = os.getenv("JWT_ISSUER")
-    aud = os.getenv("JWT_AUDIENCE")
-    if iss:
-        payload["iss"] = iss
-    if aud:
-        payload["aud"] = aud
-    kid, sec = _primary_kid_secret()
-    return jwt.encode(payload, sec, algorithm="HS256", headers={"kid": kid})
-
-
 def _cookie_flags_for(request: Request) -> tuple[bool, str]:
     """Return (secure, samesite) flags considering dev HTTP.
 
@@ -736,10 +710,9 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
     - Idempotent: safe to call multiple times
     """
     # TTLs: defaults suitable for dev (access: 30 min; refresh: 7 days)
-    try:
-        token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", str(int(os.getenv("JWT_EXPIRE_MINUTES", "30")) * 60)))
-    except Exception:
-        token_lifetime = int(os.getenv("JWT_EXPIRE_MINUTES", "30")) * 60
+    # Use centralized TTL from tokens.py
+    from ..tokens import get_default_access_ttl
+    token_lifetime = get_default_access_ttl()
     refresh_life = _get_refresh_ttl_seconds()
 
     now = int(time.time())
@@ -750,7 +723,9 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         access_payload["iss"] = iss
     if aud:
         access_payload["aud"] = aud
-    access_token = _make_jwt(user_id, exp_seconds=token_lifetime)
+    # Use tokens.py facade instead of direct JWT encoding
+    from ..tokens import make_access
+    access_token = make_access({"user_id": user_id}, ttl_s=token_lifetime)
 
     # Issue refresh token scoped to session family
     import os as _os
@@ -768,8 +743,9 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         refresh_payload["iss"] = iss
     if aud:
         refresh_payload["aud"] = aud
-    kid, sec = _primary_kid_secret()
-    refresh_token = jwt.encode(refresh_payload, sec, algorithm="HS256", headers={"kid": kid})
+    # Use tokens.py facade instead of direct JWT encoding
+    from ..tokens import make_refresh
+    refresh_token = make_refresh({"user_id": user_id, "jti": jti}, ttl_s=refresh_life)
 
     # Use centralized cookie configuration for sharp and consistent cookies
     from ..cookie_config import get_cookie_config, get_token_ttls
@@ -855,43 +831,25 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         
         from fastapi import Response as _Resp  # type: ignore
         resp = _Resp(status_code=204)
-        # High-priority cookies to avoid eviction under pressure
+        
+        # Create opaque session ID instead of using JWT
         try:
-            _append_cookie_with_priority(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-            _append_cookie_with_priority(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-            # Create opaque session ID instead of using JWT
-            try:
-                from ..auth import _create_session_id
-                import jwt
-                payload = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
-                jti = payload.get("jti")
-                expires_at = payload.get("exp", time.time() + access_ttl)
-                if jti:
-                    session_id = _create_session_id(jti, expires_at)
-                else:
-                    session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-            except Exception as e:
-                logger.warning(f"Failed to create session ID: {e}")
+            from ..auth import _create_session_id
+            import jwt
+            payload = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
+            jti = payload.get("jti")
+            expires_at = payload.get("exp", time.time() + access_ttl)
+            if jti:
+                session_id = _create_session_id(jti, expires_at)
+            else:
                 session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-            _append_cookie_with_priority(resp, key="__session", value=session_id, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-        except Exception:
-            resp.set_cookie("access_token", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
-            resp.set_cookie("refresh_token", refresh_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
-            # Create opaque session ID instead of using JWT
-            try:
-                from ..auth import _create_session_id
-                import jwt
-                payload = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
-                jti = payload.get("jti")
-                expires_at = payload.get("exp", time.time() + access_ttl)
-                if jti:
-                    session_id = _create_session_id(jti, expires_at)
-                else:
-                    session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-            except Exception as e:
-                logger.warning(f"Failed to create session ID: {e}")
-                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-            resp.set_cookie("__session", session_id, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+        except Exception as e:
+            logger.warning(f"Failed to create session ID: {e}")
+            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        
+        # Use centralized cookie functions
+        from ..cookies import set_auth_cookies
+        set_auth_cookies(resp, access=access_token, refresh=refresh_token, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
         # One-liner timing log for finisher
         try:
             dt = int((time.time() - t0) * 1000)
@@ -915,42 +873,25 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
     # Legacy GET: redirect to next with cookies attached (fallback for direct browser navigation)
     # Note: SPA should use POST /v1/auth/finish for consistent behavior
     resp = RedirectResponse(url=next_path, status_code=302)
+    
+    # Create opaque session ID instead of using JWT
     try:
-        _append_cookie_with_priority(resp, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-        _append_cookie_with_priority(resp, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-        # Create opaque session ID instead of using JWT
-        try:
-            from ..auth import _create_session_id
-            import jwt
-            payload = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
-            jti = payload.get("jti")
-            expires_at = payload.get("exp", time.time() + access_ttl)
-            if jti:
-                session_id = _create_session_id(jti, expires_at)
-            else:
-                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        except Exception as e:
-            logger.warning(f"Failed to create session ID: {e}")
+        from ..auth import _create_session_id
+        import jwt
+        payload = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
+        jti = payload.get("jti")
+        expires_at = payload.get("exp", time.time() + access_ttl)
+        if jti:
+            session_id = _create_session_id(jti, expires_at)
+        else:
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        _append_cookie_with_priority(resp, key="__session", value=session_id, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-    except Exception:
-        resp.set_cookie("access_token", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
-        resp.set_cookie("refresh_token", refresh_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
-        # Create opaque session ID instead of using JWT
-        try:
-            from ..auth import _create_session_id
-            import jwt
-            payload = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
-            jti = payload.get("jti")
-            expires_at = payload.get("exp", time.time() + access_ttl)
-            if jti:
-                session_id = _create_session_id(jti, expires_at)
-            else:
-                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        except Exception as e:
-            logger.warning(f"Failed to create session ID: {e}")
-            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        resp.set_cookie("__session", session_id, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+    except Exception as e:
+        logger.warning(f"Failed to create session ID: {e}")
+        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+    
+    # Use centralized cookie functions
+    from ..cookies import set_auth_cookies
+    set_auth_cookies(resp, access=access_token, refresh=refresh_token, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
     try:
         dt = int((time.time() - t0) * 1000)
         print(f"auth.finish t_total={dt}ms set_cookie=true reason={reason} cookies=3")
@@ -1036,10 +977,9 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
             sid = resolve_session_id(request=request, user_id=user_id)
             # Strict checks
             if await is_refresh_family_revoked(sid):
-                # Clear cookies and deny
-                response.delete_cookie("access_token", path="/")
-                response.delete_cookie("refresh_token", path="/")
-                response.delete_cookie("__session", path="/")
+                # Clear cookies and deny using centralized function
+                from ..cookies import clear_auth_cookies
+                clear_auth_cookies(response, request)
                 raise HTTPException(status_code=401, detail="refresh_family_revoked")
             
             # Single-use guard for this refresh token (replay protection). Claim FIRST, before any rotation.
@@ -1052,15 +992,13 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
                         continue
                     else:
                         # Last attempt failed due to lock timeout
-                        response.delete_cookie("access_token", path="/")
-                        response.delete_cookie("refresh_token", path="/")
-                        response.delete_cookie("__session", path="/")
+                        from ..cookies import clear_auth_cookies
+                        clear_auth_cookies(response, request)
                         raise HTTPException(status_code=503, detail="service_unavailable")
                 
                 # JTI was already used (legitimate replay or race condition)
-                response.delete_cookie("access_token", path="/")
-                response.delete_cookie("refresh_token", path="/")
-                response.delete_cookie("__session", path="/")
+                from ..cookies import clear_auth_cookies
+                clear_auth_cookies(response, request)
                 try:
                     last = await get_last_used_jti(sid)
                     print(f"auth.refresh t=0ms result=replay sid={sid} replay_of={last or '-'} reason={error_reason}")
@@ -1073,64 +1011,44 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
             from ..cookie_config import get_cookie_config, get_token_ttls
             
             access_ttl, refresh_ttl = get_token_ttls()
-            access_payload = {"user_id": user_id, "iat": now, "exp": now + access_ttl, "scopes": ["care:resident", "music:control"]}
-            access_token = jwt.encode(access_payload, secret, algorithm="HS256")
+            # Use tokens.py facade instead of direct JWT encoding
+            from ..tokens import make_access, make_refresh
+            import os
             
-            new_refresh_payload = {"user_id": user_id, "iat": now, "exp": now + refresh_ttl, "jti": jwt.api_jws.base64url_encode(os.urandom(16)).decode(), "type": "refresh", "scopes": ["care:resident", "music:control"]}
-            new_refresh = jwt.encode(new_refresh_payload, secret, algorithm="HS256")
+            access_token = make_access({"user_id": user_id}, ttl_s=access_ttl)
+            
+            new_jti = jwt.api_jws.base64url_encode(os.urandom(16)).decode()
+            new_refresh = make_refresh({"user_id": user_id, "jti": new_jti}, ttl_s=refresh_ttl)
             
             cookie_config = get_cookie_config(request)
             
+            # Create a session ID mapped to the access token JTI
+            from ..auth import _create_session_id
+            session_id = None  # Initialize session_id before try block
             try:
-                _append_cookie_with_priority(response, key="access_token", value=access_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-                _append_cookie_with_priority(response, key="refresh_token", value=new_refresh, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-                # Create a session ID mapped to the access token JTI
-                from ..auth import _create_session_id
-                try:
-                    # Decode the access token to get the JTI
-                    import jwt
-                    from ..auth import SECRET_KEY, ALGORITHM
-                    payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
-                    jti = payload.get("jti")
-                    expires_at = payload.get("exp", time.time() + access_ttl)
-                    
-                    if jti:
-                        session_id = _create_session_id(jti, expires_at)
-                    else:
-                        # Fallback if no JTI found
-                        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-                except Exception as e:
-                    logger.warning(f"Failed to decode access token for session creation: {e}")
-                    # Fallback session ID
-                    session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+                # Decode the access token to get the JTI
+                import jwt
+                # Use dynamic JWT secret function to handle test environment changes
+                secret = _jwt_secret()
+                payload = jwt.decode(access_token, secret, algorithms=["HS256"])
+                jti = payload.get("jti")
+                expires_at = payload.get("exp", time.time() + access_ttl)
                 
-                _append_cookie_with_priority(response, key="__session", value=session_id, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-            except Exception:
-                response.set_cookie("access_token", access_token, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
-                response.set_cookie("refresh_token", new_refresh, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=refresh_ttl, path="/")
-                # Create a session ID mapped to the access token JTI
-                from ..auth import _create_session_id
-                try:
-                    # Decode the access token to get the JTI
-                    import jwt
-                    from ..auth import SECRET_KEY, ALGORITHM
-                    payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
-                    jti = payload.get("jti")
-                    expires_at = payload.get("exp", time.time() + access_ttl)
-                    
-                    if jti:
-                        session_id = _create_session_id(jti, expires_at)
-                    else:
-                        # Fallback if no JTI found
-                        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-                except Exception as e:
-                    logger.warning(f"Failed to decode access token for session creation (fallback): {e}")
-                    # Fallback session ID
+                if jti:
+                    session_id = _create_session_id(jti, expires_at)
+                else:
+                    # Fallback if no JTI found
                     session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-                
-                response.set_cookie("__session", session_id, httponly=True, secure=cookie_config["secure"], samesite=cookie_config["samesite"], max_age=access_ttl, path="/")
+            except Exception as e:
+                logger.warning(f"Failed to decode access token for session creation: {e}")
+                # Fallback session ID
+                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+            
+            # Use centralized cookie functions
+            from ..cookies import set_auth_cookies
+            set_auth_cookies(response, access=access_token, refresh=new_refresh, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
             # Mark new token allowed
-            await allow_refresh(sid, str(new_refresh_payload.get("jti")), ttl_seconds=refresh_ttl)
+            await allow_refresh(sid, str(new_jti), ttl_seconds=refresh_ttl)
             try:
                 await set_last_used_jti(sid, jti, ttl_seconds=ttl)
                 _met_inc("auth_refresh_ok")
@@ -1158,11 +1076,12 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
     "/auth/login",
     responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok", "user_id": "dev"}}}}}},
 )
-async def login(username: str, request: Request, response: Response):
+async def login(request: Request, response: Response, username: str = Query(..., description="Username for login")):
     """Dev login scaffold.
 
     CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
     """
+
     # Smart minimal login: accept any non-empty username for dev; in prod plug real check
     if not username:
         raise HTTPException(status_code=400, detail="missing_username")
@@ -1190,29 +1109,13 @@ async def login(username: str, request: Request, response: Response):
     access_ttl, refresh_ttl = get_token_ttls()
     
     # Use consistent TTL from cookie config
-    jwt_token = _make_jwt(username, exp_seconds=access_ttl)
-    
-    # Set access token cookie with consistent configuration
-    print(f"DEBUG: About to set access token cookie with access_ttl={access_ttl}")
-    try:
-        _append_cookie_with_priority(response, key="access_token", value=jwt_token, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-        print(f"DEBUG: _append_cookie_with_priority succeeded")
-    except Exception as e:
-        print(f"DEBUG: Exception in _append_cookie_with_priority: {e}")
-        print(f"DEBUG: Using fallback set_cookie with access_ttl={access_ttl}")
-        response.set_cookie(
-            key="access_token",
-            value=jwt_token,
-            httponly=True,
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            max_age=access_ttl,
-            path="/",
-        )
-        print(f"DEBUG: Fallback set_cookie completed")
+    # Use tokens.py facade instead of direct JWT encoding
+    from ..tokens import make_access
+    jwt_token = make_access({"user_id": username}, ttl_s=access_ttl)
     
     # Also issue a refresh token and mark it allowed for this session
     try:
+        import jwt
         now = int(time.time())
         # Longer refresh in prod: default 7 days (604800s), allow override via env
         refresh_life = _get_refresh_ttl_seconds()
@@ -1232,23 +1135,13 @@ async def login(username: str, request: Request, response: Response):
             refresh_payload["iss"] = iss
         if aud:
             refresh_payload["aud"] = aud
-        refresh_token = jwt.encode(refresh_payload, _jwt_secret(), algorithm="HS256")
-        try:
-            _append_cookie_with_priority(response, key="refresh_token", value=refresh_token, max_age=refresh_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-        except Exception:
-            response.set_cookie(
-                key="refresh_token",
-                value=refresh_token,
-                httponly=True,
-                secure=cookie_config["secure"],
-                samesite=cookie_config["samesite"],
-                max_age=refresh_ttl,
-                path="/",
-            )
+        # Use tokens.py facade instead of direct JWT encoding
+        from ..tokens import make_refresh
+        refresh_token = make_refresh({"user_id": username, "jti": jti}, ttl_s=refresh_life)
+        
         # Create opaque session ID instead of using JWT
         try:
             from ..auth import _create_session_id
-            import jwt
             payload = jwt.decode(jwt_token, _jwt_secret(), algorithms=["HS256"])
             jti = payload.get("jti")
             expires_at = payload.get("exp", time.time() + access_ttl)
@@ -1260,24 +1153,15 @@ async def login(username: str, request: Request, response: Response):
             logger.warning(f"Failed to create session ID: {e}")
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
         
-        try:
-            _append_cookie_with_priority(response, key="__session", value=session_id, max_age=access_ttl, secure=cookie_config["secure"], samesite=cookie_config["samesite"], domain=cookie_config["domain"])
-        except Exception:
-            response.set_cookie(
-                key="__session",
-                value=session_id,
-                httponly=True,
-                secure=cookie_config["secure"],
-                samesite=cookie_config["samesite"],
-                max_age=access_ttl,
-                path="/",
-            )
+        # Use centralized cookie functions
+        from ..cookies import set_auth_cookies
+        set_auth_cookies(response, access=jwt_token, refresh=refresh_token, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
         # Use centralized session ID resolution to ensure consistency
         sid = resolve_session_id(request=request, user_id=username)
         await allow_refresh(sid, jti, ttl_seconds=refresh_ttl)
-    except Exception:
+    except Exception as e:
         # Best-effort; login still succeeds with access token alone
-        pass
+        logger.error(f"Exception in login cookie setting: {e}")
     await user_store.ensure_user(username)
     await user_store.increment_login(username)
     return {"status": "ok", "user_id": username}
@@ -1322,38 +1206,17 @@ async def logout(request: Request, response: Response):
         logger.warning(f"Failed to delete session: {e}")
         # Continue with cookie clearing even if session deletion fails
     
-    # Clear cookies with consistent attributes matching their original configuration
+    # Clear cookies using centralized function
     try:
-        from ..cookie_config import get_cookie_config, format_cookie_header
-        
-        cookie_config = get_cookie_config(request)
-        
-        # Clear all three cookies with identical attributes + Max-Age=0
-        cookies_to_clear = ["access_token", "refresh_token", "__session"]
-        
-        for cookie_name in cookies_to_clear:
-            # Set cookie with Max-Age=0 to clear it immediately
-            header = format_cookie_header(
-                key=cookie_name,
-                value="",  # Empty value
-                max_age=0,  # Max-Age=0 for immediate expiration
-                secure=cookie_config["secure"],
-                samesite=cookie_config["samesite"],
-                path=cookie_config["path"],
-                httponly=cookie_config["httponly"],
-                domain=cookie_config["domain"]
-            )
-            response.headers.append("Set-Cookie", header)
-            
-        print(f"logout.clear_cookies secure={cookie_config['secure']} samesite={cookie_config['samesite']} cookies=3")
-            
+        from ..cookies import clear_auth_cookies
+        clear_auth_cookies(response, request)
+        print("logout.clear_cookies centralized cookies=3")
     except Exception:
-        # Ultimate fallback: clear cookies with minimal attributes
+        # Ultimate fallback: clear cookies using centralized cookie functions
         # This ensures cookies are cleared even if cookie_config fails
         try:
-            response.set_cookie("access_token", "", max_age=0, path="/", httponly=True, secure=False, samesite="Lax")
-            response.set_cookie("refresh_token", "", max_age=0, path="/", httponly=True, secure=False, samesite="Lax")
-            response.set_cookie("__session", "", max_age=0, path="/", httponly=True, secure=False, samesite="Lax")
+            from ..cookies import clear_auth_cookies
+            clear_auth_cookies(response, request)
             print("logout.clear_cookies fallback cookies=3")
         except Exception:
             # If even the fallback fails, we can't do much more
@@ -1522,7 +1385,9 @@ async def issue_token(request: Request):
         scopes = [s.strip() for s in str(raw_scope).split() if s.strip()]
     except Exception:
         pass
-    token_lifetime = int(os.getenv("JWT_ACCESS_TTL_SECONDS", str(int(os.getenv("JWT_EXPIRE_MINUTES", "30")) * 60)))
+    # Use centralized TTL from tokens.py
+    from ..tokens import get_default_access_ttl
+    token_lifetime = get_default_access_ttl()
     now = int(time.time())
     # scopes already set above
     payload = {
@@ -1533,7 +1398,12 @@ async def issue_token(request: Request):
     }
     if scopes:
         payload["scope"] = " ".join(sorted(set(scopes)))
-    token = jwt.encode(payload, _jwt_secret(), algorithm="HS256")
+    # Use tokens.py facade instead of direct JWT encoding
+    from ..tokens import make_access
+    claims = {"user_id": username}
+    if scopes:
+        claims["scopes"] = scopes
+    token = make_access(claims, ttl_s=token_lifetime)
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -1577,16 +1447,30 @@ async def mock_set_access_cookie(max_age: int = 1) -> Response:
     except Exception:
         max_age = 1
     # Mint a token with requested TTL
-    tok = _make_jwt(os.getenv("DEV_USER_ID", "dev"), exp_seconds=max_age)
+    # Use tokens.py facade instead of direct JWT encoding
+    from ..tokens import make_access
+    tok = make_access({"user_id": os.getenv("DEV_USER_ID", "dev")}, ttl_s=max_age)
     resp = Response(status_code=204)
-    # SameSite and Secure flags reuse cookie defaults
-    cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
-    cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-    resp.set_cookie("access_token", tok, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=max_age, path="/")
-    # Set refresh_token with same value for testing consistency
-    resp.set_cookie("refresh_token", tok, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=max_age, path="/")
-    # Session cookie for better session management
-    resp.set_cookie("__session", tok, httponly=True, secure=cookie_secure, samesite=cookie_samesite, max_age=max_age, path="/")
+    
+    # Create opaque session ID instead of using JWT
+    try:
+        from ..auth import _create_session_id
+        import jwt
+        payload = jwt.decode(tok, _jwt_secret(), algorithms=["HS256"])
+        jti = payload.get("jti")
+        expires_at = payload.get("exp", time.time() + max_age)
+        if jti:
+            session_id = _create_session_id(jti, expires_at)
+        else:
+            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+    except Exception as e:
+        logger.warning(f"Failed to create session ID: {e}")
+        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+    
+    # Use centralized cookie functions
+    from ..cookies import set_auth_cookies
+    # For testing, use the same token for both access and refresh
+    set_auth_cookies(resp, access=tok, refresh=tok, session_id=session_id, access_ttl=max_age, refresh_ttl=max_age, request=request)
     return resp
 
 __all__ = ["router", "verify_pat"]

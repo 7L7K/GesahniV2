@@ -29,7 +29,7 @@ from fastapi import HTTPException
 
 # Import app components
 from app.main import app
-from app.auth import create_access_token, create_refresh_token
+from app.tokens import create_access_token, create_refresh_token
 from app.logging_config import get_last_errors, req_id_var
 from app.memory.api import _get_store
 from app.llama_integration import LLAMA_HEALTHY, _check_and_set_flag

@@ -157,11 +157,9 @@ async def google_login_url(request: Request) -> Response:
     # legacy clients expect `auth_url` key; keep compatibility
     response_data = {"auth_url": oauth_url}
     
-    # Set CSRF state cookie
-    # Note: If SameSite=None, then Secure must be true in production
-    logger.info("🍪 Configuring cookie settings")
-    cookie_config = get_cookie_config(request)
-    logger.info(f"🍪 Cookie config - SameSite: {cookie_config['samesite']}, Secure: {cookie_config['secure']}")
+    # Set OAuth state cookie using centralized cookie surface
+    logger.info("🍪 Setting OAuth state cookie with 5-minute TTL")
+    from ..cookies import set_oauth_state_cookies
     
     # Create a Response object to set the cookie
     import json
@@ -170,16 +168,14 @@ async def google_login_url(request: Request) -> Response:
         media_type="application/json"
     )
     
-    logger.info("🍪 Setting g_state cookie with 5-minute TTL")
-    http_response.set_cookie(
-        "g_state",
-        state,
-        max_age=300,  # 5 minutes
-        httponly=True,
-        path="/",
-        samesite=cookie_config["samesite"],
-        secure=cookie_config["secure"],
-        domain=cookie_config["domain"]
+    # Use centralized cookie surface for OAuth state cookies
+    set_oauth_state_cookies(
+        resp=http_response,
+        state=state,
+        next_url=next_url or "/",
+        request=request,
+        ttl=300,  # 5 minutes
+        provider="g"  # Google-specific cookie prefix
     )
     
     logger.info("🎉 OAuth login URL endpoint completed successfully")
@@ -240,17 +236,9 @@ async def google_callback(request: Request) -> Response:
     def _error_response(msg: str, status: int = 400) -> Response:
         import json
         resp = Response(content=json.dumps({"detail": msg}), media_type="application/json", status_code=status)
-        # Clear the g_state cookie
-        resp.set_cookie(
-            "g_state",
-            "",
-            max_age=0,
-            httponly=True,
-            path="/",
-            samesite=cookie_config["samesite"],
-            secure=cookie_config["secure"],
-            domain=cookie_config["domain"],
-        )
+        # Clear OAuth state cookies using centralized surface
+        from ..cookies import clear_oauth_state_cookies
+        clear_oauth_state_cookies(resp, request, provider="g")
         return resp
 
     if not code or not state:
@@ -295,9 +283,7 @@ async def google_callback(request: Request) -> Response:
         logger.info("✅ Signed state validation passed")
     
     # State is valid - clear/rotate the state cookie after use
-    logger.info("🍪 Clearing g_state cookie after successful validation")
-    # Reuse module-level import to avoid shadowing the name locally
-    cookie_config = get_cookie_config(request)
+    logger.info("🍪 Clearing OAuth state cookies after successful validation")
     
     # Create response object to set cleared cookie
     response = Response(
@@ -305,18 +291,10 @@ async def google_callback(request: Request) -> Response:
         media_type="text/plain"
     )
     
-    # Clear the g_state cookie by setting it with expired max_age
-    response.set_cookie(
-        "g_state",
-        "",  # Empty value
-        max_age=0,  # Expire immediately
-        httponly=True,
-        path="/",
-        samesite=cookie_config["samesite"],
-        secure=cookie_config["secure"],
-        domain=cookie_config["domain"]
-    )
-    logger.info("✅ g_state cookie cleared successfully")
+    # Clear OAuth state cookies using centralized surface
+    from ..cookies import clear_oauth_state_cookies
+    clear_oauth_state_cookies(response, request, provider="g")
+    logger.info("✅ OAuth state cookies cleared successfully")
     
     # State validation complete - proceed with usual session logic
     logger.info("✅ Google OAuth callback state validated successfully")
@@ -331,7 +309,7 @@ async def google_callback(request: Request) -> Response:
     try:
         from ..integrations.google import oauth as go
         from ..integrations.google.db import SessionLocal, GoogleToken, init_db
-        from ..auth import create_access_token, create_refresh_token
+
         import jwt as pyjwt
         from urllib.parse import urlencode
         from starlette.responses import RedirectResponse
@@ -391,8 +369,10 @@ async def google_callback(request: Request) -> Response:
 
         # Mint application JWTs (access + refresh) for the user and redirect
         app_url = os.getenv("APP_URL", "http://localhost:3000")
-        at = create_access_token({"sub": uid, "user_id": uid})
-        rt = create_refresh_token({"sub": uid, "user_id": uid})
+        # Use tokens.py facade instead of direct JWT encoding
+        from ..tokens import make_access, make_refresh
+        at = make_access({"user_id": uid})
+        rt = make_refresh({"user_id": uid})
 
         # Build redirect query - keep it compact and URL-encoded
         q = urlencode({"access_token": at, "refresh_token": rt})
@@ -438,12 +418,13 @@ async def google_callback(request: Request) -> Response:
             pass
 
         resp = RedirectResponse(url=final_root, status_code=302)
-        # Cookie attributes per dev requirements
-        cookie_kwargs = dict(path='/', httponly=True, samesite='lax', secure=False)
-        # Set access and refresh cookies
-        resp.set_cookie('access_token', at, max_age=None, **cookie_kwargs)
-        resp.set_cookie('refresh_token', rt, max_age=None, **cookie_kwargs)
+        
+        # Get TTLs from centralized configuration
+        from ..cookie_config import get_token_ttls
+        access_ttl, refresh_ttl = get_token_ttls()
+        
         # Optional legacy __session cookie for integrations
+        session_id = None
         if os.getenv('ENABLE_SESSION_COOKIE', '') in ('1', 'true', 'yes'):
             # Create opaque session ID instead of using JWT
             try:
@@ -451,7 +432,7 @@ async def google_callback(request: Request) -> Response:
                 import jwt
                 payload = jwt.decode(at, os.getenv("JWT_SECRET"), algorithms=["HS256"])
                 jti = payload.get("jti")
-                expires_at = payload.get("exp", time.time() + 900)  # 15 minutes default
+                expires_at = payload.get("exp", time.time() + access_ttl)
                 if jti:
                     session_id = _create_session_id(jti, expires_at)
                 else:
@@ -460,7 +441,10 @@ async def google_callback(request: Request) -> Response:
                 import logging
                 logging.getLogger(__name__).warning(f"Failed to create session ID: {e}")
                 session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-            resp.set_cookie('__session', session_id, max_age=None, **cookie_kwargs)
+        
+        # Use centralized cookie functions
+        from ..cookies import set_auth_cookies
+        set_auth_cookies(resp, access=at, refresh=rt, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
         logger.info("🔁 Redirecting user to %s (cookies set)", final_root)
         return resp
     except Exception as e:

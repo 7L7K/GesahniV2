@@ -9,19 +9,32 @@ ensuring all cookies are set with consistent attributes:
 - HttpOnly=True
 - Secure=False in dev HTTP, True in production
 - Consistent TTLs for access/refresh tokens
+
+Environment Variables:
+- COOKIE_SECURE: Force secure cookies (default: auto-detect)
+- COOKIE_SAMESITE: SameSite attribute (default: "lax")
+- JWT_EXPIRE_MINUTES: Access token TTL (default: 15)
+- JWT_REFRESH_EXPIRE_MINUTES: Refresh token TTL (default: 43200)
+- DEV_MODE: Development mode flag (default: auto-detect)
 """
 
 import os
-from typing import Tuple
+from typing import Tuple, Dict, Any
 from fastapi import Request
 
 
-def get_cookie_config(request: Request) -> dict:
+def get_cookie_config(request: Request) -> Dict[str, Any]:
     """
     Get consistent cookie configuration for the current request.
     
+    Computes secure, samesite, domain, path, max_age from environment variables
+    and request context. This is the single source of truth for all cookie attributes.
+    
+    Args:
+        request: FastAPI Request object for context detection
+        
     Returns:
-        dict: Cookie configuration with secure, samesite, and other flags
+        dict: Cookie configuration with secure, samesite, httponly, path, domain
     """
     # Base configuration from environment
     cookie_secure = os.getenv("COOKIE_SECURE", "0").lower() in {"1", "true", "yes", "on"}
@@ -87,6 +100,10 @@ def get_token_ttls() -> Tuple[int, int]:
     """
     Get consistent TTLs for access and refresh tokens.
     
+    Reads from environment variables:
+    - JWT_EXPIRE_MINUTES: Access token TTL in minutes (default: 15)
+    - JWT_REFRESH_EXPIRE_MINUTES: Refresh token TTL in minutes (default: 43200)
+    
     Returns:
         Tuple[int, int]: (access_ttl_seconds, refresh_ttl_seconds)
     """
@@ -113,6 +130,9 @@ def format_cookie_header(
 ) -> str:
     """
     Format a Set-Cookie header with consistent attributes.
+    
+    This is the only place that formats Set-Cookie headers, ensuring
+    consistent attribute ordering and formatting across all cookies.
     
     Args:
         key: Cookie name
@@ -152,4 +172,8 @@ def format_cookie_header(
         parts.append("Priority=High")
     
     return "; ".join(parts)
+
+
+# Export the main functions for easy access
+__all__ = ["get_cookie_config", "get_token_ttls", "format_cookie_header"]
 

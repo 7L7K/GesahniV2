@@ -39,7 +39,10 @@ class SessionStatus(str, Enum):
 class SessionCookieStore:
     """Store for mapping __session cookie IDs to access token JTIs.
     
+    Creates, reads, and deletes opaque session IDs that are stored in the __session cookie.
     Uses Redis if available, falls back to in-memory storage for development/testing.
+    
+    The session ID is always opaque (never a JWT) and maps to the JWT ID (JTI) from the access token.
     """
     
     def __init__(self):
@@ -68,15 +71,16 @@ class SessionCookieStore:
         return f"session:{session_id}"
     
     def create_session(self, jti: str, expires_at: float) -> str:
-        """Create a new session ID and store it mapped to the JTI.
+        """Create a new opaque session ID and store it mapped to the JTI.
         
         Args:
             jti: JWT ID from access token
             expires_at: Unix timestamp when session expires
             
         Returns:
-            str: New session ID
+            str: New opaque session ID (never a JWT)
         """
+        # Generate opaque session ID: sess_timestamp_random
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
         
         if self._redis_client:
@@ -92,14 +96,14 @@ class SessionCookieStore:
             # Store in memory
             self._memory_store[session_id] = (jti, expires_at)
         
-        logger.debug(f"Created session {session_id} for JTI {jti}")
+        logger.debug(f"Created opaque session {session_id} for JTI {jti}")
         return session_id
     
     def get_session(self, session_id: str) -> Optional[str]:
-        """Get the JTI for a session ID.
+        """Get the JTI for an opaque session ID.
         
         Args:
-            session_id: Session ID from __session cookie
+            session_id: Opaque session ID from __session cookie
             
         Returns:
             str: JTI if session exists and is valid, None otherwise
@@ -129,10 +133,10 @@ class SessionCookieStore:
         return None
     
     def delete_session(self, session_id: str) -> bool:
-        """Delete a session.
+        """Delete an opaque session ID.
         
         Args:
-            session_id: Session ID to delete
+            session_id: Opaque session ID to delete
             
         Returns:
             bool: True if session was deleted, False if not found
@@ -201,7 +205,7 @@ def save_meta(session_id: str, meta: dict[str, Any]) -> None:
 def create_session() -> dict[str, Any]:
     """Create a new session entry and return its metadata."""
     ts = datetime.utcnow().isoformat(timespec="seconds")
-    session_id = f"{time_ns()}_{getrandbits(12):03x}"
+    session_id = f"{time_ns()}_{random.getrandbits(12):03x}"
     meta = {
         "session_id": session_id,
         "created_at": ts + "Z",
@@ -258,4 +262,5 @@ __all__ = [
     "append_error",
     "get_session",
     "list_sessions",
+    "get_session_store",
 ]

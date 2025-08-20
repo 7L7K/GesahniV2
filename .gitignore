@@ -48,3 +48,8 @@ web/*
 env.consolidated
 frontend/.env.local
 frontend/.env*
+env.dev
+env.localhost
+.gitignore
+env.prod
+env.staging

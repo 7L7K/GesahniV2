@@ -1401,24 +1401,13 @@ async def get_csrf(request: Request) -> dict:
         resp = JSONResponse({"csrf_token": tok})
         cookie_config = get_cookie_config(request)
         
-        # For cross-site scenarios (COOKIE_SAMESITE=none), ensure CSRF token cookie
-        # is also set with SameSite=None to be accessible in cross-site requests
-        csrf_samesite = cookie_config["samesite"]
-        if csrf_samesite == "none":
-            # Ensure Secure=True when SameSite=None
-            csrf_secure = True
-        else:
-            # For same-origin scenarios, use standard configuration
-            csrf_secure = cookie_config["secure"]
-        
-        resp.set_cookie(
-            "csrf_token", 
-            tok, 
-            max_age=600, 
-            path="/",
-            secure=csrf_secure,
-            samesite=csrf_samesite,
-            httponly=False  # CSRF tokens need to be accessible to JavaScript
+        # Set CSRF cookie using centralized cookie surface
+        from .cookies import set_csrf_cookie
+        set_csrf_cookie(
+            resp=resp,
+            token=tok,
+            ttl=600,  # 10 minutes
+            request=request
         )
         return resp
     except Exception:
@@ -1647,6 +1636,16 @@ app.include_router(status_router, prefix="/v1")
 app.include_router(status_router, include_in_schema=False)
 # Tiered health (unauthenticated): /healthz/* endpoints
 app.include_router(health_router)
+
+# Include modern auth API router first to avoid route shadowing
+try:
+    from .api.auth import router as auth_api_router
+    app.include_router(auth_api_router, prefix="/v1")
+    app.include_router(auth_api_router, include_in_schema=False)
+except Exception:
+    pass
+
+# Legacy auth router (mounted after new API router to avoid shadowing)
 app.include_router(auth_router, prefix="/v1")
 app.include_router(auth_router, include_in_schema=False)
 if preflight_router is not None:
@@ -1752,14 +1751,6 @@ try:
     from .api.devices import router as devices_router
     app.include_router(devices_router, prefix="/v1")
     app.include_router(devices_router, include_in_schema=False)
-except Exception:
-    pass
-
-# Include modern auth API router exactly once (for /v1/auth/* and /v1/whoami)
-try:
-    from .api.auth import router as auth_api_router
-    app.include_router(auth_api_router, prefix="/v1")
-    app.include_router(auth_api_router, include_in_schema=False)
 except Exception:
     pass
 

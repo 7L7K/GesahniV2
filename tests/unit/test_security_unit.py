@@ -44,7 +44,8 @@ async def test_verify_token_success(monkeypatch):
     from app import security as sec
 
     monkeypatch.setenv("JWT_SECRET", "secret")
-    token = jwt.encode({"user_id": "u2"}, "secret", algorithm="HS256")
+    from app.tokens import create_access_token
+    token = create_access_token({"user_id": "u2"})
     headers = [(b"authorization", f"Bearer {token}".encode())]
     scope = {"type": "http", "method": "GET", "path": "/", "headers": headers}
     req = Request(scope)
@@ -64,7 +65,8 @@ async def test_rate_limit_paths(monkeypatch):
     sec._http_requests.clear()
     sec.http_burst.clear()
 
-    token = jwt.encode({"user_id": "u2"}, "secret", algorithm="HS256")
+    from app.tokens import create_access_token
+    token = create_access_token({"user_id": "u2"})
     headers = [(b"authorization", f"Bearer {token}".encode())]
     scope = {"type": "http", "method": "GET", "path": "/", "headers": headers}
     req = Request(scope)

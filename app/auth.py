@@ -137,93 +137,9 @@ def _delete_session_id(session_id: str) -> bool:
     return store.delete_session(session_id)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT access token with the given data.
-    
-    Args:
-        data: Dictionary containing token claims
-        expires_delta: Optional expiration delta (defaults to EXPIRE_MINUTES)
-    
-    Returns:
-        JWT access token string
-    """
-    # Ensure secret is available and appears secure before encoding
-    _ensure_jwt_secret_present()
-
-    # Ensure secret is available and appears secure before encoding
-    _ensure_jwt_secret_present()
-
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
-    
-    to_encode.update({
-        "exp": expire,
-        "jti": uuid4().hex,
-        "type": "access",
-        "scopes": data.get("scopes", ["care:resident", "music:control"]),
-    })
-    
-    if JWT_ISS:
-        to_encode["iss"] = JWT_ISS
-    if JWT_AUD:
-        to_encode["aud"] = JWT_AUD
-    
-    logger.debug("auth.create_access_token", extra={
-        "meta": {
-            "user_id": data.get("sub"),
-            "expires_at": expire.isoformat(),
-            "jti": to_encode["jti"],
-            "scopes": to_encode["scopes"],
-        }
-    })
-    
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT refresh token with the given data.
-    
-    Args:
-        data: Dictionary containing token claims
-        expires_delta: Optional expiration delta (defaults to REFRESH_EXPIRE_MINUTES)
-    
-    Returns:
-        JWT refresh token string
-    """
-    # Ensure secret is available and appears secure before encoding
-    _ensure_jwt_secret_present()
-
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=REFRESH_EXPIRE_MINUTES)
-    
-    to_encode.update({
-        "exp": expire,
-        "jti": uuid4().hex,
-        "type": "refresh",
-        "scopes": data.get("scopes", ["care:resident", "music:control"]),
-    })
-    
-    if JWT_ISS:
-        to_encode["iss"] = JWT_ISS
-    if JWT_AUD:
-        to_encode["aud"] = JWT_AUD
-    
-    logger.debug("auth.create_refresh_token", extra={
-        "meta": {
-            "user_id": data.get("sub"),
-            "expires_at": expire.isoformat(),
-            "jti": to_encode["jti"],
-            "scopes": to_encode["scopes"],
-        }
-    })
-    
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+# Import JWT token creation functions from centralized tokens module
+# Note: These functions are deprecated in favor of make_access() and make_refresh()
+# from .tokens import create_access_token, create_refresh_token
 
 
 # Pydantic models
@@ -808,24 +724,14 @@ async def login(
         access_payload["iss"] = JWT_ISS
     if JWT_AUD:
         access_payload["aud"] = JWT_AUD
-    access_token = jwt.encode(access_payload, SECRET_KEY, algorithm=ALGORITHM)
+    # Use tokens.py facade instead of direct JWT encoding
+    from .tokens import make_access, make_refresh
+    
+    access_token = make_access({"user_id": req.username})
 
     # Create refresh token
-    refresh_expire = datetime.utcnow() + timedelta(minutes=REFRESH_EXPIRE_MINUTES)
     refresh_jti = uuid4().hex
-    refresh_payload = {
-        "sub": req.username,
-        "user_id": req.username,
-        "exp": refresh_expire,
-        "jti": refresh_jti,
-        "type": "refresh",
-        "scopes": ["care:resident", "music:control"],  # Default scopes for regular users
-    }
-    if JWT_ISS:
-        refresh_payload["iss"] = JWT_ISS
-    if JWT_AUD:
-        refresh_payload["aud"] = JWT_AUD
-    refresh_token = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
+    refresh_token = make_refresh({"user_id": req.username, "jti": refresh_jti})
 
     logger.info("auth.login_tokens_created", extra={
         "meta": {
@@ -851,7 +757,7 @@ async def login(
 
     # Set HttpOnly cookies for browser clients (unified flow: header + cookie)
     try:
-        from .cookie_config import get_cookie_config, get_token_ttls, format_cookie_header
+        from .cookie_config import get_cookie_config, get_token_ttls
         
         # Get consistent cookie configuration
         cookie_config = get_cookie_config(request)
@@ -867,37 +773,14 @@ async def login(
             }
         })
         
-        # Set all three cookies with consistent configuration using header append method
-        # This provides better control over cookie attributes and avoids duplicates
-        access_header = format_cookie_header(
-            key="access_token",
-            value=access_token,
-            max_age=access_ttl,
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            httponly=cookie_config["httponly"],
-            domain=cookie_config["domain"],
-        )
-        response.headers.append("Set-Cookie", access_header)
-        
-        refresh_header = format_cookie_header(
-            key="refresh_token",
-            value=refresh_token,
-            max_age=refresh_ttl,
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            httponly=cookie_config["httponly"],
-            domain=cookie_config["domain"],
-        )
-        response.headers.append("Set-Cookie", refresh_header)
-        
         # Create a session ID mapped to the access token JTI
         # This provides better security by using an opaque session ID
         try:
             # Decode the access token to get the JTI
-            payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+            # Use dynamic JWT secret function to handle test environment changes
+            from .api.auth import _jwt_secret
+            secret = _jwt_secret()
+            payload = jwt.decode(access_token, secret, algorithms=[ALGORITHM])
             jti = payload.get("jti")
             expires_at = payload.get("exp", time.time() + access_ttl)
             
@@ -911,17 +794,9 @@ async def login(
             # Fallback session ID
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
         
-        session_header = format_cookie_header(
-            key="__session",
-            value=session_id,
-            max_age=access_ttl,
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            httponly=cookie_config["httponly"],
-            domain=cookie_config["domain"],
-        )
-        response.headers.append("Set-Cookie", session_header)
+        # Use centralized cookie functions
+        from .cookies import set_auth_cookies
+        set_auth_cookies(response, access=access_token, refresh=refresh_token, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
         
         logger.info("auth.login_cookies_set", extra={
             "meta": {
@@ -950,30 +825,15 @@ async def login(
             }
         })
         print(f"login.set_cookie error: {e}")
-        # Fallback to Starlette set_cookie if header append fails
+        # Fallback to centralized cookie functions if header append fails
         try:
-            response.set_cookie(
-                key="access_token",
-                value=access_token,
-                httponly=True,
-                secure=cookie_config["secure"],
-                samesite=cookie_config["samesite"],
-                max_age=access_ttl,
-                path="/",
-            )
-            response.set_cookie(
-                key="refresh_token",
-                value=refresh_token,
-                httponly=True,
-                secure=cookie_config["secure"],
-                samesite=cookie_config["samesite"],
-                max_age=refresh_ttl,
-                path="/",
-            )
             # Set __session cookie with session ID instead of fingerprint
             try:
                 # Decode the access token to get the JTI
-                payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+                # Use dynamic JWT secret function to handle test environment changes
+                from .api.auth import _jwt_secret
+                secret = _jwt_secret()
+                payload = jwt.decode(access_token, secret, algorithms=[ALGORITHM])
                 jti = payload.get("jti")
                 expires_at = payload.get("exp", time.time() + access_ttl)
                 
@@ -987,14 +847,16 @@ async def login(
                 # Fallback session ID
                 session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
             
-            response.set_cookie(
-                key="__session",
-                value=session_id,
-                httponly=True,
-                secure=cookie_config["secure"],
-                samesite=cookie_config["samesite"],
-                max_age=access_ttl,
-                path="/",
+            # Use centralized cookie functions
+            from .cookies import set_auth_cookies
+            set_auth_cookies(
+                response, 
+                access=access_token, 
+                refresh=refresh_token, 
+                session_id=session_id, 
+                access_ttl=access_ttl, 
+                refresh_ttl=refresh_ttl, 
+                request=request
             )
             logger.info("auth.login_cookie_fallback_success", extra={
                 "meta": {
