@@ -106,6 +106,83 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class RedactHashMiddleware(BaseHTTPMiddleware):
+    """Middleware that redacts sensitive headers and hashes sensitive values for logs."""
+
+    SENSITIVE_HEADERS = {"authorization", "cookie", "x-api-key", "set-cookie"}
+
+    async def dispatch(self, request: Request, call_next):
+        # Make a shallow copy of headers for mutation
+        try:
+            raw = list(getattr(request.headers, "raw", []))
+            new_raw = []
+            for k, v in raw:
+                key = k.decode() if isinstance(k, bytes) else str(k)
+                val = v.decode() if isinstance(v, bytes) else str(v)
+                if key.lower() in self.SENSITIVE_HEADERS:
+                    # Keep a deterministic hash for correlation but don't log raw
+                    try:
+                        h = sha256(val.encode("utf-8")).hexdigest()
+                        new_raw.append((k, f"[REDACTED_HASH:{h[:8]}]".encode()))
+                    except Exception:
+                        new_raw.append((k, b"[REDACTED]"))
+                else:
+                    new_raw.append((k, v))
+            request.headers.__dict__["_list"] = new_raw
+        except Exception:
+            pass
+
+        # Note: do NOT mutate request.cookies (breaking middleware) — keep redaction
+        # limited to header/log contexts only. If cookie values need redaction for
+        # logs, compute a redacted representation here without modifying the live
+        # request.cookies mapping.
+        try:
+            _redacted_cookies = {}
+            if hasattr(request, "cookies") and request.cookies:
+                for name, val in list(request.cookies.items()):
+                    try:
+                        _redacted_cookies[name] = f"[REDACTED_HASH:{sha256(val.encode('utf-8')).hexdigest()[:8]}]"
+                    except Exception:
+                        _redacted_cookies[name] = "[REDACTED]"
+            # attach for downstream logging/debugging only (non-authoritative)
+            try:
+                request.state._redacted_cookies = _redacted_cookies
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        resp = await call_next(request)
+
+        # Redact sensitive response headers for logging only, but do NOT remove
+        # or overwrite Set-Cookie headers that the application relies on. Replace
+        # only non-critical headers; preserve 'set-cookie' so browsers can receive
+        # auth cookies during dev/test flows.
+        try:
+            for h in list(resp.headers.keys()):
+                if h.lower() in self.SENSITIVE_HEADERS and h.lower() != "set-cookie":
+                    resp.headers[h] = "[REDACTED]"
+        except Exception:
+            pass
+
+        return resp
+
+
+class HealthCheckFilterMiddleware(BaseHTTPMiddleware):
+    """Filter out health check requests from access logs."""
+    
+    async def dispatch(self, request: Request, call_next):
+        # Check if this is a health check request
+        path = request.url.path
+        if path.startswith('/healthz') or path.startswith('/health/'):
+            # Skip logging for health checks
+            response = await call_next(request)
+            return response
+        
+        # For non-health check requests, proceed normally
+        return await call_next(request)
+
+
 class DedupMiddleware(BaseHTTPMiddleware):
     """Reject requests with a repeated ``X-Request-ID`` header.
 
@@ -239,6 +316,15 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                     "http.origin": request.headers.get("Origin", ""),
                 },
             ) as _span:
+                # Redact sensitive headers into the span attributes for observability
+                try:
+                    if _span is not None and hasattr(_span, "set_attribute"):
+                        _span.set_attribute("http.request_id", req_id)
+                        _span.set_attribute("http.session_id", rec.session_id or "")
+                        _span.set_attribute("env", os.getenv("ENV", ""))
+                        _span.set_attribute("version", os.getenv("APP_VERSION") or os.getenv("GIT_TAG") or "")
+                except Exception:
+                    pass
                 # Remove sensitive headers before passing to app log context
                 try:
                     if "authorization" in request.headers:
@@ -355,28 +441,33 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
             }
             
             try:
-                # log via std logging for live dashboards then persist in history
-                import logging, random as _rand
-                env = os.getenv("ENV", "").strip().lower()
-                status_family = (status_code // 100) if status_code else 0
-                # Sample successes in prod; log all non-2xx
-                p = 1.0
-                if env in {"prod", "production"} and status_family == 2:
-                    try:
-                        p = float(os.getenv("OBS_SAMPLE_SUCCESS_RATE", "0.1"))
-                    except Exception:
-                        p = 0.1
-                if status_family != 2 or _rand.random() < p:
-                    logging.getLogger(__name__).info("request_summary", extra={"meta": meta})
+                # Skip logging for health check requests
+                if route_path.startswith('/healthz') or route_path.startswith('/health/'):
+                    pass
+                else:
+                    # log via std logging for live dashboards then persist in history
+                    import logging, random as _rand
+                    env = os.getenv("ENV", "").strip().lower()
+                    status_family = (status_code // 100) if status_code else 0
+                    # Sample successes in prod; log all non-2xx
+                    p = 1.0
+                    if env in {"prod", "production"} and status_family == 2:
+                        try:
+                            p = float(os.getenv("OBS_SAMPLE_SUCCESS_RATE", "0.1"))
+                        except Exception:
+                            p = 0.1
+                    if status_family != 2 or _rand.random() < p:
+                        logging.getLogger(__name__).info("request_summary", extra={"meta": meta})
             except Exception:
                 pass
                 
-            # Persist structured history
-            full = {**rec.model_dump(exclude_none=True), **{"meta": meta}}
-            try:
-                asyncio.create_task(append_history(full))
-            except Exception:
-                pass
+            # Persist structured history (skip health checks)
+            if not (route_path.startswith('/healthz') or route_path.startswith('/health/')):
+                full = {**rec.model_dump(exclude_none=True), **{"meta": meta}}
+                try:
+                    asyncio.create_task(append_history(full))
+                except Exception:
+                    pass
                 
             # Record latency and metrics
             rec.latency_ms = int((time.monotonic() - start_time) * 1000)

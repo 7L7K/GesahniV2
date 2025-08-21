@@ -179,6 +179,8 @@ async def ask_gpt(
     stream: bool = False,
     on_token: Callable[[str], Awaitable[None]] | None = None,
     raw: bool = False,
+    timeout: float | None = None,
+    routing_decision=None,  # New parameter for routing decision
     **kwargs,  # <- allow passing allow_test and gen params
 ) -> tuple[str, int, int, float] | tuple[str, int, int, float, object]:
     """Return text, prompt tokens, completion tokens and total price.
@@ -208,9 +210,13 @@ async def ask_gpt(
         openai_kwargs = {k: v for k, v in gen_params.items() if v is not None}
         with start_span("openai.chat", {"llm.provider": "openai", "llm.model": model}):
             if stream:
-                resp_stream = await client.chat.completions.create(
+                create_call = client.chat.completions.create(
                     model=model, messages=messages, stream=True, **openai_kwargs
                 )
+                if timeout:
+                    resp_stream = await asyncio.wait_for(create_call, timeout=timeout)
+                else:
+                    resp_stream = await create_call
                 chunks: list[str] = []
                 final = None
                 async for part in resp_stream:
@@ -225,9 +231,13 @@ async def ask_gpt(
                 resp = final
                 text = "".join(chunks).strip()
             else:
-                resp = await client.chat.completions.create(
+                create_call = client.chat.completions.create(
                     model=model, messages=messages, **openai_kwargs
                 )
+                if timeout:
+                    resp = await asyncio.wait_for(create_call, timeout=timeout)
+                else:
+                    resp = await create_call
                 text = resp.choices[0].message.content.strip()
                 if on_token:
                     await on_token(text)

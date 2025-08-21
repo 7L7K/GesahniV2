@@ -812,7 +812,18 @@ async def login(
         })
         
         try:
-            print(f"login.set_cookie secure={cookie_config['secure']} samesite={cookie_config['samesite']} ttl={access_ttl}s/{refresh_ttl}s cookies=3")
+            logger.info(
+            "login.set_cookie secure=%s samesite=%s ttl=%ds/%ds cookies=3",
+            cookie_config['secure'], cookie_config['samesite'], access_ttl, refresh_ttl,
+            extra={
+                "meta": {
+                    "secure": cookie_config['secure'],
+                    "samesite": cookie_config['samesite'],
+                    "access_ttl": access_ttl,
+                    "refresh_ttl": refresh_ttl,
+                }
+            }
+        )
         except Exception:
             pass
     except Exception as e:
@@ -824,7 +835,7 @@ async def login(
                 "error_type": type(e).__name__,
             }
         })
-        print(f"login.set_cookie error: {e}")
+        logger.error("login.set_cookie error: %s", e)
         # Fallback to centralized cookie functions if header append fails
         try:
             # Set __session cookie with session ID instead of fingerprint
@@ -874,7 +885,7 @@ async def login(
                     "error_type": type(fallback_error).__name__,
                 }
             })
-            print(f"login.set_cookie fallback error: {fallback_error}")
+            logger.error("login.set_cookie fallback error: %s", fallback_error)
             pass
 
     logger.info("auth.login_complete", extra={
@@ -901,7 +912,7 @@ async def refresh(req: RefreshRequest | None = None, request: Request = None, re
     global _DEPRECATE_REFRESH_LOGGED
     if not _DEPRECATE_REFRESH_LOGGED:
         try:
-            print("deprecate route=/v1/refresh")
+            logger.warning("deprecate route=/v1/refresh")
         except Exception:
             pass
         _DEPRECATE_REFRESH_LOGGED = True

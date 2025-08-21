@@ -31,6 +31,7 @@ def test_music_routes_gate_by_scope(monkeypatch):
 def test_admin_routes_gate_by_scope(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "secret")
     monkeypatch.setenv("ENFORCE_JWT_SCOPES", "1")
+    monkeypatch.setenv("PYTEST_RUNNING", "1")
     c = TestClient(app)
     r_forbidden = c.get("/v1/admin/metrics", headers=_bearer(scopes=["music:control"]))
     assert r_forbidden.status_code in (401, 403)

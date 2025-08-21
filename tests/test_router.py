@@ -227,8 +227,9 @@ def test_complexity_checks(monkeypatch):
     async def fake_llama(prompt, model=None):
         return "llama"
 
-    monkeypatch.setattr(router, "ask_gpt", fake_gpt)
-    monkeypatch.setattr(router, "ask_llama", fake_llama)
+    from app import gpt_client, llama_integration
+    monkeypatch.setattr(gpt_client, "ask_gpt", fake_gpt)
+    monkeypatch.setattr(llama_integration, "ask_llama", fake_llama)
 
     long_prompt = "word " * 31
     assert asyncio.run(router.route_prompt(long_prompt, user_id="u")) == "gpt"
@@ -320,7 +321,7 @@ def test_llama_circuit_open(monkeypatch):
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
     monkeypatch.setattr(router, "handle_command", lambda p: None)
     monkeypatch.setattr(router, "lookup_cached_answer", lambda p: None)
-    monkeypatch.setattr(router, "pick_model", lambda *a, **k: ("llama", "llama3"))
+    monkeypatch.setattr(router, "pick_model", lambda *a, **k: ("llama", "llama3", "light_default", None))
     monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
     monkeypatch.setattr(router.PromptBuilder, "build", lambda *a, **k: (a[0], 0))
 
@@ -344,7 +345,7 @@ def test_generation_options_passthrough(monkeypatch):
 
     monkeypatch.setattr(router, "handle_command", _hc)
     monkeypatch.setattr(router, "lookup_cached_answer", lambda p: None)
-    monkeypatch.setattr(router, "pick_model", lambda *a, **k: ("llama", "llama3"))
+    monkeypatch.setattr(router, "pick_model", lambda *a, **k: ("llama", "llama3", "light_default", None))
     monkeypatch.setattr(router, "detect_intent", lambda p: ("chat", "high"))
     monkeypatch.setattr(router, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(router.memgpt, "store_interaction", lambda *a, **k: None)

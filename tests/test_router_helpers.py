@@ -62,8 +62,11 @@ def test_call_gpt(monkeypatch):
 
 
 def test_call_llama_success(monkeypatch):
-    async def fake_llama(prompt, model):
-        return "llama answer"
+    async def fake_llama(prompt, model, **kwargs):
+        # Mock the async generator behavior
+        async def fake_generator():
+            yield "llama answer"
+        return fake_generator()
 
     calls = {}
 
@@ -74,6 +77,8 @@ def test_call_llama_success(monkeypatch):
         calls["record"] = (engine, fallback)
 
     monkeypatch.setattr(router, "ask_llama", fake_llama)
+    monkeypatch.setattr("app.router.ask_llama", fake_llama)
+    monkeypatch.setattr("app.llama_integration.ask_llama", fake_llama)
     monkeypatch.setattr(router, "append_history", fake_append)
     monkeypatch.setattr(router, "record", fake_record)
     monkeypatch.setattr(
@@ -113,8 +118,11 @@ def test_call_llama_success(monkeypatch):
 
 
 def test_call_llama_fallback(monkeypatch):
-    async def fake_llama(prompt, model):
-        return {"error": "timeout", "llm_used": model}
+    async def fake_llama(prompt, model, **kwargs):
+        # Mock the async generator behavior that raises an exception
+        async def fake_generator():
+            raise RuntimeError("timeout")
+        return fake_generator()
 
     async def fake_gpt(prompt, model, system, **kwargs):
         return "gpt fallback", 0, 0, 0.0
@@ -128,6 +136,8 @@ def test_call_llama_fallback(monkeypatch):
         calls["records"].append((engine, fallback))
 
     monkeypatch.setattr(router, "ask_llama", fake_llama)
+    monkeypatch.setattr("app.router.ask_llama", fake_llama)
+    monkeypatch.setattr("app.llama_integration.ask_llama", fake_llama)
     monkeypatch.setattr(router, "ask_gpt", fake_gpt)
     monkeypatch.setattr(router, "append_history", fake_append)
     monkeypatch.setattr(router, "record", fake_record)

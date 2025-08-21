@@ -63,6 +63,7 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
     // Rate limiting and backoff state
     private consecutiveFailures = 0;
     private backoffUntil = 0;
+    private authGateRetryAttempted = false; // Track auth gate retry attempts
     private readonly MIN_CALL_INTERVAL = 5000; // Increased from 2000 to 5000ms to reduce rate limiting
     private readonly MAX_BACKOFF = 60000; // Increased from 30000 to 60000ms
     private readonly BASE_BACKOFF = 2000; // Increased from 1000 to 2000ms
@@ -264,15 +265,15 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
 
         const now = Date.now();
 
-        // Rate limiting check
-        if (now < this.backoffUntil) {
+        // Rate limiting check (skip for auth gate retries)
+        if (now < this.backoffUntil && !this.authGateRetryAttempted) {
             const remaining = this.backoffUntil - now;
             console.info(`AUTH Orchestrator: Rate limited, skipping whoami. Remaining: ${remaining}ms`);
             return;
         }
 
-        // Minimum interval check
-        if (now - this.lastWhoamiCall < this.MIN_CALL_INTERVAL) {
+        // Minimum interval check (skip for auth gate retries)
+        if (now - this.lastWhoamiCall < this.MIN_CALL_INTERVAL && !this.authGateRetryAttempted) {
             console.info(`AUTH Orchestrator: Too soon since last whoami call. Last: ${this.lastWhoamiCall}, Now: ${now}, Min interval: ${this.MIN_CALL_INTERVAL}`);
             return;
         }
@@ -343,7 +344,7 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
         try {
             const response = await apiFetch('/v1/whoami', {
                 method: 'GET',
-                auth: true, // Explicitly require authentication
+                auth: false, // Don't require authentication for whoami check
                 dedupe: false, // Always make fresh request for auth checks
             });
 
@@ -367,23 +368,90 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
                     timestamp: new Date().toISOString(),
                 });
 
+                // Auth Orchestrator gate: Treat isAuthenticated === true && !userId as not authenticated
+                // This handles late cookie propagation scenarios
+                const hasValidUserId = data.user_id && typeof data.user_id === 'string' && data.user_id.trim() !== '';
+
+                // If is_authenticated is not provided in the response, fall back to the old behavior
+                // where we consider the user authenticated if they have a valid user_id
+                const isAuthenticatedFromResponse = data.is_authenticated !== undefined ? data.is_authenticated : hasValidUserId;
+                const shouldBeAuthenticated = isAuthenticatedFromResponse && hasValidUserId;
+
+                if (data.is_authenticated !== undefined && data.is_authenticated && !hasValidUserId) {
+                    console.warn(`AUTH Orchestrator: Auth gate triggered - isAuthenticated=true but no userId`, {
+                        userId: data.user_id,
+                        isAuthenticated: data.is_authenticated,
+                        timestamp: new Date().toISOString(),
+                    });
+
+                    // Retry once with short backoff to handle late cookie propagation
+                    if (!this.authGateRetryAttempted) {
+                        console.info('AUTH Orchestrator: Auth gate retry - attempting one more whoami check');
+                        this.authGateRetryAttempted = true;
+
+                        // Set loading state and return early - the retry will be handled by the setTimeout
+                        this.setState({
+                            isLoading: false,
+                            error: null,
+                        });
+
+                        // Short backoff before retry - use a shorter delay for testing
+                        const retryDelay = process.env.NODE_ENV === 'test' ? 100 : 500;
+                        setTimeout(() => {
+                            this.checkAuth();
+                        }, retryDelay);
+
+                        return;
+                    } else {
+                        console.error('AUTH Orchestrator: Auth gate retry failed - flipping to unauthenticated state');
+
+                        // Dispatch auth mismatch event for toast notification
+                        if (typeof window !== 'undefined') {
+                            const ev = new CustomEvent('auth-mismatch', {
+                                detail: {
+                                    message: 'Auth mismatch—re-login.',
+                                    timestamp: new Date().toISOString()
+                                }
+                            });
+                            window.dispatchEvent(ev);
+                        }
+
+                        // Flip to unauthenticated state after retry fails
+                        const unauthenticatedState: AuthState = {
+                            isAuthenticated: false,
+                            sessionReady: false,
+                            user: null,
+                            source: 'missing',
+                            version: this.state.version + 1,
+                            lastChecked: now,
+                            isLoading: false,
+                            error: 'Auth gate: isAuthenticated=true but no userId after retry',
+                            whoamiOk: false,
+                        };
+
+                        this.setState(unauthenticatedState);
+                        return;
+                    }
+                }
+
                 // Reset failure tracking on success
                 this.consecutiveFailures = 0;
                 this.backoffUntil = 0;
+                this.authGateRetryAttempted = false; // Reset retry flag on successful auth
 
                 const newState: AuthState = {
-                    isAuthenticated: true,
-                    sessionReady: true,
-                    user: {
+                    isAuthenticated: shouldBeAuthenticated,
+                    sessionReady: shouldBeAuthenticated,
+                    user: shouldBeAuthenticated ? {
                         id: data.user_id,
                         email: data.email || null,
-                    },
-                    source: 'cookie', // Assuming cookie-based auth
+                    } : null,
+                    source: shouldBeAuthenticated ? 'cookie' : 'missing',
                     version: this.state.version + 1,
                     lastChecked: now,
                     isLoading: false,
                     error: null,
-                    whoamiOk: true,
+                    whoamiOk: shouldBeAuthenticated,
                 };
 
                 // Check for oscillation
@@ -491,6 +559,7 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
         this.initialized = false;
         this.consecutiveFailures = 0;
         this.backoffUntil = 0;
+        this.authGateRetryAttempted = false;
         this.oscillationDetectionCount = 0;
         this.lastSuccessfulState = null;
 

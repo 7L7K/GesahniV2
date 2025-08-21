@@ -57,8 +57,6 @@ def verify_secrets_on_boot() -> Dict[str, Dict[str, str]]:
     Returns:
         Dict containing verification results for each secret
     """
-    logger.info("=== SECRET USAGE VERIFICATION ON BOOT ===")
-    
     results = {}
     
     for secret_name, config in CRITICAL_SECRETS.items():
@@ -78,13 +76,11 @@ def verify_secrets_on_boot() -> Dict[str, Dict[str, str]]:
                 logger.error(f"{secret_name}: MISSING (REQUIRED) - {config['description']}")
             else:
                 status = "MISSING_OPTIONAL"
-                logger.info(f"{secret_name}: NOT SET (optional) - {config['description']}")
         elif is_insecure:
             status = "INSECURE_DEFAULT"
             logger.warning(f"{secret_name}: INSECURE DEFAULT - {config['description']}")
         else:
             status = "SET_SECURE"
-            logger.info(f"{secret_name}: SET - {config['description']}")
         
         results[secret_name] = {
             "status": status,
@@ -98,7 +94,6 @@ def verify_secrets_on_boot() -> Dict[str, Dict[str, str]]:
     _check_openai_key_format(results)
     _check_jwt_secret_strength(results)
     
-    logger.info("=== END SECRET VERIFICATION ===")
     return results
 
 def _check_openai_key_format(results: Dict[str, Dict[str, str]]) -> None:
@@ -127,6 +122,17 @@ def _check_jwt_secret_strength(results: Dict[str, Dict[str, str]]) -> None:
                 results["JWT_SECRET"]["status"] = "WEAK_SECRET"
             elif len(jwt_secret) >= 64:
                 logger.info("JWT_SECRET: Strong secret (64+ characters)")
+
+
+def _in_test_mode() -> bool:
+    """Detect test mode similar to other modules so tests can run with weaker secrets."""
+    v = lambda s: str(os.getenv(s, "")).strip().lower()
+    return bool(
+        os.getenv("PYTEST_CURRENT_TEST")
+        or os.getenv("PYTEST_RUNNING")
+        or v("PYTEST_MODE") in {"1", "true", "yes", "on"}
+        or v("ENV") == "test"
+    )
 
 def get_missing_required_secrets() -> List[str]:
     """Get list of missing required secrets."""
@@ -158,4 +164,17 @@ def log_secret_summary() -> None:
         logger.warning(f"Secrets with security issues: {', '.join(insecure)}")
     
     if not missing_required and not insecure:
-        logger.info("All critical secrets are properly configured")
+        logger.debug("All critical secrets are properly configured")
+    # Fail fast for missing or weak JWT secret in non-test environments
+    try:
+        jwt_res = results.get("JWT_SECRET")
+        if jwt_res:
+            status = jwt_res.get("status")
+            if not _in_test_mode() and status in {"MISSING_REQUIRED", "WEAK_SECRET", "INSECURE_DEFAULT"}:
+                # Raise a clear error to stop startup
+                raise RuntimeError("JWT_SECRET too weak (need >=32 bytes)")
+    except RuntimeError:
+        raise
+    except Exception:
+        # Defensive: don't crash startup on unexpected checks
+        pass

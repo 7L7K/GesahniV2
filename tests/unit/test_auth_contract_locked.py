@@ -16,24 +16,29 @@ client = TestClient(app)
 
 
 class TestWhoamiLockedContract:
-    """Test that /v1/whoami always returns 200 with consistent structure."""
+    """Test that /v1/whoami returns appropriate status codes with consistent structure."""
 
-    def test_whoami_returns_200_with_consistent_structure(self, client: TestClient):
-        """Test that GET /v1/whoami always returns 200 with expected structure."""
+    def test_whoami_returns_401_when_not_authenticated(self, client: TestClient):
+        """Test that GET /v1/whoami returns 401 when not authenticated."""
         response = client.get("/v1/whoami")
-        assert response.status_code == 200
+        assert response.status_code == 401
         
         data = response.json()
-        # Verify consistent structure
+        # Verify consistent structure even in error response
+        assert "error" in data
+        assert "detail" in data
         assert "is_authenticated" in data
         assert "session_ready" in data
         assert "source" in data
         assert "user" in data
+        assert "version" in data
         
-        # Verify user object structure when authenticated
-        if data["is_authenticated"]:
-            assert "id" in data["user"]
-            assert "username" in data["user"]
+        # Verify error details
+        assert data["error"] == "Unauthorized"
+        assert data["detail"] == "Authentication required"
+        assert data["is_authenticated"] is False
+        assert data["session_ready"] is False
+        assert data["user"]["id"] is None
 
     def test_whoami_with_valid_jwt_token(self, client: TestClient):
         """Test whoami with valid JWT token in Authorization header."""
@@ -54,6 +59,7 @@ class TestWhoamiLockedContract:
             assert data["is_authenticated"] is True
             assert data["session_ready"] is True
             assert data["source"] == "header"
+            assert data["user_id"] == "test_user"
             assert data["user"]["id"] == "test_user"
 
 

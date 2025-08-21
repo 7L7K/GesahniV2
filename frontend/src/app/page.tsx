@@ -6,7 +6,7 @@ import ChatBubble from '../components/ChatBubble';
 import LoadingBubble from '../components/LoadingBubble';
 import InputBar from '../components/InputBar';
 import { Button } from '@/components/ui/button';
-import { SignInButton, SignUpButton } from '@clerk/nextjs';
+// Clerk auth UI removed for cookie-only frontend
 import { sendPrompt, getToken, getMusicState, type MusicState, apiFetch, isAuthed, handleAuthError } from '@/lib/api';
 import { wsHub } from '@/services/wsHub';
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
@@ -15,7 +15,7 @@ import DiscoveryCard from '@/components/music/DiscoveryCard';
 import MoodDial from '@/components/music/MoodDial';
 import QueueCard from '@/components/music/QueueCard';
 import DevicePicker from '@/components/music/DevicePicker';
-import { RateLimitToast } from '@/components/ui/toast';
+import { RateLimitToast, AuthMismatchToast } from '@/components/ui/toast';
 import { WebSocketStatus } from '@/components/WebSocketStatus';
 import { useAuthState, useAuthOrchestrator } from '@/hooks/useAuth';
 import { useBootstrapManager } from '@/hooks/useBootstrap';
@@ -30,25 +30,7 @@ interface ChatMessage {
 
 // Custom hook to safely use Clerk hooks only when Clerk is enabled
 function useClerkAuth() {
-  const isClerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-
-  if (!isClerkEnabled) {
-    return { isSignedIn: false, isLoaded: true, clerkEnabled: false };
-  }
-
-  // Dynamically import Clerk hooks only when needed
-  try {
-    const { useUser, useAuth } = require('@clerk/nextjs');
-    const { isSignedIn } = useUser();
-    const { isLoaded } = useAuth();
-    return { isSignedIn, isLoaded, clerkEnabled: true };
-  } catch (error) {
-    // Suppress console warnings for expected Clerk errors
-    if (!error.message.includes('ClerkProvider')) {
-      console.warn('Clerk hooks not available:', error);
-    }
-    return { isSignedIn: false, isLoaded: true, clerkEnabled: false };
-  }
+  return { isSignedIn: false, isLoaded: true, clerkEnabled: false };
 }
 
 export default function Page() {
@@ -613,6 +595,7 @@ export default function Page() {
   return (
     <div className="flex flex-col h-full">
       <RateLimitToast />
+      <AuthMismatchToast />
 
       {/* Auth Finish Error */}
       {finishError && (

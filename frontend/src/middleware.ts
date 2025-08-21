@@ -42,7 +42,8 @@ export default function middleware(req: NextRequest, ev: NextFetchEvent) {
         return NextResponse.next()
     }
 
-    const hasClerk = Boolean(process.env.CLERK_SECRET_KEY || process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
+    // Temporarily disable Clerk middleware during Google OAuth stabilization so only Google OAuth is active.
+    const hasClerk = false
     if (hasClerk) {
         return baseClerkMiddleware(req, ev)
     }

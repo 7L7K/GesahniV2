@@ -119,29 +119,8 @@ if (typeof console !== 'undefined') {
 
 // --- Auth token helpers ------------------------------------------------------
 export function getToken(): string | null {
-  try {
-    // Since we disabled Clerk, always use localStorage tokens
-    const token = getLocalStorage("auth:access");
-    if (token) {
-      console.info('TOKENS get.header_mode', {
-        hasToken: !!token,
-        tokenLength: token?.length || 0,
-        timestamp: new Date().toISOString(),
-      });
-    } else {
-      console.info('TOKENS get.header_mode', {
-        hasToken: false,
-        timestamp: new Date().toISOString(),
-      });
-    }
-    return token;
-  } catch (e) {
-    console.error('TOKENS get.error', {
-      error: e instanceof Error ? e.message : String(e),
-      timestamp: new Date().toISOString(),
-    });
-    return null;
-  }
+  // Cookie-mode only: do not use localStorage access tokens. Return null.
+  return null;
 }
 
 export function getRefreshToken(): string | null {
@@ -261,13 +240,7 @@ export function useSessionState() {
 }
 
 function authHeaders() {
-  // Get the access token for header-based authentication
-  const token = getToken();
-  if (token) {
-    return {
-      'Authorization': `Bearer ${token}`
-    };
-  }
+  // Cookie-mode: do not send Authorization header; backend reads cookies
   return {};
 }
 
@@ -300,8 +273,24 @@ export async function apiFetch(
   path: string,
   init: (RequestInit & { auth?: boolean; dedupe?: boolean; shortCacheMs?: number; contextKey?: string | string[]; credentials?: RequestCredentials }) = {}
 ): Promise<Response> {
-  // In header mode, don't include browser cookies for API calls
-  const defaultCredentials = 'include';
+  // Determine the default credentials based on auth mode and endpoint type
+  const isHeaderMode = process.env.NEXT_PUBLIC_HEADER_AUTH_MODE === '1';
+  const isOAuthEndpoint = path.includes('/google/auth/login_url') || path.includes('/google/auth/callback');
+  const isWhoamiEndpoint = path.includes('/whoami');
+
+  // For OAuth endpoints and whoami, always use credentials: 'include' for cookie mode
+  // For header mode, use credentials: 'omit' by default, but allow override
+  let defaultCredentials: RequestCredentials;
+  if (isOAuthEndpoint || isWhoamiEndpoint) {
+    // OAuth and whoami endpoints need credentials for cookie-based auth
+    defaultCredentials = 'include';
+  } else if (isHeaderMode) {
+    // Header mode defaults to omit credentials
+    defaultCredentials = 'omit';
+  } else {
+    // Cookie mode defaults to include credentials
+    defaultCredentials = 'include';
+  }
 
   // Determine if this is a public endpoint
   const isPublicEndpoint = PUBLIC_ENDPOINTS.some(endpoint => path.includes(endpoint));
@@ -1002,6 +991,7 @@ export async function getGoogleAuthUrl(next?: string): Promise<string> {
 
   const response = await apiFetch(`/v1/google/auth/login_url?${params.toString()}`, {
     method: 'GET',
+    // credentials enforced by apiFetch defaults for OAuth endpoints; explicit to be safe
     credentials: 'include', // Ensure cookies are sent for g_state cookie
   });
 

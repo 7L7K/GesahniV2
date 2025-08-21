@@ -64,7 +64,7 @@ async def trust_device(request: Request, response: Response) -> dict:
     env = (os.getenv("ENV", "dev").strip().lower())
     if env in {"prod", "production"}:
         try:
-            print("device_trust.cookie_refused prod=true")
+            logger.warning("device_trust.cookie_refused prod=true")
         except Exception:
             pass
         return {"status": "ok", "trusted": False, "cookie": None}  # type: ignore[return-value]

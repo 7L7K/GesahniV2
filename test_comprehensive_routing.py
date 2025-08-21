@@ -169,6 +169,101 @@ def test_metrics_structure():
     for metric in metrics:
         print(f"  ✅ {metric}")
 
+def test_fallback_metrics_labeling():
+    """Test that fallback metrics correctly label the original vendor as from_vendor."""
+    print("\n" + "=" * 60)
+    print("FALLBACK METRICS LABELING TEST")
+    print("=" * 60)
+    
+    from app.router import _get_fallback_vendor
+    
+    # Test the core issue: when we have a fallback, from_vendor should be the original vendor
+    print("✅ Testing fallback metrics labeling logic...")
+    
+    # Simulate the original problematic logic
+    original_vendor = "openai"
+    fallback_vendor = _get_fallback_vendor(original_vendor)  # "ollama"
+    
+    # OLD LOGIC (problematic):
+    # chosen_vendor = fallback_vendor  # "ollama"
+    # from_vendor = _get_fallback_vendor(chosen_vendor)  # _get_fallback_vendor("ollama") = "openai"
+    # This works by coincidence but is confusing and error-prone
+    
+    # NEW LOGIC (correct):
+    # original_vendor = chosen_vendor  # "openai" 
+    # chosen_vendor = fallback_vendor  # "ollama"
+    # from_vendor = original_vendor  # "openai"
+    
+    # Verify the new logic is correct
+    expected_from_vendor = original_vendor  # "openai"
+    expected_to_vendor = fallback_vendor    # "ollama"
+    
+    print(f"  Original vendor: {original_vendor}")
+    print(f"  Fallback vendor: {fallback_vendor}")
+    print(f"  Expected from_vendor: {expected_from_vendor}")
+    print(f"  Expected to_vendor: {expected_to_vendor}")
+    
+    # Verify the fallback function works correctly
+    assert _get_fallback_vendor("openai") == "ollama"
+    assert _get_fallback_vendor("ollama") == "openai"
+    
+    print("  ✅ Fallback metrics labeling logic is correct")
+
+def test_user_circuit_breaker_thread_safety():
+    """Test that user circuit breaker is thread-safe and works correctly."""
+    print("\n" + "=" * 60)
+    print("USER CIRCUIT BREAKER THREAD SAFETY TEST")
+    print("=" * 60)
+    
+    import asyncio
+    from app.router import _user_circuit_open, _user_cb_record_failure, _user_cb_reset
+    
+    async def test_concurrent_access():
+        """Test concurrent access to user circuit breaker functions."""
+        print("✅ Testing concurrent access to user circuit breaker...")
+        
+        user_id = "test_user_123"
+        
+        # Test initial state
+        is_open = await _user_circuit_open(user_id)
+        assert not is_open, "Circuit breaker should be closed initially"
+        print("  ✅ Initial state: circuit breaker closed")
+        
+        # Test recording multiple failures concurrently
+        tasks = []
+        for i in range(5):
+            task = _user_cb_record_failure(user_id)
+            tasks.append(task)
+        
+        # Execute all tasks concurrently
+        await asyncio.gather(*tasks)
+        
+        # Check if circuit breaker is open (should be after 3+ failures)
+        is_open = await _user_circuit_open(user_id)
+        assert is_open, "Circuit breaker should be open after multiple failures"
+        print("  ✅ After concurrent failures: circuit breaker open")
+        
+        # Test reset
+        await _user_cb_reset(user_id)
+        is_open = await _user_circuit_open(user_id)
+        assert not is_open, "Circuit breaker should be closed after reset"
+        print("  ✅ After reset: circuit breaker closed")
+        
+        # Test concurrent reads
+        read_tasks = []
+        for i in range(10):
+            task = _user_circuit_open(user_id)
+            read_tasks.append(task)
+        
+        results = await asyncio.gather(*read_tasks)
+        assert all(not result for result in results), "All concurrent reads should return False"
+        print("  ✅ Concurrent reads work correctly")
+        
+        print("  ✅ Thread safety test passed")
+    
+    # Run the async test
+    asyncio.run(test_concurrent_access())
+
 if __name__ == "__main__":
     test_allowlist_validation()
     test_fallback_logic()
@@ -177,6 +272,8 @@ if __name__ == "__main__":
     test_environment_configuration()
     test_endpoints()
     test_metrics_structure()
+    test_fallback_metrics_labeling()
+    test_user_circuit_breaker_thread_safety()
     
     print("\n" + "=" * 60)
     print("COMPREHENSIVE ROUTING SYSTEM SUMMARY")

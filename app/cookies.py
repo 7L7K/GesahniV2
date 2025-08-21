@@ -35,18 +35,30 @@ Usage:
 from typing import Optional
 from fastapi import Response, Request
 
-from .cookie_config import get_cookie_config, get_token_ttls, format_cookie_header
+from . import cookie_config as cookie_cfg
+from .cookie_config import format_cookie_header, get_cookie_config
+from .cookie_names import (
+    GSNH_AT,
+    GSNH_RT,
+    GSNH_SESS,
+    ACCESS_TOKEN,
+    REFRESH_TOKEN,
+    SESSION,
+    ACCESS_TOKEN_LEGACY,
+    REFRESH_TOKEN_LEGACY,
+    SESSION_LEGACY,
+)
 
 
 def set_auth_cookies(
-    resp: Response, 
-    *, 
-    access: str, 
-    refresh: str, 
+    resp: Response,
+    *,
+    access: str,
+    refresh: str,
     session_id: Optional[str] = None,
-    access_ttl: int, 
+    access_ttl: int,
     refresh_ttl: int,
-    request: Request
+    request: Request,
 ) -> None:
     """
     Set authentication cookies on the response.
@@ -69,11 +81,12 @@ def set_auth_cookies(
         this alignment to prevent divergence.
     """
     # Get cookie configuration from request context
-    cookie_config = get_cookie_config(request)
+    cookie_config = cookie_cfg.get_cookie_config(request)
     
-    # Set access token cookie
+    # Set access token cookie (write canonical name)
+    # Use the external-facing canonical name so clients see `access_token`.
     access_header = format_cookie_header(
-        key="access_token",
+        key=ACCESS_TOKEN,
         value=access,
         max_age=access_ttl,
         secure=cookie_config["secure"],
@@ -87,7 +100,7 @@ def set_auth_cookies(
     # Set refresh token cookie only if provided
     if refresh:
         refresh_header = format_cookie_header(
-            key="refresh_token",
+            key=REFRESH_TOKEN,
             value=refresh,
             max_age=refresh_ttl,
             secure=cookie_config["secure"],
@@ -102,8 +115,9 @@ def set_auth_cookies(
     # CRITICAL: __session TTL must always align with access token TTL
     # This prevents call sites from diverging and ensures consistent session lifecycle
     if session_id:
+        # Use external-facing session cookie name (`__session`) for integrations
         session_header = format_cookie_header(
-            key="__session",
+            key=SESSION,
             value=session_id,
             max_age=access_ttl,  # Always use access_ttl for session alignment
             secure=cookie_config["secure"],
@@ -113,6 +127,8 @@ def set_auth_cookies(
             domain=cookie_config["domain"],
         )
         resp.headers.append("Set-Cookie", session_header)
+
+    # No legacy cookie clears — writes only touch canonical names
 
 
 def clear_auth_cookies(resp: Response, request: Request) -> None:
@@ -127,12 +143,26 @@ def clear_auth_cookies(resp: Response, request: Request) -> None:
         request: FastAPI Request object for cookie configuration
     """
     # Get cookie configuration from request context
-    cookie_config = get_cookie_config(request)
+    cookie_config = cookie_cfg.get_cookie_config(request)
     
-    # Clear all three cookies with identical attributes + Max-Age=0
-    cookies_to_clear = ["access_token", "refresh_token", "__session"]
-    
-    for cookie_name in cookies_to_clear:
+    # Clear both canonical external names and internal GSNH_* legacy names to
+    # ensure interoperability during migrations and for clients using either.
+    cookies_to_clear = [
+        ACCESS_TOKEN,
+        REFRESH_TOKEN,
+        SESSION,
+        ACCESS_TOKEN_LEGACY,
+        REFRESH_TOKEN_LEGACY,
+        SESSION_LEGACY,
+    ]
+    # Deduplicate while preserving order
+    seen = set()
+    deduped = []
+    for n in cookies_to_clear:
+        if n not in seen:
+            seen.add(n)
+            deduped.append(n)
+    for cookie_name in deduped:
         # Set cookie with Max-Age=0 to clear it immediately
         header = format_cookie_header(
             key=cookie_name,
@@ -472,6 +502,15 @@ def clear_named_cookie(
         domain=cookie_domain
     )
     resp.headers.append("Set-Cookie", header)
+
+
+def get_cookie(request: Request, name: str) -> str | None:
+    """Plain cookie reader — no legacy fallbacks.
+
+    Use direct `get_cookie(request, GSNH_AT)` for auth reads to ensure only canonical
+    names are relied upon.
+    """
+    return request.cookies.get(name)
 
 
 # Export all cookie facade functions

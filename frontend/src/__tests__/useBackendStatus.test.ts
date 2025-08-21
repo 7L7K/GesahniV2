@@ -29,7 +29,7 @@ describe('useBackendStatus', () => {
         expect(result.current.ready).toBe('online');
         // Verify fetch options include omit/no-store via call args inspection for first call
         const init = mockFetch.mock.calls[0][1];
-        expect(init.credentials).toBe('include');
+        expect(init.credentials).toBe('omit');
         expect(init.cache).toBe('no-store');
     });
 

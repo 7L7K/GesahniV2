@@ -32,7 +32,7 @@ def _extract_csrf_header(request: Request) -> tuple[str | None, bool, bool]:
         if allowed:
             try:
                 # Log with explicit deprecation date for ops visibility
-                print("csrf.legacy_header used removal=2025-12-31")
+                logger.warning("csrf.legacy_header used removal=2025-12-31")
             except Exception:
                 pass
         return legacy, True, allowed

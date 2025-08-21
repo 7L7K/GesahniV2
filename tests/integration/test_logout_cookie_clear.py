@@ -16,8 +16,8 @@ def test_logout_clears_and_blocks_refresh(monkeypatch):
 
     # cookies should be gone (client-side helper can't read httponly, but server behavior next proves it)
     r3 = client.get("/v1/whoami")
-    # whoami returns JSON but not authenticated; accept 200 with is_authenticated false
-    assert r3.status_code in (HTTPStatus.OK, HTTPStatus.UNAUTHORIZED)
+    # whoami now requires authentication and returns 401 when not authenticated
+    assert r3.status_code == HTTPStatus.UNAUTHORIZED
 
     # refresh now denied
     r4 = client.post("/v1/auth/refresh")

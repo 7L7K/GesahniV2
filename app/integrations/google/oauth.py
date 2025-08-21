@@ -2,6 +2,7 @@ from __future__ import annotations
 import json, time, base64, hmac, hashlib
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Tuple, List, Any
+import logging
 
 from fastapi import HTTPException
 
@@ -26,6 +27,8 @@ from .config import (
     JWT_STATE_SECRET,
     get_google_scopes,
 )
+
+logger = logging.getLogger(__name__)
 
 CLIENT_CONFIG = {
     "web": {
@@ -100,64 +103,96 @@ def create_flow(scopes: Optional[List[str]] = None):
     Raises HTTPException when unavailable so callers can degrade gracefully.
     """
     if not _GOOGLE_AVAILABLE or _Flow is None:  # pragma: no cover - env-dependent
-        raise HTTPException(status_code=501, detail="google oauth client unavailable")
-    return _Flow.from_client_config(
-        CLIENT_CONFIG,
-        scopes=scopes or get_google_scopes(),
-        redirect_uri=GOOGLE_REDIRECT_URI,
-    )
+        raise HTTPException(status_code=503, detail="Google OAuth libraries unavailable")
+    return _Flow.from_client_config(CLIENT_CONFIG, scopes=scopes or get_google_scopes())
 
-def build_auth_url(
-    user_id: str,
-    scopes: Optional[List[str]] = None,
-    extra_state: Optional[Dict] = None,
-) -> Tuple[str, str]:
-    """Return an OAuth authorization URL and our signed state.
+def build_auth_url(user_id: str, state_payload: Optional[Dict] = None) -> Tuple[str, str]:
+    """Build a Google OAuth URL with optional state payload.
 
-    Uses the official Flow when available; otherwise constructs the URL
-    manually so tests and lightweight environments work without heavy deps.
+    Returns:
+        Tuple[str, str]: (auth_url, state)
     """
-    requested_scopes = scopes or get_google_scopes()
-    # Compose our signed state first
-    state_payload: Dict[str, Any] = {"uid": user_id}
-    if extra_state:
-        state_payload.update(extra_state)
-    signed = _sign_state(state_payload)
+    if not _GOOGLE_AVAILABLE or _Flow is None:  # pragma: no cover - env-dependent
+        raise HTTPException(status_code=503, detail="Google OAuth libraries unavailable")
+    flow = create_flow()
+    if state_payload:
+        state = _sign_state(state_payload)
+    else:
+        state = _sign_state({"user_id": user_id})
+    flow.state = state
+    return flow.authorization_url()[0], state
 
-    # Always construct the URL manually for deterministic scopes to avoid
-    # oauthlib "scope_changed" exceptions due to Google returning userinfo.*
-    # even when requesting email/profile.
+def exchange_code(code: str, state: str, verify_state: bool = True) -> Any:
+    """Exchange an authorization code for credentials.
 
-    # Manual construction fallback
-    q = urlencode(
-        {
-            "client_id": GOOGLE_CLIENT_ID,
-            "redirect_uri": GOOGLE_REDIRECT_URI,
-            "response_type": "code",
-            "scope": " ".join(requested_scopes),
-            "access_type": "offline",
-            "include_granted_scopes": "true",
-            "prompt": "consent",
-            "state": signed,
-        }
-    )
-    return f"https://accounts.google.com/o/oauth2/v2/auth?{q}", signed
+    Args:
+        code: Authorization code from Google
+        state: State parameter (verified if verify_state=True)
+        verify_state: Whether to verify the state parameter
 
-def exchange_code(code: str, signed_state: str, verify_state: bool = True):
-    # Validate CSRF state we sent earlier unless caller already validated it
+    Returns:
+        Credentials object with token, refresh_token, etc.
+
+    Raises:
+        HTTPException: On exchange failure or invalid state
+    """
     if verify_state:
-        _ = _verify_state(signed_state)
+        try:
+            _verify_state(state)
+        except Exception as e:
+            logger.error(
+                "State verification failed",
+                extra={
+                    "meta": {
+                        "error_class": "StateVerificationError",
+                        "error_detail": str(e),
+                        "cause": "Invalid or expired state parameter"
+                    }
+                }
+            )
+            raise HTTPException(status_code=400, detail="Invalid state")
+
     if not _GOOGLE_AVAILABLE or _Flow is None:  # pragma: no cover - env-dependent
         # Optional google libs are unavailable; fall back to manual token exchange below.
         # We still attempt the manual HTTP token exchange to support lightweight environments.
-        import logging
-        logging.getLogger(__name__).warning("google oauth client libs unavailable; using manual token exchange")
+        logger.warning("Google OAuth client libs unavailable; using manual token exchange")
+    
     # First try via official client (if available)
     try:
-        flow = create_flow()
-        flow.fetch_token(code=code)
-        return flow.credentials
-    except Exception:
+        from ...otel_utils import start_span
+
+        # Record whether PKCE was used (best-effort: present in code or flow)
+        pkce_used = False
+        try:
+            pkce_used = bool(getattr(flow, "code_verifier", None) or "pkce" in getattr(flow, "scopes", []))
+        except Exception:
+            pkce_used = False
+
+        with start_span("google.oauth.token.exchange", {"method": "google_client_lib", "pkce_used": pkce_used}) as _span:
+            flow = create_flow()
+            flow.fetch_token(code=code)
+            logger.info(
+                "Token exchange successful via Google client library",
+                extra={
+                    "meta": {
+                        "method": "google_client_lib",
+                        "status": "success",
+                        "pkce_used": pkce_used,
+                    }
+                }
+            )
+            return flow.credentials
+    except Exception as e:
+        logger.warning(
+            "Google client library token exchange failed, falling back to manual HTTP",
+            extra={
+                "meta": {
+                    "method": "google_client_lib",
+                    "status": "failed",
+                    "error": str(e)
+                }
+            }
+        )
         # Fallback: manual token exchange to avoid oauthlib scope_changed issues
         try:
             # Prefer requests if available for simplicity
@@ -165,7 +200,20 @@ def exchange_code(code: str, signed_state: str, verify_state: bool = True):
                 import requests
                 from datetime import datetime, timezone, timedelta
 
-                resp = requests.post(
+                logger.info(
+                    "Starting manual HTTP token exchange",
+                    extra={
+                        "meta": {
+                            "method": "manual_http_requests",
+                            "token_uri": CLIENT_CONFIG["web"]["token_uri"]
+                        }
+                    }
+                )
+                
+                start_time = time.time()
+                from ...otel_utils import start_span
+                with start_span("google.oauth.token.exchange", {"method": "manual_http_requests"}) as _span:
+                    resp = requests.post(
                     CLIENT_CONFIG["web"]["token_uri"],
                     data={
                         "code": code,
@@ -176,14 +224,55 @@ def exchange_code(code: str, signed_state: str, verify_state: bool = True):
                     },
                     timeout=10,
                 )
+                duration = (time.time() - start_time) * 1000
+                
                 if not resp.ok:
+                    logger.error(
+                        "Google token exchange failed",
+                        extra={
+                            "meta": {
+                                "method": "manual_http_requests",
+                                "status": resp.status_code,
+                                "latency_ms": duration,
+                                "error_class": "HTTPError",
+                                "error_detail": f"HTTP {resp.status_code}",
+                                "response_body": resp.text[:200] if resp.text else None
+                            }
+                        }
+                    )
                     raise HTTPException(status_code=400, detail="oauth_exchange_failed")
+                
                 data = resp.json()
+                logger.info(
+                    "Manual HTTP token exchange successful",
+                    extra={
+                        "meta": {
+                            "method": "manual_http_requests",
+                            "status": resp.status_code,
+                            "latency_ms": duration,
+                            "has_access_token": "access_token" in data,
+                            "has_refresh_token": "refresh_token" in data,
+                            "has_id_token": "id_token" in data
+                        }
+                    }
+                )
+                
             except ModuleNotFoundError:
                 # Fall back to stdlib when requests isn't installed
                 import urllib.request, urllib.parse, json as _json
                 from datetime import datetime, timezone, timedelta
 
+                logger.info(
+                    "Starting manual HTTP token exchange (stdlib)",
+                    extra={
+                        "meta": {
+                            "method": "manual_http_stdlib",
+                            "token_uri": CLIENT_CONFIG["web"]["token_uri"]
+                        }
+                    }
+                )
+                
+                start_time = time.time()
                 post_data = urllib.parse.urlencode({
                     "code": code,
                     "client_id": CLIENT_CONFIG["web"]["client_id"],
@@ -199,6 +288,21 @@ def exchange_code(code: str, signed_state: str, verify_state: bool = True):
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     body = resp.read().decode()
                     data = _json.loads(body)
+                
+                duration = (time.time() - start_time) * 1000
+                logger.info(
+                    "Manual HTTP token exchange successful (stdlib)",
+                    extra={
+                        "meta": {
+                            "method": "manual_http_stdlib",
+                            "status": resp.status,
+                            "latency_ms": duration,
+                            "has_access_token": "access_token" in data,
+                            "has_refresh_token": "refresh_token" in data,
+                            "has_id_token": "id_token" in data
+                        }
+                    }
+                )
 
             class _SimpleCreds:
                 def __init__(self, d):
@@ -217,6 +321,16 @@ def exchange_code(code: str, signed_state: str, verify_state: bool = True):
         except HTTPException:
             raise
         except Exception as e:
+            logger.error(
+                "Manual token exchange failed",
+                extra={
+                    "meta": {
+                        "error_class": type(e).__name__,
+                        "error_detail": str(e),
+                        "cause": "Unexpected error during manual token exchange"
+                    }
+                }
+            )
             raise HTTPException(status_code=400, detail=f"oauth_exchange_failed: {e}")
 
 def refresh_if_needed(creds: Any) -> Any:

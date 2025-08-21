@@ -2,6 +2,10 @@
 from app.env_utils import load_env
 
 load_env()
+# Fail fast: enforce strong JWT secret at import time to prevent misconfigured deployments
+jwt_secret = os.getenv("JWT_SECRET", "")
+if len(jwt_secret) < 32:
+    raise ValueError(f"JWT_SECRET must be at least 32 characters (current: {len(jwt_secret)})")
 import asyncio
 import json
 import logging
@@ -65,7 +69,7 @@ from .home_assistant import (
 from .alias_store import get_all as alias_all, set as alias_set, delete as alias_delete
 from .history import get_record_by_req_id
 from .llama_integration import startup_check as llama_startup
-from .logging_config import configure_logging, req_id_var, get_last_errors
+from .logging_config import configure_logging, req_id_var, get_errors
 from .csrf import CSRFMiddleware
 from .otel_utils import init_tracing, shutdown_tracing
 from .status import router as status_router
@@ -168,6 +172,8 @@ from .middleware import (
     RequestIDMiddleware,
     DedupMiddleware,
     TraceRequestMiddleware,
+    HealthCheckFilterMiddleware,
+    RedactHashMiddleware,
     reload_env_middleware,
     silent_refresh_middleware,
 )
@@ -200,8 +206,6 @@ def _anon_user_id(auth_header: str | None) -> str:
 
 
 # Configure logging first
-from .logging_config import configure_logging, req_id_var, get_last_errors
-
 configure_logging()
 logger = logging.getLogger(__name__)
 
@@ -346,8 +350,17 @@ async def enhanced_error_handling(request: Request, call_next):
     req_id = req_id_var.get()
     
     try:
+        # Augment logs with route and anonymized user id for observability
+        route_name = None
+        try:
+            route_name = getattr(request.scope.get("endpoint"), "__name__", None)
+        except Exception:
+            route_name = None
+
+        user_anon = _anon_user_id(request.headers.get("authorization"))
+
         logger.debug(f"Request started: {request.method} {request.url.path} (ID: {req_id})")
-        
+
         # Log request details in debug mode
         if logger.isEnabledFor(logging.DEBUG):
             headers = dict(request.headers)
@@ -355,10 +368,12 @@ async def enhanced_error_handling(request: Request, call_next):
             for key in ["authorization", "cookie", "x-api-key"]:
                 if key in headers:
                     headers[key] = "[REDACTED]"
-            
+
             logger.debug(f"Request details: {request.method} {request.url.path}", extra={
                 "meta": {
                     "req_id": req_id,
+                    "route": route_name,
+                    "user_anon": user_anon,
                     "headers": headers,
                     "query_params": dict(request.query_params),
                     "client_ip": request.client.host if request.client else None,
@@ -372,6 +387,8 @@ async def enhanced_error_handling(request: Request, call_next):
         logger.info(f"Request completed: {request.method} {request.url.path} -> {response.status_code} ({duration:.3f}s)", extra={
             "meta": {
                 "req_id": req_id,
+                "route": route_name,
+                "user_anon": user_anon,
                 "status_code": response.status_code,
                 "duration_ms": duration * 1000,
             }
@@ -385,6 +402,8 @@ async def enhanced_error_handling(request: Request, call_next):
         logger.error(error_msg, exc_info=True, extra={
             "meta": {
                 "req_id": req_id,
+                "route": route_name,
+                "user_anon": user_anon,
                 "duration_ms": duration * 1000,
                 "error_type": type(e).__name__,
                 "error_message": str(e),
@@ -498,6 +517,13 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Home Assistant startup failed (non-blocking): %s", e)
         
+        # OpenAI startup check
+        try:
+            from .router import _check_openai_health
+            await _check_openai_health()
+        except Exception as e:
+            logger.warning("OpenAI startup check failed (non-blocking): %s", e)
+        
         # Schedule nightly jobs (no-op if scheduler unavailable)
         try:
             schedule_nightly_jobs()
@@ -534,7 +560,7 @@ async def lifespan(app: FastAPI):
         try:
             from typing import cast as _cast
             if _HEALTH_LAST.get("online", True):
-                print("healthz status=offline")
+                logger.info("healthz status=offline")
             _HEALTH_LAST["online"] = False
         except Exception:
             pass
@@ -604,22 +630,11 @@ app.openapi = _custom_openapi  # type: ignore[assignment]
 # CORS configuration - will be added as outermost middleware
 # WebSocket requirement: Only accept http://localhost:3000 for consistent origin validation
 
-# Enhanced logging for debugging configuration issues
-logging.info("=== CORS CONFIGURATION DEBUG ===")
-logging.info(f"Environment variables:")
-logging.info(f"  CORS_ALLOW_ORIGINS: {repr(os.getenv('CORS_ALLOW_ORIGINS'))}")
-logging.info(f"  APP_URL: {repr(os.getenv('APP_URL'))}")
-logging.info(f"  API_URL: {repr(os.getenv('API_URL'))}")
-logging.info(f"  HOST: {repr(os.getenv('HOST'))}")
-logging.info(f"  PORT: {repr(os.getenv('PORT'))}")
-logging.info(f"  CORS_ALLOW_CREDENTIALS: {repr(os.getenv('CORS_ALLOW_CREDENTIALS'))}")
-
+# CORS configuration - simplified logging
 _cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
-logging.info(f"Raw CORS origins from env: {repr(_cors_origins)}")
 
 # Parse and normalize entries
 origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
-logging.info(f"Parsed CORS origins (pre-sanitize): {origins}")
 
 # Normalize common localhost variants (127.0.0.1 -> localhost)
 origins = [
@@ -677,7 +692,6 @@ else:
 if not origins:
     logging.warning("No CORS origins configured. Defaulting to http://localhost:3000")
     origins = ["http://localhost:3000"]
-    logging.info(f"Set default CORS origin: {origins[0]}")
 
 def is_same_address_family(origin_list):
     """Check if all origins are in the same address family (localhost or IP)"""
@@ -691,15 +705,12 @@ if not is_same_address_family(origins):
     logging.warning("Mixed address families detected in CORS origins (post-sanitize).")
     logging.warning("This may cause WebSocket connection issues. Consider using consistent addressing.")
 
-# Allow credentials: yes (cookies/tokens)
-allow_credentials_raw = os.getenv("CORS_ALLOW_CREDENTIALS", "true")
-allow_credentials = allow_credentials_raw.strip().lower() in {"1", "true", "yes", "on"}
-logging.info(f"CORS allow_credentials: raw={repr(allow_credentials_raw)}, parsed={allow_credentials}")
+# Allow credentials: yes (cookies/tokens) — enforce true for local dev to support cookies with exact origin
+allow_credentials = True
 
-logging.info(f"Final CORS configuration:")
-logging.info(f"  origins: {origins}")
-logging.info(f"  allow_credentials: {allow_credentials}")
-logging.info("=== END CORS CONFIGURATION DEBUG ===")
+# Log CORS configuration only in DEBUG mode
+if os.getenv("LOG_LEVEL", "INFO").upper() == "DEBUG":
+    logging.debug(f"CORS configuration: origins={origins}, allow_credentials={allow_credentials}")
 
 # Custom handler for HTTP requests to WebSocket endpoints
 @app.get("/v1/ws/{path:path}")
@@ -848,7 +859,7 @@ async def _health_live() -> dict:
     # If ever used to signal offline, mirror flip logging
     if not _HEALTH_LAST.get("online", False):
         try:
-            print("healthz status=online")
+            logger.info("healthz status=online")
         except Exception:
             pass
     _HEALTH_LAST["online"] = True
@@ -1223,8 +1234,9 @@ async def upload(
     session_dir.mkdir(parents=True, exist_ok=True)
     dest = session_dir / "source.wav"
     content = await file.read()
-    dest.write_bytes(content)
-    logger.info("sessions.upload", extra={"meta": {"dest": str(dest)}})
+    # Offload blocking disk write to threadpool to avoid blocking the event loop
+    await asyncio.to_thread(dest.write_bytes, content)
+    logger.info("sessions.upload", extra={"meta": {"dest": str(dest), "user_id": user_id}})
     return {"session_id": session_id}
 
 
@@ -1950,31 +1962,11 @@ if music_router is not None:
 #    Order: [ RequestID ] → [ Trace ] → [ CSRF ] → [ CORS ] → [ RateLimit / Router / Handlers ]
 app.add_middleware(RequestIDMiddleware)      # innermost - sets request ID
 app.add_middleware(DedupMiddleware)          # deduplicates requests
+app.add_middleware(HealthCheckFilterMiddleware)  # filters health check logs
 app.add_middleware(TraceRequestMiddleware)   # traces/logs requests (skips OPTIONS)
+app.add_middleware(RedactHashMiddleware)     # redact + hashing for secrets
 
-# Add CORS debug middleware
-@app.middleware("http")
-async def cors_debug_middleware(request: Request, call_next):
-    """Debug middleware to log CORS-related information."""
-    origin = request.headers.get("origin")
-    method = request.method
-    
-    if origin:
-        logging.info(f"CORS DEBUG: Request from origin={origin}, method={method}, path={request.url.path}")
-        if origin not in origins:
-            logging.warning(f"CORS DEBUG: Origin {origin} not in allowed origins {origins}")
-    
-    if method == "OPTIONS":
-        logging.info(f"CORS DEBUG: Preflight request for path={request.url.path}")
-    
-    response = await call_next(request)
-    
-    # Log CORS headers in response
-    cors_headers = {k: v for k, v in response.headers.items() if k.lower().startswith('access-control-')}
-    if cors_headers:
-        logging.info(f"CORS DEBUG: Response headers: {cors_headers}")
-    
-    return response
+
 
 
 
@@ -1994,15 +1986,6 @@ app.middleware("http")(enhanced_error_handling)  # Enhanced error handling and l
 
 # 5) CORS AS OUTERMOST MIDDLEWARE — HANDLES ALL RESPONSES
 #    CORS middleware must be the outermost to ensure all responses (including errors) get ACAO headers
-logging.info("=== REGISTERING CORS MIDDLEWARE (OUTERMOST) ===")
-logging.info(f"Adding CORSMiddleware with:")
-logging.info(f"  allow_origins: {origins}")
-logging.info(f"  allow_credentials: {allow_credentials}")
-logging.info(f"  allow_methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']")
-logging.info(f"  allow_headers: ['*']")
-logging.info(f"  expose_headers: ['X-Request-ID']")
-logging.info(f"  max_age: 600")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -2013,7 +1996,6 @@ app.add_middleware(
     expose_headers=["X-Request-ID"],
     max_age=600,
 )
-logging.info("=== CORS MIDDLEWARE REGISTERED (OUTERMOST) ===")
 
 # Debug middleware order dump
 def _dump_mw_stack(app):
@@ -2025,14 +2007,8 @@ def _dump_mw_stack(app):
 
 _dump_mw_stack(app)
 
-# Final startup logging
-logging.info("=== FINAL STARTUP CONFIGURATION ===")
-logging.info(f"Server will start on: {os.getenv('HOST', '0.0.0.0')}:{os.getenv('PORT', '8000')}")
-logging.info(f"Frontend origin: http://localhost:3000")
-logging.info(f"Backend origin: http://localhost:8000")
-logging.info(f"CORS origins: {origins}")
-logging.info(f"CORS allow_credentials: {allow_credentials}")
-logging.info("=== STARTUP COMPLETE ===")
+# Final startup logging - simplified
+logging.info(f"Server starting on {os.getenv('HOST', '0.0.0.0')}:{os.getenv('PORT', '8000')}")
 
 
 if __name__ == "__main__":

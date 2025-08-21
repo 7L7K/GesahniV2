@@ -1,15 +1,17 @@
+import asyncio
 import logging
 import os
 import inspect
-from dataclasses import asdict
+import time
+from dataclasses import asdict, dataclass
 from typing import Any, Awaitable, Callable
+from enum import Enum
 
 import httpx
 
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, status
 
 from .analytics import record
-from .deps.user import get_current_user_id
 from .gpt_client import SYSTEM_PROMPT, ask_gpt
 from .model_router import (
     route_text,
@@ -45,12 +47,14 @@ from .memory.vector_store import (
 from .model_picker import pick_model
 from . import model_picker as model_picker_module
 from .prompt_builder import PromptBuilder
+from .postcall import PostCallData, process_postcall
 from .memory.vector_store import safe_query_user_memories
 from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
 from .skills.smalltalk_skill import SmalltalkSkill
 from .telemetry import log_record_var
 from .otel_utils import start_span, set_error
 from .memory.profile_store import profile_store, CANONICAL_KEYS
+from .memory.write_policy import memory_write_policy
 try:  # optional: new retrieval pipeline
     from .retrieval.pipeline import run_pipeline as _run_retrieval_pipeline
 except Exception:  # pragma: no cover
@@ -76,14 +80,86 @@ except Exception:  # pragma: no cover - fallback stubs
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class RoutingDecision:
+    """Data class to encapsulate routing decision information."""
+    vendor: str
+    model: str
+    reason: str
+    keyword_hit: str | None
+    stream: bool
+    allow_fallback: bool
+    request_id: str
+
+
+class ErrorType(Enum):
+    """Normalized error types for deterministic fallback policy."""
+    PROVIDER_4XX = "provider_4xx"  # Client errors (400-499) - likely won't succeed on retry
+    PROVIDER_5XX = "provider_5xx"  # Server errors (500-599) - might succeed on retry
+    NETWORK_TIMEOUT = "network_timeout"  # Network issues - might succeed on retry
+    AUTH_ERROR = "auth_error"  # Authentication issues - won't succeed without fixing credentials
+
+
+def normalize_error(error: Exception) -> ErrorType:
+    """Normalize various exception types into standardized ErrorType enum."""
+    import httpx
+
+    # Handle HTTP status errors
+    if isinstance(error, httpx.HTTPStatusError):
+        status_code = error.response.status_code
+        if 400 <= status_code < 500:
+            if status_code in (401, 403):
+                return ErrorType.AUTH_ERROR
+            else:
+                return ErrorType.PROVIDER_4XX
+        elif 500 <= status_code < 600:
+            return ErrorType.PROVIDER_5XX
+
+    # Handle HTTPX specific errors
+    if isinstance(error, (httpx.TimeoutException, httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout)):
+        return ErrorType.NETWORK_TIMEOUT
+
+    if isinstance(error, (httpx.ConnectError, httpx.RemoteProtocolError)):
+        return ErrorType.NETWORK_TIMEOUT
+
+    # Handle generic timeout errors
+    if isinstance(error, asyncio.TimeoutError):
+        return ErrorType.NETWORK_TIMEOUT
+
+    # Handle authentication errors
+    error_str = str(error).lower()
+    if any(keyword in error_str for keyword in ["unauthorized", "forbidden", "invalid api key", "authentication failed"]):
+        return ErrorType.AUTH_ERROR
+
+    # Default to server error for unknown exceptions
+    return ErrorType.PROVIDER_5XX
+
+# ---------------------------------------------------------------------------
+# Constants / Config
+# ---------------------------------------------------------------------------
+
+# Single source of truth for model allow-lists
+def _get_allowed_models() -> tuple[set[str], set[str]]:
+    """Get allowed models from environment variables as sets."""
+    gpt_models = set(
+        filter(
+            None, os.getenv("ALLOWED_GPT_MODELS", "gpt-4o,gpt-4,gpt-3.5-turbo").split(",")
+        )
+    )
+    llama_models = set(
+        filter(None, os.getenv("ALLOWED_LLAMA_MODELS", "llama3:latest,llama3").split(","))
+    )
+    return gpt_models, llama_models
+
+ALLOWED_GPT_MODELS, ALLOWED_LLAMA_MODELS = _get_allowed_models()
+
 # Environment variables for routing configuration
 ROUTER_BUDGET_MS = int(os.getenv("ROUTER_BUDGET_MS", "7000"))
 OPENAI_TIMEOUT_MS = int(os.getenv("OPENAI_TIMEOUT_MS", "6000"))
 OLLAMA_TIMEOUT_MS = int(os.getenv("OLLAMA_TIMEOUT_MS", "4500"))
-
-# Allow-list validation
-ALLOWED_GPT_MODELS = os.getenv("ALLOWED_GPT_MODELS", "gpt-4o,gpt-4o-mini,gpt-4.1-nano").split(",")
-ALLOWED_LLAMA_MODELS = os.getenv("ALLOWED_LLAMA_MODELS", "llama3,llama3.2,llama3.1").split(",")
 
 def _validate_model_allowlist(model: str, vendor: str) -> None:
     """Validate model against allow-list before any vendor imports."""
@@ -95,7 +171,7 @@ def _validate_model_allowlist(model: str, vendor: str) -> None:
                     "error": "model_not_allowed",
                     "model": model,
                     "vendor": vendor,
-                    "allowed": ALLOWED_GPT_MODELS
+                    "allowed": list(ALLOWED_GPT_MODELS)
                 }
             )
     elif vendor == "ollama":
@@ -106,7 +182,7 @@ def _validate_model_allowlist(model: str, vendor: str) -> None:
                     "error": "model_not_allowed", 
                     "model": model,
                     "vendor": vendor,
-                    "allowed": ALLOWED_LLAMA_MODELS
+                    "allowed": list(ALLOWED_LLAMA_MODELS)
                 }
             )
     else:
@@ -115,15 +191,31 @@ def _validate_model_allowlist(model: str, vendor: str) -> None:
             detail={
                 "error": "unknown_model",
                 "model": model,
-                "hint": f"allowed: {', '.join(ALLOWED_GPT_MODELS + ALLOWED_LLAMA_MODELS)}"
+                "hint": f"allowed: {', '.join(ALLOWED_GPT_MODELS | ALLOWED_LLAMA_MODELS)}"
             }
         )
+
+# OpenAI circuit breaker state (similar to LLaMA pattern)
+openai_failures: int = 0
+openai_last_failure_ts: float = 0.0
+openai_circuit_open: bool = False
+OPENAI_HEALTHY: bool = True
+
+# OpenAI health check state tracking
+openai_health_check_state = {
+    "has_ever_succeeded": False,
+    "last_success_ts": 0.0,
+    "last_check_ts": 0.0,
+    "consecutive_failures": 0,
+    "next_check_delay": 5.0,  # Start with 5 seconds
+    "max_check_delay": 300.0,  # Max 5 minutes
+    "success_throttle_delay": 60.0,  # 1 minute after success
+}
 
 def _check_vendor_health(vendor: str) -> bool:
     """Check if vendor is healthy without importing vendor modules."""
     if vendor == "openai":
-        # Check OpenAI health (implement based on your OpenAI integration)
-        return True  # Placeholder - implement actual health check
+        return OPENAI_HEALTHY and not openai_circuit_open
     elif vendor == "ollama":
         return llama_integration.LLAMA_HEALTHY and not llama_integration.llama_circuit_open
     return False
@@ -146,15 +238,15 @@ def _dry(engine: str, model: str) -> str:
     logger.info(msg)
     return msg
 
-def _user_circuit_open(user_id: str) -> bool:
-    """Check if user-specific circuit breaker is open."""
-    # Implement user-specific circuit breaker logic
-    # For now, return False (circuit closed)
-    return False
+
 
 import json
 import uuid
 from datetime import datetime, timezone
+
+# ---------------------------------------------------------------------------
+# Post-call handling (use existing postcall.py module)
+# ---------------------------------------------------------------------------
 
 def _log_golden_trace(
     request_id: str,
@@ -165,16 +257,15 @@ def _log_golden_trace(
     override_in: str | None,
     intent: str,
     tokens_est: int,
-    picker_reason: str,
-    chosen_vendor: str,
-    chosen_model: str,
+    routing_decision: RoutingDecision,
     dry_run: bool,
     cb_user_open: bool,
     cb_global_open: bool,
-    allow_fallback: bool,
-    stream: bool,
     tokens_est_method: str = "approx",
-    keyword_hit: str | None = None,
+    latency_ms: int | None = None,
+    timeout_ms: int | None = None,
+    fallback_reason: str | None = None,
+    cache_hit: bool = False,
 ) -> None:
     """Emit exactly one post-decision log before adapter call. Make it the law."""
     trace = {
@@ -188,25 +279,29 @@ def _log_golden_trace(
         "intent": intent,
         "tokens_est": tokens_est,
         "tokens_est_method": tokens_est_method,
-        "picker_reason": picker_reason,
-        "chosen_vendor": chosen_vendor,
-        "chosen_model": chosen_model,
+        "picker_reason": routing_decision.reason,
+        "chosen_vendor": routing_decision.vendor,
+        "chosen_model": routing_decision.model,
         "dry_run": dry_run,
         "cb_user_open": cb_user_open,
         "cb_global_open": cb_global_open,
-        "allow_fallback": allow_fallback,
-        "stream": stream,
+        "allow_fallback": routing_decision.allow_fallback,
+        "stream": routing_decision.stream,
+        "latency_ms": latency_ms,
+        "timeout_ms": timeout_ms,
+        "fallback_reason": fallback_reason,
+        "cache_hit": cache_hit,
     }
+
+    if routing_decision.keyword_hit:
+        trace["keyword_hit"] = routing_decision.keyword_hit
     
-    if keyword_hit:
-        trace["keyword_hit"] = keyword_hit
-    
-    print(f"🎯 GOLDEN_TRACE: {json.dumps(trace)}")
+    logger.info("🎯 GOLDEN_TRACE: %s", json.dumps(trace))
     
     # Emit metrics
     try:
         from .metrics import ROUTER_REQUESTS_TOTAL
-        ROUTER_REQUESTS_TOTAL.labels(vendor=chosen_vendor, model=chosen_model, reason=picker_reason).inc()
+        ROUTER_REQUESTS_TOTAL.labels(vendor=routing_decision.vendor, model=routing_decision.model, reason=routing_decision.reason).inc()
     except Exception:
         pass
 
@@ -225,26 +320,27 @@ def _log_routing_decision(
     normalized_from: str | None,
 ) -> None:
     """Log the final routing decision for auditability."""
-    print(
-        f"🎯 ROUTING DECISION: "
-        f"override_in={override_in}, intent={intent}, tokens_est={tokens_est}, "
-        f"picker_reason={picker_reason}, chosen_vendor={chosen_vendor}, chosen_model={chosen_model}, "
-        f"dry_run={dry_run}, cb_user_open={cb_user_open}, cb_global_open={cb_global_open}, "
-        f"shape={shape}, normalized_from={normalized_from}"
+    logger.info(
+        "🎯 ROUTING DECISION: override_in=%s, intent=%s, tokens_est=%s, picker_reason=%s, chosen_vendor=%s, chosen_model=%s, dry_run=%s, cb_user_open=%s, cb_global_open=%s, shape=%s, normalized_from=%s",
+        override_in, intent, tokens_est, picker_reason, chosen_vendor, chosen_model, dry_run, cb_user_open, cb_global_open, shape, normalized_from,
+        extra={
+            "meta": {
+                "override_in": override_in,
+                "intent": intent,
+                "tokens_est": tokens_est,
+                "picker_reason": picker_reason,
+                "chosen_vendor": chosen_vendor,
+                "chosen_model": chosen_model,
+                "dry_run": dry_run,
+                "cb_user_open": cb_user_open,
+                "cb_global_open": cb_global_open,
+                "shape": shape,
+                "normalized_from": normalized_from,
+            }
+        }
     )
 
 
-# ---------------------------------------------------------------------------
-# Constants / Config
-# ---------------------------------------------------------------------------
-ALLOWED_GPT_MODELS: set[str] = set(
-    filter(
-        None, os.getenv("ALLOWED_GPT_MODELS", "gpt-4o,gpt-4,gpt-3.5-turbo").split(",")
-    )
-)
-ALLOWED_LLAMA_MODELS: set[str] = set(
-    filter(None, os.getenv("ALLOWED_LLAMA_MODELS", "llama3:latest,llama3").split(","))
-)
 CATALOG = BUILTIN_CATALOG  # allows tests to monkey‑patch
 _SMALLTALK = SmalltalkSkill()
 
@@ -257,25 +353,106 @@ LLAMA_HEALTHY: bool = True
 _USER_CB_THRESHOLD = int(os.getenv("LLAMA_USER_CB_THRESHOLD", "3"))
 _USER_CB_COOLDOWN = float(os.getenv("LLAMA_USER_CB_COOLDOWN", "120"))
 _llama_user_failures: dict[str, tuple[int, float]] = {}
+_llama_user_failures_lock = asyncio.Lock()
 
-def _user_circuit_open(user_id: str) -> bool:
-    rec = _llama_user_failures.get(user_id)
-    if not rec:
+async def _user_circuit_open(user_id: str) -> bool:
+    async with _llama_user_failures_lock:
+        rec = _llama_user_failures.get(user_id)
+        if not rec:
+            return False
+        count, last_ts = rec
+        if count >= _USER_CB_THRESHOLD and (time := __import__("time")).time() - last_ts < _USER_CB_COOLDOWN:
+            return True
         return False
-    count, last_ts = rec
-    if count >= _USER_CB_THRESHOLD and (time := __import__("time")).time() - last_ts < _USER_CB_COOLDOWN:
-        return True
-    return False
 
-def _user_cb_record_failure(user_id: str) -> None:
-    t = (__import__("time").time())
-    count, _ = _llama_user_failures.get(user_id, (0, 0.0))
-    if t - _ >= _USER_CB_COOLDOWN:
-        count = 0
-    _llama_user_failures[user_id] = (count + 1, t)
+async def _user_cb_record_failure(user_id: str) -> None:
+    async with _llama_user_failures_lock:
+        t = (__import__("time").time())
+        count, last_ts = _llama_user_failures.get(user_id, (0, 0.0))
+        if t - last_ts >= _USER_CB_COOLDOWN:
+            count = 0
+        _llama_user_failures[user_id] = (count + 1, t)
 
-def _user_cb_reset(user_id: str) -> None:
-    _llama_user_failures.pop(user_id, None)
+async def _user_cb_reset(user_id: str) -> None:
+    async with _llama_user_failures_lock:
+        _llama_user_failures.pop(user_id, None)
+
+# ---------------------------------------------------------------------------
+# OpenAI circuit breaker functions
+# ---------------------------------------------------------------------------
+
+def _openai_record_failure() -> None:
+    """Update OpenAI circuit breaker failure counters."""
+    global openai_failures, openai_circuit_open
+    now = time.monotonic()
+    if now - openai_last_failure_ts > 60:
+        openai_failures = 1
+    else:
+        openai_failures += 1
+    openai_last_failure_ts = now
+    if openai_failures >= 3:
+        openai_circuit_open = True
+
+def _openai_reset_failures() -> None:
+    """Reset OpenAI circuit breaker state after a successful call."""
+    global openai_failures, openai_circuit_open
+    openai_failures = 0
+    openai_circuit_open = False
+
+def _mark_openai_unhealthy() -> None:
+    """Flip the shared health flag so the picker knows OpenAI is down."""
+    global OPENAI_HEALTHY
+    OPENAI_HEALTHY = False
+
+async def _check_openai_health() -> None:
+    """Attempt a minimal OpenAI call to check health and update flags."""
+    global OPENAI_HEALTHY
+    
+    now = time.monotonic()
+    
+    # Check if we should skip this health check due to throttling
+    if openai_health_check_state["has_ever_succeeded"]:
+        time_since_success = now - openai_health_check_state["last_success_ts"]
+        if time_since_success < openai_health_check_state["success_throttle_delay"]:
+            logger.debug("Skipping OpenAI health check - throttled after success (%.1fs remaining)", 
+                        openai_health_check_state["success_throttle_delay"] - time_since_success)
+            return
+    
+    # Check if we should skip due to exponential backoff
+    time_since_last_check = now - openai_health_check_state["last_check_ts"]
+    if not openai_health_check_state["has_ever_succeeded"] and time_since_last_check < openai_health_check_state["next_check_delay"]:
+        logger.debug("Skipping OpenAI health check - exponential backoff (%.1fs remaining)", 
+                    openai_health_check_state["next_check_delay"] - time_since_last_check)
+        return
+    
+    openai_health_check_state["last_check_ts"] = now
+    
+    try:
+        # Use minimal generation to keep health checks snappy
+        model = os.getenv("OPENAI_MODEL", "gpt-4o")
+        text, _, _, _ = await ask_gpt("ping", model, "You are a helpful assistant.", timeout=OPENAI_TIMEOUT_MS/1000, allow_test=True, routing_decision=None)
+        
+        # Success - update state
+        OPENAI_HEALTHY = True
+        openai_health_check_state["has_ever_succeeded"] = True
+        openai_health_check_state["last_success_ts"] = now
+        openai_health_check_state["consecutive_failures"] = 0
+        openai_health_check_state["next_check_delay"] = 5.0  # Reset to initial delay
+        
+        logger.debug("OpenAI health check successful")
+        
+    except Exception as e:
+        OPENAI_HEALTHY = False
+        openai_health_check_state["consecutive_failures"] += 1
+        
+        # Exponential backoff: double the delay, capped at max_delay
+        if not openai_health_check_state["has_ever_succeeded"]:
+            openai_health_check_state["next_check_delay"] = min(
+                openai_health_check_state["next_check_delay"] * 2,
+                openai_health_check_state["max_check_delay"]
+            )
+        
+        logger.warning("OpenAI health check failed: %s", e)
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -399,66 +576,35 @@ def _maybe_update_profile_from_statement(user_id: str, text: str) -> bool:
         for phrase in ("my favorite color is ", "my favourite color is ", "favorite color is ", "favourite color is "):
             if tl.startswith(phrase):
                 val = t[len(phrase):].strip(" .")
-                if val:
+                if val and memory_write_policy.should_write_profile(text, "favorite_color"):
                     profile_store.upsert(user_id, "favorite_color", val, source="utterance")
                     updated = True
                     return True
         # generic color-only confirmation
         conf = _maybe_extract_confirmation(t)
         if conf and conf.lower() in _BASIC_COLORS:
-            profile_store.upsert(user_id, "favorite_color", conf, source="utterance")
-            return True
+            if memory_write_policy.should_write_profile(text, "favorite_color"):
+                profile_store.upsert(user_id, "favorite_color", conf, source="utterance")
+                return True
         # name
         for phrase in ("my name is ", "call me "):
             if tl.startswith(phrase):
                 val = t[len(phrase):].strip(" .")
-                if val:
+                if val and memory_write_policy.should_write_profile(text, "preferred_name"):
                     profile_store.upsert(user_id, "preferred_name", val, source="utterance")
                     return True
         # home city
         for phrase in ("i live in ", "my home city is "):
             if tl.startswith(phrase):
                 val = t[len(phrase):].strip(" .")
-                if val:
+                if val and memory_write_policy.should_write_profile(text, "home_city"):
                     profile_store.upsert(user_id, "home_city", val, source="utterance")
                     return True
     except Exception:
         return updated
     return updated
 
-def _annotate_provenance(text: str, mem_docs: list[str]) -> str:
-    """Append [#chunk:ID] tags to lines with high semantic similarity to RAG.
 
-    Best-effort and conservative; never raises.
-    """
-    try:
-        if not text or not mem_docs:
-            return text
-        mem_embeds = [(_nh(m)[:12], _embed(m)) for m in mem_docs]
-        lines = text.splitlines()
-        out: list[str] = []
-        for line in lines:
-            base = line.rstrip()
-            if not base:
-                out.append(line)
-                continue
-            try:
-                e = _embed(base)
-                best_id = None
-                best_sim = -1.0
-                for cid, me in mem_embeds:
-                    sim = _cos(e, me)
-                    if sim > best_sim:
-                        best_sim, best_id = sim, cid
-                if best_id and best_sim >= 0.60 and "[#chunk:" not in base:
-                    out.append(f"{base} [#chunk:{best_id}]")
-                else:
-                    out.append(line)
-            except Exception:
-                out.append(line)
-        return "\n".join(out)
-    except Exception:
-        return text
 
 
 # ---------------------------------------------------------------------------
@@ -466,8 +612,8 @@ def _annotate_provenance(text: str, mem_docs: list[str]) -> str:
 # ---------------------------------------------------------------------------
 async def route_prompt(
     prompt: str,
+    user_id: str,
     model_override: str | None = None,
-    user_id: str = Depends(get_current_user_id),
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     stream_hook: Callable[[str], Awaitable[None]] | None = None,
     shape: str = "text",
@@ -479,29 +625,86 @@ async def route_prompt(
     request_id = str(uuid.uuid4())[:8]
     
     # Step 2: Log model routing inputs and decisions
-    print(f"🎯 ROUTE_PROMPT: prompt='{prompt[:50]}...', model_override={model_override}, user_id={user_id}, gen_opts={gen_opts}")
-    
-    logger.debug(
-        "route_prompt start prompt=%r model_override=%s user_id=%s",
-        prompt,
+    logger.info(
+        "🎯 ROUTE_PROMPT: prompt='%s...', model_override=%s, user_id=%s, gen_opts=%s",
+        prompt[:50] if len(prompt) > 50 else prompt,
         model_override,
         user_id,
+        gen_opts,
+        extra={
+            "meta": {
+                "prompt_length": len(prompt),
+                "model_override": model_override,
+                "user_id": user_id,
+                "gen_opts_keys": list(gen_opts.keys()) if gen_opts else [],
+            }
+        }
     )
     
         # Detect intent and count tokens
     norm_prompt = prompt.lower().strip()
     intent, priority = detect_intent(prompt)
     tokens = count_tokens(prompt)
-    
+
     # Check for debug mode
-    debug_route = bool(os.getenv("DEBUG_MODEL_ROUTING", "0"))
+    debug_route = os.getenv("DEBUG_MODEL_ROUTING", "0").lower() in {"1", "true", "yes"}
+
+    # Early cache lookup short-circuit
+    cached_answer = lookup_cached_answer(norm_prompt)
+    if cached_answer is not None:
+        # Record cache hit in metrics
+        from .analytics import record_cache_lookup
+        await record_cache_lookup(hit=True)
+
+        logger.info("💾 CACHE HIT: Returning cached answer for prompt", extra={
+            "meta": {
+                "request_id": request_id,
+                "prompt_length": len(prompt),
+                "cached_answer_length": len(cached_answer),
+                "user_id": user_id,
+            }
+        })
+
+        # Log golden trace for cache hit
+        cache_routing_decision = RoutingDecision(
+            vendor="cache",
+            model="cache",
+            reason="cache_hit",
+            keyword_hit=None,
+            stream=bool(stream_cb),
+            allow_fallback=allow_fallback,
+            request_id=request_id,
+        )
+        _log_golden_trace(
+            request_id=request_id,
+            user_id=user_id,
+            path="/v1/ask",
+            shape=shape,
+            normalized_from=normalized_from,
+            override_in=model_override,
+            intent=intent,
+            tokens_est=tokens,
+            routing_decision=cache_routing_decision,
+            dry_run=debug_route,
+            cb_user_open=False,
+            cb_global_open=False,
+            latency_ms=0,  # Cache hits are instant
+            timeout_ms=None,
+            fallback_reason=None,
+            cache_hit=True,
+        )
+
+        return cached_answer
+    else:
+        # Record cache miss in metrics
+        from .analytics import record_cache_lookup
+        await record_cache_lookup(hit=False)
     
     # Determine initial routing decision
     if model_override:
         # Model override path
         mv = model_override.strip()
-        print(f"🔀 MODEL OVERRIDE: {mv} requested - bypassing skills")
-        logger.info("🔀 Model override requested → %s", mv)
+        logger.info("🔀 MODEL OVERRIDE: %s requested - bypassing skills", mv)
         
         # Determine vendor from model name
         if mv.startswith("gpt"):
@@ -551,6 +754,9 @@ async def route_prompt(
                         }
                     )
                 
+                # Capture original vendor before fallback
+                original_vendor = chosen_vendor
+                
                 # Use fallback
                 chosen_vendor = fallback_vendor
                 chosen_model = fallback_model
@@ -560,7 +766,7 @@ async def route_prompt(
                 try:
                     from .metrics import ROUTER_FALLBACKS_TOTAL
                     ROUTER_FALLBACKS_TOTAL.labels(
-                        from_vendor=_get_fallback_vendor(chosen_vendor),
+                        from_vendor=original_vendor,
                         to_vendor=chosen_vendor,
                         reason="vendor_unhealthy"
                     ).inc()
@@ -569,7 +775,18 @@ async def route_prompt(
     else:
         # Default picker path
         engine, model_name, picker_reason, keyword_hit = pick_model(prompt, intent, tokens)
-        print(f"🎯 DEFAULT MODEL SELECTION: engine={engine}, model={model_name}, intent={intent}, reason={picker_reason}")
+        logger.info(
+            "🎯 DEFAULT MODEL SELECTION: engine=%s, model=%s, intent=%s, reason=%s",
+            engine, model_name, intent, picker_reason,
+            extra={
+                "meta": {
+                    "engine": engine,
+                    "model": model_name,
+                    "intent": intent,
+                    "picker_reason": picker_reason,
+                }
+            }
+        )
         
         # Determine vendor
         chosen_vendor = "openai" if engine == "gpt" else "ollama"
@@ -608,6 +825,9 @@ async def route_prompt(
                         }
                     )
                 
+                # Capture original vendor before fallback
+                original_vendor = chosen_vendor
+                
                 # Use fallback
                 chosen_vendor = fallback_vendor
                 chosen_model = fallback_model
@@ -618,7 +838,7 @@ async def route_prompt(
                 try:
                     from .metrics import ROUTER_FALLBACKS_TOTAL
                     ROUTER_FALLBACKS_TOTAL.labels(
-                        from_vendor=_get_fallback_vendor(chosen_vendor),
+                        from_vendor=original_vendor,
                         to_vendor=chosen_vendor,
                         reason="vendor_unhealthy"
                     ).inc()
@@ -627,8 +847,19 @@ async def route_prompt(
 
     # Check circuit breakers
     cb_global_open = llama_circuit_open
-    cb_user_open = _user_circuit_open(user_id) if user_id else False
+    cb_user_open = await _user_circuit_open(user_id) if user_id else False
     
+    # Create routing decision object
+    routing_decision = RoutingDecision(
+        vendor=chosen_vendor,
+        model=chosen_model,
+        reason=picker_reason,
+        keyword_hit=keyword_hit if 'keyword_hit' in locals() else None,
+        stream=bool(stream_cb),
+        allow_fallback=allow_fallback,
+        request_id=request_id,
+    )
+
     # Log the final routing decision
     _log_golden_trace(
         request_id=request_id,
@@ -639,15 +870,14 @@ async def route_prompt(
         override_in=model_override,
         intent=intent,
         tokens_est=tokens,
-        picker_reason=picker_reason,
-        chosen_vendor=chosen_vendor,
-        chosen_model=chosen_model,
+        routing_decision=routing_decision,
         dry_run=debug_route,
         cb_user_open=cb_user_open,
         cb_global_open=cb_global_open,
-        allow_fallback=allow_fallback,
-        stream=bool(stream_cb),
-        keyword_hit=keyword_hit if 'keyword_hit' in locals() else None,
+        latency_ms=None,
+        timeout_ms=None,
+        fallback_reason=None,
+        cache_hit=False,
     )
     
     # Execute the chosen vendor
@@ -662,23 +892,39 @@ async def route_prompt(
             result = await ask_gpt(
                 prompt,
                 model=chosen_model,
+                timeout=OPENAI_TIMEOUT_MS/1000,
                 stream_cb=stream_cb,
+                routing_decision=routing_decision,
                 **gen_opts
             )
+            # Extract just the text from the tuple (text, prompt_tokens, completion_tokens, cost)
+            if isinstance(result, tuple) and len(result) >= 1:
+                return result[0]
             return result
         except Exception as e:
-            if allow_fallback and chosen_vendor != _get_fallback_vendor(chosen_vendor):
+            # Normalize the error for deterministic fallback policy
+            error_type = normalize_error(e)
+
+            # Determine if fallback should be attempted based on error type
+            should_fallback = (
+                allow_fallback
+                and chosen_vendor != _get_fallback_vendor(chosen_vendor)
+                and error_type != ErrorType.AUTH_ERROR  # Don't fallback on auth errors
+                and error_type != ErrorType.PROVIDER_4XX  # Don't fallback on client errors
+            )
+
+            if should_fallback:
                 # Try fallback
                 fallback_vendor = _get_fallback_vendor(chosen_vendor)
                 fallback_model = _get_fallback_model(fallback_vendor)
-                
-                # Log fallback metrics
+
+                # Log fallback metrics with specific error type
                 try:
                     from .metrics import ROUTER_FALLBACKS_TOTAL
                     ROUTER_FALLBACKS_TOTAL.labels(
                         from_vendor=chosen_vendor,
                         to_vendor=fallback_vendor,
-                        reason="vendor_error"
+                        reason=error_type.value
                     ).inc()
                 except Exception:
                     pass
@@ -690,16 +936,29 @@ async def route_prompt(
                         result = await ask_llama(
                             prompt,
                             model=fallback_model,
-                            stream_cb=stream_cb,
-                            **gen_opts
+                            timeout=OLLAMA_TIMEOUT_MS/1000,
+                            gen_opts=gen_opts,
+                            routing_decision=routing_decision
                         )
+                        # Reset user circuit breaker on LLaMA fallback success
+                        if user_id:
+                            try:
+                                await _user_cb_reset(user_id)
+                            except Exception:
+                                pass
                         return result
                     except Exception:
-                        pass
-                
+                        # Record user circuit breaker failure for LLaMA fallback
+                        if user_id:
+                            try:
+                                await _user_cb_record_failure(user_id)
+                            except Exception:
+                                pass
+
                 # If fallback also fails, raise original error
                 raise e
             else:
+                # No fallback attempted - raise original error
                 raise e
     
     elif chosen_vendor == "ollama":
@@ -709,23 +968,48 @@ async def route_prompt(
             result = await ask_llama(
                 prompt,
                 model=chosen_model,
-                stream_cb=stream_cb,
-                **gen_opts
+                timeout=OLLAMA_TIMEOUT_MS/1000,
+                gen_opts=gen_opts,
+                routing_decision=routing_decision
             )
+            # Reset user circuit breaker on LLaMA success
+            if user_id:
+                try:
+                    await _user_cb_reset(user_id)
+                except Exception:
+                    pass
             return result
         except Exception as e:
-            if allow_fallback and chosen_vendor != _get_fallback_vendor(chosen_vendor):
+            # Normalize the error for deterministic fallback policy
+            error_type = normalize_error(e)
+
+            # Record user circuit breaker failure for LLaMA
+            if user_id:
+                try:
+                    await _user_cb_record_failure(user_id)
+                except Exception:
+                    pass
+
+            # Determine if fallback should be attempted based on error type
+            should_fallback = (
+                allow_fallback
+                and chosen_vendor != _get_fallback_vendor(chosen_vendor)
+                and error_type != ErrorType.AUTH_ERROR  # Don't fallback on auth errors
+                and error_type != ErrorType.PROVIDER_4XX  # Don't fallback on client errors
+            )
+
+            if should_fallback:
                 # Try fallback
                 fallback_vendor = _get_fallback_vendor(chosen_vendor)
                 fallback_model = _get_fallback_model(fallback_vendor)
-                
-                # Log fallback metrics
+
+                # Log fallback metrics with specific error type
                 try:
                     from .metrics import ROUTER_FALLBACKS_TOTAL
                     ROUTER_FALLBACKS_TOTAL.labels(
                         from_vendor=chosen_vendor,
                         to_vendor=fallback_vendor,
-                        reason="vendor_error"
+                        reason=error_type.value
                     ).inc()
                 except Exception:
                     pass
@@ -737,16 +1021,22 @@ async def route_prompt(
                         result = await ask_gpt(
                             prompt,
                             model=fallback_model,
+                            timeout=OPENAI_TIMEOUT_MS/1000,
                             stream_cb=stream_cb,
+                            routing_decision=routing_decision,
                             **gen_opts
                         )
+                        # Extract just the text from the tuple
+                        if isinstance(result, tuple) and len(result) >= 1:
+                            return result[0]
                         return result
                     except Exception:
                         pass
-                
+
                 # If fallback also fails, raise original error
                 raise e
             else:
+                # No fallback attempted - raise original error
                 raise e
     
     # This should never be reached
@@ -765,16 +1055,17 @@ async def _call_gpt_override(
     rec,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     rag_client: Any | None = None,
+    routing_decision: RoutingDecision | None = None,
 ):
     built, pt = PromptBuilder.build(
         prompt, session_id=session_id, user_id=user_id, rag_client=rag_client
     )
     try:
         text, pt, ct, cost = await ask_gpt(
-            built, model, SYSTEM_PROMPT, stream=bool(stream_cb), on_token=stream_cb
+            built, model, SYSTEM_PROMPT, stream=bool(stream_cb), on_token=stream_cb, timeout=OPENAI_TIMEOUT_MS/1000, routing_decision=routing_decision
         )
     except TypeError:
-        text, pt, ct, cost = await ask_gpt(built, model, SYSTEM_PROMPT)
+        text, pt, ct, cost = await ask_gpt(built, model, SYSTEM_PROMPT, timeout=OPENAI_TIMEOUT_MS/1000, routing_decision=routing_decision)
     except Exception as e:
         # Preserve provider 4xx as 4xx for transparency; otherwise propagate
         try:
@@ -803,26 +1094,24 @@ async def _call_gpt_override(
         rec.completion_tokens = ct
         rec.cost_usd = cost
         rec.response = text
-    await append_history(prompt, "gpt", text)
-    await record("gpt", source="override")
-    memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
-    add_user_memory(user_id, _fact_from_qa(prompt, text))
-    try:
-        memgpt.write_claim(
-            session_id=session_id,
-            user_id=user_id,
-            claim_text=_fact_from_qa(prompt, text),
-            evidence_links=[],
-            claim_type="fact",
-            entities=[],
-            confidence=0.6,
-        )
-    except Exception:
-        pass
-    try:
-        cache_answer(prompt=norm_prompt, answer=text)
-    except Exception as e:  # pragma: no cover
-        logger.warning("QA cache store failed (gpt override): %s", e)
+    # Consolidated post-call handling using existing postcall.py module
+    postcall_data = PostCallData(
+        prompt=prompt,
+        response=text,
+        vendor="openai",
+        model=model,
+        prompt_tokens=pt,
+        completion_tokens=ct,
+        cost_usd=cost,
+        session_id=session_id,
+        user_id=user_id,
+        request_id=request_id,
+        metadata={
+            "norm_prompt": norm_prompt,
+            "source": "override"
+        }
+    )
+    await process_postcall(postcall_data)
     return text
 
 
@@ -836,6 +1125,7 @@ async def _call_llama_override(
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     gen_opts: dict[str, Any] | None = None,
     rag_client: Any | None = None,
+    routing_decision: RoutingDecision | None = None,
 ):
     built, pt = PromptBuilder.build(
         prompt,
@@ -852,9 +1142,9 @@ async def _call_llama_override(
     )
     try:
         try:
-            agen = ask_llama(built, model, **(gen_opts or {}))
+            agen = ask_llama(built, model, timeout=OLLAMA_TIMEOUT_MS/1000, routing_decision=routing_decision, **(gen_opts or {}))
         except TypeError:
-            agen = ask_llama(built, model, gen_opts=gen_opts)
+            agen = ask_llama(built, model, timeout=OLLAMA_TIMEOUT_MS/1000, gen_opts=gen_opts, routing_decision=routing_decision)
         async for tok in agen:
             tokens.append(tok)
             if stream_cb:
@@ -869,28 +1159,25 @@ async def _call_llama_override(
         rec.model_name = model
         rec.prompt_tokens = pt
         rec.response = result_text
-    await append_history(prompt, "llama", result_text)
-    await record("llama", source="override")
-    memgpt.store_interaction(
-        prompt, result_text, session_id=session_id, user_id=user_id
+    # Consolidated post-call handling using existing postcall.py module
+    # Note: _call_llama_override actually uses GPT backend, so vendor is "openai"
+    postcall_data = PostCallData(
+        prompt=prompt,
+        response=result_text,
+        vendor="openai",  # LLaMA override uses GPT backend
+        model=model,
+        prompt_tokens=pt if 'pt' in locals() else 0,
+        completion_tokens=ct if 'ct' in locals() else 0,
+        cost_usd=cost if 'cost' in locals() else 0.0,
+        session_id=session_id,
+        user_id=user_id,
+        request_id=request_id,
+        metadata={
+            "norm_prompt": norm_prompt,
+            "source": "override"
+        }
     )
-    add_user_memory(user_id, _fact_from_qa(prompt, result_text))
-    try:
-        memgpt.write_claim(
-            session_id=session_id,
-            user_id=user_id,
-            claim_text=_fact_from_qa(prompt, result_text),
-            evidence_links=[],
-            claim_type="fact",
-            entities=[],
-            confidence=0.6,
-        )
-    except Exception:
-        pass
-    try:
-        cache_answer(prompt=norm_prompt, answer=result_text)
-    except Exception as e:  # pragma: no cover
-        logger.warning("QA cache store failed (llama override): %s", e)
+    await process_postcall(postcall_data)
     return result_text
 
 
@@ -906,11 +1193,24 @@ async def _call_gpt(
     ptoks: int,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     fallback: bool = False,
+    routing_decision: RoutingDecision,
 ):
-    print(f"🤖 CALLING GPT: model={model}, prompt_len={len(prompt)}")
+    logger.info(
+        "🤖 CALLING GPT: model=%s, prompt_len=%d",
+        model, len(prompt),
+        extra={
+            "meta": {
+                "model": model,
+                "prompt_length": len(prompt),
+            }
+        }
+    )
+    
     logger.debug(
         "_call_gpt start prompt=%r model=%s user_id=%s", prompt, model, user_id
     )
+    
+    # Call GPT and handle exceptions
     try:
         text, pt, ct, cost = await ask_gpt(
             built_prompt,
@@ -918,61 +1218,51 @@ async def _call_gpt(
             SYSTEM_PROMPT,
             stream=bool(stream_cb),
             on_token=stream_cb,
+            timeout=OPENAI_TIMEOUT_MS/1000,
+            routing_decision=routing_decision,
         )
     except TypeError:
-        text, pt, ct, cost = await ask_gpt(built_prompt, model, SYSTEM_PROMPT)
+        text, pt, ct, cost = await ask_gpt(built_prompt, model, SYSTEM_PROMPT, timeout=OPENAI_TIMEOUT_MS/1000, routing_decision=routing_decision)
     except Exception as e:
-        # Preserve provider 4xx as 4xx
-        try:
-            import httpx as _httpx  # type: ignore
-            if isinstance(e, _httpx.HTTPStatusError):
-                sc = int(getattr(getattr(e, "response", None), "status_code", 500) or 500)
-                if 400 <= sc < 500:
-                    msg = None
-                    try:
-                        data = e.response.json()
-                        msg = data.get("error") or data.get("message") or data.get("detail")
-                    except Exception:
-                        try:
-                            msg = e.response.text
-                        except Exception:
-                            msg = str(e)
-                    from fastapi import HTTPException as _HTTPEx  # type: ignore
-                    raise _HTTPEx(status_code=sc, detail=str(msg or "provider_error"))
-        except Exception:
-            pass
-        raise
-        if rec:
-            rec.engine_used = "gpt"
-            rec.model_name = model
-            rec.prompt_tokens = pt
-            rec.completion_tokens = ct
-            rec.cost_usd = cost
-            rec.response = text
-        memgpt.store_interaction(prompt, text, session_id=session_id, user_id=user_id)
-        # Store concise, fact-like memory derived from the exchange
-        add_user_memory(user_id, _fact_from_qa(prompt, text))
-        try:
-            memgpt.write_claim(
-                session_id=session_id,
-                user_id=user_id,
-                claim_text=_fact_from_qa(prompt, text),
-                evidence_links=[],
-                claim_type="fact",
-                entities=[],
-                confidence=0.6,
-            )
-        except Exception:
-            pass
-        try:
-            cache_answer(prompt=norm_prompt, answer=text)
-        except Exception as e:  # pragma: no cover
-            logger.warning("QA cache store failed (gpt): %s", e)
-        logger.debug("_call_gpt result model=%s result=%s", model, text)
-        return await _finalise("gpt", prompt, text, rec, fallback=fallback)
-    except Exception:
+        # Record failure for circuit breaker
+        _openai_record_failure()
+        _mark_openai_unhealthy()
         logger.exception("_call_gpt failure")
         raise
+    
+    # Record successful response and reset circuit breaker
+    _openai_reset_failures()
+    
+    # Record/memory/cache block - always runs on success
+    if rec:
+        rec.engine_used = "gpt"
+        rec.model_name = model
+        rec.prompt_tokens = pt
+        rec.completion_tokens = ct
+        rec.cost_usd = cost
+        rec.response = text
+    
+    # Consolidated post-call handling using existing postcall.py module
+    postcall_data = PostCallData(
+        prompt=prompt,
+        response=text,
+        vendor="openai",
+        model=model,
+        prompt_tokens=pt,
+        completion_tokens=ct,
+        cost_usd=cost,
+        session_id=session_id,
+        user_id=user_id,
+        request_id=request_id,
+        metadata={
+            "norm_prompt": norm_prompt,
+            "source": "router"
+        }
+    )
+    await process_postcall(postcall_data)
+    
+    logger.debug("_call_gpt result model=%s result=%s", model, text)
+    return await _finalise("gpt", prompt, text, rec, fallback=fallback)
 
 
 async def _call_llama(
@@ -987,8 +1277,18 @@ async def _call_llama(
     ptoks: int,
     stream_cb: Callable[[str], Awaitable[None]] | None = None,
     gen_opts: dict[str, Any] | None = None,
+    routing_decision: RoutingDecision,
 ):
-    print(f"🤖 CALLING LLAMA: model={model}, prompt_len={len(prompt)}")
+    logger.info(
+        "🤖 CALLING LLAMA: model=%s, prompt_len=%d",
+        model, len(prompt),
+        extra={
+            "meta": {
+                "model": model,
+                "prompt_length": len(prompt),
+            }
+        }
+    )
     logger.debug(
         "_call_llama start prompt=%r model=%s user_id=%s", prompt, model, user_id
     )
@@ -998,11 +1298,14 @@ async def _call_llama(
         (gen_opts or {}).get("temperature"),
         (gen_opts or {}).get("top_p"),
     )
+    
+    # Call LLaMA and handle exceptions
     try:
         try:
-            result = ask_llama(built_prompt, model, **(gen_opts or {}))
+            result = ask_llama(built_prompt, model, timeout=OLLAMA_TIMEOUT_MS/1000, routing_decision=routing_decision, **(gen_opts or {}))
         except TypeError:
-            result = ask_llama(built_prompt, model, gen_opts=gen_opts)
+            result = ask_llama(built_prompt, model, timeout=OLLAMA_TIMEOUT_MS/1000, gen_opts=gen_opts, routing_decision=routing_decision)
+        
         if inspect.isasyncgen(result):
             async for tok in result:
                 tokens.append(tok)
@@ -1015,7 +1318,55 @@ async def _call_llama(
             if isinstance(result, dict) and result.get("error"):
                 raise RuntimeError(str(result.get("error")))
             result_text = (result or "").strip()
-    except Exception:
+            
+    except Exception as e:
+        _mark_llama_unhealthy()
+
+        # Normalize error for deterministic fallback policy
+        error_type = normalize_error(e)
+
+        # Only fallback for retryable errors
+        should_fallback = error_type in (ErrorType.PROVIDER_5XX, ErrorType.NETWORK_TIMEOUT)
+
+        if should_fallback:
+            fallback_model = os.getenv("OPENAI_MODEL", "gpt-4o")
+            try:
+                text = await _call_gpt(
+                prompt=prompt,
+                built_prompt=built_prompt,
+                model=fallback_model,
+                rec=rec,
+                norm_prompt=norm_prompt,
+                session_id=session_id,
+                user_id=user_id,
+                ptoks=ptoks,
+                stream_cb=stream_cb,
+                fallback=True,
+            )
+                logger.debug(
+                    "_call_llama fallback result model=%s result=%s", fallback_model, text
+                )
+                # Tag fallback for response headers via telemetry record
+                try:
+                    if rec:
+                        rec.engine_used = "gpt"
+                        rec.route_reason = (rec.route_reason or "") + "|fallback_from_llama"
+                except Exception:
+                    pass
+                return text
+            except Exception:
+                logger.exception("_call_llama fallback to GPT failed")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="GPT backend unavailable",
+                )
+        else:
+            # No fallback - re-raise original error
+            raise e
+    
+    # Check for low confidence response
+    if not result_text or _low_conf(result_text):
+        # Mark LLaMA unhealthy and fall back to GPT on empty or low-confidence replies
         _mark_llama_unhealthy()
         fallback_model = os.getenv("OPENAI_MODEL", "gpt-4o")
         try:
@@ -1032,9 +1383,10 @@ async def _call_llama(
                 fallback=True,
             )
             logger.debug(
-                "_call_llama fallback result model=%s result=%s", fallback_model, text
+                "_call_llama low-conf fallback model=%s result=%s",
+                fallback_model,
+                text,
             )
-            # Tag fallback for response headers via telemetry record
             try:
                 if rec:
                     rec.engine_used = "gpt"
@@ -1043,77 +1395,44 @@ async def _call_llama(
                 pass
             return text
         except Exception:
-            logger.exception("_call_llama fallback to GPT failed")
+            logger.exception("_call_llama low-conf fallback to GPT failed")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="GPT backend unavailable",
             )
-    try:
-        if not result_text or _low_conf(result_text):
-            # Mark LLaMA unhealthy and fall back to GPT on empty or low-confidence replies
-            _mark_llama_unhealthy()
-            fallback_model = os.getenv("OPENAI_MODEL", "gpt-4o")
-            try:
-                text = await _call_gpt(
-                    prompt=prompt,
-                    built_prompt=built_prompt,
-                    model=fallback_model,
-                    rec=rec,
-                    norm_prompt=norm_prompt,
-                    session_id=session_id,
-                    user_id=user_id,
-                    ptoks=ptoks,
-                    stream_cb=stream_cb,
-                    fallback=True,
-                )
-                logger.debug(
-                    "_call_llama low-conf fallback model=%s result=%s",
-                    fallback_model,
-                    text,
-                )
-                try:
-                    if rec:
-                        rec.engine_used = "gpt"
-                        rec.route_reason = (rec.route_reason or "") + "|fallback_from_llama"
-                except Exception:
-                    pass
-                return text
-            except Exception:
-                logger.exception("_call_llama low-conf fallback to GPT failed")
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="GPT backend unavailable",
-                )
-        if rec:
-            rec.engine_used = "llama"
-            rec.model_name = model
-            rec.prompt_tokens = ptoks
-            rec.response = result_text
-        memgpt.store_interaction(
-            prompt, result_text, session_id=session_id, user_id=user_id
-        )
-        add_user_memory(user_id, _fact_from_qa(prompt, result_text))
-        try:
-            cache_answer(prompt=norm_prompt, answer=result_text)
-        except Exception as e:  # pragma: no cover
-            logger.warning("QA cache store failed (llama): %s", e)
-        logger.debug("_call_llama result model=%s result=%s", model, result_text)
-        try:
-            memgpt.write_claim(
-                session_id=session_id,
-                user_id=user_id,
-                claim_text=_fact_from_qa(prompt, result_text),
-                evidence_links=[],
-                claim_type="fact",
-                entities=[],
-                confidence=0.6,
-            )
-        except Exception:
-            pass
-        return await _finalise("llama", prompt, result_text, rec)
-    except Exception:
-        logger.exception("_call_llama failure")
-        raise
+    
+    # Record/memory/cache block - always runs on success
+    if rec:
+        rec.engine_used = "llama"
+        rec.model_name = model
+        rec.prompt_tokens = ptoks
+        rec.response = result_text
+    
+    # Consolidated post-call handling using existing postcall.py module
+    # Estimate completion tokens since LLaMA doesn't provide structured token counts
+    completion_tokens = len(result_text.split()) * 2  # Rough estimate: 2 tokens per word
+
+    postcall_data = PostCallData(
+        prompt=prompt,
+        response=result_text,
+        vendor="ollama",
+        model=model,
+        prompt_tokens=ptoks,
+        completion_tokens=completion_tokens,
+        cost_usd=0.0,  # LLaMA doesn't have cost tracking like OpenAI
+        session_id=session_id,
+        user_id=user_id,
+        request_id=request_id,
+        metadata={
+            "norm_prompt": norm_prompt,
+            "source": "router"
+        }
+    )
+    await process_postcall(postcall_data)
+    
+    logger.debug("_call_llama result model=%s result=%s", model, result_text)
+    
+    return await _finalise("llama", prompt, result_text, rec)
 
 
 async def _finalise(

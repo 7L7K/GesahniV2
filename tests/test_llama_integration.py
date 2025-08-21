@@ -83,7 +83,7 @@ async def startup_check() -> None:
         if not val
     ]
     if missing:
-        logger.warning(
+        logger.debug(
             "OLLAMA startup skipped – missing env vars: %s",
             ", ".join(missing)
         )

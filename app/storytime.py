@@ -26,6 +26,7 @@ from .gpt_client import ask_gpt
 from .memory.vector_store import add_user_memory
 from .redaction import redact_and_store
 from .token_utils import count_tokens
+from .router import OPENAI_TIMEOUT_MS
 
 
 logger = logging.getLogger(__name__)
@@ -130,7 +131,7 @@ def _summarize_text_sync(text: str) -> str:
         "keeping dates/names if present.\n\n" + text
     )
     try:
-        summary, _, _, _ = asyncio.run(ask_gpt(prompt))
+        summary, _, _, _ = asyncio.run(ask_gpt(prompt, timeout=OPENAI_TIMEOUT_MS/1000, routing_decision=None))
     except Exception as e:
         logger.warning("storytime summarize failed: %s", e)
         return ""

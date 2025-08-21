@@ -146,8 +146,6 @@ async def _check_and_set_flag() -> None:
         llama_health_check_state["consecutive_failures"] = 0
         llama_health_check_state["next_check_delay"] = 5.0  # Reset to initial delay
         
-        logger.debug("Ollama health check successful")
-        
     except Exception as e:
         LLAMA_HEALTHY = False
         llama_health_check_state["consecutive_failures"] += 1
@@ -222,7 +220,7 @@ async def startup_check() -> None:
         if not val
     ]
     if missing:
-        logger.warning(
+        logger.debug(
             "OLLAMA startup skipped – missing env vars: %s",
             ", ".join(missing)
         )
@@ -252,6 +250,7 @@ async def ask_llama(
     model: Optional[str] = None,
     timeout: float = 30.0,
     gen_opts: Optional[Dict[str, Any]] = None,
+    routing_decision=None,  # New parameter for routing decision
 ) -> AsyncIterator[str]:
     """
     Stream tokens from Ollama. Returns an async generator you can iterate over.

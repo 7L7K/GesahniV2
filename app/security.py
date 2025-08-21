@@ -693,17 +693,25 @@ async def verify_token(request: Request) -> None:
         token = auth.split(" ", 1)[1]
         token_source = "authorization_header"
     
-    # Fallback to access_token cookie
+    # Fallback to access_token cookie (accept canonical or legacy during migration)
     if not token:
-        token = request.cookies.get("access_token")
-        if token:
-            token_source = "access_token_cookie"
+        try:
+            from .cookie_names import ACCESS_TOKEN, ACCESS_TOKEN_LEGACY
+            token = request.cookies.get(ACCESS_TOKEN) or request.cookies.get(ACCESS_TOKEN_LEGACY)
+            if token:
+                token_source = "access_token_cookie"
+        except Exception:
+            token = request.cookies.get("access_token")
     
-    # 2) Try __session cookie if access_token failed
+    # 2) Try __session cookie if access_token failed (accept canonical/legacy)
     if not token:
-        token = request.cookies.get("__session") or request.cookies.get("session")
-        if token:
-            token_source = "__session_cookie"
+        try:
+            from .cookie_names import SESSION, SESSION_LEGACY
+            token = request.cookies.get(SESSION) or request.cookies.get(SESSION_LEGACY) or request.cookies.get("session")
+            if token:
+                token_source = "__session_cookie"
+        except Exception:
+            token = request.cookies.get("__session") or request.cookies.get("session")
 
     # Log which cookie/token source authenticated the request
     if token:
@@ -809,7 +817,14 @@ async def verify_token(request: Request) -> None:
     except Exception:
         pass
     logger.warning("deny: invalid_token")
-    raise HTTPException(status_code=401, detail="Unauthorized")
+    # Emit structured reason code for unauthorized access
+    exc = HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        import logging
+        logging.getLogger(__name__).warning("auth.unauthorized", extra={"meta": {"reason": "unauthorized"}})
+    except Exception:
+        pass
+    raise exc
 
 
 async def verify_token_strict(request: Request) -> None:

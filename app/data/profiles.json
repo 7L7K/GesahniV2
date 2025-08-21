@@ -113,14 +113,14 @@
   "u_test": {
     "favorite_color": {
       "value": "blue",
-      "updated_at": 1755211184.148999,
+      "updated_at": 1755745729.50815,
       "source": "ui"
     }
   },
   "u1": {
     "preferred_name": {
       "value": "Alex",
-      "updated_at": 1755211184.15243,
+      "updated_at": 1755745729.538593,
       "source": "import"
     }
   },
@@ -200,6 +200,73 @@
       "value": "blue",
       "updated_at": 1755211184.001685,
       "source": "utterance"
+    }
+  },
+  "demo": {
+    "name": {
+      "value": "Ava",
+      "updated_at": 1755745722.6508071,
+      "source": "api"
+    },
+    "email": {
+      "value": "ava@example.com",
+      "updated_at": 1755745722.660256,
+      "source": "api"
+    },
+    "timezone": {
+      "value": "America/Los_Angeles",
+      "updated_at": 1755745722.670936,
+      "source": "api"
+    },
+    "language": {
+      "value": "en",
+      "updated_at": 1755745722.679702,
+      "source": "api"
+    },
+    "preferred_model": {
+      "value": "gpt-4o-mini",
+      "updated_at": 1755745722.687844,
+      "source": "api"
+    },
+    "notification_preferences": {
+      "value": {
+        "sms": true
+      },
+      "updated_at": 1755745722.6981068,
+      "source": "api"
+    },
+    "calendar_integration": {
+      "value": true,
+      "updated_at": 1755745722.707916,
+      "source": "api"
+    },
+    "gmail_integration": {
+      "value": false,
+      "updated_at": 1755745722.7201438,
+      "source": "api"
+    },
+    "onboarding_completed": {
+      "value": false,
+      "updated_at": 1755745722.7307231,
+      "source": "api"
+    },
+    "preferences_tiles": {
+      "value": [
+        "calendar",
+        "music"
+      ],
+      "updated_at": 1755745723.436529,
+      "source": "api"
+    },
+    "daily_rhythm": {
+      "value": "morning",
+      "updated_at": 1755745723.449285,
+      "source": "api"
+    },
+    "helpfulness": {
+      "value": "high",
+      "updated_at": 1755745723.459916,
+      "source": "api"
     }
   }
 }

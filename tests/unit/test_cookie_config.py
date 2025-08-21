@@ -282,6 +282,145 @@ class TestCookieConfig:
         assert "Path=/api" in header
 
 
+class TestCookieConfigMatrix:
+    """Matrix tests for cookie configuration: DEV/PROD x COOKIE_SECURE x COOKIE_SAMESITE."""
+
+    def test_dev_prod_secure_samesite_matrix(self):
+        """Test all combinations of DEV/PROD, COOKIE_SECURE, and COOKIE_SAMESITE."""
+        # Define test matrix: (environment, cookie_secure_env, cookie_samesite, expected_secure, expected_samesite)
+        test_matrix = [
+            # Production scenarios
+            ("PROD", "1", "lax", True, "lax"),
+            ("PROD", "1", "strict", True, "strict"),
+            ("PROD", "1", "none", True, "none"),  # SameSite=None forces Secure=True
+            ("PROD", "0", "lax", False, "lax"),
+            ("PROD", "0", "strict", False, "strict"),
+            ("PROD", "0", "none", True, "none"),  # SameSite=None forces Secure=True even if env says 0
+
+            # Development HTTP scenarios (force Secure=False)
+            ("DEV", "1", "lax", False, "lax"),  # HTTP forces Secure=False even if env says 1
+            ("DEV", "1", "strict", False, "strict"),
+            ("DEV", "1", "none", True, "none"),  # SameSite=None still forces Secure=True
+            ("DEV", "0", "lax", False, "lax"),
+            ("DEV", "0", "strict", False, "strict"),
+            ("DEV", "0", "none", True, "none"),  # SameSite=None forces Secure=True
+
+            # Development HTTPS scenarios (respect env settings)
+            ("DEV_HTTPS", "1", "lax", True, "lax"),
+            ("DEV_HTTPS", "1", "strict", True, "strict"),
+            ("DEV_HTTPS", "1", "none", True, "none"),
+            ("DEV_HTTPS", "0", "lax", False, "lax"),
+            ("DEV_HTTPS", "0", "strict", False, "strict"),
+            ("DEV_HTTPS", "0", "none", True, "none"),  # SameSite=None forces Secure=True
+        ]
+
+        for env_type, cookie_secure_env, cookie_samesite_env, expected_secure, expected_samesite in test_matrix:
+            # Set up request based on environment type
+            if env_type == "PROD":
+                request = Mock()
+                request.url.scheme = "https"
+                request.headers = {"host": "app.example.com"}
+                env_vars = {
+                    "COOKIE_SECURE": cookie_secure_env,
+                    "COOKIE_SAMESITE": cookie_samesite_env
+                }
+            elif env_type == "DEV":
+                request = Mock()
+                request.url.scheme = "http"
+                request.headers = {"host": "localhost:3000"}
+                env_vars = {
+                    "DEV_MODE": "1",
+                    "COOKIE_SECURE": cookie_secure_env,
+                    "COOKIE_SAMESITE": cookie_samesite_env
+                }
+            elif env_type == "DEV_HTTPS":
+                request = Mock()
+                request.url.scheme = "https"
+                request.headers = {"host": "localhost:3000"}
+                env_vars = {
+                    "DEV_MODE": "1",
+                    "COOKIE_SECURE": cookie_secure_env,
+                    "COOKIE_SAMESITE": cookie_samesite_env
+                }
+
+            with patch.dict(os.environ, env_vars, clear=True):
+                config = get_cookie_config(request)
+
+            # Verify expected configuration
+            assert config["secure"] == expected_secure, (
+                f"Env={env_type}, SECURE={cookie_secure_env}, SAMESITE={cookie_samesite_env}: "
+                f"expected secure={expected_secure}, got {config['secure']}"
+            )
+            assert config["samesite"] == expected_samesite, (
+                f"Env={env_type}, SECURE={cookie_secure_env}, SAMESITE={cookie_samesite_env}: "
+                f"expected samesite={expected_samesite}, got {config['samesite']}"
+            )
+
+            # Always verify common attributes
+            assert config["httponly"] is True
+            assert config["path"] == "/"
+            assert config["domain"] is None  # Never set domain
+
+    def test_format_cookie_header_domain_behavior(self):
+        """Verify format_cookie_header() Domain attribute behavior."""
+        # Test with None domain (should not set Domain)
+        header = format_cookie_header(
+            key="test_cookie", value="test_value", max_age=3600, secure=True,
+            samesite="lax", path="/", httponly=True, domain=None
+        )
+        assert "Domain=" not in header, f"Domain should not be set when None, but found in: {header}"
+
+        # Test with empty domain (should not set Domain)
+        header = format_cookie_header(
+            key="test_cookie", value="test_value", max_age=3600, secure=True,
+            samesite="lax", path="/", httponly=True, domain=""
+        )
+        assert "Domain=" not in header, f"Domain should not be set when empty, but found in: {header}"
+
+        # Test with actual domain (should set Domain)
+        header = format_cookie_header(
+            key="test_cookie", value="test_value", max_age=3600, secure=True,
+            samesite="lax", path="/", httponly=True, domain=".example.com"
+        )
+        assert "Domain=.example.com" in header, f"Domain should be set when provided, but not found in: {header}"
+
+        # Test with another domain
+        header = format_cookie_header(
+            key="test_cookie", value="test_value", max_age=3600, secure=True,
+            samesite="lax", path="/", httponly=True, domain="example.com"
+        )
+        assert "Domain=example.com" in header, f"Domain should be set when provided, but not found in: {header}"
+
+    def test_ttl_mapping_for_cookies(self):
+        """Assert TTL mapping for access/refresh/device cookies."""
+        # Test default TTLs
+        access_ttl, refresh_ttl = get_token_ttls()
+        assert access_ttl == 15 * 60  # 15 minutes default
+        assert refresh_ttl == 43200 * 60  # 30 days default
+
+        # Test custom TTLs
+        with patch.dict(os.environ, {
+            "JWT_EXPIRE_MINUTES": "30",
+            "JWT_REFRESH_EXPIRE_MINUTES": "1440"  # 1 day
+        }):
+            access_ttl, refresh_ttl = get_token_ttls()
+            assert access_ttl == 30 * 60  # 30 minutes
+            assert refresh_ttl == 1440 * 60  # 1 day
+
+        # Verify access TTL is always shorter than refresh TTL
+        assert access_ttl < refresh_ttl
+
+        # Test TTL conversion logic
+        with patch.dict(os.environ, {
+            "JWT_EXPIRE_MINUTES": "60",  # 1 hour
+            "JWT_REFRESH_EXPIRE_MINUTES": "43200"  # 30 days
+        }):
+            access_ttl, refresh_ttl = get_token_ttls()
+            # Verify proper conversion to seconds
+            assert access_ttl == 60 * 60  # 1 hour in seconds
+            assert refresh_ttl == 43200 * 60  # 30 days in seconds
+
+
 class TestCookieConfigIntegration:
     """Integration tests for cookie configuration."""
 

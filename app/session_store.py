@@ -195,6 +195,9 @@ def load_meta(session_id: str) -> dict[str, Any]:
 def save_meta(session_id: str, meta: dict[str, Any]) -> None:
     mp = meta_path(session_id)
 
+    # Create the session directory if it doesn't exist
+    mp.parent.mkdir(parents=True, exist_ok=True)
+
     mp.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 

@@ -330,11 +330,18 @@ def handle_user_reply(user_id: str, text: str) -> None:
         key = parts[0].strip().lower().replace(" ", "_")
         val = parts[1].strip()
         try:
-            profile_store.upsert(user_id, key, val, source="utterance")
+            from .memory.write_policy import memory_write_policy
+            if memory_write_policy.should_write_profile(text, key):
+                profile_store.upsert(user_id, key, val, source="utterance")
         except Exception:
             # fallback legacy setter
             profile_store.set(user_id, key, val)
-        add_user_memory(user_id, f"{key} = {val}")
+        try:
+            from .memory.write_policy import memory_write_policy
+            if memory_write_policy.should_write_memory(text):
+                add_user_memory(user_id, f"{key} = {val}")
+        except Exception:
+            pass
 
 
 def set_presence(user_id: str, ok: bool) -> None:

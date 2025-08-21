@@ -1,0 +1,22 @@
+[run]
+branch = True
+source =
+    app
+omit =
+    */__init__.py
+    app/ui_tv/*
+    app/voice/*
+    app/jobs/*
+    app/memgpt/*
+    app/tests/*
+
+[report]
+show_missing = True
+skip_covered = True
+exclude_lines =
+    # Don’t complain about standard no-cover patterns
+    pragma: no cover
+    if __name__ == .__main__.:
+    def __repr__
+    def __str__
+    def __hash__

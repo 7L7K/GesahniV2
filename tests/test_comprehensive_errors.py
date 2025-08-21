@@ -163,7 +163,7 @@ class TestComprehensiveErrors:
         # Test with invalid API key
         with patch.dict(os.environ, {"OPENAI_API_KEY": "invalid-key"}):
             try:
-                asyncio.run(ask_gpt("test prompt"))
+                asyncio.run(ask_gpt("test prompt", routing_decision=None))
             except Exception as e:
                 print(f"Expected GPT failure with invalid key: {e}")
         
@@ -174,7 +174,7 @@ class TestComprehensiveErrors:
             mock_get_client.return_value = mock_client
             
             try:
-                asyncio.run(ask_gpt("test prompt"))
+                asyncio.run(ask_gpt("test prompt", routing_decision=None))
             except Exception as e:
                 print(f"Expected GPT timeout handled: {e}")
     

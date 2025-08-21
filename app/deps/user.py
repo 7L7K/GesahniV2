@@ -72,9 +72,14 @@ def get_current_user_id(
     
     # Cookie fallback so browser sessions persist without sending headers
     if token is None and request is not None:
-        token = request.cookies.get("access_token")
-        if token:
-            token_source = "access_token_cookie"
+        try:
+            # Use canonical cookie name only
+            from ..cookie_names import GSNH_AT
+            token = request.cookies.get(GSNH_AT)
+            if token:
+                token_source = "access_token_cookie"
+        except Exception:
+            token = request.cookies.get("access_token")
     
     # Cookie header fallback for WS handshakes
     if token is None and websocket is not None:
@@ -91,7 +96,15 @@ def get_current_user_id(
 
     # 3) Try __session cookie if access_token failed (contains opaque session ID only)
     if not token and request is not None:
-        session_token = request.cookies.get("__session") or request.cookies.get("session")
+        # Only treat __session as session cookie when Clerk is enabled; otherwise prefer canonical GSNH_SESS
+        try:
+            if os.getenv("CLERK_ENABLED", "0") == "1":
+                session_token = request.cookies.get("__session") or request.cookies.get("session")
+            else:
+                from ..cookie_names import GSNH_SESS
+                session_token = request.cookies.get(GSNH_SESS)
+        except Exception:
+            session_token = request.cookies.get("session")
         if session_token:
             token = session_token
             token_source = "__session_cookie"
@@ -167,8 +180,8 @@ def get_current_user_id(
             
             if access_token and secret:
                 try:
-                    # Decode the access token to get user_id
-                    payload = jwt.decode(access_token, secret, algorithms=["HS256"])
+                    # Decode the access token to get user_id (allow small skew)
+                    payload = jwt.decode(access_token, secret, algorithms=["HS256"], leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60))
                     user_id_from_token = payload.get("user_id") or payload.get("sub")
                     
                     if user_id_from_token:
@@ -232,6 +245,10 @@ def get_current_user_id(
             # For WebSocket handshakes, proceed as anonymous on invalid token to avoid
             # closing the connection before it's established. HTTP requests still fail.
             if websocket is None:
+                try:
+                    logger.warning("auth.invalid_token", extra={"meta": {"reason": "invalid_auth_token"}})
+                except Exception:
+                    pass
                 raise HTTPException(status_code=401, detail="Invalid authentication token")
     elif token and not secret and require_jwt:
         # Token provided but no secret configured while required → fail-closed
@@ -266,6 +283,10 @@ def get_current_user_id(
         except Exception:
             # For WebSocket handshakes, proceed as anonymous on invalid token
             if websocket is None:
+                try:
+                    logger.warning("auth.invalid_clerk_token", extra={"meta": {"reason": "invalid_clerk_token"}})
+                except Exception:
+                    pass
                 raise HTTPException(status_code=401, detail="Invalid Clerk authentication token")
 
     if not user_id:
@@ -277,6 +298,29 @@ def get_current_user_id(
         target.state.user_id = user_id
 
     return user_id
+
+
+async def require_user(request: Request) -> str:
+    """FastAPI dependency that enforces a valid user authentication.
+    
+    Returns 401 if no valid authentication is found.
+    On success, returns the user id.
+    """
+    # Skip CORS preflight requests
+    if request.method == "OPTIONS":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    try:
+        user_id = get_current_user_id(request=request)
+        
+        # If no valid user found, return 401
+        if not user_id or user_id == "anon":
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        return user_id
+    except HTTPException:
+        # Re-raise with consistent error message
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 def get_current_session_device(request: Request | None = None, websocket: WebSocket | None = None) -> dict:
@@ -400,4 +444,4 @@ def resolve_session_id(request: Request | None = None, websocket: WebSocket | No
     return "anon"
 
 
-__all__ = ["get_current_user_id", "get_current_session_device", "resolve_session_id"]
+__all__ = ["get_current_user_id", "get_current_session_device", "resolve_session_id", "require_user"]

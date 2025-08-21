@@ -17,6 +17,7 @@ from app.deps.user import get_current_user_id
 from app.telemetry import hash_user_id
 from app.otel_utils import start_span, get_trace_id_hex
 from app.policy import moderation_precheck
+from app.router import OPENAI_TIMEOUT_MS, OLLAMA_TIMEOUT_MS
 
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ from app.security import rate_limit, verify_token
 router = APIRouter(tags=["Care"])  # dependency added per-route to allow env gate
 
 # Log auth dependency configuration at startup
-print(f"🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id")
+logger.info("🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id")
 
 
 # Enforce auth/rate-limit with env gates
@@ -116,13 +117,21 @@ async def _require_auth_dep(request: Request) -> None:
         }
     },
 )
-async def _ask(request: Request, body: dict | None, user_id: str = Depends(get_current_user_id)):
+async def _ask(request: Request, body: dict | None):
     """Internal ask function that accepts resolved user_id parameter."""
+    # Resolve user_id from request
+    user_id = get_current_user_id(request)
     # Step 1: Log entry point and payload details
-    print(f"🔍 ASK ENTRY: /v1/ask hit with payload={body}")
-    if body and isinstance(body, dict):
-        model_override = body.get("model") or body.get("model_override")
-        print(f"🔍 ASK PAYLOAD: model_override={model_override}, keys={list(body.keys())}")
+    logger.info(
+        "🔍 ASK ENTRY: /v1/ask hit with payload=%s",
+        body,
+        extra={
+            "meta": {
+                "payload_keys": list(body.keys()) if body and isinstance(body, dict) else [],
+                "model_override": body.get("model") or body.get("model_override") if body and isinstance(body, dict) else None,
+            }
+        }
+    )
     
     # Content-Type guard: only accept JSON bodies
     try:
@@ -338,7 +347,10 @@ async def _ask(request: Request, body: dict | None, user_id: str = Depends(get_c
                     error_detail = d
             except Exception:
                 error_detail = None
-            await queue.put(f"[error:{code}]")
+            # TEMP: Return detailed error info for debugging
+            import traceback
+            detailed_error = f"{code}: {detail}\n{traceback.format_exc()}"
+            await queue.put(f"[error:{code}: {detailed_error}]")
         except Exception as e:  # pragma: no cover - defensive
             # Ensure HTTP status reflects failure and propagate a useful error token
             logger.exception("ask.error")
@@ -347,7 +359,10 @@ async def _ask(request: Request, body: dict | None, user_id: str = Depends(get_c
             detail = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
             error_detail = detail
             error_category = "downstream_error"
-            await queue.put("[error:downstream_error]")
+            # TEMP: Return detailed error info for debugging
+            import traceback
+            detailed_error = f"{detail}\n{traceback.format_exc()}"
+            await queue.put(f"[error:downstream_error: {detailed_error}]")
         finally:
             await queue.put(None)
 
@@ -510,10 +525,16 @@ async def ask_dry_explain(
 ):
     """Shadow routing endpoint that returns routing decision without making model calls."""
     # Step 1: Log entry point and payload details
-    print(f"🔍 ASK DRY-EXPLAIN: /v1/ask/dry-explain hit with payload={body}")
-    if body and isinstance(body, dict):
-        model_override = body.get("model") or body.get("model_override")
-        print(f"🔍 ASK PAYLOAD: model_override={model_override}, keys={list(body.keys())}")
+    logger.info(
+        "🔍 ASK DRY-EXPLAIN: /v1/ask/dry-explain hit with payload=%s",
+        body,
+        extra={
+            "meta": {
+                "payload_keys": list(body.keys()) if body and isinstance(body, dict) else [],
+                "model_override": body.get("model") or body.get("model_override") if body and isinstance(body, dict) else None,
+            }
+        }
+    )
     
     # Content-Type guard: only accept JSON bodies
     try:
@@ -583,7 +604,7 @@ async def ask_dry_explain(
     from ..llama_integration import llama_circuit_open
     from ..router import _user_circuit_open
     cb_global_open = llama_circuit_open
-    cb_user_open = _user_circuit_open(user_id) if user_id else False
+    cb_user_open = await _user_circuit_open(user_id) if user_id else False
     
     # Return the routing decision
     result = {
@@ -625,10 +646,16 @@ async def ask_stream(
 ):
     """Streaming endpoint with Server-Sent Events (SSE) support."""
     # Step 1: Log entry point and payload details
-    print(f"🔍 ASK STREAM: /v1/ask/stream hit with payload={body}")
-    if body and isinstance(body, dict):
-        model_override = body.get("model") or body.get("model_override")
-        print(f"🔍 ASK PAYLOAD: model_override={model_override}, keys={list(body.keys())}")
+    logger.info(
+        "🔍 ASK STREAM: /v1/ask/stream hit with payload=%s",
+        body,
+        extra={
+            "meta": {
+                "payload_keys": list(body.keys()) if body and isinstance(body, dict) else [],
+                "model_override": body.get("model") or body.get("model_override") if body and isinstance(body, dict) else None,
+            }
+        }
+    )
     
     # Content-Type guard: only accept JSON bodies
     try:
@@ -701,7 +728,7 @@ async def ask_stream(
             from ..llama_integration import llama_circuit_open
             from ..router import _user_circuit_open
             cb_global_open = llama_circuit_open
-            cb_user_open = _user_circuit_open(user_id) if user_id else False
+            cb_user_open = await _user_circuit_open(user_id) if user_id else False
             
             # Emit route event
             route_data = {
@@ -740,6 +767,7 @@ async def ask_stream(
                     result = await ask_gpt(
                         prompt_text,
                         model=chosen_model,
+                        timeout=OPENAI_TIMEOUT_MS/1000,
                         stream_cb=stream_callback,
                         **gen_opts
                     )
@@ -748,6 +776,7 @@ async def ask_stream(
                     result = await ask_llama(
                         prompt_text,
                         model=chosen_model,
+                        timeout=OLLAMA_TIMEOUT_MS/1000,
                         stream_cb=stream_callback,
                         **gen_opts
                     )

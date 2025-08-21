@@ -13,16 +13,132 @@ import hmac
 import hashlib
 import logging
 from urllib.parse import urlencode
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from ..auth import SECRET_KEY
 from ..integrations.google.config import JWT_STATE_SECRET
-from ..cookie_config import get_cookie_config
+from .. import cookie_config as cookie_cfg
+from ..logging_config import req_id_var
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["auth"])
+
+
+# Simple in-memory monitor for OAuth callback failures and clock skew alerts
+from collections import deque
+
+
+class OAuthCallbackMonitor:
+    def __init__(self, window_seconds: float = 60.0):
+        self.window = float(window_seconds)
+        self.total = deque()
+        self.failures = deque()
+
+    def record(self, success: bool, ts: float | None = None) -> None:
+        now = ts if ts is not None else time.time()
+        cutoff = now - self.window
+        self.total.append(now)
+        if not success:
+            self.failures.append(now)
+        # prune
+        while self.total and self.total[0] < cutoff:
+            self.total.popleft()
+        while self.failures and self.failures[0] < cutoff:
+            self.failures.popleft()
+
+    def failure_rate(self) -> float:
+        t = len(self.total)
+        if t == 0:
+            return 0.0
+        return len(self.failures) / t
+
+
+_oauth_callback_monitor = OAuthCallbackMonitor(window_seconds=float(os.getenv("OAUTH_CALLBACK_MONITOR_WINDOW_SECONDS", "60")))
+_oauth_callback_fail_rate_threshold = float(os.getenv("OAUTH_CALLBACK_FAIL_RATE_THRESHOLD", "0.05"))
+_oauth_clock_skew_ms_threshold = float(os.getenv("OAUTH_CLOCK_SKEW_MS_THRESHOLD", "2000"))
+
+
+def _log_request_summary(request: Request, status_code: int, duration_ms: float, **meta):
+    """Log request summary with structured metadata."""
+    logger.info(
+        f"Request summary: {request.method} {request.url.path} -> {status_code} ({duration_ms:.1f}ms)",
+        extra={
+            "meta": {
+                "req_id": req_id_var.get(),
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": status_code,
+                "duration_ms": duration_ms,
+                **meta
+            }
+        }
+    )
+
+
+def _log_auth_context(request: Request, user_id: str = None, is_authenticated: bool = False):
+    """Log authentication context if available."""
+    if user_id or is_authenticated:
+        logger.info(
+            "Auth context available",
+            extra={
+                "meta": {
+                    "req_id": req_id_var.get(),
+                    "user_id": user_id,
+                    "is_authenticated": is_authenticated
+                }
+            }
+        )
+
+
+def _log_route_meta(request: Request, **meta):
+    """Log route-specific metadata."""
+    logger.info(
+        f"Route meta: {request.url.path}",
+        extra={
+            "meta": {
+                "req_id": req_id_var.get(),
+                "route": request.url.path,
+                **meta
+            }
+        }
+    )
+
+
+def _log_external_call(service: str, status: int, latency_ms: float, **meta):
+    """Log external service calls."""
+    logger.info(
+        f"External call: {service} -> {status} ({latency_ms:.1f}ms)",
+        extra={
+            "meta": {
+                "req_id": req_id_var.get(),
+                "http_out": {
+                    "service": service,
+                    "status": status,
+                    "latency_ms": latency_ms
+                },
+                **meta
+            }
+        }
+    )
+
+
+def _log_error(error_class: str, error_detail: str, cause: str = None, exc_info: bool = False):
+    """Log errors with structured information."""
+    meta = {
+        "req_id": req_id_var.get(),
+        "error_class": error_class,
+        "error_detail": error_detail,
+    }
+    if cause:
+        meta["cause"] = cause
+    
+    if exc_info:
+        logger.error(f"Error: {error_class}: {error_detail}", exc_info=True, extra={"meta": meta})
+    else:
+        logger.error(f"Error: {error_class}: {error_detail}", extra={"meta": meta})
 
 
 def _allow_redirect(url: str) -> bool:
@@ -76,110 +192,146 @@ async def google_login_url(request: Request) -> Response:
     Returns a Google OAuth URL and sets a short-lived state cookie
     for CSRF protection. If Google OAuth is not configured, returns 503.
     """
-    logger.info("🔐 Google OAuth login URL endpoint hit")
-    logger.info("📋 Starting OAuth flow - checking configuration")
+    start_time = time.time()
+    req_id = req_id_var.get()
     
-    # Read required environment variables
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
+    logger.info(
+        "oauth.login_url",
+        extra={
+            "meta": {
+                "req_id": req_id,
+                "component": "google_oauth",
+                "msg": "oauth.login_url",
+                "state_set": False,  # Will be set to True when state is generated
+                "next": None,  # Will be set from query params
+                "cookie_http_only": True,
+                "samesite": "Lax"
+            }
+        }
+    )
     
-    logger.info(f"🔧 Configuration check - Client ID: {'✅ Set' if client_id else '❌ Missing'}")
-    logger.info(f"🔧 Configuration check - Redirect URI: {'✅ Set' if redirect_uri else '❌ Missing'}")
-    
-    # Fail fast if configuration is missing
-    if not client_id or not redirect_uri:
-        logger.error("❌ Google OAuth configuration missing - returning 503")
-        raise HTTPException(
-            status_code=503,
-            detail="Google OAuth not configured (set GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI)"
+    try:
+        # Read required environment variables
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
+        
+        # Fail fast if configuration is missing
+        if not client_id or not redirect_uri:
+            duration = (time.time() - start_time) * 1000
+            _log_error(
+                "ConfigurationError",
+                "Google OAuth not configured",
+                "Missing GOOGLE_CLIENT_ID or GOOGLE_REDIRECT_URI"
+            )
+            _log_request_summary(request, 503, duration, error="config_missing")
+            raise HTTPException(
+                status_code=503,
+                detail="Google OAuth not configured (set GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI)"
+            )
+        
+        # Generate signed state for CSRF protection
+        state = _generate_signed_state()
+        
+        # Build Google OAuth URL
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": "openid email profile",
+            "access_type": "offline",
+            "include_granted_scopes": "true",
+            "prompt": "consent",
+            "state": state,
+        }
+        
+        # Add optional parameters only if explicitly configured
+        hd = os.getenv("GOOGLE_HD")
+        if hd and hd.strip():
+            params["hd"] = hd.strip()
+        
+        login_hint = os.getenv("GOOGLE_LOGIN_HINT")
+        if login_hint and login_hint.strip():
+            params["login_hint"] = login_hint.strip()
+        
+        # Echo through next query param if present and allowed
+        next_url = request.query_params.get("next")
+        if next_url:
+            if not _allow_redirect(next_url):
+                logger.warning(
+                    "Blocked disallowed redirect URL",
+                    extra={
+                        "meta": {
+                            "req_id": req_id,
+                            "component": "google_oauth",
+                            "msg": "redirect_blocked",
+                            "next_url": next_url[:100] + "..." if len(next_url) > 100 else next_url
+                        }
+                    }
+                )
+                next_url = "/"  # Reset to safe default
+            params["redirect_params"] = f"next={next_url}"
+        
+        oauth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+        
+        # Create JSON response with state cookie
+        response_data = {"auth_url": oauth_url}
+        
+        # Set OAuth state cookie using centralized cookie surface
+        from ..cookies import set_oauth_state_cookies
+        
+        # Create a Response object to set the cookie
+        import json
+        http_response = Response(
+            content=json.dumps(response_data),
+            media_type="application/json"
         )
-    
-    logger.info("✅ Configuration validated - proceeding with OAuth URL generation")
-    
-    # Generate signed state for CSRF protection
-    logger.info("🔐 Generating signed state for CSRF protection")
-    state = _generate_signed_state()
-    logger.info("✅ Signed state generated successfully")
-    
-    # Build Google OAuth URL
-    logger.info("🌐 Building Google OAuth URL parameters")
-    params = {
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": "openid email profile",
-        "access_type": "offline",
-        "include_granted_scopes": "true",
-        "prompt": "consent",
-        "state": state,
-    }
-    logger.info("✅ Base OAuth parameters configured")
-    
-    # Add optional parameters only if explicitly configured
-    # Note: These can leak tenant/user info - only use if you want to restrict or hint
-    logger.info("🔍 Checking optional parameters (hd, login_hint)")
-    hd = os.getenv("GOOGLE_HD")
-    if hd and hd.strip():  # Only include if explicitly set and not empty
-        params["hd"] = hd.strip()
-        logger.info("✅ HD parameter included")
-    else:
-        logger.info("ℹ️ HD parameter not set - skipping")
-    
-    login_hint = os.getenv("GOOGLE_LOGIN_HINT")
-    if login_hint and login_hint.strip():  # Only include if explicitly set and not empty
-        params["login_hint"] = login_hint.strip()
-        logger.info("✅ Login hint parameter included")
-    else:
-        logger.info("ℹ️ Login hint parameter not set - skipping")
-    
-    # Echo through next query param if present and allowed
-    logger.info("🔗 Processing next parameter for redirect")
-    next_url = request.query_params.get("next")
-    if next_url:
-        logger.info("📋 Next parameter found - validating redirect URL")
-        if not _allow_redirect(next_url):
-            logger.warning("🚫 Blocked disallowed redirect URL")  # Don't log the actual URL
-            next_url = "/"  # Reset to safe default
-            logger.info("🔄 Reset next parameter to safe default '/'")
-        else:
-            logger.info("✅ Next parameter validated successfully")
-        params["redirect_params"] = f"next={next_url}"
-        logger.info("✅ Next parameter added to OAuth URL")
-    else:
-        logger.info("ℹ️ No next parameter provided")
-    
-    logger.info("🔗 Constructing final OAuth URL")
-    oauth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
-    logger.info("✅ OAuth URL constructed successfully")
-    
-    # Create JSON response with state cookie
-    logger.info("🍪 Setting up response with state cookie")
-    # legacy clients expect `auth_url` key; keep compatibility
-    response_data = {"auth_url": oauth_url}
-    
-    # Set OAuth state cookie using centralized cookie surface
-    logger.info("🍪 Setting OAuth state cookie with 5-minute TTL")
-    from ..cookies import set_oauth_state_cookies
-    
-    # Create a Response object to set the cookie
-    import json
-    http_response = Response(
-        content=json.dumps(response_data),
-        media_type="application/json"
-    )
-    
-    # Use centralized cookie surface for OAuth state cookies
-    set_oauth_state_cookies(
-        resp=http_response,
-        state=state,
-        next_url=next_url or "/",
-        request=request,
-        ttl=300,  # 5 minutes
-        provider="g"  # Google-specific cookie prefix
-    )
-    
-    logger.info("🎉 OAuth login URL endpoint completed successfully")
-    return http_response
+        
+        # Use centralized cookie surface for OAuth state cookies
+        set_oauth_state_cookies(
+            resp=http_response,
+            state=state,
+            next_url=next_url or "/",
+            request=request,
+            ttl=300,  # 5 minutes
+            provider="g"  # Google-specific cookie prefix
+        )
+        
+        duration = (time.time() - start_time) * 1000
+        
+        # Log successful completion with required fields
+        logger.info(
+            "oauth.login_url",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "msg": "oauth.login_url",
+                    "state_set": True,
+                    "next": next_url or "/",
+                    "cookie_http_only": True,
+                    "samesite": "Lax"
+                }
+            }
+        )
+        
+        _log_request_summary(request, 200, duration)
+        return http_response
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        duration = (time.time() - start_time) * 1000
+        _log_request_summary(request, 503, duration, error="http_exception")
+        raise
+    except Exception as e:
+        duration = (time.time() - start_time) * 1000
+        _log_error(
+            type(e).__name__,
+            str(e),
+            "Unexpected error in login URL generation",
+            exc_info=True
+        )
+        _log_request_summary(request, 500, duration, error="unexpected_error")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _verify_signed_state(state: str) -> bool:
@@ -224,15 +376,41 @@ async def google_callback(request: Request) -> Response:
     Rejects requests with missing, expired, or invalid state.
     Clears the state cookie after validation and proceeds with session logic.
     """
-    logger.info("🔄 Google OAuth callback endpoint hit")
-    logger.info("📋 Starting callback validation process")
+    start_time = time.time()
+    req_id = req_id_var.get()
+    
+    logger.info(
+        "Google OAuth callback endpoint hit",
+        extra={
+            "meta": {
+                "req_id": req_id,
+                "component": "google_oauth",
+                "msg": "callback_request_started"
+            }
+        }
+    )
     
     code = request.query_params.get("code")
     state = request.query_params.get("state")
     
-    # Strict validation - respond with cleared state cookie on any error
-    logger.info(f"🔍 Validating callback parameters - Code: {'✅ Present' if code else '❌ Missing'}, State: {'✅ Present' if state else '❌ Missing'}")
-    cookie_config = get_cookie_config(request)
+    # Log callback parameters
+    logger.info(
+        "Callback parameters received",
+        extra={
+            "meta": {
+                "req_id": req_id,
+                "component": "google_oauth",
+                "msg": "callback_params",
+                "has_code": bool(code),
+                "has_state": bool(state),
+                "code_length": len(code) if code else 0,
+                "state_length": len(state) if state else 0
+            }
+        }
+    )
+    
+    cookie_config = cookie_cfg.get_cookie_config(request)
+    
     def _error_response(msg: str, status: int = 400) -> Response:
         import json
         resp = Response(content=json.dumps({"detail": msg}), media_type="application/json", status_code=status)
@@ -242,48 +420,138 @@ async def google_callback(request: Request) -> Response:
         return resp
 
     if not code or not state:
-        logger.error("❌ Google OAuth callback missing code or state")
+        duration = (time.time() - start_time) * 1000
+        _log_error(
+            "ValidationError",
+            "Missing code or state parameter",
+            "OAuth callback missing required parameters"
+        )
+        _log_request_summary(request, 400, duration, error="missing_params")
         return _error_response("missing_code_or_state", status=400)
 
     # Get state cookie and validate
-    logger.info("🍪 Checking for g_state cookie")
     state_cookie = request.cookies.get("g_state")
     
     # For local development, bypass state cookie validation if cookie is missing
     dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
+    
+    logger.info(
+        "State cookie validation",
+        extra={
+            "meta": {
+                "req_id": req_id,
+                "component": "google_oauth",
+                "msg": "state_cookie_check",
+                "has_state_cookie": bool(state_cookie),
+                "dev_mode": dev_mode
+            }
+        }
+    )
+    
     if not state_cookie and dev_mode:
-        logger.warning("⚠️ Development mode: Bypassing state cookie validation")
-        logger.info("✅ State cookie validation bypassed for development")
+        logger.warning(
+            "Development mode: Bypassing state cookie validation",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "msg": "state_cookie_bypassed_dev"
+                }
+            }
+        )
     elif not state_cookie:
-        logger.error("❌ Google OAuth callback missing state cookie")
+        duration = (time.time() - start_time) * 1000
+        _log_error(
+            "ValidationError",
+            "Missing state cookie",
+            "OAuth callback missing state cookie"
+        )
+        _log_request_summary(request, 400, duration, error="missing_state_cookie")
         return _error_response("missing_state_cookie", status=400)
-    else:
-        logger.info("✅ State cookie found")
 
     # Verify state matches cookie exactly (skip in dev mode if no cookie)
     if state_cookie:
-        logger.info("🔍 Validating state parameter matches cookie")
         if state != state_cookie:
-            logger.error("❌ Google OAuth callback state mismatch")
+            duration = (time.time() - start_time) * 1000
+            _log_error(
+                "ValidationError",
+                "State parameter mismatch",
+                "OAuth callback state parameter doesn't match cookie"
+            )
+            _log_request_summary(request, 400, duration, error="state_mismatch")
             return _error_response("state_mismatch", status=400)
-        logger.info("✅ State parameter matches cookie")
-    else:
-        logger.info("⚠️ Development mode: Skipping state parameter validation")
+        
+        logger.info(
+            "State parameter matches cookie",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "msg": "state_match_success"
+                }
+            }
+        )
 
     # Verify signed state is valid and fresh
-    logger.info("🔐 Verifying signed state signature and freshness")
-    if not _verify_signed_state(state):
+    # Measure state age and signature validity
+    state_valid = _verify_signed_state(state)
+    state_age_ms = None
+    try:
+        # our signed state format was timestamp:random:sig
+        parts = state.split(":")
+        if parts and parts[0].isdigit():
+            ts = int(parts[0])
+            state_age_ms = (time.time() - ts) * 1000
+    except Exception:
+        state_age_ms = None
+
+    logger.info(
+        "Signed state validation",
+        extra={
+            "meta": {
+                "req_id": req_id,
+                "component": "google_oauth",
+                "msg": "signed_state_check",
+                "state_valid": state_valid,
+                "state_age_ms": state_age_ms,
+                "dev_mode": dev_mode,
+            }
+        }
+    )
+    
+    if not state_valid:
         if dev_mode:
-            logger.warning("⚠️ Development mode: Bypassing signed state validation")
-            logger.info("✅ Signed state validation bypassed for development")
+            logger.warning(
+                "Development mode: Bypassing signed state validation",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "component": "google_oauth",
+                        "msg": "signed_state_bypassed_dev"
+                    }
+                }
+            )
         else:
-            logger.error("❌ Google OAuth callback invalid or expired state")
+            duration = (time.time() - start_time) * 1000
+            _log_error(
+                "ValidationError",
+                "Invalid or expired state",
+                "OAuth callback state signature invalid or expired"
+            )
+            _log_request_summary(request, 400, duration, error="invalid_state")
             return _error_response("invalid_state", status=400)
-    else:
-        logger.info("✅ Signed state validation passed")
     
     # State is valid - clear/rotate the state cookie after use
-    logger.info("🍪 Clearing OAuth state cookies after successful validation")
+    logger.info(
+        "Clearing OAuth state cookies after successful validation",
+        extra={
+            "meta": {
+                "req_id": req_id,
+                "component": "google_oauth",
+                "msg": "state_cookies_cleared"
+            }
+        }
+    )
     
     # Create response object to set cleared cookie
     response = Response(
@@ -294,18 +562,20 @@ async def google_callback(request: Request) -> Response:
     # Clear OAuth state cookies using centralized surface
     from ..cookies import clear_oauth_state_cookies
     clear_oauth_state_cookies(response, request, provider="g")
-    logger.info("✅ OAuth state cookies cleared successfully")
     
     # State validation complete - proceed with usual session logic
-    logger.info("✅ Google OAuth callback state validated successfully")
-    logger.info("🎉 All validation checks passed - proceeding with OAuth flow")
+    logger.info(
+        "Google OAuth callback state validated successfully",
+        extra={
+            "meta": {
+                "req_id": req_id,
+                "component": "google_oauth",
+                "msg": "state_validation_complete"
+            }
+        }
+    )
     
     # Perform token exchange and create an application session/redirect.
-    # We keep this flow minimal and deterministic for tests and local dev:
-    # 1) Exchange the code for Google credentials
-    # 2) Extract a stable user identifier (email or sub)
-    # 3) Persist the provider tokens in the google_oauth DB
-    # 4) Mint application access/refresh JWTs and redirect the browser
     try:
         from ..integrations.google import oauth as go
         from ..integrations.google.db import SessionLocal, GoogleToken, init_db
@@ -316,7 +586,50 @@ async def google_callback(request: Request) -> Response:
         from uuid import uuid4
 
         # Exchange the authorization code (state already validated by this endpoint)
-        creds = go.exchange_code(code, state, verify_state=False)
+        logger.info(
+            "Starting Google token exchange",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "msg": "token_exchange_started"
+                }
+            }
+        )
+        
+        # Wrap token exchange with OpenTelemetry span and capture latency
+        from ..otel_utils import start_span, get_trace_id_hex
+
+        token_exchange_start = time.time()
+        with start_span("google.oauth.token.exchange", {"component": "google_oauth"}) as _span:
+            creds = go.exchange_code(code, state, verify_state=False)
+            # If span present, set google token latency on span
+            try:
+                _span.set_attribute("google_token_latency_ms", 0)
+            except Exception:
+                pass
+        token_exchange_duration = (time.time() - token_exchange_start) * 1000
+        try:
+            if _span is not None and hasattr(_span, "set_attribute"):
+                _span.set_attribute("google_token_latency_ms", int(token_exchange_duration))
+        except Exception:
+            pass
+
+        # Emit extra telemetry in logs/meta
+        try:
+            trace_id = get_trace_id_hex()
+        except Exception:
+            trace_id = None
+        
+        # Log external call to Google token exchange
+        _log_external_call(
+            "google_token",
+            200,  # Assume success if no exception
+            token_exchange_duration,
+            exchange_status="ok",
+            trace_id=trace_id,
+            google_token_latency_ms=token_exchange_duration,
+        )
 
         # Try to extract email/sub from id_token (best-effort, without verification)
         provider_user_id = None
@@ -327,8 +640,18 @@ async def google_callback(request: Request) -> Response:
                 claims = pyjwt.decode(id_token, options={"verify_signature": False})
                 email = claims.get("email") or claims.get("email_address")
                 provider_user_id = claims.get("sub") or email
-        except Exception:
-            # Swallow - we'll fallback to tokens
+        except Exception as e:
+            logger.warning(
+                "Failed to decode ID token",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "component": "google_oauth",
+                        "msg": "id_token_decode_failed",
+                        "error": str(e)
+                    }
+                }
+            )
             provider_user_id = None
 
         # Fallback identifiers
@@ -364,8 +687,30 @@ async def google_callback(request: Request) -> Response:
                     row.scopes = rec.get("scopes")
                     row.expiry = rec.get("expiry")
                 s.commit()
-        except Exception:
-            logger.exception("Failed to persist Google tokens (non-fatal)")
+                
+            logger.info(
+                "Google tokens persisted successfully",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "component": "google_oauth",
+                        "msg": "tokens_persisted",
+                        "user_id": uid
+                    }
+                }
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to persist Google tokens (non-fatal)",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "component": "google_oauth",
+                        "msg": "token_persistence_failed",
+                        "error": str(e)
+                    }
+                }
+            )
 
         # Mint application JWTs (access + refresh) for the user and redirect
         app_url = os.getenv("APP_URL", "http://localhost:3000")
@@ -417,13 +762,36 @@ async def google_callback(request: Request) -> Response:
         except Exception:
             pass
 
-        resp = RedirectResponse(url=final_root, status_code=302)
-        
+        # Decide whether to perform a 302 redirect or return an HTML shim that
+        # sets cookies and immediately redirects via JS. The HTML shim can be
+        # more reliable for some browsers when Set-Cookie appears on redirect
+        # responses.
+        use_html_shim = os.getenv("OAUTH_HTML_REDIRECT", "0").lower() in {"1", "true", "yes", "on"}
+
         # Get TTLs from centralized configuration
-        from ..cookie_config import get_token_ttls
-        access_ttl, refresh_ttl = get_token_ttls()
-        
+        access_ttl, refresh_ttl = cookie_cfg.get_token_ttls()
+
         # Optional legacy __session cookie for integrations
+        if use_html_shim:
+            # Return an HTML page that immediately navigates to the frontend
+            # root via JS. Set cookies on this 200 response so browsers reliably
+            # persist them even when redirects might be finicky.
+            from starlette.responses import HTMLResponse
+
+            html = f"""<!doctype html>
+<html><head><meta charset=\"utf-8\"><meta http-equiv=\"x-ua-compatible\" content=\"ie=edge\"> 
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> 
+<title>Signing in...</title></head>
+<body>
+<p>Signing you in… If you are not redirected, <a id=\"link\" href=\"{final_root}\">click here</a>.</p>
+<script>window.location.replace({final_root!r});</script>
+</body></html>"""
+
+            resp = HTMLResponse(content=html, status_code=200)
+        else:
+            from starlette.responses import RedirectResponse
+            resp = RedirectResponse(url=final_root, status_code=302)
+        
         session_id = None
         if os.getenv('ENABLE_SESSION_COOKIE', '') in ('1', 'true', 'yes'):
             # Create opaque session ID instead of using JWT
@@ -438,26 +806,222 @@ async def google_callback(request: Request) -> Response:
                 else:
                     session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
             except Exception as e:
-                import logging
-                logging.getLogger(__name__).warning(f"Failed to create session ID: {e}")
+                logger.warning(
+                    "Failed to create session ID",
+                    extra={
+                        "meta": {
+                            "req_id": req_id,
+                            "component": "google_oauth",
+                            "msg": "session_id_creation_failed",
+                            "error": str(e)
+                        }
+                    }
+                )
                 session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
         
         # Use centralized cookie functions
         from ..cookies import set_auth_cookies
+
+        # Confirm resolved cookie attributes are localhost-safe for dev
+        try:
+            resolved_ccfg = cookie_cfg.get_cookie_config(request)
+            # Log resolved cookie attributes for debugging and verification
+            logger.info(
+                "Resolved cookie attributes",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "path": resolved_ccfg.get("path"),
+                        "samesite": resolved_ccfg.get("samesite"),
+                        "secure": resolved_ccfg.get("secure"),
+                        "httponly": resolved_ccfg.get("httponly"),
+                        "domain": resolved_ccfg.get("domain"),
+                    }
+                }
+            )
+
+            # Emit a warning if attributes look unsafe for localhost development
+            if _get_scheme(request) != "https":
+                if bool(resolved_ccfg.get("secure")):
+                    logger.warning("Cookie Secure=True on non-HTTPS request; overriding for dev may be required", extra={"meta": {"req_id": req_id}})
+                if str(resolved_ccfg.get("samesite", "")).lower() == "none":
+                    logger.warning("Cookie SameSite=None on non-HTTPS request; this may prevent browsers from storing cookies on localhost", extra={"meta": {"req_id": req_id}})
+        except Exception:
+            # Best-effort only; do not fail the flow if cookie config lookup/logging fails
+            pass
+
+        # Write cookies using the canonical names
         set_auth_cookies(resp, access=at, refresh=rt, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
-        logger.info("🔁 Redirecting user to %s (cookies set)", final_root)
+
+        # Emit compact cookie-write observability so ops can verify attributes/names at a glance
+        try:
+            # Report canonical names in logs
+            try:
+                from ..cookie_names import ACCESS_TOKEN, REFRESH_TOKEN
+                cookie_names_written = [ACCESS_TOKEN, REFRESH_TOKEN]
+            except Exception:
+                cookie_names_written = ["access_token", "refresh_token"]
+            # Use previously resolved cookie config when available
+            ccfg = resolved_ccfg if 'resolved_ccfg' in locals() else cookie_cfg.get_cookie_config(request)
+            samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
+            auth_cookie_attrs = {
+                "path": ccfg.get("path", "/"),
+                "samesite": samesite_map.get(str(ccfg.get("samesite", "lax")).lower(), "Lax"),
+                "secure": bool(ccfg.get("secure", False)),
+                "http_only": bool(ccfg.get("httponly", True)),
+            }
+            logger.info(
+                "oauth.callback.cookies_written",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "set_auth_cookies": True,
+                        "cookie_names_written": cookie_names_written,
+                        "auth_cookie_attrs": auth_cookie_attrs,
+                        "redirect": final_root,
+                    }
+                }
+            )
+        except Exception:
+            pass
+        
+        duration = (time.time() - start_time) * 1000
+        
+        # Log successful completion with required fields and cookie attributes
+        try:
+            ccfg = cookie_cfg.get_cookie_config(request)
+            samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
+            auth_cookie_attrs = {
+                "path": ccfg.get("path", "/"),
+                "samesite": samesite_map.get(str(ccfg.get("samesite", "lax")).lower(), "Lax"),
+                "secure": bool(ccfg.get("secure", False)),
+                "http_only": bool(ccfg.get("httponly", True)),
+            }
+        except Exception:
+            auth_cookie_attrs = {"path": "/", "samesite": "Lax", "secure": False, "http_only": True}
+
+        logger.info(
+            "oauth.callback.success",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "msg": "oauth.callback.success",
+                    "state_valid": state_valid,
+                    "token_exchange": "ok",
+                    "set_auth_cookies": True,
+                    "auth_cookie_attrs": auth_cookie_attrs,
+                    "redirect_to": final_root,
+                    "redirect": final_root,
+                    "google_token_latency_ms": int(token_exchange_duration),
+                    "trace_id": trace_id,
+                }
+            }
+        )
+
+        # Record monitor success and emit alert if failure rate threshold exceeded
+        try:
+            _oauth_callback_monitor.record(success=True)
+            rate = _oauth_callback_monitor.failure_rate()
+            if rate > _oauth_callback_fail_rate_threshold:
+                logger.warning("oauth.callback.fail_rate_high", extra={"meta": {"fail_rate": rate}})
+        except Exception:
+            pass
+        
+        # Log auth context
+        _log_auth_context(request, user_id=uid, is_authenticated=True)
+        
+        _log_request_summary(request, 302, duration)
         return resp
+        
+    except HTTPException as e:
+        duration = (time.time() - start_time) * 1000
+        
+        # Log the HTTP exception
+        _log_error(
+            type(e).__name__,
+            str(e),
+            "OAuth callback HTTP exception",
+            exc_info=False
+        )
+
+        # Log first 200 chars of Google's response body if available (DEBUG only)
+        try:
+            if hasattr(e, 'response') and hasattr(e.response, 'text'):
+                response_body = e.response.text[:200]
+                logger.debug(
+                    "Google response body (first 200 chars)",
+                    extra={
+                        "meta": {
+                            "req_id": req_id,
+                            "component": "google_oauth",
+                            "msg": "google_response_body",
+                            "response_body": response_body
+                        }
+                    }
+                )
+        except Exception:
+            # Ignore errors in logging response body
+            pass
+
+        # Log callback failure with structured reason code
+        reason_code = getattr(e, "detail", "oauth_exchange_failed") or "oauth_exchange_failed"
+        logger.warning(
+            "oauth.callback.fail",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "msg": "oauth.callback.fail",
+                    "state_valid": state_valid if 'state_valid' in locals() else False,
+                    "token_exchange": "fail",
+                    "google_status": e.status_code,
+                    "reason": reason_code,
+                    "redirect": f"/login?err={reason_code}"
+                }
+            }
+        )
+
+        try:
+            _oauth_callback_monitor.record(success=False)
+            rate = _oauth_callback_monitor.failure_rate()
+            if rate > _oauth_callback_fail_rate_threshold:
+                logger.warning("oauth.callback.fail_rate_high", extra={"meta": {"fail_rate": rate}})
+        except Exception:
+            pass
+
+        _log_request_summary(request, e.status_code, duration, error="http_exception")
+        return _error_response(e.detail, status=e.status_code)
+        
     except Exception as e:
+        duration = (time.time() - start_time) * 1000
+        
         # Log the exception type/message (always)
-        logger.error("OAuth callback processing failed: %s: %s", type(e).__name__, e)
+        _log_error(
+            type(e).__name__,
+            str(e),
+            "OAuth callback processing failed",
+            exc_info=True
+        )
 
-        # Log full traceback (guarantees stacktrace to configured logger)
-        import traceback
-        tb = traceback.format_exc()
-        logger.error("Full traceback:\n%s", tb)
-
-        # Also use logger.exception for any handlers that include exc_info
-        logger.exception("OAuth callback exception for diagnostics")
+        # Log first 200 chars of Google's response body if available (DEBUG only)
+        try:
+            if hasattr(e, 'response') and hasattr(e.response, 'text'):
+                response_body = e.response.text[:200]
+                logger.debug(
+                    "Google response body (first 200 chars)",
+                    extra={
+                        "meta": {
+                            "req_id": req_id,
+                            "component": "google_oauth",
+                            "msg": "google_response_body",
+                            "response_body": response_body
+                        }
+                    }
+                )
+        except Exception:
+            # Ignore errors in logging response body
+            pass
 
         # Determine user-friendly message and status
         msg = "oauth_callback_failed"
@@ -469,12 +1033,40 @@ async def google_callback(request: Request) -> Response:
         except Exception:
             pass
 
+        # Log callback failure with required fields
+        # Emit error with structured reason code
+        reason_code = "oauth_exchange_failed"
+        logger.error(
+            "oauth.callback.fail",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "msg": "oauth.callback.fail",
+                    "state_valid": state_valid if 'state_valid' in locals() else False,
+                    "token_exchange": "fail",
+                    "google_status": status,
+                    "reason": reason_code,
+                    "redirect": f"/login?err={reason_code}"
+                }
+            }
+        )
+
+        try:
+            _oauth_callback_monitor.record(success=False)
+            rate = _oauth_callback_monitor.failure_rate()
+            if rate > _oauth_callback_fail_rate_threshold:
+                logger.warning("oauth.callback.fail_rate_high", extra={"meta": {"fail_rate": rate}})
+        except Exception:
+            pass
+
         # If running locally, return trace in the HTTP response for quick debugging.
         # WARNING: do NOT enable this in production.
         if os.getenv("ENV", "").lower() in ("dev", "development", "local", "test"):
-            return _error_response(f"{msg}: {type(e).__name__}: {e}\n{tb}", status=status)
+            return _error_response(f"{msg}: {type(e).__name__}: {e}", status=status)
 
         # Otherwise, return sanitized cookie-clearing response (no internals leaked)
+        _log_request_summary(request, status, duration, error="callback_failed")
         return _error_response(msg, status=status)
 
 

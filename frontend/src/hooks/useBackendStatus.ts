@@ -24,8 +24,7 @@ export function useBackendStatus() {
 
                 const res = await apiFetch('/healthz/ready', {
                     signal: controller.signal,
-                    cache: 'no-store',
-                    credentials: 'include'
+                    cache: 'no-store'
                 });
 
                 clearTimeout(timeoutId);
@@ -77,8 +76,7 @@ export function useBackendStatus() {
 
                 const res = await apiFetch('/healthz/deps', {
                     signal: controller.signal,
-                    cache: 'no-store',
-                    credentials: 'include'
+                    cache: 'no-store'
                 });
 
                 clearTimeout(timeoutId);

@@ -104,4 +104,3 @@ async def json_request(
         except Exception as e:  # pragma: no cover - unexpected
             logger.warning("http.unexpected_error", extra={"meta": {"url": url, "error": str(e)}})
             return None, "unknown_error"
-    return None, "http_error"

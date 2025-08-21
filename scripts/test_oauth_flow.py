@@ -34,16 +34,28 @@ print('resp json keys:', r.json().keys())
 # Extract state cookie
 state_cookie = client.cookies.get('g_state')
 print('g_state cookie present?', bool(state_cookie))
+print('g_state cookie value:', state_cookie)
 
 # Now patch exchange_code to return stub creds and call callback
 with patch('app.integrations.google.oauth.exchange_code', lambda code, state, verify_state=False: _StubCreds()):
-    print('Calling callback with patched exchange_code...')
+    print('\nCalling callback with patched exchange_code...')
     # Use the state value from cookie (the endpoint expects state param)
     params = {'code':'fake-code','state': state_cookie}
     r2 = client.get('/v1/google/auth/callback', params=params, allow_redirects=False)
     print('callback status', r2.status_code)
+    
+    # Show all response headers
+    print('\n=== CALLBACK RESPONSE HEADERS ===')
+    for header, value in r2.headers.items():
+        print(f'{header}: {value}')
+    
+    # Show cookies that were set
+    print('\n=== COOKIES SET BY CALLBACK ===')
+    for cookie_name, cookie_value in client.cookies.items():
+        print(f'{cookie_name}: {cookie_value}')
+    
     if r2.is_redirect:
-        print('redirect location:', r2.headers.get('location'))
+        print('\nredirect location:', r2.headers.get('location'))
     else:
-        print('callback body:', r2.text)
+        print('\ncallback body:', r2.text)
 

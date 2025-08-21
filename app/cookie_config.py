@@ -37,17 +37,27 @@ def get_cookie_config(request: Request) -> Dict[str, Any]:
         dict: Cookie configuration with secure, samesite, httponly, path, domain
     """
     # Base configuration from environment
-    cookie_secure = os.getenv("COOKIE_SECURE", "0").lower() in {"1", "true", "yes", "on"}
+    # Determine secure flag automatically: HTTPS requests should be secure
+    env_force_secure = os.getenv("COOKIE_SECURE", "").strip().lower() in {"1", "true", "yes", "on"}
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
     dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
     
-    # Development mode detection: force Secure=False for HTTP in dev
-    if dev_mode or _is_dev_environment(request):
-        if _get_scheme(request) != "https":
-            cookie_secure = False
+    # Development mode detection: on dev + non-HTTPS, ensure cookies are
+    # localhost-safe: Secure=False, SameSite != None, host-only (no Domain).
+    dev_env_detected = dev_mode or _is_dev_environment(request)
+    is_tls = _get_scheme(request) == "https"
+    # Default secure: True for HTTPS and not in DEV_MODE, else False
+    cookie_secure = (is_tls and not dev_mode) or env_force_secure
+    if dev_env_detected and not is_tls:
+        # In dev over plain HTTP, ensure Secure=False so browsers accept cookies locally
+        cookie_secure = False
+        # Prevent SameSite=None in dev HTTP (browsers require Secure for None). Use Lax as safe default.
+        if cookie_samesite == "none":
+            cookie_samesite = "lax"
     
-    # SameSite=None requires Secure=True
-    if cookie_samesite == "none":
+    # SameSite=None requires Secure=True in production; enforce if configured
+    if cookie_samesite == "none" and cookie_secure:
+        # keep cookie_secure True when SameSite=None is explicitly requested and we're secure
         cookie_secure = True
     
     # Always use host-only cookies (no Domain) for better security and Safari compatibility
@@ -167,8 +177,13 @@ def format_cookie_header(
     if domain:
         parts.append(f"Domain={domain}")
     
-    # Add Priority=High for critical auth cookies
-    if key in ["access_token", "refresh_token", "__session"]:
+    # Add Priority=High for critical auth cookies (legacy + canonical names)
+    try:
+        from .cookie_names import ACCESS_TOKEN, REFRESH_TOKEN, SESSION
+        priority_names = {ACCESS_TOKEN, REFRESH_TOKEN, SESSION, "access_token", "refresh_token", "__session"}
+    except Exception:
+        priority_names = {"access_token", "refresh_token", "__session"}
+    if key in priority_names:
         parts.append("Priority=High")
     
     return "; ".join(parts)

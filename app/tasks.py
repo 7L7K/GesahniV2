@@ -23,6 +23,7 @@ from .transcribe import transcribe_file as sync_transcribe_file
 from .analytics import record_transcription
 from .gpt_client import ask_gpt
 from .memory.vector_store import add_user_memory
+from .router import OPENAI_TIMEOUT_MS
 
 
 def _get_queue() -> Queue:
@@ -145,7 +146,7 @@ def summary_task(session_id: str) -> None:
     try:
         text = transcript_path.read_text(encoding="utf-8")
         # simple prompt; tests may monkeypatch ask_gpt
-        summary, _, _, _ = asyncio.run(ask_gpt(f"Summarize the following:\n{text}"))
+        summary, _, _, _ = asyncio.run(ask_gpt(f"Summarize the following:\n{text}", timeout=OPENAI_TIMEOUT_MS/1000, routing_decision=None))
         tags = extract_tags_from_text(text)
         summary_path.write_text(
             json.dumps({"summary": summary}, ensure_ascii=False, indent=2),

@@ -34,7 +34,7 @@ async def test_cost_breakdown(monkeypatch):
     rec = LogRecord(req_id="1")
     token = log_record_var.set(rec)
     try:
-        _, pt, ct, cost = await gpt_client.ask_gpt("hi", model="gpt-4o")
+        _, pt, ct, cost = await gpt_client.ask_gpt("hi", model="gpt-4o", routing_decision=None)
     finally:
         log_record_var.reset(token)
     assert pt == 1000

@@ -129,13 +129,13 @@ class TestBearerAuthEndToEnd:
             headers={"Authorization": "Bearer invalid_token"}
         )
         
-        # Should return 200 but with is_authenticated: false for invalid token
-        assert response.status_code == 200
+        # Should return 401 for invalid token
+        assert response.status_code == 401
         data = response.json()
-        assert data["is_authenticated"] is False
+        assert data["detail"] == "Unauthorized"
     
     def test_missing_token_anonymous_access(self, monkeypatch):
-        """Test that endpoints work with anonymous access when no token provided."""
+        """Test that endpoints require authentication when no token provided."""
         monkeypatch.setenv("JWT_SECRET", "test_secret")
         monkeypatch.setenv("CSRF_ENABLED", "0")  # Disable CSRF for this test
         
@@ -144,10 +144,9 @@ class TestBearerAuthEndToEnd:
         # Test without any authentication
         response = client.get("/v1/whoami")
         
-        assert response.status_code == 200
+        assert response.status_code == 401
         data = response.json()
-        assert data["user"]["id"] is None
-        assert data["is_authenticated"] is False
+        assert data["detail"] == "Unauthorized"
     
     def test_websocket_with_bearer_token(self, monkeypatch):
         """Test that WebSocket connections work with bearer tokens."""
