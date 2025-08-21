@@ -1,11 +1,6 @@
-# ruff: noqa: E402
 from app.env_utils import load_env
 
 load_env()
-# Fail fast: enforce strong JWT secret at import time to prevent misconfigured deployments
-jwt_secret = os.getenv("JWT_SECRET", "")
-if len(jwt_secret) < 32:
-    raise ValueError(f"JWT_SECRET must be at least 32 characters (current: {len(jwt_secret)})")
 import asyncio
 import json
 import logging
@@ -70,6 +65,22 @@ from .alias_store import get_all as alias_all, set as alias_set, delete as alias
 from .history import get_record_by_req_id
 from .llama_integration import startup_check as llama_startup
 from .logging_config import configure_logging, req_id_var, get_errors
+import jwt as _pyjwt
+
+# Patch PyJWT decode to apply a sane default clock skew across the app
+_PYJWT_DECODE_ORIG = getattr(_pyjwt, "decode", None)
+def _pyjwt_decode_with_leeway(token, key=None, *args, **kwargs):
+    # Default leeway from env (seconds)
+    if "leeway" not in kwargs:
+        try:
+            kwargs["leeway"] = int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60)
+        except Exception:
+            kwargs["leeway"] = 60
+    if _PYJWT_DECODE_ORIG is None:
+        raise RuntimeError("pyjwt.decode not available")
+    return _PYJWT_DECODE_ORIG(token, key, *args, **kwargs)
+
+_pyjwt.decode = _pyjwt_decode_with_leeway
 from .csrf import CSRFMiddleware
 from .otel_utils import init_tracing, shutdown_tracing
 from .status import router as status_router
@@ -209,6 +220,22 @@ def _anon_user_id(auth_header: str | None) -> str:
 configure_logging()
 logger = logging.getLogger(__name__)
 
+
+def _enforce_jwt_strength() -> None:
+    """Enforce JWT_SECRET strength at runtime during startup (not import).
+
+    - In production (ENV in {"prod","production"} or DEV_MODE!=1) a short secret is fatal.
+    - In dev/tests we only log a warning and continue.
+    """
+    sec = os.getenv("JWT_SECRET", "") or ""
+    env = os.getenv("ENV", "").strip().lower()
+    dev_mode = os.getenv("DEV_MODE", "0").strip() == "1"
+    if len(sec) < 32:
+        if env in {"prod", "production"} or not dev_mode:
+            raise RuntimeError(f"JWT secret too weak for production: length={len(sec)}")
+        else:
+            logger.warning("WEAK JWT_SECRET detected (dev/test): length=%d", len(sec))
+
 # Global error tracking
 _startup_errors = []
 _runtime_errors = []
@@ -260,8 +287,7 @@ async def _enhanced_startup():
         logger.info(f"Application startup completed in {startup_time:.2f}s")
         # Validate critical runtime secrets (non-blocking): JWT secret
         try:
-            from .auth import _ensure_jwt_secret_present
-            _ensure_jwt_secret_present()
+            _enforce_jwt_strength()
             logger.info("JWT secret validation passed")
         except Exception as e:
             logger.error("JWT secret validation failed: %s", e)
@@ -505,6 +531,12 @@ async def lifespan(app: FastAPI):
         # Verify secret usage on boot
         from .secret_verification import log_secret_summary
         log_secret_summary()
+        # Enforce JWT strength at startup (moved from import-time)
+        try:
+            _enforce_jwt_strength()
+        except Exception:
+            # Let higher-level startup logic capture and surface this error
+            raise
         
         # Make startup checks non-blocking for development
         try:
