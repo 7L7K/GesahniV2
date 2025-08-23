@@ -38,5 +38,3 @@ describe('Login register flow', () => {
     await waitFor(() => expect(setTokens).toHaveBeenCalled());
   });
 });
-
-

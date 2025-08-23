@@ -128,5 +128,3 @@ export default function DevicePrefsStep({ profile, onNext }: DevicePrefsStepProp
         </div>
     );
 }
-
-

@@ -38,5 +38,3 @@ describe('Onboarding navigation controls', () => {
     expect(screen.getByText(/Step 2 of/i)).toBeInTheDocument()
   })
 })
-
-

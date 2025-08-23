@@ -111,6 +111,5 @@ def test_calendar_openapi_status_code_200_has_model():
         op = o.get("paths", {}).get(path, {}).get("get") or {}
         resp = (op.get("responses") or {}).get("200") or {}
         content = (resp.get("content") or {}).get("application/json") or {}
-        schema = (content.get("schema") or {})
+        schema = content.get("schema") or {}
         assert schema.get("$ref", "").endswith("/EventsResponse")
-

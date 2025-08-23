@@ -20,7 +20,7 @@ DETROIT_TZ = "America/Detroit"
 class SimpleEvent:
     title: str
     start: _dt.datetime  # timezone-aware or naive local
-    end: _dt.datetime    # timezone-aware or naive local
+    end: _dt.datetime  # timezone-aware or naive local
 
 
 class FakeCalendarProvider:
@@ -31,7 +31,12 @@ class FakeCalendarProvider:
     - Returns both local and UTC ISO8601 strings
     """
 
-    def __init__(self, tz_name: str = DETROIT_TZ, ics_path: str | None = None, events: list[SimpleEvent] | None = None) -> None:
+    def __init__(
+        self,
+        tz_name: str = DETROIT_TZ,
+        ics_path: str | None = None,
+        events: list[SimpleEvent] | None = None,
+    ) -> None:
         self.tz_name = tz_name
         self.tz = ZoneInfo(tz_name) if ZoneInfo is not None else None
         self.ics_path = Path(ics_path) if ics_path else None
@@ -40,10 +45,14 @@ class FakeCalendarProvider:
     # ----------------------
     # Public construction API
     # ----------------------
-    def add_event(self, title: str, start_local: _dt.datetime, end_local: _dt.datetime) -> None:
+    def add_event(
+        self, title: str, start_local: _dt.datetime, end_local: _dt.datetime
+    ) -> None:
         self._events.append(SimpleEvent(title=title, start=start_local, end=end_local))
 
-    def build_event(self, title: str, start_local: _dt.datetime, end_local: _dt.datetime) -> dict:
+    def build_event(
+        self, title: str, start_local: _dt.datetime, end_local: _dt.datetime
+    ) -> dict:
         """Build an output event dict from naive or aware local datetimes.
 
         Naive datetimes are assumed to be in the provider's local timezone.
@@ -71,12 +80,18 @@ class FakeCalendarProvider:
         events.extend(self._events)
         # Normalize 'now' to UTC for consistent filtering/sorting
         if now is None:
-            base_now = _dt.datetime.now(tz=self.tz) if self.tz is not None else _dt.datetime.now()
+            base_now = (
+                _dt.datetime.now(tz=self.tz)
+                if self.tz is not None
+                else _dt.datetime.now()
+            )
         else:
             base_now = now
         if base_now.tzinfo is None and self.tz is not None:
             base_now = base_now.replace(tzinfo=self.tz)
-        now_utc = base_now.astimezone(_dt.UTC) if base_now.tzinfo is not None else base_now
+        now_utc = (
+            base_now.astimezone(_dt.UTC) if base_now.tzinfo is not None else base_now
+        )
         try:
             logging.getLogger(__name__).debug(
                 "calendar_now",
@@ -97,7 +112,9 @@ class FakeCalendarProvider:
             if s_utc >= now_utc:  # include same-day boundary
                 out.append(self.build_event(ev.title, ev.start, ev.end))
         # Sort by UTC ISO timestamps for determinism
-        out.sort(key=lambda e: e["start_utc"])  # ISO-8601 Z timestamps sort lexicographically correctly
+        out.sort(
+            key=lambda e: e["start_utc"]
+        )  # ISO-8601 Z timestamps sort lexicographically correctly
         return out[: max(0, int(n))]
 
     # -----------------
@@ -149,7 +166,9 @@ class FakeCalendarProvider:
                     title = str(current.get("SUMMARY") or "Event")
                     s = current.get("__START_DT__")
                     e = current.get("__END_DT__")
-                    if not isinstance(s, _dt.datetime) or not isinstance(e, _dt.datetime):
+                    if not isinstance(s, _dt.datetime) or not isinstance(
+                        e, _dt.datetime
+                    ):
                         continue
                     out.append(SimpleEvent(title=title, start=s, end=e))
                     # Best-effort debug log
@@ -222,7 +241,9 @@ class FakeCalendarProvider:
         """
         # UTC form
         if value.endswith("Z"):
-            dt = _dt.datetime.strptime(value.rstrip("Z"), "%Y%m%dT%H%M%S").replace(tzinfo=_dt.UTC)
+            dt = _dt.datetime.strptime(value.rstrip("Z"), "%Y%m%dT%H%M%S").replace(
+                tzinfo=_dt.UTC
+            )
             # Convert to specific tz if requested; otherwise leave in UTC
             if tzid and ZoneInfo is not None:
                 try:
@@ -249,5 +270,3 @@ class FakeCalendarProvider:
 
 
 __all__ = ["FakeCalendarProvider", "SimpleEvent", "DETROIT_TZ"]
-
-

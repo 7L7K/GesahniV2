@@ -16,5 +16,3 @@ def test_get_request_payload_without_secret_decodes_without_verify(monkeypatch):
     req = Request(scope)
     p = sec._get_request_payload(req)
     assert isinstance(p, dict)
-
-

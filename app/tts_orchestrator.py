@@ -28,11 +28,15 @@ class TTSConfig:
 
 def _load_config() -> TTSConfig:
     return TTSConfig(
-        default_capture_tier=os.getenv("DEFAULT_CAPTURE_TIER", "mini_tts") or "mini_tts",
+        default_capture_tier=os.getenv("DEFAULT_CAPTURE_TIER", "mini_tts")
+        or "mini_tts",
         default_utility_tier=os.getenv("DEFAULT_UTILITY_TIER", "piper") or "piper",
         monthly_cap_usd=float(os.getenv("MONTHLY_TTS_CAP", "15") or 15),
         voice_mode=(os.getenv("VOICE_MODE", "auto").strip().lower() or "auto"),
-        privacy_local_only=(os.getenv("TTS_PRIVACY_LOCAL_ONLY", "1").strip().lower() in {"1", "true", "yes"}),
+        privacy_local_only=(
+            os.getenv("TTS_PRIVACY_LOCAL_ONLY", "1").strip().lower()
+            in {"1", "true", "yes"}
+        ),
     )
 
 
@@ -88,7 +92,10 @@ class TTSSpend:
         cap = float(cfg.monthly_cap_usd)
         ratio = spent / cap if cap > 0 else 0.0
         # Daily view (auto-degrade threshold controlled by env)
-        day_cap = float(os.getenv("DAILY_TTS_CAP_USD", os.getenv("DAILY_TTS_BUDGET_USD", "3.0")) or 3.0)
+        day_cap = float(
+            os.getenv("DAILY_TTS_CAP_USD", os.getenv("DAILY_TTS_BUDGET_USD", "3.0"))
+            or 3.0
+        )
         warn_ratio = float(os.getenv("DAILY_TTS_WARN_RATIO", "0.8") or 0.8)
         day_spent = float(cls._spent_day_usd)
         day_ratio = day_spent / day_cap if day_cap > 0 else 0.0
@@ -115,7 +122,10 @@ def _is_sensitive(text: str) -> bool:
     import re
 
     email = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
-    phone = re.search(r"(?<!\d)(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{3}\)?[\s-]?)?\d{3}[\s-]?\d{4}(?!\d)", text)
+    phone = re.search(
+        r"(?<!\d)(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{3}\)?[\s-]?)?\d{3}[\s-]?\d{4}(?!\d)",
+        text,
+    )
     ssn = re.search(r"\b\d{3}-\d{2}-\d{4}\b", text)
     return bool(email or phone or ssn)
 
@@ -125,7 +135,9 @@ def _pick_engine(mode: Mode, intent: str, cfg: TTSConfig) -> tuple[str, Tier]:
     if cfg.voice_mode == "always_piper":
         return "piper", "piper"
     if cfg.voice_mode == "always_openai":
-        tier = cfg.default_capture_tier if mode == "capture" else cfg.default_utility_tier
+        tier = (
+            cfg.default_capture_tier if mode == "capture" else cfg.default_utility_tier
+        )
         return "openai", tier if tier != "piper" else "mini_tts"
 
     # Intent-driven
@@ -135,7 +147,11 @@ def _pick_engine(mode: Mode, intent: str, cfg: TTSConfig) -> tuple[str, Tier]:
     if intent in {"control", "smalltalk", "search", "chat"}:
         return "piper", "piper"
     # Fallback to mode
-    return ("openai", cfg.default_capture_tier) if mode == "capture" else ("piper", "piper")
+    return (
+        ("openai", cfg.default_capture_tier)
+        if mode == "capture"
+        else ("piper", "piper")
+    )
 
 
 async def synthesize(
@@ -166,7 +182,9 @@ async def synthesize(
     if spent_m >= cfg.monthly_cap_usd and cfg.voice_mode != "always_openai":
         engine, tier = "piper", "piper"
     # Daily guard: flip to Piper when over warn ratio/cap
-    daily_cap = float(os.getenv("DAILY_TTS_CAP_USD", os.getenv("DAILY_TTS_BUDGET_USD", "3.0")) or 3.0)
+    daily_cap = float(
+        os.getenv("DAILY_TTS_CAP_USD", os.getenv("DAILY_TTS_BUDGET_USD", "3.0")) or 3.0
+    )
     warn_ratio = float(os.getenv("DAILY_TTS_WARN_RATIO", "0.8") or 0.8)
     spent_d = TTSSpend.total_day()
     if daily_cap > 0 and (spent_d / daily_cap) >= warn_ratio and engine != "piper":
@@ -190,7 +208,12 @@ async def synthesize(
     now = time.time()
     try:
         exp, cached = _TTS_CACHE.get(_key, (0.0, b""))  # type: ignore[attr-defined]
-        if exp and now < float(exp) and isinstance(cached, (bytes, bytearray)) and cached:
+        if (
+            exp
+            and now < float(exp)
+            and isinstance(cached, (bytes, bytearray))
+            and cached
+        ):
             return bytes(cached)
     except Exception:
         pass
@@ -198,7 +221,9 @@ async def synthesize(
     async def _call() -> tuple[bytes, float]:
         if engine == "piper":
             return await synthesize_piper(text=text)
-        audio, cost, _ = await synthesize_openai_tts(text=text, tier=tier, voice=openai_voice)
+        audio, cost, _ = await synthesize_openai_tts(
+            text=text, tier=tier, voice=openai_voice
+        )
         return audio, cost
 
     # Try primary
@@ -209,18 +234,23 @@ async def synthesize(
             if cost:
                 new_total = TTSSpend.add(cost)
                 TTSSpend.add_day(cost)
-                TTS_COST_USD.labels(engine, tier if engine == "openai" else "piper").observe(cost)
+                TTS_COST_USD.labels(
+                    engine, tier if engine == "openai" else "piper"
+                ).observe(cost)
                 # hard block above cap unless always_openai is forced
-                if new_total > cfg.monthly_cap_usd and cfg.voice_mode != "always_openai":
+                if (
+                    new_total > cfg.monthly_cap_usd
+                    and cfg.voice_mode != "always_openai"
+                ):
                     # Return a brief local notice instead
                     engine, tier = "piper", "piper"
                     TTS_FALLBACKS.labels("openai", "piper", "budget_cap").inc()
                     notice = "Switching voice due to budget cap. "
                     loc_audio, _ = await synthesize_piper(text=notice)
                     return loc_audio
-            TTS_LATENCY_SECONDS.labels(engine, tier if engine == "openai" else "piper").observe(
-                time.perf_counter() - start
-            )
+            TTS_LATENCY_SECONDS.labels(
+                engine, tier if engine == "openai" else "piper"
+            ).observe(time.perf_counter() - start)
             # store in cache
             try:
                 _TTS_CACHE[_key] = (now + float(_ttl_s), bytes(audio))  # type: ignore[index]
@@ -234,20 +264,27 @@ async def synthesize(
             # swap engine
             prev = engine
             engine = "piper" if prev == "openai" else "openai"
-            tier = "piper" if engine == "piper" else (cfg.default_capture_tier if mode == "capture" else cfg.default_utility_tier)
+            tier = (
+                "piper"
+                if engine == "piper"
+                else (
+                    cfg.default_capture_tier
+                    if mode == "capture"
+                    else cfg.default_utility_tier
+                )
+            )
             TTS_FALLBACKS.labels(prev, engine, "error").inc()
             notice = "Switching voice due to network/quota. "
             try:
                 if engine == "piper":
                     audio2, _ = await synthesize_piper(text=notice + text)
                 else:
-                    audio2, cost2 = (await synthesize_openai_tts(text=notice + text, tier=tier))[:2]
+                    audio2, cost2 = (
+                        await synthesize_openai_tts(text=notice + text, tier=tier)
+                    )[:2]
                     if cost2:
                         TTSSpend.add(cost2)
                 return audio2
             except Exception:
                 # give up silently
                 return b""
-
-
-

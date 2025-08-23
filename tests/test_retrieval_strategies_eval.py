@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from app.retrieval.strategies import reciprocal_rank_fusion, temporal_boost_order, time_decay
+from app.retrieval.strategies import (
+    reciprocal_rank_fusion,
+    temporal_boost_order,
+    time_decay,
+)
 
 
 def test_rrf_merges_lists_reasonably():
@@ -25,5 +29,3 @@ def test_temporal_boost_changes_order():
     # Crank alpha enough to flip
     order2 = temporal_boost_order(scores, ages, alpha=0.9)
     assert order2[0] == 1
-
-

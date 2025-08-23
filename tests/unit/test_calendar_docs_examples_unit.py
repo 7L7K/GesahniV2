@@ -31,5 +31,3 @@ def test_calendar_examples_present_in_openapi():
     assert len(ex_next.get("items", [])) >= 1
     assert isinstance(ex_list, dict)
     assert len(ex_list.get("items", [])) >= 2
-
-

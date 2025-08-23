@@ -18,5 +18,3 @@ def test_sessions_legacy_wrapper(monkeypatch):
     assert r.status_code == HTTPStatus.OK
     body = r.json()
     assert isinstance(body, dict) and isinstance(body.get("items"), list)
-
-

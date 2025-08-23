@@ -17,5 +17,3 @@ export const FEATURES: FeatureFlags = {
   FEATURE_REDUCE_MOTION: flag("FEATURE_REDUCE_MOTION", false),
   FEATURE_TICKER: flag("FEATURE_TICKER", true),
 };
-
-

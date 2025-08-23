@@ -9,5 +9,3 @@ describe('FooterRibbon', () => {
         expect(container.firstChild).toBeNull()
     })
 })
-
-

@@ -18,7 +18,9 @@ if os.path.exists("env.localhost"):
 
 print("Environment variable values:")
 print(f"JWT_EXPIRE_MINUTES: {os.getenv('JWT_EXPIRE_MINUTES', 'NOT_SET')}")
-print(f"JWT_REFRESH_EXPIRE_MINUTES: {os.getenv('JWT_REFRESH_EXPIRE_MINUTES', 'NOT_SET')}")
+print(
+    f"JWT_REFRESH_EXPIRE_MINUTES: {os.getenv('JWT_REFRESH_EXPIRE_MINUTES', 'NOT_SET')}"
+)
 print(f"JWT_REFRESH_TTL_SECONDS: {os.getenv('JWT_REFRESH_TTL_SECONDS', 'NOT_SET')}")
 print(f"JWT_ACCESS_TTL_SECONDS: {os.getenv('JWT_ACCESS_TTL_SECONDS', 'NOT_SET')}")
 
@@ -34,11 +36,19 @@ print(f"refresh_ttl: {refresh_ttl} seconds ({refresh_ttl/86400:.1f} days)")
 from app.api.auth import _get_refresh_ttl_seconds
 
 refresh_ttl_auth = _get_refresh_ttl_seconds()
-print(f"\nAuth refresh TTL: {refresh_ttl_auth} seconds ({refresh_ttl_auth/86400:.1f} days)")
+print(
+    f"\nAuth refresh TTL: {refresh_ttl_auth} seconds ({refresh_ttl_auth/86400:.1f} days)"
+)
 
 # Test what the JWT_ACCESS_TTL_SECONDS calculation would be
-jwt_access_ttl_seconds = int(os.getenv("JWT_ACCESS_TTL_SECONDS", str(int(os.getenv("JWT_EXPIRE_MINUTES", "30")) * 60)))
-print(f"\nJWT_ACCESS_TTL_SECONDS calculation: {jwt_access_ttl_seconds} seconds ({jwt_access_ttl_seconds/60:.1f} minutes)")
+jwt_access_ttl_seconds = int(
+    os.getenv(
+        "JWT_ACCESS_TTL_SECONDS", str(int(os.getenv("JWT_EXPIRE_MINUTES", "30")) * 60)
+    )
+)
+print(
+    f"\nJWT_ACCESS_TTL_SECONDS calculation: {jwt_access_ttl_seconds} seconds ({jwt_access_ttl_seconds/60:.1f} minutes)"
+)
 
 # Test login and check actual cookie values
 print("\nTesting login endpoint...")

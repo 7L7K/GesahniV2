@@ -37,4 +37,3 @@
 - auth/finish: 204 (always, idempotent)
 - refresh: 200/204 | 401 (missing/expired/replay) | 429 (rate limit)
 - logout: 200 | 401
-

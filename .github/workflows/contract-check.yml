@@ -16,4 +16,3 @@ jobs:
         env:
           CSRF_ENABLED: '1'
         run: pytest -q
-

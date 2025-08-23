@@ -21,5 +21,3 @@ describe('SideRail', () => {
         expect(getAllByText(/Temp|Next|Online|Offline|Reconnecting/).length).toBeGreaterThan(0)
     })
 })
-
-

@@ -11,7 +11,9 @@ from ..queue import get_queue
 router = APIRouter(tags=["Care"])
 
 
-async def sms_worker(name: str = "care_sms", *, _stop: asyncio.Event | None = None) -> None:
+async def sms_worker(
+    name: str = "care_sms", *, _stop: asyncio.Event | None = None
+) -> None:
     q = get_queue(name)
     while True:
         if _stop and _stop.is_set():
@@ -29,10 +31,8 @@ async def sms_worker(name: str = "care_sms", *, _stop: asyncio.Event | None = No
             if retries <= 5:
                 CARE_SMS_RETRIES.inc()
                 # exponential backoff seconds
-                backoff = min(60, 2 ** retries)
+                backoff = min(60, 2**retries)
                 await asyncio.sleep(backoff)
                 await q.push({**job, "retries": retries})
             else:
                 CARE_SMS_DLQ.inc()
-
-

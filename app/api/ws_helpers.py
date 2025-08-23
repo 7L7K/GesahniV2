@@ -34,5 +34,3 @@ async def handle_reauth(ws: WebSocket, message: dict[str, Any]) -> bool:
 
 
 __all__ = ["handle_reauth"]
-
-

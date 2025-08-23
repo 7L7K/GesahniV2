@@ -51,4 +51,3 @@ async function testClerkIntegration() {
 }
 
 testClerkIntegration().catch(console.error);
-

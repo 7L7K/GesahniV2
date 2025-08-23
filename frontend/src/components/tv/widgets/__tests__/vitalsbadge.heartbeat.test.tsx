@@ -19,6 +19,3 @@ describe('VitalsBadge heartbeat/live-stale indicator', () => {
     expect(screen.getByText(/Reconnecting/i)).toBeInTheDocument();
   });
 });
-
-
- 

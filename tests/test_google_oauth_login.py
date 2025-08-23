@@ -22,8 +22,12 @@ class _StubCreds:
         import base64
         import json
 
-        header = base64.urlsafe_b64encode(json.dumps({"alg": "none"}).encode()).rstrip(b"=")
-        payload = base64.urlsafe_b64encode(json.dumps({"email": "guser@example.com"}).encode()).rstrip(b"=")
+        header = base64.urlsafe_b64encode(json.dumps({"alg": "none"}).encode()).rstrip(
+            b"="
+        )
+        payload = base64.urlsafe_b64encode(
+            json.dumps({"email": "guser@example.com"}).encode()
+        ).rstrip(b"=")
         self.id_token = (header + b"." + payload + b".").decode()
 
 
@@ -95,5 +99,3 @@ def test_google_login_flow(monkeypatch):
     at = q2.get("access_token", [None])[0]
     rt = q2.get("refresh_token", [None])[0]
     assert at and rt
-
-

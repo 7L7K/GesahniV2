@@ -20,7 +20,15 @@ def test_pat_verify_scope_and_revoked(tmp_path, monkeypatch):
         token = "pat_live_testtoken"
         token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
         import uuid
-        await create_pat(id=str(uuid.uuid4()), user_id="u", name="t", token_hash=token_hash, scopes=["read", "write"], exp_at=None)
+
+        await create_pat(
+            id=str(uuid.uuid4()),
+            user_id="u",
+            name="t",
+            token_hash=token_hash,
+            scopes=["read", "write"],
+            exp_at=None,
+        )
         return token
 
     token = asyncio.get_event_loop().run_until_complete(_setup())
@@ -31,5 +39,3 @@ def test_pat_verify_scope_and_revoked(tmp_path, monkeypatch):
     # Missing scope
     rec2 = auth_api.verify_pat(token, ["admin"])  # type: ignore[attr-defined]
     assert rec2 is None
-
-

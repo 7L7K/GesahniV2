@@ -25,8 +25,12 @@ def test_health_ready_degraded(monkeypatch):
             return "unhealthy"
 
         # Patch the health utilities that the health endpoint uses
-        monkeypatch.setattr("app.health_utils.check_db", lambda: "ok")  # Keep DB healthy
-        monkeypatch.setattr("app.health_utils.check_jwt_secret", lambda: "ok")  # Keep JWT healthy
+        monkeypatch.setattr(
+            "app.health_utils.check_db", lambda: "ok"
+        )  # Keep DB healthy
+        monkeypatch.setattr(
+            "app.health_utils.check_jwt_secret", lambda: "ok"
+        )  # Keep JWT healthy
 
         # Create a mock store that fails health checks
         original_get_store = None

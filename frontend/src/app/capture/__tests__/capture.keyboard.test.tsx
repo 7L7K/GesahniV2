@@ -12,5 +12,3 @@ describe('Capture keyboard', () => {
     unmount()
   })
 })
-
-

@@ -35,26 +35,28 @@ class SessionStatus(str, Enum):
 # Session Cookie Store (for __session cookie management)
 # ---------------------------------------------------------------------------
 
+
 class SessionCookieStore:
     """Store for mapping __session cookie IDs to access token JTIs.
-    
+
     Creates, reads, and deletes opaque session IDs that are stored in the __session cookie.
     Uses Redis if available, falls back to in-memory storage for development/testing.
-    
+
     The session ID is always opaque (never a JWT) and maps to the JWT ID (JTI) from the access token.
     """
-    
+
     def __init__(self):
         self._redis_client = None
         self._memory_store = {}  # session_id -> (jti, expires_at)
         self._init_redis()
-    
+
     def _init_redis(self):
         """Initialize Redis client if available."""
         try:
             redis_url = os.getenv("REDIS_URL")
             if redis_url:
                 from redis import Redis
+
                 self._redis_client = Redis.from_url(redis_url, decode_responses=True)
                 # Test connection
                 self._redis_client.ping()
@@ -64,46 +66,46 @@ class SessionCookieStore:
         except Exception as e:
             logger.warning(f"Redis unavailable for session store, using in-memory: {e}")
             self._redis_client = None
-    
+
     def _get_key(self, session_id: str) -> str:
         """Get Redis key for session."""
         return f"session:{session_id}"
-    
+
     def create_session(self, jti: str, expires_at: float) -> str:
         """Create a new opaque session ID and store it mapped to the JTI.
-        
+
         Args:
             jti: JWT ID from access token
             expires_at: Unix timestamp when session expires
-            
+
         Returns:
             str: New opaque session ID (never a JWT)
         """
         # Generate opaque session ID: sess_timestamp_random
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        
+
         if self._redis_client:
             # Store in Redis with TTL
             ttl = int(expires_at - time.time())
             if ttl > 0:
                 self._redis_client.setex(
-                    self._get_key(session_id), 
-                    ttl, 
-                    json.dumps({"jti": jti, "expires_at": expires_at})
+                    self._get_key(session_id),
+                    ttl,
+                    json.dumps({"jti": jti, "expires_at": expires_at}),
                 )
         else:
             # Store in memory
             self._memory_store[session_id] = (jti, expires_at)
-        
+
         logger.debug(f"Created opaque session {session_id} for JTI {jti}")
         return session_id
-    
+
     def get_session(self, session_id: str) -> str | None:
         """Get the JTI for an opaque session ID.
-        
+
         Args:
             session_id: Opaque session ID from __session cookie
-            
+
         Returns:
             str: JTI if session exists and is valid, None otherwise
         """
@@ -128,15 +130,15 @@ class SessionCookieStore:
                 else:
                     # Expired, clean up
                     del self._memory_store[session_id]
-        
+
         return None
-    
+
     def delete_session(self, session_id: str) -> bool:
         """Delete an opaque session ID.
-        
+
         Args:
             session_id: Opaque session ID to delete
-            
+
         Returns:
             bool: True if session was deleted, False if not found
         """
@@ -151,13 +153,16 @@ class SessionCookieStore:
                 del self._memory_store[session_id]
                 return True
             return False
-    
+
     def cleanup_expired(self):
         """Clean up expired sessions from memory store."""
         if not self._redis_client:
             current_time = time.time()
-            expired = [sid for sid, (_, expires_at) in self._memory_store.items() 
-                      if expires_at <= current_time]
+            expired = [
+                sid
+                for sid, (_, expires_at) in self._memory_store.items()
+                if expires_at <= current_time
+            ]
             for sid in expired:
                 del self._memory_store[sid]
             if expired:
@@ -167,6 +172,7 @@ class SessionCookieStore:
 # Global session store instance
 _session_store = SessionCookieStore()
 
+
 def get_session_store() -> SessionCookieStore:
     """Get the global session store instance."""
     return _session_store
@@ -175,6 +181,7 @@ def get_session_store() -> SessionCookieStore:
 # ---------------------------------------------------------------------------
 # Basic file helpers
 # ---------------------------------------------------------------------------
+
 
 def session_path(session_id: str) -> Path:
     return SESSIONS_DIR / session_id
@@ -203,6 +210,7 @@ def save_meta(session_id: str, meta: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 # Store operations
 # ---------------------------------------------------------------------------
+
 
 def create_session() -> dict[str, Any]:
     """Create a new session entry and return its metadata."""

@@ -20,9 +20,12 @@ async def me(user_id: str = Depends(get_current_user_id)) -> dict[str, Any]:
 
     cfg = get_config()
     flags = {
-        "retrieval_pipeline": os.getenv("RETRIEVAL_PIPELINE", "0").lower() in {"1", "true", "yes"},
-        "use_hosted_rerank": os.getenv("RETRIEVE_USE_HOSTED_CE", "0").lower() in {"1", "true", "yes"},
-        "debug_model_routing": os.getenv("DEBUG_MODEL_ROUTING", "0").lower() in {"1", "true", "yes"},
+        "retrieval_pipeline": os.getenv("RETRIEVAL_PIPELINE", "0").lower()
+        in {"1", "true", "yes"},
+        "use_hosted_rerank": os.getenv("RETRIEVE_USE_HOSTED_CE", "0").lower()
+        in {"1", "true", "yes"},
+        "debug_model_routing": os.getenv("DEBUG_MODEL_ROUTING", "0").lower()
+        in {"1", "true", "yes"},
         "ablation_flags": sorted(list(cfg.obs.ablation_flags)),
         "trace_sample_rate": cfg.obs.trace_sample_rate,
     }
@@ -50,7 +53,9 @@ def _to_session_info(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "device_name": r.get("device_name"),
                 "created_at": r.get("created_at"),
                 "last_seen_at": r.get("last_seen"),
-                "current": bool((current_sid and r.get("sid") == current_sid) or i == 0),
+                "current": bool(
+                    (current_sid and r.get("sid") == current_sid) or i == 0
+                ),
             }
         )
     return out
@@ -60,7 +65,10 @@ def _to_session_info(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 async def sessions(
     request: Request,
     user_id: str = Depends(get_current_user_id),
-    legacy: int | None = Query(default=None, description="Return legacy wrapped shape when 1 (deprecated; TODO remove by 2026-01-31)"),
+    legacy: int | None = Query(
+        default=None,
+        description="Return legacy wrapped shape when 1 (deprecated; TODO remove by 2026-01-31)",
+    ),
 ) -> list[dict[str, Any]] | dict[str, Any]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -97,7 +105,9 @@ async def sessions_paginated(
 
 
 @router.post("/sessions/{sid}/revoke")
-async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) -> dict[str, str]:
+async def revoke_session(
+    sid: str, user_id: str = Depends(get_current_user_id)
+) -> dict[str, str]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     await sessions_store.revoke_family(sid)
@@ -108,5 +118,3 @@ async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) 
 
 
 __all__ = ["router"]
-
-

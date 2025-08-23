@@ -50,7 +50,9 @@ def _stub_qdrant_bindings():
 
     # Placeholder types for tuple contract
     class PointStruct:  # simple placeholder signature compat
-        def __init__(self, id: str, vector: list[float], payload: dict[str, Any]) -> None:
+        def __init__(
+            self, id: str, vector: list[float], payload: dict[str, Any]
+        ) -> None:
             self.id = id
             self.vector = vector
             self.payload = payload
@@ -69,7 +71,16 @@ def _stub_qdrant_bindings():
     class Filter:
         def __init__(self, must=None):
             self.must = must or []
-    return QdrantClient, Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+
+    return (
+        QdrantClient,
+        Distance,
+        VectorParams,
+        PointStruct,
+        Filter,
+        FieldCondition,
+        MatchValue,
+    )
 
 
 def test_sanitize_collection_name(monkeypatch):
@@ -103,7 +114,12 @@ def test_ensure_collection_stub_drops_and_creates(monkeypatch):
     mi._ensure_collection(c, "kb:test", 8)
 
     # First call should be delete (best-effort), then create with size=8
-    assert any(name == "create" and kw.get("collection_name") == "kb_test" and getattr(kw.get("vectors_config"), "size", None) == 8 for name, _, kw in calls)
+    assert any(
+        name == "create"
+        and kw.get("collection_name") == "kb_test"
+        and getattr(kw.get("vectors_config"), "size", None) == 8
+        for name, _, kw in calls
+    )
 
 
 def test_ensure_collection_non_stub_get_then_recreate(monkeypatch):
@@ -169,13 +185,19 @@ def test_ingest_uses_detected_vector_dim_and_uuid_ids(monkeypatch):
             records["point_count"] = len(pts)
             # Validate id is uuid string and vector length 12
             if pts:
-                records["id_is_str"] = isinstance(pts[0].id, str) if hasattr(pts[0], "id") else isinstance(pts[0]["id"], str)
+                records["id_is_str"] = (
+                    isinstance(pts[0].id, str)
+                    if hasattr(pts[0], "id")
+                    else isinstance(pts[0]["id"], str)
+                )
                 vec = pts[0].vector if hasattr(pts[0], "vector") else pts[0]["vector"]
                 records["vec_len"] = len(vec)
 
     monkeypatch.setattr(mi, "_qdrant_client", lambda: Fake())
 
-    res = mi.ingest_markdown_text(user_id="u1", text="# Title\n\nBody.", source="t", collection="kb:test")
+    res = mi.ingest_markdown_text(
+        user_id="u1", text="# Title\n\nBody.", source="t", collection="kb:test"
+    )
     assert res["status"] == "ok"
     # Size should match detected embed length (12)
     assert records["recreated_size"] == 12
@@ -225,9 +247,16 @@ def test_dedup_skips_second_ingest(monkeypatch):
     monkeypatch.setattr(mi, "_qdrant_client", lambda: fake)
 
     text = "# H\n\nA"
-    first = mi.ingest_markdown_text(user_id="u1", text=text, source="t", collection="kb:test")
+    first = mi.ingest_markdown_text(
+        user_id="u1", text=text, source="t", collection="kb:test"
+    )
     assert first["status"] == "ok"
-    second = mi.ingest_markdown_text(user_id="u1", text=text + "\n\nAppend new line", source="t", collection="kb:test")
+    second = mi.ingest_markdown_text(
+        user_id="u1",
+        text=text + "\n\nAppend new line",
+        source="t",
+        collection="kb:test",
+    )
     assert second["status"] == "skipped"
 
 
@@ -241,7 +270,9 @@ def test_ingest_stub_backend_skips_and_returns_headings(monkeypatch):
 
     monkeypatch.setattr(mi, "_split_markdown", fake_split)
 
-    res = mi.ingest_markdown_text(user_id="u", text="# Title\nBody", source="s", collection="c")
+    res = mi.ingest_markdown_text(
+        user_id="u", text="# Title\nBody", source="s", collection="c"
+    )
     assert res["status"] == "skipped"
     assert res["headings"] == ["Title"]
     assert res["chunk_count"] == 0
@@ -265,12 +296,18 @@ def test_dedup_fallback_without_filter_calls_scroll_without_filter(monkeypatch):
             self.distance = distance
 
     class PointStruct:
-        def __init__(self, id: str, vector: list[float], payload: dict[str, Any]) -> None:
+        def __init__(
+            self, id: str, vector: list[float], payload: dict[str, Any]
+        ) -> None:
             self.id = id
             self.vector = vector
             self.payload = payload
 
-    monkeypatch.setattr(mi, "_lazy_qdrant", lambda: (QC, Distance, VectorParams, PointStruct, None, None, None))
+    monkeypatch.setattr(
+        mi,
+        "_lazy_qdrant",
+        lambda: (QC, Distance, VectorParams, PointStruct, None, None, None),
+    )
 
     # Embed returns vectors of length 5
     monkeypatch.setattr(mi, "_embed_many", lambda texts: [[0.0] * 5 for _ in texts])
@@ -296,7 +333,9 @@ def test_dedup_fallback_without_filter_calls_scroll_without_filter(monkeypatch):
             pass
 
     monkeypatch.setattr(mi, "_qdrant_client", lambda: Fake())
-    res = mi.ingest_markdown_text(user_id="u", text="# T\n\nB", source="s", collection="kb:test")
+    res = mi.ingest_markdown_text(
+        user_id="u", text="# T\n\nB", source="s", collection="kb:test"
+    )
     assert res["status"] == "ok"
     assert called.get("has_filter") is False
 
@@ -336,5 +375,3 @@ def test_split_markdown_enforces_token_budget(monkeypatch):
     chunks, heads = mi._split_markdown(text, max_tokens=3)
     # Expect multiple chunks due to budget
     assert len(chunks) >= 3
-
-

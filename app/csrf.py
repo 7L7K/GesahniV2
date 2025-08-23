@@ -57,19 +57,30 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
             return await call_next(request)
-        
+
         # Bypass CSRF for Bearer-only auth (Authorization header present, no session cookie)
         auth_header = request.headers.get("Authorization")
-        session_cookie = request.cookies.get("access_token") or request.cookies.get("session") or request.cookies.get("__session")
+        session_cookie = (
+            request.cookies.get("access_token")
+            or request.cookies.get("session")
+            or request.cookies.get("__session")
+        )
         if auth_header and auth_header.startswith("Bearer ") and not session_cookie:
-            logger.info("bypass: csrf_bearer_only_auth header=<%s>",
-                       auth_header[:8] + "..." if auth_header else "None")
+            logger.info(
+                "bypass: csrf_bearer_only_auth header=<%s>",
+                auth_header[:8] + "..." if auth_header else "None",
+            )
             return await call_next(request)
-        
+
         # Allow-list OAuth provider callbacks which validate state/nonce explicitly
         try:
             path = getattr(getattr(request, "url", None), "path", "") or ""
-            oauth_callbacks = {"/v1/auth/apple/callback", "/auth/apple/callback", "/v1/auth/google/callback", "/auth/google/callback"}
+            oauth_callbacks = {
+                "/v1/auth/apple/callback",
+                "/auth/apple/callback",
+                "/v1/auth/google/callback",
+                "/auth/google/callback",
+            }
             if path in oauth_callbacks:
                 logger.info("bypass: csrf_oauth_callback path=<%s>", path)
                 return await call_next(request)
@@ -82,79 +93,92 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             webhook_paths = {"/v1/ha/webhook", "/ha/webhook"}
             if path in webhook_paths:
                 # Check for webhook signature headers
-                signature = request.headers.get("X-Signature") or request.headers.get("X-Hub-Signature")
+                signature = request.headers.get("X-Signature") or request.headers.get(
+                    "X-Hub-Signature"
+                )
                 if signature:
-                    logger.info("bypass: csrf_webhook_signature path=<%s> signature=<%s>",
-                               path, signature[:8] + "..." if signature else "None")
+                    logger.info(
+                        "bypass: csrf_webhook_signature path=<%s> signature=<%s>",
+                        path,
+                        signature[:8] + "..." if signature else "None",
+                    )
                     return await call_next(request)
         except Exception:
             pass
 
         # Check for route-level CSRF opt-out (for testing/signature-based endpoints)
         try:
-            csrf_opt_out = request.headers.get("X-CSRF-Opt-Out") or request.query_params.get("csrf_opt_out")
+            csrf_opt_out = request.headers.get(
+                "X-CSRF-Opt-Out"
+            ) or request.query_params.get("csrf_opt_out")
             if csrf_opt_out and _truthy(csrf_opt_out):
-                logger.info("bypass: csrf_route_opt_out header=<%s> query=<%s>",
-                           request.headers.get("X-CSRF-Opt-Out"), request.query_params.get("csrf_opt_out"))
+                logger.info(
+                    "bypass: csrf_route_opt_out header=<%s> query=<%s>",
+                    request.headers.get("X-CSRF-Opt-Out"),
+                    request.query_params.get("csrf_opt_out"),
+                )
                 return await call_next(request)
         except Exception:
             pass
 
         # Check if we're in a cross-site scenario (COOKIE_SAMESITE=none)
         is_cross_site = os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"
-        
+
         token_hdr, used_legacy, legacy_allowed = _extract_csrf_header(request)
-        
+
         if is_cross_site:
             # Cross-site CSRF validation: require token in header + additional security
             if not token_hdr:
-                logger.warning("deny: csrf_missing_header_cross_site header=<%s>", 
-                              token_hdr[:8] + "..." if token_hdr else "None")
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "missing_csrf_cross_site"}
+                logger.warning(
+                    "deny: csrf_missing_header_cross_site header=<%s>",
+                    token_hdr[:8] + "..." if token_hdr else "None",
                 )
-            
+                return JSONResponse(
+                    status_code=400, content={"detail": "missing_csrf_cross_site"}
+                )
+
             # Basic validation for cross-site tokens
             if len(token_hdr) < 16:
-                logger.warning("deny: csrf_invalid_format_cross_site header=<%s>", 
-                              token_hdr[:8] + "..." if token_hdr else "None")
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": "invalid_csrf_format"}
+                logger.warning(
+                    "deny: csrf_invalid_format_cross_site header=<%s>",
+                    token_hdr[:8] + "..." if token_hdr else "None",
                 )
-            
+                return JSONResponse(
+                    status_code=403, content={"detail": "invalid_csrf_format"}
+                )
+
             # For cross-site, we accept the token from header only
             # Additional security measures could be added here (e.g., server-side validation)
-            logger.info("allow: csrf_cross_site_validation header=<%s>", 
-                       token_hdr[:8] + "..." if token_hdr else "None")
+            logger.info(
+                "allow: csrf_cross_site_validation header=<%s>",
+                token_hdr[:8] + "..." if token_hdr else "None",
+            )
             return await call_next(request)
         else:
             # Standard same-origin CSRF validation (double-submit pattern)
             token_cookie = request.cookies.get("csrf_token") or ""
             # Reject legacy header when grace disabled
             if used_legacy and not legacy_allowed:
-                logger.warning("deny: csrf_legacy_header_disabled header=<%s>", token_hdr[:8] + "..." if token_hdr else "None")
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "missing_csrf"}
+                logger.warning(
+                    "deny: csrf_legacy_header_disabled header=<%s>",
+                    token_hdr[:8] + "..." if token_hdr else "None",
                 )
+                return JSONResponse(status_code=400, content={"detail": "missing_csrf"})
             # Require both header and cookie, and match
             if not token_hdr or not token_cookie:
-                logger.warning("deny: csrf_missing_header header=<%s> cookie=<%s>", 
-                              token_hdr[:8] + "..." if token_hdr else "None",
-                              token_cookie[:8] + "..." if token_cookie else "None")
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": "invalid_csrf"}
+                logger.warning(
+                    "deny: csrf_missing_header header=<%s> cookie=<%s>",
+                    token_hdr[:8] + "..." if token_hdr else "None",
+                    token_cookie[:8] + "..." if token_cookie else "None",
                 )
+                return JSONResponse(status_code=403, content={"detail": "invalid_csrf"})
             if token_hdr != token_cookie:
-                logger.warning("deny: csrf_mismatch header=<%s> cookie=<%s>", 
-                              token_hdr[:8] + "...", token_cookie[:8] + "...")
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": "invalid_csrf"}
+                logger.warning(
+                    "deny: csrf_mismatch header=<%s> cookie=<%s>",
+                    token_hdr[:8] + "...",
+                    token_cookie[:8] + "...",
                 )
+                return JSONResponse(status_code=403, content={"detail": "invalid_csrf"})
             return await call_next(request)
 
 
@@ -169,5 +193,3 @@ async def get_csrf_token() -> str:
 
 
 __all__ = ["CSRFMiddleware", "get_csrf_token", "_extract_csrf_header"]
-
-

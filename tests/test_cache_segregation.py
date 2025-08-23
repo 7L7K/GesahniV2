@@ -20,5 +20,3 @@ def test_cache_segregation_different_models_same_prompt():
     cache_answer(prompt=cid_b, answer="Team B")
     assert lookup_cached_answer(cid_a) == "Team A"
     assert lookup_cached_answer(cid_b) == "Team B"
-
-

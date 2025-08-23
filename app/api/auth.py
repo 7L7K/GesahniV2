@@ -27,20 +27,10 @@ else:
     require_user_clerk = None
 from fastapi.responses import JSONResponse
 
-from ..auth_monitoring import (
-    record_finish_call,
-    record_whoami_call,
-    track_auth_event,
-)
-from ..auth_store import (
-    create_pat as _create_pat,
-)
-from ..auth_store import (
-    ensure_tables as _ensure_auth,
-)
-from ..auth_store import (
-    get_pat_by_hash as _get_pat_by_hash,
-)
+from ..auth_monitoring import record_finish_call, record_whoami_call, track_auth_event
+from ..auth_store import create_pat as _create_pat
+from ..auth_store import ensure_tables as _ensure_auth
+from ..auth_store import get_pat_by_hash as _get_pat_by_hash
 from ..logging_config import req_id_var
 from ..token_store import (
     allow_refresh,
@@ -80,20 +70,33 @@ def _met_inc(key: str) -> None:
         pass
 
 
-def _append_cookie_with_priority(response: Response, *, key: str, value: str, max_age: int, secure: bool, samesite: str, path: str = "/", domain: str = None) -> None:
+def _append_cookie_with_priority(
+    response: Response,
+    *,
+    key: str,
+    value: str,
+    max_age: int,
+    secure: bool,
+    samesite: str,
+    path: str = "/",
+    domain: str = None,
+) -> None:
     """Append a cookie header with priority using the centralized cookie configuration.
-    
+
     This function should be replaced with calls to the centralized cookie facade
     in app/cookies.py. This is a legacy function that will be removed.
     """
     # This function is deprecated and should not be used.
     # Use the centralized cookie functions from app/cookies.py instead.
     # For example: set_named_cookie(), set_auth_cookies(), etc.
-    raise DeprecationWarning("_append_cookie_with_priority is deprecated. Use centralized cookie functions from app/cookies.py")
+    raise DeprecationWarning(
+        "_append_cookie_with_priority is deprecated. Use centralized cookie functions from app/cookies.py"
+    )
+
+
 @router.get("/auth/clerk/protected")
 async def clerk_protected(user_id: str = Depends(require_user)) -> dict[str, Any]:
     return {"ok": True, "user_id": user_id}
-
 
 
 def _iso(dt: float | None) -> str | None:
@@ -117,7 +120,11 @@ def _ensure_loop() -> None:
         asyncio.get_event_loop()
     except RuntimeError:
         # Only create a loop automatically in test contexts
-        if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING") or os.getenv("ENV", "").lower() == "test":
+        if (
+            os.getenv("PYTEST_CURRENT_TEST")
+            or os.getenv("PYTEST_RUNNING")
+            or os.getenv("ENV", "").lower() == "test"
+        ):
             asyncio.set_event_loop(asyncio.new_event_loop())
 
 
@@ -150,11 +157,16 @@ async def _require_user_or_dev(request: Request) -> str:
         if env in {"dev", "development"} and not has_clerk:
             return os.getenv("DEV_USER_ID", "dev")
         # Otherwise, re-raise unauthorized
-        from fastapi import HTTPException as _HTTPException  # lazy to avoid import cycles
+        from fastapi import (
+            HTTPException as _HTTPException,
+        )  # lazy to avoid import cycles
+
         raise _HTTPException(status_code=401, detail="Unauthorized")
 
 
-def verify_pat(token: str, required_scopes: list[str] | None = None) -> dict[str, Any] | None:
+def verify_pat(
+    token: str, required_scopes: list[str] | None = None
+) -> dict[str, Any] | None:
     try:
         import hashlib
 
@@ -194,8 +206,9 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
     }
     """
     import logging
+
     logger = logging.getLogger(__name__)
-    
+
     with track_auth_event("whoami", user_id="unknown"):
         t0 = time.time()
         src: str = "missing"
@@ -203,65 +216,85 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         token_header: str | None = None
         clerk_token: str | None = None
 
-        logger.info("whoami.start", extra={
-            "meta": {
-                "ip": request.client.host if request.client else "unknown",
-                "user_agent": request.headers.get("User-Agent", "unknown"),
-                "timestamp": time.time(),
-            }
-        })
-    
+        logger.info(
+            "whoami.start",
+            extra={
+                "meta": {
+                    "ip": request.client.host if request.client else "unknown",
+                    "user_agent": request.headers.get("User-Agent", "unknown"),
+                    "timestamp": time.time(),
+                }
+            },
+        )
+
     try:
         # Prefer canonical cookie name but accept legacy for migration
         from ..cookie_names import ACCESS_TOKEN, ACCESS_TOKEN_LEGACY
-        token_cookie = request.cookies.get(ACCESS_TOKEN) or request.cookies.get(ACCESS_TOKEN_LEGACY)
-        logger.info("whoami.cookie_check", extra={
-            "meta": {
-                "has_access_token_cookie": bool(token_cookie),
-                "cookie_length": len(token_cookie) if token_cookie else 0,
-                "all_cookies": list(request.cookies.keys()),
-                "timestamp": time.time(),
-            }
-        })
+
+        token_cookie = request.cookies.get(ACCESS_TOKEN) or request.cookies.get(
+            ACCESS_TOKEN_LEGACY
+        )
+        logger.info(
+            "whoami.cookie_check",
+            extra={
+                "meta": {
+                    "has_access_token_cookie": bool(token_cookie),
+                    "cookie_length": len(token_cookie) if token_cookie else 0,
+                    "all_cookies": list(request.cookies.keys()),
+                    "timestamp": time.time(),
+                }
+            },
+        )
     except Exception as e:
-        logger.error("whoami.cookie_error", extra={
-            "meta": {
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "timestamp": time.time(),
-            }
-        })
+        logger.error(
+            "whoami.cookie_error",
+            extra={
+                "meta": {
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "timestamp": time.time(),
+                }
+            },
+        )
         token_cookie = None
-        
+
     try:
         ah = request.headers.get("Authorization")
         if ah and ah.startswith("Bearer "):
             token_header = ah.split(" ", 1)[1]
-        logger.info("whoami.header_check", extra={
-            "meta": {
-                "has_authorization_header": bool(ah),
-                "starts_with_bearer": ah.startswith("Bearer ") if ah else False,
-                "has_token_header": bool(token_header),
-                "token_header_length": len(token_header) if token_header else 0,
-                "timestamp": time.time(),
-            }
-        })
+        logger.info(
+            "whoami.header_check",
+            extra={
+                "meta": {
+                    "has_authorization_header": bool(ah),
+                    "starts_with_bearer": ah.startswith("Bearer ") if ah else False,
+                    "has_token_header": bool(token_header),
+                    "token_header_length": len(token_header) if token_header else 0,
+                    "timestamp": time.time(),
+                }
+            },
+        )
     except Exception as e:
-        logger.error("whoami.header_error", extra={
-            "meta": {
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "timestamp": time.time(),
-            }
-        })
+        logger.error(
+            "whoami.header_error",
+            extra={
+                "meta": {
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "timestamp": time.time(),
+                }
+            },
+        )
         token_header = None
-    
+
     # Check for Clerk authentication tokens
     try:
         # Check for Clerk session cookies only if Clerk explicitly enabled
         clerk_token = None
         if os.getenv("CLERK_ENABLED", "0") == "1":
-            clerk_token = request.cookies.get("__session") or request.cookies.get("session")
+            clerk_token = request.cookies.get("__session") or request.cookies.get(
+                "session"
+            )
         if not clerk_token:
             # Check for Clerk token in Authorization header
             ah = request.headers.get("Authorization")
@@ -273,164 +306,222 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 if potential_clerk_token.count(".") == 2:
                     # Don't set clerk_token yet - we'll check it after trying traditional JWT
                     pass
-        logger.info("whoami.clerk_check", extra={
-            "meta": {
-                "has_clerk_cookie": bool(clerk_token),
-                "clerk_cookie_length": len(clerk_token) if clerk_token else 0,
-                "timestamp": time.time(),
-            }
-        })
+        logger.info(
+            "whoami.clerk_check",
+            extra={
+                "meta": {
+                    "has_clerk_cookie": bool(clerk_token),
+                    "clerk_cookie_length": len(clerk_token) if clerk_token else 0,
+                    "timestamp": time.time(),
+                }
+            },
+        )
     except Exception as e:
-        logger.error("whoami.clerk_error", extra={
-            "meta": {
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "timestamp": time.time(),
-            }
-        })
+        logger.error(
+            "whoami.clerk_error",
+            extra={
+                "meta": {
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "timestamp": time.time(),
+                }
+            },
+        )
         clerk_token = None
 
     # Prefer cookie when valid; otherwise fall back to header; then try Clerk
     session_ready = False
     effective_uid: str | None = None
     jwt_status = "missing"
-    
+
     # Set source to "header" if we have a token header, even if invalid
     if token_header and src == "missing":
         src = "header"
-    
+
     # Priority 1: Try access_token cookie first (most secure)
     if token_cookie:
         try:
-            logger.info("whoami.cookie_jwt_decode.start", extra={
-                "meta": {
-                    "timestamp": time.time(),
-                }
-            })
+            logger.info(
+                "whoami.cookie_jwt_decode.start",
+                extra={
+                    "meta": {
+                        "timestamp": time.time(),
+                    }
+                },
+            )
             # Allow a small clock skew when decoding cookies (iat/nbf)
             claims = _jwt_decode(token_cookie, _jwt_secret(), algorithms=["HS256"], leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60))  # type: ignore[arg-type]
             session_ready = True
             src = "cookie"
-            effective_uid = str(claims.get("user_id") or claims.get("sub") or "") or None
+            effective_uid = (
+                str(claims.get("user_id") or claims.get("sub") or "") or None
+            )
             jwt_status = "ok"
-            logger.info("whoami.cookie_jwt_decode.success", extra={
-                "meta": {
-                    "user_id": effective_uid,
-                    "claims_keys": list(claims.keys()),
-                    "timestamp": time.time(),
-                }
-            })
+            logger.info(
+                "whoami.cookie_jwt_decode.success",
+                extra={
+                    "meta": {
+                        "user_id": effective_uid,
+                        "claims_keys": list(claims.keys()),
+                        "timestamp": time.time(),
+                    }
+                },
+            )
         except Exception as e:
             session_ready = False
             effective_uid = None
             jwt_status = "invalid"
-            logger.error("whoami.cookie_jwt_decode.failed", extra={
-                "meta": {
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "timestamp": time.time(),
-                }
-            })
-    
+            logger.error(
+                "whoami.cookie_jwt_decode.failed",
+                extra={
+                    "meta": {
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "timestamp": time.time(),
+                    }
+                },
+            )
+
     # Priority 2: Try session fingerprint verification if access_token cookie failed
     if not session_ready and clerk_token:
         try:
-            logger.info("whoami.session_fingerprint.start", extra={
-                "meta": {
-                    "timestamp": time.time(),
-                }
-            })
-            
+            logger.info(
+                "whoami.session_fingerprint.start",
+                extra={
+                    "meta": {
+                        "timestamp": time.time(),
+                    }
+                },
+            )
+
             # Import session fingerprint verification
             from ..auth import _verify_session_fingerprint
-            
+
             # Get the access token from the same request
             # Accept canonical or legacy refresh cookie during migration
             from ..cookie_names import REFRESH_TOKEN, REFRESH_TOKEN_LEGACY
-            access_token = request.cookies.get(REFRESH_TOKEN) or request.cookies.get(REFRESH_TOKEN_LEGACY)
+
+            access_token = request.cookies.get(REFRESH_TOKEN) or request.cookies.get(
+                REFRESH_TOKEN_LEGACY
+            )
             if access_token:
                 # Decode the access token to get user_id and timestamp
-                access_claims = _jwt_decode(access_token, _jwt_secret(), algorithms=["HS256"])
-                user_id_from_token = access_claims.get("user_id") or access_claims.get("sub")
+                access_claims = _jwt_decode(
+                    access_token, _jwt_secret(), algorithms=["HS256"]
+                )
+                user_id_from_token = access_claims.get("user_id") or access_claims.get(
+                    "sub"
+                )
                 iat = access_claims.get("iat", 0)  # Issued at timestamp
-                
-                if user_id_from_token and _verify_session_fingerprint(clerk_token, user_id_from_token, access_token, iat):
+
+                if user_id_from_token and _verify_session_fingerprint(
+                    clerk_token, user_id_from_token, access_token, iat
+                ):
                     session_ready = True
                     src = "cookie"  # Still cookie-based
                     effective_uid = user_id_from_token
                     jwt_status = "ok"
-                    logger.info("whoami.session_fingerprint.success", extra={
-                        "meta": {
-                            "user_id": effective_uid,
-                            "timestamp": time.time(),
-                        }
-                    })
+                    logger.info(
+                        "whoami.session_fingerprint.success",
+                        extra={
+                            "meta": {
+                                "user_id": effective_uid,
+                                "timestamp": time.time(),
+                            }
+                        },
+                    )
                 else:
-                    logger.warning("whoami.session_fingerprint.invalid", extra={
+                    logger.warning(
+                        "whoami.session_fingerprint.invalid",
+                        extra={
+                            "meta": {
+                                "timestamp": time.time(),
+                            }
+                        },
+                    )
+            else:
+                logger.warning(
+                    "whoami.session_fingerprint.no_access_token",
+                    extra={
                         "meta": {
                             "timestamp": time.time(),
                         }
-                    })
-            else:
-                logger.warning("whoami.session_fingerprint.no_access_token", extra={
+                    },
+                )
+        except Exception as e:
+            logger.error(
+                "whoami.session_fingerprint.failed",
+                extra={
                     "meta": {
+                        "error": str(e),
+                        "error_type": type(e).__name__,
                         "timestamp": time.time(),
                     }
-                })
-        except Exception as e:
-            logger.error("whoami.session_fingerprint.failed", extra={
-                "meta": {
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "timestamp": time.time(),
-                }
-            })
-    
+                },
+            )
+
     # Priority 3: Try Authorization header only if cookie authentication failed
     if not session_ready and token_header:
         try:
-            logger.info("whoami.header_jwt_decode.start", extra={
-                "meta": {
-                    "timestamp": time.time(),
-                }
-            })
+            logger.info(
+                "whoami.header_jwt_decode.start",
+                extra={
+                    "meta": {
+                        "timestamp": time.time(),
+                    }
+                },
+            )
             claims = _jwt_decode(token_header, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
             session_ready = True
             src = "header"
-            effective_uid = str(claims.get("user_id") or claims.get("sub") or "") or None
+            effective_uid = (
+                str(claims.get("user_id") or claims.get("sub") or "") or None
+            )
             jwt_status = "ok"
-            logger.info("whoami.header_jwt_decode.success", extra={
-                "meta": {
-                    "user_id": effective_uid,
-                    "claims_keys": list(claims.keys()),
-                    "timestamp": time.time(),
-                }
-            })
+            logger.info(
+                "whoami.header_jwt_decode.success",
+                extra={
+                    "meta": {
+                        "user_id": effective_uid,
+                        "claims_keys": list(claims.keys()),
+                        "timestamp": time.time(),
+                    }
+                },
+            )
         except Exception as e:
             session_ready = False
             effective_uid = None
             jwt_status = "invalid"
-            logger.error("whoami.header_jwt_decode.failed", extra={
-                "meta": {
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "timestamp": time.time(),
-                }
-            })
-    
+            logger.error(
+                "whoami.header_jwt_decode.failed",
+                extra={
+                    "meta": {
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "timestamp": time.time(),
+                    }
+                },
+            )
+
     # Priority 4: Try Clerk authentication if all other methods failed
     if not session_ready and clerk_token and os.getenv("CLERK_ENABLED", "0") == "1":
         try:
-            logger.info("whoami.clerk_verify.start", extra={
-                "meta": {
-                    "timestamp": time.time(),
-                }
-            })
+            logger.info(
+                "whoami.clerk_verify.start",
+                extra={
+                    "meta": {
+                        "timestamp": time.time(),
+                    }
+                },
+            )
             from ..deps.clerk_auth import verify_clerk_token
+
             claims = verify_clerk_token(clerk_token)
             session_ready = True
             src = "clerk"
-            effective_uid = str(claims.get("sub") or claims.get("user_id") or "") or None
+            effective_uid = (
+                str(claims.get("sub") or claims.get("user_id") or "") or None
+            )
             jwt_status = "ok"
             # Set email in request state for Clerk authentication
             try:
@@ -438,39 +529,60 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 if email:
                     request.state.email = email
             except Exception as e:
-                logger.error("whoami.cookie_jwt_decode.failed", extra={"meta": {"error": str(e), "error_type": type(e).__name__, "timestamp": time.time()}})
-            logger.info("whoami.clerk_verify.success", extra={
-                "meta": {
-                    "user_id": effective_uid,
-                    "claims_keys": list(claims.keys()),
-                    "timestamp": time.time(),
-                }
-            })
+                logger.error(
+                    "whoami.cookie_jwt_decode.failed",
+                    extra={
+                        "meta": {
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "timestamp": time.time(),
+                        }
+                    },
+                )
+            logger.info(
+                "whoami.clerk_verify.success",
+                extra={
+                    "meta": {
+                        "user_id": effective_uid,
+                        "claims_keys": list(claims.keys()),
+                        "timestamp": time.time(),
+                    }
+                },
+            )
         except Exception as e:
             session_ready = False
             effective_uid = None
             jwt_status = "invalid"
-            logger.error("whoami.clerk_verify.failed", extra={
-                "meta": {
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "timestamp": time.time(),
-                }
-            })
-        
+            logger.error(
+                "whoami.clerk_verify.failed",
+                extra={
+                    "meta": {
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "timestamp": time.time(),
+                    }
+                },
+            )
+
         # If still not ready, check for Clerk token in Authorization header
         if not session_ready and token_header:
             try:
-                logger.info("whoami.clerk_header_verify.start", extra={
-                    "meta": {
-                        "timestamp": time.time(),
-                    }
-                })
+                logger.info(
+                    "whoami.clerk_header_verify.start",
+                    extra={
+                        "meta": {
+                            "timestamp": time.time(),
+                        }
+                    },
+                )
                 from ..deps.clerk_auth import verify_clerk_token
+
                 claims = verify_clerk_token(token_header)
                 session_ready = True
                 src = "clerk"
-                effective_uid = str(claims.get("sub") or claims.get("user_id") or "") or None
+                effective_uid = (
+                    str(claims.get("sub") or claims.get("user_id") or "") or None
+                )
                 jwt_status = "ok"
                 # Set email in request state for Clerk authentication
                 try:
@@ -479,53 +591,64 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                         request.state.email = email
                 except Exception:
                     pass
-                logger.info("whoami.clerk_header_verify.success", extra={
-                    "meta": {
-                        "user_id": effective_uid,
-                        "claims_keys": list(claims.keys()),
-                        "timestamp": time.time(),
-                    }
-                })
+                logger.info(
+                    "whoami.clerk_header_verify.success",
+                    extra={
+                        "meta": {
+                            "user_id": effective_uid,
+                            "claims_keys": list(claims.keys()),
+                            "timestamp": time.time(),
+                        }
+                    },
+                )
             except Exception as e:
                 session_ready = False
                 effective_uid = None
                 jwt_status = "invalid"
-                logger.error("whoami.clerk_header_verify.failed", extra={
-                    "meta": {
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                        "timestamp": time.time(),
-                    }
-                })
+                logger.error(
+                    "whoami.clerk_header_verify.failed",
+                    extra={
+                        "meta": {
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "timestamp": time.time(),
+                        }
+                    },
+                )
 
     # Canonical policy: authenticated iff a valid token was presented
     is_authenticated = bool(session_ready and effective_uid)
 
-    logger.info("whoami.result", extra={
-        "meta": {
-            "is_authenticated": is_authenticated,
-            "session_ready": session_ready,
-            "source": src,
-            "user_id": effective_uid,
-            "jwt_status": jwt_status,
-            "timestamp": time.time(),
-        }
-    })
+    logger.info(
+        "whoami.result",
+        extra={
+            "meta": {
+                "is_authenticated": is_authenticated,
+                "session_ready": session_ready,
+                "source": src,
+                "user_id": effective_uid,
+                "jwt_status": jwt_status,
+                "timestamp": time.time(),
+            }
+        },
+    )
 
     # Log a compact line for probing and metrics
     try:
         dt = int((time.time() - t0) * 1000)
         logger.info(
-        "whoami t=%dms jwt=%s src=%s",
-        dt, jwt_status, src,
-        extra={
-            "meta": {
-                "duration_ms": dt,
-                "jwt_status": jwt_status,
-                "source": src,
-            }
-        }
-    )
+            "whoami t=%dms jwt=%s src=%s",
+            dt,
+            jwt_status,
+            src,
+            extra={
+                "meta": {
+                    "duration_ms": dt,
+                    "jwt_status": jwt_status,
+                    "source": src,
+                }
+            },
+        )
         try:
             _met_inc("whoami_jwt_ok" if session_ready else "whoami_jwt_fail")
         except Exception:
@@ -541,7 +664,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             user_id=effective_uid,
             session_ready=session_ready,
             is_authenticated=is_authenticated,
-            jwt_status=jwt_status
+            jwt_status=jwt_status,
         )
     except Exception:
         pass
@@ -550,11 +673,13 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         "is_authenticated": bool(is_authenticated),
         "session_ready": bool(session_ready),
         "user_id": effective_uid if effective_uid else None,
-        "user": {"id": effective_uid if effective_uid else None, "email": getattr(request.state, "email", None)},
+        "user": {
+            "id": effective_uid if effective_uid else None,
+            "email": getattr(request.state, "email", None),
+        },
         "source": src,
         "version": 1,
     }
-
 
 
 @router.get("/whoami")
@@ -569,20 +694,43 @@ async def whoami(request: Request) -> JSONResponse:
     try:
         out = await whoami_impl(request)
     except Exception:
-        out = {"is_authenticated": False, "session_ready": False, "user": None, "session": None, "source": "missing", "version": 1}
+        out = {
+            "is_authenticated": False,
+            "session_ready": False,
+            "user": None,
+            "session": None,
+            "source": "missing",
+            "version": 1,
+        }
 
     # If already authenticated, return immediately
     if out.get("is_authenticated"):
         try:
             duration = int((time.time() - start_time) * 1000)
-            logger.info("auth.whoami", extra={"meta": {"req_id": req_id, "is_authenticated": out.get("is_authenticated"), "duration_ms": duration}})
+            logger.info(
+                "auth.whoami",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "is_authenticated": out.get("is_authenticated"),
+                        "duration_ms": duration,
+                    }
+                },
+            )
         except Exception:
             pass
-        return JSONResponse(content=out, headers={"Vary": "Origin", "Cache-Control": "no-cache, no-store, must-revalidate"})
+        return JSONResponse(
+            content=out,
+            headers={
+                "Vary": "Origin",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+            },
+        )
 
     # Otherwise, attempt silent rotation if refresh cookie present and no access cookie
     try:
         from ..cookie_names import ACCESS_TOKEN, REFRESH_TOKEN
+
         access_cookie = request.cookies.get(ACCESS_TOKEN)
         has_refresh = bool(request.cookies.get(REFRESH_TOKEN))
         if not access_cookie and has_refresh:
@@ -590,91 +738,146 @@ async def whoami(request: Request) -> JSONResponse:
             if tokens and isinstance(tokens, dict):
                 try:
                     from ..cookie_config import get_token_ttls
+
                     access_ttl, refresh_ttl = get_token_ttls()
                     try:
                         claims_fb = _decode_any(tokens.get("access_token"))
                     except Exception:
                         claims_fb = {}
-                    uid_fb_res = str(claims_fb.get("user_id") or claims_fb.get("sub") or tokens.get("user_id") or "")
+                    uid_fb_res = str(
+                        claims_fb.get("user_id")
+                        or claims_fb.get("sub")
+                        or tokens.get("user_id")
+                        or ""
+                    )
                     new_result = {
                         "is_authenticated": True,
                         "session_ready": True,
                         "user_id": uid_fb_res,
-                        "user": {"id": uid_fb_res, "email": getattr(request.state, "email", None)},
+                        "user": {
+                            "id": uid_fb_res,
+                            "email": getattr(request.state, "email", None),
+                        },
                         "source": "cookie",
                         "version": 1,
                     }
 
-                    final = JSONResponse(content=new_result, headers={"Vary": "Origin", "Cache-Control": "no-cache, no-store, must-revalidate"})
+                    final = JSONResponse(
+                        content=new_result,
+                        headers={
+                            "Vary": "Origin",
+                            "Cache-Control": "no-cache, no-store, must-revalidate",
+                        },
+                    )
 
                     # Create a session id for cookie writer
                     session_id = None
                     try:
                         from ..auth import _create_session_id
-                        payload = _jwt_decode(tokens.get("access_token"), _jwt_secret(), algorithms=["HS256"])
+
+                        payload = _jwt_decode(
+                            tokens.get("access_token"),
+                            _jwt_secret(),
+                            algorithms=["HS256"],
+                        )
                         jti = payload.get("jti")
                         expires_at = payload.get("exp", time.time() + access_ttl)
                         if jti:
                             session_id = _create_session_id(jti, expires_at)
                         else:
-                            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+                            session_id = (
+                                f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+                            )
                     except Exception:
-                        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+                        session_id = (
+                            f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+                        )
 
                     from ..cookies import set_auth_cookies
+
                     try:
-                        set_auth_cookies(final, access=tokens.get("access_token"), refresh=tokens.get("refresh_token"), session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
+                        set_auth_cookies(
+                            final,
+                            access=tokens.get("access_token"),
+                            refresh=tokens.get("refresh_token"),
+                            session_id=session_id,
+                            access_ttl=access_ttl,
+                            refresh_ttl=refresh_ttl,
+                            request=request,
+                        )
                     except Exception:
                         pass
                     try:
                         duration = int((time.time() - start_time) * 1000)
-                        logger.info("auth.whoami", extra={"meta": {"req_id": req_id, "is_authenticated": True, "duration_ms": duration}})
+                        logger.info(
+                            "auth.whoami",
+                            extra={
+                                "meta": {
+                                    "req_id": req_id,
+                                    "is_authenticated": True,
+                                    "duration_ms": duration,
+                                }
+                            },
+                        )
                     except Exception:
                         pass
                     return final
                 except Exception:
                     pass
     except Exception as e:
-        logger.error("whoami.refresh_exception", extra={"meta": {"error": str(e), "timestamp": time.time()}})
+        logger.error(
+            "whoami.refresh_exception",
+            extra={"meta": {"error": str(e), "timestamp": time.time()}},
+        )
 
     try:
         duration = int((time.time() - start_time) * 1000)
-        logger.info("auth.whoami", extra={"meta": {"req_id": req_id, "is_authenticated": out.get("is_authenticated", False), "duration_ms": duration}})
+        logger.info(
+            "auth.whoami",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "is_authenticated": out.get("is_authenticated", False),
+                    "duration_ms": duration,
+                }
+            },
+        )
     except Exception:
         pass
 
-    return JSONResponse(content=out, headers={"Vary": "Origin", "Cache-Control": "no-cache, no-store, must-revalidate"})
+    return JSONResponse(
+        content=out,
+        headers={
+            "Vary": "Origin",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+    )
 
 
 @router.get("/auth/whoami")
 async def auth_whoami(
     request: Request,
     user_id: str = Depends(require_user),
-
 ) -> JSONResponse:
     """Auth-specific whoami endpoint for tests."""
     start_time = time.time()
     req_id = req_id_var.get()
-    
+
     # Get user information from request state
     email = getattr(request.state, "email", None)
-    
+
     response = JSONResponse(
-        content={
-            "user_id": user_id,
-            "email": email,
-            "authenticated": True
-        },
+        content={"user_id": user_id, "email": email, "authenticated": True},
         headers={
             "Vary": "Origin",
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Pragma": "no-cache",
-            "Expires": "0"
-        }
+            "Expires": "0",
+        },
     )
-    
+
     duration = (time.time() - start_time) * 1000
-    
+
     # Log whoami call with required fields
     logger.info(
         "auth.whoami",
@@ -685,11 +888,11 @@ async def auth_whoami(
                 "msg": "auth.whoami",
                 "status": 200,
                 "user_id": user_id if user_id != "anon" else None,
-                "duration_ms": duration
+                "duration_ms": duration,
             }
-        }
+        },
     )
-    
+
     return response
 
 
@@ -697,13 +900,34 @@ async def auth_whoami(
 
 
 @router.get("/pats")
-async def list_pats(user_id: str = Depends(get_current_user_id)) -> list[dict[str, Any]]:
+async def list_pats(
+    user_id: str = Depends(get_current_user_id),
+) -> list[dict[str, Any]]:
     # Placeholder: PAT listing not persisted yet in this router; return empty list until wired
     return []
 
 
-@router.post("/pats", openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"example": {"name": "CI token", "scopes": ["admin:write"], "exp_at": None}}}}}})
-async def create_pat(body: dict[str, Any], user_id: str = Depends(get_current_user_id)) -> dict[str, Any]:
+@router.post(
+    "/pats",
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "example": {
+                            "name": "CI token",
+                            "scopes": ["admin:write"],
+                            "exp_at": None,
+                        }
+                    }
+                }
+            }
+        }
+    },
+)
+async def create_pat(
+    body: dict[str, Any], user_id: str = Depends(get_current_user_id)
+) -> dict[str, Any]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     await _ensure_auth()
@@ -715,7 +939,14 @@ async def create_pat(body: dict[str, Any], user_id: str = Depends(get_current_us
     pat_id = f"pat_{secrets.token_hex(4)}"
     token = f"pat_live_{secrets.token_urlsafe(24)}"
     token_hash = secrets.token_hex(16)  # placeholder for hash of token if desired
-    await _create_pat(id=pat_id, user_id=user_id, name=name, token_hash=token_hash, scopes=scopes, exp_at=None)
+    await _create_pat(
+        id=pat_id,
+        user_id=user_id,
+        name=name,
+        token_hash=token_hash,
+        scopes=scopes,
+        exp_at=None,
+    )
     return {"id": pat_id, "token": token, "scopes": scopes, "exp_at": exp_at}
 
 
@@ -800,6 +1031,7 @@ def _decode_any(token: str, *, leeway: int = 0) -> dict:
         raise last_err
     raise HTTPException(status_code=401, detail="Unauthorized")
 
+
 def _get_refresh_ttl_seconds() -> int:
     """Return refresh token TTL in seconds using consistent precedence.
 
@@ -830,16 +1062,18 @@ def _cookie_flags_for(request: Request) -> tuple[bool, str]:
     - In dev over http, prefer not Secure for local testing
     """
     from ..cookie_config import get_cookie_config
-    
+
     cookie_config = get_cookie_config(request)
     return cookie_config["secure"], cookie_config["samesite"]
 
 
 @router.get("/auth/finish")
 @router.post("/auth/finish")
-async def finish_clerk_login(request: Request, response: Response, user_id: str = Depends(_require_user_or_dev)):
+async def finish_clerk_login(
+    request: Request, response: Response, user_id: str = Depends(_require_user_or_dev)
+):
     """Set auth cookies and finish login. Idempotent: safe to call multiple times.
-    
+
     Locked contract: Always returns 204 for POST, 302 for GET.
     CSRF: Required for POST when CSRF_ENABLED=1 via X-CSRF-Token matching csrf_token cookie.
     """
@@ -858,11 +1092,18 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
     # TTLs: defaults suitable for dev (access: 30 min; refresh: 7 days)
     # Use centralized TTL from tokens.py
     from ..tokens import get_default_access_ttl
+
     token_lifetime = get_default_access_ttl()
     refresh_life = _get_refresh_ttl_seconds()
 
     now = int(time.time())
-    access_payload = {"user_id": user_id, "sub": user_id, "iat": now, "exp": now + token_lifetime, "scopes": ["care:resident", "music:control"]}
+    access_payload = {
+        "user_id": user_id,
+        "sub": user_id,
+        "iat": now,
+        "exp": now + token_lifetime,
+        "scopes": ["care:resident", "music:control"],
+    }
     iss = os.getenv("JWT_ISSUER")
     aud = os.getenv("JWT_AUDIENCE")
     if iss:
@@ -871,12 +1112,14 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         access_payload["aud"] = aud
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_access
+
     access_token = make_access({"user_id": user_id}, ttl_s=token_lifetime)
 
     # Issue refresh token scoped to session family
     import os as _os
 
     import jwt as pyjwt
+
     jti = pyjwt.api_jws.base64url_encode(_os.urandom(16)).decode()
     refresh_payload = {
         "user_id": user_id,
@@ -893,16 +1136,18 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         refresh_payload["aud"] = aud
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_refresh
+
     refresh_token = make_refresh({"user_id": user_id, "jti": jti}, ttl_s=refresh_life)
 
     # Use centralized cookie configuration for sharp and consistent cookies
     from ..cookie_config import get_cookie_config, get_token_ttls
-    
+
     cookie_config = get_cookie_config(request)
     access_ttl, refresh_ttl = get_token_ttls()
 
     # Build safe redirect target using centralized helper
     from ..url_helpers import sanitize_redirect_path
+
     next_path = sanitize_redirect_path(request.query_params.get("next"), "/")
 
     # Classify finisher reason for logs
@@ -919,7 +1164,9 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         # When SameSite=None (cross-site), require explicit intent header even for finisher POST
         try:
             if os.getenv("COOKIE_SAMESITE", "lax").lower() == "none":
-                intent = request.headers.get("x-auth-intent") or request.headers.get("X-Auth-Intent")
+                intent = request.headers.get("x-auth-intent") or request.headers.get(
+                    "X-Auth-Intent"
+                )
                 if str(intent or "").strip().lower() != "refresh":
                     raise HTTPException(status_code=401, detail="missing_intent_header")
         except HTTPException:
@@ -929,7 +1176,13 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         # Enforce CSRF for POST in cookie-auth flows when globally enabled
         try:
             from ..csrf import _extract_csrf_header as _csrf_extract
-            if os.getenv("CSRF_ENABLED", "0").strip().lower() in {"1","true","yes","on"}:
+
+            if os.getenv("CSRF_ENABLED", "0").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }:
                 tok, used_legacy, allowed = _csrf_extract(request)
                 if used_legacy and not allowed:
                     raise HTTPException(status_code=400, detail="missing_csrf")
@@ -940,28 +1193,38 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
             raise
         except Exception:
             pass
-        
+
         # Idempotent: Check if we already have valid cookies for this user
         # If so, just return 204 without setting new cookies
         try:
             from ..cookie_names import ACCESS_TOKEN
+
             existing_access = request.cookies.get(ACCESS_TOKEN)
             if existing_access:
                 try:
-                    claims = _jwt_decode(existing_access, _jwt_secret(), algorithms=["HS256"])
-                    existing_user_id = str(claims.get("user_id") or claims.get("sub") or "")
+                    claims = _jwt_decode(
+                        existing_access, _jwt_secret(), algorithms=["HS256"]
+                    )
+                    existing_user_id = str(
+                        claims.get("user_id") or claims.get("sub") or ""
+                    )
                     if existing_user_id == user_id:
                         # Valid cookies already exist for this user, return 204
                         try:
                             dt = int((time.time() - t0) * 1000)
                             logger.info(
-            "auth.finish t_total=%dms set_cookie=false reason=idempotent_skip",
-            dt,
-            extra={"meta": {"duration_ms": dt, "reason": "idempotent_skip"}}
-        )
+                                "auth.finish t_total=%dms set_cookie=false reason=idempotent_skip",
+                                dt,
+                                extra={
+                                    "meta": {
+                                        "duration_ms": dt,
+                                        "reason": "idempotent_skip",
+                                    }
+                                },
+                            )
                         except Exception:
                             pass
-                        
+
                         # Record finish call for monitoring
                         try:
                             record_finish_call(
@@ -969,11 +1232,11 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
                                 method="POST",
                                 reason="idempotent_skip",
                                 user_id=user_id,
-                                set_cookie=False
+                                set_cookie=False,
                             )
                         except Exception:
                             pass
-                        
+
                         return Response(status_code=204)
                 except Exception:
                     # Invalid existing token, proceed with setting new ones
@@ -981,13 +1244,15 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         except Exception:
             # Error checking existing cookies, proceed with setting new ones
             pass
-        
+
         from fastapi import Response as _Resp  # type: ignore
+
         resp = _Resp(status_code=204)
-        
+
         # Create opaque session ID instead of using JWT
         try:
             from ..auth import _create_session_id
+
             payload = _jwt_decode(access_token, _jwt_secret(), algorithms=["HS256"])
             jti = payload.get("jti")
             expires_at = payload.get("exp", time.time() + access_ttl)
@@ -998,21 +1263,31 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         except Exception as e:
             logger.warning(f"Failed to create session ID: {e}")
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        
+
         # Use centralized cookie functions
         from ..cookies import set_auth_cookies
-        set_auth_cookies(resp, access=access_token, refresh=refresh_token, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
+
+        set_auth_cookies(
+            resp,
+            access=access_token,
+            refresh=refresh_token,
+            session_id=session_id,
+            access_ttl=access_ttl,
+            refresh_ttl=refresh_ttl,
+            request=request,
+        )
         # One-liner timing log for finisher
         try:
             dt = int((time.time() - t0) * 1000)
             logger.info(
                 "auth.finish t_total=%dms set_cookie=true reason=%s cookies=3",
-                dt, reason,
-                extra={"meta": {"duration_ms": dt, "reason": reason}}
+                dt,
+                reason,
+                extra={"meta": {"duration_ms": dt, "reason": reason}},
             )
         except Exception:
             pass
-        
+
         # Record finish call for monitoring
         try:
             record_finish_call(
@@ -1020,21 +1295,22 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
                 method="POST",
                 reason=reason,
                 user_id=user_id,
-                set_cookie=True
+                set_cookie=True,
             )
         except Exception:
             pass
-        
+
         return resp
     # Legacy GET: redirect to next with cookies attached (fallback for direct browser navigation)
     # Note: SPA should use POST /v1/auth/finish for consistent behavior
     resp = RedirectResponse(url=next_path, status_code=302)
-    
+
     # Create opaque session ID instead of using JWT
     try:
         import jwt as pyjwt
 
         from ..auth import _create_session_id
+
         payload = py_jwt_decode(access_token, _jwt_secret(), algorithms=["HS256"])
         jti = payload.get("jti")
         expires_at = payload.get("exp", time.time() + access_ttl)
@@ -1045,20 +1321,30 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
     except Exception as e:
         logger.warning(f"Failed to create session ID: {e}")
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-    
+
     # Use centralized cookie functions
     from ..cookies import set_auth_cookies
-    set_auth_cookies(resp, access=access_token, refresh=refresh_token, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
+
+    set_auth_cookies(
+        resp,
+        access=access_token,
+        refresh=refresh_token,
+        session_id=session_id,
+        access_ttl=access_ttl,
+        refresh_ttl=refresh_ttl,
+        request=request,
+    )
     try:
         dt = int((time.time() - t0) * 1000)
         logger.info(
             "auth.finish t_total=%dms set_cookie=true reason=%s cookies=3",
-            dt, reason,
-            extra={"meta": {"duration_ms": dt, "reason": reason}}
+            dt,
+            reason,
+            extra={"meta": {"duration_ms": dt, "reason": reason}},
         )
     except Exception:
         pass
-    
+
     # Record finish call for monitoring
     try:
         record_finish_call(
@@ -1066,11 +1352,11 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
             method="GET",
             reason=reason,
             user_id=user_id,
-            set_cookie=True
+            set_cookie=True,
         )
     except Exception:
         pass
-    
+
     return resp
 
 
@@ -1094,7 +1380,9 @@ async def clerk_finish(request: Request) -> dict[str, Any]:
         return {"status": "ok"}
 
 
-async def rotate_refresh_cookies(request: Request, response: Response, refresh_override: str | None = None) -> dict[str, str] | None:
+async def rotate_refresh_cookies(
+    request: Request, response: Response, refresh_override: str | None = None
+) -> dict[str, str] | None:
     """Rotate access/refresh cookies strictly.
 
     - If family revoked or jti reuse detected, revoke family, clear cookies, raise 401.
@@ -1103,23 +1391,30 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
     """
     max_retries = 3
     retry_delay = 0.1  # 100ms
-    
+
     for attempt in range(max_retries):
         try:
             secret = _jwt_secret()
             rtok = refresh_override or request.cookies.get("refresh_token")
             if not rtok:
                 try:
-                    logger.debug("auth.refresh debug no_refresh_cookie headers=%s", dict(request.headers))
+                    logger.debug(
+                        "auth.refresh debug no_refresh_cookie headers=%s",
+                        dict(request.headers),
+                    )
                     try:
-                        logger.debug("auth.refresh debug cookies=%s", dict(request.cookies))
+                        logger.debug(
+                            "auth.refresh debug cookies=%s", dict(request.cookies)
+                        )
                     except Exception:
                         pass
                 except Exception:
                     pass
                 return None
             # Decode refresh token against any configured key with a small skew
-            payload = _decode_any(rtok, leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60))
+            payload = _decode_any(
+                rtok, leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60)
+            )
             if payload.get("type") != "refresh":
                 # Backward-compat: accept tokens minted before type flag existed
                 # Treat as refresh when "exp" is reasonably large (>= 10 minutes)
@@ -1140,11 +1435,14 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
             if await is_refresh_family_revoked(sid):
                 # Clear cookies and deny using centralized function
                 from ..cookies import clear_auth_cookies
+
                 clear_auth_cookies(response, request)
                 raise HTTPException(status_code=401, detail="refresh_family_revoked")
-            
+
             # Single-use guard for this refresh token (replay protection). Claim FIRST, before any rotation.
-            first_use, error_reason = await claim_refresh_jti_with_retry(sid, jti, ttl_seconds=ttl)
+            first_use, error_reason = await claim_refresh_jti_with_retry(
+                sid, jti, ttl_seconds=ttl
+            )
             if not first_use:
                 if error_reason == "lock_timeout":
                     # Another request is processing this JTI, retry after a short delay
@@ -1154,8 +1452,11 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
                     else:
                         # Last attempt failed due to lock timeout
                         from ..cookies import clear_auth_cookies
+
                         clear_auth_cookies(response, request)
-                        raise HTTPException(status_code=503, detail="service_unavailable")
+                        raise HTTPException(
+                            status_code=503, detail="service_unavailable"
+                        )
 
                 # JTI was already used - check if this is a legitimate refresh vs concurrent requests
                 # Allow grace period for concurrent requests from the same session
@@ -1165,8 +1466,15 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
                     if last and (time.time() - float(last)) < 5:
                         logger.info(
                             "auth.refresh t=0ms result=concurrent sid=%s jti=%s (allowing)",
-                            sid, jti,
-                            extra={"meta": {"sid": sid, "jti": jti, "reason": "concurrent_request"}}
+                            sid,
+                            jti,
+                            extra={
+                                "meta": {
+                                    "sid": sid,
+                                    "jti": jti,
+                                    "reason": "concurrent_request",
+                                }
+                            },
                         )
                         # Skip rotation for concurrent requests, just return success
                         return None
@@ -1175,37 +1483,49 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
 
                 # JTI was already used (legitimate replay or race condition)
                 from ..cookies import clear_auth_cookies
+
                 clear_auth_cookies(response, request)
                 try:
                     last = await get_last_used_jti(sid)
                     logger.info(
-            "auth.refresh t=0ms result=replay sid=%s replay_of=%s reason=%s",
-            sid, last or '-', error_reason,
-            extra={"meta": {"sid": sid, "replay_of": last, "reason": error_reason}}
-        )
+                        "auth.refresh t=0ms result=replay sid=%s replay_of=%s reason=%s",
+                        sid,
+                        last or "-",
+                        error_reason,
+                        extra={
+                            "meta": {
+                                "sid": sid,
+                                "replay_of": last,
+                                "reason": error_reason,
+                            }
+                        },
+                    )
                     _met_inc("auth_refresh_replay")
                 except Exception:
                     pass
                 raise HTTPException(status_code=401, detail="refresh_reused")
-            
+
             # Mint new access + refresh with consistent TTLs
             from ..cookie_config import get_cookie_config, get_token_ttls
-            
+
             access_ttl, refresh_ttl = get_token_ttls()
             # Use tokens.py facade instead of direct JWT encoding
             import os
 
             from ..tokens import make_access, make_refresh
-            
+
             access_token = make_access({"user_id": user_id}, ttl_s=access_ttl)
-            
+
             new_jti = jwt.api_jws.base64url_encode(os.urandom(16)).decode()
-            new_refresh = make_refresh({"user_id": user_id, "jti": new_jti}, ttl_s=refresh_ttl)
-            
+            new_refresh = make_refresh(
+                {"user_id": user_id, "jti": new_jti}, ttl_s=refresh_ttl
+            )
+
             cookie_config = get_cookie_config(request)
-            
+
             # Create a session ID mapped to the access token JTI
             from ..auth import _create_session_id
+
             session_id = None  # Initialize session_id before try block
             try:
                 # Decode the access token to get the JTI
@@ -1214,34 +1534,49 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
                 payload = _jwt_decode(access_token, secret, algorithms=["HS256"])
                 jti = payload.get("jti")
                 expires_at = payload.get("exp", time.time() + access_ttl)
-                
+
                 if jti:
                     session_id = _create_session_id(jti, expires_at)
                 else:
                     # Fallback if no JTI found
                     session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
             except Exception as e:
-                logger.warning(f"Failed to decode access token for session creation: {e}")
+                logger.warning(
+                    f"Failed to decode access token for session creation: {e}"
+                )
                 # Fallback session ID
                 session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-            
+
             # Use centralized cookie functions
             from ..cookies import set_auth_cookies
-            set_auth_cookies(response, access=access_token, refresh=new_refresh, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
+
+            set_auth_cookies(
+                response,
+                access=access_token,
+                refresh=new_refresh,
+                session_id=session_id,
+                access_ttl=access_ttl,
+                refresh_ttl=refresh_ttl,
+                request=request,
+            )
             # Mark new token allowed
             await allow_refresh(sid, str(new_jti), ttl_seconds=refresh_ttl)
             try:
                 await set_last_used_jti(sid, jti, ttl_seconds=ttl)
                 _met_inc("auth_refresh_ok")
                 logger.info(
-            "auth.refresh t=0ms result=ok sid=%s cookies=3",
-            sid,
-            extra={"meta": {"sid": sid}}
-        )
+                    "auth.refresh t=0ms result=ok sid=%s cookies=3",
+                    sid,
+                    extra={"meta": {"sid": sid}},
+                )
             except Exception:
                 pass
-            return {"access_token": access_token, "refresh_token": new_refresh, "user_id": str(user_id)}
-            
+            return {
+                "access_token": access_token,
+                "refresh_token": new_refresh,
+                "user_id": str(user_id),
+            }
+
         except HTTPException:
             # Don't retry on HTTP exceptions
             raise
@@ -1253,15 +1588,27 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
             else:
                 # Last attempt failed
                 return None
-    
+
     return None
 
 
 @router.post(
     "/auth/login",
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok", "user_id": "dev"}}}}}},
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "schema": {"example": {"status": "ok", "user_id": "dev"}}
+                }
+            }
+        }
+    },
 )
-async def login(request: Request, response: Response, username: str = Query(..., description="Username for login")):
+async def login(
+    request: Request,
+    response: Response,
+    username: str = Query(..., description="Username for login"),
+):
     """Dev login scaffold.
 
     CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
@@ -1286,25 +1633,28 @@ async def login(request: Request, response: Response, username: str = Query(...,
         raise
     except Exception:
         pass
-    
+
     # Use centralized cookie configuration for sharp and consistent cookies
     from ..cookie_config import get_cookie_config, get_token_ttls
-    
+
     cookie_config = get_cookie_config(request)
     access_ttl, refresh_ttl = get_token_ttls()
-    
+
     # Use consistent TTL from cookie config
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_access
+
     jwt_token = make_access({"user_id": username}, ttl_s=access_ttl)
-    
+
     # Also issue a refresh token and mark it allowed for this session
     try:
         import jwt
+
         now = int(time.time())
         # Longer refresh in prod: default 7 days (604800s), allow override via env
         refresh_life = _get_refresh_ttl_seconds()
         import os as _os
+
         jti = jwt.api_jws.base64url_encode(_os.urandom(16)).decode()
         refresh_payload = {
             "user_id": username,
@@ -1322,11 +1672,15 @@ async def login(request: Request, response: Response, username: str = Query(...,
             refresh_payload["aud"] = aud
         # Use tokens.py facade instead of direct JWT encoding
         from ..tokens import make_refresh
-        refresh_token = make_refresh({"user_id": username, "jti": jti}, ttl_s=refresh_life)
-        
+
+        refresh_token = make_refresh(
+            {"user_id": username, "jti": jti}, ttl_s=refresh_life
+        )
+
         # Create opaque session ID instead of using JWT
         try:
             from ..auth import _create_session_id
+
             payload = _jwt_decode(jwt_token, _jwt_secret(), algorithms=["HS256"])
             jti = payload.get("jti")
             expires_at = payload.get("exp", time.time() + access_ttl)
@@ -1337,10 +1691,19 @@ async def login(request: Request, response: Response, username: str = Query(...,
         except Exception as e:
             logger.warning(f"Failed to create session ID: {e}")
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        
+
         # Use centralized cookie functions
         from ..cookies import set_auth_cookies
-        set_auth_cookies(response, access=jwt_token, refresh=refresh_token, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
+
+        set_auth_cookies(
+            response,
+            access=jwt_token,
+            refresh=refresh_token,
+            session_id=session_id,
+            access_ttl=access_ttl,
+            refresh_ttl=refresh_ttl,
+            request=request,
+        )
         # Use centralized session ID resolution to ensure consistency
         sid = resolve_session_id(request=request, user_id=username)
         await allow_refresh(sid, jti, ttl_seconds=refresh_ttl)
@@ -1361,38 +1724,42 @@ async def logout(request: Request, response: Response):
 
     CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
     """
-    
+
     # Revoke refresh family bound to session id (did/sid) when possible
     try:
         from ..token_store import revoke_refresh_family
-        
+
         # Use centralized session ID resolution to ensure consistency
         sid = resolve_session_id(request=request)
-        
+
         # TTL: align with remaining refresh TTL when available; best-effort 7d
         await revoke_refresh_family(sid, ttl_seconds=_get_refresh_ttl_seconds())
     except Exception:
         # Best-effort token revocation - continue with cookie clearing
         pass
-    
+
     # Delete session from session store
     try:
         from ..auth import _delete_session_id
-        
+
         # Get session ID from __session cookie
         session_id = request.cookies.get("__session")
         if session_id:
             _delete_session_id(session_id)
-            logger.info("auth.session_deleted", extra={
-                "session_id": session_id,
-            })
+            logger.info(
+                "auth.session_deleted",
+                extra={
+                    "session_id": session_id,
+                },
+            )
     except Exception as e:
         logger.warning(f"Failed to delete session: {e}")
         # Continue with cookie clearing even if session deletion fails
-    
+
     # Clear cookies using centralized function
     try:
         from ..cookies import clear_auth_cookies
+
         clear_auth_cookies(response, request)
         logger.info("logout.clear_cookies centralized cookies=3")
     except Exception:
@@ -1400,23 +1767,29 @@ async def logout(request: Request, response: Response):
         # This ensures cookies are cleared even if cookie_config fails
         try:
             from ..cookies import clear_auth_cookies
+
             clear_auth_cookies(response, request)
             logger.info("logout.clear_cookies fallback cookies=3")
         except Exception:
             # If even the fallback fails, we can't do much more
             # The response will still be 204, indicating logout was processed
             pass
-    
+
     response.status_code = 204
     return response
 
 
-
-
-
 @router.post(
     "/auth/refresh",
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok", "user_id": "dev"}}}}}},
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "schema": {"example": {"status": "ok", "user_id": "dev"}}
+                }
+            }
+        }
+    },
 )
 async def refresh(request: Request, response: Response):
     """Rotate access/refresh cookies.
@@ -1426,36 +1799,43 @@ async def refresh(request: Request, response: Response):
     """
     # Global CSRF enforcement for mutating routes when enabled
     try:
-        if os.getenv("CSRF_ENABLED", "0").strip().lower() in {"1","true","yes","on"}:
+        if os.getenv("CSRF_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}:
             from ..csrf import _extract_csrf_header as _csrf_extract
+
             tok, used_legacy, allowed = _csrf_extract(request)
-            
+
             # Check if we're in a cross-site scenario (COOKIE_SAMESITE=none)
             is_cross_site = os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"
-            
+
             if is_cross_site:
                 # Cross-site CSRF validation: require intent header + additional security
                 if not tok:
-                    raise HTTPException(status_code=400, detail="missing_csrf_cross_site")
-                
+                    raise HTTPException(
+                        status_code=400, detail="missing_csrf_cross_site"
+                    )
+
                 # For cross-site, we can't rely on same-origin cookies, so we use a different approach:
                 # 1. Require the CSRF token in header
                 # 2. Validate against a server-side session or use a different mechanism
                 # 3. Additional validation: check if the request has proper intent headers
-                
+
                 # Validate intent header is present for cross-site requests
-                intent = request.headers.get("x-auth-intent") or request.headers.get("X-Auth-Intent")
+                intent = request.headers.get("x-auth-intent") or request.headers.get(
+                    "X-Auth-Intent"
+                )
                 if str(intent or "").strip().lower() != "refresh":
-                    raise HTTPException(status_code=400, detail="missing_intent_header_cross_site")
-                
+                    raise HTTPException(
+                        status_code=400, detail="missing_intent_header_cross_site"
+                    )
+
                 # For cross-site, we'll accept the CSRF token from header only
                 # This is less secure than double-submit, but necessary for cross-site functionality
                 if not tok or len(tok) < 16:  # Basic validation
                     raise HTTPException(status_code=403, detail="invalid_csrf_format")
-                
+
                 # TODO: Consider implementing server-side CSRF token validation for cross-site requests
                 # This could involve storing valid tokens in Redis/session and validating against that
-                
+
             else:
                 # Standard same-origin CSRF validation (double-submit pattern)
                 if used_legacy and not allowed:
@@ -1466,7 +1846,9 @@ async def refresh(request: Request, response: Response):
         else:
             # When CSRF is disabled, still require intent header for cross-site requests
             if os.getenv("COOKIE_SAMESITE", "lax").lower() == "none":
-                intent = request.headers.get("x-auth-intent") or request.headers.get("X-Auth-Intent")
+                intent = request.headers.get("x-auth-intent") or request.headers.get(
+                    "X-Auth-Intent"
+                )
                 if str(intent or "").strip().lower() != "refresh":
                     raise HTTPException(status_code=400, detail="missing_intent_header")
     except HTTPException:
@@ -1476,10 +1858,11 @@ async def refresh(request: Request, response: Response):
     # Rate-limit refresh per session id (sid) 60/min
     try:
         from ..token_store import incr_login_counter
+
         # Use centralized session ID resolution for rate limiting
         sid = resolve_session_id(request=request)
         # Rate-limit per family and per-IP
-        ip = (request.client.host if request.client else "unknown")
+        ip = request.client.host if request.client else "unknown"
         fam_hits = await incr_login_counter(f"rl:refresh:fam:{sid}", 60)
         ip_hits = await incr_login_counter(f"rl:refresh:ip:{ip}", 60)
         fam_cap = 60
@@ -1492,7 +1875,9 @@ async def refresh(request: Request, response: Response):
         pass
     # Strict family rotation path
     try:
-        if os.getenv("MULTIPROC", "0").lower() in {"1","true","yes","on"} and not (await has_redis()):
+        if os.getenv("MULTIPROC", "0").lower() in {"1", "true", "yes", "on"} and not (
+            await has_redis()
+        ):
             raise HTTPException(status_code=503, detail="redis_required")
     except HTTPException:
         raise
@@ -1514,12 +1899,14 @@ async def refresh(request: Request, response: Response):
         # Metric for spikes on refresh failures
         try:
             from ..metrics import AUTH_4XX_TOTAL  # type: ignore
+
             AUTH_4XX_TOTAL.labels("/v1/auth/refresh", "401").inc()
         except Exception:
             pass
         # Fallback: if a valid access_token cookie exists, treat as session-ready and return 200
         try:
             from ..cookie_names import ACCESS_TOKEN
+
             atok = request.cookies.get(ACCESS_TOKEN)
             if atok:
                 claims = _decode_any(atok)
@@ -1529,8 +1916,9 @@ async def refresh(request: Request, response: Response):
                     sid = resolve_session_id(request=request, user_id=uid_fb)
                     logger.info(
                         "auth.refresh t=%dms result=ok sid=%s",
-                        dt, sid,
-                        extra={"meta": {"duration_ms": dt, "sid": sid}}
+                        dt,
+                        sid,
+                        extra={"meta": {"duration_ms": dt, "sid": sid}},
                     )
                 except Exception:
                     pass
@@ -1541,12 +1929,15 @@ async def refresh(request: Request, response: Response):
     # Prefer user_id from rotation outcome; include tokens for header-auth clients
     try:
         dt = int((time.time() - t0) * 1000)
-        user_id_from_tokens = tokens.get("user_id") if isinstance(tokens, dict) else None
+        user_id_from_tokens = (
+            tokens.get("user_id") if isinstance(tokens, dict) else None
+        )
         sid = resolve_session_id(request=request, user_id=user_id_from_tokens)
         logger.info(
             "auth.refresh t=%dms result=ok sid=%s",
-            dt, sid,
-            extra={"meta": {"duration_ms": dt, "sid": sid}}
+            dt,
+            sid,
+            extra={"meta": {"duration_ms": dt, "sid": sid}},
         )
     except Exception:
         pass
@@ -1562,7 +1953,17 @@ async def refresh(request: Request, response: Response):
 @router.post(
     "/auth/token",
     include_in_schema=True,
-    responses={200: {"content": {"application/json": {"schema": {"example": {"access_token": "<jwt>", "token_type": "bearer"}}}}}},
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "example": {"access_token": "<jwt>", "token_type": "bearer"}
+                    }
+                }
+            }
+        }
+    },
 )
 async def issue_token(request: Request):
     # Gate for production environments
@@ -1580,6 +1981,7 @@ async def issue_token(request: Request):
         pass
     # Use centralized TTL from tokens.py
     from ..tokens import get_default_access_ttl
+
     token_lifetime = get_default_access_ttl()
     now = int(time.time())
     # scopes already set above
@@ -1593,6 +1995,7 @@ async def issue_token(request: Request):
         payload["scope"] = " ".join(sorted(set(scopes)))
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_access
+
     claims = {"user_id": username}
     if scopes:
         claims["scopes"] = scopes
@@ -1642,12 +2045,14 @@ async def mock_set_access_cookie(request: Request, max_age: int = 1) -> Response
     # Mint a token with requested TTL
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_access
+
     tok = make_access({"user_id": os.getenv("DEV_USER_ID", "dev")}, ttl_s=max_age)
     resp = Response(status_code=204)
-    
+
     # Create opaque session ID instead of using JWT
     try:
         from ..auth import _create_session_id
+
         payload = _jwt_decode(tok, _jwt_secret(), algorithms=["HS256"])
         jti = payload.get("jti")
         expires_at = payload.get("exp", time.time() + max_age)
@@ -1658,13 +2063,21 @@ async def mock_set_access_cookie(request: Request, max_age: int = 1) -> Response
     except Exception as e:
         logger.warning(f"Failed to create session ID: {e}")
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-    
+
     # Use centralized cookie functions
     from ..cookies import set_auth_cookies
+
     # For testing, use the same token for both access and refresh
-    set_auth_cookies(resp, access=tok, refresh=tok, session_id=session_id, access_ttl=max_age, refresh_ttl=max_age, request=request)
+    set_auth_cookies(
+        resp,
+        access=tok,
+        refresh=tok,
+        session_id=session_id,
+        access_ttl=max_age,
+        refresh_ttl=max_age,
+        request=request,
+    )
     return resp
 
+
 __all__ = ["router", "verify_pat"]
-
-

@@ -8,5 +8,3 @@ def test_count_tokens_handles_spaces_and_nospaces():
     # long nospace string approximates 4 chars/token
     s = "x" * 40
     assert 9 <= count_tokens(s) <= 11
-
-

@@ -17,5 +17,3 @@ def test_status_reports_quiet_hours(monkeypatch):
     data = res.json()
     assert data.get("quiet_hours", {}).get("enabled") is True
     assert data.get("quiet_hours", {}).get("active") in {True, False}
-
-

@@ -16,8 +16,8 @@ def test_prompt_snapshot_stable(monkeypatch):
     monkeypatch.setattr(pb.memgpt, "summarize_session", lambda *a, **k: "summary")
     monkeypatch.setattr(pb, "safe_query_user_memories", lambda *a, **k: ["m1", "m2"])
 
-    prompt, _ = PromptBuilder.build("hello", session_id="s", user_id="u", debug=True, debug_info="DBG")
+    prompt, _ = PromptBuilder.build(
+        "hello", session_id="s", user_id="u", debug=True, debug_info="DBG"
+    )
     snap = _anonize(prompt)
     assert "summary" in snap and "m1" in snap and "hello" in snap and "DBG" in snap
-
-

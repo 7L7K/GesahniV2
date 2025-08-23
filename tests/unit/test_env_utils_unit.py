@@ -39,5 +39,3 @@ def test_load_env_uses_example_when_missing(monkeypatch, tmp_path: Path):
 
     env_utils.load_env()
     assert env_utils.os.getenv("BAZ") == "example"
-
-

@@ -26,7 +26,10 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Lightweight in-process cache for repeated queries within a short TTL
 # ---------------------------------------------------------------------------
-_CACHE: dict[tuple[str, str, str | None, str], tuple[list[str], list[dict[str, Any]], float]] = {}
+_CACHE: dict[
+    tuple[str, str, str | None, str], tuple[list[str], list[dict[str, Any]], float]
+] = {}
+
 
 def _normalize_query(q: str) -> str:
     return (q or "").strip().lower()
@@ -39,7 +42,9 @@ def _budgets_for_intent(intent: str | None) -> tuple[int, int, int]:
     intent_key = (intent or "chat").lower()
     k_dense = int(os.getenv(f"RETRIEVE_{intent_key.upper()}_K_DENSE", "80"))
     k_sparse = int(os.getenv(f"RETRIEVE_{intent_key.upper()}_K_SPARSE", "80"))
-    token_budget = int(os.getenv(f"RETRIEVE_{intent_key.upper()}_TOKENS", str(max_in // 2)))
+    token_budget = int(
+        os.getenv(f"RETRIEVE_{intent_key.upper()}_TOKENS", str(max_in // 2))
+    )
     return k_dense, k_sparse, token_budget
 
 
@@ -82,13 +87,17 @@ def run_pipeline(
         cached = _CACHE.get(key)
         if cached and now - cached[2] <= cache_ttl:
             texts, trace_cached, _ts = cached
-            trace_cached = list(trace_cached) + [{"event": "cache_hit", "meta": {"age_s": round(now - _ts, 3)}}]
+            trace_cached = list(trace_cached) + [
+                {"event": "cache_hit", "meta": {"age_s": round(now - _ts, 3)}}
+            ]
             try:
                 logger.info(
                     "retrieval.cache_hit",
                     extra={
                         "meta": {
-                            "user_hash": hash_user_id(str(user_id)) if user_id else "anon",
+                            "user_hash": (
+                                hash_user_id(str(user_id)) if user_id else "anon"
+                            ),
                             "intent": (intent or ""),
                             "collection": str(collection),
                             "age_s": round(now - _ts, 3),
@@ -100,15 +109,17 @@ def run_pipeline(
                 pass
             return list(texts), trace_cached
     kd, ks, token_budget = _budgets_for_intent(intent)
-    trace.append({
-        "event": "budget",
-        "meta": {
-            "intent": (intent or "unknown"),
-            "k_dense": kd,
-            "k_sparse": ks,
-            "token_budget": token_budget,
-        },
-    })
+    trace.append(
+        {
+            "event": "budget",
+            "meta": {
+                "intent": (intent or "unknown"),
+                "k_dense": kd,
+                "k_sparse": ks,
+                "token_budget": token_budget,
+            },
+        }
+    )
 
     # Hybrid search first pass
     t0 = time.perf_counter()
@@ -116,17 +127,34 @@ def run_pipeline(
     t_embed = (time.perf_counter() - t0) * 1000.0
     dense = []
     sparse = []
-    with start_span("vector.qdrant.search", {"k": kd, "filter": str(extra_filter or {})}):
+    with start_span(
+        "vector.qdrant.search", {"k": kd, "filter": str(extra_filter or {})}
+    ):
         t1 = time.perf_counter()
         try:
-            dense = dense_search(collection=collection, user_id=user_id, query_vector=qvec, limit=kd, extra_filter=extra_filter)
+            dense = dense_search(
+                collection=collection,
+                user_id=user_id,
+                query_vector=qvec,
+                limit=kd,
+                extra_filter=extra_filter,
+            )
         except Exception:
             dense = []
         t_vec = (time.perf_counter() - t1) * 1000.0
-    with start_span("vector.qdrant.search", {"k": ks, "filter": str(extra_filter or {}), "sparse": True}):
+    with start_span(
+        "vector.qdrant.search",
+        {"k": ks, "filter": str(extra_filter or {}), "sparse": True},
+    ):
         t2 = time.perf_counter()
         try:
-            sparse = sparse_search(collection=collection, user_id=user_id, query=query, limit=ks, extra_filter=extra_filter)
+            sparse = sparse_search(
+                collection=collection,
+                user_id=user_id,
+                query=query,
+                limit=ks,
+                extra_filter=extra_filter,
+            )
         except Exception:
             sparse = []
         t_sparse = (time.perf_counter() - t2) * 1000.0
@@ -134,51 +162,65 @@ def run_pipeline(
     dense_thresh = float(os.getenv("RETRIEVE_DENSE_SIM_THRESHOLD", "0.75"))
     if dense:
         try:
-            dense = [it for it in dense if float(getattr(it, "score", 0.0) or 0.0) >= dense_thresh]
+            dense = [
+                it
+                for it in dense
+                if float(getattr(it, "score", 0.0) or 0.0) >= dense_thresh
+            ]
         except Exception:
             pass
+
     # Include threshold rationale snapshot: first few raw scores and keep/drop
     def _sample_scores(items):
-        return [round(float(getattr(it, 'score', 0.0) or 0.0), 4) for it in items[:5]]
-    trace.append({
-        "event": "hybrid",
-        "meta": {
-            "dense": len(dense),
-            "sparse": len(sparse),
-            "t_embed_ms": int(t_embed),
-            "t_vec_ms": int(t_vec),
-            "t_sparse_ms": int(t_sparse),
-            "scores_dense": _sample_scores(dense),
-            "scores_sparse": _sample_scores(sparse),
-            "threshold_sim": round(dense_thresh, 4),
-            "policy": f"keep if sim>={dense_thresh} (dist<={round(1.0-dense_thresh,4)})",
-        },
-    })
+        return [round(float(getattr(it, "score", 0.0) or 0.0), 4) for it in items[:5]]
+
+    trace.append(
+        {
+            "event": "hybrid",
+            "meta": {
+                "dense": len(dense),
+                "sparse": len(sparse),
+                "t_embed_ms": int(t_embed),
+                "t_vec_ms": int(t_vec),
+                "t_sparse_ms": int(t_sparse),
+                "scores_dense": _sample_scores(dense),
+                "scores_sparse": _sample_scores(sparse),
+                "threshold_sim": round(dense_thresh, 4),
+                "policy": f"keep if sim>={dense_thresh} (dist<={round(1.0-dense_thresh,4)})",
+            },
+        }
+    )
 
     # RRF (include simple feature breakdown sample)
     t3 = time.perf_counter()
     with start_span("retrieval.pipeline", {"topk_pre": len(dense) + len(sparse)}):
         fused = reciprocal_rank_fusion([dense, sparse]) if (dense or sparse) else []
     t_rrf = (time.perf_counter() - t3) * 1000.0
+
     def _rrf_features(fused_items: list[RetrievedItem]) -> list[dict[str, float]]:
         rows: list[dict[str, float]] = []
         for it in fused_items[:5]:
             md = it.metadata or {}
-            rows.append({
-                "rrf_score": float(md.get("rrf_score", it.score)),
-                "base": float(md.get("base", 0.0)),
-            })
+            rows.append(
+                {
+                    "rrf_score": float(md.get("rrf_score", it.score)),
+                    "base": float(md.get("base", 0.0)),
+                }
+            )
         return rows
-    trace.append({
-        "event": "rrf",
-        "meta": {
-            "in_dense": len(dense),
-            "in_sparse": len(sparse),
-            "out": len(fused),
-            "t_ms": int(t_rrf),
-            "features": _rrf_features(fused),
-        },
-    })
+
+    trace.append(
+        {
+            "event": "rrf",
+            "meta": {
+                "in_dense": len(dense),
+                "in_sparse": len(sparse),
+                "out": len(fused),
+                "t_ms": int(t_rrf),
+                "features": _rrf_features(fused),
+            },
+        }
+    )
 
     # Diversify via MMR (cap pool to 200 for speed, select 60 by default)
     max_pool = int(os.getenv("RETRIEVE_POOL_MAX", "200"))
@@ -187,8 +229,11 @@ def run_pipeline(
     t4 = time.perf_counter()
     mmr_lambda = float(os.getenv("RETRIEVE_MMR_LAMBDA", "0.6"))
     with start_span("retrieval.pipeline", {"mmr": True, "topk_pre": len(pool)}):
-        diversified = mmr_diversify(query, pool, k=min(mmr_k, len(pool)), lambda_=mmr_lambda)
+        diversified = mmr_diversify(
+            query, pool, k=min(mmr_k, len(pool)), lambda_=mmr_lambda
+        )
     t_mmr = (time.perf_counter() - t4) * 1000.0
+
     # diversity proxy: average pairwise Jaccard distance over tokens for selection
     def _diversity_score(items: list[str]) -> float:
         toks = [set(x.lower().split()) for x in items]
@@ -203,21 +248,24 @@ def run_pipeline(
                 acc += 1.0 - (inter / union)
                 pairs += 1
         return float(acc / max(1, pairs))
+
     before_div = _diversity_score([it.text for it in pool[:10]])
     after_div = _diversity_score([it.text for it in diversified[:10]])
-    trace.append({
-        "event": "mmr",
-        "meta": {
-            "in": len(pool),
-            "out": len(diversified),
-            "lambda": round(mmr_lambda, 3),
-            "t_ms": int(t_mmr),
-            "diversity_before": round(before_div, 3),
-            "diversity_after": round(after_div, 3),
-            "diversity_delta": round(after_div - before_div, 3),
-            "sample_ids": [it.id for it in diversified[:5]],
-        },
-    })
+    trace.append(
+        {
+            "event": "mmr",
+            "meta": {
+                "in": len(pool),
+                "out": len(diversified),
+                "lambda": round(mmr_lambda, 3),
+                "t_ms": int(t_mmr),
+                "diversity_before": round(before_div, 3),
+                "diversity_after": round(after_div, 3),
+                "diversity_delta": round(after_div - before_div, 3),
+                "sample_ids": [it.id for it in diversified[:5]],
+            },
+        }
+    )
 
     # Rerank cascade: local then optional hosted
     keep1 = int(os.getenv("RETRIEVE_CE_KEEP1", "24"))
@@ -228,35 +276,47 @@ def run_pipeline(
     ce_scores = [float(it.metadata.get("local_ce", 0.0)) for it in after_local]
     ce_top = ce_scores[0] if ce_scores else 0.0
     ce_avg = (sum(ce_scores) / len(ce_scores)) if ce_scores else 0.0
-    trace.append({
-        "event": "rerank_local",
-        "meta": {
-            "in": len(diversified),
-            "out": len(after_local),
-            "t_ms": int(t_rerank1),
-            "ce_top": round(ce_top, 3),
-            "ce_avg": round(ce_avg, 3),
-            "kept_ids": [it.id for it in after_local[:10]],
-        },
-    })
-    use_hosted = os.getenv("RETRIEVE_USE_HOSTED_CE", "0").lower() in {"1", "true", "yes"}
+    trace.append(
+        {
+            "event": "rerank_local",
+            "meta": {
+                "in": len(diversified),
+                "out": len(after_local),
+                "t_ms": int(t_rerank1),
+                "ce_top": round(ce_top, 3),
+                "ce_avg": round(ce_avg, 3),
+                "kept_ids": [it.id for it in after_local[:10]],
+            },
+        }
+    )
+    use_hosted = os.getenv("RETRIEVE_USE_HOSTED_CE", "0").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     t6 = time.perf_counter()
-    after_hosted = hosted_rerank_passthrough(query, after_local, keep=keep2) if use_hosted else after_local[:keep2]
+    after_hosted = (
+        hosted_rerank_passthrough(query, after_local, keep=keep2)
+        if use_hosted
+        else after_local[:keep2]
+    )
     t_rerank2 = (time.perf_counter() - t6) * 1000.0
     ce2_scores = [float(it.metadata.get("local_ce", 0.0)) for it in after_hosted]
     ce2_avg = (sum(ce2_scores) / len(ce2_scores)) if ce2_scores else 0.0
-    trace.append({
-        "event": "rerank_hosted",
-        "meta": {
-            "enabled": use_hosted,
-            "in": len(after_local),
-            "out": len(after_hosted),
-            "t_ms": int(t_rerank2),
-            "hosted_calls": int(use_hosted),
-            "score_avg": round(ce2_avg, 3),
-            "kept_ids": [it.id for it in after_hosted[:10]],
-        },
-    })
+    trace.append(
+        {
+            "event": "rerank_hosted",
+            "meta": {
+                "enabled": use_hosted,
+                "in": len(after_local),
+                "out": len(after_hosted),
+                "t_ms": int(t_rerank2),
+                "hosted_calls": int(use_hosted),
+                "score_avg": round(ce2_avg, 3),
+                "kept_ids": [it.id for it in after_hosted[:10]],
+            },
+        }
+    )
 
     # Temporal & quality boost, compose final scores
     half_life_days = float(os.getenv("RETRIEVE_HALF_LIFE_DAYS", "14"))
@@ -276,7 +336,9 @@ def run_pipeline(
         pinned = bool(it.metadata.get("pinned", False))
         tb = time_decay_boost(timestamp=ts, half_life_days=half_life_days)
         qb = quality_boost(tier)
-        final = compose_final_score(base=it.score, time_boost=tb, quality=qb, pinned=pinned)
+        final = compose_final_score(
+            base=it.score, time_boost=tb, quality=qb, pinned=pinned
+        )
         meta = {
             "base": it.score,
             "time_boost": tb,
@@ -294,23 +356,27 @@ def run_pipeline(
     examples = []
     for i in range(min(3, len(top_items))):
         ex = top_meta[i]
-        examples.append({
-            "base": round(float(ex["base"]), 4),
-            "time": round(float(ex["time_boost"]), 4),
-            "quality": round(float(ex["quality_boost"]), 4),
-            "pinned": bool(ex["pinned"]),
-            "final": round(float(ex["final"]), 4),
-            "formula": "final = 0.7*base + 0.2*time + 0.1*quality + (pinned?0.1:0)",
-        })
-    trace.append({
-        "event": "boost",
-        "meta": {
-            "count": len(top_items),
-            "half_life_days": half_life_days,
-            "weights": weights,
-            "examples": examples,
-        },
-    })
+        examples.append(
+            {
+                "base": round(float(ex["base"]), 4),
+                "time": round(float(ex["time_boost"]), 4),
+                "quality": round(float(ex["quality_boost"]), 4),
+                "pinned": bool(ex["pinned"]),
+                "final": round(float(ex["final"]), 4),
+                "formula": "final = 0.7*base + 0.2*time + 0.1*quality + (pinned?0.1:0)",
+            }
+        )
+    trace.append(
+        {
+            "event": "boost",
+            "meta": {
+                "count": len(top_items),
+                "half_life_days": half_life_days,
+                "weights": weights,
+                "examples": examples,
+            },
+        }
+    )
 
     # MemGPT/task policy trim: enforce token budget and minimal decision trail
     # Include mem_documents as-is; downstream caps to 500–600 tokens via truncate_to_token_budget
@@ -319,12 +385,24 @@ def run_pipeline(
     if not trimmed and texts:
         trimmed = texts[:1]
     # Ensure at least one trace note about decision trail items count
-    trace.append({"event": "policy_trim", "meta": {"kept": len(trimmed), "budget_tokens": token_budget}})
+    trace.append(
+        {
+            "event": "policy_trim",
+            "meta": {"kept": len(trimmed), "budget_tokens": token_budget},
+        }
+    )
 
     # Explainability: include top reasons and composite scores for the first N,
     # respecting a per-task injection policy (e.g., HA constraints)
     allowed_types_by_intent = {
-        "ha": {"device", "location", "safety", "rollup:device", "rollup:location", "rollup:safety"},
+        "ha": {
+            "device",
+            "location",
+            "safety",
+            "rollup:device",
+            "rollup:location",
+            "rollup:safety",
+        },
     }
     allow_set = allowed_types_by_intent.get((intent or "").lower())
     filtered_items = []
@@ -388,5 +466,3 @@ def run_pipeline(
 
 
 __all__ = ["run_pipeline"]
-
-

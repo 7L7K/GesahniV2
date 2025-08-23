@@ -66,7 +66,7 @@ class TestRegister:
         """Test that register overwrites existing flags."""
         register("test_flag", "First description", "0")
         register("test_flag", "Second description", "1", "int")
-        
+
         flag = _REGISTRY["test_flag"]
         assert flag.description == "Second description"
         assert flag.default == "1"
@@ -263,9 +263,9 @@ class TestListFlags:
         """Test listing flags with registered flags."""
         register("flag1", "First flag", "0", "bool")
         register("flag2", "Second flag", "default", "str")
-        
+
         result = list_flags()
-        
+
         assert "flag1" in result
         assert "flag2" in result
         assert result["flag1"]["description"] == "First flag"
@@ -283,9 +283,9 @@ class TestListFlags:
         """Test listing flags with overrides."""
         register("test_flag", "Test flag", "0", "bool")
         set_value("test_flag", "1")
-        
+
         result = list_flags()
-        
+
         assert result["test_flag"]["value"] == "1"
         assert result["test_flag"]["overridden"] is True
 
@@ -302,13 +302,10 @@ class TestListFlags:
         register("z_flag", "Z flag", "0")
         register("a_flag", "A flag", "0")
         register("m_flag", "M flag", "0")
-        
+
         result = list_flags()
         keys = list(result.keys())
         assert keys == ["a_flag", "m_flag", "z_flag"]
-
-
-
 
 
 class TestIntegration:
@@ -323,18 +320,18 @@ class TestIntegration:
         """Test complete flag lifecycle."""
         # Register flag
         register("test_flag", "Test flag", "0", "bool")
-        
+
         # Get default value
         assert get("test_flag") is False
-        
+
         # Set override
         set_value("test_flag", "1")
         assert get("test_flag") is True
-        
+
         # Clear override
         clear_value("test_flag")
         assert get("test_flag") is False
-        
+
         # Set environment variable
         with patch.dict(os.environ, {"FLAG_TEST_FLAG": "1"}):
             assert get("test_flag") is True
@@ -344,14 +341,14 @@ class TestIntegration:
         register("flag1", "Flag 1", "0", "bool")
         register("flag2", "Flag 2", "100", "int")
         register("flag3", "Flag 3", "hello", "str")
-        
+
         set_value("flag1", "1")
         set_value("flag2", "200")
-        
+
         assert get("flag1") is True
         assert get("flag2") == 200
         assert get("flag3") == "hello"
-        
+
         flags = list_flags()
         assert flags["flag1"]["overridden"] is True
         assert flags["flag2"]["overridden"] is True
@@ -362,21 +359,21 @@ class TestIntegration:
         register("feature_a", "Feature A", "0", "bool")
         register("feature_b", "Feature B", "0", "bool")
         register("feature_c", "Feature C", "0", "bool")
-        
+
         # Enable features
         set_value("feature_a", "1")
         set_value("feature_b", "1")
-        
+
         # Simulate feature gate logic
         def can_access_feature():
             return get("feature_a") and get("feature_b") and not get("feature_c")
-        
+
         assert can_access_feature() is True
-        
+
         # Disable one feature
         set_value("feature_b", "0")
         assert can_access_feature() is False
-        
+
         # Enable all features
         set_value("feature_b", "1")
         set_value("feature_c", "1")

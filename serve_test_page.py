@@ -11,12 +11,13 @@ from pathlib import Path
 
 PORT = 8080
 
+
 class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         # Add CORS headers for testing
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         super().end_headers()
 
     def do_OPTIONS(self):
@@ -24,16 +25,19 @@ class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
 
+
 if __name__ == "__main__":
     # Change to the project root directory
     project_root = Path(__file__).parent
     os.chdir(project_root)
-    
+
     print(f"Starting test server on http://localhost:{PORT}")
     print(f"Serving files from: {project_root}")
-    print(f"Test page available at: http://localhost:{PORT}/test_frontend_backend_connection.html")
+    print(
+        f"Test page available at: http://localhost:{PORT}/test_frontend_backend_connection.html"
+    )
     print("Press Ctrl+C to stop")
-    
+
     with socketserver.TCPServer(("", PORT), CORSHTTPRequestHandler) as httpd:
         try:
             httpd.serve_forever()

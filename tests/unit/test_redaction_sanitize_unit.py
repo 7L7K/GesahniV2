@@ -11,5 +11,3 @@ def test_sanitize_and_map_path(tmp_path, monkeypatch):
 
     p = redaction._map_path("k@", "i#")
     assert str(p).startswith(str(tmp_path)) and p.name.endswith(".json")
-
-

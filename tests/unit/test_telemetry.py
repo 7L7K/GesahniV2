@@ -152,9 +152,9 @@ class TestLogRecord:
             tts_tier="standard",
             tts_chars=100,
             tts_minutes=0.5,
-            tts_cost_usd=0.01
+            tts_cost_usd=0.01,
         )
-        
+
         assert record.req_id == "test-123"
         assert record.prompt == "test prompt"
         assert record.engine_used == "gpt-4"

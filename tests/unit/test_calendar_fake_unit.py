@@ -63,7 +63,9 @@ def test_build_event_outputs_expected_keys():
     s = dt.datetime(2025, 5, 1, 12, 0, tzinfo=tz)
     e = dt.datetime(2025, 5, 1, 12, 30, tzinfo=tz)
     ev = prov.build_event("Lunch", s, e)
-    assert set(["title", "start_local", "end_local", "start_utc", "end_utc", "tz"]).issubset(ev.keys())
+    assert set(
+        ["title", "start_local", "end_local", "start_utc", "end_utc", "tz"]
+    ).issubset(ev.keys())
 
 
 def test_ics_parser_local_and_utc(tmp_path):
@@ -95,9 +97,15 @@ def test_ics_parser_local_and_utc(tmp_path):
 def test_list_next_sorts_by_utc():
     tz = _tz()
     prov = FakeCalendarProvider()
-    prov.add_event("B", dt.datetime(2025, 5, 1, 10, 0, tzinfo=tz), dt.datetime(2025, 5, 1, 11, 0, tzinfo=tz))
-    prov.add_event("A", dt.datetime(2025, 5, 1, 9, 0, tzinfo=tz), dt.datetime(2025, 5, 1, 10, 0, tzinfo=tz))
+    prov.add_event(
+        "B",
+        dt.datetime(2025, 5, 1, 10, 0, tzinfo=tz),
+        dt.datetime(2025, 5, 1, 11, 0, tzinfo=tz),
+    )
+    prov.add_event(
+        "A",
+        dt.datetime(2025, 5, 1, 9, 0, tzinfo=tz),
+        dt.datetime(2025, 5, 1, 10, 0, tzinfo=tz),
+    )
     out = prov.list_next(5, now=dt.datetime(2025, 5, 1, 8, 0, tzinfo=tz))
     assert [e["title"] for e in out] == ["A", "B"]
-
-

@@ -10,5 +10,3 @@ async def test_embed_async_stub_when_pytest_flag(monkeypatch):
 
     v = await emb.embed("hello")
     assert isinstance(v, list) and len(v) == 8
-
-

@@ -8,7 +8,10 @@ from .base import Skill
 
 class CoverSkill(Skill):
     PATTERNS = [
-        re.compile(r"\b(open|close) (?P<name>[\w\s]+?)(?: (?:cover|blind|blinds|garage|shades?))?\b", re.I)
+        re.compile(
+            r"\b(open|close) (?P<name>[\w\s]+?)(?: (?:cover|blind|blinds|garage|shades?))?\b",
+            re.I,
+        )
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:

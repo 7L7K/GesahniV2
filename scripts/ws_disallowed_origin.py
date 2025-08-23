@@ -3,6 +3,7 @@
 and print close / error behavior.
 """
 import asyncio
+
 import websockets
 
 URI = "ws://127.0.0.1:8000/v1/ws/health"
@@ -22,5 +23,3 @@ async def run():
 
 if __name__ == "__main__":
     asyncio.run(run())
-
-

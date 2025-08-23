@@ -28,7 +28,7 @@ async def whoami(request: Request, _: None = Depends(rate_limit) if os.getenv("D
 
 #### Increased Intervals and Backoff
 - **MIN_CALL_INTERVAL**: Increased from 2000ms to 5000ms
-- **MAX_BACKOFF**: Increased from 30000ms to 60000ms  
+- **MAX_BACKOFF**: Increased from 30000ms to 60000ms
 - **BASE_BACKOFF**: Increased from 1000ms to 2000ms
 - **DEBOUNCE_DELAY**: Increased from 500ms to 1000ms
 
@@ -78,7 +78,7 @@ async def whoami(request: Request, _: None = Depends(rate_limit) if os.getenv("D
 All fixes have been tested and verified:
 
 - ✅ Auth orchestrator tests pass
-- ✅ Oscillation prevention tests pass  
+- ✅ Oscillation prevention tests pass
 - ✅ Rate limiting integration tests pass
 - ✅ WebSocket connection tests pass
 

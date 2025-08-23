@@ -77,7 +77,7 @@ def test_login_and_me(tmp_path, monkeypatch):
 
     r2 = client.get("/me", headers=headers)
     data2 = r2.json()
-    # The /me endpoint uses the user_id from Authorization header (hash of "token123"), 
+    # The /me endpoint uses the user_id from Authorization header (hash of "token123"),
     # not the logged-in username ("alice"). So it returns stats for a different user.
     assert data2["login_count"] == 0  # This user hasn't logged in
     # The /me endpoint uses the user_id from Authorization header, which gets incremented by middleware

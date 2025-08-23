@@ -35,5 +35,3 @@ describe('Admin /admin page', () => {
         expect(await screen.findByText(/Daily self-review/i)).toBeInTheDocument()
     })
 })
-
-

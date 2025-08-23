@@ -16,5 +16,3 @@ async def test_verify_webhook_missing_secret(monkeypatch):
     req = Request(scope)
     with pytest.raises(Exception):
         await sec.verify_webhook(req)
-
-

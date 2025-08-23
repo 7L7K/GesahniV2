@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 def make_client():
     from app.api.admin import router as admin_router
+
     app = FastAPI()
     app.include_router(admin_router, prefix="/v1")
     return TestClient(app)
@@ -18,9 +19,37 @@ def setup_function(_):
 
 def test_router_filters_and_pagination():
     from app.decisions import add_decision
-    add_decision({"req_id": "f1", "engine_used": "gpt", "model_name": "gpt-4o", "route_reason": "default", "cache_hit": False, "intent": "chat"})
-    add_decision({"req_id": "f2", "engine_used": "llama", "model_name": "llama3", "route_reason": "cheap path", "cache_hit": True, "intent": "search"})
-    add_decision({"req_id": "f3", "engine_used": "gpt", "model_name": "gpt-4o-mini", "route_reason": "fallback", "cache_hit": False, "intent": "search"})
+
+    add_decision(
+        {
+            "req_id": "f1",
+            "engine_used": "gpt",
+            "model_name": "gpt-4o",
+            "route_reason": "default",
+            "cache_hit": False,
+            "intent": "chat",
+        }
+    )
+    add_decision(
+        {
+            "req_id": "f2",
+            "engine_used": "llama",
+            "model_name": "llama3",
+            "route_reason": "cheap path",
+            "cache_hit": True,
+            "intent": "search",
+        }
+    )
+    add_decision(
+        {
+            "req_id": "f3",
+            "engine_used": "gpt",
+            "model_name": "gpt-4o-mini",
+            "route_reason": "fallback",
+            "cache_hit": False,
+            "intent": "search",
+        }
+    )
 
     client = make_client()
     # filter by engine
@@ -35,7 +64,11 @@ def test_router_filters_and_pagination():
     # filter by intent and q in reason
     r = client.get("/v1/admin/router/decisions?intent=search&q=cheap&token=t")
     items = r.json().get("items", [])
-    assert all("search" in (it.get("intent") or "").lower() and "cheap" in (it.get("route_reason") or "").lower() for it in items)
+    assert all(
+        "search" in (it.get("intent") or "").lower()
+        and "cheap" in (it.get("route_reason") or "").lower()
+        for it in items
+    )
     # pagination via cursor
     r1 = client.get("/v1/admin/router/decisions?limit=1&token=t")
     nc = r1.json().get("next_cursor")
@@ -43,5 +76,3 @@ def test_router_filters_and_pagination():
     if nc:
         r2 = client.get(f"/v1/admin/router/decisions?limit=1&cursor={nc}&token=t")
         assert r2.status_code == 200
-
-

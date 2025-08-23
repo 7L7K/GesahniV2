@@ -74,7 +74,7 @@ app.add_middleware(
 # Bypass CSRF when Authorization header is present (header auth mode)
 auth_header = request.headers.get("Authorization")
 if auth_header and auth_header.startswith("Bearer "):
-    logger.info("bypass: csrf_authorization_header_present header=<%s>", 
+    logger.info("bypass: csrf_authorization_header_present header=<%s>",
                auth_header[:8] + "..." if auth_header else "None")
     return await call_next(request)
 ```

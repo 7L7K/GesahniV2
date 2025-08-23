@@ -70,7 +70,9 @@ async def json_request(
                 cm = factory()
             async with cm as client:
                 # Create a client span around outbound call
-                with start_span("http.client", {"http.method": method, "http.url": url}):
+                with start_span(
+                    "http.client", {"http.method": method, "http.url": url}
+                ):
                     if hasattr(client, "request"):
                         resp = await client.request(method, url, **kwargs)
                     else:  # pragma: no cover - testing hooks
@@ -84,7 +86,9 @@ async def json_request(
                 return None, "json_error"
         except httpx.HTTPStatusError as e:
             status = e.response.status_code
-            logger.warning("http.status_error", extra={"meta": {"status": status, "url": url}})
+            logger.warning(
+                "http.status_error", extra={"meta": {"status": status, "url": url}}
+            )
             if 500 <= status < 600 and attempt < 2:
                 await asyncio.sleep(delay)
                 delay *= 2
@@ -95,12 +99,16 @@ async def json_request(
                 return None, "not_found"
             return None, "http_error"
         except httpx.RequestError as e:
-            logger.warning("http.network_error", extra={"meta": {"url": url, "error": str(e)}})
+            logger.warning(
+                "http.network_error", extra={"meta": {"url": url, "error": str(e)}}
+            )
             if attempt < 2:
                 await asyncio.sleep(delay)
                 delay *= 2
                 continue
             return None, "network_error"
         except Exception as e:  # pragma: no cover - unexpected
-            logger.warning("http.unexpected_error", extra={"meta": {"url": url, "error": str(e)}})
+            logger.warning(
+                "http.unexpected_error", extra={"meta": {"url": url, "error": str(e)}}
+            )
             return None, "unknown_error"

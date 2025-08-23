@@ -33,5 +33,3 @@ def test_cookie_eviction_stress(monkeypatch):
     # But presence of cookies should keep them from being evicted; emulate by asserting cookies still exist
     assert c.cookies.get("access_token") is not None
     assert c.cookies.get("refresh_token") is not None
-
-

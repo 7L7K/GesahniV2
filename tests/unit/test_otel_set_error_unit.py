@@ -9,6 +9,7 @@ def test_set_error_on_span_stub():
 
         def set_attribute(self, k, v=None):
             calls["set_attr"] += 1
+
         def set_status(self, *args, **kwargs):
             # emulate having set_status method present
             pass
@@ -16,5 +17,3 @@ def test_set_error_on_span_stub():
     otel_utils.set_error(Span(), RuntimeError("x"))
     assert calls["record_exception"] >= 1
     assert calls["set_attr"] >= 1
-
-

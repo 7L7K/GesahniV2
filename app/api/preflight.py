@@ -60,10 +60,18 @@ def _check_embeddings() -> dict[str, Any]:
     backend = (os.getenv("EMBEDDING_BACKEND") or "openai").strip().lower()
     if backend == "openai":
         has_key = bool(os.getenv("OPENAI_API_KEY"))
-        return {"status": "ok" if has_key else "warn", "backend": backend, "openai_key": has_key}
+        return {
+            "status": "ok" if has_key else "warn",
+            "backend": backend,
+            "openai_key": has_key,
+        }
     if backend == "llama":
         has_path = bool(os.getenv("LLAMA_EMBEDDINGS_MODEL"))
-        return {"status": "ok" if has_path else "warn", "backend": backend, "llama_model": has_path}
+        return {
+            "status": "ok" if has_path else "warn",
+            "backend": backend,
+            "llama_model": has_path,
+        }
     return {"status": "warn", "backend": backend}
 
 
@@ -85,5 +93,3 @@ async def preflight() -> dict[str, Any]:
 
 
 __all__ = ["router"]
-
-

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 def make_client():
     from app.api.admin import router as admin_router
+
     app = FastAPI()
     app.include_router(admin_router, prefix="/v1")
     return TestClient(app)
@@ -34,7 +35,9 @@ def test_metrics_cache_rate_is_float_under_pytest():
 def test_router_decisions_limit_bounds():
     client = make_client()
     assert client.get("/v1/admin/router/decisions?limit=0&token=t").status_code == 422
-    assert client.get("/v1/admin/router/decisions?limit=1001&token=t").status_code == 422
+    assert (
+        client.get("/v1/admin/router/decisions?limit=1001&token=t").status_code == 422
+    )
 
 
 def test_retrieval_last_limit_bounds():
@@ -45,15 +48,37 @@ def test_retrieval_last_limit_bounds():
 
 def test_router_decisions_order_and_fields():
     from app.decisions import add_decision
-    add_decision({"req_id": "a", "engine_used": "gpt", "model_name": "gpt-4o", "route_reason": "default", "latency_ms": 12})
-    add_decision({"req_id": "b", "engine_used": "llama", "model_name": "llama3", "route_reason": "cheap", "latency_ms": 5, "cache_hit": True, "cache_similarity": 0.91, "self_check_score": 0.8})
+
+    add_decision(
+        {
+            "req_id": "a",
+            "engine_used": "gpt",
+            "model_name": "gpt-4o",
+            "route_reason": "default",
+            "latency_ms": 12,
+        }
+    )
+    add_decision(
+        {
+            "req_id": "b",
+            "engine_used": "llama",
+            "model_name": "llama3",
+            "route_reason": "cheap",
+            "latency_ms": 5,
+            "cache_hit": True,
+            "cache_similarity": 0.91,
+            "self_check_score": 0.8,
+        }
+    )
     client = make_client()
     r = client.get("/v1/admin/router/decisions?limit=1&token=t")
     body = r.json()
     items = body.get("items")
     # first page contains newest
     assert [it["req_id"] for it in items] == ["b"]
-    assert set(["engine", "model", "route_reason", "latency_ms", "cache_hit"]).issubset(items[0].keys())
+    assert set(["engine", "model", "route_reason", "latency_ms", "cache_hit"]).issubset(
+        items[0].keys()
+    )
     # pagination cursor and second page order
     nc = body.get("next_cursor")
     assert nc in (None, 1)
@@ -66,6 +91,7 @@ def test_router_decisions_order_and_fields():
 
 def test_retrieval_last_filters_trace_event():
     from app.decisions import add_decision, add_trace_event
+
     add_decision({"req_id": "r1"})
     add_decision({"req_id": "r2"})
     add_trace_event("r2", "retrieval_trace", ok=True)
@@ -77,6 +103,7 @@ def test_retrieval_last_filters_trace_event():
 
 def test_decisions_explain_ok():
     from app.decisions import add_decision
+
     add_decision({"req_id": "xyz", "engine_used": "gpt"})
     client = make_client()
     r = client.get("/v1/admin/decisions/explain?req_id=xyz&token=t")
@@ -87,10 +114,13 @@ def test_decisions_explain_ok():
 
 def test_errors_limit_and_shape():
     from app.logging_config import _ERRORS  # type: ignore
+
     # seed errors
     _ERRORS.clear()
     for i in range(60):
-        _ERRORS.append({"timestamp": "t", "level": "ERROR", "component": "x", "msg": str(i)})
+        _ERRORS.append(
+            {"timestamp": "t", "level": "ERROR", "component": "x", "msg": str(i)}
+        )
     client = make_client()
     r = client.get("/v1/admin/errors?token=t")
     assert r.status_code == 200
@@ -134,6 +164,7 @@ def test_admin_config_ok_with_token_and_overrides(monkeypatch):
 
 def test_admin_metrics_top_skills_sorted():
     from app.analytics import record_skill
+
     # increment skills asynchronously
     asyncio.run(record_skill("a"))
     asyncio.run(record_skill("b"))
@@ -146,6 +177,7 @@ def test_admin_metrics_top_skills_sorted():
 
 def test_admin_router_decisions_clip_limit():
     from app.decisions import add_decision
+
     for i in range(10):
         add_decision({"req_id": f"id{i}"})
     client = make_client()
@@ -155,6 +187,7 @@ def test_admin_router_decisions_clip_limit():
 
 def test_admin_retrieval_last_clip_limit():
     from app.decisions import add_decision, add_trace_event
+
     for i in range(10):
         rid = f"rid{i}"
         add_decision({"req_id": rid})
@@ -166,6 +199,7 @@ def test_admin_retrieval_last_clip_limit():
 
 def test_admin_decisions_explain_404_for_missing():
     client = make_client()
-    assert client.get("/v1/admin/decisions/explain?req_id=missing&token=t").status_code == 404
-
-
+    assert (
+        client.get("/v1/admin/decisions/explain?req_id=missing&token=t").status_code
+        == 404
+    )

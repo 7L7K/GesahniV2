@@ -29,7 +29,10 @@ def test_login_unknown_hash_returns_401(monkeypatch):
     # Corrupt the stored hash with an unknown scheme
     db_path = os.environ["USERS_DB"]
     with sqlite3.connect(db_path) as db:
-        db.execute("UPDATE auth_users SET password_hash=? WHERE username=?", ("md5$deadbeef", "alice"))
+        db.execute(
+            "UPDATE auth_users SET password_hash=? WHERE username=?",
+            ("md5$deadbeef", "alice"),
+        )
         db.commit()
     r = client.post("/login", json={"username": "alice", "password": "wonderland"})
     assert r.status_code == 401
@@ -72,5 +75,3 @@ def test_logout_invalid_token_returns_204(monkeypatch):
     client = _client(monkeypatch)
     r = client.post("/logout", headers={"Authorization": "Bearer notatoken"})
     assert r.status_code == 204
-
-

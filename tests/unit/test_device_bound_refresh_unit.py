@@ -27,5 +27,3 @@ def test_refresh_single_use_revokes(monkeypatch):
     # Using the same refresh again should fail (revoked)
     r2 = c.post("/v1/refresh", json={"refresh_token": t["refresh_token"]})
     assert r2.status_code == 401
-
-

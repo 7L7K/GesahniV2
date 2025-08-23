@@ -15,6 +15,3 @@ def test_small_ask_prompt_is_thin(monkeypatch):
     assert "[USER_PROFILE_FACTS]" in text
     # Minimal size – well under 200 tokens
     assert toks < 200
-
-
-

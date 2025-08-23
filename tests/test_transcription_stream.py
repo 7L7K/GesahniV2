@@ -73,6 +73,3 @@ async def test_ws_transcribe_emits_partial_final(monkeypatch):
     events = await ws.drain()
     kinds = [e.get("event") for e in events]
     assert "stt.state" in kinds and "stt.partial" in kinds and "stt.final" in kinds
-
-
-

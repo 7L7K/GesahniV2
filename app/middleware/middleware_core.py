@@ -61,6 +61,7 @@ except Exception:  # pragma: no cover - fallback implementation
         def __len__(self) -> int:  # pragma: no cover - convenience
             return len(self._data)
 
+
 from ..logging_config import req_id_var
 
 logger = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
             # Important: do not create your own response; just pass through
             # CORS middleware will handle the preflight response
             return await call_next(request)
-            
+
         # Prefer client-provided ID to enable end-to-end correlation
         req_id = request.headers.get("X-Request-ID") or req_id_var.get()
         if not req_id or req_id == "-":
@@ -143,7 +144,9 @@ class RedactHashMiddleware(BaseHTTPMiddleware):
             if hasattr(request, "cookies") and request.cookies:
                 for name, val in list(request.cookies.items()):
                     try:
-                        _redacted_cookies[name] = f"[REDACTED_HASH:{sha256(val.encode('utf-8')).hexdigest()[:8]}]"
+                        _redacted_cookies[name] = (
+                            f"[REDACTED_HASH:{sha256(val.encode('utf-8')).hexdigest()[:8]}]"
+                        )
                     except Exception:
                         _redacted_cookies[name] = "[REDACTED]"
             # attach for downstream logging/debugging only (non-authoritative)
@@ -172,15 +175,15 @@ class RedactHashMiddleware(BaseHTTPMiddleware):
 
 class HealthCheckFilterMiddleware(BaseHTTPMiddleware):
     """Filter out health check requests from access logs."""
-    
+
     async def dispatch(self, request: Request, call_next):
         # Check if this is a health check request
         path = request.url.path
-        if path.startswith('/healthz') or path.startswith('/health/'):
+        if path.startswith("/healthz") or path.startswith("/health/"):
             # Skip logging for health checks
             response = await call_next(request)
             return response
-        
+
         # For non-health check requests, proceed normally
         return await call_next(request)
 
@@ -202,7 +205,9 @@ class DedupMiddleware(BaseHTTPMiddleware):
         # Clamp to sane ranges to avoid misconfiguration foot-guns
         self._ttl: float = max(1.0, float(ttl_raw))
         self._max_entries: int = max(1, min(int(max_raw), 1_000_000))
-        self._seen: TTLCache[str, float] = TTLCache(maxsize=self._max_entries, ttl=self._ttl)
+        self._seen: TTLCache[str, float] = TTLCache(
+            maxsize=self._max_entries, ttl=self._ttl
+        )
         self._lock = asyncio.Lock()
 
     async def dispatch(self, request: Request, call_next):
@@ -211,7 +216,7 @@ class DedupMiddleware(BaseHTTPMiddleware):
             # Important: do not create your own response; just pass through
             # CORS middleware will handle the preflight response
             return await call_next(request)
-            
+
         now = time.monotonic()
         req_id = request.headers.get("X-Request-ID")
         if req_id:
@@ -268,7 +273,7 @@ def _anon_user_id(source: Request | str | None) -> str:
 
 class TraceRequestMiddleware(BaseHTTPMiddleware):
     """Trace/logging middleware — never stamp headers on OPTIONS (and strip if inherited)"""
-    
+
     async def dispatch(self, request: Request, call_next):
         # Let CORS handle preflight; do NOTHING here for OPTIONS
         if request.method == "OPTIONS":
@@ -279,34 +284,36 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
         # Unify request id across middlewares and response
         incoming_id = request.headers.get("X-Request-ID")
         current_id = req_id_var.get()
-        req_id = incoming_id or (current_id if current_id and current_id != "-" else str(uuid.uuid4()))
+        req_id = incoming_id or (
+            current_id if current_id and current_id != "-" else str(uuid.uuid4())
+        )
         rec = LogRecord(req_id=req_id)
         token_req = req_id_var.set(req_id)
         token_rec = log_record_var.set(rec)
-        
+
         # Set session/device ids if present
         rec.session_id = request.headers.get("X-Session-ID")
         rec.user_id = _anon_user_id(request)
-        
+
         # Best-effort user accounting (do not affect request latency on failure)
         try:
             await user_store.ensure_user(rec.user_id)
             await user_store.increment_request(rec.user_id)
         except Exception:
             pass
-            
+
         rec.channel = request.headers.get("X-Channel")
         rec.received_at = utc_now().isoformat()
         rec.started_at = rec.received_at
         start_time = time.monotonic()
         response: Response | None = None
-        
+
         try:
             # Create a top-level span for the inbound request
             route = request.scope.get("route") if hasattr(request, "scope") else None
             route_path = getattr(route, "path", None) or request.url.path
             safe_target = getattr(request.url, "path", "/") or "/"
-            
+
             with start_span(
                 "http.request",
                 {
@@ -324,55 +331,76 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                         _span.set_attribute("http.request_id", req_id)
                         _span.set_attribute("http.session_id", rec.session_id or "")
                         _span.set_attribute("env", os.getenv("ENV", ""))
-                        _span.set_attribute("version", os.getenv("APP_VERSION") or os.getenv("GIT_TAG") or "")
+                        _span.set_attribute(
+                            "version",
+                            os.getenv("APP_VERSION") or os.getenv("GIT_TAG") or "",
+                        )
                 except Exception:
                     pass
                 # Remove sensitive headers before passing to app log context
                 try:
                     if "authorization" in request.headers:
                         request.headers.__dict__["_list"] = [
-                            (k, v if k.decode().lower() != "authorization" else b"Bearer [REDACTED]")
+                            (
+                                k,
+                                (
+                                    v
+                                    if k.decode().lower() != "authorization"
+                                    else b"Bearer [REDACTED]"
+                                ),
+                            )
                             for (k, v) in request.headers.raw
                         ]
                 except Exception:
                     pass
-                    
+
                 response = await call_next(request)
                 rec.status = "OK"
-                
+
                 # Enhanced tracing for golden trace endpoints
                 status_code = getattr(response, "status_code", 200)
                 try:
                     if _span is not None and hasattr(_span, "set_attribute"):
                         _span.set_attribute("http.status_code", status_code)
-                        
+
                         # Golden trace fields for whoami and auth/finish
                         if route_path in ["/v1/whoami", "/v1/auth/finish"]:
                             _span.set_attribute("http.rid", req_id)
                             _span.set_attribute("http.uid", rec.user_id)
-                            _span.set_attribute("http.origin", request.headers.get("Origin", ""))
+                            _span.set_attribute(
+                                "http.origin", request.headers.get("Origin", "")
+                            )
                             _span.set_attribute("http.status", status_code)
-                            
+
                             # Set cookie flags for auth endpoints
                             if route_path == "/v1/auth/finish":
-                                set_cookie_headers = response.headers.getlist("set-cookie", [])
+                                set_cookie_headers = response.headers.getlist(
+                                    "set-cookie", []
+                                )
                                 cookie_flags = []
                                 for cookie in set_cookie_headers:
-                                    if "access_token" in cookie or "refresh_token" in cookie:
+                                    if (
+                                        "access_token" in cookie
+                                        or "refresh_token" in cookie
+                                    ):
                                         flags = []
                                         if "HttpOnly" in cookie:
                                             flags.append("HttpOnly")
                                         if "Secure" in cookie:
                                             flags.append("Secure")
                                         if "SameSite=" in cookie:
-                                            samesite = cookie.split("SameSite=")[1].split(";")[0]
+                                            samesite = cookie.split("SameSite=")[
+                                                1
+                                            ].split(";")[0]
                                             flags.append(f"SameSite={samesite}")
                                         cookie_flags.extend(flags)
                                 if cookie_flags:
-                                    _span.set_attribute("http.cookie_flags", " ".join(cookie_flags))
+                                    _span.set_attribute(
+                                        "http.cookie_flags", " ".join(cookie_flags)
+                                    )
                 except Exception:
                     pass
-                    
+
                 # Only stamp RL headers for non-OPTIONS requests
                 # CORS preflight requests should never have rate limit headers
                 if request.method != "OPTIONS":
@@ -380,11 +408,19 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                         snap = get_rate_limit_snapshot(request)
                         if snap:
                             response.headers["ratelimit-limit"] = str(snap.get("limit"))
-                            response.headers["ratelimit-remaining"] = str(snap.get("remaining"))
+                            response.headers["ratelimit-remaining"] = str(
+                                snap.get("remaining")
+                            )
                             response.headers["ratelimit-reset"] = str(snap.get("reset"))
-                            response.headers["X-RateLimit-Burst-Limit"] = str(snap.get("burst_limit"))
-                            response.headers["X-RateLimit-Burst-Remaining"] = str(snap.get("burst_remaining"))
-                            response.headers["X-RateLimit-Burst-Reset"] = str(snap.get("burst_reset"))
+                            response.headers["X-RateLimit-Burst-Limit"] = str(
+                                snap.get("burst_limit")
+                            )
+                            response.headers["X-RateLimit-Burst-Remaining"] = str(
+                                snap.get("burst_remaining")
+                            )
+                            response.headers["X-RateLimit-Burst-Reset"] = str(
+                                snap.get("burst_reset")
+                            )
                     except Exception:
                         # Silently fail if rate limit snapshot fails
                         pass
@@ -393,10 +429,14 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
             # Include required fields: latency_ms, status_code, req_id, and router decision tag
             status_code = 0
             try:
-                status_code = int(getattr(response, "status_code", 0)) if response is not None else 0
+                status_code = (
+                    int(getattr(response, "status_code", 0))
+                    if response is not None
+                    else 0
+                )
             except Exception:
                 status_code = 0
-                
+
             # Rate limit snapshot for visibility in logs
             try:
                 snap = get_rate_limit_snapshot(request)
@@ -408,17 +448,21 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                 }
             except Exception:
                 limit_bucket = None
-                
+
             # Scope info for logs
             try:
                 payload = getattr(request.state, "jwt_payload", None)
                 scopes = []
                 if isinstance(payload, dict):
                     raw_scopes = payload.get("scope") or payload.get("scopes") or []
-                    scopes = (raw_scopes.split() if isinstance(raw_scopes, str) else [str(s) for s in raw_scopes])
+                    scopes = (
+                        raw_scopes.split()
+                        if isinstance(raw_scopes, str)
+                        else [str(s) for s in raw_scopes]
+                    )
             except Exception:
                 scopes = []
-                
+
             meta = {
                 "req_id": rec.req_id,
                 "status_code": status_code,
@@ -434,22 +478,34 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                 "escalated": rec.escalated,
                 "cache_hit": rec.cache_hit,
                 "limit_bucket": limit_bucket,
-                "requests_remaining": (limit_bucket or {}).get("long_remaining") if isinstance(limit_bucket, dict) else None,
+                "requests_remaining": (
+                    (limit_bucket or {}).get("long_remaining")
+                    if isinstance(limit_bucket, dict)
+                    else None
+                ),
                 "enforced_scope": " ".join(sorted(set(scopes))) if scopes else None,
                 # Structured fields
                 "user_id": getattr(request.state, "user_id", None) or rec.user_id,
                 "route": route_path,
-                "error_code": (getattr(getattr(response, "body_iterator", None), "status_code", None) or None),
+                "error_code": (
+                    getattr(
+                        getattr(response, "body_iterator", None), "status_code", None
+                    )
+                    or None
+                ),
             }
-            
+
             try:
                 # Skip logging for health check requests
-                if route_path.startswith('/healthz') or route_path.startswith('/health/'):
+                if route_path.startswith("/healthz") or route_path.startswith(
+                    "/health/"
+                ):
                     pass
                 else:
                     # log via std logging for live dashboards then persist in history
                     import logging
                     import random as _rand
+
                     env = os.getenv("ENV", "").strip().lower()
                     status_family = (status_code // 100) if status_code else 0
                     # Sample successes in prod; log all non-2xx
@@ -460,18 +516,22 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                         except Exception:
                             p = 0.1
                     if status_family != 2 or _rand.random() < p:
-                        logging.getLogger(__name__).info("request_summary", extra={"meta": meta})
+                        logging.getLogger(__name__).info(
+                            "request_summary", extra={"meta": meta}
+                        )
             except Exception:
                 pass
-                
+
             # Persist structured history (skip health checks)
-            if not (route_path.startswith('/healthz') or route_path.startswith('/health/')):
+            if not (
+                route_path.startswith("/healthz") or route_path.startswith("/health/")
+            ):
                 full = {**rec.model_dump(exclude_none=True), **{"meta": meta}}
                 try:
                     asyncio.create_task(append_history(full))
                 except Exception:
                     pass
-                
+
             # Record latency and metrics
             rec.latency_ms = int((time.monotonic() - start_time) * 1000)
             await record_latency(rec.latency_ms)
@@ -483,7 +543,7 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
             engine = rec.engine_used or "unknown"
             route = request.scope.get("route") if hasattr(request, "scope") else None
             route_path = getattr(route, "path", None) or request.url.path
-            
+
             try:
                 metrics.REQUEST_COUNT.labels(route_path, request.method, engine).inc()
             except Exception:
@@ -491,7 +551,9 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
 
             # Emit canonical counters/histograms too
             try:
-                metrics.GESAHNI_REQUESTS_TOTAL.labels(route_path, request.method, str(status_code or 0)).inc()
+                metrics.GESAHNI_REQUESTS_TOTAL.labels(
+                    route_path, request.method, str(status_code or 0)
+                ).inc()
             except Exception:
                 pass
 
@@ -501,33 +563,49 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                 user_scopes = getattr(request.state, "scopes", None)
                 if user_scopes:
                     for scope in user_scopes:
-                        metrics.SCOPE_REQUESTS_TOTAL.labels(scope, route_path, request.method, str(status_code or 0)).inc()
-                        metrics.SCOPE_LATENCY_SECONDS.labels(scope, route_path, request.method).observe(rec.latency_ms / 1000)
+                        metrics.SCOPE_REQUESTS_TOTAL.labels(
+                            scope, route_path, request.method, str(status_code or 0)
+                        ).inc()
+                        metrics.SCOPE_LATENCY_SECONDS.labels(
+                            scope, route_path, request.method
+                        ).observe(rec.latency_ms / 1000)
 
                 # Track auth failures
                 if status_code in (401, 403, 429):
                     failure_type = str(status_code)
                     reason = getattr(request.state, "auth_failure_reason", "unknown")
-                    metrics.AUTH_FAILURES_TOTAL.labels(failure_type, route_path, reason).inc()
+                    metrics.AUTH_FAILURES_TOTAL.labels(
+                        failure_type, route_path, reason
+                    ).inc()
 
                 # Track scope usage for authorization decisions
                 if hasattr(request.state, "scope_check_results"):
                     for scope, result in request.state.scope_check_results.items():
-                        metrics.SCOPE_USAGE_TOTAL.labels(scope, route_path, result).inc()
+                        metrics.SCOPE_USAGE_TOTAL.labels(
+                            scope, route_path, result
+                        ).inc()
 
                 # PHASE 6: Record SLO measurements
                 from app.slos import record_api_request
+
                 auth_success = status_code not in (401, 403, 429)
-                record_api_request(status_code, rec.latency_ms, auth_success,
-                                 route=route_path, method=request.method)
+                record_api_request(
+                    status_code,
+                    rec.latency_ms,
+                    auth_success,
+                    route=route_path,
+                    method=request.method,
+                )
 
             except Exception:
                 pass  # Continue even if enhanced metrics/SLO tracking fails
-                
+
             # Observe with exemplar when possible to jump from Grafana to trace
             try:
                 trace_id = get_trace_id_hex()
-                hist = metrics.REQUEST_LATENCY.labels(route_path, request.method, engine)
+                hist = metrics.REQUEST_LATENCY.labels(
+                    route_path, request.method, engine
+                )
                 observe_with_exemplar(
                     hist,
                     rec.latency_ms / 1000,
@@ -535,15 +613,19 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                 )
             except Exception:
                 try:
-                    metrics.REQUEST_LATENCY.labels(route_path, request.method, engine).observe(rec.latency_ms / 1000)
+                    metrics.REQUEST_LATENCY.labels(
+                        route_path, request.method, engine
+                    ).observe(rec.latency_ms / 1000)
                 except Exception:
                     pass
-                    
+
             try:
-                metrics.GESAHNI_LATENCY_SECONDS.labels(route_path).observe(rec.latency_ms / 1000)
+                metrics.GESAHNI_LATENCY_SECONDS.labels(route_path).observe(
+                    rec.latency_ms / 1000
+                )
             except Exception:
                 pass
-                
+
             if rec.prompt_cost_usd:
                 metrics.REQUEST_COST.labels(
                     route_path, request.method, engine, "prompt"
@@ -565,10 +647,12 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                     if tid:
                         response.headers["X-Trace-ID"] = tid
                         # Optional hint for browser devtools
-                        response.headers.setdefault("Server-Timing", f"traceparent;desc={tid}")
+                        response.headers.setdefault(
+                            "Server-Timing", f"traceparent;desc={tid}"
+                        )
                 except Exception:
                     pass
-                    
+
                 # Mark model fallback headers for observability (e.g., llama→gpt)
                 try:
                     rr = rec.route_reason or ""
@@ -576,30 +660,38 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                         response.headers.setdefault("X-Fallback", "gpt")
                 except Exception:
                     pass
-                    
+
                 # Make backend origin explicit for debugging across the Next proxy
                 try:
                     response.headers.setdefault("X-Debug-Backend", "fastapi")
                 except Exception:
                     pass
-                    
+
                 # Security headers: HSTS, CSP and other hardening headers
                 try:
                     env = os.getenv("ENV", "").strip().lower()
                     if request.url.scheme == "https" and env in {"prod", "production"}:
-                        response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+                        response.headers.setdefault(
+                            "Strict-Transport-Security",
+                            "max-age=63072000; includeSubDomains; preload",
+                        )
                     # Security headers (CSP handled by frontend)
                     response.headers.setdefault("Referrer-Policy", "no-referrer")
                     response.headers.setdefault("X-Content-Type-Options", "nosniff")
-                    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+                    response.headers.setdefault(
+                        "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
+                    )
                     response.headers.setdefault("X-Frame-Options", "DENY")
                 except Exception:
                     pass
-                    
+
                 # Offline mode badge for UI: set a cookie when local fallback is in use
                 try:
                     from .llama_integration import LLAMA_HEALTHY as _LL_OK
-                    local_mode = (not _LL_OK) and (os.getenv("OPENAI_API_KEY", "") == "")
+
+                    local_mode = (not _LL_OK) and (
+                        os.getenv("OPENAI_API_KEY", "") == ""
+                    )
                     if local_mode:
                         # Enforce Secure/SameSite in prod; relax in tests/dev (http)
                         secure = True
@@ -610,6 +702,7 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                             pass
                         # Use centralized cookie functions for local mode indicator
                         from ..cookies import set_named_cookie
+
                         set_named_cookie(
                             resp=response,
                             name="X-Local-Mode",
@@ -618,11 +711,11 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                             request=request,
                             httponly=True,
                             secure=secure,
-                            samesite="Lax"  # Keep Lax for local mode indicator
+                            samesite="Lax",  # Keep Lax for local mode indicator
                         )
                 except Exception:
                     pass
-                    
+
         except TimeoutError:
             rec.status = "ERR_TIMEOUT"
             raise
@@ -633,7 +726,7 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
         finally:
             log_record_var.reset(token_rec)
             req_id_var.reset(token_req)
-            
+
         return response
 
 
@@ -647,10 +740,15 @@ async def silent_refresh_middleware(request: Request, call_next):
       - DISABLE_SILENT_REFRESH: set to "1" to disable this middleware
     """
     # Check if silent refresh is disabled via environment variable
-    if os.getenv("DISABLE_SILENT_REFRESH", "0").strip().lower() in {"1", "true", "yes", "on"}:
+    if os.getenv("DISABLE_SILENT_REFRESH", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         logger.debug("SILENT_REFRESH: Disabled via environment variable")
         return await call_next(request)
-    
+
     logger.debug("SILENT_REFRESH: Middleware called")
     # Call downstream first; do not swallow exceptions from handlers
     response: Response = await call_next(request)
@@ -666,15 +764,24 @@ async def silent_refresh_middleware(request: Request, call_next):
                 return response
             # Skip logout endpoints to avoid setting new cookies during logout
             # Broadened: skip any path that is logout-ish (ends with /logout or contains /auth/logout), regardless of status code
-            if path.endswith("/logout") or "/auth/logout" in path or request.headers.get("X-Logout") == "true":
+            if (
+                path.endswith("/logout")
+                or "/auth/logout" in path
+                or request.headers.get("X-Logout") == "true"
+            ):
                 logger.debug("SILENT_REFRESH: Skipping logout path or X-Logout header")
                 return response
             # Skip refresh if the response includes any Set-Cookie that deletes an auth cookie
             # (access_token, refresh_token, or __session)—i.e., a delete with Max-Age=0
             set_cookies = response.headers.getlist("set-cookie", [])
             auth_cookies = ["access_token", "refresh_token", "__session"]
-            if any(any(cookie in h and "Max-Age=0" in h for cookie in auth_cookies) for h in set_cookies):
-                logger.debug("SILENT_REFRESH: Skipping due to auth cookie deletion (Max-Age=0)")
+            if any(
+                any(cookie in h and "Max-Age=0" in h for cookie in auth_cookies)
+                for h in set_cookies
+            ):
+                logger.debug(
+                    "SILENT_REFRESH: Skipping due to auth cookie deletion (Max-Age=0)"
+                )
                 return response
             # Skip on 204 responses
             if response.status_code == 204:
@@ -698,13 +805,18 @@ async def silent_refresh_middleware(request: Request, call_next):
         now = int(time.time())
         exp = int(payload.get("exp", 0))
         threshold = int(os.getenv("ACCESS_REFRESH_THRESHOLD_SECONDS", "3600"))
-        logger.debug("SILENT_REFRESH: Token expires in %s seconds, threshold is %s", exp - now, threshold)
+        logger.debug(
+            "SILENT_REFRESH: Token expires in %s seconds, threshold is %s",
+            exp - now,
+            threshold,
+        )
         if exp - now <= threshold:
             logger.debug("SILENT_REFRESH: Token needs refresh, proceeding...")
             # Small jitter to avoid stampede when many tabs refresh concurrently
             try:
                 import asyncio as _asyncio
                 import random as _rand
+
                 await _asyncio.sleep(_rand.uniform(0.01, 0.05))
             except Exception:
                 pass
@@ -714,23 +826,38 @@ async def silent_refresh_middleware(request: Request, call_next):
                 return response
             # Use centralized TTL from tokens.py
             from ..tokens import get_default_access_ttl
+
             lifetime = get_default_access_ttl()
-            base_claims = {k: v for k, v in payload.items() if k not in {"iat", "exp", "nbf", "jti"}}
+            base_claims = {
+                k: v
+                for k, v in payload.items()
+                if k not in {"iat", "exp", "nbf", "jti"}
+            }
             base_claims["user_id"] = user_id
             # Use tokens.py facade instead of direct JWT encoding
             from ..tokens import make_access
+
             new_token = make_access({"user_id": user_id}, ttl_s=lifetime)
             # Use centralized cookie configuration
             from ..cookie_config import get_cookie_config, get_token_ttls
-            
+
             cookie_config = get_cookie_config(request)
             access_ttl, _ = get_token_ttls()
-            
+
             # Use centralized cookie functions for access token
             from ..cookies import set_auth_cookies
+
             # For silent refresh, we only update the access token, keep existing refresh token
             # and don't set session cookie (it should already exist)
-            set_auth_cookies(response, access=new_token, refresh="", session_id=None, access_ttl=access_ttl, refresh_ttl=0, request=request)
+            set_auth_cookies(
+                response,
+                access=new_token,
+                refresh="",
+                session_id=None,
+                access_ttl=access_ttl,
+                refresh_ttl=0,
+                request=request,
+            )
             # Optionally extend refresh cookie if present (best-effort) with jitter to avoid herd
             try:
                 rtok = request.cookies.get("refresh_token")
@@ -738,6 +865,7 @@ async def silent_refresh_middleware(request: Request, call_next):
                     rp = _jwt_decode(rtok, secret, algorithms=["HS256"])  # may raise
                     r_exp = int(rp.get("exp", now))
                     import random as _rand
+
                     # Jitter extension by 50–250ms only; do not reduce lifespan substantially
                     r_life = max(0, r_exp - now)
                     if r_life > 0:
@@ -750,27 +878,29 @@ async def silent_refresh_middleware(request: Request, call_next):
                         # since set_auth_cookies expects both access and refresh tokens
                         try:
                             from ..cookies import set_named_cookie
+
                             set_named_cookie(
                                 resp=response,
                                 name="refresh_token",
                                 value=rtok,
                                 ttl=r_life,
                                 request=request,
-                                httponly=cookie_config["httponly"]
+                                httponly=cookie_config["httponly"],
                             )
                         except Exception:
                             # Fallback to centralized cookie functions
                             from ..cookies import set_auth_cookies
+
                             # For refresh token extension, we need to set it individually
                             # since set_auth_cookies expects both access and refresh tokens
                             set_auth_cookies(
-                                response, 
-                                access="", 
-                                refresh=rtok, 
-                                session_id=None, 
-                                access_ttl=0, 
-                                refresh_ttl=r_life, 
-                                request=request
+                                response,
+                                access="",
+                                refresh=rtok,
+                                session_id=None,
+                                access_ttl=0,
+                                refresh_ttl=r_life,
+                                request=request,
                             )
             except Exception:
                 pass
@@ -779,12 +909,14 @@ async def silent_refresh_middleware(request: Request, call_next):
         pass
     return response
 
+
 async def reload_env_middleware(request: Request, call_next):
     # Only reload env when explicitly enabled (e.g., in dev)
     try:
-        if os.getenv("RELOAD_ENV_ON_REQUEST", os.getenv("ENV_RELOAD_ON_REQUEST", "0")).lower() in {"1", "true", "yes", "on"}:
+        if os.getenv(
+            "RELOAD_ENV_ON_REQUEST", os.getenv("ENV_RELOAD_ON_REQUEST", "0")
+        ).lower() in {"1", "true", "yes", "on"}:
             load_env()
     except Exception:
         pass
     return await call_next(request)
-

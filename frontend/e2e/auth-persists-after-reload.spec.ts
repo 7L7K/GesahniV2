@@ -32,5 +32,3 @@ test('auth persists after reload', async ({ page }) => {
     expect(names).not.toContain('refresh_token');
     expect(names).not.toContain('__session');
 });
-
-

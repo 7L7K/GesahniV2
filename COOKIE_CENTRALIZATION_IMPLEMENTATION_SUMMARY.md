@@ -11,7 +11,7 @@ The centralized cookie management system is **fully implemented and operational*
 **✅ Single Source of Truth for Cookie Attributes and TTL Policy**
 
 - **`get_cookie_config(request)`** - Computes secure, samesite, domain, path from environment variables
-- **`get_token_ttls()`** - Returns access/refresh token TTLs from environment variables  
+- **`get_token_ttls()`** - Returns access/refresh token TTLs from environment variables
 - **`format_cookie_header(...)`** - Formats Set-Cookie headers with consistent attributes
 
 **Environment Variables Supported:**
@@ -27,7 +27,7 @@ The centralized cookie management system is **fully implemented and operational*
 
 **Available Facades:**
 - `set_auth_cookies()` / `clear_auth_cookies()` - Authentication tokens
-- `set_csrf_cookie()` / `clear_csrf_cookie()` - CSRF protection  
+- `set_csrf_cookie()` / `clear_csrf_cookie()` - CSRF protection
 - `set_oauth_state_cookies()` / `clear_oauth_state_cookies()` - OAuth flows
 - `set_device_cookie()` / `clear_device_cookie()` - Device trust/pairing
 - `set_named_cookie()` / `clear_named_cookie()` - Generic cookies
@@ -48,7 +48,7 @@ The centralized cookie management system is **fully implemented and operational*
 
 **Allowed Files Only:**
 - `app/cookies.py` - The centralized facade
-- `app/cookie_config.py` - Configuration utilities  
+- `app/cookie_config.py` - Configuration utilities
 - `tests/unit/test_cookie_guard.py` - The guard test itself
 
 ### ✅ All Handlers Use Centralized Facades

@@ -7,5 +7,3 @@ from dataclasses import dataclass
 class MusicCard:
     provider: str | None = None  # e.g., "spotify", "apple"
     is_connected: bool = False
-
-

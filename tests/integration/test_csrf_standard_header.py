@@ -23,5 +23,3 @@ def test_csrf_legacy_header_blocked(monkeypatch):
     c.cookies.set("csrf_token", "tok")
     r = c.post("/v1/profile", headers={"X-CSRF": "tok"}, json={})
     assert r.status_code == HTTPStatus.BAD_REQUEST
-
-

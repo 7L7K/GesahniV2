@@ -10,5 +10,3 @@ def test_rate_limit_status_contains_prefix_and_windows():
     data = r.json()
     assert "prefix" in data
     assert "windows_s" in data and "long" in data["windows_s"]
-
-

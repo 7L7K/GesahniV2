@@ -20,7 +20,7 @@ def _tok():
         "sub": "u1",
         "iat": int(time.time()),
         "exp": int(time.time()) + 60,
-        "scopes": ["test:read"]
+        "scopes": ["test:read"],
     }
     return jwt.encode(payload, secret, algorithm="HS256")
 
@@ -44,6 +44,7 @@ def test_ws_health_ok(monkeypatch):
     monkeypatch.setenv("DEV_MODE", "1")
 
     from app.main import app
+
     c = TestClient(app)
 
     # Test with valid token - if connection succeeds, it means validation passed
@@ -56,7 +57,9 @@ def test_ws_health_ok(monkeypatch):
     except Exception as e:
         # If connection fails, that's expected - we're just testing that the endpoint exists
         # and has proper validation (which is already tested elsewhere)
-        print(f"✅ WebSocket endpoint exists and validation is in place: {type(e).__name__}")
+        print(
+            f"✅ WebSocket endpoint exists and validation is in place: {type(e).__name__}"
+        )
         # Re-raise to maintain test behavior
         raise
 
@@ -71,6 +74,7 @@ def test_ws_health_rejects_invalid_token():
     os.environ["DEV_MODE"] = "1"
 
     from app.main import app
+
     c = TestClient(app)
 
     # Test without token - should fail
@@ -92,6 +96,7 @@ def test_ws_health_rejects_expired_token():
     os.environ["DEV_MODE"] = "1"
 
     from app.main import app
+
     c = TestClient(app)
 
     # Generate expired token
@@ -99,7 +104,7 @@ def test_ws_health_rejects_expired_token():
     expired_payload = {
         "sub": "u1",
         "iat": int(time.time()) - 120,  # 2 minutes ago
-        "exp": int(time.time()) - 60,   # 1 minute ago (expired)
+        "exp": int(time.time()) - 60,  # 1 minute ago (expired)
     }
     expired_token = jwt.encode(expired_payload, secret, algorithm="HS256")
 
@@ -125,6 +130,7 @@ def test_ws_dependency_uses_class_based_approach():
 
     # Verify it has proper signature (takes WebSocket parameter)
     import inspect
+
     sig = inspect.signature(verify_ws)
     params = list(sig.parameters.keys())
     assert "ws" in params, "verify_ws should take a WebSocket parameter"
@@ -150,9 +156,9 @@ def test_ws_state_properly_attached():
     class MockWebSocket:
         def __init__(self):
             self.headers = {"authorization": f"Bearer {_tok()}"}
-            self.url = type('obj', (object,), {'query': ''})()
-            self.state = type('obj', (object,), {})()
-            self.client = type('obj', (object,), {'host': '127.0.0.1'})()
+            self.url = type("obj", (object,), {"query": ""})()
+            self.state = type("obj", (object,), {})()
+            self.client = type("obj", (object,), {"host": "127.0.0.1"})()
 
         async def close(self, code=1000, reason=""):
             pass
@@ -167,11 +173,11 @@ def test_ws_state_properly_attached():
         result = asyncio.run(verify_ws(ws))
 
         # Verify state was properly set (no None values)
-        assert hasattr(ws.state, 'user_id'), "ws.state.user_id should be set"
+        assert hasattr(ws.state, "user_id"), "ws.state.user_id should be set"
         assert ws.state.user_id is not None, "ws.state.user_id should not be None"
         assert isinstance(ws.state.user_id, str), "ws.state.user_id should be a string"
 
-        assert hasattr(ws.state, 'scopes'), "ws.state.scopes should be set"
+        assert hasattr(ws.state, "scopes"), "ws.state.scopes should be set"
         assert ws.state.scopes is not None, "ws.state.scopes should not be None"
         assert isinstance(ws.state.scopes, list), "ws.state.scopes should be a list"
 
@@ -182,6 +188,8 @@ def test_ws_state_properly_attached():
     except Exception as e:
         # If the test fails due to JWT issues, that's OK - the main goal is
         # to verify the verify_ws function exists and is class-based
-        print(f"✅ verify_ws function exists and is class-based (JWT test failed as expected: {type(e).__name__})")
+        print(
+            f"✅ verify_ws function exists and is class-based (JWT test failed as expected: {type(e).__name__})"
+        )
         # Verify the function still exists and is callable
         assert callable(verify_ws), "verify_ws should be callable"

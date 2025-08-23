@@ -69,15 +69,15 @@ import { useAuthState } from '@/hooks/useAuth';
 
 function MyComponent() {
   const authState = useAuthState();
-  
+
   if (authState.isLoading) {
     return <div>Loading...</div>;
   }
-  
+
   if (!authState.isAuthenticated) {
     return <div>Please log in</div>;
   }
-  
+
   return <div>Welcome, {authState.user?.id}!</div>;
 }
 ```
@@ -89,14 +89,14 @@ import { useAuthOrchestrator } from '@/hooks/useAuth';
 
 function LogoutButton() {
   const orchestrator = useAuthOrchestrator();
-  
+
   const handleLogout = async () => {
     // Perform logout
     await apiFetch('/v1/auth/logout', { method: 'POST' });
     // Refresh auth state
     await orchestrator.refreshAuth();
   };
-  
+
   return <button onClick={handleLogout}>Logout</button>;
 }
 ```

@@ -55,7 +55,7 @@ The following files had print statements replaced with structured logging:
 
 ### Banner Examples
 - 🔍 DEBUG: Debug messages
-- ℹ️ INFO: Information messages  
+- ℹ️ INFO: Information messages
 - ⚠️ WARNING: Warning messages
 - ❌ ERROR: Error messages
 - 🚨 CRITICAL: Critical messages
@@ -72,7 +72,7 @@ The following files had print statements replaced with structured logging:
 # Before
 async def _ask(request: Request, body: dict | None, user_id: str = Depends(get_current_user_id)):
 
-# After  
+# After
 async def _ask(request: Request, body: dict | None):
     """Internal ask function that accepts resolved user_id parameter."""
     # Resolve user_id from request

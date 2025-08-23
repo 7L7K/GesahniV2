@@ -20,5 +20,3 @@ def nightly_rollup(interactions: list[dict[str, str]]) -> list[str]:
 
 
 __all__ = ["event_to_fact", "nightly_rollup"]
-
-

@@ -25,4 +25,3 @@ Export `/metrics` (Prometheus). The app exposes:
 - rate_limit_allow_total, rate_limit_block_total
 
 A sample Grafana dashboard is in `grafana_dashboard.json`.
-

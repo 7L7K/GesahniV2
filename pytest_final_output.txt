@@ -7,7 +7,7 @@ client = <starlette.testclient.TestClient object at 0x12ec18650>
     def test_admin_write_requires_write_or_admin_scope(client):
         """Test that admin write endpoints require admin:write or admin scope"""
         test_data = {"test": "data"}
-    
+
         # Test with admin:write scope - should succeed
         token_write = _tok(["admin:write"])
         response = client.post("/v1/admin/config", json=test_data, headers={"Authorization": f"Bearer {token_write}"})
@@ -43,7 +43,7 @@ client = <starlette.testclient.TestClient object at 0x12ec27fd0>
     def test_admin_tv_config_put_scope(client):
         """Test that TV config PUT endpoint requires admin:write or admin scope"""
         test_data = {"config": {"theme": "dark"}}
-    
+
         # Test with admin:write scope - should succeed
         token_write = _tok(["admin:write"])
         response = client.put("/v1/admin/tv/config", json=test_data, headers={"Authorization": f"Bearer {token_write}"})
@@ -120,7 +120,7 @@ client = <starlette.testclient.TestClient object at 0x135014810>
         token_profile = _tok(["user:profile"])
         response = client.get("/v1/admin/users/me", headers={"Authorization": f"Bearer {token_profile}"})
         assert response.status_code == 200
-    
+
         # Test with admin scope - should succeed (admin can access user profile)
         token_admin = _tok(["admin"])
         response = client.get("/v1/admin/users/me", headers={"Authorization": f"Bearer {token_admin}"})
@@ -170,25 +170,25 @@ client = <starlette.testclient.TestClient object at 0x12ef54550>
         """Test that read and write scopes are properly separated"""
         # Test that admin:read allows reads but not writes
         token_read = _tok(["admin:read"])
-    
+
         # Read operations should work
         read_endpoints = [
             "/v1/admin/config",
             "/v1/admin/metrics",
             "/v1/admin/system/status"
         ]
-    
+
         for endpoint in read_endpoints:
             response = client.get(endpoint, headers={"Authorization": f"Bearer {token_read}"})
             assert response.status_code == 200, f"admin:read should allow GET {endpoint}"
-    
+
         # Write operations should fail
         write_endpoints = [
             ("/v1/admin/config", "POST"),
             ("/v1/admin/tv/config", "PUT"),
             ("/v1/admin/vector_store/bootstrap", "POST")
         ]
-    
+
         for endpoint, method in write_endpoints:
             if method == "POST":
                 response = client.post(endpoint, headers={"Authorization": f"Bearer {token_read}"})
@@ -273,7 +273,7 @@ client = <starlette.testclient.TestClient object at 0x12ede5d50>
             "scopes": ["admin"]
         }
         expired_token = jwt.encode(payload, key, algorithm="HS256")
-    
+
         response = client.get("/v1/admin/config", headers={"Authorization": f"Bearer {expired_token}"})
 >       assert response.status_code == 401
 E       assert 200 == 401
@@ -347,11 +347,11 @@ client = <starlette.testclient.TestClient object at 0x1350aec50>
         # Make a request with invalid token to trigger auth failure
         response = client.get("/v1/admin/config", headers={"Authorization": "Bearer invalid_token"})
         assert response.status_code == 401
-    
+
         # Check metrics endpoint
         metrics_response = client.get("/metrics")
         body = metrics_response.text
-    
+
         assert "auth_fail_total" in body
 >       assert 'reason="invalid"' in body
 E       assert 'reason="invalid"' in '# HELP python_gc_objects_collected_total Objects collected during gc\n# TYPE python_gc_objects_collected_total counte...i_llama_queue_depth Current LLaMA queue depth\n# TYPE gesahni_llama_queue_depth gauge\ngesahni_llama_queue_depth 0.0\n'

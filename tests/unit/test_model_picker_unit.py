@@ -34,7 +34,12 @@ def test_pick_model_llama_path(monkeypatch):
 @pytest.mark.parametrize(
     "prompt,intent,tokens,expected_reason",
     [
-        ("do heavy research on climate change" + " words" * 40, "analysis", 50, "heavy_length"),
+        (
+            "do heavy research on climate change" + " words" * 40,
+            "analysis",
+            50,
+            "heavy_length",
+        ),
         ("please explain", "chat", 2000, "heavy_tokens"),
         ("write code sample", "chat", 10, "keyword"),
         # "analyze this data" triggers keyword detection first, not heavy_intent
@@ -49,7 +54,7 @@ def test_pick_model_gpt_reasons(monkeypatch, prompt, intent, tokens, expected_re
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)
     monkeypatch.setenv("MODEL_ROUTER_HEAVY_WORDS", "30")
     monkeypatch.setenv("MODEL_ROUTER_HEAVY_TOKENS", "1000")
-    
+
     engine, model, reason, keyword = model_picker.pick_model(prompt, intent, tokens)
     assert engine == "gpt"
     assert reason == expected_reason
@@ -195,7 +200,7 @@ def test_pick_model_environment_variables_override(monkeypatch):
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)
-    
+
     # Directly patch the module variables instead of environment variables
     monkeypatch.setattr(model_picker, "HEAVY_WORD_COUNT", 10)
     monkeypatch.setattr(model_picker, "HEAVY_TOKENS", 500)
@@ -219,5 +224,3 @@ def test_pick_model_environment_variables_override(monkeypatch):
     assert engine == "gpt"
     assert reason == "keyword"
     assert keyword in ["custom", "test"]
-
-

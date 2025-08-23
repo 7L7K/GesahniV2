@@ -274,7 +274,7 @@ async def _enhanced_startup():
     """Enhanced startup with comprehensive error tracking and logging."""
     startup_start = time.time()
     logger.info("Starting enhanced application startup")
-    
+
     try:
         # Initialize core components with error tracking
         components = [
@@ -285,7 +285,7 @@ async def _enhanced_startup():
             ("Memory Store", _init_memory_store),
             ("Scheduler", _init_scheduler),
         ]
-        
+
         for name, init_func in components:
             try:
                 logger.info(f"Initializing {name}")
@@ -297,7 +297,7 @@ async def _enhanced_startup():
                 _record_error(e, f"startup.{name.lower().replace(' ', '_')}")
                 # Continue startup even if some components fail
                 continue
-        
+
         startup_time = time.time() - startup_start
         logger.info(f"Application startup completed in {startup_time:.2f}s")
         # Validate critical runtime secrets (non-blocking): JWT secret
@@ -389,7 +389,7 @@ async def enhanced_error_handling(request: Request, call_next):
     """Enhanced error handling middleware with comprehensive logging."""
     start_time = time.time()
     req_id = req_id_var.get()
-    
+
     try:
         # Augment logs with route and anonymized user id for observability
         route_name = None
@@ -420,9 +420,9 @@ async def enhanced_error_handling(request: Request, call_next):
                     "client_ip": request.client.host if request.client else None,
                 }
             })
-        
+
         response = await call_next(request)
-        
+
         # Log response details
         duration = time.time() - start_time
         logger.info(f"Request completed: {request.method} {request.url.path} -> {response.status_code} ({duration:.3f}s)", extra={
@@ -434,9 +434,9 @@ async def enhanced_error_handling(request: Request, call_next):
                 "duration_ms": duration * 1000,
             }
         })
-        
+
         return response
-        
+
     except Exception as e:
         duration = time.time() - start_time
         error_msg = f"Request failed: {request.method} {request.url.path} -> {type(e).__name__}: {e}"
@@ -451,7 +451,7 @@ async def enhanced_error_handling(request: Request, call_next):
             }
         })
         _record_error(e, f"request.{request.method.lower()}.{request.url.path.replace('/', '_')}")
-        
+
         # Return a proper error response
         return JSONResponse(
             status_code=500,
@@ -469,7 +469,7 @@ async def enhanced_startup_event():
     """Enhanced startup event with comprehensive initialization."""
     app.state._start_time = time.time()
     logger.info("Enhanced startup event triggered")
-    
+
     try:
         await _enhanced_startup()
         logger.info("Enhanced startup completed successfully")
@@ -552,25 +552,25 @@ async def lifespan(app: FastAPI):
         except Exception:
             # Let higher-level startup logic capture and surface this error
             raise
-        
+
         # Make startup checks non-blocking for development
         try:
             await llama_startup()
         except Exception as e:
             logger.warning("LLaMA startup failed (non-blocking): %s", e)
-        
+
         try:
             await ha_startup()
         except Exception as e:
             logger.warning("Home Assistant startup failed (non-blocking): %s", e)
-        
+
         # OpenAI startup check
         try:
             from .router import _check_openai_health
             await _check_openai_health()
         except Exception as e:
             logger.warning("OpenAI startup check failed (non-blocking): %s", e)
-        
+
         # Schedule nightly jobs (no-op if scheduler unavailable)
         try:
             schedule_nightly_jobs()
@@ -593,14 +593,14 @@ async def lifespan(app: FastAPI):
             asyncio.create_task(sms_worker())
         except Exception:
             logger.debug("sms_worker not started", exc_info=True)
-        
+
         # Start token store cleanup task
         try:
             from .token_store import start_cleanup_task
             await start_cleanup_task()
         except Exception:
             logger.debug("token store cleanup task not started", exc_info=True)
-        
+
         yield
     finally:
         # Log health flip to offline on shutdown
@@ -625,7 +625,7 @@ async def lifespan(app: FastAPI):
             shutdown_tracing()
         except Exception:
             pass
-        
+
         # Stop token store cleanup task
         try:
             from .token_store import stop_cleanup_task
@@ -791,7 +791,7 @@ _HEALTH_LAST: dict[str, bool] = {"online": True}
 async def root() -> dict:
     """Root endpoint for basic connectivity check."""
     return {
-        "status": "ok", 
+        "status": "ok",
         "message": "Gesahni API is running",
         "timestamp": datetime.utcnow().isoformat(),
         "version": "1.0.0"
@@ -819,7 +819,7 @@ async def _health_live() -> dict:
 async def _health_ready() -> dict:
     """Enhanced health check with detailed system status."""
     health_start = time.time()
-    
+
     try:
         # Basic system checks
         checks = {
@@ -827,10 +827,10 @@ async def _health_ready() -> dict:
             "uptime": time.time() - getattr(app.state, "_start_time", 0),
             "version": "1.0.0",
         }
-        
+
         # Component health checks
         component_health = {}
-        
+
         # Database health
         try:
             from .auth import _ensure_table
@@ -838,7 +838,7 @@ async def _health_ready() -> dict:
             component_health["database"] = {"status": "healthy"}
         except Exception as e:
             component_health["database"] = {"status": "unhealthy", "error": str(e)}
-        
+
         # Vector store health
         try:
             from .memory.api import _get_store
@@ -846,33 +846,33 @@ async def _health_ready() -> dict:
             component_health["vector_store"] = {"status": "healthy", "type": type(store).__name__}
         except Exception as e:
             component_health["vector_store"] = {"status": "unhealthy", "error": str(e)}
-        
+
         # LLaMA health
         try:
             from .llama_integration import LLAMA_HEALTHY
             component_health["llama"] = {"status": "healthy" if LLAMA_HEALTHY else "unhealthy"}
         except Exception as e:
             component_health["llama"] = {"status": "unhealthy", "error": str(e)}
-        
+
         checks["components"] = component_health
-        
+
         # Error statistics
         checks["errors"] = {
             "startup_errors": len(_startup_errors),
             "runtime_errors": len(_runtime_errors),
             "recent_errors": len(get_last_errors(10)),
         }
-        
+
         # Performance metrics
         health_duration = time.time() - health_start
         checks["performance"] = {
             "health_check_duration_ms": health_duration * 1000,
         }
-        
+
         # Determine overall health
         unhealthy_components = [c for c in component_health.values() if c.get("status") == "unhealthy"]
         overall_status = "healthy" if not unhealthy_components else "degraded"
-        
+
         logger.info(f"Health check completed: {overall_status} ({health_duration:.3f}s)", extra={
             "meta": {
                 "health_status": overall_status,
@@ -880,12 +880,12 @@ async def _health_ready() -> dict:
                 "duration_ms": health_duration * 1000,
             }
         })
-        
+
         return {
             "status": overall_status,
             **checks
         }
-        
+
     except Exception as e:
         logger.error(f"Health check failed: {e}", exc_info=True)
         _record_error(e, "health_check")
@@ -1208,10 +1208,10 @@ async def get_csrf(request: Request) -> dict:
         # Set cookie for double-submit; not HttpOnly so client can echo back
         from fastapi.responses import JSONResponse
         from .cookie_config import get_cookie_config
-        
+
         resp = JSONResponse({"csrf_token": tok})
         cookie_config = get_cookie_config(request)
-        
+
         # Set CSRF cookie using centralized cookie surface
         from .cookies import set_csrf_cookie
         set_csrf_cookie(
@@ -1920,5 +1920,5 @@ if __name__ == "__main__":
     # Read host and port from environment variables
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", 8000))
-    
+
     uvicorn.run(app, host=host, port=port)

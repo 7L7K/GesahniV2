@@ -46,5 +46,3 @@ def test_ha_entities_429_after_first_call(monkeypatch):
     # Second call should be rate-limited (429) before handler executes
     r2 = client.get("/v1/ha/entities", headers=_bearer("care:resident"))
     assert r2.status_code == 429
-
-

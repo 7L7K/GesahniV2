@@ -5,7 +5,10 @@ from fastapi.testclient import TestClient
 
 def _auth():
     import jwt as _jwt
-    token = _jwt.encode({"user_id": "u_test"}, os.getenv("JWT_SECRET", "secret"), algorithm="HS256")
+
+    token = _jwt.encode(
+        {"user_id": "u_test"}, os.getenv("JWT_SECRET", "secret"), algorithm="HS256"
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -24,10 +27,20 @@ def test_recommendations_cache_respects_limit(monkeypatch):
     save_state("u_test", st)
 
     many = [
-        {"id": f"t{i}", "name": "", "artists": [], "album": {"images": []}, "explicit": False}
+        {
+            "id": f"t{i}",
+            "name": "",
+            "artists": [],
+            "album": {"images": []},
+            "explicit": False,
+        }
         for i in range(25)
     ]
-    monkeypatch.setattr(music, "_provider_recommendations", lambda uid, seed_tracks=None, vibe=None, limit=10: many)
+    monkeypatch.setattr(
+        music,
+        "_provider_recommendations",
+        lambda uid, seed_tracks=None, vibe=None, limit=10: many,
+    )
     c = TestClient(app)
     # First fills cache
     out1 = c.get("/v1/recommendations?limit=10", headers=_auth()).json()
@@ -35,5 +48,3 @@ def test_recommendations_cache_respects_limit(monkeypatch):
     # Now request smaller limit and ensure cache truncation
     out2 = c.get("/v1/recommendations?limit=3", headers=_auth()).json()
     assert len(out2["recommendations"]) == 3
-
-

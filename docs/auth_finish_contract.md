@@ -20,7 +20,7 @@ The auth finish endpoint bridges external authentication (Clerk) to internal app
 
 **Response**:
 - Status: `204 No Content` (LOCKED CONTRACT: Always returns 204)
-- Headers: 
+- Headers:
   - `Set-Cookie: access_token=<jwt>; HttpOnly; Secure; SameSite=Lax`
   - `Set-Cookie: refresh_token=<jwt>; HttpOnly; Secure; SameSite=Lax`
   - CORS headers as configured
@@ -45,10 +45,10 @@ The auth finish endpoint bridges external authentication (Clerk) to internal app
 
 **Code Example**:
 ```typescript
-const res = await apiFetch('/v1/auth/finish', { 
-  method: 'POST', 
-  auth: false, 
-  signal: controller.signal 
+const res = await apiFetch('/v1/auth/finish', {
+  method: 'POST',
+  auth: false,
+  signal: controller.signal
 });
 
 if (res.status === 204) {

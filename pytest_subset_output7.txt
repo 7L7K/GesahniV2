@@ -43,7 +43,7 @@ client = <starlette.testclient.TestClient object at 0x12ecc1510>
     def test_admin_write_requires_write_or_admin_scope(client):
         """Test that admin write endpoints require admin:write or admin scope"""
         test_data = {"test": "data"}
-    
+
         # Test with admin:write scope - should succeed
         token_write = _tok(["admin:write"])
         response = client.post("/v1/admin/config", json=test_data, headers={"Authorization": f"Bearer {token_write}"})
@@ -112,7 +112,7 @@ client = <starlette.testclient.TestClient object at 0x12ef3d850>
         token_read = _tok(["admin:read"])
         response = client.get("/v1/admin/system/status", headers={"Authorization": f"Bearer {token_read}"})
         assert response.status_code == 200
-    
+
         # Test with admin scope - should succeed
         token_admin = _tok(["admin"])
         response = client.get("/v1/admin/system/status", headers={"Authorization": f"Bearer {token_admin}"})
@@ -222,7 +222,7 @@ client = <starlette.testclient.TestClient object at 0x12b8a3410>
     def test_admin_tv_config_put_scope(client):
         """Test that TV config PUT endpoint requires admin:write or admin scope"""
         test_data = {"config": {"theme": "dark"}}
-    
+
         # Test with admin:write scope - should succeed
         token_write = _tok(["admin:write"])
         response = client.put("/v1/admin/tv/config", json=test_data, headers={"Authorization": f"Bearer {token_write}"})
@@ -291,7 +291,7 @@ client = <starlette.testclient.TestClient object at 0x110ea6c50>
         token_profile = _tok(["user:profile"])
         response = client.get("/v1/admin/users/me", headers={"Authorization": f"Bearer {token_profile}"})
         assert response.status_code == 200
-    
+
         # Test with admin scope - should succeed (admin can access user profile)
         token_admin = _tok(["admin"])
         response = client.get("/v1/admin/users/me", headers={"Authorization": f"Bearer {token_admin}"})
@@ -369,7 +369,7 @@ client = <starlette.testclient.TestClient object at 0x12b61ea50>
     def test_scope_inheritance_admin_full_access(client):
         """Test that admin scope provides access to all admin endpoints"""
         token_admin = _tok(["admin"])
-    
+
         # Test all admin endpoints with admin scope
         endpoints = [
             "/v1/admin/config",
@@ -378,7 +378,7 @@ client = <starlette.testclient.TestClient object at 0x12b61ea50>
             "/v1/admin/flags",
             "/v1/admin/errors"
         ]
-    
+
         for endpoint in endpoints:
             response = client.get(endpoint, headers={"Authorization": f"Bearer {token_admin}"})
 >           assert response.status_code == 200, f"Admin should access {endpoint}"
@@ -417,14 +417,14 @@ client = <starlette.testclient.TestClient object at 0x12eebc350>
         """Test that read and write scopes are properly separated"""
         # Test that admin:read allows reads but not writes
         token_read = _tok(["admin:read"])
-    
+
         # Read operations should work
         read_endpoints = [
             "/v1/admin/config",
             "/v1/admin/metrics",
             "/v1/admin/system/status"
         ]
-    
+
         for endpoint in read_endpoints:
             response = client.get(endpoint, headers={"Authorization": f"Bearer {token_read}"})
 >           assert response.status_code == 200, f"admin:read should allow GET {endpoint}"
@@ -463,7 +463,7 @@ client = <starlette.testclient.TestClient object at 0x12eebd590>
         """Test that malformed tokens are properly rejected"""
         response = client.get("/v1/admin/config", headers={"Authorization": "Bearer malformed-token"})
         assert response.status_code == 401
-    
+
         response = client.get("/v1/admin/config", headers={"Authorization": "NotBearer token"})
 >       assert response.status_code == 401
 E       assert 500 == 401
@@ -795,20 +795,20 @@ tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000g
         # Make a request
         response = client.get("/healthz")
         assert response.status_code == 200
-    
+
         # Read audit file
         audit_file = get_audit_file_path()
         assert audit_file.exists()
-    
+
         content = audit_file.read_text().strip()
         assert content, "Audit file should not be empty"
-    
+
         lines = content.split('\n')
         assert len(lines) >= 1, "Should have at least one audit event"
-    
+
         # Parse the last event
         last_event = json.loads(lines[-1])
-    
+
         # Verify required fields
 >       assert "ts" in last_event
 E       AssertionError: assert 'ts' in {'action': 'http_request', 'data': {'method': 'GET', 'path': '/v1/google/auth/callback', 'route': 'google_callback', '...35', 'metadata': {'audit_version': '2.0', 'ip_address': 'testclient', 'request_id': '-', 'session_id': None, ...}, ...}
@@ -837,18 +837,18 @@ tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000g
         client.get("/healthz")
         client.get("/v1/admin/metrics")
         client.post("/v1/admin/config", json={"test": "data"})
-    
+
         # Read audit file
         audit_file = tmp_audit_dir / "events.ndjson"
 >       content = audit_file.read_text().strip()
                   ^^^^^^^^^^^^^^^^^^^^^^
 
-tests/test_audit_trail.py:86: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_audit_trail.py:86:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 ../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1058: in read_text
     with self.open(mode='r', encoding=encoding, errors=errors) as f:
          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 self = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-5/test_audit_append_multiple_eve0/audit/events.ndjson')
 mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
@@ -933,12 +933,12 @@ tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000g
 >       content1 = audit_file.read_text().strip()
                    ^^^^^^^^^^^^^^^^^^^^^^
 
-tests/test_audit_trail.py:128: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_audit_trail.py:128:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 ../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1058: in read_text
     with self.open(mode='r', encoding=encoding, errors=errors) as f:
          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 self = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-5/test_audit_append_preserves_hi0/audit/events.ndjson')
 mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
@@ -976,19 +976,19 @@ tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000g
     def test_audit_append_timestamp_format(client, tmp_audit_dir):
         """Test that timestamps are in proper ISO format"""
         import re
-    
+
         client.get("/healthz")
-    
+
         audit_file = tmp_audit_dir / "events.ndjson"
 >       content = audit_file.read_text().strip()
                   ^^^^^^^^^^^^^^^^^^^^^^
 
-tests/test_audit_trail.py:147: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_audit_trail.py:147:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 ../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1058: in read_text
     with self.open(mode='r', encoding=encoding, errors=errors) as f:
          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 self = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-5/test_audit_append_timestamp_fo0/audit/events.ndjson')
 mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
@@ -1058,17 +1058,17 @@ tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000g
         # This would need a valid token in a real scenario
         # For now, test with invalid token to see auth-related fields
         response = client.get("/v1/admin/config", headers={"Authorization": "Bearer invalid-token"})
-    
+
         audit_file = tmp_audit_dir / "events.ndjson"
 >       content = audit_file.read_text().strip()
                   ^^^^^^^^^^^^^^^^^^^^^^
 
-tests/test_audit_trail.py:181: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_audit_trail.py:181:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 ../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1058: in read_text
     with self.open(mode='r', encoding=encoding, errors=errors) as f:
          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 self = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-5/test_audit_append_with_authent0/audit/events.ndjson')
 mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
@@ -1118,7 +1118,7 @@ tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000g
     def test_audit_append_file_permissions(client, tmp_audit_dir):
         """Test that audit file has appropriate permissions"""
         client.get("/healthz")
-    
+
         audit_file = tmp_audit_dir / "events.ndjson"
 >       assert audit_file.exists()
 E       AssertionError: assert False
@@ -1147,26 +1147,26 @@ tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000g
         """Test audit file handling under concurrent access"""
         import threading
         import concurrent.futures
-    
+
         def make_request():
             return client.get("/healthz")
-    
+
         # Make concurrent requests
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(make_request) for _ in range(10)]
             responses = [f.result() for f in concurrent.futures.as_completed(futures)]
-    
+
         # All should succeed
         assert all(r.status_code == 200 for r in responses)
-    
+
         # Check audit file
         audit_file = get_audit_file_path()
         content = audit_file.read_text().strip()
         lines = content.split('\n')
-    
+
         # Should have all events
         assert len(lines) >= 10, f"Expected at least 10 audit events, got {len(lines)}"
-    
+
         # All should be valid JSON
         events = [json.loads(line) for line in lines]
 >       assert all(event["action"] == "http_request" for event in events)
@@ -1232,17 +1232,17 @@ tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000g
         # Make many requests to simulate file growth
         for i in range(100):
             client.get("/healthz")
-    
+
         audit_file = tmp_audit_dir / "events.ndjson"
 >       content = audit_file.read_text().strip()
                   ^^^^^^^^^^^^^^^^^^^^^^
 
-tests/test_audit_trail.py:242: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_audit_trail.py:242:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 ../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1058: in read_text
     with self.open(mode='r', encoding=encoding, errors=errors) as f:
          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 self = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-5/test_audit_append_file_rotatio0/audit/events.ndjson')
 mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 def test_admin_metrics_shape():
     os.environ["ADMIN_TOKEN"] = "t"
     from app.api.admin import router as admin_router
+
     app = FastAPI()
     app.include_router(admin_router, prefix="/v1")
     client = TestClient(app)
@@ -19,5 +20,3 @@ def test_admin_metrics_shape():
     assert "latency_p95_ms" in body
     assert "transcribe_error_rate" in body
     assert "top_skills" in body and isinstance(body["top_skills"], list)
-
-

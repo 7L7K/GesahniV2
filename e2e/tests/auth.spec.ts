@@ -79,5 +79,3 @@ test('PAT create, scope mismatch 403, revoke → 401', async ({ request }) => {
     const adminCall = await request.get('/v1/admin/metrics', { params: { token: 'wrong' }, headers: { Authorization: `Bearer ${token}` } });
     expect([200, 403]).toContain(adminCall.status());
 });
-
-

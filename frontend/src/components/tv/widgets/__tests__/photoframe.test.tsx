@@ -17,5 +17,3 @@ describe('PhotoFrame', () => {
         expect(imgs.length).toBeGreaterThan(0)
     })
 })
-
-

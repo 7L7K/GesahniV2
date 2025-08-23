@@ -35,5 +35,3 @@ def get_queue(name: str) -> InMemoryQueue:
 
 
 _QUEUES: dict[str, InMemoryQueue] = {}
-
-

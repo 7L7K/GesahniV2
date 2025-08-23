@@ -24,6 +24,3 @@ export default function Stage2() {
         </main>
     );
 }
-
-
-

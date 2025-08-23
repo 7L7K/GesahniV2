@@ -59,9 +59,9 @@ backup_env() {
 switch_environment() {
     local env=$1
     local source_file="env.$env"
-    
+
     print_header
-    
+
     # Check if source file exists
     if [ ! -f "$source_file" ]; then
         print_error "Environment file '$source_file' not found!"
@@ -69,22 +69,22 @@ switch_environment() {
         ls -la env.* 2>/dev/null || echo "No environment files found"
         exit 1
     fi
-    
+
     # Backup current .env
     backup_env
-    
+
     # Copy the environment file to .env
     cp "$source_file" .env
-    
+
     print_status "Switched to $env environment"
     print_status "Source: $source_file"
     print_status "Target: .env"
-    
+
     # Show key differences for the environment
     echo ""
     print_status "Environment-specific settings for $env:"
     echo "----------------------------------------"
-    
+
     case $env in
         "dev")
             echo "APP_URL: http://localhost:3000"
@@ -111,14 +111,14 @@ switch_environment() {
             echo "DEV_MODE: 0"
             ;;
     esac
-    
+
     echo ""
     print_warning "Remember to:"
     echo "  1. Set your API keys and secrets in .env"
     echo "  2. Update URLs to match your actual deployment"
     echo "  3. Configure your database connections"
     echo "  4. Set appropriate JWT secrets"
-    
+
     echo ""
     print_status "Environment switch complete!"
 }
@@ -131,9 +131,9 @@ main() {
         show_usage
         exit 1
     fi
-    
+
     local env=$1
-    
+
     # Validate environment argument
     case $env in
         "dev"|"staging"|"prod")

@@ -14,5 +14,3 @@ describe('TranscriptSlate', () => {
         expect(getByText('hello')).toBeInTheDocument()
     })
 })
-
-

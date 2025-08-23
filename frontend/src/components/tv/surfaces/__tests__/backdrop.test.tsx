@@ -8,5 +8,3 @@ describe('Backdrop', () => {
         expect(getByText('child')).toBeInTheDocument()
     })
 })
-
-

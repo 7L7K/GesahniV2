@@ -8,7 +8,7 @@ Successfully implemented the exact cookie configuration as requested for the Ges
 
 ### Cookie Names
 - `access_token` - JWT access token
-- `refresh_token` - JWT refresh token  
+- `refresh_token` - JWT refresh token
 - `__session` - Optional session cookie (cleared on logout)
 
 ### Cookie Attributes (Per Cookie)
@@ -33,7 +33,7 @@ Updated all environment files to use the new TTL values:
 **Files Updated:**
 - `.env` - Main environment file
 - `env.dev` - Development environment
-- `env.prod` - Production environment  
+- `env.prod` - Production environment
 - `env.staging` - Staging environment
 - `env.example` - Example configuration
 - `env.template` - Template configuration
@@ -44,7 +44,7 @@ Updated all environment files to use the new TTL values:
 JWT_EXPIRE_MINUTES=30          # 30 minutes
 JWT_REFRESH_EXPIRE_MINUTES=1440 # 24 hours
 
-# After  
+# After
 JWT_EXPIRE_MINUTES=15          # 15 minutes
 JWT_REFRESH_EXPIRE_MINUTES=43200 # 30 days
 ```
@@ -72,7 +72,7 @@ All tests pass with the new configuration:
 
 ```
 ✅ PASS login_success
-✅ PASS cookie_access_token_attributes  
+✅ PASS cookie_access_token_attributes
 ✅ PASS cookie_refresh_token_attributes
 ✅ PASS cookie___session_optional
 ✅ PASS logout_success

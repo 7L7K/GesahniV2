@@ -13,5 +13,3 @@ describe('Capture logic smoke', () => {
     expect(screen.getAllByText(/Reset/i).length).toBeGreaterThan(0)
   })
 })
-
-

@@ -6,9 +6,9 @@ immediately rewrite them using the new names.
 """
 
 # Canonical cookie names (single source of truth)
-GSNH_AT = "GSNH_AT"       # access token
-GSNH_RT = "GSNH_RT"       # refresh token
-GSNH_SESS = "GSNH_SESS"   # opaque app session id
+GSNH_AT = "GSNH_AT"  # access token
+GSNH_RT = "GSNH_RT"  # refresh token
+GSNH_SESS = "GSNH_SESS"  # opaque app session id
 
 # Backward-compatible canonical constants expected by other modules.
 # These map to the standard cookie names used across the app.
@@ -32,5 +32,3 @@ __all__ = [
     "REFRESH_TOKEN_LEGACY",
     "SESSION_LEGACY",
 ]
-
-

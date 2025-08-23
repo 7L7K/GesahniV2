@@ -13,5 +13,3 @@ describe('uiEffects', () => {
         detach()
     })
 })
-
-

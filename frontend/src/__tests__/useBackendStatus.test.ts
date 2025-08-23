@@ -39,5 +39,3 @@ describe('useBackendStatus', () => {
         expect(true).toBe(true);
     });
 });
-
-

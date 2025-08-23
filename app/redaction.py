@@ -60,7 +60,9 @@ def _load_phone_whitelist() -> list[str]:
     return []
 
 
-def redact_pii(text: str, *, whitelist_numbers: Iterable[str] | None = None) -> tuple[str, dict[str, str]]:
+def redact_pii(
+    text: str, *, whitelist_numbers: Iterable[str] | None = None
+) -> tuple[str, dict[str, str]]:
     """Return (redacted_text, mapping) for common PII.
 
     Mapping keys are placeholder tokens and values are the original strings.
@@ -79,15 +81,19 @@ def redact_pii(text: str, *, whitelist_numbers: Iterable[str] | None = None) -> 
 
     # Patterns
     email_re = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-    phone_re = re.compile(r"\b(?:\+?\d{1,3}[\s-]?)?(?:\(\d{3}\)|\d{3})[\s-]?\d{3}[\s-]?\d{4}\b")
+    phone_re = re.compile(
+        r"\b(?:\+?\d{1,3}[\s-]?)?(?:\(\d{3}\)|\d{3})[\s-]?\d{3}[\s-]?\d{4}\b"
+    )
     ssn_re = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 
     t = email_re.sub(lambda m: _repl("EMAIL", m.group(0)), text or "")
+
     def _phone_sub(m: re.Match[str]) -> str:
         raw = m.group(0)
         if _normalize_phone(raw) in wl:
             return raw
         return _repl("PHONE", raw)
+
     t = phone_re.sub(_phone_sub, t)
     t = ssn_re.sub(lambda m: _repl("SSN", m.group(0)), t)
     return t, redactions
@@ -111,7 +117,9 @@ def store_redaction_map(kind: str, item_id: str, mapping: dict[str, str]) -> Non
                     mapping = existing
             except Exception:
                 pass
-        path.write_text(json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8")
+        path.write_text(
+            json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         try:
             os.chmod(path, 0o600)
         except Exception:
@@ -145,5 +153,3 @@ __all__ = [
     "get_redaction_map",
     "redact_and_store",
 ]
-
-

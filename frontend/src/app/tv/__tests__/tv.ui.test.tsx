@@ -46,5 +46,3 @@ describe('TV UI basics', () => {
         expect(screen.getByText('hello')).toBeInTheDocument()
     })
 })
-
-

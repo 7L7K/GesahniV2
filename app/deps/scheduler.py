@@ -75,7 +75,9 @@ class _CompatScheduler:
     def shutdown(self, *a, **k):
         return self._impl.shutdown(*a, **k)
 
-    def add_job(self, func, trigger=None, id=None, args=None, replace_existing=False, **kwargs):
+    def add_job(
+        self, func, trigger=None, id=None, args=None, replace_existing=False, **kwargs
+    ):
         # v3 path
         if hasattr(self._impl, "add_job"):
             return self._impl.add_job(
@@ -108,19 +110,34 @@ class _CompatScheduler:
                 seconds = kwargs.pop("seconds", None)
                 if run_date is None and seconds is not None:
                     run_date = datetime.now(UTC) + timedelta(seconds=seconds)
-                trig_obj = _DateTrigger(run_date=run_date) if run_date is not None else None
+                trig_obj = (
+                    _DateTrigger(run_date=run_date) if run_date is not None else None
+                )
         except Exception:
             trig_obj = None
 
-        schedule_fn = getattr(self._impl, "add_schedule", None) or getattr(self._impl, "schedule", None)
+        schedule_fn = getattr(self._impl, "add_schedule", None) or getattr(
+            self._impl, "schedule", None
+        )
         if trig_obj is not None and schedule_fn is not None:
-            return schedule_fn(func, trig_obj, args=args or [], id=id, replace_existing=replace_existing)
+            return schedule_fn(
+                func,
+                trig_obj,
+                args=args or [],
+                id=id,
+                replace_existing=replace_existing,
+            )
 
         # Fallback: in-memory store only
         key = id or str(len(self._jobs) + 1)
         if not replace_existing and key in self._jobs:
             return self._jobs[key]
-        self._jobs[key] = {"func": func, "trigger": trigger, "args": args or [], "kwargs": kwargs}
+        self._jobs[key] = {
+            "func": func,
+            "trigger": trigger,
+            "args": args or [],
+            "kwargs": kwargs,
+        }
         return self._jobs[key]
 
     def remove_job(self, id):

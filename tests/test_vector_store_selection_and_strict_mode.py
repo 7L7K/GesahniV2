@@ -15,7 +15,9 @@ def _reload_memory_api(monkeypatch, **env):
     return mem_api
 
 
-def test_unknown_vector_store_defaults_to_chroma_and_records_fallback(monkeypatch, tmp_path):
+def test_unknown_vector_store_defaults_to_chroma_and_records_fallback(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("VECTOR_STORE", "qdran")  # typo
     monkeypatch.setenv("CHROMA_PATH", str(tmp_path))
     mem_api = _reload_memory_api(monkeypatch)
@@ -66,6 +68,7 @@ def test_preflight_accepts_dual_and_cloud(monkeypatch, tmp_path):
     # dual should be recognized by preflight even if runtime differs under test
     monkeypatch.setenv("VECTOR_STORE", "dual")
     from app.api.preflight import _check_vector_store
+
     res = _check_vector_store()
     assert res["env"] == "dual"
     assert res["status"] in {"ok", "warn"}
@@ -75,5 +78,3 @@ def test_preflight_accepts_dual_and_cloud(monkeypatch, tmp_path):
     res2 = _check_vector_store()
     assert res2["env"] == "cloud"
     assert res2["status"] in {"ok", "warn"}
-
-

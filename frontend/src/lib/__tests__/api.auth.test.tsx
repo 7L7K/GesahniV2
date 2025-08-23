@@ -27,5 +27,3 @@ describe('api auth tokens', () => {
     expect(isAuthed()).toBe(false)
   })
 })
-
-

@@ -38,7 +38,9 @@ class UserStore:
             )
             # record version 1
             try:
-                await self._conn.execute("INSERT OR IGNORE INTO schema_migrations (version) VALUES (1)")
+                await self._conn.execute(
+                    "INSERT OR IGNORE INTO schema_migrations (version) VALUES (1)"
+                )
             except Exception:
                 pass
             await self._conn.commit()

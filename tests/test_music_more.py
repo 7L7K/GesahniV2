@@ -139,7 +139,9 @@ def test_album_art_cached_path_returned_when_file_exists(tmp_path, monkeypatch):
     dest.write_bytes(b"jpgdata")
     # Should return the public path without network
     # Use asyncio.run for event loop safety under pytest
-    out = __import__("asyncio").run(music._ensure_album_cached("http://x/y.jpg", track_id))
+    out = __import__("asyncio").run(
+        music._ensure_album_cached("http://x/y.jpg", track_id)
+    )
     assert out == f"/album_art/{track_id}.jpg"
 
 
@@ -180,5 +182,3 @@ def test_set_device_overwrites_previous():
     c.post("/v1/music/device", json={"device_id": "dev-2"})
     st = c.get("/v1/state").json()
     assert st["device_id"] == "dev-2"
-
-

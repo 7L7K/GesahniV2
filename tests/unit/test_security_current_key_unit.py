@@ -12,5 +12,3 @@ def test_current_key_variants():
         client=types.SimpleNamespace(host="h"),
     )
     assert _current_key(req).startswith("1.2.3.4")
-
-

@@ -10,7 +10,7 @@ This document outlines the improvements made to the login rate limiting system i
 
 **Problem**: The original implementation used OR logic (`remain = _throttled(user_key) or _throttled(ip_key)`), which meant that if either key was not throttled, the request would proceed. This allowed attackers to bypass rate limiting by alternating between different usernames or IP addresses.
 
-**Solution**: 
+**Solution**:
 - Changed to use the most restrictive throttling (longest wait time) from both user and IP keys
 - Implemented `_get_throttle_status()` function to check both keys simultaneously
 - Applied the maximum throttle time to ensure the most restrictive limit is enforced
@@ -20,7 +20,7 @@ This document outlines the improvements made to the login rate limiting system i
 if user_throttle is not None or ip_throttle is not None:
     max_throttle = max(user_throttle or 0, ip_throttle or 0)
     raise HTTPException(
-        status_code=429, 
+        status_code=429,
         detail={"error": "rate_limited", "retry_after": max_throttle}
     )
 ```

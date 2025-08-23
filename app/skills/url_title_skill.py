@@ -28,5 +28,3 @@ class UrlTitleSkill(Skill):
             return "No title found."
         title = re.sub(r"\s+", " ", m.group(1)).strip()
         return title[:200] if title else "No title found."
-
-

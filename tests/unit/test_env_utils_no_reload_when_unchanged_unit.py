@@ -19,5 +19,3 @@ def test_load_env_no_reload_when_unchanged(monkeypatch, tmp_path: Path):
     env_utils._last_mtime = first
     # Should short circuit without error
     env_utils.load_env()
-
-

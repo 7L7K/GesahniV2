@@ -145,12 +145,12 @@ Only these files can contain direct cookie operations:
 ```python
 # ❌ Don't do this
 response.set_cookie(
-    "access_token", 
-    token, 
-    httponly=True, 
-    secure=secure, 
-    samesite=samesite, 
-    max_age=ttl, 
+    "access_token",
+    token,
+    httponly=True,
+    secure=secure,
+    samesite=samesite,
+    max_age=ttl,
     path="/"
 )
 ```

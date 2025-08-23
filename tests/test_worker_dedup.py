@@ -21,6 +21,7 @@ def test_worker_dedup():
 
     # Force a fresh import
     import app.main
+
     app_instance = app.main.app
 
     # Give some time for any background tasks to start
@@ -35,4 +36,6 @@ def test_worker_dedup():
     task_difference = final_tasks - initial_tasks
 
     # Allow for at most 2 new tasks (very lenient - most reloads should have 0 difference)
-    assert task_difference <= 2, f"Too many new tasks after reload: {task_difference} (initial: {initial_tasks}, final: {final_tasks})"
+    assert (
+        task_difference <= 2
+    ), f"Too many new tasks after reload: {task_difference} (initial: {initial_tasks}, final: {final_tasks})"

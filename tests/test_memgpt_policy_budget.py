@@ -9,5 +9,3 @@ def test_policy_blocks_low_confidence():
     high = MemoryClaim(claim="y", evidence=["e"], confidence=0.9, horizons=["long"])
     assert should_store(high)
     assert not should_store(low)
-
-

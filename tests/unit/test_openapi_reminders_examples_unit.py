@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 def _spec():
     from app.main import app
+
     return TestClient(app).get("/openapi.json").json()
 
 
@@ -16,7 +17,9 @@ def test_reminders_post_response_model_present():
     spec = _spec()
     op = spec["paths"]["/v1/reminders"]["post"]
     res = op["responses"]["200"]
-    any_schema = any((c.get("schema") or {}) for c in (res.get("content") or {}).values())
+    any_schema = any(
+        (c.get("schema") or {}) for c in (res.get("content") or {}).values()
+    )
     assert any_schema
 
 
@@ -43,5 +46,3 @@ def test_reminders_get_exists():
 def test_reminders_delete_exists():
     spec = _spec()
     assert "delete" in spec["paths"]["/v1/reminders"]
-
-

@@ -8,5 +8,3 @@ router = APIRouter(tags=["auth"], include_in_schema=False)
 # This file is kept for potential future use but all OAuth routes have been moved to the canonical location
 
 __all__ = ["router"]
-
-

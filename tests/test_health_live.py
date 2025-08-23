@@ -37,5 +37,3 @@ def test_health_live_not_rate_limited_under_hammer():
     c = TestClient(app)
     codes = [c.get("/healthz/live").status_code for _ in range(20)]
     assert all(code == 200 for code in codes)
-
-

@@ -34,5 +34,3 @@ describe('Calendar weighting & chip', () => {
         expect(a.nextEventChip).toMatch(/Next: Appt/)
     })
 })
-
-

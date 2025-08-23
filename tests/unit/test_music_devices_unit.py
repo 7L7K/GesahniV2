@@ -5,7 +5,10 @@ from fastapi.testclient import TestClient
 
 def _auth():
     import jwt as _jwt
-    token = _jwt.encode({"user_id": "u_test"}, os.getenv("JWT_SECRET", "secret"), algorithm="HS256")
+
+    token = _jwt.encode(
+        {"user_id": "u_test"}, os.getenv("JWT_SECRET", "secret"), algorithm="HS256"
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -24,5 +27,3 @@ def test_devices_returns_empty_on_auth_error(monkeypatch):
     c = TestClient(app)
     out = c.get("/v1/music/devices", headers=_auth()).json()
     assert out["devices"] == []
-
-

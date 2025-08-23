@@ -8,5 +8,3 @@ export function YesNoBar({ onYes, onNo }: { onYes?: () => void; onNo?: () => voi
         </div>
     );
 }
-
-

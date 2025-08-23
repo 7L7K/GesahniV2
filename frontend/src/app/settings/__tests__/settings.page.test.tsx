@@ -74,5 +74,3 @@ describe('SettingsPage', () => {
     await waitFor(() => expect(screen.getByText(/profile_update_failed/)).toBeInTheDocument());
   });
 });
-
-

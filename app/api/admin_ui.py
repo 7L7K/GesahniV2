@@ -7,7 +7,9 @@ from app.deps.scopes import docs_security_with
 from app.deps.user import get_current_user_id
 from app.status import _admin_token
 
-router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
+router = APIRouter(
+    tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))]
+)
 
 
 def _guard(token: str | None) -> None:
@@ -82,7 +84,9 @@ def _html_page(title: str, body: str) -> str:
 
 
 @router.get("/admin/ui", response_class=HTMLResponse)
-def admin_ui_home(token: str | None = Query(default=None), user_id: str = Depends(get_current_user_id)):
+def admin_ui_home(
+    token: str | None = Query(default=None), user_id: str = Depends(get_current_user_id)
+):
     _guard(token)
     from pathlib import Path
 
@@ -94,7 +98,9 @@ def admin_ui_home(token: str | None = Query(default=None), user_id: str = Depend
 
 
 @router.get("/admin/ui/retrieval", response_class=HTMLResponse)
-async def admin_ui_retrieval(token: str | None = Query(default=None), user_id: str = Depends(get_current_user_id)):
+async def admin_ui_retrieval(
+    token: str | None = Query(default=None), user_id: str = Depends(get_current_user_id)
+):
     _guard(token)
     body = """
     <p>Recent retrieval traces are available via the API. Use the token box on the Dashboard to authorize requests.</p>
@@ -107,7 +113,9 @@ async def admin_ui_retrieval(token: str | None = Query(default=None), user_id: s
 
 
 @router.get("/admin/ui/config", response_class=HTMLResponse)
-async def admin_ui_config(token: str | None = Query(default=None), user_id: str = Depends(get_current_user_id)):
+async def admin_ui_config(
+    token: str | None = Query(default=None), user_id: str = Depends(get_current_user_id)
+):
     _guard(token)
     body = """
     <p>Use <code>/v1/admin/flags</code> to flip runtime flags quickly.</p>
@@ -121,5 +129,3 @@ async def admin_ui_config(token: str | None = Query(default=None), user_id: str 
 
 
 __all__ = ["router"]
-
-

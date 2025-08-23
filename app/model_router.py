@@ -128,9 +128,11 @@ def _load_rules() -> dict[str, Any]:
             }
         return _LOADED_RULES
 
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class RouteDecision:
@@ -153,6 +155,7 @@ def compose_cache_id(model: str, prompt: str, topk_docs: Iterable[str] | None) -
     prompt_h = normalized_hash(prompt)
     topk = ",".join(sorted(normalized_hash(doc) for doc in (topk_docs or [])))
     return f"v1|{model}|{prompt_h}|{topk}"
+
 
 def route_text(
     *,
@@ -251,6 +254,7 @@ def route_text(
     ROUTER_DECISION.labels("default").inc()
     return _decision("gpt-5-nano", "default")
 
+
 def _heuristic_self_check(
     user_prompt: str,
     answer: str,
@@ -294,9 +298,12 @@ def _heuristic_self_check(
                 overlap += 1
         factual = min(1.0, 0.4 + overlap / 50.0)
 
-    reasoning = 0.6 + (0.2 if any(k in text for k in ("because", "therefore", "so")) else 0)
+    reasoning = 0.6 + (
+        0.2 if any(k in text for k in ("because", "therefore", "so")) else 0
+    )
     score = max(0.0, min(1.0, 0.25 * length_norm + 0.45 * factual + 0.30 * reasoning))
     return float(score)
+
 
 async def run_with_self_check(
     *,
@@ -316,8 +323,12 @@ async def run_with_self_check(
     Returns: (text, final_model, reason, self_check, prompt_tokens, completion_tokens, cost, escalated)
     """
     rules = _load_rules()
-    thresh = float(rules["SELF_CHECK_FAIL_THRESHOLD"] if threshold is None else threshold)
-    effective_max = int(rules["MAX_RETRIES_PER_REQUEST"] if max_retries is None else max_retries)
+    thresh = float(
+        rules["SELF_CHECK_FAIL_THRESHOLD"] if threshold is None else threshold
+    )
+    effective_max = int(
+        rules["MAX_RETRIES_PER_REQUEST"] if max_retries is None else max_retries
+    )
     retries_left = int(effective_max)
 
     # If budget/quota is breached, disable escalations entirely
@@ -345,7 +356,11 @@ async def run_with_self_check(
     # attempt 1
     text, pt, ct, cost = await _call(current_model)
     score = _heuristic_self_check(
-        user_prompt, text, retrieved_docs, model=current_model, system_prompt=system_prompt
+        user_prompt,
+        text,
+        retrieved_docs,
+        model=current_model,
+        system_prompt=system_prompt,
     )
     if score >= thresh:
         return text, current_model, reason, score, pt, ct, cost, escalated
@@ -373,16 +388,22 @@ async def run_with_self_check(
 
         text, pt, ct, cost = await _call(current_model)
         score = _heuristic_self_check(
-            user_prompt, text, retrieved_docs, model=current_model, system_prompt=system_prompt
+            user_prompt,
+            text,
+            retrieved_docs,
+            model=current_model,
+            system_prompt=system_prompt,
         )
         if score >= thresh:
             break
 
     return text, current_model, reason, score, pt, ct, cost, escalated
 
+
 # ---------------------------------------------------------------------------
 # Vision routing
 # ---------------------------------------------------------------------------
+
 
 def triage_scene_risk(text_hint: str | None) -> str:
     """Return simple risk category for a scene from an optional text hint."""
@@ -395,10 +416,12 @@ def triage_scene_risk(text_hint: str | None) -> str:
         return "medium"
     return "low"
 
+
 _VISION_DAY: str | None = None
 _VISION_COUNT: int = 0
 _VISION_LAST_MAX: int | None = None
 _VISION_LOCK = threading.Lock()
+
 
 def _vision_daily_cap(max_per_day: int) -> bool:
     """Return True if another remote vision call is allowed today (thread-safe)."""
@@ -416,6 +439,7 @@ def _vision_daily_cap(max_per_day: int) -> bool:
             return False
         _VISION_COUNT += 1
         return True
+
 
 async def route_vision(
     *,
@@ -459,9 +483,11 @@ async def route_vision(
             _ = await ask_func(images, text_hint=text_hint, allow_test=allow_test)
     return model, reason
 
+
 # ---------------------------------------------------------------------------
 # System prompts
 # ---------------------------------------------------------------------------
+
 
 def load_system_prompt(mode: str | None) -> str | None:
     """Return system prompt text for Granny Mode or Computer Mode.
@@ -484,6 +510,7 @@ def load_system_prompt(mode: str | None) -> str | None:
         return path.read_text(encoding="utf-8")
     except Exception:
         return None
+
 
 __all__ = [
     "RouteDecision",

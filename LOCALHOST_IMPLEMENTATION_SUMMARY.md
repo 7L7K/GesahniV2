@@ -30,7 +30,7 @@ This document summarizes the changes made to implement consistent localhost conf
 - `frontend/package.json`: Updated dev scripts to use `-H localhost` instead of `-H ::`
 
 #### Development Scripts
-- `scripts/dev.sh`: 
+- `scripts/dev.sh`:
   - Added centralized configuration loading
   - Added frontend environment setup
   - Updated messaging to reflect localhost-only configuration
@@ -117,7 +117,7 @@ CORS_ALLOW_ORIGINS=http://localhost:3000
 
 ### Manual Cookie Clearing
 1. **Chrome/Edge**: DevTools > Application > Storage > Cookies
-2. **Firefox**: DevTools > Storage > Cookies  
+2. **Firefox**: DevTools > Storage > Cookies
 3. **Safari**: Preferences > Privacy > Manage Website Data
 
 ## Benefits Achieved

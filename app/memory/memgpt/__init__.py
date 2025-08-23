@@ -165,10 +165,16 @@ class MemGPT:
         if not pinned and not (novelty >= thr_novelty and importance >= thr_importance):
             return None
 
-        if self._is_duplicate(checksum=checksum, simhash=simhash, text=redacted_text, user_id=user_id):
+        if self._is_duplicate(
+            checksum=checksum, simhash=simhash, text=redacted_text, user_id=user_id
+        ):
             return None
 
-        horizon = float(horizon_days) if horizon_days is not None else self._default_horizon_days(claim_type)
+        horizon = (
+            float(horizon_days)
+            if horizon_days is not None
+            else self._default_horizon_days(claim_type)
+        )
         decay_at = now + max(1.0, horizon * 24.0 * 3600.0)
 
         record = {
@@ -193,10 +199,15 @@ class MemGPT:
         }
 
         with self._lock:
-            bucket = self._pin_store.setdefault(session_id, []) if pinned else self._data.setdefault(session_id, [])
+            bucket = (
+                self._pin_store.setdefault(session_id, [])
+                if pinned
+                else self._data.setdefault(session_id, [])
+            )
             bucket.append(record)
             self._save()
         return checksum
+
     def store_interaction(
         self,
         prompt: str,
@@ -326,9 +337,14 @@ class MemGPT:
                     if item.get("kind") == "claim":
                         claims_buffer.append(item)
                         continue
-                    h = item.get("hash") or hashlib.sha256(
-                        (item.get("prompt", "") + item.get("answer", "")).encode("utf-8")
-                    ).hexdigest()
+                    h = (
+                        item.get("hash")
+                        or hashlib.sha256(
+                            (item.get("prompt", "") + item.get("answer", "")).encode(
+                                "utf-8"
+                            )
+                        ).hexdigest()
+                    )
                     item["hash"] = h
                     if h in seen:
                         continue
@@ -339,7 +355,9 @@ class MemGPT:
                     kept.append(item)
 
                 # Apply decay and rollups on claims
-                decayed, rollups, tombstoned = self._decay_and_rollup_claims(claims_buffer, now)
+                decayed, rollups, tombstoned = self._decay_and_rollup_claims(
+                    claims_buffer, now
+                )
                 kept.extend(decayed)
                 kept.extend(rollups)
 
@@ -363,7 +381,9 @@ class MemGPT:
             self._save()
 
     # ----------------------- Governance helpers ------------------------
-    def _normalize_entities(self, entities: list[str] | list[dict[str, Any]] | None) -> list[str]:
+    def _normalize_entities(
+        self, entities: list[str] | list[dict[str, Any]] | None
+    ) -> list[str]:
         out: list[str] = []
         for e in entities or []:
             if isinstance(e, str):
@@ -382,7 +402,12 @@ class MemGPT:
             "fact": float(os.getenv("MEMGPT_HORIZON_FACT_DAYS", "365")),
             "preference": float(os.getenv("MEMGPT_HORIZON_PREF_DAYS", "180")),
         }
-        return float(table.get(claim_type.lower(), float(os.getenv("MEMGPT_HORIZON_DEFAULT_DAYS", "90"))))
+        return float(
+            table.get(
+                claim_type.lower(),
+                float(os.getenv("MEMGPT_HORIZON_DEFAULT_DAYS", "90")),
+            )
+        )
 
     def _redact_pii(self, text: str) -> tuple[str, dict[str, str]]:
         redactions: dict[str, str] = {}
@@ -396,7 +421,9 @@ class MemGPT:
 
         # crude patterns; reversible via mapping
         email_re = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-        phone_re = re.compile(r"\b(?:\+?\d{1,3}[\s-]?)?(?:\(\d{3}\)|\d{3})[\s-]?\d{3}[\s-]?\d{4}\b")
+        phone_re = re.compile(
+            r"\b(?:\+?\d{1,3}[\s-]?)?(?:\(\d{3}\)|\d{3})[\s-]?\d{3}[\s-]?\d{4}\b"
+        )
         ssn_re = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 
         t = email_re.sub(lambda m: repl("EMAIL", m.group(0)), text)
@@ -415,7 +442,7 @@ class MemGPT:
         out = 0
         for i, v in enumerate(vec):
             if v > 0:
-                out |= (1 << i)
+                out |= 1 << i
         return out
 
     def _hamming(self, a: int, b: int) -> int:
@@ -441,7 +468,9 @@ class MemGPT:
         for store in (self._data, self._pin_store):
             for interactions in store.values():
                 for item in interactions:
-                    if item.get("kind") == "claim" and (user_id is None or item.get("user_id") == user_id):
+                    if item.get("kind") == "claim" and (
+                        user_id is None or item.get("user_id") == user_id
+                    ):
                         corpus.append(item.get("text", ""))
         if not corpus:
             return 1.0
@@ -450,16 +479,23 @@ class MemGPT:
             max_sim = max(max_sim, self._cosine_sim(text, t))
         return float(max(0.0, 1.0 - max_sim))
 
-    def _importance_score(self, text: str, entities: list[str], links: list[str]) -> float:
+    def _importance_score(
+        self, text: str, entities: list[str], links: list[str]
+    ) -> float:
         score = 0.0
         score += 0.2 if len(text) >= 40 else 0.0
         score += min(0.4, 0.1 * len(entities))
         score += min(0.4, 0.2 * len(links))
-        if any(k in text.lower() for k in ("deadline", "due", "meeting", "invoice", "api", "error")):
+        if any(
+            k in text.lower()
+            for k in ("deadline", "due", "meeting", "invoice", "api", "error")
+        ):
             score += 0.2
         return float(min(1.0, score))
 
-    def _is_duplicate(self, *, checksum: str, simhash: int, text: str, user_id: str | None) -> bool:
+    def _is_duplicate(
+        self, *, checksum: str, simhash: int, text: str, user_id: str | None
+    ) -> bool:
         max_hamming = int(os.getenv("MEMGPT_SIMHASH_HAMMING_MAX", "3"))
         max_cosine = float(os.getenv("MEMGPT_COSINE_DUP_MAX", "0.90"))
         for store in (self._data, self._pin_store):
@@ -482,7 +518,9 @@ class MemGPT:
                         return True
         return False
 
-    def _decay_and_rollup_claims(self, claims: list[dict[str, Any]], now: float) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    def _decay_and_rollup_claims(
+        self, claims: list[dict[str, Any]], now: float
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
         decayed: list[dict[str, Any]] = []
         rollups: list[dict[str, Any]] = []
         tombstoned_ids: list[str] = []
@@ -508,11 +546,21 @@ class MemGPT:
         decayed.extend(active)
 
         # Rollup low-importance crumbs within window by entity/topic
-        crumbs = [c for c in active if float(c.get("importance", 0.0)) <= rollup_importance_max and (now - float(c.get("timestamp", now)) <= window_sec) and not c.get("pinned", False)]
+        crumbs = [
+            c
+            for c in active
+            if float(c.get("importance", 0.0)) <= rollup_importance_max
+            and (now - float(c.get("timestamp", now)) <= window_sec)
+            and not c.get("pinned", False)
+        ]
         clusters: dict[str, list[dict[str, Any]]] = {}
         for c in crumbs:
             ents = c.get("entities") or []
-            topic = (ents[0] if isinstance(ents, list) and ents else (c.get("type") or "misc")).lower()
+            topic = (
+                ents[0]
+                if isinstance(ents, list) and ents
+                else (c.get("type") or "misc")
+            ).lower()
             clusters.setdefault(topic, []).append(c)
 
         for topic, items in list(clusters.items()):
@@ -591,5 +639,3 @@ class MemGPT:
 memgpt = MemGPT()
 
 __all__ = ["MemGPT", "memgpt", "jaro_winkler_similarity"]
-
-

@@ -9,5 +9,3 @@ from collections.abc import Iterable
 
 def transcribe_chunks(audio_chunks: Iterable[bytes]) -> str:
     return ""
-
-

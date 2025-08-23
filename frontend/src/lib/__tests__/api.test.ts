@@ -254,5 +254,3 @@ describe('api.ts', () => {
         global.fetch = originalFetch;
     });
 });
-
-

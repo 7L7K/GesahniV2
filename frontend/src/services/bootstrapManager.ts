@@ -1,6 +1,6 @@
 /**
  * Bootstrap Manager - Singleton Bootstrap Coordinator
- * 
+ *
  * This ensures that health polling and auth bootstrap can only start once,
  * preventing duplicate bootstraps and race conditions.
  */

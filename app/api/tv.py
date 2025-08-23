@@ -28,6 +28,7 @@ def _list_images(dir_path: Path) -> list[str]:
 def _estimate_brightness_and_smile(img_path: Path) -> tuple[float, bool]:
     try:
         from PIL import Image, ImageStat  # type: ignore
+
         # Brightness via grayscale mean
         with Image.open(img_path) as im:
             im = im.convert("L")
@@ -102,308 +103,16 @@ class TvOkResponse(BaseModel):
 
 @router.post(
     "/tv/photos/favorite",
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     response_model=TvOkResponse,
-    responses={200: {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/TvOkResponse"}}}}},
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/TvOkResponse"}
+                }
+            }
+        }
+    },
 )
 async def tv_photos_favorite(name: str, user_id: str = Depends(get_current_user_id)):
     name = (name or "").strip()
@@ -421,7 +130,9 @@ async def tv_photos_favorite(name: str, user_id: str = Depends(get_current_user_
                 data = []
         if name not in data:
             data.append(name)
-        _FAV_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        _FAV_FILE.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return {"status": "ok"}
     except Exception:
         raise HTTPException(status_code=500, detail="persist_failed")
@@ -446,7 +157,9 @@ async def tv_weather(user_id: str = Depends(get_current_user_id)):
     tomorrow_hi = int(os.getenv("TV_WEATHER_TOM_HI", "73") or 73)
     tomorrow_lo = int(os.getenv("TV_WEATHER_TOM_LO", "59") or 59)
     desc = os.getenv("TV_WEATHER_DESC", "Sunny")
-    sentence = os.getenv("TV_WEATHER_SENTENCE", f"It's {int(round(now_temp_f))}° and {desc.lower()}.")
+    sentence = os.getenv(
+        "TV_WEATHER_SENTENCE", f"It's {int(round(now_temp_f))}° and {desc.lower()}."
+    )
     return {
         "city": city,
         "now": {"temp": now_temp_f, "desc": desc, "sentence": sentence},
@@ -456,7 +169,11 @@ async def tv_weather(user_id: str = Depends(get_current_user_id)):
 
 
 @router.post("/tv/alert", responses={200: {"model": TvOkResponse}})
-async def tv_alert(kind: str = "help", note: str | None = None, user_id: str = Depends(get_current_user_id)):
+async def tv_alert(
+    kind: str = "help",
+    note: str | None = None,
+    user_id: str = Depends(get_current_user_id),
+):
     """Escalation hook from TV to caregiver channel.
 
     This is a thin wrapper; in V1.1 we can fan-out to SMS/voice/webhook.
@@ -465,8 +182,11 @@ async def tv_alert(kind: str = "help", note: str | None = None, user_id: str = D
         # Fan-out over WS so caregivers can see real-time alerts
         try:
             from app.api.care_ws import broadcast_resident
+
             resident_id = os.getenv("TV_RESIDENT_ID", "me")
-            await broadcast_resident(resident_id, "alert.created", {"kind": kind, "note": note})
+            await broadcast_resident(
+                resident_id, "alert.created", {"kind": kind, "note": note}
+            )
         except Exception:
             pass
         return {"status": "accepted", "kind": kind, "note": note}
@@ -488,12 +208,20 @@ async def tv_ambient_tips(user_id: str = Depends(get_current_user_id)):
     temp = int(round(float(w.get("now", {}).get("temp") or 72)))
     desc = str(w.get("now", {}).get("desc") or "cloudy").lower()
     # Very small prompt-free heuristic for vibe
-    vibe = "lo-fi" if "cloud" in desc or temp < 68 else ("chill" if temp < 78 else "upbeat")
+    vibe = (
+        "lo-fi"
+        if "cloud" in desc or temp < 68
+        else ("chill" if temp < 78 else "upbeat")
+    )
     tip = f"It's {temp}°F and {desc}; {vibe} playlist queued."
     return {"status": "ok", "tip": tip}
 
 
-@router.post("/tv/music/play", response_model=TvOkResponse, responses={200: {"model": TvOkResponse}})
+@router.post(
+    "/tv/music/play",
+    response_model=TvOkResponse,
+    responses={200: {"model": TvOkResponse}},
+)
 async def tv_music_play(preset: str, user_id: str = Depends(get_current_user_id)):
     """Start playing a local preset playlist (placeholder)."""
     name = (preset or "").strip()
@@ -532,9 +260,9 @@ async def tv_get_prefs(user_id: str = Depends(get_current_user_id)):
                             "input_mode": {"type": "string"},
                             "font_scale": {"type": "string"},
                             "wake_word_enabled": {"type": "boolean"},
-                            "address_style": {"type": "string"}
+                            "address_style": {"type": "string"},
                         },
-                        "example": {"name": "Ava", "speech_rate": "normal"}
+                        "example": {"name": "Ava", "speech_rate": "normal"},
                     }
                 }
             }
@@ -575,7 +303,11 @@ class Stage2Body(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {"tiles": ["calendar", "music"], "rhythm": "morning", "helpfulness": "high"}
+            "example": {
+                "tiles": ["calendar", "music"],
+                "rhythm": "morning",
+                "helpfulness": "high",
+            }
         }
     )
 
@@ -618,7 +350,11 @@ async def tv_stage2(
 from app.models.tv import QuietHours, TvConfig, TvConfigResponse, TVConfigUpdate
 
 
-@router.get("/tv/config", response_model=TvConfigResponse, responses={200: {"model": TvConfigResponse}})
+@router.get(
+    "/tv/config",
+    response_model=TvConfigResponse,
+    responses={200: {"model": TvConfigResponse}},
+)
 async def tv_get_config(resident_id: str):
     from app.care_store import get_tv_config
 
@@ -630,7 +366,11 @@ async def tv_get_config(resident_id: str):
     cfg = TvConfig(
         ambient_rotation=int(rec.get("ambient_rotation") or 30),
         rail=str(rec.get("rail") or "safe"),
-        quiet_hours=QuietHours(**(rec.get("quiet_hours") or {})) if rec.get("quiet_hours") else None,
+        quiet_hours=(
+            QuietHours(**(rec.get("quiet_hours") or {}))
+            if rec.get("quiet_hours")
+            else None
+        ),
         default_vibe=str(rec.get("default_vibe") or "Calm Night"),
     )
     return {"status": "ok", "config": cfg.model_dump()}
@@ -652,15 +392,31 @@ async def tv_put_config(
     current = TvConfig(
         ambient_rotation=int((rec or {}).get("ambient_rotation") or 30),
         rail=str((rec or {}).get("rail") or "safe"),
-        quiet_hours=QuietHours(**((rec or {}).get("quiet_hours") or {})) if (rec and rec.get("quiet_hours")) else None,
+        quiet_hours=(
+            QuietHours(**((rec or {}).get("quiet_hours") or {}))
+            if (rec and rec.get("quiet_hours"))
+            else None
+        ),
         default_vibe=str((rec or {}).get("default_vibe") or "Calm Night"),
     )
 
     # Compute effective values
-    new_ambient = int(body.ambient_rotation) if body and body.ambient_rotation is not None else current.ambient_rotation
+    new_ambient = (
+        int(body.ambient_rotation)
+        if body and body.ambient_rotation is not None
+        else current.ambient_rotation
+    )
     new_rail = (body.rail or current.rail).lower() if body else current.rail
-    new_qh = body.quiet_hours if (body and body.quiet_hours is not None) else current.quiet_hours
-    new_vibe = body.default_vibe if (body and body.default_vibe is not None) else current.default_vibe
+    new_qh = (
+        body.quiet_hours
+        if (body and body.quiet_hours is not None)
+        else current.quiet_hours
+    )
+    new_vibe = (
+        body.default_vibe
+        if (body and body.default_vibe is not None)
+        else current.default_vibe
+    )
 
     # Validate rail and simple hh:mm format for quiet hours (400 on bad input)
     rail = (new_rail or "safe").lower()
@@ -692,17 +448,27 @@ async def tv_put_config(
     # Emit WS event so TV can hot-reload config without full refresh
     try:
         from app.api.care_ws import broadcast_resident
-        await broadcast_resident(resident_id or "me", "tv.config.updated", {"config": {
+
+        await broadcast_resident(
+            resident_id or "me",
+            "tv.config.updated",
+            {
+                "config": {
+                    "ambient_rotation": new_ambient,
+                    "rail": rail,
+                    "quiet_hours": new_qh.model_dump() if new_qh else None,
+                    "default_vibe": new_vibe,
+                }
+            },
+        )
+    except Exception:
+        pass
+    return {
+        "status": "ok",
+        "config": {
             "ambient_rotation": new_ambient,
             "rail": rail,
             "quiet_hours": new_qh.model_dump() if new_qh else None,
             "default_vibe": new_vibe,
-        }})
-    except Exception:
-        pass
-    return {"status": "ok", "config": {
-        "ambient_rotation": new_ambient,
-        "rail": rail,
-        "quiet_hours": new_qh.model_dump() if new_qh else None,
-        "default_vibe": new_vibe,
-    }}
+        },
+    }

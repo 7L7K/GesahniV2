@@ -4,5 +4,3 @@ def test_env_list_parsing(monkeypatch):
     monkeypatch.setenv("GEN_STOP", "a,b, c\n d")
     out = mp.base_defaults()
     assert out["stop"] == ["a", "b", "c", "d"]
-
-

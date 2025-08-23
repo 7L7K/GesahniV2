@@ -8,5 +8,3 @@ def test_request_id_filter_uses_context_var():
     rec = logging.LogRecord("n", logging.INFO, __file__, 1, "m", (), None)
     RequestIdFilter().filter(rec)
     assert getattr(rec, "req_id", None) == "abc123"
-
-

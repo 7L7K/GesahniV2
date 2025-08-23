@@ -8,7 +8,13 @@ def test_json_formatter_and_request_id_filter():
     formatter = JsonFormatter()
 
     rec = logging.LogRecord(
-        name="comp", level=logging.INFO, pathname=__file__, lineno=1, msg="hello", args=(), exc_info=None
+        name="comp",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="hello",
+        args=(),
+        exc_info=None,
     )
     rec.meta = {"x": 1}
 
@@ -18,5 +24,3 @@ def test_json_formatter_and_request_id_filter():
     data = json.loads(s)
     assert data["msg"] == "hello" and data["component"] == "comp"
     assert "req_id" in data
-
-

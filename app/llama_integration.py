@@ -22,12 +22,13 @@ from .otel_utils import start_span
 
 # ---- ENV --------------------------------------------------------------------
 # Default to local Ollama to avoid import-time crashes when env isn’t set.
-OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:latest")
 
 # Health-check timeout (seconds). Remote or cold models may take longer than
 # 10s to answer a minimal generation. Allow override via env.
 HEALTH_TIMEOUT: float = float(os.getenv("OLLAMA_HEALTH_TIMEOUT", "60.0"))
+
 
 # Force IPv4 resolution for the Ollama host (Tailscale compatibility)
 def _force_ipv4_base(url: str) -> str:
@@ -42,18 +43,30 @@ def _force_ipv4_base(url: str) -> str:
             pass
 
         # Resolve A records only (IPv4). Use first result.
-        infos = socket.getaddrinfo(host, parsed.port, family=socket.AF_INET, type=socket.SOCK_STREAM)
+        infos = socket.getaddrinfo(
+            host, parsed.port, family=socket.AF_INET, type=socket.SOCK_STREAM
+        )
         if not infos:
             return url
         ipv4_addr = infos[0][4][0]
         # Rebuild netloc with resolved IPv4 and original port
         port = f":{parsed.port}" if parsed.port else ""
         netloc = f"{ipv4_addr}{port}"
-        rebuilt = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+        rebuilt = urlunparse(
+            (
+                parsed.scheme,
+                netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
         return rebuilt
     except Exception:
         # On any failure, silently fall back to original URL
         return url
+
 
 # Allow opting out via env if needed
 if os.getenv("OLLAMA_FORCE_IPV6", "").lower() not in {"1", "true", "yes"}:
@@ -83,36 +96,45 @@ llama_health_check_state = {
 _MAX_STREAMS = int(os.getenv("LLAMA_MAX_STREAMS", "2"))
 _sema = asyncio.Semaphore(_MAX_STREAMS)
 
+
 # --- always-yield generator for all return paths ---
 async def _empty_gen():
     if False:
         yield
     return
 
+
 @log_exceptions("llama")
 async def _check_and_set_flag() -> None:
     """Attempt a tiny generation and update ``LLAMA_HEALTHY`` accordingly."""
     global LLAMA_HEALTHY
-    
+
     now = time.monotonic()
-    
+
     # Check if we should skip this health check due to throttling
     if llama_health_check_state["has_ever_succeeded"]:
         time_since_success = now - llama_health_check_state["last_success_ts"]
         if time_since_success < llama_health_check_state["success_throttle_delay"]:
-            logger.debug("Skipping health check - throttled after success (%.1fs remaining)", 
-                        llama_health_check_state["success_throttle_delay"] - time_since_success)
+            logger.debug(
+                "Skipping health check - throttled after success (%.1fs remaining)",
+                llama_health_check_state["success_throttle_delay"] - time_since_success,
+            )
             return
-    
+
     # Check if we should skip due to exponential backoff
     time_since_last_check = now - llama_health_check_state["last_check_ts"]
-    if not llama_health_check_state["has_ever_succeeded"] and time_since_last_check < llama_health_check_state["next_check_delay"]:
-        logger.debug("Skipping health check - exponential backoff (%.1fs remaining)", 
-                    llama_health_check_state["next_check_delay"] - time_since_last_check)
+    if (
+        not llama_health_check_state["has_ever_succeeded"]
+        and time_since_last_check < llama_health_check_state["next_check_delay"]
+    ):
+        logger.debug(
+            "Skipping health check - exponential backoff (%.1fs remaining)",
+            llama_health_check_state["next_check_delay"] - time_since_last_check,
+        )
         return
-    
+
     llama_health_check_state["last_check_ts"] = now
-    
+
     try:
         if not OLLAMA_MODEL:
             # No model configured yet; mark unhealthy without doing a network call
@@ -139,50 +161,58 @@ async def _check_and_set_flag() -> None:
                 raise RuntimeError(f"model {OLLAMA_MODEL} not in available models")
         if err or not isinstance(data, dict) or not data.get("response"):
             raise RuntimeError(err or "empty_response")
-        
+
         # Success - update state
         LLAMA_HEALTHY = True
         llama_health_check_state["has_ever_succeeded"] = True
         llama_health_check_state["last_success_ts"] = now
         llama_health_check_state["consecutive_failures"] = 0
         llama_health_check_state["next_check_delay"] = 5.0  # Reset to initial delay
-        
+
     except Exception as e:
         LLAMA_HEALTHY = False
         llama_health_check_state["consecutive_failures"] += 1
-        
+
         # Exponential backoff: double the delay, capped at max_delay
         if not llama_health_check_state["has_ever_succeeded"]:
             llama_health_check_state["next_check_delay"] = min(
                 llama_health_check_state["next_check_delay"] * 2,
-                llama_health_check_state["max_check_delay"]
+                llama_health_check_state["max_check_delay"],
             )
-            logger.warning("Ollama health check failed (attempt %d, next check in %.1fs): %s", 
-                          llama_health_check_state["consecutive_failures"], 
-                          llama_health_check_state["next_check_delay"], e)
+            logger.warning(
+                "Ollama health check failed (attempt %d, next check in %.1fs): %s",
+                llama_health_check_state["consecutive_failures"],
+                llama_health_check_state["next_check_delay"],
+                e,
+            )
         else:
             logger.warning("Ollama health check failed after previous success: %s", e)
-    
+
     # Schedule the next health check
     await _schedule_next_health_check()
+
 
 def _record_failure() -> None:
     """Update circuit breaker failure counters."""
     global llama_failures, llama_circuit_open
     now = time.monotonic()
     # Update failures count; timestamp tracked only when needed elsewhere
-    if now - getattr(globals().get("llama_last_failure_ts", 0), "__class__", 0) > 60:  # sentinel check
+    if (
+        now - getattr(globals().get("llama_last_failure_ts", 0), "__class__", 0) > 60
+    ):  # sentinel check
         llama_failures = 1
     else:
         llama_failures += 1
     if llama_failures >= 3:
         llama_circuit_open = True
 
+
 def _reset_failures() -> None:
     """Reset circuit breaker state after a successful call."""
     global llama_failures, llama_circuit_open
     llama_failures = 0
     llama_circuit_open = False
+
 
 async def _schedule_next_health_check() -> None:
     """Schedule the next health check based on current state."""
@@ -192,23 +222,24 @@ async def _schedule_next_health_check() -> None:
     else:
         # Before success: use exponential backoff
         delay = llama_health_check_state["next_check_delay"]
-    
+
     # Remove existing health check job if it exists
     try:
         scheduler.remove_job("llama_health_check")
     except Exception:
         pass
-    
+
     # Schedule next check
     scheduler.add_job(
         _check_and_set_flag,
         "date",
         run_date=datetime.fromtimestamp(time.time() + delay, tz=UTC),
         id="llama_health_check",
-        replace_existing=True
+        replace_existing=True,
     )
-    
+
     logger.debug("Scheduled next LLaMA health check in %.1f seconds", delay)
+
 
 async def startup_check() -> None:
     """
@@ -217,22 +248,25 @@ async def startup_check() -> None:
     """
     missing = [
         name
-        for name, val in {"OLLAMA_URL": OLLAMA_URL, "OLLAMA_MODEL": OLLAMA_MODEL}.items()
+        for name, val in {
+            "OLLAMA_URL": OLLAMA_URL,
+            "OLLAMA_MODEL": OLLAMA_MODEL,
+        }.items()
         if not val
     ]
     if missing:
         logger.debug(
-            "OLLAMA startup skipped – missing env vars: %s",
-            ", ".join(missing)
+            "OLLAMA startup skipped – missing env vars: %s", ", ".join(missing)
         )
         return
 
     # Initial health check (won't crash on failure)
     await _check_and_set_flag()
-    
+
     # Schedule the next health check based on the result
     await _schedule_next_health_check()
     scheduler_start()
+
 
 async def get_status() -> dict[str, Any]:
     """
@@ -245,6 +279,7 @@ async def get_status() -> dict[str, Any]:
     if LLAMA_HEALTHY:
         return {"status": "healthy", "latency_ms": latency}
     raise RuntimeError("llama_error")
+
 
 async def ask_llama(
     prompt: str,
@@ -311,9 +346,17 @@ async def ask_llama(
             with attempt:
                 try:
                     async with _sema:
-                        with start_span("ollama.generate", {"llm.provider": "ollama", "llm.model": model or OLLAMA_MODEL}):
+                        with start_span(
+                            "ollama.generate",
+                            {
+                                "llm.provider": "ollama",
+                                "llm.model": model or OLLAMA_MODEL,
+                            },
+                        ):
                             async with httpx.AsyncClient(timeout=timeout) as client:
-                                async with client.stream("POST", url, json=payload) as resp:
+                                async with client.stream(
+                                    "POST", url, json=payload
+                                ) as resp:
                                     resp.raise_for_status()
                                     async for line in resp.aiter_lines():
                                         if not line.strip():
@@ -325,10 +368,17 @@ async def ask_llama(
                                         token = data.get("response")
                                         if token:
                                             yield token
-                                        if data.get("prompt_eval_count") is not None and prompt_tokens == 0:
-                                            prompt_tokens = data.get("prompt_eval_count", 0)
+                                        if (
+                                            data.get("prompt_eval_count") is not None
+                                            and prompt_tokens == 0
+                                        ):
+                                            prompt_tokens = data.get(
+                                                "prompt_eval_count", 0
+                                            )
                                         if data.get("eval_count") is not None:
-                                            completion_tokens = data.get("eval_count", completion_tokens)
+                                            completion_tokens = data.get(
+                                                "eval_count", completion_tokens
+                                            )
                                         if data.get("done"):
                                             break
                     # on success
@@ -340,7 +390,7 @@ async def ask_llama(
                     _record_failure()
                     logger.warning(
                         "Ollama request failed",
-                        extra={"meta": {"req_id": req_id_var.get(), "error": str(e)}}
+                        extra={"meta": {"req_id": req_id_var.get(), "error": str(e)}},
                     )
                     # Error? Just stop iterating, don't yield junk.
                     return

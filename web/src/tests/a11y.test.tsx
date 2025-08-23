@@ -26,5 +26,3 @@ describe('a11y', () => {
         expect(results.violations.filter(v => v.impact === 'critical')).toHaveLength(0)
     })
 })
-
-

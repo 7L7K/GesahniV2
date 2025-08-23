@@ -13,6 +13,7 @@ _SCOPES_DEFAULT = (
     "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar.events"
 )
 
+
 def get_google_scopes() -> list[str]:
     """Return Google OAuth scopes from env or sensible defaults.
 
@@ -21,15 +22,21 @@ def get_google_scopes() -> list[str]:
     """
     return os.getenv("GOOGLE_SCOPES", _SCOPES_DEFAULT).split()
 
+
 # used to sign our state param
 JWT_STATE_SECRET = os.getenv("JWT_STATE_SECRET", "dev_only_change_me")
 
 # optional: override DB URL; defaults to sqlite file
-GOOGLE_OAUTH_DB_URL = os.getenv("GOOGLE_OAUTH_DB_URL", "sqlite:///./google_oauth.sqlite3")
+GOOGLE_OAUTH_DB_URL = os.getenv(
+    "GOOGLE_OAUTH_DB_URL", "sqlite:///./google_oauth.sqlite3"
+)
+
 
 def validate_config():
     missing = []
-    if not GOOGLE_CLIENT_ID: missing.append("GOOGLE_CLIENT_ID")
-    if not GOOGLE_CLIENT_SECRET: missing.append("GOOGLE_CLIENT_SECRET")
+    if not GOOGLE_CLIENT_ID:
+        missing.append("GOOGLE_CLIENT_ID")
+    if not GOOGLE_CLIENT_SECRET:
+        missing.append("GOOGLE_CLIENT_SECRET")
     if missing:
         raise RuntimeError(f"Missing required env vars: {', '.join(missing)}")

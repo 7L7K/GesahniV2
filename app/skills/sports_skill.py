@@ -59,9 +59,7 @@ class SportsSkill(Skill):
                     team_score = away_score
                     opp_score = home_score
                 result = "won" if win else "lost"
-                return (
-                    f"The {team_name} {result} {team_score}-{opp_score} against the {opponent}."
-                )
+                return f"The {team_name} {result} {team_score}-{opp_score} against the {opponent}."
 
             next_resp = await client.get(
                 "https://www.thesportsdb.com/api/v1/json/3/eventsnext.php",
@@ -77,6 +75,4 @@ class SportsSkill(Skill):
             opponent = away if home == team_name else home
             date = nxt.get("dateEvent")
             time = nxt.get("strTime")
-            return (
-                f"The next game for the {team_name} is against the {opponent} on {date} at {time}."
-            )
+            return f"The next game for the {team_name} is against the {opponent} on {date} at {time}."

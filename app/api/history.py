@@ -8,7 +8,9 @@ from app.deps.scopes import docs_security_with, optional_require_scope
 from app.deps.user import get_current_user_id
 from app.history import HISTORY_FILE
 
-router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
+router = APIRouter(
+    tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))]
+)
 
 
 @router.get("/history/recent")
@@ -47,7 +49,13 @@ async def recent_history(
 @router.post(
     "/history/pin",
     dependencies=[Depends(optional_require_scope("pin"))],
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "pinned"}}}}}},
+    responses={
+        200: {
+            "content": {
+                "application/json": {"schema": {"example": {"status": "pinned"}}}
+            }
+        }
+    },
 )
 async def pin_interaction(
     session_id: str,
@@ -57,15 +65,21 @@ async def pin_interaction(
     """Pin an interaction by hash into the pinned store (requires 'pin' scope when scopes enforced)."""
     try:
         from app.memory.memgpt import memgpt
+
         # Best-effort: iterate recent store and find by hash
         items = memgpt.retrieve_relevant_memories(hash_value)
         if not items:
             raise HTTPException(status_code=404, detail="not_found")
         item = items[0]
-        memgpt.store_interaction(item.get("prompt", ""), item.get("answer", ""), session_id, user_id=user_id, tags=["pin"])
+        memgpt.store_interaction(
+            item.get("prompt", ""),
+            item.get("answer", ""),
+            session_id,
+            user_id=user_id,
+            tags=["pin"],
+        )
         return {"status": "pinned"}
     except HTTPException:
         raise
     except Exception:
         raise HTTPException(status_code=500, detail="error")
-

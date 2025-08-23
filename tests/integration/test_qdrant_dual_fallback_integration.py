@@ -1,5 +1,3 @@
-
-
 def test_vector_store_selection_env(monkeypatch):
     monkeypatch.setenv("VECTOR_STORE", "qdrant")
     from importlib import reload
@@ -22,4 +20,3 @@ def test_dual_mode_logs(monkeypatch, caplog):
     store = mem.get_store()
     # Should initialize a DualReadVectorStore
     assert "dual" in type(store).__name__.lower()
-

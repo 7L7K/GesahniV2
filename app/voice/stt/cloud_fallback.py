@@ -1,6 +1,5 @@
 """Offline-first STT with cloud fallback wrapper."""
 
-
 from .offline import transcribe_chunks as offline_transcribe
 
 try:
@@ -22,6 +21,7 @@ def transcribe_with_fallback(file_path: str, *, prefer_offline: bool = True) -> 
         return ""
     try:
         import asyncio
+
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -30,5 +30,3 @@ def transcribe_with_fallback(file_path: str, *, prefer_offline: bool = True) -> 
             return loop.run_until_complete(cloud_transcribe(file_path))
     except Exception:
         return ""
-
-

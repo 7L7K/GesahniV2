@@ -90,5 +90,3 @@ locust -f locustfile.py --host=http://127.0.0.1:8000
 
 ## Reporting Security Issues
 Please open a private security advisory on your repository host (e.g., GitHub Security Advisories) or contact the maintainers privately. Avoid filing public issues for vulnerabilities.
-
-

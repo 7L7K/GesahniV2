@@ -47,13 +47,13 @@ def log_auth_event(
     session_ready: bool | None = None,
     is_authenticated: bool | None = None,
     lock_reason: str | None = None,
-    **kwargs
+    **kwargs,
 ) -> None:
     """
     Log an authentication event with structured data.
-    
+
     Args:
-        event_type: Type of auth event ("finish.start", "finish.end", "whoami.start", 
+        event_type: Type of auth event ("finish.start", "finish.end", "whoami.start",
                     "whoami.end", "lock.on", "lock.off", "authed.change")
         user_id: User identifier
         source: Auth source ("cookie", "header", "clerk")
@@ -74,7 +74,7 @@ def log_auth_event(
         rec.auth_lock_reason = lock_reason
         rec.auth_boot_phase = _is_boot_phase()
         rec.timestamp = utc_now().isoformat()
-        
+
         # Log structured event
         log_data = {
             "event": "auth_event",
@@ -87,11 +87,11 @@ def log_auth_event(
             "lock_reason": lock_reason,
             "boot_phase": _is_boot_phase(),
             "timestamp": rec.timestamp,
-            **kwargs
+            **kwargs,
         }
-        
+
         logger.info("Authentication event", extra=log_data)
-        
+
     except Exception as e:
         logger.error(f"Failed to log auth event: {e}", exc_info=True)
 
@@ -100,14 +100,14 @@ def log_auth_event(
 def track_auth_event(event_type: str, **kwargs):
     """
     Context manager to track authentication event timing.
-    
+
     Args:
         event_type: Type of auth event
         **kwargs: Additional fields to log
     """
     start_time = time.time()
     start_kwargs = {**kwargs, "phase": "start"}
-    
+
     try:
         log_auth_event(f"{event_type}.start", **start_kwargs)
         yield
@@ -115,17 +115,17 @@ def track_auth_event(event_type: str, **kwargs):
         # Log error event
         error_kwargs = {**kwargs, "phase": "error", "error": str(e)}
         log_auth_event(f"{event_type}.error", **error_kwargs)
-        AUTH_EVENT_DURATION_SECONDS.labels(event_type=event_type, status="error").observe(
-            time.time() - start_time
-        )
+        AUTH_EVENT_DURATION_SECONDS.labels(
+            event_type=event_type, status="error"
+        ).observe(time.time() - start_time)
         raise
     else:
         # Log success event
         end_kwargs = {**kwargs, "phase": "end"}
         log_auth_event(f"{event_type}.end", **end_kwargs)
-        AUTH_EVENT_DURATION_SECONDS.labels(event_type=event_type, status="success").observe(
-            time.time() - start_time
-        )
+        AUTH_EVENT_DURATION_SECONDS.labels(
+            event_type=event_type, status="success"
+        ).observe(time.time() - start_time)
 
 
 def record_whoami_call(
@@ -140,14 +140,12 @@ def record_whoami_call(
     try:
         boot_phase = "true" if _is_boot_phase() else "false"
         source_label = source or "unknown"
-        
+
         # Increment Prometheus counter
         WHOAMI_CALLS_TOTAL.labels(
-            status=status,
-            source=source_label,
-            boot_phase=boot_phase
+            status=status, source=source_label, boot_phase=boot_phase
         ).inc()
-        
+
         # Log the event
         log_auth_event(
             "whoami.call",
@@ -157,9 +155,9 @@ def record_whoami_call(
             session_ready=session_ready,
             is_authenticated=is_authenticated,
             status=status,
-            boot_phase=_is_boot_phase()
+            boot_phase=_is_boot_phase(),
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to record whoami call: {e}", exc_info=True)
 
@@ -174,12 +172,8 @@ def record_finish_call(
     """Record an auth finish endpoint call with metrics and logging."""
     try:
         # Increment Prometheus counter
-        FINISH_CALLS_TOTAL.labels(
-            status=status,
-            method=method,
-            reason=reason
-        ).inc()
-        
+        FINISH_CALLS_TOTAL.labels(status=status, method=method, reason=reason).inc()
+
         # Log the event
         log_auth_event(
             "finish.call",
@@ -187,9 +181,9 @@ def record_finish_call(
             status=status,
             method=method,
             reason=reason,
-            set_cookie=set_cookie
+            set_cookie=set_cookie,
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to record finish call: {e}", exc_info=True)
 
@@ -202,19 +196,13 @@ def record_privileged_call_blocked(
     """Record a blocked privileged call."""
     try:
         # Increment Prometheus counter
-        PRIVILEGED_CALLS_BLOCKED_TOTAL.labels(
-            endpoint=endpoint,
-            reason=reason
-        ).inc()
-        
+        PRIVILEGED_CALLS_BLOCKED_TOTAL.labels(endpoint=endpoint, reason=reason).inc()
+
         # Log the event
         log_auth_event(
-            "privileged.blocked",
-            user_id=user_id,
-            endpoint=endpoint,
-            reason=reason
+            "privileged.blocked", user_id=user_id, endpoint=endpoint, reason=reason
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to record privileged call blocked: {e}", exc_info=True)
 
@@ -227,19 +215,13 @@ def record_ws_reconnect_attempt(
     """Record a WebSocket reconnection attempt."""
     try:
         # Increment Prometheus counter
-        WS_RECONNECT_ATTEMPTS_TOTAL.labels(
-            endpoint=endpoint,
-            reason=reason
-        ).inc()
-        
+        WS_RECONNECT_ATTEMPTS_TOTAL.labels(endpoint=endpoint, reason=reason).inc()
+
         # Log the event
         log_auth_event(
-            "ws.reconnect",
-            user_id=user_id,
-            endpoint=endpoint,
-            reason=reason
+            "ws.reconnect", user_id=user_id, endpoint=endpoint, reason=reason
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to record WS reconnect attempt: {e}", exc_info=True)
 
@@ -256,9 +238,9 @@ def record_auth_lock_event(
             f"lock.{action}",
             user_id=user_id,
             lock_reason=reason,
-            duration_seconds=duration_seconds
+            duration_seconds=duration_seconds,
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to record auth lock event: {e}", exc_info=True)
 
@@ -278,8 +260,8 @@ def record_auth_state_change(
             source=source,
             is_authenticated=new_state,
             old_authenticated=old_state,
-            change_reason=reason
+            change_reason=reason,
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to record auth state change: {e}", exc_info=True)

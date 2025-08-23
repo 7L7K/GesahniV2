@@ -48,12 +48,21 @@ class TTSRequest(BaseModel):
         }
     },
 )
-async def speak(req: TTSRequest, request: Request, user_id: str = Depends(get_current_user_id)):
+async def speak(
+    req: TTSRequest, request: Request, user_id: str = Depends(get_current_user_id)
+):
     # CSRF: uniform enforcement for mutating routes when globally enabled
     try:
         import os as _os
-        if _os.getenv("CSRF_ENABLED", "0").strip().lower() in {"1","true","yes","on"}:
+
+        if _os.getenv("CSRF_ENABLED", "0").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
             from app.csrf import _extract_csrf_header  # lazy import
+
             token_hdr, used_legacy, legacy_allowed = _extract_csrf_header(request)
             cookie = request.cookies.get("csrf_token") or ""
             if used_legacy and not legacy_allowed:
@@ -69,6 +78,7 @@ async def speak(req: TTSRequest, request: Request, user_id: str = Depends(get_cu
         raise HTTPException(status_code=400, detail="empty_text")
     # Length/byte caps
     import os as _os
+
     max_chars = int(_os.getenv("TTS_MAX_CHARS", "800") or 800)
     if len(text) > max_chars:
         raise HTTPException(status_code=400, detail="text_too_long")
@@ -76,6 +86,7 @@ async def speak(req: TTSRequest, request: Request, user_id: str = Depends(get_cu
     # Chunk long inputs for sequential streaming
     def _chunks(s: str, limit: int = 240) -> list[str]:
         import re as _re
+
         parts = _re.split(r"(?<=[\.!?])\s+", s)
         out: list[str] = []
         cur = ""
@@ -114,6 +125,3 @@ async def speak(req: TTSRequest, request: Request, user_id: str = Depends(get_cu
         return StreamingResponse(io.BytesIO(audio), media_type="audio/wav")
     # Multi-part stream: raw chunk bytes; client handles sequential playback
     return StreamingResponse(_gen(), media_type="application/octet-stream")
-
-
-

@@ -24,6 +24,8 @@ class ScriptSkill(Skill):
             name = match.group("name").strip()
             # resolve first to support user aliases like "bedtime routine"
             results = await ha.resolve_entity(name)
-            entity = results[0] if results else f"script.{name.lower().replace(' ', '_')}"
+            entity = (
+                results[0] if results else f"script.{name.lower().replace(' ', '_')}"
+            )
         await ha.call_service("script", "turn_on", {"entity_id": entity})
         return f"Script {entity} triggered."

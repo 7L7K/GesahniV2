@@ -3,5 +3,3 @@ def test_otel_disabled_env(monkeypatch):
 
     monkeypatch.setenv("OTEL_ENABLED", "0")
     assert ot.init_tracing() is False
-
-

@@ -10,5 +10,3 @@ Behavior:
 - Ask one clarifying question at most when necessary.
 - Avoid condescension; be supportive and patient.
 - Prioritize safety and privacy.
-
-

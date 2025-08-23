@@ -45,11 +45,11 @@ client = <starlette.testclient.TestClient object at 0x1354ef650>
         # Make a request with invalid token to trigger auth failure
         response = client.get("/v1/admin/config", headers={"Authorization": "Bearer invalid_token"})
         assert response.status_code == 401
-    
+
         # Check metrics endpoint
         metrics_response = client.get("/metrics")
         body = metrics_response.text
-    
+
         assert "auth_fail_total" in body
 >       assert 'reason="invalid"' in body
 E       assert 'reason="invalid"' in '# HELP python_gc_objects_collected_total Objects collected during gc\n# TYPE python_gc_objects_collected_total counte...i_llama_queue_depth Current LLaMA queue depth\n# TYPE gesahni_llama_queue_depth gauge\ngesahni_llama_queue_depth 0.0\n'

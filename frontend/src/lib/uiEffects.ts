@@ -59,5 +59,3 @@ export function attachUiEffects() {
         window.removeEventListener("remote:down", onRemoteDown);
     };
 }
-
-

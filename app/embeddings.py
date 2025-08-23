@@ -51,6 +51,7 @@ except Exception:  # pragma: no cover
 # Deterministic stub (for tests / in-memory stores)
 # ---------------------------------------------------------------------------
 
+
 def _embed_stub(text: str) -> list[float]:
     """Return a deterministic local embedding used for tests and in-memory stores.
 
@@ -69,6 +70,7 @@ def _embed_stub(text: str) -> list[float]:
 # ---------------------------------------------------------------------------
 # LLaMA backend (sync init, run in executor)
 # ---------------------------------------------------------------------------
+
 
 def _get_llama_model():
     """Lazily instantiate and cache the LLaMA model for embeddings."""
@@ -92,9 +94,11 @@ def _reset_llama_model_for_tests():  # pragma: no cover - test helper
 # OpenAI backend (sync path with TTL cache)
 # ---------------------------------------------------------------------------
 
+
 def get_openai_client() -> OpenAI:
     """Return a synchronous OpenAI client (instantiate per call for test isolation)."""
     from openai import OpenAI  # type: ignore
+
     return OpenAI()
 
 
@@ -104,7 +108,9 @@ def _embed_openai_sync(text: str, ttl_bucket: int) -> list[float]:
     client = get_openai_client()
     model = os.getenv("EMBED_MODEL", "text-embedding-3-small")
     try:
-        resp = client.embeddings.create(model=model, input=text, encoding_format="float")
+        resp = client.embeddings.create(
+            model=model, input=text, encoding_format="float"
+        )
     except TypeError:
         # Older SDKs / stubs that don't accept encoding_format
         resp = client.embeddings.create(model=model, input=text)
@@ -119,7 +125,9 @@ def _embed_openai_sync(text: str, ttl_bucket: int) -> list[float]:
             raw = base64.b64decode(embedding)
             return np.frombuffer(raw, dtype=np.float32).astype("float32").tolist()
         except Exception as e:
-            raise RuntimeError("Unexpected base64 embedding format from OpenAI API") from e
+            raise RuntimeError(
+                "Unexpected base64 embedding format from OpenAI API"
+            ) from e
     return embedding  # type: ignore[return-value]
 
 
@@ -159,6 +167,7 @@ async def _embed_llama(text: str) -> list[float]:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def embed_sync(text: str) -> list[float]:
     """Synchronous helper used by vector stores."""
     backend = os.getenv("EMBEDDING_BACKEND", "openai").lower()
@@ -175,7 +184,9 @@ def embed_sync(text: str) -> list[float]:
         if backend == "openai"
         else os.getenv("LLAMA_EMBEDDINGS_MODEL", "")
     )
-    logger.debug("embed_sync backend=%s model=%s (cosine metric assumed)", backend, model)
+    logger.debug(
+        "embed_sync backend=%s model=%s (cosine metric assumed)", backend, model
+    )
 
     t0 = time.perf_counter()
     try:
@@ -225,7 +236,9 @@ async def embed(text: str) -> list[float]:
     raise ValueError(f"Unsupported EMBEDDING_BACKEND: {backend}")
 
 
-async def benchmark(text: str, iterations: int = 10, user_id: str | None = None) -> dict[str, float]:
+async def benchmark(
+    text: str, iterations: int = 10, user_id: str | None = None
+) -> dict[str, float]:
     """Run ``embed`` ``iterations`` times and log latency & throughput.
 
     ``user_id`` is accepted for interface parity but is not used.
@@ -236,7 +249,12 @@ async def benchmark(text: str, iterations: int = 10, user_id: str | None = None)
     elapsed = time.perf_counter() - start
     latency = elapsed / iterations if iterations else 0.0
     throughput = iterations / elapsed if elapsed else 0.0
-    logger.info("embeddings.benchmark", extra={"meta": {"latency": round(latency, 6), "throughput": round(throughput, 6)}})
+    logger.info(
+        "embeddings.benchmark",
+        extra={
+            "meta": {"latency": round(latency, 6), "throughput": round(throughput, 6)}
+        },
+    )
     return {"latency": latency, "throughput": throughput}
 
 

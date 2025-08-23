@@ -37,5 +37,3 @@ describe('apiFetch', () => {
     expect((global.fetch as any).mock.calls.length).toBe(1)
   })
 })
-
-

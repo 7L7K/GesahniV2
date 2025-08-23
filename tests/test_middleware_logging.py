@@ -30,5 +30,3 @@ def test_request_headers_set(monkeypatch):
     rid = "test-rid-123"
     r = c.get("/health")
     assert "X-Request-ID" in r.headers
-
-

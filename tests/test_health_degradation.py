@@ -20,5 +20,3 @@ def test_healthz_degrades_when_deps_missing(monkeypatch):
     res = client.get("/v1/healthz")
     assert res.status_code == 200
     assert res.json()["llama"] == "error"
-
-

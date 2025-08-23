@@ -63,5 +63,3 @@ describe('wsHub', () => {
         wsHub.stop({ music: true })
     })
 })
-
-

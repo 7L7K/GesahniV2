@@ -13,11 +13,15 @@ def test_history_recent_reads_jsonl(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(hist, "HISTORY_FILE", p)
     # also patch the value captured in the api module at import time
     monkeypatch.setattr(api_history, "HISTORY_FILE", p)
-    p.write_text("\n".join([
-        "{}",
-        '{"type":"capture","x":1}',
-        '{"type":"capture","x":2}',
-    ]))
+    p.write_text(
+        "\n".join(
+            [
+                "{}",
+                '{"type":"capture","x":1}',
+                '{"type":"capture","x":2}',
+            ]
+        )
+    )
 
     app = FastAPI()
     app.include_router(api_history.router)
@@ -55,5 +59,3 @@ def test_skills_list_shape(monkeypatch):
     if data["items"]:
         it = data["items"][0]
         assert "name" in it and "keywords" in it
-
-

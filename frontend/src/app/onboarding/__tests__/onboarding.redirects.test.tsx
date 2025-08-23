@@ -17,5 +17,3 @@ describe('Onboarding redirects', () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/'))
   })
 })
-
-

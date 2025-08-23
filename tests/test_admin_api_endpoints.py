@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 def _make_client():
     from app.api.admin import router as admin_router
+
     app = FastAPI()
     app.include_router(admin_router, prefix="/v1")
     return TestClient(app)
@@ -43,7 +44,10 @@ def test_retrieval_last_filters_by_trace_event():
 def test_decision_explain_404_and_ok():
     client = _make_client()
     # not found
-    assert client.get("/v1/admin/decisions/explain?req_id=missing&token=t").status_code == 404
+    assert (
+        client.get("/v1/admin/decisions/explain?req_id=missing&token=t").status_code
+        == 404
+    )
 
 
 def test_admin_config_includes_store_overrides():
@@ -53,7 +57,13 @@ def test_admin_config_includes_store_overrides():
     r = client.get("/v1/admin/config?token=t")
     assert r.status_code == 200
     data = r.json()
-    assert data["store"]["vector_store"] in ("memory", "chroma", "dual", "qdrant", data["store"]["vector_store"])  # stable key
+    assert data["store"]["vector_store"] in (
+        "memory",
+        "chroma",
+        "dual",
+        "qdrant",
+        data["store"]["vector_store"],
+    )  # stable key
     assert data["store"]["active_collection"] == "kb:test"
 
 
@@ -65,5 +75,3 @@ def test_errors_and_self_review_guarded_and_shapes():
     assert r.status_code == 200
     body = r.json()
     assert isinstance(body, dict)
-
-

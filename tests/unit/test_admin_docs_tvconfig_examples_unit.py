@@ -22,5 +22,3 @@ def test_admin_tv_config_examples_and_scopes_present_in_docs():
     # OAuth2 locks present (from global admin router docs binding)
     assert any("OAuth2" in d for d in get_op.get("security", []))
     assert any("OAuth2" in d for d in put_op.get("security", []))
-
-

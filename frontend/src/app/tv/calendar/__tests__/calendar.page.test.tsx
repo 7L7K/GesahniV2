@@ -16,5 +16,3 @@ describe('TV Calendar page', () => {
     expect(container.firstChild).toMatchSnapshot();
   });
 });
-
-

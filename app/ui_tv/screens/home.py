@@ -14,6 +14,6 @@ class HomeScreenModel:
 
 
 def get_default_home_model() -> HomeScreenModel:
-    return HomeScreenModel(tile_groups=["Weather", "Calendar", "Music", "Photos", "News", "Reminders"])
-
-
+    return HomeScreenModel(
+        tile_groups=["Weather", "Calendar", "Music", "Photos", "News", "Reminders"]
+    )

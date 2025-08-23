@@ -20,5 +20,3 @@ def test_regex_test_match():
     m = s.match(q)
     out = asyncio.run(s.run(q, m))
     assert "matched:" in out
-
-

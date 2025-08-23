@@ -14,6 +14,7 @@ from typing import Any
 @dataclass
 class SLO:
     """Service Level Objective with concrete targets and thresholds."""
+
     name: str
     description: str
     sli_name: str
@@ -27,6 +28,7 @@ class SLO:
 @dataclass
 class SLIResult:
     """Result of SLI measurement."""
+
     sli_name: str
     value: float
     target: float
@@ -53,7 +55,6 @@ class SLOMonitor:
             period_seconds=3600,  # 1 hour
             min_sample_size=10,
         ),
-
         "auth_latency": SLO(
             name="Authentication Latency",
             description="95th percentile authentication response time",
@@ -64,7 +65,6 @@ class SLOMonitor:
             period_seconds=900,  # 15 minutes
             min_sample_size=20,
         ),
-
         # API Availability SLOs
         "api_availability": SLO(
             name="API Availability",
@@ -76,7 +76,6 @@ class SLOMonitor:
             period_seconds=3600,  # 1 hour
             min_sample_size=100,
         ),
-
         "api_latency": SLO(
             name="API Latency",
             description="95th percentile API response time for successful requests",
@@ -87,7 +86,6 @@ class SLOMonitor:
             period_seconds=1800,  # 30 minutes
             min_sample_size=50,
         ),
-
         # Authorization SLOs
         "authz_success_rate": SLO(
             name="Authorization Success Rate",
@@ -99,7 +97,6 @@ class SLOMonitor:
             period_seconds=3600,
             min_sample_size=100,
         ),
-
         # WebSocket SLOs
         "ws_connection_success": SLO(
             name="WebSocket Connection Success",
@@ -111,7 +108,6 @@ class SLOMonitor:
             period_seconds=3600,
             min_sample_size=10,
         ),
-
         "ws_message_latency": SLO(
             name="WebSocket Message Latency",
             description="95th percentile WebSocket message round-trip time",
@@ -122,7 +118,6 @@ class SLOMonitor:
             period_seconds=900,  # 15 minutes
             min_sample_size=20,
         ),
-
         # Memory and AI SLOs
         "ai_response_success": SLO(
             name="AI Response Success Rate",
@@ -134,7 +129,6 @@ class SLOMonitor:
             period_seconds=1800,
             min_sample_size=30,
         ),
-
         "ai_response_latency": SLO(
             name="AI Response Latency",
             description="95th percentile AI response time",
@@ -145,7 +139,6 @@ class SLOMonitor:
             period_seconds=900,
             min_sample_size=20,
         ),
-
         # Security SLOs
         "security_incident_rate": SLO(
             name="Security Incident Rate",
@@ -157,7 +150,6 @@ class SLOMonitor:
             period_seconds=3600,
             min_sample_size=1,
         ),
-
         # Data Integrity SLOs
         "audit_integrity": SLO(
             name="Audit Log Integrity",
@@ -169,7 +161,6 @@ class SLOMonitor:
             period_seconds=300,  # 5 minutes
             min_sample_size=1,
         ),
-
         # Performance SLOs
         "memory_search_latency": SLO(
             name="Memory Search Latency",
@@ -181,7 +172,6 @@ class SLOMonitor:
             period_seconds=900,
             min_sample_size=15,
         ),
-
         # Error Budget SLOs
         "error_rate_4xx": SLO(
             name="Client Error Rate",
@@ -193,7 +183,6 @@ class SLOMonitor:
             period_seconds=3600,
             min_sample_size=50,
         ),
-
         "error_rate_5xx": SLO(
             name="Server Error Rate",
             description="Rate of 5xx errors",
@@ -215,19 +204,14 @@ class SLOMonitor:
         if sli_name not in self.measurements:
             self.measurements[sli_name] = []
 
-        measurement = {
-            "timestamp": datetime.now(),
-            "value": value,
-            **metadata
-        }
+        measurement = {"timestamp": datetime.now(), "value": value, **metadata}
 
         self.measurements[sli_name].append(measurement)
 
         # Keep only recent measurements (last 24 hours)
         cutoff = datetime.now() - timedelta(hours=24)
         self.measurements[sli_name] = [
-            m for m in self.measurements[sli_name]
-            if m["timestamp"] > cutoff
+            m for m in self.measurements[sli_name] if m["timestamp"] > cutoff
         ]
 
     def evaluate_slo(self, slo: SLO) -> SLIResult:
@@ -238,8 +222,7 @@ class SLOMonitor:
 
         # Filter measurements in the evaluation period
         period_measurements = [
-            m for m in measurements
-            if m["timestamp"] >= period_start
+            m for m in measurements if m["timestamp"] >= period_start
         ]
 
         if len(period_measurements) < slo.min_sample_size:
@@ -251,38 +234,62 @@ class SLOMonitor:
                 sample_size=len(period_measurements),
                 period_start=period_start,
                 period_end=now,
-                details={"error": "Insufficient sample size"}
+                details={"error": "Insufficient sample size"},
             )
 
         # Calculate the SLI value based on the metric type
         if slo.sli_name.endswith("_rate"):
             # For rates: count of good events / total events
-            if slo.sli_name in ["auth_success_rate", "api_availability", "authz_success_rate"]:
-                good_count = sum(1 for m in period_measurements if m.get("success", False))
+            if slo.sli_name in [
+                "auth_success_rate",
+                "api_availability",
+                "authz_success_rate",
+            ]:
+                good_count = sum(
+                    1 for m in period_measurements if m.get("success", False)
+                )
                 value = (good_count / len(period_measurements)) * 100
             elif slo.sli_name == "error_rate_4xx":
-                error_count = sum(1 for m in period_measurements if 400 <= m.get("status_code", 0) < 500)
+                error_count = sum(
+                    1
+                    for m in period_measurements
+                    if 400 <= m.get("status_code", 0) < 500
+                )
                 value = (error_count / len(period_measurements)) * 100
             elif slo.sli_name == "error_rate_5xx":
-                error_count = sum(1 for m in period_measurements if m.get("status_code", 0) >= 500)
+                error_count = sum(
+                    1 for m in period_measurements if m.get("status_code", 0) >= 500
+                )
                 value = (error_count / len(period_measurements)) * 100
             elif slo.sli_name == "security_incident_rate":
-                incident_count = len([m for m in period_measurements if m.get("incident", False)])
+                incident_count = len(
+                    [m for m in period_measurements if m.get("incident", False)]
+                )
                 hours = slo.period_seconds / 3600
                 value = incident_count / hours
             else:
-                value = sum(m["value"] for m in period_measurements) / len(period_measurements)
+                value = sum(m["value"] for m in period_measurements) / len(
+                    period_measurements
+                )
         elif slo.sli_name.endswith("_latency"):
             # For latency: percentile calculation
             if slo.sli_name.endswith("_p95"):
-                sorted_measurements = sorted(period_measurements, key=lambda m: m["value"])
+                sorted_measurements = sorted(
+                    period_measurements, key=lambda m: m["value"]
+                )
                 p95_index = int(len(sorted_measurements) * 0.95)
-                value = sorted_measurements[min(p95_index, len(sorted_measurements) - 1)]["value"]
+                value = sorted_measurements[
+                    min(p95_index, len(sorted_measurements) - 1)
+                ]["value"]
             else:
-                value = sum(m["value"] for m in period_measurements) / len(period_measurements)
+                value = sum(m["value"] for m in period_measurements) / len(
+                    period_measurements
+                )
         else:
             # Default: average
-            value = sum(m["value"] for m in period_measurements) / len(period_measurements)
+            value = sum(m["value"] for m in period_measurements) / len(
+                period_measurements
+            )
 
         achieved = value >= slo.target if slo.target > 1 else value <= slo.target
 
@@ -296,8 +303,8 @@ class SLOMonitor:
             period_end=now,
             details={
                 "measurements": len(period_measurements),
-                "target_type": "minimum" if slo.target <= 1 else "maximum"
-            }
+                "target_type": "minimum" if slo.target <= 1 else "maximum",
+            },
         )
 
     def get_slo_status(self, slo_name: str) -> SLIResult | None:
@@ -332,7 +339,9 @@ class SLOMonitor:
         """Check if the system meets all critical SLOs."""
         failed_critical = []
         for result in self.get_failed_slos(critical_only=True):
-            failed_critical.append(f"{result.sli_name}: {result.value:.2f} (target: {result.target:.2f})")
+            failed_critical.append(
+                f"{result.sli_name}: {result.value:.2f} (target: {result.target:.2f})"
+            )
 
         return len(failed_critical) == 0, failed_critical
 
@@ -341,16 +350,34 @@ class SLOMonitor:
 slo_monitor = SLOMonitor()
 
 
-def record_api_request(status_code: int, latency_ms: float, auth_success: bool = True, **metadata):
+def record_api_request(
+    status_code: int, latency_ms: float, auth_success: bool = True, **metadata
+):
     """Record an API request for SLO tracking."""
-    slo_monitor.record_measurement("api_availability", 1 if status_code < 500 else 0, status_code=status_code, **metadata)
-    slo_monitor.record_measurement("api_latency_p95", latency_ms / 1000, status_code=status_code, **metadata)
-    slo_monitor.record_measurement("authz_success_rate", 1 if auth_success else 0, status_code=status_code, **metadata)
+    slo_monitor.record_measurement(
+        "api_availability",
+        1 if status_code < 500 else 0,
+        status_code=status_code,
+        **metadata,
+    )
+    slo_monitor.record_measurement(
+        "api_latency_p95", latency_ms / 1000, status_code=status_code, **metadata
+    )
+    slo_monitor.record_measurement(
+        "authz_success_rate",
+        1 if auth_success else 0,
+        status_code=status_code,
+        **metadata,
+    )
 
     if 400 <= status_code < 500:
-        slo_monitor.record_measurement("error_rate_4xx", 1, status_code=status_code, **metadata)
+        slo_monitor.record_measurement(
+            "error_rate_4xx", 1, status_code=status_code, **metadata
+        )
     elif status_code >= 500:
-        slo_monitor.record_measurement("error_rate_5xx", 1, status_code=status_code, **metadata)
+        slo_monitor.record_measurement(
+            "error_rate_5xx", 1, status_code=status_code, **metadata
+        )
 
 
 def record_auth_attempt(success: bool, latency_ms: float, **metadata):
@@ -361,37 +388,60 @@ def record_auth_attempt(success: bool, latency_ms: float, **metadata):
 
 def record_ai_request(success: bool, latency_ms: float, **metadata):
     """Record an AI request."""
-    slo_monitor.record_measurement("ai_response_success", 1 if success else 0, **metadata)
-    slo_monitor.record_measurement("ai_response_latency_p95", latency_ms / 1000, **metadata)
+    slo_monitor.record_measurement(
+        "ai_response_success", 1 if success else 0, **metadata
+    )
+    slo_monitor.record_measurement(
+        "ai_response_latency_p95", latency_ms / 1000, **metadata
+    )
 
 
 def record_security_incident(incident_type: str, **metadata):
     """Record a security incident."""
-    slo_monitor.record_measurement("security_incident_rate", 1, incident=True, incident_type=incident_type, **metadata)
+    slo_monitor.record_measurement(
+        "security_incident_rate",
+        1,
+        incident=True,
+        incident_type=incident_type,
+        **metadata,
+    )
 
 
-def record_websocket_event(event_type: str, success: bool = True, latency_ms: float | None = None, **metadata):
+def record_websocket_event(
+    event_type: str, success: bool = True, latency_ms: float | None = None, **metadata
+):
     """Record a WebSocket event."""
     if event_type == "connection":
-        slo_monitor.record_measurement("ws_connection_success", 1 if success else 0, **metadata)
+        slo_monitor.record_measurement(
+            "ws_connection_success", 1 if success else 0, **metadata
+        )
     elif event_type == "message" and latency_ms is not None:
-        slo_monitor.record_measurement("ws_message_latency_p95", latency_ms / 1000, **metadata)
+        slo_monitor.record_measurement(
+            "ws_message_latency_p95", latency_ms / 1000, **metadata
+        )
 
 
 def record_memory_search(latency_ms: float, **metadata):
     """Record a memory search operation."""
-    slo_monitor.record_measurement("memory_search_latency_p95", latency_ms / 1000, **metadata)
+    slo_monitor.record_measurement(
+        "memory_search_latency_p95", latency_ms / 1000, **metadata
+    )
 
 
 def check_audit_integrity() -> bool:
     """Check audit log integrity for SLO compliance."""
     try:
         from app.audit import verify_audit_integrity
+
         is_valid, issues = verify_audit_integrity()
-        slo_monitor.record_measurement("audit_integrity", 100.0 if is_valid else 0.0, issues=issues)
+        slo_monitor.record_measurement(
+            "audit_integrity", 100.0 if is_valid else 0.0, issues=issues
+        )
         return is_valid
     except Exception:
-        slo_monitor.record_measurement("audit_integrity", 0.0, error="Exception during integrity check")
+        slo_monitor.record_measurement(
+            "audit_integrity", 0.0, error="Exception during integrity check"
+        )
         return False
 
 
@@ -403,7 +453,7 @@ def run_slo_tests() -> dict[str, Any]:
         "slo_results": {},
         "overall_pass": True,
         "failed_slos": [],
-        "critical_failures": []
+        "critical_failures": [],
     }
 
     for slo_name, result in slo_monitor.get_all_slo_statuses().items():
@@ -412,7 +462,7 @@ def run_slo_tests() -> dict[str, Any]:
             "value": result.value,
             "target": result.target,
             "sample_size": result.sample_size,
-            "details": result.details
+            "details": result.details,
         }
 
         if not result.achieved:
@@ -432,9 +482,13 @@ def assert_slos_in_ci(min_success_rate: float = 0.8) -> None:
     results = run_slo_tests()
 
     if not results["overall_pass"]:
-        failure_msg = f"SLO tests failed. Failed SLOs: {', '.join(results['failed_slos'])}"
+        failure_msg = (
+            f"SLO tests failed. Failed SLOs: {', '.join(results['failed_slos'])}"
+        )
         if results["critical_failures"]:
-            failure_msg += f" Critical failures: {', '.join(results['critical_failures'])}"
+            failure_msg += (
+                f" Critical failures: {', '.join(results['critical_failures'])}"
+            )
         raise AssertionError(failure_msg)
 
     # Check minimum success rate
@@ -443,9 +497,7 @@ def assert_slos_in_ci(min_success_rate: float = 0.8) -> None:
     success_rate = passed_slos / total_slos if total_slos > 0 else 0
 
     if success_rate < min_success_rate:
-        raise AssertionError(
-            ".2%"
-        )
+        raise AssertionError(".2%")
 
 
 __all__ = [

@@ -19,7 +19,7 @@ The following criteria must be met (pass/fail):
 
 **Problem**: Silent refresh middleware was disabled, potentially causing 401s during app initialization.
 
-**Solution**: 
+**Solution**:
 - Re-enabled silent refresh middleware in `app/main.py`
 - The middleware automatically refreshes access tokens when they're nearing expiry
 - Prevents 401s by proactively rotating tokens before they expire

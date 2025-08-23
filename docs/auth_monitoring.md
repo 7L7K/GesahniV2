@@ -13,7 +13,7 @@ The authentication monitoring system provides comprehensive observability for au
 The system tracks the following authentication event types:
 
 - `auth.finish.start/end` - Authentication finish process timing
-- `auth.whoami.start/end` - Whoami endpoint call timing  
+- `auth.whoami.start/end` - Whoami endpoint call timing
 - `auth.lock.on/off` - Authentication lock events
 - `auth.authed.change` - Authentication state changes
 
@@ -61,7 +61,7 @@ Each authentication event includes structured fields:
 
 The alerts are configured in the Grafana dashboard (`grafana_auth_dashboard.json`) with:
 
-- **Thresholds**: 
+- **Thresholds**:
   - Whoami calls: > 1 during boot phase
   - 401 errors: > 0 during boot phase
 - **Frequency**: 1 minute evaluation

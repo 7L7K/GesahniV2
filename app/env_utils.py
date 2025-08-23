@@ -43,7 +43,9 @@ def load_env(force: bool | int | str = False) -> None:
 
     # Normalize force
     _force = str(force).lower() in {"1", "true", "yes", "on"}
-    test_mode = os.getenv("ENV", "").strip().lower() == "test" or bool(os.getenv("PYTEST_RUNNING"))
+    test_mode = os.getenv("ENV", "").strip().lower() == "test" or bool(
+        os.getenv("PYTEST_RUNNING")
+    )
 
     # Snapshot current mtimes and existence
     def _mtime(path: Path) -> float:
@@ -71,7 +73,9 @@ def load_env(force: bool | int | str = False) -> None:
         if _last_mtimes is not None and _last_mtimes == current:
             # Nothing changed since last run → still ensure example defaults are present
             # Apply examples as non-overriding top-ups so new keys get filled if files changed outside mtime granularity
-            filled_example = filled_alt = filled_dev = filled_staging = filled_prod = filled_localhost = 0
+            filled_example = filled_alt = filled_dev = filled_staging = filled_prod = (
+                filled_localhost
+            ) = 0
             if current["example"] >= 0:
                 for k, v in (dotenv_values(_ENV_EXAMPLE_PATH) or {}).items():
                     if k and v is not None and k not in os.environ:
@@ -102,7 +106,14 @@ def load_env(force: bool | int | str = False) -> None:
                     if k and v is not None and k not in os.environ:
                         os.environ[str(k)] = str(v)
                         filled_localhost += 1
-            if filled_example or filled_alt or filled_dev or filled_staging or filled_prod or filled_localhost:
+            if (
+                filled_example
+                or filled_alt
+                or filled_dev
+                or filled_staging
+                or filled_prod
+                or filled_localhost
+            ):
                 _logger.info(
                     "env_loader: .env unchanged; examples filled missing keys (example=%d, alt=%d, dev=%d, staging=%d, prod=%d, localhost=%d)",
                     filled_example,
@@ -115,7 +126,9 @@ def load_env(force: bool | int | str = False) -> None:
             return
 
     # Compute counts and apply precedence
-    applied_env = filled_example = filled_alt = filled_dev = filled_staging = filled_prod = filled_localhost = 0
+    applied_env = filled_example = filled_alt = filled_dev = filled_staging = (
+        filled_prod
+    ) = filled_localhost = 0
 
     # 1) .env populates missing values only (do not clobber existing env vars)
     #    Tests and monkeypatches expect programmatic env overrides to take

@@ -49,5 +49,3 @@ def test_health_ready_timeout_enforced(monkeypatch):
     # Should return quickly despite hang (under ~0.8s to be safe)
     assert (time.time() - t0) < 0.8
     assert r.status_code == 503
-
-

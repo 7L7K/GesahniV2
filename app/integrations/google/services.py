@@ -10,10 +10,12 @@ def _refresh(creds: Credentials) -> Credentials:
         creds.refresh(Request())
     return creds
 
+
 def gmail_service(creds: Credentials):
     _refresh(creds)
     # cache_discovery=False avoids file writes in server envs
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
+
 
 def calendar_service(creds: Credentials):
     _refresh(creds)

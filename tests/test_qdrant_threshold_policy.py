@@ -14,8 +14,6 @@ def _env(monkeypatch):
 def test_threshold_constant_documented(monkeypatch):
     # Ensure the documented constants are set in code paths (0.75 sim → 0.25 dist)
     from app.memory.vector_store.qdrant import __dict__ as qdict
+
     # Presence of cutoff constant usage validated indirectly; this is a smoke check the module loads
     assert "QdrantVectorStore" in qdict
-
-
-

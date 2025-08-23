@@ -23,5 +23,3 @@ describe('Admin TV Config editor', () => {
     await waitFor(() => expect(btn).toHaveTextContent(/Saving|Save/));
   });
 });
-
-

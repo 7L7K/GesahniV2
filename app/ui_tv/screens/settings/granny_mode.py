@@ -9,5 +9,3 @@ class GrannyModeSettings:
     high_contrast: bool = True
     large_text: bool = True
     do_not_disturb_window: tuple[int, int] | None = None  # start_hour, end_hour
-
-

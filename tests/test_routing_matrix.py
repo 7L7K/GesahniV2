@@ -34,4 +34,3 @@ def test_branch_ops_complex():
 def test_branch_long_prompt():
     d = route_text(user_prompt="x" * 1200)  # ~300 approx tokens in fallback
     assert d.reason in {"long-prompt", "long-context"}
-

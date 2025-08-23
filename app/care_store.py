@@ -219,7 +219,9 @@ async def update_alert(alert_id: str, **fields: Any) -> None:
         await db.commit()
 
 
-async def insert_event(alert_id: str, type_: str, meta: dict[str, Any] | None = None) -> None:
+async def insert_event(
+    alert_id: str, type_: str, meta: dict[str, Any] | None = None
+) -> None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute(
@@ -257,7 +259,9 @@ async def list_alerts(resident_id: str | None = None) -> list[dict[str, Any]]:
     return out
 
 
-async def upsert_device(device_id: str, resident_id: str, *, battery_pct: int | None = None) -> dict[str, Any]:
+async def upsert_device(
+    device_id: str, resident_id: str, *, battery_pct: int | None = None
+) -> dict[str, Any]:
     await ensure_tables()
     now = _now()
     async with aiosqlite.connect(str(DB_PATH)) as db:
@@ -272,7 +276,14 @@ async def upsert_device(device_id: str, resident_id: str, *, battery_pct: int | 
             offline_since = None
             await db.execute(
                 "INSERT INTO devices (id,resident_id,last_seen,battery_pct,battery_low_since,offline_since) VALUES (?,?,?,?,?,?)",
-                (device_id, resident_id, now, battery_pct, battery_low_since, offline_since),
+                (
+                    device_id,
+                    resident_id,
+                    now,
+                    battery_pct,
+                    battery_low_since,
+                    offline_since,
+                ),
             )
             await db.commit()
             return {
@@ -301,7 +312,16 @@ async def upsert_device(device_id: str, resident_id: str, *, battery_pct: int | 
         # offline tracking handled by caller using status computation
         await db.execute(
             "UPDATE devices SET resident_id=?, last_seen=?, battery_pct=?, battery_low_since=?, battery_notified=?, offline_since=?, offline_notified=? WHERE id=?",
-            (resident_id, last_seen, batt, batt_low_since, batt_notified, off_since, off_notified, device_id),
+            (
+                resident_id,
+                last_seen,
+                batt,
+                batt_low_since,
+                batt_notified,
+                off_since,
+                off_notified,
+                device_id,
+            ),
         )
         await db.commit()
         return {
@@ -384,6 +404,7 @@ async def list_devices() -> list[dict[str, Any]]:
 
 # TV Config -------------------------------------------------------------------
 
+
 async def get_tv_config(resident_id: str) -> dict[str, Any] | None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
@@ -434,6 +455,7 @@ async def set_tv_config(
 
 
 # Sessions --------------------------------------------------------------------
+
 
 async def create_session(rec: dict[str, Any]) -> None:
     await ensure_tables()
@@ -495,7 +517,14 @@ async def create_contact(rec: dict[str, Any]) -> None:
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute(
             "INSERT INTO contacts (id,resident_id,name,phone,priority,quiet_hours) VALUES (?,?,?,?,?,?)",
-            (rec["id"], rec["resident_id"], rec["name"], rec.get("phone"), int(rec.get("priority", 0)), json.dumps(rec.get("quiet_hours") or {})),
+            (
+                rec["id"],
+                rec["resident_id"],
+                rec["name"],
+                rec.get("phone"),
+                int(rec.get("priority", 0)),
+                json.dumps(rec.get("quiet_hours") or {}),
+            ),
         )
         await db.commit()
 
@@ -540,5 +569,3 @@ async def delete_contact(contact_id: str) -> None:
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("DELETE FROM contacts WHERE id=?", (contact_id,))
         await db.commit()
-
-

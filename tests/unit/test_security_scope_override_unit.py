@@ -19,7 +19,12 @@ def test_scope_override_blocks_on_third(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "secret")
     app = FastAPI()
 
-    @app.get("/admin", dependencies=[Depends(sec.scope_rate_limit("admin", long_limit=2, burst_limit=10))])
+    @app.get(
+        "/admin",
+        dependencies=[
+            Depends(sec.scope_rate_limit("admin", long_limit=2, burst_limit=10))
+        ],
+    )
     async def admin():
         return {"ok": True}
 
@@ -29,5 +34,3 @@ def test_scope_override_blocks_on_third(monkeypatch):
     assert c.get("/admin", headers=h).status_code == 200
     r3 = c.get("/admin", headers=h)
     assert r3.status_code in (200, 429)
-
-

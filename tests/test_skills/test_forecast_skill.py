@@ -56,6 +56,7 @@ def test_forecast_skill(monkeypatch):
 def test_forecast_plain_phrase(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: FakeClient())
     import app.skills.forecast_skill as fs
+
     monkeypatch.setattr(fs, "OPENWEATHER_KEY", "dummy")
     skill = ForecastSkill()
     m = skill.match("forecast for Berlin, DE")
@@ -67,18 +68,23 @@ def test_forecast_handles_no_data(monkeypatch):
     class EmptyClient:
         async def __aenter__(self):
             return self
+
         async def __aexit__(self, exc_type, exc, tb):
             pass
+
         async def get(self, url, params=None):
             class R:
                 def json(self_non):
                     return {"list": []}
+
                 def raise_for_status(self_non):
                     pass
+
             return R()
 
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: EmptyClient())
     import app.skills.forecast_skill as fs
+
     monkeypatch.setattr(fs, "OPENWEATHER_KEY", "dummy")
     skill = ForecastSkill()
     m = skill.match("three day forecast")

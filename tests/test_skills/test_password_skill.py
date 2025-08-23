@@ -24,5 +24,3 @@ def test_password_custom_length_bounds():
     m2 = s.match("create password 100")
     out2 = asyncio.run(s.run("create password 100", m2))
     assert len(out2) == 64  # clamped max
-
-

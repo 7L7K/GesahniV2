@@ -57,5 +57,3 @@ export default function AdminMetrics() {
     </div>
   );
 }
-
-

@@ -39,5 +39,3 @@ describe('Onboarding step components', () => {
     expect(onNext).toHaveBeenCalled()
   })
 })
-
-

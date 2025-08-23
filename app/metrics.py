@@ -1,6 +1,7 @@
 # Phase 6.1: Clean Prometheus Metrics (no sampling)
 # Phase 7.6: Label Hygiene & Cardinality Management
 
+
 def normalize_model_label(model: str) -> str:
     """
     Normalize model names to prevent cardinality explosion.
@@ -138,7 +139,8 @@ REQUEST_COUNT = Counter(
 
 REQUEST_LATENCY = Histogram(
     "app_request_latency_seconds",
-    "Request latency in seconds", ["endpoint", "method", "engine"]
+    "Request latency in seconds",
+    ["endpoint", "method", "engine"],
 )
 
 # Map to new canonical names for compatibility
@@ -153,11 +155,14 @@ try:
         ["check_type"],
     )
 except Exception:  # pragma: no cover
+
     class _H2:
         def labels(self, *a, **k):
             return self
+
         def observe(self, *a, **k):
             return None
+
     HEALTH_CHECK_DURATION_SECONDS = _H2()  # type: ignore
 
 # Authentication metrics -------------------------------------------------------
@@ -168,11 +173,14 @@ try:
         ["status", "source", "boot_phase"],
     )
 except Exception:  # pragma: no cover
+
     class _C2:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     WHOAMI_CALLS_TOTAL = _C2()  # type: ignore
 
 try:
@@ -182,11 +190,14 @@ try:
         ["status", "method", "reason"],
     )
 except Exception:  # pragma: no cover
+
     class _C3:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     FINISH_CALLS_TOTAL = _C3()  # type: ignore
 
 try:
@@ -196,11 +207,14 @@ try:
         ["endpoint", "reason"],
     )
 except Exception:  # pragma: no cover
+
     class _C4:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     PRIVILEGED_CALLS_BLOCKED_TOTAL = _C4()  # type: ignore
 
 try:
@@ -210,11 +224,14 @@ try:
         ["endpoint", "reason"],
     )
 except Exception:  # pragma: no cover
+
     class _C5:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     WS_RECONNECT_ATTEMPTS_TOTAL = _C5()  # type: ignore
 
 # Authentication event timing
@@ -225,11 +242,14 @@ try:
         ["event_type", "status"],
     )
 except Exception:  # pragma: no cover
+
     class _H3:
         def labels(self, *a, **k):
             return self
+
         def observe(self, *a, **k):
             return None
+
     AUTH_EVENT_DURATION_SECONDS = _H3()  # type: ignore
 
 try:
@@ -239,11 +259,14 @@ try:
         ["reason"],
     )
 except Exception:  # pragma: no cover
+
     class _C2:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     HEALTH_READY_FAILURES_TOTAL = _C2()  # type: ignore
 
 try:
@@ -253,11 +276,14 @@ try:
         ["from_shape", "to_shape"],
     )
 except Exception:  # pragma: no cover
+
     class _C3:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     ROUTER_SHAPE_NORMALIZED_TOTAL = _C3()  # type: ignore
 
 try:
@@ -267,11 +293,14 @@ try:
         ["vendor", "model", "reason"],
     )
 except Exception:  # pragma: no cover
+
     class _C4:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     ROUTER_REQUESTS_TOTAL = _C4()  # type: ignore
 
 try:
@@ -281,11 +310,14 @@ try:
         ["from_vendor", "to_vendor", "reason"],
     )
 except Exception:  # pragma: no cover
+
     class _C5:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     ROUTER_FALLBACKS_TOTAL = _C5()  # type: ignore
 
 try:
@@ -295,11 +327,14 @@ try:
         ["scope"],
     )
 except Exception:  # pragma: no cover
+
     class _C6:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     ROUTER_CIRCUIT_OPEN_TOTAL = _C6()  # type: ignore
 
 try:
@@ -309,11 +344,14 @@ try:
         ["vendor", "model"],
     )
 except Exception:  # pragma: no cover
+
     class _H2:
         def labels(self, *a, **k):
             return self
+
         def observe(self, *a, **k):
             return None
+
     ROUTER_DURATION_MS = _H2()  # type: ignore
 
 try:
@@ -323,11 +361,14 @@ try:
         ["env", "route"],
     )
 except Exception:  # pragma: no cover
+
     class _C7:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     ROUTER_ASK_USER_ID_MISSING_TOTAL = _C7()  # type: ignore
 
 # Histogram for request cost in USD
@@ -337,9 +378,7 @@ REQUEST_COST = Histogram(
     ["endpoint", "method", "engine", "segment"],
 )
 # Auth and validation spikes (route scoped)
-AUTH_4XX_TOTAL = Counter(
-    "auth_4xx_total", "Total 4xx auth failures", ["route", "code"]
-)
+AUTH_4XX_TOTAL = Counter("auth_4xx_total", "Total 4xx auth failures", ["route", "code"])
 VALIDATION_4XX_TOTAL = Counter(
     "validation_4xx_total", "Total 4xx validation failures", ["route", "code"]
 )
@@ -354,9 +393,7 @@ LLAMA_LATENCY = Histogram(
 )
 
 # Router decision counts by rule/reason label
-ROUTER_DECISION = Counter(
-    "router_decision_total", "Routing decisions made", ["rule"]
-)
+ROUTER_DECISION = Counter("router_decision_total", "Routing decisions made", ["rule"])
 
 # Model latency seconds (enables p50/p95 per model in Grafana)
 MODEL_LATENCY_SECONDS = Histogram(
@@ -490,17 +527,13 @@ TIME_TO_ACK_SECONDS = Histogram(
 ALERT_SEND_FAILURES = Counter(
     "care_alert_send_failures_total", "Total number of alert send failures", ["channel"]
 )
-HEARTBEAT_OK = Counter(
-    "care_heartbeat_ok_total", "Number of on-time device heartbeats"
-)
+HEARTBEAT_OK = Counter("care_heartbeat_ok_total", "Number of on-time device heartbeats")
 HEARTBEAT_LATE = Counter(
     "care_heartbeat_late_total", "Number of late/missed device heartbeats"
 )
 
 # Care SMS queue metrics
-CARE_SMS_RETRIES = Counter(
-    "care_sms_retries_total", "Number of SMS retry attempts"
-)
+CARE_SMS_RETRIES = Counter("care_sms_retries_total", "Number of SMS retry attempts")
 CARE_SMS_DLQ = Counter(
     "care_sms_dead_letter_total", "Number of SMS jobs sent to dead-letter queue"
 )
@@ -512,7 +545,11 @@ CARE_SMS_DLQ = Counter(
 RATE_LIMIT_ALLOWS = Counter(
     "rate_limit_allow_total",
     "Requests allowed by the rate limiter",
-    ["channel", "bucket", "backend"],  # channel: http|ws; bucket: burst|long|daily|bypass
+    [
+        "channel",
+        "bucket",
+        "backend",
+    ],  # channel: http|ws; bucket: burst|long|daily|bypass
 )
 
 RATE_LIMIT_BLOCKS = Counter(
@@ -555,18 +592,12 @@ WS_RECONNECT = Counter(
 WS_TIME_TO_RECONNECT_SECONDS = Histogram(
     "ws_time_to_reconnect_seconds", "Time to reconnect after WS drop (seconds)"
 )
-SSE_FAIL_TOTAL = Counter(
-    "sse_fail_total", "Number of SSE failures", ["route"]
-)
+SSE_FAIL_TOTAL = Counter("sse_fail_total", "Number of SSE failures", ["route"])
 SSE_PARTIAL_STREAM_TOTAL = Counter(
     "sse_partial_stream_total", "Number of partial SSE streams", ["route"]
 )
-SSE_RETRY_TOTAL = Counter(
-    "sse_retry_total", "Number of SSE retries", ["route"]
-)
-API_RETRY_TOTAL = Counter(
-    "api_retry_total", "Number of HTTP API retries", ["route"]
-)
+SSE_RETRY_TOTAL = Counter("sse_retry_total", "Number of SSE retries", ["route"])
+API_RETRY_TOTAL = Counter("api_retry_total", "Number of HTTP API retries", ["route"])
 API_RETRY_SUCCESS_RATIO = Histogram(
     "api_retry_success_ratio", "Success ratio of API retries"
 )

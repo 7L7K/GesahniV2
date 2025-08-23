@@ -22,5 +22,3 @@ def test_status_routes_bound_and_json_stable(monkeypatch):
     # /config guarded (status router)
     assert client.get("/v1/config?token=X").status_code == 403
     assert client.get("/v1/config?token=T").status_code == 200
-
-

@@ -71,7 +71,7 @@ nano .env
 #### Environment Options
 
 - **Development** (`env.dev`): Local development with HTTP and relaxed security
-- **Staging** (`env.staging`): Test environment with HTTPS and production-like security  
+- **Staging** (`env.staging`): Test environment with HTTPS and production-like security
 - **Production** (`env.prod`): Production environment with HTTPS and strict security
 
 #### Environment-Specific Variables
@@ -109,7 +109,7 @@ If you prefer manual setup:
 ```bash
 # Copy the appropriate environment file
 cp env.dev .env      # For development
-cp env.staging .env  # For staging  
+cp env.staging .env  # For staging
 cp env.prod .env     # For production
 
 # Edit .env to add your secrets and API keys

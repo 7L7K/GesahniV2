@@ -14,7 +14,12 @@ if __name__ == "__main__":
     inv.add_argument("prompt")
 
     mig = sub.add_parser("migrate", help="Run Chroma→Qdrant migration helper")
-    mig.add_argument("action", choices=["inventory", "export", "migrate"], nargs="?", default="inventory")
+    mig.add_argument(
+        "action",
+        choices=["inventory", "export", "migrate"],
+        nargs="?",
+        default="inventory",
+    )
     mig.add_argument("--dry-run", action="store_true")
     mig.add_argument("--out-dir", default=None)
 

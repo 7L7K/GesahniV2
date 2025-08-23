@@ -18,7 +18,9 @@ if os.path.exists("env.localhost"):
 
 print("Environment variable values:")
 print(f"JWT_EXPIRE_MINUTES: {os.getenv('JWT_EXPIRE_MINUTES', 'NOT_SET')}")
-print(f"JWT_REFRESH_EXPIRE_MINUTES: {os.getenv('JWT_REFRESH_EXPIRE_MINUTES', 'NOT_SET')}")
+print(
+    f"JWT_REFRESH_EXPIRE_MINUTES: {os.getenv('JWT_REFRESH_EXPIRE_MINUTES', 'NOT_SET')}"
+)
 print(f"JWT_REFRESH_TTL_SECONDS: {os.getenv('JWT_REFRESH_TTL_SECONDS', 'NOT_SET')}")
 print(f"JWT_ACCESS_TTL_SECONDS: {os.getenv('JWT_ACCESS_TTL_SECONDS', 'NOT_SET')}")
 
@@ -34,7 +36,9 @@ print(f"refresh_ttl: {refresh_ttl} seconds ({refresh_ttl/86400:.1f} days)")
 from app.api.auth import _get_refresh_ttl_seconds
 
 refresh_ttl_auth = _get_refresh_ttl_seconds()
-print(f"\nAuth refresh TTL: {refresh_ttl_auth} seconds ({refresh_ttl_auth/86400:.1f} days)")
+print(
+    f"\nAuth refresh TTL: {refresh_ttl_auth} seconds ({refresh_ttl_auth/86400:.1f} days)"
+)
 
 # Test login and check actual cookie values
 print("\nTesting login endpoint...")

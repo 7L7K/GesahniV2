@@ -42,22 +42,27 @@ def _fake_session(partial_texts: list[str], tokens: list[str] | None = None):
     class Fake:
         def __init__(self, event_cb=None):
             self.event_cb = event_cb
+
         async def start(self):
             return None
+
         async def stop(self):
             return None
+
         async def stream(self, it):
             if tokens and self.event_cb:
                 for t in tokens:
                     await self.event_cb("llm.token", {"token": t})
             for p in partial_texts:
                 yield p
+
     return Fake
 
 
 @pytest.mark.asyncio
 async def test_initial_state_event(monkeypatch):
     from app.transcription import TranscriptionStream
+
     monkeypatch.setenv("VOICE_ENABLED", "1")
     monkeypatch.setattr("app.transcription.PipecatSession", _fake_session(["hello"]))
     ws = DummyWS()
@@ -72,6 +77,7 @@ async def test_initial_state_event(monkeypatch):
 @pytest.mark.asyncio
 async def test_final_punctuation_preserved(monkeypatch):
     from app.transcription import TranscriptionStream
+
     monkeypatch.setenv("VOICE_ENABLED", "1")
     monkeypatch.setattr("app.transcription.PipecatSession", _fake_session(["ok!"]))
     ws = DummyWS()
@@ -87,13 +93,16 @@ async def test_final_punctuation_preserved(monkeypatch):
 @pytest.mark.asyncio
 async def test_error_emits_network_shaky(monkeypatch):
     from app.transcription import TranscriptionStream
+
     monkeypatch.setenv("VOICE_ENABLED", "1")
 
     class Boom:
         async def start(self):
             return None
+
         async def stop(self):
             return None
+
         async def stream(self, it):
             raise RuntimeError("boom")
 
@@ -110,6 +119,7 @@ async def test_error_emits_network_shaky(monkeypatch):
 @pytest.mark.asyncio
 async def test_events_order_state_then_partial_then_final(monkeypatch):
     from app.transcription import TranscriptionStream
+
     monkeypatch.setenv("VOICE_ENABLED", "1")
     monkeypatch.setattr("app.transcription.PipecatSession", _fake_session(["a", "ab"]))
     ws = DummyWS()
@@ -126,6 +136,7 @@ async def test_events_order_state_then_partial_then_final(monkeypatch):
 @pytest.mark.asyncio
 async def test_voice_enabled_default_true(monkeypatch):
     from app.transcription import TranscriptionStream
+
     monkeypatch.delenv("VOICE_ENABLED", raising=False)
     monkeypatch.setattr("app.transcription.PipecatSession", _fake_session(["ok"]))
     ws = DummyWS()
@@ -139,6 +150,7 @@ async def test_voice_enabled_default_true(monkeypatch):
 @pytest.mark.asyncio
 async def test_wake_mode_any_accepts_either(monkeypatch):
     from app.transcription import TranscriptionStream
+
     monkeypatch.setenv("WAKE_MODE", "any")
     monkeypatch.setattr("app.transcription.PipecatSession", _fake_session(["ok"]))
     ws = DummyWS()
@@ -154,6 +166,7 @@ async def test_wake_mode_any_accepts_either(monkeypatch):
 @pytest.mark.asyncio
 async def test_wake_mode_both_requires_both(monkeypatch):
     from app.transcription import TranscriptionStream
+
     monkeypatch.setenv("WAKE_MODE", "both")
     monkeypatch.setattr("app.transcription.PipecatSession", _fake_session(["ok"]))
     ws = DummyWS()
@@ -170,6 +183,7 @@ async def test_wake_mode_both_requires_both(monkeypatch):
 @pytest.mark.asyncio
 async def test_unknown_control_ignored(monkeypatch):
     from app.transcription import TranscriptionStream
+
     monkeypatch.setattr("app.transcription.PipecatSession", _fake_session(["ok"]))
     ws = DummyWS()
     ws.feed({"text": json.dumps({"foo": 1})})
@@ -183,6 +197,7 @@ async def test_unknown_control_ignored(monkeypatch):
 @pytest.mark.asyncio
 async def test_has_speech_monkeypatch(monkeypatch):
     from app.transcription import TranscriptionStream
+
     monkeypatch.setattr("app.transcription.has_speech", lambda b: False)
     monkeypatch.setattr("app.transcription.PipecatSession", _fake_session([]))
     ws = DummyWS()
@@ -193,5 +208,3 @@ async def test_has_speech_monkeypatch(monkeypatch):
     # Only state, no partials
     kinds = [e.get("event") for e in events]
     assert kinds and kinds[0] == "stt.state" and "stt.partial" not in kinds
-
-

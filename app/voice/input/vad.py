@@ -66,5 +66,3 @@ _CHECK: Callable[[bytes], bool] = _select_backend()
 
 def has_speech(audio_chunk: bytes) -> bool:
     return _CHECK(audio_chunk)
-
-

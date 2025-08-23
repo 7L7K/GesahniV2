@@ -4,5 +4,3 @@ from __future__ import annotations
 from app.memory.chroma_store import ChromaVectorStore
 
 __all__ = ["ChromaVectorStore"]
-
-

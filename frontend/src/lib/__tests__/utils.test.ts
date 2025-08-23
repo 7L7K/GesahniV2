@@ -30,5 +30,3 @@ describe("sanitizeNextPath", () => {
     expect(sanitizeNextPath("/settings?tab=profile", "/")).toBe("/settings?tab=profile");
   });
 });
-
-

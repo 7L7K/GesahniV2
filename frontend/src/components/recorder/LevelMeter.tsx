@@ -13,5 +13,3 @@ export function LevelMeter({ volume }: { volume: number }) {
         </div>
     );
 }
-
-

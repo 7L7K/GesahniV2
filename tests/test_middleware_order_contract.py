@@ -31,5 +31,3 @@ def test_middleware_order_contract(monkeypatch):
         "DedupMiddleware",
         "RequestIDMiddleware",
     ]
-
-

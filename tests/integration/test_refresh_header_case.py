@@ -11,6 +11,8 @@ def test_refresh_header_case(monkeypatch):
     c = TestClient(app)
     for key in ["x-auth-intent", "X-Auth-Intent", "X-AUTH-INTENT"]:
         r = c.post("/v1/auth/refresh", headers={key: "refresh"})
-        assert r.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.OK, HTTPStatus.BAD_REQUEST}
-
-
+        assert r.status_code in {
+            HTTPStatus.UNAUTHORIZED,
+            HTTPStatus.OK,
+            HTTPStatus.BAD_REQUEST,
+        }

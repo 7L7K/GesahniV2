@@ -10,7 +10,7 @@ def mint_jwt_token(
     scopes: list[str] | None = None,
     sub: str = "test-user-123",
     ttl: int = 300,
-    secret: str | None = None
+    secret: str | None = None,
 ) -> str:
     """
     Mint a JWT token for testing.

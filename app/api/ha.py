@@ -5,14 +5,12 @@ import logging
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
-from app import home_assistant as ha  # capture original callable for monkeypatch detection
+from app import (
+    home_assistant as ha,
+)  # capture original callable for monkeypatch detection
 from app.deps.scopes import require_any_scope
 from app.deps.user import get_current_user_id
-from app.home_assistant import (
-    HomeAssistantAPIError,
-    get_states,
-    resolve_entity,
-)
+from app.home_assistant import HomeAssistantAPIError, get_states, resolve_entity
 from app.security import require_nonce, verify_token
 
 logger = logging.getLogger(__name__)
@@ -37,7 +35,10 @@ class ServiceRequest(BaseModel):
 router = APIRouter(
     tags=["Care"],
     # Ensure JWT + scopes enforced above nonce for all HA endpoints
-    dependencies=[Depends(verify_token), Depends(require_any_scope(["care:resident", "care:caregiver"]))],
+    dependencies=[
+        Depends(verify_token),
+        Depends(require_any_scope(["care:resident", "care:caregiver"])),
+    ],
 )
 
 # Capture original function reference at import time for monkeypatch detection
@@ -77,7 +78,9 @@ class ServiceAck(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
 
 
-@router.post("/ha/service", response_model=ServiceAck, responses={200: {"model": ServiceAck}})
+@router.post(
+    "/ha/service", response_model=ServiceAck, responses={200: {"model": ServiceAck}}
+)
 async def ha_service(
     req: ServiceRequest,
     _nonce: None = Depends(require_nonce),
@@ -86,6 +89,7 @@ async def ha_service(
     try:
         # If not configured AND not monkeypatched, short-circuit as 400 (contract allows 400)
         import os as _os
+
         not_configured = not (
             _os.getenv("HOME_ASSISTANT_URL") and _os.getenv("HOME_ASSISTANT_TOKEN")
         )
@@ -110,7 +114,9 @@ class WebhookAck(BaseModel):
     status: str = "ok"
 
 
-@router.post("/ha/webhook", response_model=WebhookAck, responses={200: {"model": WebhookAck}})
+@router.post(
+    "/ha/webhook", response_model=WebhookAck, responses={200: {"model": WebhookAck}}
+)
 async def ha_webhook(
     request: Request,
     x_signature: str | None = Header(default=None),
@@ -134,5 +140,3 @@ async def ha_resolve(name: str, user_id: str = Depends(get_current_user_id)):
     except Exception as e:
         logger.exception("HA resolve error: %s", e)
         raise HTTPException(status_code=500, detail="Home Assistant error")
-
-

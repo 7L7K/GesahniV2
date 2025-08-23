@@ -11,5 +11,3 @@ async def test_log_exceptions_decorator_propagates():
 
     with pytest.raises(RuntimeError):
         await boom()
-
-

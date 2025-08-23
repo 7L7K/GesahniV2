@@ -149,4 +149,3 @@ async def websocket_storytime(
 - WebSocket endpoints and subscription/broadcast code in `app/api/care_ws.py` and `app/api/music.py`.
 - Event-producing HTTP endpoints in `app/api/care.py`, `app/api/tv.py`, and `app/api/music.py`.
 - Transcription WS endpoints in `app/api/sessions.py`.
-

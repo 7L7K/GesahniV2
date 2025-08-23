@@ -10,4 +10,3 @@ export default async function CapturePage() {
   // Client-side auth check is handled in CaptureMode component
   return <CaptureMode />;
 }
-

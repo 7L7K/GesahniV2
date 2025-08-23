@@ -21,5 +21,3 @@ module.exports = {
         '/node_modules/(?!(react-markdown|remark-gfm)/)'
     ],
 };
-
-

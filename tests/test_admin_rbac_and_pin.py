@@ -20,7 +20,9 @@ def test_pin_requires_scope_when_enforced(monkeypatch):
     client = TestClient(app)
     monkeypatch.setenv("ENFORCE_JWT_SCOPES", "1")
     monkeypatch.setenv("JWT_SECRET", "x")
-    r = client.post("/v1/history/pin", params={"session_id": "s", "hash_value": "h"}, headers={"Authorization": "Bearer invalid"})
+    r = client.post(
+        "/v1/history/pin",
+        params={"session_id": "s", "hash_value": "h"},
+        headers={"Authorization": "Bearer invalid"},
+    )
     assert r.status_code in {401, 403}
-
-

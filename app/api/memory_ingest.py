@@ -50,6 +50,7 @@ async def ingest_memory(
             contents = await file.read()
             import os
             import tempfile
+
             fd, tmp_path = tempfile.mkstemp(prefix="ing_", suffix="_upload")
             try:
                 with os.fdopen(fd, "wb") as f:
@@ -62,7 +63,12 @@ async def ingest_memory(
                     pass
                 raise
             path = tmp_path
-        res = ingest_path_or_url(user_id=user_id, source=source or (url or (getattr(file, "filename", None) or "upload")), path=path, url=url)
+        res = ingest_path_or_url(
+            user_id=user_id,
+            source=source or (url or (getattr(file, "filename", None) or "upload")),
+            path=path,
+            url=url,
+        )
         return IngestResponse(**res)
     except HTTPException:
         raise
@@ -73,8 +79,7 @@ async def ingest_memory(
         try:
             if tmp_path:
                 import os
+
                 os.remove(tmp_path)
         except Exception:
             pass
-
-

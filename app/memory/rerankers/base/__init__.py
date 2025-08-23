@@ -12,9 +12,9 @@ class RerankScore:
 
 
 class Reranker(Protocol):
-    def rerank(self, query: str, docs: Sequence[str], top_k: int | None = None) -> list[RerankScore]: ...
+    def rerank(
+        self, query: str, docs: Sequence[str], top_k: int | None = None
+    ) -> list[RerankScore]: ...
 
 
 __all__ = ["Reranker", "RerankScore"]
-
-

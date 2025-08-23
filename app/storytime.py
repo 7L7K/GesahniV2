@@ -112,12 +112,16 @@ def _chunk_story_lines(lines: list[dict], target_tokens: int = 800) -> list[_Chu
             continue
         tentative = " ".join(buf + [txt])
         if count_tokens(tentative) > target_tokens:
-            chunks.append(_Chunk(user_id=user_id, session_id=session_id, text=" ".join(buf)))
+            chunks.append(
+                _Chunk(user_id=user_id, session_id=session_id, text=" ".join(buf))
+            )
             buf = [txt]
         else:
             buf.append(txt)
     if buf:
-        chunks.append(_Chunk(user_id=user_id, session_id=session_id, text=" ".join(buf)))
+        chunks.append(
+            _Chunk(user_id=user_id, session_id=session_id, text=" ".join(buf))
+        )
     return chunks
 
 
@@ -129,7 +133,9 @@ def _summarize_text_sync(text: str) -> str:
         "keeping dates/names if present.\n\n" + text
     )
     try:
-        summary, _, _, _ = asyncio.run(ask_gpt(prompt, timeout=OPENAI_TIMEOUT_MS/1000, routing_decision=None))
+        summary, _, _, _ = asyncio.run(
+            ask_gpt(prompt, timeout=OPENAI_TIMEOUT_MS / 1000, routing_decision=None)
+        )
     except Exception as e:
         logger.warning("storytime summarize failed: %s", e)
         return ""
@@ -192,7 +198,10 @@ def schedule_nightly_jobs() -> None:
             replace_existing=True,
         )
         # Use structured logging style consistently
-        logger.info("storytime.schedule", extra={"meta": {"cron": "2:00", "job": "storytime_summarize_nightly"}})
+        logger.info(
+            "storytime.schedule",
+            extra={"meta": {"cron": "2:00", "job": "storytime_summarize_nightly"}},
+        )
     except Exception:
         logger.debug("Failed to schedule storytime summarization", exc_info=True)
 
@@ -203,5 +212,3 @@ __all__ = [
     "summarize_stories_once",
     "schedule_nightly_jobs",
 ]
-
-

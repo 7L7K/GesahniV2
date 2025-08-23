@@ -11,5 +11,3 @@ class OnboardingStage2:
     connected_calendar: bool = False
     connected_music: bool = False
     connected_photos: bool = False
-
-

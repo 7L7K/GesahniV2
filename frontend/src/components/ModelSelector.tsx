@@ -27,5 +27,3 @@ export function ModelSelector({ value, onChange }: { value: string; onChange: (v
         </div>
     )
 }
-
-

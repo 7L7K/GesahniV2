@@ -8,5 +8,3 @@ describe('Capture page server module', () => {
     expect(pageModule).toHaveProperty('default')
   })
 })
-
-

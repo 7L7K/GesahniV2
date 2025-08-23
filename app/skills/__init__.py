@@ -58,7 +58,7 @@ try:
     from .text_utils_skill import TextUtilsSkill  # type: ignore
 except Exception:
     TextUtilsSkill = None  # type: ignore
- 
+
 
 # Preserve class order but avoid duplicates when this module reloads
 SKILL_CLASSES: list[type] = [
@@ -102,6 +102,7 @@ import os as _os
 if _os.getenv("ENABLE_EXTRA_SKILLS", "0").lower() in {"1", "true", "yes"}:
     try:
         from .shopping_list_skill import ShoppingListSkill as _ShoppingListSkill
+
         SKILL_CLASSES.append(_ShoppingListSkill)
     except Exception:
         pass

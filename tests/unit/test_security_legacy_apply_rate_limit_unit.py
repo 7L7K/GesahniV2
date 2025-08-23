@@ -15,5 +15,3 @@ async def test_apply_rate_limit_and_pruning(monkeypatch):
     # prune-only path leaves entries intact
     assert await sec._apply_rate_limit("ip", record=False)
     assert "ip" in sec._requests
-
-

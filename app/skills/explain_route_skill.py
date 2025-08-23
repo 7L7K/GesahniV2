@@ -19,12 +19,16 @@ class ExplainRouteSkill(Skill):
         if not data:
             return "No routing record found."
         parts: list[str] = []
-        parts.append(f"engine={data.get('engine')} model={data.get('model')} reason={data.get('route_reason')}")
+        parts.append(
+            f"engine={data.get('engine')} model={data.get('model')} reason={data.get('route_reason')}"
+        )
         if data.get("latency_ms") is not None:
             parts.append(f"latency={int(data['latency_ms'])}ms")
         if data.get("cache_hit"):
             sim = data.get("cache_similarity")
-            parts.append(f"from_cache={bool(data['cache_hit'])} sim={sim if sim is not None else 'n/a'}")
+            parts.append(
+                f"from_cache={bool(data['cache_hit'])} sim={sim if sim is not None else 'n/a'}"
+            )
         trace = data.get("trace") or []
         for ev in trace[-6:]:  # last few breadcrumbs
             e = ev.get("event")
@@ -36,8 +40,8 @@ class ExplainRouteSkill(Skill):
 
     async def run(self, prompt: str, match: re.Match) -> str:
         rid = None
-        if match.lastgroup == 'rid':
-            rid = match.group('rid')
+        if match.lastgroup == "rid":
+            rid = match.group("rid")
         else:
             # try to extract from explicit parameter inside prompt
             m2 = re.search(r"req_id=([a-f0-9\-]{8,})", prompt, re.I)
@@ -50,5 +54,3 @@ class ExplainRouteSkill(Skill):
             items = _recent(1)
             data = items[0] if items else None
         return self._format(data)
-
-

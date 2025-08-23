@@ -32,5 +32,3 @@ class IdSkill(Skill):
         length = max(4, min(64, length))
         rng = random.SystemRandom()
         return "".join(rng.choice(_ALPHABET) for _ in range(length))
-
-

@@ -97,7 +97,9 @@ def test_embedding_backend_logged(monkeypatch, caplog, backend):
         monkeypatch.setenv("EMBEDDING_BACKEND", "openai")
         monkeypatch.setenv("VECTOR_STORE", "chroma")
         monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
-        monkeypatch.setattr(embeddings, "get_openai_client", lambda: DummyOpenAIClient())
+        monkeypatch.setattr(
+            embeddings, "get_openai_client", lambda: DummyOpenAIClient()
+        )
         embeddings._embed_openai_sync.cache_clear()
         asyncio.run(embeddings.embed("hi"))
     elif backend == "llama":
@@ -163,7 +165,9 @@ def test_openai_cache_ttl(monkeypatch):
 
         def create(self, model, input, encoding_format="float"):
             self.calls += 1
-            return types.SimpleNamespace(data=[types.SimpleNamespace(embedding=[0.0] * 8)])
+            return types.SimpleNamespace(
+                data=[types.SimpleNamespace(embedding=[0.0] * 8)]
+            )
 
     dummy = DummyClient()
     monkeypatch.setattr(embeddings, "get_openai_client", lambda: dummy)

@@ -34,7 +34,7 @@ The CSRF middleware automatically:
 # Bypass CSRF when Authorization header is present (header auth mode)
 auth_header = request.headers.get("Authorization")
 if auth_header and auth_header.startswith("Bearer "):
-    logger.info("bypass: csrf_authorization_header_present header=<%s>", 
+    logger.info("bypass: csrf_authorization_header_present header=<%s>",
                auth_header[:8] + "..." if auth_header else "None")
     return await call_next(request)
 ```
@@ -74,7 +74,7 @@ The Clerk authentication module already:
 def verify_clerk_token(token: str) -> Dict[str, Any]:
     client, iss, aud = _jwks_client()
     signing_key = client.get_signing_key_from_jwt(token)
-    claims = jwt.decode(token, signing_key.key, algorithms=["RS256"], 
+    claims = jwt.decode(token, signing_key.key, algorithms=["RS256"],
                        options={"require": ["exp", "iat", "sub"]})
     return claims
 ```

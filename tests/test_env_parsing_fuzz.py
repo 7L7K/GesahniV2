@@ -14,5 +14,3 @@ def test_env_parsing_fuzz(monkeypatch):
         os.environ["MEM_TOP_K"] = raw
         k = _get_mem_top_k()
         assert 1 <= k <= 10
-
-

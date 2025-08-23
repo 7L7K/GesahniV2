@@ -30,5 +30,3 @@ describe('InputBar', () => {
         expect(enabledTextarea.disabled).toBe(false);
     });
 });
-
-

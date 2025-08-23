@@ -161,4 +161,3 @@ async def silent_refresh_middleware(request: Request, call_next):
             path="/",
         )
 ```
-

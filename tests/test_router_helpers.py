@@ -66,6 +66,7 @@ def test_call_llama_success(monkeypatch):
         # Mock the async generator behavior
         async def fake_generator():
             yield "llama answer"
+
         return fake_generator()
 
     calls = {}
@@ -122,6 +123,7 @@ def test_call_llama_fallback(monkeypatch):
         # Mock the async generator behavior that raises an exception
         async def fake_generator():
             raise RuntimeError("timeout")
+
         return fake_generator()
 
     async def fake_gpt(prompt, model, system, **kwargs):
@@ -143,7 +145,9 @@ def test_call_llama_fallback(monkeypatch):
     monkeypatch.setattr(router, "record", fake_record)
     monkeypatch.setattr(router.memgpt, "store_interaction", lambda *a, **k: None)
     monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
-    monkeypatch.setattr(router, "cache_answer", lambda prompt, answer, cache_id=None: None)
+    monkeypatch.setattr(
+        router, "cache_answer", lambda prompt, answer, cache_id=None: None
+    )
 
     rec = make_record("fallback")
     result = asyncio.run(

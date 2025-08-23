@@ -29,7 +29,7 @@ else:
 3) Fallback policy and metrics
 ```121:127:app/memory/api.py
 logger.warning("%s unavailable (%s: %s); falling back to MemoryVectorStore", backend_label, type(exc).__name__, exc)
-... 
+...
 store = MemoryVectorStore()
 ```
 

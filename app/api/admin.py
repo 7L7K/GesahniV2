@@ -8,12 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
-from app.analytics import (
-    cache_hit_rate,
-    get_metrics,
-    get_top_skills,
-    latency_p95,
-)
+from app.analytics import cache_hit_rate, get_metrics, get_top_skills, latency_p95
 from app.config_runtime import get_config
 from app.decisions import get_explain as decisions_get
 from app.decisions import get_recent as decisions_recent
@@ -41,8 +36,11 @@ from app.token_store import get_storage_stats
 try:
     from app.proactive_engine import get_self_review as _get_self_review  # type: ignore
 except Exception:  # pragma: no cover - optional
+
     def _get_self_review():  # type: ignore
         return None
+
+
 try:
     from app.admin.routes import router as _admin_inspect_router
 except Exception:
@@ -54,7 +52,7 @@ router = APIRouter(
     responses={
         401: {"description": "Authentication required"},
         403: {"description": "Insufficient permissions"},
-    }
+    },
 )
 logger = logging.getLogger(__name__)
 
@@ -68,16 +66,18 @@ class AdminStatusResponse(BaseModel):
     user_scopes: list[str]
     user_id: str | None = None
 
-    model_config = ConfigDict(json_schema_extra={
-        "example": {
-            "status": "ok",
-            "area": "admin",
-            "rbac_version": "2.0",
-            "authenticated": True,
-            "user_scopes": ["admin", "admin:write", "admin:read"],
-            "user_id": "user123"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "ok",
+                "area": "admin",
+                "rbac_version": "2.0",
+                "authenticated": True,
+                "user_scopes": ["admin", "admin:write", "admin:read"],
+                "user_id": "user123",
+            }
         }
-    })
+    )
 
 
 class RbacInfoResponse(BaseModel):
@@ -86,21 +86,27 @@ class RbacInfoResponse(BaseModel):
     user_scopes: list[str]
     effective_permissions: list[str]
 
-    model_config = ConfigDict(json_schema_extra={
-        "example": {
-            "scopes_available": {
-                "admin": "Full administrative access",
-                "admin:write": "Administrative write operations",
-                "admin:read": "Administrative read operations"
-            },
-            "roles_available": {
-                "admin": ["admin", "admin:write", "admin:read"],
-                "caregiver": ["care:caregiver", "user:profile"]
-            },
-            "user_scopes": ["admin", "admin:write"],
-            "effective_permissions": ["system_management", "user_management", "metrics_access"]
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "scopes_available": {
+                    "admin": "Full administrative access",
+                    "admin:write": "Administrative write operations",
+                    "admin:read": "Administrative read operations",
+                },
+                "roles_available": {
+                    "admin": ["admin", "admin:write", "admin:read"],
+                    "caregiver": ["care:caregiver", "user:profile"],
+                },
+                "user_scopes": ["admin", "admin:write"],
+                "effective_permissions": [
+                    "system_management",
+                    "user_management",
+                    "metrics_access",
+                ],
+            }
         }
-    })
+    )
 
 
 # Rebuild the model to ensure all references are resolved
@@ -109,7 +115,9 @@ RbacInfoResponse.model_rebuild()
 
 # New RBAC-powered admin endpoints
 @router.get("/ping", dependencies=[Depends(require_admin())])
-async def admin_ping(user_scopes: set[str] = Depends(get_user_scopes())) -> AdminStatusResponse:
+async def admin_ping(
+    user_scopes: set[str] = Depends(get_user_scopes()),
+) -> AdminStatusResponse:
     """Enhanced admin ping endpoint using new RBAC system.
 
     This endpoint demonstrates:
@@ -123,14 +131,14 @@ async def admin_ping(user_scopes: set[str] = Depends(get_user_scopes())) -> Admi
     user_id = None
 
     return AdminStatusResponse(
-        authenticated=True,
-        user_scopes=sorted(user_scopes),
-        user_id=user_id
+        authenticated=True, user_scopes=sorted(user_scopes), user_id=user_id
     )
 
 
 @router.get("/rbac/info", dependencies=[Depends(require_scope("admin:read"))])
-async def admin_rbac_info(user_scopes: set[str] = Depends(get_user_scopes())) -> RbacInfoResponse:
+async def admin_rbac_info(
+    user_scopes: set[str] = Depends(get_user_scopes()),
+) -> RbacInfoResponse:
     """Get RBAC information for the current user.
 
     This endpoint demonstrates:
@@ -147,7 +155,7 @@ async def admin_rbac_info(user_scopes: set[str] = Depends(get_user_scopes())) ->
         "care:caregiver": "caregiver_features",
         "music:control": "music_control",
         "user:profile": "profile_access",
-        "user:settings": "settings_management"
+        "user:settings": "settings_management",
     }
 
     effective_permissions = [
@@ -160,7 +168,7 @@ async def admin_rbac_info(user_scopes: set[str] = Depends(get_user_scopes())) ->
         scopes_available=STANDARD_SCOPES,
         roles_available=ROLE_SCOPES,
         user_scopes=sorted(user_scopes),
-        effective_permissions=effective_permissions
+        effective_permissions=effective_permissions,
     )
 
 
@@ -180,7 +188,7 @@ async def admin_user_profile(user_scopes: set[str] = Depends(get_user_scopes()))
         "user_id": user_id,
         "scopes": sorted(user_scopes),
         "profile_access": "granted",
-        "can_modify_settings": "user:settings" in user_scopes
+        "can_modify_settings": "user:settings" in user_scopes,
     }
 
 
@@ -200,10 +208,10 @@ async def admin_system_status():
         "environment": {
             "env": os.getenv("ENV", "dev"),
             "debug_mode": os.getenv("DEBUG_MODE", "false"),
-            "test_mode": os.getenv("PYTEST_RUNNING", "false")
+            "test_mode": os.getenv("PYTEST_RUNNING", "false"),
         },
         "rbac_system": "active",
-        "admin_access": "read_only"
+        "admin_access": "read_only",
     }
 
 
@@ -261,27 +269,39 @@ async def admin_surface_index(
     _check_admin(token, request)
     try:
         from app.main import app as _app  # type: ignore
+
         schema = _app.openapi()
         ws_list: list[dict] = []
         try:
             from fastapi.routing import WebSocketRoute  # type: ignore
+
             for r in _app.routes:
                 try:
                     if isinstance(r, WebSocketRoute):
-                        ws_list.append({
-                            "path": getattr(r, "path", None),
-                            "name": getattr(r, "name", None),
-                            "endpoint": getattr(getattr(r, "endpoint", None), "__name__", None),
-                        })
+                        ws_list.append(
+                            {
+                                "path": getattr(r, "path", None),
+                                "name": getattr(r, "name", None),
+                                "endpoint": getattr(
+                                    getattr(r, "endpoint", None), "__name__", None
+                                ),
+                            }
+                        )
                     sub = getattr(r, "routes", None)
                     if sub:
                         for rr in sub:
                             if isinstance(rr, WebSocketRoute):
-                                ws_list.append({
-                                    "path": getattr(rr, "path", None),
-                                    "name": getattr(rr, "name", None),
-                                    "endpoint": getattr(getattr(rr, "endpoint", None), "__name__", None),
-                                })
+                                ws_list.append(
+                                    {
+                                        "path": getattr(rr, "path", None),
+                                        "name": getattr(rr, "name", None),
+                                        "endpoint": getattr(
+                                            getattr(rr, "endpoint", None),
+                                            "__name__",
+                                            None,
+                                        ),
+                                    }
+                                )
                 except Exception:
                     continue
         except Exception:
@@ -301,7 +321,9 @@ async def admin_metrics(
     transcribe_count = max(0, int(m.get("transcribe_count", 0)))
     transcribe_errors = max(0, int(m.get("transcribe_errors", 0)))
     transcribe_error_rate = (
-        round(100.0 * transcribe_errors / transcribe_count, 2) if transcribe_count else 0.0
+        round(100.0 * transcribe_errors / transcribe_count, 2)
+        if transcribe_count
+        else 0.0
     )
     out = {
         "metrics": m,
@@ -317,24 +339,33 @@ async def admin_metrics(
 async def admin_router_decisions(
     limit: int = Query(default=500, ge=1, le=1000),
     cursor: int = Query(default=0, ge=0),
-    engine: str | None = Query(default=None, description="Filter by engine (gpt|llama|...)"),
-    model: str | None = Query(default=None, description="Filter by model name contains"),
+    engine: str | None = Query(
+        default=None, description="Filter by engine (gpt|llama|...)"
+    ),
+    model: str | None = Query(
+        default=None, description="Filter by model name contains"
+    ),
     cache_hit: bool | None = Query(default=None),
     escalated: bool | None = Query(default=None),
     intent: str | None = Query(default=None),
     q: str | None = Query(default=None, description="Substring match in route_reason"),
-    since: str | None = Query(default=None, description="ISO timestamp lower bound (inclusive)"),
+    since: str | None = Query(
+        default=None, description="ISO timestamp lower bound (inclusive)"
+    ),
     token: str | None = Query(default=None),
     request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
     from datetime import datetime
+
     _check_admin(token, request)
     _raw = decisions_recent(1000)
     items = _raw if isinstance(_raw, list) else []
     # Apply filters
     if engine:
-        items = [it for it in items if (it.get("engine") or "").lower() == engine.lower()]
+        items = [
+            it for it in items if (it.get("engine") or "").lower() == engine.lower()
+        ]
     if model:
         s = model.lower()
         items = [it for it in items if s in (it.get("model") or "").lower()]
@@ -351,22 +382,26 @@ async def admin_router_decisions(
     if since:
         try:
             t0 = datetime.fromisoformat(since)
+
             def _parse(ts: str | None):
                 try:
                     return datetime.fromisoformat(ts) if ts else None
                 except Exception:
                     return None
+
             items = [it for it in items if (_parse(it.get("timestamp")) or t0) >= t0]
         except Exception:
             # ignore bad since parameter
             pass
     total = len(items)
-    sliced = items[cursor: cursor + limit]
+    sliced = items[cursor : cursor + limit]
     next_cursor = cursor + len(sliced) if (cursor + len(sliced)) < total else None
     return {"items": sliced, "total": total, "next_cursor": next_cursor}
 
 
-@router.get("/router/decisions.ndjson", dependencies=[Depends(require_scope("admin:read"))])
+@router.get(
+    "/router/decisions.ndjson", dependencies=[Depends(require_scope("admin:read"))]
+)
 async def admin_router_decisions_ndjson(
     limit: int = Query(default=500, ge=1, le=1000),
     user_id: str = Depends(get_current_user_id),
@@ -403,7 +438,9 @@ async def admin_retrieval_last(
     return {"items": out[:limit]}
 
 
-@router.get("/diagnostics/requests", dependencies=[Depends(require_scope("admin:read"))])
+@router.get(
+    "/diagnostics/requests", dependencies=[Depends(require_scope("admin:read"))]
+)
 async def admin_diagnostics_requests(
     limit: int = Query(default=50, ge=1, le=200),
     user_id: str = Depends(get_current_user_id),
@@ -439,8 +476,13 @@ async def admin_config(
     data = get_config().to_dict()
     # Overlay a few live values for observability at runtime
     import os as _os
-    data["store"]["vector_store"] = (_os.getenv("VECTOR_STORE") or data["store"]["vector_store"]).lower()
-    data["store"]["qdrant_collection"] = _os.getenv("QDRANT_COLLECTION", data["store"].get("qdrant_collection", "kb:default"))
+
+    data["store"]["vector_store"] = (
+        _os.getenv("VECTOR_STORE") or data["store"]["vector_store"]
+    ).lower()
+    data["store"]["qdrant_collection"] = _os.getenv(
+        "QDRANT_COLLECTION", data["store"].get("qdrant_collection", "kb:default")
+    )
     data["store"]["active_collection"] = data["store"]["qdrant_collection"]
     return data
 
@@ -474,18 +516,10 @@ class AdminOkResponse(BaseModel):
 
 @router.post(
     "/admin/reload_env",
-    
-    
     response_model=AdminOkResponse,
     responses={200: {"model": AdminOkResponse}},
     openapi_extra={
-        "requestBody": {
-            "content": {
-                "application/json": {
-                    "schema": {"example": {}}
-                }
-            }
-        }
+        "requestBody": {"content": {"application/json": {"schema": {"example": {}}}}}
     },
 )
 async def admin_reload_env(
@@ -496,6 +530,7 @@ async def admin_reload_env(
     _check_admin(token, request)
     try:
         from app.env_utils import load_env
+
         logger.info("admin.reload_env", extra={"meta": {"user": user_id}})
         load_env()
         return {"status": "ok"}
@@ -534,12 +569,25 @@ class AdminBootstrapResponse(BaseModel):
     )
 
 
-@router.post("/vector_store/bootstrap", response_model=AdminBootstrapResponse, responses={200: {"model": AdminBootstrapResponse}}, dependencies=[Depends(require_scope("admin:write"))])
+@router.post(
+    "/vector_store/bootstrap",
+    response_model=AdminBootstrapResponse,
+    responses={200: {"model": AdminBootstrapResponse}},
+    dependencies=[Depends(require_scope("admin:write"))],
+)
 async def admin_vs_bootstrap(
     name: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),
 ):
-    logger.info("admin.vector_bootstrap", extra={"meta": {"user": user_id, "collection": name or (os.getenv("QDRANT_COLLECTION") or "kb:default")}})
+    logger.info(
+        "admin.vector_bootstrap",
+        extra={
+            "meta": {
+                "user": user_id,
+                "collection": name or (os.getenv("QDRANT_COLLECTION") or "kb:default"),
+            }
+        },
+    )
     coll = name or (os.getenv("QDRANT_COLLECTION") or "kb:default")
     try:
         res = _q_bootstrap(coll, int(os.getenv("EMBED_DIM", "1536")))
@@ -550,6 +598,8 @@ async def admin_vs_bootstrap(
         # exercise RBAC/flow can proceed without external dependencies.
         logger.warning("admin.vector_bootstrap.failed", extra={"error": str(e)})
         return AdminBootstrapResponse(status="ok", collection=coll, existed="unknown")
+
+
 class AdminStartedResponse(BaseModel):
     status: str
     action: str
@@ -568,14 +618,29 @@ class AdminStartedResponse(BaseModel):
     )
 
 
-@router.post("/vector_store/migrate", response_model=AdminStartedResponse, responses={200: {"model": AdminStartedResponse}}, dependencies=[Depends(require_scope("admin:write"))])
+@router.post(
+    "/vector_store/migrate",
+    response_model=AdminStartedResponse,
+    responses={200: {"model": AdminStartedResponse}},
+    dependencies=[Depends(require_scope("admin:write"))],
+)
 async def admin_vs_migrate(
     action: str = Query(default="migrate", pattern="^(inventory|export|migrate)$"),
     dry_run: bool = Query(default=True),
     out_dir: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),
 ):
-    logger.info("admin.vector_migrate", extra={"meta": {"user": user_id, "action": action, "dry_run": dry_run, "out_dir": out_dir}})
+    logger.info(
+        "admin.vector_migrate",
+        extra={
+            "meta": {
+                "user": user_id,
+                "action": action,
+                "dry_run": dry_run,
+                "out_dir": out_dir,
+            }
+        },
+    )
     argv = [action]
     if dry_run:
         argv.append("--dry-run")
@@ -586,7 +651,12 @@ async def admin_vs_migrate(
     except SystemExit:
         # argparse exits; swallow for HTTP context
         pass
-    return {"status": "started", "action": action, "dry_run": dry_run, "out_dir": out_dir}
+    return {
+        "status": "started",
+        "action": action,
+        "dry_run": dry_run,
+        "out_dir": out_dir,
+    }
 
 
 def _sse_format(event: str | None, data: dict | str | None) -> str:
@@ -596,7 +666,10 @@ def _sse_format(event: str | None, data: dict | str | None) -> str:
     return f"data: {payload}\n\n"
 
 
-@router.get("/vector_store/bootstrap/stream", dependencies=[Depends(require_scope("admin:read"))])
+@router.get(
+    "/vector_store/bootstrap/stream",
+    dependencies=[Depends(require_scope("admin:read"))],
+)
 async def admin_vs_bootstrap_stream(
     name: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),
@@ -606,7 +679,10 @@ async def admin_vs_bootstrap_stream(
     Emits events: start, step, done, error.
     """
     coll = name or (os.getenv("QDRANT_COLLECTION") or "kb:default")
-    logger.info("admin.vector_bootstrap_stream", extra={"meta": {"user": user_id, "collection": coll}})
+    logger.info(
+        "admin.vector_bootstrap_stream",
+        extra={"meta": {"user": user_id, "collection": coll}},
+    )
 
     async def _agen():
         yield _sse_format("start", {"collection": coll})
@@ -621,7 +697,9 @@ async def admin_vs_bootstrap_stream(
     return StreamingResponse(_agen(), media_type="text/event-stream")
 
 
-@router.get("/vector_store/migrate/stream", dependencies=[Depends(require_scope("admin:read"))])
+@router.get(
+    "/vector_store/migrate/stream", dependencies=[Depends(require_scope("admin:read"))]
+)
 async def admin_vs_migrate_stream(
     action: str = Query(default="migrate", pattern="^(inventory|export|migrate)$"),
     dry_run: bool = Query(default=True),
@@ -632,10 +710,22 @@ async def admin_vs_migrate_stream(
 
     Uses in-process calls for portability; degrades gracefully when deps missing.
     """
-    logger.info("admin.vector_migrate_stream", extra={"meta": {"user": user_id, "action": action, "dry_run": dry_run, "out_dir": out_dir}})
+    logger.info(
+        "admin.vector_migrate_stream",
+        extra={
+            "meta": {
+                "user": user_id,
+                "action": action,
+                "dry_run": dry_run,
+                "out_dir": out_dir,
+            }
+        },
+    )
 
     async def _agen():
-        yield _sse_format("start", {"action": action, "dry_run": dry_run, "out_dir": out_dir})
+        yield _sse_format(
+            "start", {"action": action, "dry_run": dry_run, "out_dir": out_dir}
+        )
         try:
             # Import lazily to avoid heavy deps on startup
             import importlib
@@ -654,14 +744,22 @@ async def admin_vs_migrate_stream(
             if action == "export":
                 qa = mod._export_qa(cli)  # type: ignore[attr-defined]
                 um = mod._export_user_memories(cli)  # type: ignore[attr-defined]
-                yield _sse_format("step", {"qa_cache": len(qa), "user_memories": len(um)})
+                yield _sse_format(
+                    "step", {"qa_cache": len(qa), "user_memories": len(um)}
+                )
                 if out_dir:
-                    mod._write_jsonl(os.path.join(out_dir, "qa_cache.jsonl"), [  # type: ignore[attr-defined]
-                        {"id": i, "document": d, "metadata": m} for (i, d, m) in qa
-                    ])
-                    mod._write_jsonl(os.path.join(out_dir, "user_memories.jsonl"), [  # type: ignore[attr-defined]
-                        {"id": i, "text": d, "metadata": m} for (i, d, m) in um
-                    ])
+                    mod._write_jsonl(
+                        os.path.join(out_dir, "qa_cache.jsonl"),
+                        [  # type: ignore[attr-defined]
+                            {"id": i, "document": d, "metadata": m} for (i, d, m) in qa
+                        ],
+                    )
+                    mod._write_jsonl(
+                        os.path.join(out_dir, "user_memories.jsonl"),
+                        [  # type: ignore[attr-defined]
+                            {"id": i, "text": d, "metadata": m} for (i, d, m) in um
+                        ],
+                    )
                     yield _sse_format("step", {"exported_to": out_dir})
                 yield _sse_format("done", {"status": "ok"})
                 return
@@ -669,17 +767,28 @@ async def admin_vs_migrate_stream(
             # migrate
             qa = mod._export_qa(cli)  # type: ignore[attr-defined]
             um = mod._export_user_memories(cli)  # type: ignore[attr-defined]
-            yield _sse_format("step", {"phase": "export", "qa_cache": len(qa), "user_memories": len(um)})
+            yield _sse_format(
+                "step",
+                {"phase": "export", "qa_cache": len(qa), "user_memories": len(um)},
+            )
             moved_qa = mod._upsert_qa(qc, qa, dry_run=dry_run)  # type: ignore[attr-defined]
-            yield _sse_format("step", {"phase": "upsert_qa", "count": moved_qa, "idempotent": True})
+            yield _sse_format(
+                "step", {"phase": "upsert_qa", "count": moved_qa, "idempotent": True}
+            )
             moved_um = mod._upsert_user_memories(qc, um, dry_run=dry_run)  # type: ignore[attr-defined]
-            yield _sse_format("step", {"phase": "upsert_user_memories", "count": moved_um, "idempotent": True})
+            yield _sse_format(
+                "step",
+                {
+                    "phase": "upsert_user_memories",
+                    "count": moved_um,
+                    "idempotent": True,
+                },
+            )
             yield _sse_format("done", {"status": "ok", "dry_run": dry_run})
         except Exception as e:
             yield _sse_format("error", {"error": str(e)})
 
     return StreamingResponse(_agen(), media_type="text/event-stream")
-
 
 
 @router.get("/vector_store/stats", dependencies=[Depends(require_scope("admin:read"))])
@@ -748,7 +857,10 @@ class AdminFlagBody(BaseModel):
     key: str
     value: str
 
-    model_config = ConfigDict(title="AdminFlagBody", json_schema_extra={"example": {"key": "RETRIEVAL_PIPELINE", "value": "dual"}})
+    model_config = ConfigDict(
+        title="AdminFlagBody",
+        json_schema_extra={"example": {"key": "RETRIEVAL_PIPELINE", "value": "dual"}},
+    )
 
 
 @router.post(
@@ -756,7 +868,13 @@ class AdminFlagBody(BaseModel):
     response_model=AdminFlagsResponse,
     responses={200: {"model": AdminFlagsResponse}},
     openapi_extra={
-        "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/AdminFlagBody"}}}}
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/AdminFlagBody"}
+                }
+            }
+        }
     },
 )
 async def admin_flags(
@@ -783,7 +901,9 @@ async def admin_flags(
         raise HTTPException(status_code=400, detail="missing_key")
     if value is None or value == "":
         raise HTTPException(status_code=400, detail="missing_value")
-    logger.info("admin.flags.set", extra={"meta": {"user": user_id, "key": key, "value": value}})
+    logger.info(
+        "admin.flags.set", extra={"meta": {"user": user_id, "key": key, "value": value}}
+    )
     _set_flag(key, value)
     os.environ[f"FLAG_{key.upper()}"] = value
     # Maintain backward-compat: also set plain key for legacy tests/tools
@@ -802,13 +922,15 @@ async def admin_health_router_retrieval(
     out: dict = {"router": {}, "retrieval": {}, "warnings": []}
     try:
         import app.model_router as mr  # type: ignore
+
         try:
             rules = mr._load_rules()  # type: ignore[attr-defined]
         except Exception:
             rules = None
         out["router"] = {
             "rules_loaded": bool(rules),
-            "rule_values": rules or {
+            "rule_values": rules
+            or {
                 "MAX_SHORT_PROMPT_TOKENS": mr.MAX_SHORT_PROMPT_TOKENS,
                 "RAG_LONG_CONTEXT_THRESHOLD": mr.RAG_LONG_CONTEXT_THRESHOLD,
                 "DOC_LONG_REPLY_TARGET": mr.DOC_LONG_REPLY_TARGET,
@@ -821,22 +943,27 @@ async def admin_health_router_retrieval(
         out["warnings"].append(f"router_rules_error: {e}")
     try:
         from app.config_runtime import get_config as _get_cfg  # type: ignore
+
         cfg = _get_cfg()
         import os as _os
+
         th_raw = _os.getenv("RETRIEVE_DENSE_SIM_THRESHOLD", "0.75")
         try:
             th = float(th_raw)
         except Exception:
             th = None
         out["retrieval"] = {
-            "use_pipeline": _os.getenv("USE_RETRIEVAL_PIPELINE", "0").lower() in {"1", "true", "yes"},
+            "use_pipeline": _os.getenv("USE_RETRIEVAL_PIPELINE", "0").lower()
+            in {"1", "true", "yes"},
             "dense_sim_threshold": th,
             "mmr_lambda": getattr(cfg.retrieval, "mmr_lambda", None),
             "topk_vec": getattr(cfg.retrieval, "topk_vec", None),
             "topk_final": getattr(cfg.retrieval, "topk_final", None),
         }
         if th is None or not (0.0 <= th <= 1.0):
-            out["warnings"].append(f"threshold_invalid: RETRIEVE_DENSE_SIM_THRESHOLD={th_raw}")
+            out["warnings"].append(
+                f"threshold_invalid: RETRIEVE_DENSE_SIM_THRESHOLD={th_raw}"
+            )
     except Exception as e:
         out["warnings"].append(f"retrieval_cfg_error: {e}")
     return out
@@ -884,7 +1011,9 @@ _TV_CFG_EXAMPLE = {
         }
     },
 )
-async def admin_tv_get_config(resident_id: str, user_id: str = Depends(get_current_user_id)):
+async def admin_tv_get_config(
+    resident_id: str, user_id: str = Depends(get_current_user_id)
+):
     """Mirror of /tv/config (GET) for docs under Admin tag."""
     from app.care_store import get_tv_config as _get_tv_config
 
@@ -895,7 +1024,11 @@ async def admin_tv_get_config(resident_id: str, user_id: str = Depends(get_curre
     cfg = TvConfig(
         ambient_rotation=int(rec.get("ambient_rotation") or 30),
         rail=str(rec.get("rail") or "safe"),
-        quiet_hours=QuietHours(**(rec.get("quiet_hours") or {})) if rec.get("quiet_hours") else None,
+        quiet_hours=(
+            QuietHours(**(rec.get("quiet_hours") or {}))
+            if rec.get("quiet_hours")
+            else None
+        ),
         default_vibe=str(rec.get("default_vibe") or "Calm Night"),
     )
     return {"status": "ok", "config": cfg.model_dump()}
@@ -929,14 +1062,30 @@ async def admin_tv_put_config(
     current = TvConfig(
         ambient_rotation=int((rec or {}).get("ambient_rotation") or 30),
         rail=str((rec or {}).get("rail") or "safe"),
-        quiet_hours=QuietHours(**((rec or {}).get("quiet_hours") or {})) if (rec and rec.get("quiet_hours")) else None,
+        quiet_hours=(
+            QuietHours(**((rec or {}).get("quiet_hours") or {}))
+            if (rec and rec.get("quiet_hours"))
+            else None
+        ),
         default_vibe=str((rec or {}).get("default_vibe") or "Calm Night"),
     )
 
-    new_ambient = int(body.ambient_rotation) if body and body.ambient_rotation is not None else current.ambient_rotation
+    new_ambient = (
+        int(body.ambient_rotation)
+        if body and body.ambient_rotation is not None
+        else current.ambient_rotation
+    )
     new_rail = (body.rail or current.rail).lower() if body else current.rail
-    new_qh = body.quiet_hours if (body and body.quiet_hours is not None) else current.quiet_hours
-    new_vibe = body.default_vibe if (body and body.default_vibe is not None) else current.default_vibe
+    new_qh = (
+        body.quiet_hours
+        if (body and body.quiet_hours is not None)
+        else current.quiet_hours
+    )
+    new_vibe = (
+        body.default_vibe
+        if (body and body.default_vibe is not None)
+        else current.default_vibe
+    )
 
     # minimal validation to match tv endpoint
     rail = (new_rail or "safe").lower()
@@ -965,11 +1114,12 @@ async def admin_tv_put_config(
         quiet_hours=new_qh.model_dump() if new_qh else None,
         default_vibe=str(new_vibe or ""),
     )
-    return {"status": "ok", "config": {
-        "ambient_rotation": new_ambient,
-        "rail": rail,
-        "quiet_hours": new_qh.model_dump() if new_qh else None,
-        "default_vibe": new_vibe,
-    }}
-
-
+    return {
+        "status": "ok",
+        "config": {
+            "ambient_rotation": new_ambient,
+            "rail": rail,
+            "quiet_hours": new_qh.model_dump() if new_qh else None,
+            "default_vibe": new_vibe,
+        },
+    }

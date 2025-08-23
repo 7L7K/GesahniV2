@@ -93,7 +93,14 @@ sys.modules["app.audit.models"] = _models_mod
 sys.modules["app.audit.store"] = _store_mod
 
 # Re-export common names for `from app.audit import append_audit` style imports
-for _name in ("append_audit", "append_ws_audit", "append_http_audit", "get_audit_events", "verify_audit_integrity", "AUDIT_EVENT_TYPES"):
+for _name in (
+    "append_audit",
+    "append_ws_audit",
+    "append_http_audit",
+    "get_audit_events",
+    "verify_audit_integrity",
+    "AUDIT_EVENT_TYPES",
+):
     if hasattr(_store_mod, _name):
         globals()[_name] = getattr(_store_mod, _name)
     else:
@@ -109,5 +116,3 @@ if hasattr(_models_mod, "AuditEvent"):
     AuditEvent = _models_mod.AuditEvent
 
 __all__ = ["models", "store", "AuditEvent"]
-
- 

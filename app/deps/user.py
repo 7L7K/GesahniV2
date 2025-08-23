@@ -36,12 +36,12 @@ def get_current_user_id(
     3. Never try to validate __session as a Clerk token unless Clerk is enabled
     4. Use the same JWT secret/issuer checks for both
     5. Log which cookie authenticated the request
-    
+
     The resolved ID is attached to request/websocket state when authenticated.
     """
     if request and request.method == "OPTIONS":
         return "anon"
-    
+
     target = request or websocket
 
     # 1) Grab or initialize our log record
@@ -58,11 +58,11 @@ def get_current_user_id(
     auth_header = None
     if target:
         auth_header = target.headers.get("Authorization")
-    
+
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ", 1)[1]
         token_source = "authorization_header"
-    
+
     # WS query param fallback for browser WebSocket handshakes
     if token is None and websocket is not None:
         try:
@@ -72,18 +72,19 @@ def get_current_user_id(
                 token_source = "websocket_query_param"
         except Exception:
             token = None
-    
+
     # Cookie fallback so browser sessions persist without sending headers
     if token is None and request is not None:
         try:
             # Use canonical cookie name only
             from ..cookie_names import GSNH_AT
+
             token = request.cookies.get(GSNH_AT)
             if token:
                 token_source = "access_token_cookie"
         except Exception:
             token = request.cookies.get("access_token")
-    
+
     # Cookie header fallback for WS handshakes
     if token is None and websocket is not None:
         try:
@@ -102,16 +103,19 @@ def get_current_user_id(
         # Only treat __session as session cookie when Clerk is enabled; otherwise prefer canonical GSNH_SESS
         try:
             if os.getenv("CLERK_ENABLED", "0") == "1":
-                session_token = request.cookies.get("__session") or request.cookies.get("session")
+                session_token = request.cookies.get("__session") or request.cookies.get(
+                    "session"
+                )
             else:
                 from ..cookie_names import GSNH_SESS
+
                 session_token = request.cookies.get(GSNH_SESS)
         except Exception:
             session_token = request.cookies.get("session")
         if session_token:
             token = session_token
             token_source = "__session_cookie"
-    
+
     # 4) Try __session cookie for WebSocket handshakes
     if not token and websocket is not None:
         try:
@@ -127,21 +131,45 @@ def get_current_user_id(
 
     # Log which cookie/token source authenticated the request
     if token:
-        logger.info("auth.token_source", extra={
-            "token_source": token_source,
-            "has_token": bool(token),
-            "token_length": len(token) if token else 0,
-            "request_path": getattr(request, "url", {}).path if hasattr(getattr(request, "url", {}), "path") else "unknown" if request else "websocket",
-        })
+        logger.info(
+            "auth.token_source",
+            extra={
+                "token_source": token_source,
+                "has_token": bool(token),
+                "token_length": len(token) if token else 0,
+                "request_path": (
+                    getattr(request, "url", {}).path
+                    if hasattr(getattr(request, "url", {}), "path")
+                    else "unknown" if request else "websocket"
+                ),
+            },
+        )
     else:
-        logger.info("auth.no_token", extra={
-            "request_path": getattr(request, "url", {}).path if hasattr(getattr(request, "url", {}), "path") else "unknown" if request else "websocket",
-        })
+        logger.info(
+            "auth.no_token",
+            extra={
+                "request_path": (
+                    getattr(request, "url", {}).path
+                    if hasattr(getattr(request, "url", {}), "path")
+                    else "unknown" if request else "websocket"
+                ),
+            },
+        )
 
     secret = JWT_SECRET or os.getenv("JWT_SECRET")
     # Default to not requiring JWT in dev unless explicitly enabled
-    require_jwt = os.getenv("REQUIRE_JWT", "0").strip().lower() in {"1", "true", "yes", "on"}
-    optional_in_tests = os.getenv("JWT_OPTIONAL_IN_TESTS", "0").lower() in {"1", "true", "yes", "on"}
+    require_jwt = os.getenv("REQUIRE_JWT", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    optional_in_tests = os.getenv("JWT_OPTIONAL_IN_TESTS", "0").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
     # Test-mode bypass: if running under pytest or explicit test flags, allow
     # anonymous access when no secret is configured. Mirrors the pattern used in
@@ -156,15 +184,16 @@ def get_current_user_id(
     if not secret and is_test_mode:
         secret = None
         require_jwt = False
-    
+
     # Handle opaque session ID resolution for __session cookies
     if token and token_source in ["__session_cookie", "websocket_session_cookie"]:
         # For __session cookies, we expect an opaque session ID (never a JWT)
         # Use the canonical session resolver to get the JTI
         from ..session_store import get_session_store
+
         store = get_session_store()
         jti = store.get_session(token)
-        
+
         if jti:
             # Found valid session, now get the access token to extract user_id
             access_token = None
@@ -180,50 +209,75 @@ def get_current_user_id(
                             break
                 except Exception:
                     pass
-            
+
             if access_token and secret:
                 try:
                     # Decode the access token to get user_id (allow small skew)
-                    payload = _jwt_decode(access_token, secret, algorithms=["HS256"], leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60))
+                    payload = _jwt_decode(
+                        access_token,
+                        secret,
+                        algorithms=["HS256"],
+                        leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60),
+                    )
                     user_id_from_token = payload.get("user_id") or payload.get("sub")
-                    
+
                     if user_id_from_token:
                         user_id = user_id_from_token
                         # Store JWT payload in request state for scope enforcement
                         if target and isinstance(payload, dict):
                             target.state.jwt_payload = payload
-                        logger.info("auth.opaque_session_resolved", extra={
-                            "user_id": user_id,
-                            "session_id": token,
-                            "jti": jti,
-                            "token_source": token_source,
-                        })
+                        logger.info(
+                            "auth.opaque_session_resolved",
+                            extra={
+                                "user_id": user_id,
+                                "session_id": token,
+                                "jti": jti,
+                                "token_source": token_source,
+                            },
+                        )
                     else:
-                        logger.warning("auth.opaque_session_no_user_id", extra={
+                        logger.warning(
+                            "auth.opaque_session_no_user_id",
+                            extra={
+                                "session_id": token,
+                                "jti": jti,
+                                "token_source": token_source,
+                            },
+                        )
+                except jwt.PyJWTError:
+                    logger.warning(
+                        "auth.opaque_session_token_decode_failed",
+                        extra={
                             "session_id": token,
                             "jti": jti,
                             "token_source": token_source,
-                        })
-                except jwt.PyJWTError:
-                    logger.warning("auth.opaque_session_token_decode_failed", extra={
+                        },
+                    )
+            else:
+                logger.warning(
+                    "auth.opaque_session_no_access_token",
+                    extra={
                         "session_id": token,
                         "jti": jti,
                         "token_source": token_source,
-                    })
-            else:
-                logger.warning("auth.opaque_session_no_access_token", extra={
-                    "session_id": token,
-                    "jti": jti,
-                    "token_source": token_source,
-                })
+                    },
+                )
         else:
-            logger.warning("auth.opaque_session_invalid", extra={
-                "session_id": token,
-                "token_source": token_source,
-            })
-    
+            logger.warning(
+                "auth.opaque_session_invalid",
+                extra={
+                    "session_id": token,
+                    "token_source": token_source,
+                },
+            )
+
     # Try traditional JWT first (same secret/issuer checks for both access_token and __session)
-    if not user_id and token and secret and token_source not in ["__session_cookie", "websocket_session_cookie"]:
+    if (
+        not user_id
+        and token
+        and secret
+        and token_source not in ["__session_cookie", "websocket_session_cookie"]
+    ):
         try:
             # Enforce iss/aud in prod if configured
             opts = {}
@@ -233,14 +287,14 @@ def get_current_user_id(
                 opts["issuer"] = iss
             if aud:
                 opts["audience"] = aud
-            
+
             if opts:
                 payload = _jwt_decode(token, secret, algorithms=["HS256"], **opts)
             else:
                 payload = _jwt_decode(token, secret, algorithms=["HS256"])
-            
+
             user_id = payload.get("user_id") or payload.get("sub") or user_id
-            
+
             # Store JWT payload in request state for scope enforcement
             if target and isinstance(payload, dict):
                 target.state.jwt_payload = payload
@@ -249,23 +303,29 @@ def get_current_user_id(
             # closing the connection before it's established. HTTP requests still fail.
             if websocket is None:
                 try:
-                    logger.warning("auth.invalid_token", extra={"meta": {"reason": "invalid_auth_token"}})
+                    logger.warning(
+                        "auth.invalid_token",
+                        extra={"meta": {"reason": "invalid_auth_token"}},
+                    )
                 except Exception:
                     pass
 
                 # Record auth failure metrics
                 try:
                     from app.security import AUTH_FAIL
+
                     if AUTH_FAIL:
                         AUTH_FAIL.labels(reason="invalid").inc()
                 except Exception:
                     pass
 
-                raise HTTPException(status_code=401, detail="Invalid authentication token")
+                raise HTTPException(
+                    status_code=401, detail="Invalid authentication token"
+                )
     elif token and not secret and require_jwt:
         # Token provided but no secret configured while required → fail-closed
         raise HTTPException(status_code=500, detail="missing_jwt_secret")
-    
+
     # 5) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
     # AND the token source is NOT __session (unless Clerk is enabled)
     clerk_token = None
@@ -275,10 +335,15 @@ def get_current_user_id(
         # 2. Token came from Authorization header (not __session cookie)
         clerk_enabled = _is_clerk_enabled()
         is_authorization_header = token_source == "authorization_header"
-        is_session_cookie = token_source in ["__session_cookie", "websocket_session_cookie"]
-        
+        is_session_cookie = token_source in [
+            "__session_cookie",
+            "websocket_session_cookie",
+        ]
+
         # Never try to validate __session as a Clerk token unless Clerk is enabled
-        if (clerk_enabled or is_authorization_header) and not (is_session_cookie and not clerk_enabled):
+        if (clerk_enabled or is_authorization_header) and not (
+            is_session_cookie and not clerk_enabled
+        ):
             # Basic check if it looks like a Clerk JWT (has 3 parts separated by dots)
             if token.count(".") == 2:
                 clerk_token = token
@@ -286,9 +351,10 @@ def get_current_user_id(
     if not user_id and clerk_token:
         try:
             from ..deps.clerk_auth import verify_clerk_token
+
             claims = verify_clerk_token(clerk_token)
             user_id = str(claims.get("sub") or claims.get("user_id") or "")
-            
+
             # Store Clerk claims in request state for scope enforcement
             if target and isinstance(claims, dict):
                 target.state.jwt_payload = claims
@@ -296,18 +362,26 @@ def get_current_user_id(
             # For WebSocket handshakes, proceed as anonymous on invalid token
             if websocket is None:
                 try:
-                    logger.warning("auth.invalid_clerk_token", extra={"meta": {"reason": "invalid_clerk_token"}})
+                    logger.warning(
+                        "auth.invalid_clerk_token",
+                        extra={"meta": {"reason": "invalid_clerk_token"}},
+                    )
                 except Exception:
                     pass
-                raise HTTPException(status_code=401, detail="Invalid Clerk authentication token")
+                raise HTTPException(
+                    status_code=401, detail="Invalid Clerk authentication token"
+                )
 
     if not user_id:
         user_id = "anon"
 
         # Record metrics for missing/invalid tokens if we had a token but couldn't authenticate
-        if token and websocket is None:  # Only for HTTP requests, not WebSocket handshakes
+        if (
+            token and websocket is None
+        ):  # Only for HTTP requests, not WebSocket handshakes
             try:
                 from app.security import AUTH_FAIL
+
                 if AUTH_FAIL:
                     AUTH_FAIL.labels(reason="missing").inc()
             except Exception:
@@ -323,28 +397,30 @@ def get_current_user_id(
 
 async def require_user(request: Request) -> str:
     """FastAPI dependency that enforces a valid user authentication.
-    
+
     Returns 401 if no valid authentication is found.
     On success, returns the user id.
     """
     # Skip CORS preflight requests
     if request.method == "OPTIONS":
         raise HTTPException(status_code=401, detail="Unauthorized")
-    
+
     try:
         user_id = get_current_user_id(request=request)
-        
+
         # If no valid user found, return 401
         if not user_id or user_id == "anon":
             raise HTTPException(status_code=401, detail="Unauthorized")
-        
+
         return user_id
     except HTTPException:
         # Re-raise with consistent error message
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-def get_current_session_device(request: Request | None = None, websocket: WebSocket | None = None) -> dict:
+def get_current_session_device(
+    request: Request | None = None, websocket: WebSocket | None = None
+) -> dict:
     """Get session and device IDs using centralized resolution."""
     sid = resolve_session_id(request=request, websocket=websocket)
     target = request or websocket
@@ -361,13 +437,17 @@ def get_current_session_device(request: Request | None = None, websocket: WebSoc
     return {"session_id": sid, "device_id": did}
 
 
-def resolve_session_id(request: Request | None = None, websocket: WebSocket | None = None, user_id: str | None = None) -> str:
+def resolve_session_id(
+    request: Request | None = None,
+    websocket: WebSocket | None = None,
+    user_id: str | None = None,
+) -> str:
     """
     Canonical function to resolve session ID consistently across the codebase.
-    
+
     This function expects opaque session IDs from the __session cookie and provides
     a single representation and resolver for session management.
-    
+
     Priority order:
     1. __session cookie (contains opaque session ID only, never JWT)
     2. X-Session-ID header (primary source for non-cookie scenarios)
@@ -375,27 +455,32 @@ def resolve_session_id(request: Request | None = None, websocket: WebSocket | No
     4. user_id from Authorization header (if available)
     5. user_id parameter (if provided and not None)
     6. "anon" (ultimate fallback)
-    
+
     The __session cookie always contains an opaque session ID that maps to a JWT ID (JTI)
     in the session store. This ensures consistent session lifecycle management.
     """
     target = request or websocket
-    
+
     # 1. Try __session cookie first (contains opaque session ID only)
     try:
         if isinstance(request, Request):
-            session_id = request.cookies.get("__session") or request.cookies.get("session")
+            session_id = request.cookies.get("__session") or request.cookies.get(
+                "session"
+            )
             if session_id:
                 # Validate that this is an opaque session ID (not a JWT)
                 if not session_id.count(".") == 2:  # JWT has 3 parts separated by dots
                     return session_id
                 else:
-                    logger.warning("auth.session_cookie_contains_jwt", extra={
-                        "session_id": session_id,
-                    })
+                    logger.warning(
+                        "auth.session_cookie_contains_jwt",
+                        extra={
+                            "session_id": session_id,
+                        },
+                    )
     except Exception:
         pass
-    
+
     # 2. Try __session cookie for WebSocket handshakes
     try:
         if websocket is not None:
@@ -405,16 +490,21 @@ def resolve_session_id(request: Request | None = None, websocket: WebSocket | No
                 if p.startswith("__session="):
                     session_id = p.split("=", 1)[1]
                     # Validate that this is an opaque session ID (not a JWT)
-                    if not session_id.count(".") == 2:  # JWT has 3 parts separated by dots
+                    if (
+                        not session_id.count(".") == 2
+                    ):  # JWT has 3 parts separated by dots
                         return session_id
                     else:
-                        logger.warning("auth.websocket_session_cookie_contains_jwt", extra={
-                            "session_id": session_id,
-                        })
+                        logger.warning(
+                            "auth.websocket_session_cookie_contains_jwt",
+                            extra={
+                                "session_id": session_id,
+                            },
+                        )
                     break
     except Exception:
         pass
-    
+
     # 3. Try X-Session-ID header (primary source for non-cookie scenarios)
     try:
         if target is not None:
@@ -423,7 +513,7 @@ def resolve_session_id(request: Request | None = None, websocket: WebSocket | No
                 return sid
     except Exception:
         pass
-    
+
     # 4. Try sid cookie (fallback)
     try:
         if isinstance(request, Request):
@@ -432,7 +522,7 @@ def resolve_session_id(request: Request | None = None, websocket: WebSocket | No
                 return sid
     except Exception:
         pass
-    
+
     # 5. Try websocket query param
     try:
         if websocket is not None:
@@ -441,7 +531,7 @@ def resolve_session_id(request: Request | None = None, websocket: WebSocket | No
                 return sid
     except Exception:
         pass
-    
+
     # 6. Try to extract user_id from Authorization header
     try:
         if isinstance(request, Request):
@@ -450,19 +540,25 @@ def resolve_session_id(request: Request | None = None, websocket: WebSocket | No
                 token = auth_header[7:]  # Remove "Bearer " prefix
                 # Import here to avoid circular imports
                 from ..api.auth import _decode_any
+
                 payload = _decode_any(token)
                 extracted_user_id = payload.get("sub") or payload.get("user_id")
                 if extracted_user_id and extracted_user_id != "anon":
                     return extracted_user_id
     except Exception:
         pass
-    
+
     # 7. Use provided user_id if available and not None
     if user_id is not None and user_id != "anon":
         return user_id
-    
+
     # 8. Ultimate fallback
     return "anon"
 
 
-__all__ = ["get_current_user_id", "get_current_session_device", "resolve_session_id", "require_user"]
+__all__ = [
+    "get_current_user_id",
+    "get_current_session_device",
+    "resolve_session_id",
+    "require_user",
+]

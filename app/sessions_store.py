@@ -44,7 +44,9 @@ class SessionsStore:
         await conn.commit()
         return conn
 
-    async def create_session(self, user_id: str, *, did: str | None = None, device_name: str | None = None) -> dict[str, str]:
+    async def create_session(
+        self, user_id: str, *, did: str | None = None, device_name: str | None = None
+    ) -> dict[str, str]:
         """Create a new logical login session for a device.
 
         Returns a dict with keys: sid, did.
@@ -142,5 +144,3 @@ class SessionsStore:
 sessions_store = SessionsStore(DB_PATH)
 
 __all__ = ["sessions_store", "SessionsStore"]
-
-

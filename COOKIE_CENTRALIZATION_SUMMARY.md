@@ -41,12 +41,12 @@ Successfully implemented a centralized cookie management system that ensures all
 
 ```python
 # Authentication cookies
-set_auth_cookies(resp, access=token, refresh=token, session_id=id, 
+set_auth_cookies(resp, access=token, refresh=token, session_id=id,
                 access_ttl=ttl, refresh_ttl=ttl, request=request)
 clear_auth_cookies(resp, request)
 
-# OAuth state cookies  
-set_oauth_state_cookies(resp, state=state, next_url=url, 
+# OAuth state cookies
+set_oauth_state_cookies(resp, state=state, next_url=url,
                        request=request, ttl=600, provider="oauth")
 clear_oauth_state_cookies(resp, request, provider="oauth")
 
@@ -55,12 +55,12 @@ set_csrf_cookie(resp, token=token, ttl=ttl, request=request)
 clear_csrf_cookie(resp, request)
 
 # Device trust cookies
-set_device_cookie(resp, value=value, ttl=ttl, request=request, 
+set_device_cookie(resp, value=value, ttl=ttl, request=request,
                  cookie_name="device_trust")
 clear_device_cookie(resp, request, cookie_name="device_trust")
 
 # Generic named cookies
-set_named_cookie(resp, name=name, value=value, ttl=ttl, 
+set_named_cookie(resp, name=name, value=value, ttl=ttl,
                 request=request, httponly=True, ...)
 clear_named_cookie(resp, name=name, request=request, ...)
 ```
@@ -101,7 +101,7 @@ from app.cookies import set_auth_cookies
 set_auth_cookies(
     resp=response,
     access=access_token,
-    refresh=refresh_token, 
+    refresh=refresh_token,
     session_id=session_id,
     access_ttl=900,  # 15 minutes
     refresh_ttl=2592000,  # 30 days

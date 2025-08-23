@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 def _client(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "secret")
     from app.main import app
+
     return TestClient(app)
 
 
@@ -38,11 +39,17 @@ def test_ws_broadcast_backpressure_survives_many_clients(monkeypatch):
     sockets = []
     try:
         for i in range(0, 12):
-            sockets.append(c.websocket_connect("/v1/ws/music?access_token=" + _tok(f"u{i}")))
+            sockets.append(
+                c.websocket_connect("/v1/ws/music?access_token=" + _tok(f"u{i}"))
+            )
         # Trigger a broadcast via a GET that calls _broadcast internally (get_state used indirectly)
         # The music state broadcast occurs on certain endpoints; we poke /v1/state which typically broadcasts current state.
         r = c.get("/v1/state", headers={"Authorization": f"Bearer {_tok('u0')}"})
-        assert r.status_code in (200, 404, 500)  # tolerate env variability; test is about not hanging
+        assert r.status_code in (
+            200,
+            404,
+            500,
+        )  # tolerate env variability; test is about not hanging
         # If we can still perform another request quickly, backpressure didn't starve handlers
         r2 = c.get("/v1/status")
         assert r2.status_code in (200, 401, 403)
@@ -52,5 +59,3 @@ def test_ws_broadcast_backpressure_survives_many_clients(monkeypatch):
                 ws.close()
             except Exception:
                 pass
-
-

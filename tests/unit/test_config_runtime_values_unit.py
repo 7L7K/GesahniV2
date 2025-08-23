@@ -20,5 +20,3 @@ def test_config_parsing_types(monkeypatch):
     assert abs(cfg.obs.trace_sample_rate - 0.5) < 1e-6
     assert cfg.obs.latency_budget_ms == 1000
     assert cfg.obs.ablation_flags == {"a", "b"}
-
-

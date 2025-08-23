@@ -41,8 +41,7 @@ def test_dedup_ttl_expiry(monkeypatch):
     assert client.get("/ping", headers=h).status_code == 200
     assert client.get("/ping", headers=h).status_code == 409
     import time as _t
+
     _t.sleep(1.1)
     # After TTL, request should be accepted again
     assert client.get("/ping", headers=h).status_code == 200
-
-

@@ -62,5 +62,3 @@ def test_latency_stats_and_top_skills():
 
     samples = metrics.get_latency_samples()
     assert isinstance(samples, list) and all(isinstance(x, int) for x in samples)
-
-

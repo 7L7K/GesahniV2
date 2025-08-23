@@ -19,6 +19,7 @@ from typing import Any
 try:
     from app.audit_new.models import AuditEvent
     from app.audit_new.store import append
+
     NEW_AUDIT_AVAILABLE = True
 except ImportError:
     NEW_AUDIT_AVAILABLE = False
@@ -29,7 +30,9 @@ except ImportError:
 # Single source of truth: AUDIT_DIR defaults to `data/audit` and AUDIT_FILE
 # defaults to `events.ndjson` inside that directory. Tests can override via
 # AUDIT_DIR/AUDIT_FILE environment variables.
-AUDIT_DIR = Path(os.getenv("AUDIT_DIR", Path(__file__).resolve().parent / "data" / "audit"))
+AUDIT_DIR = Path(
+    os.getenv("AUDIT_DIR", Path(__file__).resolve().parent / "data" / "audit")
+)
 AUDIT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Allow overriding the file name (tests expect `events.ndjson`)
@@ -47,7 +50,6 @@ AUDIT_EVENT_TYPES = {
     "auth.scope_granted": "Scope access granted",
     "auth.jwt_invalid": "Invalid JWT token",
     "auth.session_expired": "Session expired",
-
     # User management events
     "user.created": "User account created",
     "user.updated": "User account updated",
@@ -55,14 +57,12 @@ AUDIT_EVENT_TYPES = {
     "user.password_changed": "User password changed",
     "user.profile_accessed": "User profile accessed",
     "user.settings_changed": "User settings changed",
-
     # Administrative events
     "admin.access": "Administrative function accessed",
     "admin.config_changed": "System configuration changed",
     "admin.user_impersonated": "User impersonation",
     "admin.backup_created": "System backup created",
     "admin.maintenance": "System maintenance performed",
-
     # Memory and AI events
     "memory.accessed": "Memory data accessed",
     "memory.modified": "Memory data modified",
@@ -71,14 +71,12 @@ AUDIT_EVENT_TYPES = {
     "ai.chat_started": "AI chat session started",
     "ai.chat_message": "AI chat message sent",
     "ai.voice_used": "Voice synthesis/recognition used",
-
     # WebSocket events
     "ws.connect": "WebSocket connection established",
     "ws.disconnect": "WebSocket connection closed",
     "ws.message_sent": "WebSocket message sent",
     "ws.message_received": "WebSocket message received",
     "ws.error": "WebSocket error occurred",
-
     # API and system events
     "api.request": "API endpoint accessed",
     "api.error": "API error occurred",
@@ -86,7 +84,6 @@ AUDIT_EVENT_TYPES = {
     "system.shutdown": "System shutdown",
     "system.health_check": "Health check performed",
     "rate_limit.hit": "Rate limit exceeded",
-
     # Security events
     "security.suspicious_activity": "Suspicious activity detected",
     "security.brute_force_attempt": "Brute force attempt detected",
@@ -164,12 +161,12 @@ def append_audit(
                 user_id=user_id_hashed,
                 route=action,  # Use action as route for now
                 method="API",  # Default method
-                status=200,    # Default status
+                status=200,  # Default status
                 ip=ip_address,
                 req_id=request_id,
-                scopes=[],      # No scope info in old API
+                scopes=[],  # No scope info in old API
                 action=action,
-                meta=meta
+                meta=meta,
             )
 
             # Append to new audit system
@@ -202,7 +199,9 @@ def append_audit(
     }
 
     # Create deterministic payload for hashing (excluding the hash itself)
-    payload = json.dumps(record, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    payload = json.dumps(
+        record, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
     digest = sha256(payload.encode("utf-8")).hexdigest()
     record["hash"] = digest
 
@@ -284,7 +283,9 @@ def verify_audit_integrity() -> tuple[bool, list[str]]:
 
                 # Verify record integrity
                 record_hash = record.pop("hash", None)
-                payload = json.dumps(record, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+                payload = json.dumps(
+                    record, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+                )
                 calculated_hash = sha256(payload.encode("utf-8")).hexdigest()
 
                 if record_hash != calculated_hash:
@@ -327,7 +328,10 @@ def get_audit_events(
                     record = json.loads(line.strip())
 
                     # Apply filters
-                    if since_timestamp and record.get("timestamp", "") < since_timestamp:
+                    if (
+                        since_timestamp
+                        and record.get("timestamp", "") < since_timestamp
+                    ):
                         continue
                     if action_filter and record.get("action") != action_filter:
                         continue
@@ -356,5 +360,3 @@ __all__ = [
     "get_audit_events",
     "AUDIT_EVENT_TYPES",
 ]
-
-

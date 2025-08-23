@@ -21,9 +21,13 @@ async def heartbeat_monitor_loop(poll_seconds: int = 30) -> None:
                 last = float(d.get("last_seen") or 0.0)
                 offline = now - last > 90.0
                 if offline and not d.get("offline_since"):
-                    await set_device_flags(d["id"], offline_since=now, offline_notified=0)
+                    await set_device_flags(
+                        d["id"], offline_since=now, offline_notified=0
+                    )
                 elif not offline and d.get("offline_since"):
-                    await set_device_flags(d["id"], offline_since=None, offline_notified=0)
+                    await set_device_flags(
+                        d["id"], offline_since=None, offline_notified=0
+                    )
 
                 batt = d.get("battery_pct")
                 if batt is not None and batt < 15:
@@ -31,7 +35,10 @@ async def heartbeat_monitor_loop(poll_seconds: int = 30) -> None:
                     notified = int(d.get("battery_notified") or 0)
                     # If low for > 5 minutes and not notified, send SMS (stub)
                     if now - float(low_since) > 300 and not notified:
-                        ok = await send_sms(os.getenv("TWILIO_TEST_TO", "+10000000000"), f"Battery low on device {d['id']} ({batt}%).")
+                        ok = await send_sms(
+                            os.getenv("TWILIO_TEST_TO", "+10000000000"),
+                            f"Battery low on device {d['id']} ({batt}%).",
+                        )
                         if ok:
                             await set_device_flags(d["id"], battery_notified=1)
                         else:
@@ -39,9 +46,9 @@ async def heartbeat_monitor_loop(poll_seconds: int = 30) -> None:
                 else:
                     # reset low battery flags when recovered
                     if d.get("battery_low_since") or d.get("battery_notified"):
-                        await set_device_flags(d["id"], battery_low_since=None, battery_notified=0)
+                        await set_device_flags(
+                            d["id"], battery_low_since=None, battery_notified=0
+                        )
         except Exception:
             pass
         await asyncio.sleep(poll_seconds)
-
-

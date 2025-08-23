@@ -22,9 +22,11 @@ def test_ha_service_human_readable(monkeypatch):
 
     monkeypatch.setattr(ha, "call_service", fake_call)
     client = TestClient(app)
-    res = client.post("/v1/ha/service", json={"domain": "light", "service": "toggle", "data": {"entity_id": "light.k"}})
+    res = client.post(
+        "/v1/ha/service",
+        json={"domain": "light", "service": "toggle", "data": {"entity_id": "light.k"}},
+    )
     print(res.status_code, res.text)
     # Handler wraps as 500 with readable message
     assert res.status_code == 500
     assert res.json()["detail"] == "Home Assistant error"
-

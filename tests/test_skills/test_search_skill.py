@@ -39,14 +39,18 @@ def test_search_was_are_variants(monkeypatch):
     class Client:
         async def __aenter__(self):
             return self
+
         async def __aexit__(self, exc_type, exc, tb):
             pass
+
         async def get(self, url, params=None):
             class R:
                 def json(self_inner):
                     return {"AbstractText": "Answer text"}
+
                 def raise_for_status(self_inner):
                     pass
+
             return R()
 
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: Client())
@@ -60,14 +64,18 @@ def test_search_related_topics_fallback(monkeypatch):
     class Client:
         async def __aenter__(self):
             return self
+
         async def __aexit__(self, exc_type, exc, tb):
             pass
+
         async def get(self, url, params=None):
             class R:
                 def json(self_inner):
                     return {"RelatedTopics": [{"Text": "Alt snippet"}]}
+
                 def raise_for_status(self_inner):
                     pass
+
             return R()
 
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: Client())
@@ -81,8 +89,10 @@ def test_search_service_unreachable(monkeypatch):
     class Bad:
         async def __aenter__(self):
             return self
+
         async def __aexit__(self, exc_type, exc, tb):
             pass
+
         async def get(self, url, params=None):
             raise RuntimeError("boom")
 

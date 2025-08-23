@@ -14,5 +14,3 @@ class ConfirmationModel:
 
 def build_confirmation(prompt_text: str) -> ConfirmationModel:
     return ConfirmationModel(prompt_text=prompt_text)
-
-

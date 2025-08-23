@@ -7,5 +7,3 @@ def get_help_topics() -> list[str]:
         "How to connect calendar, music, and photos",
         "Contact caregiver",
     ]
-
-

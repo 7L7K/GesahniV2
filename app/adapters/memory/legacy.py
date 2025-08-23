@@ -40,10 +40,14 @@ class LegacyMemoryBackend(MemoryBackend):
         res = _api.query_user_memories(user_id, query, k)
         return [{"text": r} for r in res]
 
-    def upsert_entity(self, kind: str, name: str, **attrs) -> str:  # pragma: no cover - noop
+    def upsert_entity(
+        self, kind: str, name: str, **attrs
+    ) -> str:  # pragma: no cover - noop
         # Legacy vector store has no entity graph; return synthesized id
         return f"{kind}:{name}"
 
-    def link(self, src_id: str, rel: str, dst_id: str, **attrs) -> None:  # pragma: no cover - noop
+    def link(
+        self, src_id: str, rel: str, dst_id: str, **attrs
+    ) -> None:  # pragma: no cover - noop
         # Relationship creation is a no-op for the legacy backend
         return None

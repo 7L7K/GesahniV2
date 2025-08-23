@@ -11,5 +11,3 @@ def build_prompt(intent_action: str) -> str:
         "add": "Should I save that reminder?",
         "assist": "Do you need me to call a caregiver?",
     }.get(intent_action, "Is this correct?")
-
-

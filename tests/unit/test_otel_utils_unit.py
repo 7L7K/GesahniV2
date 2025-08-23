@@ -10,5 +10,3 @@ def test_start_span_noop_without_otel(monkeypatch):
     # Methods should handle None safely
     otel_utils.set_error(None, RuntimeError("x"))
     assert otel_utils.get_trace_id_hex() in ("",)
-
-

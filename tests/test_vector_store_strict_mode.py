@@ -8,8 +8,7 @@ def test_strict_vector_store_enforced(monkeypatch):
     # Re-import module fresh to apply env at import time
     import importlib
     import sys
+
     sys.modules.pop("app.memory.api", None)
     with pytest.raises(Exception):
         importlib.import_module("app.memory.api")
-
-

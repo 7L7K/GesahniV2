@@ -21,7 +21,9 @@ class RegexExplainSkill(Skill):
                 if not m:
                     return "no match"
                 if m.groups():
-                    groups = ", ".join(f"{i}:{g}" for i, g in enumerate(m.groups(), start=1))
+                    groups = ", ".join(
+                        f"{i}:{g}" for i, g in enumerate(m.groups(), start=1)
+                    )
                     return f"matched: {m.group(0)} | groups: {groups}"
                 return f"matched: {m.group(0)}"
             except re.error as e:
@@ -44,5 +46,3 @@ class RegexExplainSkill(Skill):
         if not hints:
             hints.append("valid regex")
         return ", ".join(hints)
-
-

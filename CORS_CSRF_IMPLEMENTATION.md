@@ -178,9 +178,9 @@ CORS_ALLOW_CREDENTIALS=true
 
 The implementation fully complies with the specified requirements:
 
-✅ **Backend allowlist: exactly http://localhost:3000 (not both localhost and 127)**  
-✅ **Allow credentials: yes (cookies/tokens)**  
-✅ **Expose headers: only what you need (e.g., X-Request-ID), not wildcards**  
+✅ **Backend allowlist: exactly http://localhost:3000 (not both localhost and 127)**
+✅ **Allow credentials: yes (cookies/tokens)**
+✅ **Expose headers: only what you need (e.g., X-Request-ID), not wildcards**
 ✅ **Preflight: CORS middleware registered as the outermost layer so OPTIONS short-circuits**
 
 All changes are backward compatible and include comprehensive test coverage to ensure security and functionality.

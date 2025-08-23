@@ -32,7 +32,9 @@ class DictionarySkill(Skill):
             if not meanings_list:
                 return f"No definition found for '{word}'."
             # pick the first meaning with definitions
-            chosen = next((m for m in meanings_list if m.get("definitions")), meanings_list[0])
+            chosen = next(
+                (m for m in meanings_list if m.get("definitions")), meanings_list[0]
+            )
             definition = chosen["definitions"][0].get("definition", "")
             synonyms = chosen.get("synonyms", [])
             if synonyms:

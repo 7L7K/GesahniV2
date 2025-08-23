@@ -16,6 +16,7 @@ from app.main import app
 
 def _auth_headers():
     import jwt as _jwt
+
     secret = os.getenv("JWT_SECRET", "secret")
     token = _jwt.encode({"user_id": "u_test"}, secret, algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}
@@ -43,5 +44,3 @@ def test_set_vibe_and_caps():
     body = r2.json()
     assert body["vibe"]["name"] in ("Turn Up", "Calm Night")  # accept name merge
     assert isinstance(body["explicit_allowed"], bool)
-
-

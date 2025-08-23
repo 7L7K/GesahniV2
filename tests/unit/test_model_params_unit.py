@@ -20,5 +20,3 @@ def test_merge_and_maps(monkeypatch):
 
     ollama_args = mp.for_ollama({"max_tokens": 99, "foo": 2})
     assert ollama_args["num_predict"] == 99 and ollama_args["foo"] == 2
-
-

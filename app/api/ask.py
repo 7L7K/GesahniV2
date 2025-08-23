@@ -31,9 +31,15 @@ class Message(BaseModel):
 
 
 class AskRequest(BaseModel):
-    prompt: str | list[Message] = Field(..., description="Canonical prompt: text or messages[]")
-    model: str | None = Field(None, description="Preferred model id (e.g., gpt-4o, llama3)")
-    stream: bool | None = Field(False, description="Force SSE when true; otherwise negotiated via Accept")
+    prompt: str | list[Message] = Field(
+        ..., description="Canonical prompt: text or messages[]"
+    )
+    model: str | None = Field(
+        None, description="Preferred model id (e.g., gpt-4o, llama3)"
+    )
+    stream: bool | None = Field(
+        False, description="Force SSE when true; otherwise negotiated via Accept"
+    )
 
     # Allow legacy alias 'model_override' in docs compatibility
     model_override: str | None = Field(None, exclude=True)
@@ -56,7 +62,12 @@ logger.info("🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id")
 
 # Enforce auth/rate-limit with env gates
 def _require_auth_for_ask() -> bool:
-    return os.getenv("REQUIRE_AUTH_FOR_ASK", "1").strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("REQUIRE_AUTH_FOR_ASK", "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 async def _verify_bearer_strict(request: Request) -> None:
@@ -71,13 +82,23 @@ async def _verify_bearer_strict(request: Request) -> None:
     if auth and auth.startswith("Bearer "):
         token = auth.split(" ", 1)[1]
     if not token:
-        logger.info("auth.missing_bearer", extra={"meta": {"path": getattr(getattr(request, "url", None), "path", "/")}})
+        logger.info(
+            "auth.missing_bearer",
+            extra={
+                "meta": {"path": getattr(getattr(request, "url", None), "path", "/")}
+            },
+        )
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         payload = _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
         request.state.jwt_payload = payload
     except jwt.PyJWTError:
-        logger.info("auth.invalid_token", extra={"meta": {"path": getattr(getattr(request, "url", None), "path", "/")}})
+        logger.info(
+            "auth.invalid_token",
+            extra={
+                "meta": {"path": getattr(getattr(request, "url", None), "path", "/")}
+            },
+        )
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -88,7 +109,12 @@ async def _require_auth_dep(request: Request) -> None:
     # When auth is required for ask, enforce strict token validation before rate limiting
     if _require_auth_for_ask():
         # Prefer cookie/header hybrid validator to support cookie-auth flows; allow strict bearer via env
-        if os.getenv("ASK_STRICT_BEARER", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        if os.getenv("ASK_STRICT_BEARER", "0").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
             await _verify_bearer_strict(request)
         else:
             await verify_token(request)
@@ -126,48 +152,64 @@ async def _ask(request: Request, body: dict | None):
         body,
         extra={
             "meta": {
-                "payload_keys": list(body.keys()) if body and isinstance(body, dict) else [],
-                "model_override": body.get("model") or body.get("model_override") if body and isinstance(body, dict) else None,
+                "payload_keys": (
+                    list(body.keys()) if body and isinstance(body, dict) else []
+                ),
+                "model_override": (
+                    body.get("model") or body.get("model_override")
+                    if body and isinstance(body, dict)
+                    else None
+                ),
             }
-        }
+        },
     )
-    
+
     # Content-Type guard: only accept JSON bodies
     try:
-        ct = (request.headers.get("content-type") or request.headers.get("Content-Type") or "").lower()
+        ct = (
+            request.headers.get("content-type")
+            or request.headers.get("Content-Type")
+            or ""
+        ).lower()
     except Exception:
         ct = ""
     if "application/json" not in ct:
         raise HTTPException(status_code=415, detail="unsupported_media_type")
-    
+
     # Use canonical user_id from resolved parameter
-    user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
-    
+    _user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
+
     # Enforce authentication - return 401 if no valid user
     if user_id == "anon":
         try:
             from ..metrics import ROUTER_ASK_USER_ID_MISSING_TOTAL
-            ROUTER_ASK_USER_ID_MISSING_TOTAL.labels(env=os.getenv("ENV", "dev"), route="/v1/ask").inc()
+
+            ROUTER_ASK_USER_ID_MISSING_TOTAL.labels(
+                env=os.getenv("ENV", "dev"), route="/v1/ask"
+            ).inc()
         except Exception:
             pass
         raise HTTPException(status_code=401, detail="Authentication required")
+
     # Liberal parsing: normalize various legacy shapes into (prompt_text, model, opts)
     def _dget(obj: dict | None, path: str):
         cur = obj or {}
-        for part in path.split('.'):
+        for part in path.split("."):
             if not isinstance(cur, dict) or part not in cur:
                 return None
             cur = cur[part]
         return cur
 
-    def _normalize_payload(raw: dict | None) -> tuple[str, str | None, bool, bool, dict, str]:
+    def _normalize_payload(
+        raw: dict | None,
+    ) -> tuple[str, str | None, bool, bool, dict, str]:
         if not isinstance(raw, dict):
             raise HTTPException(status_code=422, detail="invalid_request")
-        
+
         # Detect payload shape
         shape = "text"  # default
         normalized_from = None
-        
+
         # Check for chat format: prompt is a list of {role, content}
         if isinstance(raw.get("prompt"), list):
             shape = "chat"
@@ -180,7 +222,7 @@ async def _ask(request: Request, body: dict | None):
         elif raw.get("messages") and isinstance(raw.get("messages"), list):
             shape = "chat"
             normalized_from = "messages_list"
-        
+
         model = raw.get("model") or raw.get("model_override")
         stream_present = "stream" in raw
         stream_flag = bool(raw.get("stream", False))
@@ -227,7 +269,11 @@ async def _ask(request: Request, body: dict | None):
                 prompt_text = "\n".join(parts).strip()
             except Exception:
                 prompt_text = None
-        if not prompt_text or not isinstance(prompt_text, str) or not prompt_text.strip():
+        if (
+            not prompt_text
+            or not isinstance(prompt_text, str)
+            or not prompt_text.strip()
+        ):
             raise HTTPException(status_code=422, detail="empty_prompt")
         # Forward select generation options when present
         gen_opts = {}
@@ -244,18 +290,29 @@ async def _ask(request: Request, body: dict | None):
             normalized_from,
         )
 
-    prompt_text, model_override, stream_flag, stream_explicit, gen_opts, shape, normalized_from = _normalize_payload(body)
-    
+    (
+        prompt_text,
+        model_override,
+        stream_flag,
+        stream_explicit,
+        gen_opts,
+        shape,
+        normalized_from,
+    ) = _normalize_payload(body)
+
     # Track shape normalization metrics
     if normalized_from:
         try:
             from ..metrics import ROUTER_SHAPE_NORMALIZED_TOTAL, normalize_shape_label
+
             normalized_from_shape = normalize_shape_label(normalized_from)
             normalized_to_shape = normalize_shape_label(shape)
-            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(from_shape=normalized_from_shape, to_shape=normalized_to_shape).inc()
+            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(
+                from_shape=normalized_from_shape, to_shape=normalized_to_shape
+            ).inc()
         except Exception:
             pass
-    
+
     # Telemetry breadcrumb (once per request): include request id and stream flag
     try:
         rid = request.headers.get("X-Request-ID")
@@ -276,8 +333,8 @@ async def _ask(request: Request, body: dict | None):
 
     queue: asyncio.Queue[str | None] = asyncio.Queue()
     status_code: int | None = None
-    error_detail: str | dict | None = None
-    error_category: str | None = None
+    _error_detail: str | dict | None = None
+    _error_category: str | None = None
 
     streamed_any: bool = False
 
@@ -293,12 +350,13 @@ async def _ask(request: Request, body: dict | None):
             if not moderation_precheck(prompt_text, extra_phrases=[]):
                 try:
                     from app.metrics import VALIDATION_4XX_TOTAL  # type: ignore
+
                     VALIDATION_4XX_TOTAL.labels("/v1/ask", "400").inc()
                 except Exception:
                     pass
                 raise HTTPException(status_code=400, detail="blocked_by_policy")
             # Auth is enforced via route dependency to ensure verify_token runs before rate_limit
-                # rate_limit applied via route dependency; keep explicit header snapshot behavior
+            # rate_limit applied via route dependency; keep explicit header snapshot behavior
             # Lazily import to respect tests that monkeypatch app.main.route_prompt
             main_mod = import_module("app.main")
             route_prompt = main_mod.route_prompt
@@ -314,11 +372,19 @@ async def _ask(request: Request, body: dict | None):
                     **gen_opts,
                 )
             else:  # Compatibility with tests that monkeypatch route_prompt
-                result = await route_prompt(prompt_text, model_override, user_id, **gen_opts)
+                result = await route_prompt(
+                    prompt_text, model_override, user_id, **gen_opts
+                )
             if streamed_any:
-                logger.info("ask.success", extra={"meta": {"user_hash": user_hash, "streamed": True}})
+                logger.info(
+                    "ask.success",
+                    extra={"meta": {"user_hash": user_hash, "streamed": True}},
+                )
             else:
-                logger.info("ask.success", extra={"meta": {"user_hash": user_hash, "streamed": False}})
+                logger.info(
+                    "ask.success",
+                    extra={"meta": {"user_hash": user_hash, "streamed": False}},
+                )
                 # If the backend didn't stream any tokens, emit the final result once
                 if isinstance(result, str) and result:
                     await queue.put(result)
@@ -341,15 +407,16 @@ async def _ask(request: Request, body: dict | None):
                 code = "rate_limited"
             elif status_code >= 500:
                 code = "downstream_error"
-            error_category = code
+            _error_category = code
             try:
                 d = getattr(exc, "detail", None)
                 if d is not None:
-                    error_detail = d
+                    _error_detail = d
             except Exception:
-                error_detail = None
+                _error_detail = None
             # TEMP: Return detailed error info for debugging
             import traceback
+
             detailed_error = f"{code}: {detail}\n{traceback.format_exc()}"
             await queue.put(f"[error:{code}: {detailed_error}]")
         except Exception as e:  # pragma: no cover - defensive
@@ -358,10 +425,11 @@ async def _ask(request: Request, body: dict | None):
             status_code = 500
             # Include exception type to avoid empty messages like "Exception()"
             detail = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
-            error_detail = detail
-            error_category = "downstream_error"
+            _error_detail = detail
+            _error_category = "downstream_error"
             # TEMP: Return detailed error info for debugging
             import traceback
+
             detailed_error = f"{detail}\n{traceback.format_exc()}"
             await queue.put(f"[error:downstream_error: {detailed_error}]")
         finally:
@@ -371,7 +439,8 @@ async def _ask(request: Request, body: dict | None):
     # Root span for this request
     attrs = {
         "user_id": user_id,
-        "ip": request.headers.get("X-Forwarded-For") or (request.client.host if request.client else ""),
+        "ip": request.headers.get("X-Forwarded-For")
+        or (request.client.host if request.client else ""),
         "route": "/v1/ask",
     }
     span_ctx = start_span("ask.request", attrs)
@@ -466,7 +535,11 @@ async def _ask(request: Request, body: dict | None):
         text_result = "".join(chunks)
         if status_code and status_code >= 400:
             # Error path: propagate detail with proper status
-            detail_payload = error_detail if (isinstance(error_detail, dict) or isinstance(error_detail, list)) else {"detail": str(error_detail or error_category or "error")}
+            detail_payload = (
+                error_detail
+                if (isinstance(error_detail, dict) or isinstance(error_detail, list))
+                else {"detail": str(error_detail or error_category or "error")}
+            )
             resp = JSONResponse(detail_payload, status_code=int(status_code))
         else:
             resp = JSONResponse({"response": text_result}, status_code=200)
@@ -486,7 +559,8 @@ async def _ask(request: Request, body: dict | None):
         pass
     # Close span when response finishes (best-effort for streaming)
     try:
-        span = span_ctx.__enter__()  # type: ignore
+        _ = span_ctx.__enter__()  # type: ignore
+
         @resp.background
         async def _finish_span():  # type: ignore
             try:
@@ -496,6 +570,7 @@ async def _ask(request: Request, body: dict | None):
                     span_ctx.__exit__(None, None, None)  # type: ignore
                 except Exception:
                     pass
+
     except Exception:
         try:
             span_ctx.__exit__(None, None, None)  # type: ignore
@@ -515,7 +590,6 @@ async def ask(
 
 @router.post(
     "/ask/dry-explain",
-
     response_model=dict,
     include_in_schema=False,
 )
@@ -531,59 +605,84 @@ async def ask_dry_explain(
         body,
         extra={
             "meta": {
-                "payload_keys": list(body.keys()) if body and isinstance(body, dict) else [],
-                "model_override": body.get("model") or body.get("model_override") if body and isinstance(body, dict) else None,
+                "payload_keys": (
+                    list(body.keys()) if body and isinstance(body, dict) else []
+                ),
+                "model_override": (
+                    body.get("model") or body.get("model_override")
+                    if body and isinstance(body, dict)
+                    else None
+                ),
             }
-        }
+        },
     )
-    
+
     # Content-Type guard: only accept JSON bodies
     try:
-        ct = (request.headers.get("content-type") or request.headers.get("Content-Type") or "").lower()
+        ct = (
+            request.headers.get("content-type")
+            or request.headers.get("Content-Type")
+            or ""
+        ).lower()
     except Exception:
         ct = ""
     if "application/json" not in ct:
         raise HTTPException(status_code=415, detail="unsupported_media_type")
-    
+
     # Use canonical user_id from get_current_user_id dependency
     user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
-    
+
     # Enforce authentication - return 401 if no valid user
     if user_id == "anon":
         try:
             from ..metrics import ROUTER_ASK_USER_ID_MISSING_TOTAL
-            ROUTER_ASK_USER_ID_MISSING_TOTAL.labels(env=os.getenv("ENV", "dev"), route="/v1/ask/dry-explain").inc()
+
+            ROUTER_ASK_USER_ID_MISSING_TOTAL.labels(
+                env=os.getenv("ENV", "dev"), route="/v1/ask/dry-explain"
+            ).inc()
         except Exception:
             pass
         raise HTTPException(status_code=401, detail="Authentication required")
-    
+
     # Use the same normalization logic
-    prompt_text, model_override, stream_flag, stream_explicit, gen_opts, shape, normalized_from = _normalize_payload(body)
-    
+    (
+        prompt_text,
+        model_override,
+        stream_flag,
+        stream_explicit,
+        gen_opts,
+        shape,
+        normalized_from,
+    ) = _normalize_payload(body)
+
     # Track shape normalization metrics
     if normalized_from:
         try:
             from ..metrics import ROUTER_SHAPE_NORMALIZED_TOTAL, normalize_shape_label
+
             normalized_from_shape = normalize_shape_label(normalized_from)
             normalized_to_shape = normalize_shape_label(shape)
-            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(from_shape=normalized_from_shape, to_shape=normalized_to_shape).inc()
+            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(
+                from_shape=normalized_from_shape, to_shape=normalized_to_shape
+            ).inc()
         except Exception:
             pass
-    
+
     # Generate request ID
     import uuid
+
     request_id = str(uuid.uuid4())[:8]
-    
+
     # Get routing decision without making actual calls
     from ..intent import detect_intent
     from ..model_picker import pick_model
     from ..tokenizer import count_tokens
-    
+
     # Detect intent and count tokens
     norm_prompt = prompt_text.lower().strip()
     intent, priority = detect_intent(prompt_text)
     tokens = count_tokens(prompt_text)
-    
+
     # Determine routing decision
     if model_override:
         mv = model_override.strip()
@@ -598,16 +697,19 @@ async def ask_dry_explain(
         else:
             raise HTTPException(status_code=400, detail=f"Unknown model '{mv}'")
     else:
-        engine, model_name, picker_reason, keyword_hit = pick_model(prompt_text, intent, tokens)
+        engine, model_name, picker_reason, keyword_hit = pick_model(
+            prompt_text, intent, tokens
+        )
         chosen_vendor = "openai" if engine == "gpt" else "ollama"
         chosen_model = model_name
-    
+
     # Check circuit breakers
     from ..llama_integration import llama_circuit_open
     from ..router import _user_circuit_open
+
     cb_global_open = llama_circuit_open
     cb_user_open = await _user_circuit_open(user_id) if user_id else False
-    
+
     # Return the routing decision
     result = {
         "ts": datetime.now(UTC).isoformat(),
@@ -628,16 +730,15 @@ async def ask_dry_explain(
         "allow_fallback": True,
         "stream": bool(stream_flag),
     }
-    
-    if 'keyword_hit' in locals() and keyword_hit:
+
+    if "keyword_hit" in locals() and keyword_hit:
         result["keyword_hit"] = keyword_hit
-    
+
     return result
 
 
 @router.post(
     "/ask/stream",
-
     response_class=StreamingResponse,
     include_in_schema=False,
 )
@@ -653,60 +754,84 @@ async def ask_stream(
         body,
         extra={
             "meta": {
-                "payload_keys": list(body.keys()) if body and isinstance(body, dict) else [],
-                "model_override": body.get("model") or body.get("model_override") if body and isinstance(body, dict) else None,
+                "payload_keys": (
+                    list(body.keys()) if body and isinstance(body, dict) else []
+                ),
+                "model_override": (
+                    body.get("model") or body.get("model_override")
+                    if body and isinstance(body, dict)
+                    else None
+                ),
             }
-        }
+        },
     )
-    
+
     # Content-Type guard: only accept JSON bodies
     try:
-        ct = (request.headers.get("content-type") or request.headers.get("Content-Type") or "").lower()
+        ct = (
+            request.headers.get("content-type")
+            or request.headers.get("Content-Type")
+            or ""
+        ).lower()
     except Exception:
         ct = ""
     if "application/json" not in ct:
         raise HTTPException(status_code=415, detail="unsupported_media_type")
-    
+
     # Use canonical user_id from get_current_user_id dependency
     user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
-    
+
     # Enforce authentication - return 401 if no valid user
     if user_id == "anon":
         try:
             from ..metrics import ROUTER_ASK_USER_ID_MISSING_TOTAL
-            ROUTER_ASK_USER_ID_MISSING_TOTAL.labels(env=os.getenv("ENV", "dev"), route="/v1/ask/stream").inc()
+
+            ROUTER_ASK_USER_ID_MISSING_TOTAL.labels(
+                env=os.getenv("ENV", "dev"), route="/v1/ask/stream"
+            ).inc()
         except Exception:
             pass
         raise HTTPException(status_code=401, detail="Authentication required")
-    
+
     # Use the same normalization logic
-    prompt_text, model_override, stream_flag, stream_explicit, gen_opts, shape, normalized_from = _normalize_payload(body)
-    
+    (
+        prompt_text,
+        model_override,
+        stream_flag,
+        stream_explicit,
+        gen_opts,
+        shape,
+        normalized_from,
+    ) = _normalize_payload(body)
+
     # Track shape normalization metrics
     if normalized_from:
         try:
             from ..metrics import ROUTER_SHAPE_NORMALIZED_TOTAL, normalize_shape_label
+
             normalized_from_shape = normalize_shape_label(normalized_from)
             normalized_to_shape = normalize_shape_label(shape)
-            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(from_shape=normalized_from_shape, to_shape=normalized_to_shape).inc()
+            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(
+                from_shape=normalized_from_shape, to_shape=normalized_to_shape
+            ).inc()
         except Exception:
             pass
-    
+
     # Generate request ID
     request_id = str(uuid.uuid4())[:8]
-    
+
     async def stream_generator():
         try:
             # Get routing decision first
             from ..intent import detect_intent
             from ..model_picker import pick_model
             from ..tokenizer import count_tokens
-            
+
             # Detect intent and count tokens
             norm_prompt = prompt_text.lower().strip()
             intent, priority = detect_intent(prompt_text)
             tokens = count_tokens(prompt_text)
-            
+
             # Determine routing decision
             if model_override:
                 mv = model_override.strip()
@@ -723,16 +848,19 @@ async def ask_stream(
                     yield f"event: error\ndata: {json.dumps({'rid': request_id, 'error': 'unknown_model', 'model': mv})}\n\n"
                     return
             else:
-                engine, model_name, picker_reason, keyword_hit = pick_model(prompt_text, intent, tokens)
+                engine, model_name, picker_reason, keyword_hit = pick_model(
+                    prompt_text, intent, tokens
+                )
                 chosen_vendor = "openai" if engine == "gpt" else "ollama"
                 chosen_model = model_name
-            
+
             # Check circuit breakers
             from ..llama_integration import llama_circuit_open
             from ..router import _user_circuit_open
+
             cb_global_open = llama_circuit_open
             cb_user_open = await _user_circuit_open(user_id) if user_id else False
-            
+
             # Emit route event
             route_data = {
                 "ts": datetime.now(UTC).isoformat(),
@@ -753,40 +881,42 @@ async def ask_stream(
                 "allow_fallback": True,
                 "stream": True,
             }
-            
-            if 'keyword_hit' in locals() and keyword_hit:
+
+            if "keyword_hit" in locals() and keyword_hit:
                 route_data["keyword_hit"] = keyword_hit
-            
+
             yield f"event: route\ndata: {json.dumps(route_data)}\n\n"
-            
+
             # Stream the actual response
             async def stream_callback(token: str):
                 yield f"event: delta\ndata: {json.dumps({'content': token})}\n\n"
-            
+
             # Call the appropriate vendor
             try:
                 if chosen_vendor == "openai":
                     from ..gpt_client import ask_gpt
+
                     result = await ask_gpt(
                         prompt_text,
                         model=chosen_model,
-                        timeout=OPENAI_TIMEOUT_MS/1000,
+                        timeout=OPENAI_TIMEOUT_MS / 1000,
                         stream_cb=stream_callback,
-                        **gen_opts
+                        **gen_opts,
                     )
                 elif chosen_vendor == "ollama":
                     from ..llama_integration import ask_llama
+
                     result = await ask_llama(
                         prompt_text,
                         model=chosen_model,
-                        timeout=OLLAMA_TIMEOUT_MS/1000,
+                        timeout=OLLAMA_TIMEOUT_MS / 1000,
                         stream_cb=stream_callback,
-                        **gen_opts
+                        **gen_opts,
                     )
                 else:
                     yield f"event: error\ndata: {json.dumps({'rid': request_id, 'vendor': chosen_vendor, 'error_class': 'unknown_vendor'})}\n\n"
                     return
-                
+
                 # Emit done event
                 done_data = {
                     "rid": request_id,
@@ -795,33 +925,33 @@ async def ask_stream(
                     "final_tokens": tokens,  # This would be actual completion tokens
                 }
                 yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
-                
+
             except Exception as e:
                 # Emit error event
                 error_data = {
                     "rid": request_id,
                     "vendor": chosen_vendor,
                     "error_class": type(e).__name__,
-                    "error": str(e)
+                    "error": str(e),
                 }
                 yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
-                
+
         except Exception as e:
             # Emit error event for any other errors
             error_data = {
                 "rid": request_id,
                 "error_class": type(e).__name__,
-                "error": str(e)
+                "error": str(e),
             }
             yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
-    
+
     return StreamingResponse(
         stream_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-store",
             "X-RID": request_id,
-        }
+        },
     )
 
 
@@ -841,13 +971,11 @@ async def ask_replay(
     # 1. Load the stored golden trace from a database/cache
     # 2. Replay against current vendor configs
     # 3. Return diff between then and now
-    
+
     # For now, return a mock response
     return {
         "rid": rid,
         "status": "not_implemented",
         "message": "Replay functionality not yet implemented",
-        "note": "This would load stored golden trace and replay against current configs"
+        "note": "This would load stored golden trace and replay against current configs",
     }
-
-

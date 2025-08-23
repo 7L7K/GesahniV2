@@ -118,5 +118,3 @@
 - `frontend/src/lib/api.ts`: "const res = await apiFetch('/v1/ask', { method: 'POST', headers, body: JSON.stringify(payload) });"
 - `app/main.py`: "protected_router = APIRouter(dependencies=[Depends(verify_token), Depends(rate_limit)])"
 - `frontend/src/app/page.tsx`: "localStorage.setItem(historyKey, JSON.stringify(messages.filter(m => !m.loading).slice(-100)))"
-
-

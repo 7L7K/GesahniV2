@@ -12,5 +12,3 @@ def test_configure_logging_and_error_buffer(monkeypatch, capsys):
 
     errors = lc.get_last_errors(1)
     assert errors and errors[-1]["msg"] == "boom"
-
-

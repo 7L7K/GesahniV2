@@ -25,5 +25,3 @@ def test_vector_store_user_namespace():
     res_b = vs.query_user_memories(uid_b, "beta", k=5)
     assert any("alpha" in x for x in res_a)
     assert any("beta" in x for x in res_b)
-
-

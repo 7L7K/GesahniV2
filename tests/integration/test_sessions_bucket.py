@@ -31,7 +31,9 @@ def _mk_client(env: dict[str, str] | None = None) -> TestClient:
     return TestClient(app)
 
 
-def _register_and_login(client: TestClient, username: str = "user1", password: str = "secret123") -> dict[str, Any]:
+def _register_and_login(
+    client: TestClient, username: str = "user1", password: str = "secret123"
+) -> dict[str, Any]:
     # Register
     r1 = client.post("/v1/register", json={"username": username, "password": password})
     assert r1.status_code in (200, 400)  # 400 when user already exists
@@ -77,7 +79,9 @@ def _auth_refresh(client: TestClient) -> int:
     return r.status_code
 
 
-def _logout_family(client: TestClient, bearer_token: str, sid: str | None = None) -> int:
+def _logout_family(
+    client: TestClient, bearer_token: str, sid: str | None = None
+) -> int:
     headers = {"Authorization": f"Bearer {bearer_token}"}
     if sid:
         headers["X-Session-ID"] = sid
@@ -105,38 +109,59 @@ def test_phase1_map_and_cookie_persistence():
 def test_phase2_sessions_listing_and_revoke_cross_device(monkeypatch):
     # Use a dedicated DB for sessions store to avoid collisions across runs
     import tempfile
+
     tmp = tempfile.NamedTemporaryFile(delete=True)
     client = _mk_client({"USER_DB": tmp.name})
     _register_and_login(client, "user2")
     # Ensure the singleton store points at our temp DB despite prior imports
     import app.sessions_store as _ssm
+
     _ssm.sessions_store._path = tmp.name  # type: ignore[attr-defined]
 
     # Seed two device sessions for u2 directly via store (mirrors existing tests)
     import asyncio
 
     from app.sessions_store import sessions_store
-    rec1 = asyncio.get_event_loop().run_until_complete(sessions_store.create_session("user2", did="dev_a", device_name="A"))
-    rec2 = asyncio.get_event_loop().run_until_complete(sessions_store.create_session("user2", did="dev_b", device_name="B"))
+
+    rec1 = asyncio.get_event_loop().run_until_complete(
+        sessions_store.create_session("user2", did="dev_a", device_name="A")
+    )
+    rec2 = asyncio.get_event_loop().run_until_complete(
+        sessions_store.create_session("user2", did="dev_b", device_name="B")
+    )
     # Sanity: verify store sees both records directly
-    direct = asyncio.get_event_loop().run_until_complete(sessions_store.list_user_sessions("user2"))
+    direct = asyncio.get_event_loop().run_until_complete(
+        sessions_store.list_user_sessions("user2")
+    )
     assert {r.get("did") for r in direct} >= {"dev_a", "dev_b"}
 
     # API collision: /v1/sessions in this app returns capture sessions, not device sessions.
     # Validate presence via store directly (already asserted above) and proceed to revoke via HTTP.
 
     # Revoke one session and verify listing reflects it (best-effort via store)
-    _revoke_session(client, rec1["sid"])  # HTTP path should route to device sessions revoke handler
+    _revoke_session(
+        client, rec1["sid"]
+    )  # HTTP path should route to device sessions revoke handler
     # Confirm family is marked revoked in store
     import asyncio as _asyncio
 
     from app.sessions_store import sessions_store as _store
-    assert _asyncio.get_event_loop().run_until_complete(_store.is_family_revoked(rec1["sid"])) is True
+
+    assert (
+        _asyncio.get_event_loop().run_until_complete(
+            _store.is_family_revoked(rec1["sid"])
+        )
+        is True
+    )
 
     # Cross-device: logout family for sid=rec2 and ensure strict refresh denies if enforced
     # Mint a dev bearer token for logout
-    tok = client.post("/v1/auth/token", data={"username": "user2"}).json()["access_token"]
-    code = _logout_family(client, tok, sid=rec2["sid"])  # set family revoke key in Redis when available
+    tok = client.post("/v1/auth/token", data={"username": "user2"}).json()[
+        "access_token"
+    ]
+    code = _logout_family(
+        client, tok, sid=rec2["sid"]
+    )  # set family revoke key in Redis when available
     assert code == 200
 
     # After family revoke, strict refresh should reject for that family (depends on Redis availability)
@@ -146,7 +171,9 @@ def test_phase2_sessions_listing_and_revoke_cross_device(monkeypatch):
 
 def test_phase2_missing_and_expired_tokens_and_rate_limits(monkeypatch):
     # Short TTLs to exercise expiry and silent rotation
-    client = _mk_client({"JWT_ACCESS_TTL_SECONDS": "3", "ACCESS_REFRESH_THRESHOLD_SECONDS": "3600"})
+    client = _mk_client(
+        {"JWT_ACCESS_TTL_SECONDS": "3", "ACCESS_REFRESH_THRESHOLD_SECONDS": "3600"}
+    )
     _register_and_login(client, "user3")
 
     # Missing refresh token
@@ -175,6 +202,7 @@ def test_phase2_missing_and_expired_tokens_and_rate_limits(monkeypatch):
         import asyncio as _asyncio
 
         from app.token_store import _get_redis  # type: ignore
+
         r = _asyncio.get_event_loop().run_until_complete(_get_redis())
         if r is not None:
             try:
@@ -202,6 +230,7 @@ def test_phase2_boundary_listing_shapes_and_pages():
 
 def test_phase3_restart_sessions_store_and_retry_on_fail(monkeypatch):
     import tempfile
+
     tmp = tempfile.NamedTemporaryFile(delete=True)
     client = _mk_client({"USER_DB": tmp.name})
     _register_and_login(client, "user5")
@@ -239,5 +268,3 @@ def test_phase4_emit_records_and_summary():
     # Health endpoints for summary context
     r2 = client.get("/v1/health")
     assert r2.status_code == 200
-
-

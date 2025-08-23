@@ -1,9 +1,9 @@
 /**
  * Auth Orchestrator - Centralized Authentication Authority
- * 
+ *
  * This is the ONLY component allowed to call /v1/whoami directly.
  * All other components must read authentication state from the global store.
- * 
+ *
  * Integrates with BootstrapManager to prevent race conditions during auth finish.
  */
 

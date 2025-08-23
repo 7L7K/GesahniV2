@@ -17,11 +17,15 @@ def _cheap_cross_score(query: str, text: str) -> float:
     nq = math.sqrt(sum(x * x for x in q)) or 1.0
     nd = math.sqrt(sum(y * y for y in d)) or 1.0
     cos = dot / (nq * nd)
-    penalty = 0.02 * max(0, (len(text) - 600) / 200)  # mild penalty for very long passages
+    penalty = 0.02 * max(
+        0, (len(text) - 600) / 200
+    )  # mild penalty for very long passages
     return float(cos - penalty)
 
 
-def local_rerank(query: str, items: Iterable[RetrievedItem], keep: int) -> list[RetrievedItem]:
+def local_rerank(
+    query: str, items: Iterable[RetrievedItem], keep: int
+) -> list[RetrievedItem]:
     scored: list[tuple[float, RetrievedItem]] = []
     for it in items:
         s = _cheap_cross_score(query, it.text)
@@ -35,11 +39,11 @@ def local_rerank(query: str, items: Iterable[RetrievedItem], keep: int) -> list[
     return out
 
 
-def hosted_rerank_passthrough(query: str, items: Iterable[RetrievedItem], keep: int) -> list[RetrievedItem]:
+def hosted_rerank_passthrough(
+    query: str, items: Iterable[RetrievedItem], keep: int
+) -> list[RetrievedItem]:
     # Placeholder for a hosted cross-encoder; returns top-N by local score.
     return local_rerank(query, items, keep)
 
 
 __all__ = ["local_rerank", "hosted_rerank_passthrough"]
-
-

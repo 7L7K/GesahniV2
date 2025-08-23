@@ -11,5 +11,3 @@ def weekly_rollup(chunks: Iterable[str]) -> str:
     head = items[:3]
     tail = items[-2:]
     return " | ".join(head + (["…"] if len(items) > 5 else []) + tail)
-
-

@@ -11,5 +11,3 @@ class Tile:
 
 def empty_grid() -> list[Tile]:
     return []
-
-

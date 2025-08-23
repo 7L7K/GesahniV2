@@ -18,5 +18,3 @@ def test_refresh_ttl_default(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     # default 7 days
     assert _get_refresh_ttl_seconds() == 7 * 24 * 60 * 60
-
-

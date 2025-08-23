@@ -12,5 +12,3 @@ def test_csrf_missing_cookie(monkeypatch):
     # Send header only; no cookie
     r = c.post("/v1/profile", headers={"X-CSRF-Token": "tok"})
     assert r.status_code == HTTPStatus.FORBIDDEN
-
-

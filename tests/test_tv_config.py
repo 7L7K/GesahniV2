@@ -1,5 +1,3 @@
-
-
 def _get(client, path: str):
     return client.get(path, headers={"Authorization": "Bearer test"})
 
@@ -63,4 +61,3 @@ def test_tv_config_is_per_resident_isolated(client):
     res = _get(client, "/v1/tv/config?resident_id=r2")
     assert res.status_code == 200
     assert res.json()["config"]["rail"] == "safe"
-

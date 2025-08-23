@@ -13,16 +13,19 @@ def test_pick_model_llama():
     assert engine == "llama"
     assert model == llama_integration.OLLAMA_MODEL or model == "llama3"
 
+
 def test_pick_model_complex_long():
     prompt = "word " * 31
     engine, model = pick_model(prompt, "chat", 0)
     assert engine == "gpt"
     assert model == GPT_HEAVY_MODEL
 
+
 def test_pick_model_keyword():
     engine, model = pick_model("please analyze this", "chat", 0)
     assert engine == "gpt"
     assert model == GPT_HEAVY_MODEL
+
 
 def test_pick_model_llama_unhealthy(monkeypatch):
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)

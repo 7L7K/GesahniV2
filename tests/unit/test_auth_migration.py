@@ -63,5 +63,3 @@ def test_jwt_leeway_60s():
     token_bad = jwt.encode(payload_bad, secret, algorithm="HS256")
     with pytest.raises(jwt.PyJWTError):
         jwt.decode(token_bad, secret, algorithms=["HS256"], leeway=60)
-
-

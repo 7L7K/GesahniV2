@@ -112,5 +112,3 @@ describe('Home Chat Page', () => {
         await waitFor(() => expect((screen.getByPlaceholderText('Type a message…') as HTMLTextAreaElement).disabled).toBe(false));
     });
 });
-
-

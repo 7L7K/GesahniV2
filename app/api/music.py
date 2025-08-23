@@ -36,7 +36,8 @@ ws_router = APIRouter()
 _TEST_MODE = (
     bool(os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING"))
     or os.getenv("ENV", "").strip().lower() == "test"
-    or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").strip().lower() in {"1", "true", "yes", "on"}
+    or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").strip().lower()
+    in {"1", "true", "yes", "on"}
 )
 
 if _TEST_MODE:
@@ -48,8 +49,18 @@ else:
         "yes",
         "on",
     }
-MUSIC_FALLBACK_RADIO = os.getenv("MUSIC_FALLBACK_RADIO", "false").strip().lower() in {"1", "true", "yes", "on"}
-EXPLICIT_DEFAULT = os.getenv("EXPLICIT_DEFAULT", "true").strip().lower() in {"1", "true", "yes", "on"}
+MUSIC_FALLBACK_RADIO = os.getenv("MUSIC_FALLBACK_RADIO", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+EXPLICIT_DEFAULT = os.getenv("EXPLICIT_DEFAULT", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 QUIET_START = os.getenv("QUIET_HOURS_START", "22:00")
 QUIET_END = os.getenv("QUIET_HOURS_END", "07:00")
@@ -62,7 +73,9 @@ RADIO_URL = os.getenv("FALLBACK_RADIO_URL", "")
 DEFAULT_VIBES: dict[str, MusicVibe] = {
     "Calm Night": MusicVibe(name="Calm Night", energy=0.25, tempo=80, explicit=False),
     "Turn Up": MusicVibe(name="Turn Up", energy=0.9, tempo=128, explicit=False),
-    "Uplift Morning": MusicVibe(name="Uplift Morning", energy=0.6, tempo=110, explicit=False),
+    "Uplift Morning": MusicVibe(
+        name="Uplift Morning", energy=0.6, tempo=110, explicit=False
+    ),
 }
 
 
@@ -127,6 +140,7 @@ async def _ensure_album_cached(url: str | None, track_id: str | None) -> str | N
 # ETag helpers
 # ---------------------------------------------------------------------------
 
+
 def _user_namespace(user_id: str) -> str:
     test_salt = os.getenv("PYTEST_CURRENT_TEST") or ""
     return f"u:{user_id}:{test_salt}" if test_salt else f"u:{user_id}"
@@ -159,13 +173,17 @@ def _attach_cache_headers(response: Response, etag: str) -> None:
 
 def _maybe_304(request: Request, response: Response, etag: str) -> Response | None:
     try:
-        inm = request.headers.get("if-none-match") or request.headers.get("If-None-Match")
+        inm = request.headers.get("if-none-match") or request.headers.get(
+            "If-None-Match"
+        )
         if inm and inm.strip() == etag:
             _attach_cache_headers(response, etag)
             return Response(status_code=304, headers=dict(response.headers))
     except Exception:
         return None
     return None
+
+
 async def _provider_state(user_id: str) -> dict | None:
     if not PROVIDER_SPOTIFY:
         return None
@@ -278,7 +296,9 @@ async def _provider_recommendations(
 _RECS_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
 _RECS_CACHE_TTL_S: int = int(os.getenv("RECS_CACHE_TTL", "180") or 180)
 # Optional TTL (seconds) for state-backed recommendations cache; 0 disables TTL (serve when present)
-_RECS_STATE_TTL_S: int = int(os.getenv("RECS_STATE_TTL_S", os.getenv("RECS_STATE_TTL", "0")) or 0)
+_RECS_STATE_TTL_S: int = int(
+    os.getenv("RECS_STATE_TTL_S", os.getenv("RECS_STATE_TTL", "0")) or 0
+)
 
 
 def _recs_cache_key(user_id: str, seeds: list[str] | None, vibe: MusicVibe) -> tuple:
@@ -363,7 +383,12 @@ class VibeBody(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {"name": "Calm Night", "energy": 0.3, "tempo": 85, "explicit": False}
+            "example": {
+                "name": "Calm Night",
+                "energy": 0.3,
+                "tempo": 85,
+                "explicit": False,
+            }
         }
     )
 
@@ -395,6 +420,7 @@ async def _broadcast(topic: str, payload: dict) -> None:
         return
     # Fan-out with bounded concurrency and isolate slow clients
     import asyncio as _aio
+
     dead: list[WebSocket] = []
     sem = _aio.Semaphore(int(os.getenv("WS_BROADCAST_CONCURRENCY", "64") or 64))
 
@@ -418,6 +444,7 @@ async def _broadcast(topic: str, payload: dict) -> None:
 # Internal builders
 # ---------------------------------------------------------------------------
 
+
 async def _build_state_payload(user_id: str) -> StateResponse:
     state = load_state(user_id)
     quiet = _in_quiet_hours()
@@ -433,7 +460,7 @@ async def _build_state_payload(user_id: str) -> StateResponse:
         item = (sp or {}).get("item") or {}
         track_id = item.get("id")
         state.last_track_id = track_id or state.last_track_id
-        images = ((item.get("album") or {}).get("images") or [])
+        images = (item.get("album") or {}).get("images") or []
         art_url = images[0]["url"] if images else None
         _cached = _ensure_album_cached(art_url, track_id)
         cached = await _cached if inspect.isawaitable(_cached) else _cached
@@ -460,7 +487,9 @@ async def _build_state_payload(user_id: str) -> StateResponse:
     state.explicit_allowed = _explicit_allowed(state.vibe)
     save_state(user_id, state)
 
-    provider = "spotify" if PROVIDER_SPOTIFY else ("radio" if MUSIC_FALLBACK_RADIO else None)
+    provider = (
+        "spotify" if PROVIDER_SPOTIFY else ("radio" if MUSIC_FALLBACK_RADIO else None)
+    )
     return StateResponse(
         vibe=asdict(state.vibe),
         volume=state.volume,
@@ -472,7 +501,11 @@ async def _build_state_payload(user_id: str) -> StateResponse:
         explicit_allowed=state.explicit_allowed,
         provider=provider,
         radio_url=RADIO_URL or None,
-        radio_playing=state.radio_playing if (not PROVIDER_SPOTIFY and MUSIC_FALLBACK_RADIO) else None,
+        radio_playing=(
+            state.radio_playing
+            if (not PROVIDER_SPOTIFY and MUSIC_FALLBACK_RADIO)
+            else None
+        ),
     )
 
 
@@ -491,11 +524,16 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
         except Exception:
             pass
         return
-    
+
     await verify_ws(ws)
     # If strict auth is required, close unauthenticated with policy violation
     try:
-        require_jwt = os.getenv("REQUIRE_JWT", "0").strip().lower() in {"1", "true", "yes", "on"}
+        require_jwt = os.getenv("REQUIRE_JWT", "0").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         uid = getattr(ws.state, "user_id", None)
         if require_jwt and not uid:
             try:
@@ -513,15 +551,20 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
     _ws_clients.add(ws)
     _logger = logging.getLogger(__name__)
     import time as _t
+
     connected_at = _t.time()
     last_pong = _t.monotonic()
     try:
-        _logger.info("ws.music.accept", extra={"meta": {"user_id": getattr(ws.state, "user_id", None)}})
+        _logger.info(
+            "ws.music.accept",
+            extra={"meta": {"user_id": getattr(ws.state, "user_id", None)}},
+        )
     except Exception:
         pass
     try:
         while True:
             import asyncio as _aio
+
             recv_task = _aio.create_task(ws.receive())
             done, _ = await _aio.wait({recv_task}, timeout=25.0)
             if not done:
@@ -542,7 +585,9 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
             if raw.get("type") == "websocket.disconnect":
                 break
             data = raw.get("text") or raw.get("bytes")
-            if data == "pong" or (isinstance(data, (bytes, bytearray)) and bytes(data) == b"pong"):
+            if data == "pong" or (
+                isinstance(data, (bytes, bytearray)) and bytes(data) == b"pong"
+            ):
                 last_pong = _t.monotonic()
                 continue
             try:
@@ -580,155 +625,6 @@ class OkResponse(CommonOkResponse):
 
 @router.post(
     "/music",
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     response_model=OkResponse,
     responses={200: {"model": OkResponse}},
     openapi_extra={
@@ -736,14 +632,20 @@ class OkResponse(CommonOkResponse):
             "content": {
                 "application/json": {
                     "schema": {
-                        "example": {"command": "volume", "volume": 20, "temporary": True}
+                        "example": {
+                            "command": "volume",
+                            "volume": 20,
+                            "temporary": True,
+                        }
                     }
                 }
             }
         }
     },
 )
-async def music_command(body: MusicCommand, user_id: str = Depends(get_current_user_id)):
+async def music_command(
+    body: MusicCommand, user_id: str = Depends(get_current_user_id)
+):
     state = load_state(user_id)
     quiet = _in_quiet_hours()
     cap = _volume_cap_for(state.vibe, quiet)
@@ -800,7 +702,12 @@ class VibeResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "status": "ok",
-                "vibe": {"name": "Calm Night", "energy": 0.3, "tempo": 85, "explicit": False},
+                "vibe": {
+                    "name": "Calm Night",
+                    "energy": 0.3,
+                    "tempo": 85,
+                    "explicit": False,
+                },
             }
         }
     )
@@ -808,10 +715,6 @@ class VibeResponse(BaseModel):
 
 @router.post(
     "/vibe",
-    
-    
-    
-    
     response_model=VibeResponse,
     responses={200: {"model": VibeResponse}},
     openapi_extra={
@@ -823,7 +726,7 @@ class VibeResponse(BaseModel):
                             "name": "Calm Night",
                             "energy": 0.3,
                             "tempo": 85,
-                            "explicit": False
+                            "explicit": False,
                         }
                     }
                 }
@@ -843,7 +746,9 @@ async def set_vibe(body: VibeBody, user_id: str = Depends(get_current_user_id)):
             name=body.name or vibe.name,
             energy=float(body.energy) if body.energy is not None else vibe.energy,
             tempo=float(body.tempo) if body.tempo is not None else vibe.tempo,
-            explicit=bool(body.explicit) if body.explicit is not None else vibe.explicit,
+            explicit=(
+                bool(body.explicit) if body.explicit is not None else vibe.explicit
+            ),
         )
 
     # Enforce new caps immediately
@@ -861,7 +766,9 @@ async def set_vibe(body: VibeBody, user_id: str = Depends(get_current_user_id)):
     return {"status": "ok", "vibe": asdict(state.vibe)}
 
 
-@router.post("/music/restore", response_model=OkResponse, responses={200: {"model": OkResponse}})
+@router.post(
+    "/music/restore", response_model=OkResponse, responses={200: {"model": OkResponse}}
+)
 async def restore_volume(user_id: str = Depends(get_current_user_id)):
     state = load_state(user_id)
     if state.duck_from is not None:
@@ -877,14 +784,18 @@ async def restore_volume(user_id: str = Depends(get_current_user_id)):
 
 
 @router.get("/state", response_model=StateResponse)
-async def get_state(request: Request, response: Response, user_id: str = Depends(get_current_user_id)):
+async def get_state(
+    request: Request, response: Response, user_id: str = Depends(get_current_user_id)
+):
     body = await _build_state_payload(user_id)
     try:
         stable = {
             "vibe": body.vibe,
             "volume": int(body.volume),
             "device_id": body.device_id,
-            "is_playing": bool(body.is_playing) if body.is_playing is not None else None,
+            "is_playing": (
+                bool(body.is_playing) if body.is_playing is not None else None
+            ),
             "track_id": (body.track or {}).get("id") if body.track else None,
             "quiet_hours": bool(body.quiet_hours),
             "explicit_allowed": bool(body.explicit_allowed),
@@ -903,13 +814,19 @@ async def get_state(request: Request, response: Response, user_id: str = Depends
 
 
 @router.get("/queue")
-async def get_queue(request: Request, response: Response, user_id: str = Depends(get_current_user_id)):
+async def get_queue(
+    request: Request, response: Response, user_id: str = Depends(get_current_user_id)
+):
     state = load_state(user_id)
     if not PROVIDER_SPOTIFY:
         asyncio.create_task(_broadcast("music.queue.updated", {"count": 0}))
         body = {"current": None, "up_next": [], "skip_count": state.skip_count}
         try:
-            etag = _strong_etag("music.queue", user_id, {"current": None, "ids": [], "skip": int(state.skip_count)})
+            etag = _strong_etag(
+                "music.queue",
+                user_id,
+                {"current": None, "ids": [], "skip": int(state.skip_count)},
+            )
             r304 = _maybe_304(request, response, etag)
             if r304 is not None:
                 return r304  # type: ignore[return-value]
@@ -921,12 +838,13 @@ async def get_queue(request: Request, response: Response, user_id: str = Depends
     current, queue = (await _qres) if inspect.isawaitable(_qres) else _qres
     # Broadcast queue update for listeners
     asyncio.create_task(_broadcast("music.queue.updated", {"count": len(queue)}))
+
     # Map to minimal shape
     async def _map(item: dict | None) -> dict | None:
         if not item:
             return None
-        tid = (item.get("id") if item else None)
-        images = ((item.get("album") or {}).get("images") or [])
+        tid = item.get("id") if item else None
+        images = (item.get("album") or {}).get("images") or []
         art_url = images[0]["url"] if images else None
         _cached = _ensure_album_cached(art_url, tid)
         cached = await _cached if inspect.isawaitable(_cached) else _cached
@@ -941,7 +859,11 @@ async def get_queue(request: Request, response: Response, user_id: str = Depends
     mapped_queue: list[dict] = []
     for q in queue:
         mapped_queue.append(await _map(q))
-    body = {"current": mapped_current, "up_next": mapped_queue, "skip_count": state.skip_count}
+    body = {
+        "current": mapped_current,
+        "up_next": mapped_queue,
+        "skip_count": state.skip_count,
+    }
     try:
         stable = {
             "cur": (mapped_current or {}).get("id") if mapped_current else None,
@@ -959,7 +881,12 @@ async def get_queue(request: Request, response: Response, user_id: str = Depends
 
 
 @router.get("/recommendations")
-async def get_recommendations(request: Request, response: Response, limit: int = 6, user_id: str = Depends(get_current_user_id)):
+async def get_recommendations(
+    request: Request,
+    response: Response,
+    limit: int = 6,
+    user_id: str = Depends(get_current_user_id),
+):
     state = load_state(user_id)
     # Clamp requested limit to [1, 10]
     try:
@@ -994,7 +921,9 @@ async def get_recommendations(request: Request, response: Response, limit: int =
             try:
                 if _RECS_STATE_TTL_S <= 0:
                     return {"recommendations": state.last_recommendations[:clamp]}
-                if state.recs_cached_at is not None and (time.time() - float(state.recs_cached_at) < _RECS_STATE_TTL_S):
+                if state.recs_cached_at is not None and (
+                    time.time() - float(state.recs_cached_at) < _RECS_STATE_TTL_S
+                ):
                     return {"recommendations": state.last_recommendations[:clamp]}
             except Exception:
                 return {"recommendations": state.last_recommendations[:clamp]}
@@ -1004,7 +933,9 @@ async def get_recommendations(request: Request, response: Response, limit: int =
         try:
             if _RECS_STATE_TTL_S <= 0:
                 return {"recommendations": state.last_recommendations[:clamp]}
-            if state.recs_cached_at is not None and (time.time() - float(state.recs_cached_at) < _RECS_STATE_TTL_S):
+            if state.recs_cached_at is not None and (
+                time.time() - float(state.recs_cached_at) < _RECS_STATE_TTL_S
+            ):
                 return {"recommendations": state.last_recommendations[:clamp]}
         except Exception:
             return {"recommendations": state.last_recommendations[:clamp]}
@@ -1016,7 +947,7 @@ async def get_recommendations(request: Request, response: Response, limit: int =
     out: list[dict] = []
     for t in filtered:
         tid = t.get("id")
-        images = ((t.get("album") or {}).get("images") or [])
+        images = (t.get("album") or {}).get("images") or []
         art_url = images[0]["url"] if images else None
         _cached = _ensure_album_cached(art_url, tid)
         cached = await _cached if inspect.isawaitable(_cached) else _cached
@@ -1037,7 +968,10 @@ async def get_recommendations(request: Request, response: Response, limit: int =
     # In-memory cache already stores provider-raw; do not overwrite with mapped output
     body = {"recommendations": out}
     try:
-        stable = {"ids": [t.get("id") for t in out if isinstance(t, dict)], "limit": clamp}
+        stable = {
+            "ids": [t.get("id") for t in out if isinstance(t, dict)],
+            "limit": clamp,
+        }
         etag = _strong_etag("music.recs", user_id, stable)
         r304 = _maybe_304(request, response, etag)
         if r304 is not None:
@@ -1051,13 +985,13 @@ async def get_recommendations(request: Request, response: Response, limit: int =
 class DeviceBody(BaseModel):
     device_id: str
 
-    model_config = ConfigDict(
-        json_schema_extra={"example": {"device_id": "abcdef123"}}
-    )
+    model_config = ConfigDict(json_schema_extra={"example": {"device_id": "abcdef123"}})
 
 
 @router.get("/music/devices")
-async def list_devices(request: Request, response: Response, user_id: str = Depends(get_current_user_id)):
+async def list_devices(
+    request: Request, response: Response, user_id: str = Depends(get_current_user_id)
+):
     if not PROVIDER_SPOTIFY:
         body = {"devices": []}
         try:
@@ -1089,7 +1023,9 @@ async def list_devices(request: Request, response: Response, user_id: str = Depe
     return body
 
 
-@router.post("/music/device", response_model=OkResponse, responses={200: {"model": OkResponse}})
+@router.post(
+    "/music/device", response_model=OkResponse, responses={200: {"model": OkResponse}}
+)
 async def set_device(body: DeviceBody, user_id: str = Depends(get_current_user_id)):
     state = load_state(user_id)
     state.device_id = body.device_id
@@ -1103,5 +1039,3 @@ async def set_device(body: DeviceBody, user_id: str = Depends(get_current_user_i
             pass
     await _broadcast("music.state", (await _build_state_payload(user_id)).model_dump())
     return {"status": "ok"}
-
-

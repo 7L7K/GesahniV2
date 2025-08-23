@@ -47,5 +47,3 @@ def test_daily_cap_blocks(monkeypatch):
     assert c.get("/ping", headers=h).status_code == 200
     r3 = c.get("/ping", headers=h)
     assert r3.status_code == 429
-
-

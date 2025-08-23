@@ -11,6 +11,7 @@ def _app_with_security(monkeypatch, extra_env: dict | None = None):
             monkeypatch.setenv(k, str(v))
 
     import app.security as sec
+
     # clear buckets to avoid bleed between tests
     sec._http_requests.clear()
     sec.http_burst.clear()
@@ -18,7 +19,9 @@ def _app_with_security(monkeypatch, extra_env: dict | None = None):
     app = FastAPI()
 
     @app.get("/protected")
-    async def protected(dep1: None = Depends(sec.verify_token), dep2: None = Depends(sec.rate_limit)):
+    async def protected(
+        dep1: None = Depends(sec.verify_token), dep2: None = Depends(sec.rate_limit)
+    ):
         return {"ok": True}
 
     @app.post("/state")
@@ -35,6 +38,7 @@ def _app_with_security(monkeypatch, extra_env: dict | None = None):
 
 def _auth_header(uid: str = "u") -> dict:
     from app.tokens import create_access_token
+
     token = create_access_token({"user_id": uid})
     return {"Authorization": f"Bearer {token}"}
 
@@ -73,7 +77,9 @@ def test_response_has_security_headers(monkeypatch):
 
 
 def test_nonce_required_and_reuse(monkeypatch):
-    client, _ = _app_with_security(monkeypatch, {"REQUIRE_NONCE": "1", "NONCE_TTL_SECONDS": "5"})
+    client, _ = _app_with_security(
+        monkeypatch, {"REQUIRE_NONCE": "1", "NONCE_TTL_SECONDS": "5"}
+    )
     # missing header
     r = client.post("/state")
     assert r.status_code == 400
@@ -105,8 +111,12 @@ def test_webhook_signing_and_rotation(monkeypatch, tmp_path: Path):
     # rotate adds new secret at top; old still valid
     s2 = rotate()
     sig2 = hmac.new(s2.encode(), body, hashlib.sha256).hexdigest()
-    assert client.post("/ha/webhook", data=body, headers={"X-Signature": sig2}).status_code == 200
+    assert (
+        client.post("/ha/webhook", data=body, headers={"X-Signature": sig2}).status_code
+        == 200
+    )
     # old still accepted for a time
-    assert client.post("/ha/webhook", data=body, headers={"X-Signature": sig}).status_code == 200
-
-
+    assert (
+        client.post("/ha/webhook", data=body, headers={"X-Signature": sig}).status_code
+        == 200
+    )

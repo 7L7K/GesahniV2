@@ -202,7 +202,7 @@ class TestSLOAlertingThresholds:
 
         # Should be above target (2s) but below critical threshold (10s)
         assert not latency_slo["achieved"]  # Above 2s target
-        assert latency_slo["value"] < 10.0   # Below critical threshold
+        assert latency_slo["value"] < 10.0  # Below critical threshold
 
     def test_critical_threshold_detection(self):
         """Test that critical thresholds are properly detected."""
@@ -260,7 +260,9 @@ def test_canary_deployment_gates():
 
     # Allow some non-critical failures in canary
     critical_failures = results["critical_failures"]
-    assert len(critical_failures) == 0, f"Critical SLO failures in canary: {critical_failures}"
+    assert (
+        len(critical_failures) == 0
+    ), f"Critical SLO failures in canary: {critical_failures}"
 
     # But still check overall success rate
     assert results["overall_pass"] or len(results["failed_slos"]) <= 2
@@ -276,4 +278,6 @@ if __name__ == "__main__":
 
     for slo_name, result in results["slo_results"].items():
         status = "✓" if result["achieved"] else "✗"
-        print(f"{status} {slo_name}: {result['value']:.2f} (target: {result['target']:.2f})")
+        print(
+            f"{status} {slo_name}: {result['value']:.2f} (target: {result['target']:.2f})"
+        )

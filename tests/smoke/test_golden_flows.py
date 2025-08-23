@@ -11,6 +11,7 @@ def _setup_app(monkeypatch):
     # Enable per-request env reload for config endpoint smoke
     os.environ.setdefault("ENV_RELOAD_ON_REQUEST", "1")
     from app import main
+
     monkeypatch.setattr(main, "ha_startup", lambda: None)
     monkeypatch.setattr(main, "llama_startup", lambda: None)
     return main.app
@@ -35,5 +36,3 @@ def test_rate_limit_status(monkeypatch):
     assert r.status_code == 200
     data = r.json()
     assert "backend" in data and "limits" in data
-
-

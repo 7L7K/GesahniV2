@@ -8,7 +8,7 @@ The CSRF token mismatch issue occurred in cross-site scenarios when `COOKIE_SAME
 
 2. **Cross-site requests can't access same-origin cookies**: When `COOKIE_SAMESITE=none` is set, the refresh endpoint requires an intent header, but the CSRF validation still expected the `csrf_token` cookie to be present.
 
-3. **Catch-22 situation**: 
+3. **Catch-22 situation**:
    - Cross-site requests need CSRF protection
    - But cross-site requests can't access the `csrf_token` cookie due to SameSite restrictions
    - This created a circular dependency
@@ -79,12 +79,12 @@ if is_cross_site:
     # Cross-site CSRF validation
     if not tok:
         raise HTTPException(status_code=400, detail="missing_csrf_cross_site")
-    
+
     # Validate intent header
     intent = request.headers.get("x-auth-intent") or request.headers.get("X-Auth-Intent")
     if str(intent or "").strip().lower() != "refresh":
         raise HTTPException(status_code=400, detail="missing_intent_header_cross_site")
-    
+
     # Basic token validation
     if not tok or len(tok) < 16:
         raise HTTPException(status_code=403, detail="invalid_csrf_format")

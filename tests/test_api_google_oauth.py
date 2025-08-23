@@ -62,7 +62,9 @@ class TestGoogleLoginUrl:
         """Test login_url with valid config - happy path with state cookie"""
         # Set up Google OAuth config
         monkeypatch.setenv("GOOGLE_CLIENT_ID", "test_client_id")
-        monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://testserver/google/auth/callback")
+        monkeypatch.setenv(
+            "GOOGLE_REDIRECT_URI", "http://testserver/google/auth/callback"
+        )
         monkeypatch.setenv("JWT_STATE_SECRET", "test_state_secret")
 
         app = _create_test_app()
@@ -79,7 +81,10 @@ class TestGoogleLoginUrl:
         auth_url = data["auth_url"]
         assert "https://accounts.google.com/o/oauth2/v2/auth" in auth_url
         assert "client_id=test_client_id" in auth_url
-        assert "redirect_uri=http%3A%2F%2Ftestserver%2Fgoogle%2Fauth%2Fcallback" in auth_url
+        assert (
+            "redirect_uri=http%3A%2F%2Ftestserver%2Fgoogle%2Fauth%2Fcallback"
+            in auth_url
+        )
         assert "response_type=code" in auth_url
         assert "scope=openid+email+profile" in auth_url
 
@@ -90,7 +95,9 @@ class TestGoogleLoginUrl:
         """Test login_url with optional Google parameters"""
         # Set up config with optional parameters
         monkeypatch.setenv("GOOGLE_CLIENT_ID", "test_client_id")
-        monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://testserver/google/auth/callback")
+        monkeypatch.setenv(
+            "GOOGLE_REDIRECT_URI", "http://testserver/google/auth/callback"
+        )
         monkeypatch.setenv("GOOGLE_HD", "example.com")
         monkeypatch.setenv("GOOGLE_LOGIN_HINT", "user@example.com")
         monkeypatch.setenv("JWT_STATE_SECRET", "test_state_secret")
@@ -152,7 +159,9 @@ class TestGoogleCallback:
         client.cookies.set("g_state", "invalid_state")
 
         # Make request with mismatched state
-        response = client.get("/v1/google/auth/callback?code=test_code&state=different_state")
+        response = client.get(
+            "/v1/google/auth/callback?code=test_code&state=different_state"
+        )
 
         # Assert 400 error
         assert response.status_code == 400
@@ -180,17 +189,21 @@ class TestGoogleCallback:
         client.cookies.set("g_state", expired_state)
 
         # Make request with expired state
-        response = client.get(f"/v1/google/auth/callback?code=test_code&state={expired_state}")
+        response = client.get(
+            f"/v1/google/auth/callback?code=test_code&state={expired_state}"
+        )
 
         # Assert 400 error
         assert response.status_code == 400
         data = response.json()
         assert "invalid_state" in data["detail"]
 
-    @patch('app.integrations.google.oauth.exchange_code')
-    @patch('app.integrations.google.oauth.creds_to_record')
-    @patch('app.integrations.google.db.init_db')
-    def test_callback_token_exchange_failure(self, mock_init_db, mock_creds_to_record, mock_exchange, monkeypatch):
+    @patch("app.integrations.google.oauth.exchange_code")
+    @patch("app.integrations.google.oauth.creds_to_record")
+    @patch("app.integrations.google.db.init_db")
+    def test_callback_token_exchange_failure(
+        self, mock_init_db, mock_creds_to_record, mock_exchange, monkeypatch
+    ):
         """Test callback when token exchange fails - 500 error"""
         monkeypatch.setenv("JWT_STATE_SECRET", "test_state_secret")
         monkeypatch.setenv("JWT_SECRET", "test_jwt_secret")
@@ -207,17 +220,21 @@ class TestGoogleCallback:
         client.cookies.set("g_state", valid_state)
 
         # Make callback request
-        response = client.get(f"/v1/google/auth/callback?code=test_code&state={valid_state}")
+        response = client.get(
+            f"/v1/google/auth/callback?code=test_code&state={valid_state}"
+        )
 
         # Assert 500 error
         assert response.status_code == 500
         data = response.json()
         assert "oauth_callback_failed" in data["detail"]
 
-    @patch('app.integrations.google.oauth.exchange_code')
-    @patch('app.integrations.google.oauth.creds_to_record')
-    @patch('app.integrations.google.db.init_db')
-    def test_callback_happy_path(self, mock_init_db, mock_creds_to_record, mock_exchange, monkeypatch):
+    @patch("app.integrations.google.oauth.exchange_code")
+    @patch("app.integrations.google.oauth.creds_to_record")
+    @patch("app.integrations.google.db.init_db")
+    def test_callback_happy_path(
+        self, mock_init_db, mock_creds_to_record, mock_exchange, monkeypatch
+    ):
         """Test callback with successful OAuth flow - happy path with redirect"""
         monkeypatch.setenv("JWT_STATE_SECRET", "test_state_secret")
         monkeypatch.setenv("JWT_SECRET", "test_jwt_secret")
@@ -229,7 +246,10 @@ class TestGoogleCallback:
         mock_exchange.return_value = mock_creds
 
         # Mock creds_to_record
-        mock_creds_to_record.return_value = {"access_token": "at", "refresh_token": "rt"}
+        mock_creds_to_record.return_value = {
+            "access_token": "at",
+            "refresh_token": "rt",
+        }
 
         # Mock database operations
         mock_init_db.return_value = None
@@ -242,14 +262,17 @@ class TestGoogleCallback:
         client.cookies.set("g_state", valid_state)
 
         # Make callback request
-        response = client.get(f"/v1/google/auth/callback?code=test_code&state={valid_state}", allow_redirects=False)
+        response = client.get(
+            f"/v1/google/auth/callback?code=test_code&state={valid_state}",
+            allow_redirects=False,
+        )
 
         # Assert redirect response
         assert response.status_code in (302, 307)
         assert "Location" in response.headers
         location = response.headers["Location"]
         assert location.startswith("http://app.example/")
-        
+
         # Check that auth cookies are set (tokens are in cookies, not URL)
         assert "access_token" in response.cookies
         assert "refresh_token" in response.cookies
@@ -284,7 +307,9 @@ class TestGoogleCallbackErrors:
         client.cookies.set("g_state", "invalid_state_cookie")
 
         # Make request with mismatched state
-        response = client.get("/v1/google/auth/callback?code=test_code&state=different_state")
+        response = client.get(
+            "/v1/google/auth/callback?code=test_code&state=different_state"
+        )
 
         # Assert 400 error
         assert response.status_code == 400
@@ -301,7 +326,9 @@ class TestGoogleCallbackErrors:
         client = TestClient(app)
 
         # Make request without state cookie
-        response = client.get("/v1/google/auth/callback?code=test_code&state=test_state")
+        response = client.get(
+            "/v1/google/auth/callback?code=test_code&state=test_state"
+        )
 
         # Assert 400 error
         assert response.status_code == 400
@@ -329,7 +356,9 @@ class TestGoogleCallbackErrors:
         client.cookies.set("g_state", expired_state)
 
         # Make request with expired state
-        response = client.get(f"/v1/google/auth/callback?code=test_code&state={expired_state}")
+        response = client.get(
+            f"/v1/google/auth/callback?code=test_code&state={expired_state}"
+        )
 
         # Assert 400 error
         assert response.status_code == 400
@@ -343,7 +372,9 @@ class TestGoogleRedirectValidation:
     def test_login_url_invalid_redirect_blocked(self, monkeypatch):
         """Test login_url with disallowed redirect URL"""
         monkeypatch.setenv("GOOGLE_CLIENT_ID", "test_client_id")
-        monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://testserver/google/auth/callback")
+        monkeypatch.setenv(
+            "GOOGLE_REDIRECT_URI", "http://testserver/google/auth/callback"
+        )
         monkeypatch.setenv("JWT_STATE_SECRET", "test_state_secret")
         monkeypatch.setenv("OAUTH_REDIRECT_ALLOWLIST", "example.com")
 
@@ -351,7 +382,9 @@ class TestGoogleRedirectValidation:
         client = TestClient(app)
 
         # Make request with disallowed redirect
-        response = client.get("/v1/google/auth/login_url?next=https://malicious.com/redirect")
+        response = client.get(
+            "/v1/google/auth/login_url?next=https://malicious.com/redirect"
+        )
 
         # Assert redirect is blocked and reset to safe default
         assert response.status_code == 200
@@ -363,7 +396,9 @@ class TestGoogleRedirectValidation:
     def test_login_url_allowed_redirect_passthrough(self, monkeypatch):
         """Test login_url with allowed redirect URL"""
         monkeypatch.setenv("GOOGLE_CLIENT_ID", "test_client_id")
-        monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://testserver/google/auth/callback")
+        monkeypatch.setenv(
+            "GOOGLE_REDIRECT_URI", "http://testserver/google/auth/callback"
+        )
         monkeypatch.setenv("JWT_STATE_SECRET", "test_state_secret")
         monkeypatch.setenv("OAUTH_REDIRECT_ALLOWLIST", "example.com")
 
@@ -371,7 +406,9 @@ class TestGoogleRedirectValidation:
         client = TestClient(app)
 
         # Make request with allowed redirect
-        response = client.get("/v1/google/auth/login_url?next=https://app.example.com/dashboard")
+        response = client.get(
+            "/v1/google/auth/login_url?next=https://app.example.com/dashboard"
+        )
 
         # Assert redirect is allowed
         assert response.status_code == 200
@@ -382,7 +419,9 @@ class TestGoogleRedirectValidation:
     def test_login_url_no_allowlist_allows_all(self, monkeypatch):
         """Test login_url without allowlist allows any redirect"""
         monkeypatch.setenv("GOOGLE_CLIENT_ID", "test_client_id")
-        monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://testserver/google/auth/callback")
+        monkeypatch.setenv(
+            "GOOGLE_REDIRECT_URI", "http://testserver/google/auth/callback"
+        )
         monkeypatch.setenv("JWT_STATE_SECRET", "test_state_secret")
         # Don't set OAUTH_REDIRECT_ALLOWLIST
 
@@ -390,7 +429,9 @@ class TestGoogleRedirectValidation:
         client = TestClient(app)
 
         # Make request with any redirect
-        response = client.get("/v1/google/auth/login_url?next=https://any-domain.com/path")
+        response = client.get(
+            "/v1/google/auth/login_url?next=https://any-domain.com/path"
+        )
 
         # Should allow the redirect when no allowlist is configured
         assert response.status_code == 200
@@ -406,7 +447,9 @@ class TestGoogleConfiguration:
         """Test login_url when GOOGLE_CLIENT_ID is missing - 503 error"""
         # Clear Google OAuth config
         monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
-        monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://testserver/google/auth/callback")
+        monkeypatch.setenv(
+            "GOOGLE_REDIRECT_URI", "http://testserver/google/auth/callback"
+        )
 
         app = _create_test_app()
         client = TestClient(app)

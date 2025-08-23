@@ -14,5 +14,3 @@ class ListeningScreenModel:
 
 def new_listening_state() -> ListeningScreenModel:
     return ListeningScreenModel(is_ptt_active=False, partial_transcript=None)
-
-

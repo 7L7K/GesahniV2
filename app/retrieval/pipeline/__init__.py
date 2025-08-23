@@ -10,7 +10,9 @@ import os
 from pathlib import Path
 
 _impl_path = Path(__file__).resolve().parent.parent / "pipeline.py"
-_spec = importlib.util.spec_from_file_location("app.retrieval._pipeline_impl", str(_impl_path))
+_spec = importlib.util.spec_from_file_location(
+    "app.retrieval._pipeline_impl", str(_impl_path)
+)
 if _spec and _spec.loader:  # pragma: no cover - import glue
     _mod = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(_mod)  # type: ignore[assignment]
@@ -28,8 +30,9 @@ def run_retrieval(q: str, user_id: str, k: int | None = None, **kwargs):
     """
 
     coll = os.getenv("QDRANT_COLLECTION") or "kb:default"
-    return run_pipeline(user_id=user_id, query=q, intent=None, collection=coll, explain=True)
+    return run_pipeline(
+        user_id=user_id, query=q, intent=None, collection=coll, explain=True
+    )
 
 
 __all__ = ["run_pipeline", "run_retrieval"]
-

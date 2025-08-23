@@ -10,11 +10,14 @@ def _client(monkeypatch):
     # Ensure auth is required for /ask in this test
     monkeypatch.setenv("REQUIRE_JWT", "1")
     from app.main import app
+
     return TestClient(app)
 
 
 def _token(user_id="u1"):
-    return jwt.encode({"user_id": user_id}, os.getenv("JWT_SECRET", "secret"), algorithm="HS256")
+    return jwt.encode(
+        {"user_id": user_id}, os.getenv("JWT_SECRET", "secret"), algorithm="HS256"
+    )
 
 
 def test_ask_unauth_is_401_without_rl_headers(monkeypatch):
@@ -39,5 +42,3 @@ def test_ask_authed_over_limit_returns_429_with_retry_after(monkeypatch):
             assert "Retry-After" in r.headers
             break
     assert got_429
-
-

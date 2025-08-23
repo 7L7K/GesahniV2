@@ -33,17 +33,8 @@ except Exception:  # pragma: no cover - import-time guard
             raise RuntimeError("openai package not installed")
 
 
-from .metrics import (
-    MODEL_LATENCY_SECONDS,
-    REQUEST_COST,
-    REQUEST_COUNT,
-    REQUEST_LATENCY,
-)
-from .model_config import (
-    GPT_BASELINE_MODEL,
-    GPT_HEAVY_MODEL,
-    GPT_MID_MODEL,
-)
+from .metrics import MODEL_LATENCY_SECONDS, REQUEST_COST, REQUEST_COUNT, REQUEST_LATENCY
+from .model_config import GPT_BASELINE_MODEL, GPT_HEAVY_MODEL, GPT_MID_MODEL
 from .model_params import for_openai
 from .otel_utils import start_span
 from .telemetry import log_record_var
@@ -53,6 +44,7 @@ if TYPE_CHECKING:  # pragma: no cover - only for type checkers
 
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", GPT_MID_MODEL)
+
 
 # Map internal router aliases to real OpenAI model ids.
 # These aliases are used by the deterministic router and tests but may not
@@ -75,6 +67,7 @@ def _load_models_aliases() -> dict:
         raw = os.getenv("MODELS_JSON", "").strip()
         if raw:
             import json as _json
+
             data = _json.loads(raw)
             # Accept either a list of {alias: real} or a dict
             if isinstance(data, dict):
@@ -90,6 +83,7 @@ def _load_models_aliases() -> dict:
     except Exception:
         pass
     return aliases
+
 
 _MODEL_ALIASES = _load_models_aliases()
 

@@ -44,7 +44,7 @@ if command -v wscat &> /dev/null; then
     echo "❌ Test 3a failed: Valid origin rejected"
     exit 1
   }
-  
+
   # Test invalid origin (should be rejected)
   timeout 5s wscat -c "ws://localhost:8000/v1/ws/health" -H "Origin: http://evil.com" && {
     echo "❌ Test 3b failed: Invalid origin accepted"
@@ -96,7 +96,7 @@ echo "✅ All security tests passed!"
 echo ""
 echo "📊 Quick receipts:"
 echo "1. CORS Origin echo: ✅"
-echo "2. OPTIONS preflight: ✅" 
+echo "2. OPTIONS preflight: ✅"
 echo "3. WebSocket Origin: ✅"
 echo "4. No wildcard CORS with cookies: ✅"
 echo "5. Vary: Origin header: ✅"

@@ -27,7 +27,9 @@ def time_decay(weight_seconds: float) -> float:
     return max(0.0, min(1.0, 1.0 / (1.0 + age)))
 
 
-def temporal_boost_order(scores: list[float], ages_seconds: list[float], alpha: float = 0.1) -> list[int]:
+def temporal_boost_order(
+    scores: list[float], ages_seconds: list[float], alpha: float = 0.1
+) -> list[int]:
     """Return indices sorted by score adjusted with a simple temporal decay.
 
     Newer items (smaller age) keep more of their base score; older items are penalized.
@@ -37,14 +39,19 @@ def temporal_boost_order(scores: list[float], ages_seconds: list[float], alpha: 
         return []
     max_age = max(ages_seconds) if ages_seconds else 1.0
     order = list(range(len(scores)))
+
     def adj(i: int) -> float:
         age = ages_seconds[i] if i < len(ages_seconds) else max_age
         norm_age = (age / max_age) if max_age else 0.0
         return float(scores[i]) - float(alpha) * float(norm_age)
+
     order.sort(key=lambda i: adj(i), reverse=True)
     return order
 
 
-__all__ = ["hyde_queries", "reciprocal_rank_fusion", "time_decay", "temporal_boost_order"]
-
-
+__all__ = [
+    "hyde_queries",
+    "reciprocal_rank_fusion",
+    "time_decay",
+    "temporal_boost_order",
+]

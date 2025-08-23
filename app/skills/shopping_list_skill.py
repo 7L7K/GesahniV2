@@ -24,7 +24,9 @@ def _load_list() -> list[str]:
 def _save_list(items: list[str]) -> None:
     try:
         _LIST_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _LIST_PATH.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+        _LIST_PATH.write_text(
+            json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
     except Exception:
         pass
 
@@ -59,5 +61,3 @@ class ShoppingListSkill(Skill):
         if not items:
             return "Your shopping list is empty."
         return "; ".join(items)
-
-

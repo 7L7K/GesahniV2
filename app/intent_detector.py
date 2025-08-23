@@ -64,9 +64,9 @@ EXAMPLE_INTENTS: dict[str, list[str]] = {
     "control": ["turn on the light", "switch off the fan"],
     # recall_story maps queries to search past transcripts/memories
     "recall_story": [
-        "what did grandma say", 
-        "recall the story about", 
-        "remind me what we discussed", 
+        "what did grandma say",
+        "recall the story about",
+        "remind me what we discussed",
         "what did i say yesterday",
         "what did we talk about last time",
     ],
@@ -80,15 +80,17 @@ def _get_model() -> tuple[SentenceTransformer, dict[str, Any]]:
     """Return the SBERT model and prototype embeddings."""
     try:
         from sentence_transformers import (
-            SentenceTransformer as _SentenceTransformer,  # type: ignore
-        )
+            SentenceTransformer as _SentenceTransformer,
+        )  # type: ignore
     except Exception:
         raise RuntimeError("sentence-transformers not installed")
 
     model = _SentenceTransformer(MODEL_NAME)
     embeds = {
         # Suppress progress bar to avoid noisy 'Batches: 100%' logs
-        label: model.encode(texts, convert_to_tensor=True, show_progress_bar=False).mean(0)
+        label: model.encode(
+            texts, convert_to_tensor=True, show_progress_bar=False
+        ).mean(0)
         for label, texts in EXAMPLE_INTENTS.items()
     }
     return model, embeds
@@ -98,6 +100,7 @@ def _semantic_classify(text: str) -> tuple[str, float, bool]:
     """Return ``(intent, score, exact)`` using a semantic model or fuzzy matching."""
     try:
         from sentence_transformers import util as _util  # type: ignore
+
         model, embeds = _get_model()
     except Exception:
         # Fallback: no sentence-transformers available
@@ -112,7 +115,9 @@ def _semantic_classify(text: str) -> tuple[str, float, bool]:
                     exact = text == ex
         return best_label, best_score / 100.0, exact
     emb = model.encode(text, convert_to_tensor=True, show_progress_bar=False)
-    scores = {label: float(_util.cos_sim(emb, proto)) for label, proto in embeds.items()}
+    scores = {
+        label: float(_util.cos_sim(emb, proto)) for label, proto in embeds.items()
+    }
     intent, score = max(scores.items(), key=lambda kv: kv[1])
     return intent, score, False
 
@@ -161,7 +166,10 @@ def detect_intent(
         return intent, priority
 
     # Recall heuristic: simple phrase triggers for story recall
-    if any(k in prompt_l for k in ("what did i say", "what did we talk", "recall", "remember")):
+    if any(
+        k in prompt_l
+        for k in ("what did i say", "what did we talk", "recall", "remember")
+    ):
         rec = log_record_var.get()
         if rec:
             rec.intent = "recall_story"

@@ -68,9 +68,9 @@ def test_authorize_docs_lists_defined_scopes(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", TEST_JWT_SECRET)
     c = TestClient(app)
     schema = c.get("/openapi.json").json()
-    scopes = (
-        schema["components"]["securitySchemes"]["OAuth2"]["flows"]["password"]["scopes"]
-    )
+    scopes = schema["components"]["securitySchemes"]["OAuth2"]["flows"]["password"][
+        "scopes"
+    ]
     for expected in ["care:resident", "care:caregiver", "music:control", "admin:write"]:
         assert expected in scopes
 
@@ -103,4 +103,3 @@ def test_insecure_jwt_secret_raises_error(monkeypatch):
     r = c.post("/v1/auth/token", data={"username": "alice", "password": "x"})
     assert r.status_code == 500
     assert "insecure_jwt_secret" in r.json()["detail"]
-

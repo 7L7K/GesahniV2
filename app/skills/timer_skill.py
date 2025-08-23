@@ -31,9 +31,14 @@ class TimerSkill(Skill):
             re.I,
         ),
         # "pause/resume/cancel <name?> timer"
-        re.compile(r"\b(?:pause|resume|cancel|stop) (?:(?P<cname>[\w\-]+) )?timer\b", re.I),
+        re.compile(
+            r"\b(?:pause|resume|cancel|stop) (?:(?P<cname>[\w\-]+) )?timer\b", re.I
+        ),
         # "how long left on <name?> timer"
-        re.compile(r"\bhow (?:much |long )?left (?:on|for) (?:(?P<qname>[\w\-]+) )?timer\b", re.I),
+        re.compile(
+            r"\bhow (?:much |long )?left (?:on|for) (?:(?P<qname>[\w\-]+) )?timer\b",
+            re.I,
+        ),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:

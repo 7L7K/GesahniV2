@@ -36,5 +36,3 @@ export default function GettingStarted() {
         </article>
     );
 }
-
-

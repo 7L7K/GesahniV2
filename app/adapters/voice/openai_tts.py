@@ -12,7 +12,12 @@ except Exception:  # pragma: no cover
             raise RuntimeError("openai package not installed")
 
 
-from ...metrics import TTS_COST_USD, TTS_LATENCY_SECONDS, TTS_REQUEST_COUNT, normalize_model_label
+from ...metrics import (
+    TTS_COST_USD,
+    TTS_LATENCY_SECONDS,
+    TTS_REQUEST_COUNT,
+    normalize_model_label,
+)
 
 OPENAI_TTS_PRICING_PER_1K_CHARS = {
     "tts-1": 0.015,
@@ -53,11 +58,15 @@ async def synthesize_openai_tts(
 
     # Use normalized model and reduced dimensions to prevent cardinality explosion
     normalized_model = normalize_model_label(model)
-    TTS_REQUEST_COUNT.labels("openai", tier_label, os.getenv("VOICE_MODE", "auto"), "auto", normalized_model).inc()
+    TTS_REQUEST_COUNT.labels(
+        "openai", tier_label, os.getenv("VOICE_MODE", "auto"), "auto", normalized_model
+    ).inc()
     start = time.perf_counter()
     # Note: official API surface is audio.speech.create with model=tts-1/hd and voice
     # For gpt-4o-mini-tts the surface differs in preview SDKs; here we normalize
-    out_format = "wav" if format.lower() not in {"mp3", "opus", "aac"} else format.lower()
+    out_format = (
+        "wav" if format.lower() not in {"mp3", "opus", "aac"} else format.lower()
+    )
     chosen_voice = voice or os.getenv("OPENAI_TTS_VOICE", "alloy")
 
     # Fallback path for environments where SDK may not include audio.speech
@@ -68,7 +77,9 @@ async def synthesize_openai_tts(
             input=text,
             format=out_format,
         )
-        audio_bytes = resp.read() if hasattr(resp, "read") else getattr(resp, "content", b"")
+        audio_bytes = (
+            resp.read() if hasattr(resp, "read") else getattr(resp, "content", b"")
+        )
         if not isinstance(audio_bytes, (bytes, bytearray)):
             # Some SDKs return base64 string; normalize
             try:
@@ -92,9 +103,9 @@ async def synthesize_openai_tts(
         cost = (seconds / 60.0) * OPENAI_TTS_MINI_PER_MINUTE
     else:
         chars = len(text)
-        per_1k = OPENAI_TTS_PRICING_PER_1K_CHARS.get(model, OPENAI_TTS_PRICING_PER_1K_CHARS.get("tts-1", 0.015))
+        per_1k = OPENAI_TTS_PRICING_PER_1K_CHARS.get(
+            model, OPENAI_TTS_PRICING_PER_1K_CHARS.get("tts-1", 0.015)
+        )
         cost = (chars / 1000.0) * per_1k
     TTS_COST_USD.labels("openai", tier_label).observe(cost)
     return bytes(audio_bytes), float(cost), tier_label
-
-

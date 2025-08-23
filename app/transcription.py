@@ -33,7 +33,9 @@ except Exception:  # pragma: no cover - exercised when dependency missing
         """
 
         class _Transcriptions:
-            async def create(self, *_, **__):  # pragma: no cover - used only if a test hits it
+            async def create(
+                self, *_, **__
+            ):  # pragma: no cover - used only if a test hits it
                 raise RuntimeError("offline_whisper_unavailable")
 
         class _Audio:
@@ -126,8 +128,12 @@ class TranscriptionStream:
         self.session_id = uuid.uuid4().hex
         self._last_partial_ts: float = 0.0
         self._silence_started: float | None = None
-        self._partial_min_interval_s: float = float(os.getenv("STT_PARTIAL_MIN_INTERVAL_S", "0.15") or 0.15)
-        self._silence_final_s: float = float(os.getenv("STT_SILENCE_FINALIZE_S", "1.2") or 1.2)
+        self._partial_min_interval_s: float = float(
+            os.getenv("STT_PARTIAL_MIN_INTERVAL_S", "0.15") or 0.15
+        )
+        self._silence_final_s: float = float(
+            os.getenv("STT_SILENCE_FINALIZE_S", "1.2") or 1.2
+        )
 
     async def _iter_audio(self, first_msg: dict) -> AsyncIterator[bytes]:
         msg = first_msg
@@ -174,6 +180,7 @@ class TranscriptionStream:
                 if self._silence_started is None:
                     try:
                         import time as _t
+
                         self._silence_started = _t.time()
                     except Exception:
                         self._silence_started = None
@@ -200,7 +207,9 @@ class TranscriptionStream:
 
         async def emit(kind: str, payload: dict) -> None:
             try:
-                await self.ws.send_json({"event": kind, **payload, "session_id": self.session_id})
+                await self.ws.send_json(
+                    {"event": kind, **payload, "session_id": self.session_id}
+                )
             except Exception:
                 pass
 
@@ -212,28 +221,51 @@ class TranscriptionStream:
         await session.start()
         try:
             # Send initial listening state
-            await self.ws.send_json({"event": "stt.state", "state": "listening", "session_id": self.session_id})
+            await self.ws.send_json(
+                {
+                    "event": "stt.state",
+                    "state": "listening",
+                    "session_id": self.session_id,
+                }
+            )
             last_text: str | None = None
             import time as _t
+
             async for text in session.stream(self._iter_audio(msg)):
                 # Emit partials throttled; relay TTS sync markers out-of-band.
                 now = _t.time()
                 if now - self._last_partial_ts >= self._partial_min_interval_s:
-                    await self.ws.send_json({"event": "stt.partial", "text": text, "session_id": self.session_id})
+                    await self.ws.send_json(
+                        {
+                            "event": "stt.partial",
+                            "text": text,
+                            "session_id": self.session_id,
+                        }
+                    )
                     self._last_partial_ts = now
                 last_text = text
                 # End-of-speech via silence window
-                if self._silence_started and (now - self._silence_started) >= self._silence_final_s:
+                if (
+                    self._silence_started
+                    and (now - self._silence_started) >= self._silence_final_s
+                ):
                     break
             # Final punctuation pass (simple heuristic)
             try:
                 import re as _re
+
                 final_text = _re.sub(r"\s+", " ", (last_text or "")).strip()
                 if final_text and final_text[-1] not in ".?!":
                     final_text += "."
             except Exception:
                 final_text = last_text or ""
-            await self.ws.send_json({"event": "stt.final", "text": final_text, "session_id": self.session_id})
+            await self.ws.send_json(
+                {
+                    "event": "stt.final",
+                    "text": final_text,
+                    "session_id": self.session_id,
+                }
+            )
         except Exception:  # pragma: no cover - best effort
             await self.ws.send_json({"error": "listening_network_shaky"})
         finally:

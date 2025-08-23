@@ -25,7 +25,9 @@ def test_ingest_markdown_text(monkeypatch):
     text = "# Title\n\nSome content.\n\n## Section\n\nMore text."
     # When qdrant-client isn't available, this should raise RuntimeError; treat as skip
     try:
-        res = ingest_markdown_text(user_id="u1", text=text, source="testdoc", collection="kb:test")
+        res = ingest_markdown_text(
+            user_id="u1", text=text, source="testdoc", collection="kb:test"
+        )
     except RuntimeError:
         pytest.skip("qdrant-client not installed")
     assert res["status"] in {"ok", "skipped"}
@@ -33,5 +35,3 @@ def test_ingest_markdown_text(monkeypatch):
     # chunk_count is > 0 on first ingest
     if res["status"] == "ok":
         assert res["chunk_count"] >= 1
-
-

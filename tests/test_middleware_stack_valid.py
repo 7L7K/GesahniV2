@@ -23,7 +23,9 @@ def test_user_middleware_are_classes():
 
     for middleware in app.user_middleware:
         # Each middleware should have a cls attribute
-        assert hasattr(middleware, "cls"), f"Middleware missing cls attribute: {middleware}"
+        assert hasattr(
+            middleware, "cls"
+        ), f"Middleware missing cls attribute: {middleware}"
 
         # The cls should be a class, not a function or other type
         assert inspect.isclass(middleware.cls), (
@@ -34,7 +36,7 @@ def test_user_middleware_are_classes():
         # The cls should subclass BaseHTTPMiddleware (except for built-in Starlette middleware like CORSMiddleware)
         # We allow some exceptions for well-known middleware that don't follow BaseHTTPMiddleware
         known_exceptions = [
-            'CORSMiddleware',  # Starlette's CORS middleware
+            "CORSMiddleware",  # Starlette's CORS middleware
         ]
 
         if middleware.cls.__name__ not in known_exceptions:
@@ -82,32 +84,34 @@ def test_middleware_stack_integrity():
 
     # Verify expected middleware are present (this will need updating if middleware changes)
     expected_middleware = [
-        'CORSMiddleware',
-        'EnhancedErrorHandlingMiddleware',
-        'SilentRefreshMiddleware',
-        'ReloadEnvMiddleware',
-        'CSRFMiddleware',
-        'RateLimitMiddleware',
-        'SessionAttachMiddleware',
-        'RedactHashMiddleware',
-        'TraceRequestMiddleware',
-        'HealthCheckFilterMiddleware',
-        'DedupMiddleware',
-        'RequestIDMiddleware'
+        "CORSMiddleware",
+        "EnhancedErrorHandlingMiddleware",
+        "SilentRefreshMiddleware",
+        "ReloadEnvMiddleware",
+        "CSRFMiddleware",
+        "RateLimitMiddleware",
+        "SessionAttachMiddleware",
+        "RedactHashMiddleware",
+        "TraceRequestMiddleware",
+        "HealthCheckFilterMiddleware",
+        "DedupMiddleware",
+        "RequestIDMiddleware",
     ]
 
     actual_names = [m.cls.__name__ for m in middleware_list]
 
     # Check for critical middleware that should always be present
     critical_middleware = [
-        'CORSMiddleware',
-        'EnhancedErrorHandlingMiddleware',
-        'CSRFMiddleware',
-        'RateLimitMiddleware',
-        'RequestIDMiddleware'
+        "CORSMiddleware",
+        "EnhancedErrorHandlingMiddleware",
+        "CSRFMiddleware",
+        "RateLimitMiddleware",
+        "RequestIDMiddleware",
     ]
 
-    missing_critical = [name for name in critical_middleware if name not in actual_names]
+    missing_critical = [
+        name for name in critical_middleware if name not in actual_names
+    ]
     assert not missing_critical, (
         f"Critical middleware missing: {missing_critical}\n"
         f"Current middleware: {actual_names}"
@@ -130,11 +134,11 @@ def test_no_function_in_middleware_attrs():
         cls = middleware.cls
 
         # Skip built-in Starlette middleware
-        if cls.__module__.startswith('starlette.'):
+        if cls.__module__.startswith("starlette."):
             continue
 
         # Check that the class has proper middleware methods
-        assert hasattr(cls, 'dispatch'), (
+        assert hasattr(cls, "dispatch"), (
             f"Middleware {cls.__name__} missing dispatch method\n"
             "All middleware classes must implement async def dispatch(self, request, call_next)"
         )

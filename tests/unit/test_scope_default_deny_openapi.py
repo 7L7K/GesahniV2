@@ -22,5 +22,3 @@ def test_privileged_routes_require_scopes_in_openapi():
             if not has_scopes:
                 offenders.append((method.upper(), path, tuple(sorted(tags))))
     assert not offenders, f"Privileged routes missing scopes: {offenders}"
-
-

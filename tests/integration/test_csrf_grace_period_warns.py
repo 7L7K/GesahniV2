@@ -14,5 +14,3 @@ def test_csrf_grace_period_warns(monkeypatch, capsys):
     assert r.status_code == HTTPStatus.OK
     out = capsys.readouterr().out
     assert "csrf.legacy_header used" in out
-
-

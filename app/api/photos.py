@@ -64,8 +64,16 @@ class TvPhotoOkResponse(CommonOkResponse):
     model_config = ConfigDict(title="OkResponse")
 
 
-@router.post("/tv/photos/favorite", response_model=TvPhotoOkResponse, responses={200: {"model": TvPhotoOkResponse}})
-async def mark_favorite(body: dict | None = None, name: str | None = None, user_id: str = Depends(get_current_user_id)):
+@router.post(
+    "/tv/photos/favorite",
+    response_model=TvPhotoOkResponse,
+    responses={200: {"model": TvPhotoOkResponse}},
+)
+async def mark_favorite(
+    body: dict | None = None,
+    name: str | None = None,
+    user_id: str = Depends(get_current_user_id),
+):
     # Prefer JSON body { name }, fall back to query param for backward compat
     if body and isinstance(body, dict) and not name:
         name = str(body.get("name") or "")
@@ -77,5 +85,3 @@ async def mark_favorite(body: dict | None = None, name: str | None = None, user_
         _write_favs(favs)
         return {"status": "ok"}
     return {"status": "ignored"}
-
-

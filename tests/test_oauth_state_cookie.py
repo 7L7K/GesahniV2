@@ -17,7 +17,9 @@ def _spin():
     os.environ["GOOGLE_CLIENT_SECRET"] = "test-client-secret"
     os.environ["GOOGLE_REDIRECT_URI"] = "http://localhost:8000/v1/google/auth/callback"
     from app.main import app
+
     return TestClient(app)
+
 
 def test_google_oauth_state_cookie_shape():
     """Test that Google OAuth sets proper state cookie."""
@@ -35,9 +37,12 @@ def test_google_oauth_state_cookie_shape():
 
     # Check for state cookie in headers (accept Google-prefixed `g_state` or generic `oauth_state`)
     cookie_header = r.headers.get("set-cookie", "")
-    assert any(x in cookie_header for x in ("oauth_state=", "g_state=")), f"state cookie missing in: {cookie_header}"
+    assert any(
+        x in cookie_header for x in ("oauth_state=", "g_state=")
+    ), f"state cookie missing in: {cookie_header}"
     assert "HttpOnly" in cookie_header
     assert "Path=/" in cookie_header
+
 
 def test_google_oauth_state_cookie_lax_samesite():
     """Test that Google OAuth state cookie uses Lax SameSite."""
@@ -48,6 +53,7 @@ def test_google_oauth_state_cookie_lax_samesite():
 
     cookie_header = r.headers.get("set-cookie", "")
     assert "SameSite=Lax" in cookie_header
+
 
 def test_google_oauth_state_verification():
     """Test OAuth state verification in callback."""
@@ -75,6 +81,7 @@ def test_google_oauth_state_verification():
     if r2.status_code == 400:
         assert "state_mismatch" not in r2.text and "missing_state" not in r2.text
 
+
 def test_google_oauth_state_mismatch():
     """Test OAuth callback rejects mismatched state."""
     c = _spin()
@@ -88,6 +95,7 @@ def test_google_oauth_state_mismatch():
     # Should get 400 for state mismatch
     assert r2.status_code == 400
     assert "state_mismatch" in r2.text or "bad_state" in r2.text
+
 
 def test_apple_oauth_state_cookie_shape():
     """Test that Apple OAuth sets proper state cookie."""
@@ -103,7 +111,10 @@ def test_apple_oauth_state_cookie_shape():
     r = c.get("/v1/auth/apple/start")
     # In some test environments the Apple OAuth route may not be wired; accept 302 (redirect)
     # or 404 (not configured) to avoid brittle failures.
-    assert r.status_code in (302, 404), f"Unexpected status for Apple start: {r.status_code}"
+    assert r.status_code in (
+        302,
+        404,
+    ), f"Unexpected status for Apple start: {r.status_code}"
 
     # If the endpoint is not configured (404), skip cookie checks.
     if r.status_code == 404:
@@ -111,9 +122,12 @@ def test_apple_oauth_state_cookie_shape():
 
     # Check for state cookie in redirect response; accept provider-prefixed names
     cookie_header = r.headers.get("set-cookie", "")
-    assert any(x in cookie_header for x in ("oauth_state=", "g_state=", "a_state=")), f"state cookie missing in: {cookie_header}"
+    assert any(
+        x in cookie_header for x in ("oauth_state=", "g_state=", "a_state=")
+    ), f"state cookie missing in: {cookie_header}"
     assert "HttpOnly" in cookie_header
     assert "Path=/" in cookie_header
+
 
 def test_apple_oauth_state_verification():
     """Test Apple OAuth state verification in callback."""
@@ -129,7 +143,10 @@ def test_apple_oauth_state_verification():
     # Start OAuth flow
     r1 = c.get("/v1/auth/apple/start", allow_redirects=False)
     # Accept 302 (redirect to Apple or stub) or 404 if route not wired in this env
-    assert r1.status_code in (302, 404), f"Unexpected status for Apple start: {r1.status_code}"
+    assert r1.status_code in (
+        302,
+        404,
+    ), f"Unexpected status for Apple start: {r1.status_code}"
 
     if r1.status_code == 404:
         # Route not configured in this environment; skip verification
@@ -145,11 +162,13 @@ def test_apple_oauth_state_verification():
     assert state_param is not None
 
     # Try callback with matching state
-    r2 = c.post("/v1/auth/apple/callback",
-                data={"code": "fake-code", "state": state_param})
+    r2 = c.post(
+        "/v1/auth/apple/callback", data={"code": "fake-code", "state": state_param}
+    )
     # Should proceed (exact status depends on token validation); ensure it's not a state mismatch
     if r2.status_code == 400:
         assert "state_mismatch" not in r2.text and "missing_state" not in r2.text
+
 
 def test_apple_oauth_state_mismatch():
     """Test Apple OAuth callback rejects mismatched state."""
@@ -165,18 +184,23 @@ def test_apple_oauth_state_mismatch():
     # Start OAuth flow
     r1 = c.get("/v1/auth/apple/start", allow_redirects=False)
     # Accept 302 (redirect to Apple or stub) or 404 (not configured in this env)
-    assert r1.status_code in (302, 404), f"Unexpected status for Apple start: {r1.status_code}"
+    assert r1.status_code in (
+        302,
+        404,
+    ), f"Unexpected status for Apple start: {r1.status_code}"
 
     if r1.status_code == 404:
         # Route not configured in this environment; skip mismatch verification
         return
 
     # Try callback with wrong state
-    r2 = c.post("/v1/auth/apple/callback",
-                data={"code": "fake-code", "state": "wrong-state"})
+    r2 = c.post(
+        "/v1/auth/apple/callback", data={"code": "fake-code", "state": "wrong-state"}
+    )
     # Should get 400 for state mismatch
     assert r2.status_code == 400
     assert "bad_state" in r2.text
+
 
 def test_oauth_state_cookie_clearing():
     """Test that state cookies are cleared after successful auth."""
@@ -202,8 +226,9 @@ def test_oauth_state_cookie_clearing():
             break
 
     # Try callback (will fail on token exchange but should clear state cookie)
-    r2 = c.post("/v1/auth/apple/callback",
-                data={"code": "fake-code", "state": state_param})
+    r2 = c.post(
+        "/v1/auth/apple/callback", data={"code": "fake-code", "state": state_param}
+    )
 
     # Check that state cookie is cleared (Max-Age=0)
     cookie_header = r2.headers.get("set-cookie", "")

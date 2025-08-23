@@ -41,15 +41,21 @@ async def check_jwt_secret() -> HealthResult:
     # Required readiness: JWT secret configured for auth flows
     jwt_secret = os.getenv("JWT_SECRET")
     jwt_public_key = os.getenv("JWT_PUBLIC_KEY")
-    
+
     # Check if JWT_SECRET is configured
     if not jwt_secret and not jwt_public_key:
         return "error"
-    
+
     # Security check: detect insecure default values
-    if jwt_secret and jwt_secret.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
+    if jwt_secret and jwt_secret.strip().lower() in {
+        "change-me",
+        "default",
+        "placeholder",
+        "secret",
+        "key",
+    }:
         return "error"
-    
+
     return "ok"
 
 
@@ -62,7 +68,9 @@ async def check_db() -> HealthResult:
         return "error"
 
 
-async def _http_probe(url: str, method: str = "HEAD", timeout_ms: int = 400) -> HealthResult:
+async def _http_probe(
+    url: str, method: str = "HEAD", timeout_ms: int = 400
+) -> HealthResult:
     if httpx is None:
         return "skipped"
     try:
@@ -77,7 +85,12 @@ async def _http_probe(url: str, method: str = "HEAD", timeout_ms: int = 400) -> 
 
 async def check_llama() -> HealthResult:
     # Explicit toggle wins
-    if (os.getenv("LLAMA_ENABLED") or "").strip().lower() in {"0","false","no","off"}:
+    if (os.getenv("LLAMA_ENABLED") or "").strip().lower() in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }:
         return "skipped"
     url = (os.getenv("OLLAMA_URL") or os.getenv("LLAMA_URL") or "").strip()
     if not url:
@@ -120,5 +133,3 @@ __all__ = [
     "check_qdrant",
     "check_spotify",
 ]
-
-

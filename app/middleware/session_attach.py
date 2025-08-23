@@ -9,6 +9,7 @@ from app.security import _get_request_payload
 
 log = logging.getLogger(__name__)
 
+
 class SessionAttachMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Skip preflight
@@ -16,7 +17,9 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         user_id: str | None = None
-        scopes: list | None = None  # None = unauthenticated, [] = authenticated but no scopes
+        scopes: list | None = (
+            None  # None = unauthenticated, [] = authenticated but no scopes
+        )
 
         try:
             # Try to get user_id using existing logic first
@@ -34,6 +37,7 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
                 else:
                     # Check for token in query params (for WebSocket compatibility)
                     from urllib.parse import parse_qs
+
                     qs = parse_qs(request.url.query or "")
                     token = (qs.get("token") or [None])[0]
 
@@ -42,13 +46,16 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
                         import os
 
                         from app.security import _jwt_decode
+
                         payload = _jwt_decode(token, key=os.getenv("JWT_SECRET"))
                         user_id = payload.get("sub") or payload.get("uid")
                         if user_id:
                             # Successfully authenticated - normalize scopes
                             raw_scopes = payload.get("scopes")
                             if isinstance(raw_scopes, str):
-                                scopes = [s.strip() for s in raw_scopes.split() if s.strip()]
+                                scopes = [
+                                    s.strip() for s in raw_scopes.split() if s.strip()
+                                ]
                             elif isinstance(raw_scopes, (list, tuple, set)):
                                 scopes = list(raw_scopes)
                             else:
@@ -75,11 +82,14 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
 
         # Attach to request state for downstream middleware/handlers
         request.state.user_id = user_id
-        request.state.scopes = scopes  # None = unauthenticated, [] = authenticated but no scopes
+        request.state.scopes = (
+            scopes  # None = unauthenticated, [] = authenticated but no scopes
+        )
 
         # Record metrics for authenticated requests
         if user_id and user_id != "anon":
             from app.middleware.rate_limit import _record_request_metrics
+
             _record_request_metrics(user_id, scopes)
 
         return await call_next(request)

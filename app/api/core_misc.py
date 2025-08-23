@@ -6,11 +6,14 @@ from app.deps.user import get_current_user_id
 
 router = APIRouter(tags=["Admin"], dependencies=deps_protected_http())
 
+
 class AskRequest(BaseModel):
     # Accept both legacy text and chat-style array
     prompt: str | list[dict]
     model_override: str | None = Field(None, alias="model")
-    stream: bool | None = Field(False, description="Force SSE when true; otherwise negotiated via Accept")
+    stream: bool | None = Field(
+        False, description="Force SSE when true; otherwise negotiated via Accept"
+    )
     model_config = ConfigDict(
         title="AskRequest",
         validate_by_name=True,
@@ -18,11 +21,16 @@ class AskRequest(BaseModel):
         json_schema_extra={"example": {"prompt": "hello"}},
     )
 
+
 @router.post("/intent-test", summary="No-op intent echo")
 async def intent_test(req: AskRequest, user_id: str = Depends(get_current_user_id)):
     import logging
-    logging.getLogger(__name__).info("intent.test", extra={"meta": {"prompt": req.prompt}})
+
+    logging.getLogger(__name__).info(
+        "intent.test", extra={"meta": {"prompt": req.prompt}}
+    )
     return {"intent": "test", "prompt": req.prompt}
+
 
 @router.get("/client-crypto-policy")
 async def client_crypto_policy() -> dict:
@@ -33,9 +41,11 @@ async def client_crypto_policy() -> dict:
         "deks": "per-user-per-device",
     }
 
+
 @router.get("/explain_route")
 async def explain_route(req_id: str, user_id: str = Depends(get_current_user_id)):
     from app.history import get_record_by_req_id
+
     record = await get_record_by_req_id(req_id)
     if not record:
         raise HTTPException(status_code=404, detail="request_not_found")
@@ -71,4 +81,8 @@ async def explain_route(req_id: str, user_id: str = Depends(get_current_user_id)
     if isinstance(lat, int):
         parts.append(f"latency={lat}ms")
 
-    return {"req_id": req_id, "breadcrumb": " | ".join(parts), "meta": record.get("meta")}
+    return {
+        "req_id": req_id,
+        "breadcrumb": " | ".join(parts),
+        "meta": record.get("meta"),
+    }

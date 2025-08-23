@@ -44,7 +44,13 @@ def _quotas() -> tuple[int, float]:
     return max_tokens, max_minutes
 
 
-def add_usage(user_id: str, *, prompt_tokens: int = 0, completion_tokens: int = 0, minutes: float = 0.0) -> None:
+def add_usage(
+    user_id: str,
+    *,
+    prompt_tokens: int = 0,
+    completion_tokens: int = 0,
+    minutes: float = 0.0,
+) -> None:
     _reset_if_new_day()
     state = _STATE.setdefault(user_id, {"tokens": 0.0, "minutes": 0.0})
     state["tokens"] += float(prompt_tokens + completion_tokens)
@@ -78,5 +84,3 @@ def get_budget_state(user_id: str) -> dict[str, object]:
 
 
 __all__ = ["add_usage", "get_budget_state"]
-
-

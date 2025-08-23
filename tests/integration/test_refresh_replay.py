@@ -8,25 +8,26 @@ from app.main import app
 
 def _setup(client: TestClient):
     # CSRF optional for this test path
-    client.post('/v1/register', json={'username': 'rre_user', 'password': 'secret123'})
-    client.post('/v1/login', json={'username': 'rre_user', 'password': 'secret123'})
+    client.post("/v1/register", json={"username": "rre_user", "password": "secret123"})
+    client.post("/v1/login", json={"username": "rre_user", "password": "secret123"})
 
 
 @pytest.mark.contract
 def test_refresh_replay_header_mode(monkeypatch):
-    monkeypatch.setenv('CSRF_ENABLED', '0')
+    monkeypatch.setenv("CSRF_ENABLED", "0")
     client = TestClient(app)
     with client:
         _setup(client)
         # Capture current refresh cookie value
-        ref = client.cookies.get('refresh_token')
-        assert ref, 'missing refresh_token cookie after login'
+        ref = client.cookies.get("refresh_token")
+        assert ref, "missing refresh_token cookie after login"
         # First use should succeed
-        r1 = client.post('/v1/auth/refresh', json={'refresh_token': ref})
+        r1 = client.post("/v1/auth/refresh", json={"refresh_token": ref})
         assert r1.status_code in (HTTPStatus.OK, HTTPStatus.NO_CONTENT)
         # Second use must 401
-        r2 = client.post('/v1/auth/refresh', json={'refresh_token': ref})
+        r2 = client.post("/v1/auth/refresh", json={"refresh_token": ref})
         assert r2.status_code == HTTPStatus.UNAUTHORIZED
+
 
 from fastapi.testclient import TestClient
 
@@ -72,5 +73,3 @@ def test_refresh_race_two_inflight(monkeypatch):
         b = ex.submit(_call)
         codes = sorted([a.result(), b.result()])
     assert codes == [HTTPStatus.OK, HTTPStatus.UNAUTHORIZED]
-
-

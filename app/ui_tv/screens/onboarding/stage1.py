@@ -10,5 +10,3 @@ from dataclasses import dataclass
 class OnboardingStage1:
     consent_microphone: bool | None = None
     consent_calendar: bool | None = None
-
-

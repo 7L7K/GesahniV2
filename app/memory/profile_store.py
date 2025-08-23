@@ -71,17 +71,25 @@ class ProfileStore:
                         if isinstance(attrs, dict):
                             fixed[uid] = {}
                             for k, v in attrs.items():
-                                if isinstance(v, dict) and ("value" in v and "updated_at" in v):
+                                if isinstance(v, dict) and (
+                                    "value" in v and "updated_at" in v
+                                ):
                                     fixed[uid][k] = v
                                 else:
-                                    fixed[uid][k] = {"value": v, "updated_at": now, "source": "import"}
+                                    fixed[uid][k] = {
+                                        "value": v,
+                                        "updated_at": now,
+                                        "source": "import",
+                                    }
                     self._mem = fixed
             except Exception:
                 self._mem = {}
 
     def _save(self) -> None:
         tmp = self._path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self._mem, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.write_text(
+            json.dumps(self._mem, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         tmp.replace(self._path)
 
     def _refresh_ttl(self, user_id: str) -> None:
@@ -99,7 +107,9 @@ class ProfileStore:
                 self._exp.pop(user_id, None)
             return dict(self._mem.get(user_id, {}))
 
-    def get_values(self, user_id: str, keys: Iterable[str] | None = None) -> dict[str, Any]:
+    def get_values(
+        self, user_id: str, keys: Iterable[str] | None = None
+    ) -> dict[str, Any]:
         snap = self.get_snapshot(user_id)
         out: dict[str, Any] = {}
         for k, rec in snap.items():
@@ -110,7 +120,9 @@ class ProfileStore:
     def get_value(self, user_id: str, key: str) -> Any | None:
         return self.get_values(user_id, keys=[key]).get(key)
 
-    def upsert(self, user_id: str, key: str, value: Any, *, source: str = "utterance") -> dict[str, Any]:
+    def upsert(
+        self, user_id: str, key: str, value: Any, *, source: str = "utterance"
+    ) -> dict[str, Any]:
         if key not in CANONICAL_KEYS:
             logger.warning("profile_store: non-canonical key %s", key)
         now = time.time()
@@ -150,7 +162,9 @@ class ProfileStore:
         with self._lock:
             return self._last_key.get(user_id)
 
-    def update_bulk(self, user_id: str, attrs: dict[str, Any], *, source: str = "import") -> None:
+    def update_bulk(
+        self, user_id: str, attrs: dict[str, Any], *, source: str = "import"
+    ) -> None:
         with self._lock:
             for k, v in (attrs or {}).items():
                 self.upsert(user_id, k, v, source=source)
@@ -161,7 +175,9 @@ class ProfileStore:
                 pass
 
     # Back-compat helper used by API layer
-    def update(self, user_id: str, attrs: dict[str, Any], *, source: str = "api") -> None:
+    def update(
+        self, user_id: str, attrs: dict[str, Any], *, source: str = "api"
+    ) -> None:
         self.update_bulk(user_id, attrs, source=source)
 
     def persist_all(self) -> None:
@@ -176,5 +192,3 @@ class ProfileStore:
 profile_store = ProfileStore()
 
 __all__ = ["ProfileStore", "profile_store", "CANONICAL_KEYS"]
-
-

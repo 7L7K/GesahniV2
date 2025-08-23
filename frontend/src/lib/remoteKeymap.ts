@@ -41,5 +41,3 @@ export function attachRemoteKeymap() {
 function dispatch(name: RemoteEvent) {
     window.dispatchEvent(new CustomEvent(name));
 }
-
-

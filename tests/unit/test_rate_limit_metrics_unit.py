@@ -33,4 +33,3 @@ def test_metrics_allow_and_block_counters(monkeypatch):
     assert client.get("/rl", headers=_h()).status_code == 200
     r = client.get("/rl", headers=_h()).status_code
     assert r in (200, 429)
-

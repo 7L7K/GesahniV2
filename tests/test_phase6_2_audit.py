@@ -25,7 +25,7 @@ class TestAuditModels:
             ip="127.0.0.1",
             scopes=["user:profile"],
             action="http_request",
-            meta={"test": "value"}
+            meta={"test": "value"},
         )
 
         assert event.user_id == "test_user"
@@ -40,11 +40,7 @@ class TestAuditModels:
 
     def test_audit_event_defaults(self):
         """Test audit event default values."""
-        event = AuditEvent(
-            route="/minimal",
-            method="POST",
-            status=404
-        )
+        event = AuditEvent(route="/minimal", method="POST", status=404)
 
         assert event.user_id is None
         assert event.ip is None
@@ -55,12 +51,7 @@ class TestAuditModels:
 
     def test_audit_event_json_serialization(self):
         """Test audit event JSON serialization."""
-        event = AuditEvent(
-            user_id="test_user",
-            route="/test",
-            method="GET",
-            status=200
-        )
+        event = AuditEvent(user_id="test_user", route="/test", method="GET", status=200)
 
         json_str = event.model_dump_json()
         assert "test_user" in json_str
@@ -98,16 +89,12 @@ class TestAuditStore:
 
         # Clean up temp directory
         import shutil
+
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_single_audit_append(self):
         """Test appending a single audit event."""
-        event = AuditEvent(
-            user_id="test_user",
-            route="/test",
-            method="GET",
-            status=200
-        )
+        event = AuditEvent(user_id="test_user", route="/test", method="GET", status=200)
 
         append(event)
 
@@ -188,16 +175,19 @@ class TestAuditMiddleware:
     def test_audit_middleware_import(self):
         """Test that audit middleware can be imported."""
         from app.middleware.audit_mw import AuditMiddleware
+
         assert AuditMiddleware is not None
 
     def test_audit_models_import(self):
         """Test that audit models can be imported."""
         from app.audit.models import AuditEvent
+
         assert AuditEvent is not None
 
     def test_audit_store_import(self):
         """Test that audit store can be imported."""
         from app.audit.store import append, bulk
+
         assert append is not None
         assert bulk is not None
 
@@ -217,7 +207,7 @@ class TestWebSocketAudit:
             ip="192.168.1.1",
             scopes=["care:resident"],
             action="ws_connect",
-            meta={"path": "/v1/ws/care", "endpoint": "/v1/ws/care"}
+            meta={"path": "/v1/ws/care", "endpoint": "/v1/ws/care"},
         )
 
         assert event.user_id == "ws_user"
@@ -241,7 +231,7 @@ class TestWebSocketAudit:
             ip="192.168.1.1",
             scopes=["care:resident"],
             action="ws_disconnect",
-            meta={"path": "/v1/ws/care", "endpoint": "/v1/ws/care"}
+            meta={"path": "/v1/ws/care", "endpoint": "/v1/ws/care"},
         )
 
         assert event.user_id == "ws_user"
@@ -256,18 +246,14 @@ if __name__ == "__main__":
     print("Running Phase 6.2 audit tests...")
 
     # Test basic functionality
-    event = AuditEvent(
-        user_id="test_user",
-        route="/test",
-        method="GET",
-        status=200
-    )
+    event = AuditEvent(user_id="test_user", route="/test", method="GET", status=200)
 
     print(f"✅ Created audit event: {event.user_id} -> {event.route}")
     print(f"✅ Event JSON: {event.model_dump_json()}")
 
     # Test audit store
     from app.audit.store import get_audit_file_path
+
     print(f"✅ Audit file path: {get_audit_file_path()}")
 
     print("✅ All basic tests passed!")

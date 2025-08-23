@@ -41,6 +41,7 @@ try:
 except Exception:  # pragma: no cover - optional
     AUTH_FAIL = None  # type: ignore
 
+
 def _safe_request_path(request: Request | None) -> str:
     """Safely extract request path without getattr tricks."""
     if request is None:
@@ -55,36 +56,48 @@ def _safe_request_path(request: Request | None) -> str:
 
 def register_problem_handler(app) -> None:
     """Register problem+JSON handler for HTTPException when ENABLE_PROBLEM_HANDLER=1.
-    
+
     This replaces the import-time monkey-patching with explicit app-scoped registration.
     """
-    if os.getenv("ENABLE_PROBLEM_HANDLER", "0").strip().lower() not in {"1", "true", "yes", "on"}:
+    if os.getenv("ENABLE_PROBLEM_HANDLER", "0").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         return
-    
+
     try:
         from fastapi.responses import JSONResponse
         from starlette.exceptions import HTTPException as StarletteHTTPException
         from starlette.requests import Request as StarletteRequest
-        
+
         @app.exception_handler(StarletteHTTPException)
-        async def problem_aware_http_exception_handler(request: StarletteRequest, exc: StarletteHTTPException):
+        async def problem_aware_http_exception_handler(
+            request: StarletteRequest, exc: StarletteHTTPException
+        ):
             # Skip CORS preflight requests - don't touch headers
             if request.method.upper() == "OPTIONS":
                 return None  # Let default handler deal with it
-            
+
             headers = getattr(exc, "headers", None)
             detail = getattr(exc, "detail", None)
             content_type = ""
             if isinstance(headers, dict):
-                content_type = headers.get("Content-Type", "") or headers.get("content-type", "")
-            if isinstance(detail, dict) and content_type.startswith("application/problem+json"):
+                content_type = headers.get("Content-Type", "") or headers.get(
+                    "content-type", ""
+                )
+            if isinstance(detail, dict) and content_type.startswith(
+                "application/problem+json"
+            ):
                 return JSONResponse(
-                    detail, 
-                    status_code=getattr(exc, "status_code", 500), 
-                    headers=headers, 
-                    media_type="application/problem+json"
+                    detail,
+                    status_code=getattr(exc, "status_code", 500),
+                    headers=headers,
+                    media_type="application/problem+json",
                 )
             return None  # Let default handler deal with it
+
     except Exception:
         pass
 
@@ -98,7 +111,10 @@ def scope_required(*required_scopes: str):
         scopes = _payload_scopes(payload)
         if not set(required_scopes) <= scopes:
             raise HTTPException(status_code=403, detail="insufficient_scope")
+
     return _dep
+
+
 from . import metrics
 
 JWT_SECRET: str | None = None  # backwards compat; actual value read from env
@@ -111,12 +127,19 @@ _window = float(os.getenv("RATE_LIMIT_WINDOW_S", "60"))
 # Short burst bucket
 RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "10"))
 # Default burst window to 60s (was 10s); accept either *_S or legacy var for compatibility
-_burst_window = float(os.getenv("RATE_LIMIT_BURST_WINDOW_S", os.getenv("RATE_LIMIT_BURST_WINDOW", "60")))
+_burst_window = float(
+    os.getenv("RATE_LIMIT_BURST_WINDOW_S", os.getenv("RATE_LIMIT_BURST_WINDOW", "60"))
+)
 _lock = asyncio.Lock()
 
 # Trust proxy headers for client IP only when explicitly enabled
 # Default: do NOT trust X-Forwarded-For unless explicitly enabled
-_TRUST_XFF = os.getenv("TRUST_X_FORWARDED_FOR", "0").strip().lower() in {"1", "true", "yes", "on"}
+_TRUST_XFF = os.getenv("TRUST_X_FORWARDED_FOR", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 # Scope of rate limit keys: default to "route" to avoid cross-route contention
 _KEY_SCOPE = os.getenv("RATE_LIMIT_KEY_SCOPE", "global").strip().lower()
@@ -143,7 +166,11 @@ def _maybe_refresh_settings_for_test() -> None:
     global RATE_LIMIT, RATE_LIMIT_BURST, _window, _burst_window, _KEY_SCOPE
     try:
         if RATE_LIMIT == _DEF_RATE_LIMIT:
-            RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MIN", os.getenv("RATE_LIMIT", str(RATE_LIMIT))))
+            RATE_LIMIT = int(
+                os.getenv(
+                    "RATE_LIMIT_PER_MIN", os.getenv("RATE_LIMIT", str(RATE_LIMIT))
+                )
+            )
     except Exception:
         pass
     try:
@@ -158,7 +185,12 @@ def _maybe_refresh_settings_for_test() -> None:
         pass
     try:
         if _burst_window == _DEF_BURST_WINDOW:
-            _burst_window = float(os.getenv("RATE_LIMIT_BURST_WINDOW_S", os.getenv("RATE_LIMIT_BURST_WINDOW", str(_burst_window))))
+            _burst_window = float(
+                os.getenv(
+                    "RATE_LIMIT_BURST_WINDOW_S",
+                    os.getenv("RATE_LIMIT_BURST_WINDOW", str(_burst_window)),
+                )
+            )
     except Exception:
         pass
     try:
@@ -168,8 +200,8 @@ def _maybe_refresh_settings_for_test() -> None:
     except Exception:
         _KEY_SCOPE = "global"
 
-
     # (previous duplicate definition removed; refresh handled above)
+
 
 # ---------------------------------------------------------------------------
 # Optional distributed backend (Redis) for rate limiting
@@ -184,6 +216,7 @@ _RL_PREFIX = os.getenv("RATE_LIMIT_REDIS_PREFIX", "rl").strip(":")
 # Lazy-initialized async Redis client (if available). Keep it optional so that
 # test environments without the dependency continue to work unchanged.
 _redis_client: object | None = None
+
 
 def _should_use_redis() -> bool:
     # Under pytest, prefer in-memory to ensure deterministic behavior
@@ -224,12 +257,17 @@ async def _get_redis():
 # is explicitly set it takes precedence; otherwise when running under pytest
 # default to 0 seconds of leeway.
 _env_jwt_skew = os.getenv("JWT_CLOCK_SKEW_S", None)
-if _env_jwt_skew is None and (os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING")):
+if _env_jwt_skew is None and (
+    os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING")
+):
     JWT_CLOCK_SKEW_S = 0
 else:
     JWT_CLOCK_SKEW_S = int(_env_jwt_skew or "60")
 
-def _jwt_decode(token: str, key: str | None = None, algorithms: list[str] | None = None, **kwargs) -> dict:
+
+def _jwt_decode(
+    token: str, key: str | None = None, algorithms: list[str] | None = None, **kwargs
+) -> dict:
     """Decode a JWT using a consistent leeway and sensible default options.
 
     Prefer callers to pass `leeway`/`options` explicitly; otherwise we default to
@@ -262,7 +300,9 @@ def _seconds_until_utc_midnight() -> int:
     return max(0, int(delta + 0.999))
 
 
-async def _redis_incr_with_ttl(redis_client, key: str, period_seconds: float) -> tuple[int, int]:
+async def _redis_incr_with_ttl(
+    redis_client, key: str, period_seconds: float
+) -> tuple[int, int]:
     """Atomically increment a counter and ensure TTL is set on first increment.
 
     Returns (count, ttl_seconds).
@@ -276,7 +316,11 @@ async def _redis_incr_with_ttl(redis_client, key: str, period_seconds: float) ->
     try:
         res = await redis_client.eval(script, 1, key, int(period_seconds * 1000))
         count = int(res[0]) if isinstance(res, (list, tuple)) else int(res)
-        pttl = int(res[1]) if isinstance(res, (list, tuple)) and len(res) > 1 else await redis_client.pttl(key)
+        pttl = (
+            int(res[1])
+            if isinstance(res, (list, tuple)) and len(res) > 1
+            else await redis_client.pttl(key)
+        )
         ttl_s = max(0, int((pttl + 999) // 1000))
         return count, ttl_s
     except Exception:
@@ -346,10 +390,10 @@ def _get_request_payload(request: Request | None) -> dict | None:
     payload = getattr(request.state, "jwt_payload", None)
     if isinstance(payload, dict):
         return payload
-    
+
     token: str | None = None
     token_source = "none"
-    
+
     # 1) Try access_token first (Authorization header or cookie)
     try:
         auth = request.headers.get("Authorization")
@@ -358,7 +402,7 @@ def _get_request_payload(request: Request | None) -> dict | None:
             token_source = "authorization_header"
     except Exception:
         auth = None
-    
+
     # Fallback to access_token cookie
     if not token:
         try:
@@ -367,7 +411,7 @@ def _get_request_payload(request: Request | None) -> dict | None:
                 token_source = "access_token_cookie"
         except Exception:
             token = None
-    
+
     # 2) Try __session cookie if access_token failed
     if not token:
         try:
@@ -376,10 +420,10 @@ def _get_request_payload(request: Request | None) -> dict | None:
                 token_source = "__session_cookie"
         except Exception:
             token = None
-    
+
     if not token:
         return None
-    
+
     # 3) Try traditional JWT first (only for non-session cookies)
     # __session cookies contain opaque session IDs only, never JWTs
     if token_source not in ["websocket_session_cookie"]:
@@ -394,7 +438,7 @@ def _get_request_payload(request: Request | None) -> dict | None:
                     opts["issuer"] = iss
                 if aud:
                     opts["audience"] = aud
-                
+
                 if opts:
                     return _jwt_decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
                 else:
@@ -404,14 +448,21 @@ def _get_request_payload(request: Request | None) -> dict | None:
                 pass
         else:
             # If no secret configured, try non-verifying decode only in dev/test mode
-            dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
-            test_mode = os.getenv("ENV", "").strip().lower() == "test" or os.getenv("PYTEST_RUNNING")
+            dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+            test_mode = os.getenv("ENV", "").strip().lower() == "test" or os.getenv(
+                "PYTEST_RUNNING"
+            )
             if dev_mode or test_mode:
                 try:
                     return _jwt_decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
                 except Exception:
                     pass
-    
+
     # 4) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
     # AND the token source is NOT __session (unless Clerk is enabled)
     clerk_enabled = bool(
@@ -421,9 +472,11 @@ def _get_request_payload(request: Request | None) -> dict | None:
     )
     is_authorization_header = token_source == "authorization_header"
     is_session_cookie = token_source == "__session_cookie"
-    
+
     # Never try to validate __session as a Clerk token unless Clerk is enabled
-    if (clerk_enabled or is_authorization_header) and not (is_session_cookie and not clerk_enabled):
+    if (clerk_enabled or is_authorization_header) and not (
+        is_session_cookie and not clerk_enabled
+    ):
         try:
             if _verify_clerk:
                 claims = _verify_clerk(token)  # type: ignore[misc]
@@ -431,7 +484,7 @@ def _get_request_payload(request: Request | None) -> dict | None:
                     return claims
         except Exception:
             pass
-    
+
     # All authentication methods failed
     return None
 
@@ -442,10 +495,10 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
     payload = getattr(websocket.state, "jwt_payload", None)
     if isinstance(payload, dict):
         return payload
-    
+
     token: str | None = None
     token_source = "none"
-    
+
     # 1) Try access_token first (Authorization header, query param, or cookie)
     try:
         auth = websocket.headers.get("Authorization")
@@ -454,7 +507,7 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
             token_source = "authorization_header"
     except Exception:
         auth = None
-    
+
     # WS query param fallback for browser WebSocket handshakes
     if not token:
         try:
@@ -464,7 +517,7 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
                 token_source = "websocket_query_param"
         except Exception:
             token = None
-    
+
     # Cookie header fallback for WS handshakes
     if not token:
         try:
@@ -477,7 +530,7 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
                     break
         except Exception:
             token = None
-    
+
     # 2) Try __session cookie if access_token failed
     if not token:
         try:
@@ -490,10 +543,10 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
                     break
         except Exception:
             token = None
-    
+
     if not token:
         return None
-    
+
     # 3) Try traditional JWT first (only for non-session cookies)
     # __session cookies contain opaque session IDs only, never JWTs
     if token_source not in ["websocket_session_cookie"]:
@@ -508,7 +561,7 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
                     opts["issuer"] = iss
                 if aud:
                     opts["audience"] = aud
-                
+
                 if opts:
                     return _jwt_decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
                 else:
@@ -518,14 +571,21 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
                 pass
         else:
             # If no secret configured, try non-verifying decode only in dev/test mode
-            dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
-            test_mode = os.getenv("ENV", "").strip().lower() == "test" or os.getenv("PYTEST_RUNNING")
+            dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+            test_mode = os.getenv("ENV", "").strip().lower() == "test" or os.getenv(
+                "PYTEST_RUNNING"
+            )
             if dev_mode or test_mode:
                 try:
                     return _jwt_decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
                 except Exception:
                     pass
-    
+
     # 4) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
     # AND the token source is NOT __session (unless Clerk is enabled)
     clerk_enabled = bool(
@@ -535,9 +595,11 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
     )
     is_authorization_header = token_source == "authorization_header"
     is_session_cookie = token_source in ["websocket_session_cookie"]
-    
+
     # Never try to validate __session as a Clerk token unless Clerk is enabled
-    if (clerk_enabled or is_authorization_header) and not (is_session_cookie and not clerk_enabled):
+    if (clerk_enabled or is_authorization_header) and not (
+        is_session_cookie and not clerk_enabled
+    ):
         try:
             if _verify_clerk:
                 claims = _verify_clerk(token)  # type: ignore[misc]
@@ -545,7 +607,7 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
                     return claims
         except Exception:
             pass
-    
+
     # All authentication methods failed
     return None
 
@@ -567,7 +629,7 @@ def validate_websocket_origin(websocket: WebSocket) -> bool:
     # Use single source of truth from app.state (same as CORS)
     try:
         allowed_origins = getattr(websocket.app.state, "allowed_origins", None)
-        if allowed_origins is not None and hasattr(allowed_origins, '__iter__'):
+        if allowed_origins is not None and hasattr(allowed_origins, "__iter__"):
             return origin in allowed_origins
     except (AttributeError, TypeError):
         # Fallback for tests or contexts where app.state is not available
@@ -595,7 +657,6 @@ _http_burst = http_burst
 _ws_burst = ws_burst
 
 
-
 def _current_key(request: Request) -> str:
     """Get the current rate limiting key for the request."""
     # Prefer explicit user_id set by deps; otherwise pull from JWT payload
@@ -606,14 +667,19 @@ def _current_key(request: Request) -> str:
             payload = _get_request_payload(request)
         if isinstance(payload, dict):
             uid = payload.get("user_id") or payload.get("sub")
-    
+
     if uid:
         return f"user:{uid}"
-    
+
     # Fallback to IP-based key
     ip = request.headers.get("X-Forwarded-For")
-    ip = (ip.split(",")[0].strip() if ip else (request.client.host if request.client else "anon"))
+    ip = (
+        ip.split(",")[0].strip()
+        if ip
+        else (request.client.host if request.client else "anon")
+    )
     return f"ip:{ip}"
+
 
 def _should_bypass_rate_limit(request: Request) -> bool:
     """Check if rate limiting should be bypassed for this request."""
@@ -623,7 +689,7 @@ def _should_bypass_rate_limit(request: Request) -> bool:
             return True
     except Exception:
         pass
-    
+
     # Development mode: bypass rate limits for authenticated users
     dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
     if dev_mode:
@@ -636,7 +702,7 @@ def _should_bypass_rate_limit(request: Request) -> bool:
                 return True
         except Exception:
             pass
-    
+
     # Check for bypass scopes
     try:
         payload = getattr(request.state, "jwt_payload", None)
@@ -648,12 +714,15 @@ def _should_bypass_rate_limit(request: Request) -> bool:
             return True
     except Exception:
         pass
-    
+
     return False
 
-def _bucket_rate_limit(key: str, bucket: dict[str, int], limit: int, period: float) -> bool:
+
+def _bucket_rate_limit(
+    key: str, bucket: dict[str, int], limit: int, period: float
+) -> bool:
     """Apply rate limiting to a bucket.
-    
+
     Returns True if the request is allowed, False if rate limited.
     """
     now = time.time()
@@ -665,11 +734,13 @@ def _bucket_rate_limit(key: str, bucket: dict[str, int], limit: int, period: flo
     bucket[key] = count
     return count <= limit
 
+
 def _bucket_retry_after(bucket: dict[str, int], period: float) -> int:
     """Calculate retry after time for a bucket."""
     now = time.time()
     reset = bucket.get("_reset", now)
     return max(0, int(reset + period - now))
+
 
 async def _apply_rate_limit(key: str, record: bool = True) -> bool:
     """Compatibility shim used directly by some legacy tests.
@@ -681,7 +752,7 @@ async def _apply_rate_limit(key: str, record: bool = True) -> bool:
     """
     # Ensure test-time env overrides are applied if globals weren't monkeypatched
     _maybe_refresh_settings_for_test()
-    
+
     now = time.time()
     cutoff = now - _window
     timestamps = [ts for ts in _requests.get(key, []) if ts > cutoff]
@@ -711,7 +782,12 @@ async def verify_token(request: Request) -> None:
 
     jwt_secret = os.getenv("JWT_SECRET")
     # Require JWT by default; tests/dev can opt-out via JWT_OPTIONAL_IN_TESTS
-    require_jwt = os.getenv("REQUIRE_JWT", "1").strip().lower() in {"1", "true", "yes", "on"}
+    require_jwt = os.getenv("REQUIRE_JWT", "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     # Enforce strict clock skew if configured (seconds)
     try:
         skew = int(os.getenv("JWT_CLOCK_SKEW_S", "0") or 0)
@@ -721,7 +797,8 @@ async def verify_token(request: Request) -> None:
     test_bypass = (
         os.getenv("ENV", "").strip().lower() == "test"
         or os.getenv("PYTEST_RUNNING")
-        or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").strip().lower() in {"1", "true", "yes", "on"}
+        or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").strip().lower()
+        in {"1", "true", "yes", "on"}
     )
     if test_bypass and not jwt_secret:
         return
@@ -741,22 +818,30 @@ async def verify_token(request: Request) -> None:
     if auth and auth.startswith("Bearer "):
         token = auth.split(" ", 1)[1]
         token_source = "authorization_header"
-    
+
     # Fallback to access_token cookie (accept canonical or legacy during migration)
     if not token:
         try:
             from .cookie_names import ACCESS_TOKEN, ACCESS_TOKEN_LEGACY
-            token = request.cookies.get(ACCESS_TOKEN) or request.cookies.get(ACCESS_TOKEN_LEGACY)
+
+            token = request.cookies.get(ACCESS_TOKEN) or request.cookies.get(
+                ACCESS_TOKEN_LEGACY
+            )
             if token:
                 token_source = "access_token_cookie"
         except Exception:
             token = request.cookies.get("access_token")
-    
+
     # 2) Try __session cookie if access_token failed (accept canonical/legacy)
     if not token:
         try:
             from .cookie_names import SESSION, SESSION_LEGACY
-            token = request.cookies.get(SESSION) or request.cookies.get(SESSION_LEGACY) or request.cookies.get("session")
+
+            token = (
+                request.cookies.get(SESSION)
+                or request.cookies.get(SESSION_LEGACY)
+                or request.cookies.get("session")
+            )
             if token:
                 token_source = "__session_cookie"
         except Exception:
@@ -764,21 +849,22 @@ async def verify_token(request: Request) -> None:
 
     # Log which cookie/token source authenticated the request
     if token:
-        logger.info("auth.token_source", extra={
-            "token_source": token_source,
-            "has_token": bool(token),
-            "token_length": len(token) if token else 0,
-            "request_path": _safe_request_path(request),
-        })
+        logger.info(
+            "auth.token_source",
+            extra={
+                "token_source": token_source,
+                "has_token": bool(token),
+                "token_length": len(token) if token else 0,
+                "request_path": _safe_request_path(request),
+            },
+        )
 
     if not token:
         # If JWT is required, enforce 401 even under tests
         if require_jwt:
             try:
                 record_privileged_call_blocked(
-                    endpoint=request.url.path,
-                    reason="missing_token",
-                    user_id="unknown"
+                    endpoint=request.url.path, reason="missing_token", user_id="unknown"
                 )
             except Exception:
                 pass
@@ -787,13 +873,15 @@ async def verify_token(request: Request) -> None:
             logger.warning("deny: missing_token")
             raise HTTPException(status_code=401, detail="Unauthorized")
         # Otherwise allow anonymous when tests indicate JWT is optional OR when scopes enforcement is disabled.
-        if test_bypass or os.getenv("ENFORCE_JWT_SCOPES", "1").strip() in {"0", "false", "no"}:
+        if test_bypass or os.getenv("ENFORCE_JWT_SCOPES", "1").strip() in {
+            "0",
+            "false",
+            "no",
+        }:
             return
         try:
             record_privileged_call_blocked(
-                endpoint=request.url.path,
-                reason="missing_token",
-                user_id="unknown"
+                endpoint=request.url.path, reason="missing_token", user_id="unknown"
             )
         except Exception:
             pass
@@ -813,18 +901,20 @@ async def verify_token(request: Request) -> None:
             if aud:
                 opts["audience"] = aud
             if opts:
-                payload = _jwt_decode(token, jwt_secret, algorithms=["HS256"], leeway=skew, **opts)
+                payload = _jwt_decode(
+                    token, jwt_secret, algorithms=["HS256"], leeway=skew, **opts
+                )
             else:
-                payload = _jwt_decode(token, jwt_secret, algorithms=["HS256"], leeway=skew)
+                payload = _jwt_decode(
+                    token, jwt_secret, algorithms=["HS256"], leeway=skew
+                )
             request.state.jwt_payload = payload
             return  # Success with traditional JWT
         except jwt.ExpiredSignatureError:
             # Allow caller to distinguish expiry for logging
             try:
                 record_privileged_call_blocked(
-                    endpoint=request.url.path,
-                    reason="token_expired",
-                    user_id="unknown"
+                    endpoint=request.url.path, reason="token_expired", user_id="unknown"
                 )
             except Exception:
                 pass
@@ -845,9 +935,11 @@ async def verify_token(request: Request) -> None:
     )
     is_authorization_header = token_source == "authorization_header"
     is_session_cookie = token_source == "__session_cookie"
-    
+
     # Never try to validate __session as a Clerk token unless Clerk is enabled
-    if (clerk_enabled or is_authorization_header) and not (is_session_cookie and not clerk_enabled):
+    if (clerk_enabled or is_authorization_header) and not (
+        is_session_cookie and not clerk_enabled
+    ):
         # Basic check if it looks like a Clerk JWT (has 3 parts separated by dots)
         if token.count(".") == 2:
             try:
@@ -863,9 +955,7 @@ async def verify_token(request: Request) -> None:
     # All authentication methods failed
     try:
         record_privileged_call_blocked(
-            endpoint=request.url.path,
-            reason="invalid_token",
-            user_id="unknown"
+            endpoint=request.url.path, reason="invalid_token", user_id="unknown"
         )
     except Exception:
         pass
@@ -876,7 +966,10 @@ async def verify_token(request: Request) -> None:
     exc = HTTPException(status_code=401, detail="Unauthorized")
     try:
         import logging
-        logging.getLogger(__name__).warning("auth.unauthorized", extra={"meta": {"reason": "unauthorized"}})
+
+        logging.getLogger(__name__).warning(
+            "auth.unauthorized", extra={"meta": {"reason": "unauthorized"}}
+        )
     except Exception:
         pass
     raise exc
@@ -909,7 +1002,7 @@ async def verify_token_strict(request: Request) -> None:
             record_privileged_call_blocked(
                 endpoint=request.url.path,
                 reason="missing_token_strict",
-                user_id="unknown"
+                user_id="unknown",
             )
         except Exception:
             pass
@@ -923,7 +1016,7 @@ async def verify_token_strict(request: Request) -> None:
             record_privileged_call_blocked(
                 endpoint=request.url.path,
                 reason="invalid_token_strict",
-                user_id="unknown"
+                user_id="unknown",
             )
         except Exception:
             pass
@@ -962,59 +1055,75 @@ async def rate_limit(request: Request) -> None:
     """
     if request.method == "OPTIONS":
         return
-    
+
     _maybe_refresh_settings_for_test()
-    
+
     # Read rate limit values dynamically from environment
-    rate_limit_per_min = int(os.getenv("RATE_LIMIT_PER_MIN", os.getenv("RATE_LIMIT", "60")))
+    rate_limit_per_min = int(
+        os.getenv("RATE_LIMIT_PER_MIN", os.getenv("RATE_LIMIT", "60"))
+    )
     rate_limit_burst = int(os.getenv("RATE_LIMIT_BURST", "10"))
     window = float(os.getenv("RATE_LIMIT_WINDOW_S", "60"))
-    burst_window = float(os.getenv("RATE_LIMIT_BURST_WINDOW_S", os.getenv("RATE_LIMIT_BURST_WINDOW", "60")))
-    
+    burst_window = float(
+        os.getenv(
+            "RATE_LIMIT_BURST_WINDOW_S", os.getenv("RATE_LIMIT_BURST_WINDOW", "60")
+        )
+    )
+
     # Get the user key for rate limiting with proper scoping
     base_key = _current_key(request)
     key = _compose_key(base_key, request)
-    
+
     # Check if we should bypass rate limiting for this request
     if _should_bypass_rate_limit(request):
         return
-    
+
     # Apply rate limiting
     async with _lock:
         # Check long-term rate limit
         ok_long = _bucket_rate_limit(key, _http_requests, rate_limit_per_min, window)
         retry_long = _bucket_retry_after(_http_requests, window)
         if not ok_long:
-            logger.warning("deny: rate_limit_exceeded key=<%s> limit=<%d> window=<%.1fs> retry_after=<%ds>", 
-                          key, rate_limit_per_min, window, retry_long)
+            logger.warning(
+                "deny: rate_limit_exceeded key=<%s> limit=<%d> window=<%.1fs> retry_after=<%ds>",
+                key,
+                rate_limit_per_min,
+                window,
+                retry_long,
+            )
             headers = {
                 "Retry-After": str(retry_long),
                 "RateLimit-Limit": str(rate_limit_per_min),
                 "RateLimit-Remaining": "0",
-                "RateLimit-Reset": str(retry_long)
+                "RateLimit-Reset": str(retry_long),
             }
             raise HTTPException(
-                status_code=429, 
+                status_code=429,
                 detail={"error": "rate_limited", "retry_after": retry_long},
-                headers=headers
+                headers=headers,
             )
-        
+
         # Check burst rate limit
         ok_burst = _bucket_rate_limit(key, http_burst, rate_limit_burst, burst_window)
         retry_burst = _bucket_retry_after(http_burst, burst_window)
         if not ok_burst:
-            logger.warning("deny: rate_limit_burst_exceeded key=<%s> limit=<%d> window=<%.1fs> retry_after=<%ds>", 
-                          key, rate_limit_burst, burst_window, retry_burst)
+            logger.warning(
+                "deny: rate_limit_burst_exceeded key=<%s> limit=<%d> window=<%.1fs> retry_after=<%ds>",
+                key,
+                rate_limit_burst,
+                burst_window,
+                retry_burst,
+            )
             headers = {
                 "Retry-After": str(retry_burst),
                 "RateLimit-Limit": str(rate_limit_burst),
                 "RateLimit-Remaining": "0",
-                "RateLimit-Reset": str(retry_burst)
+                "RateLimit-Reset": str(retry_burst),
             }
             raise HTTPException(
-                status_code=429, 
+                status_code=429,
                 detail={"error": "rate_limited", "retry_after": retry_burst},
-                headers=headers
+                headers=headers,
             )
 
 
@@ -1026,7 +1135,7 @@ async def verify_ws(websocket: WebSocket) -> None:
     that cannot set custom headers during the WebSocket handshake.
     When validated, the decoded payload is attached to ``ws.state.jwt_payload``
     and ``ws.state.user_id`` is set if present in the token.
-    
+
     WebSocket requirement: Validates origin to ensure only http://localhost:3000 is accepted.
     """
 
@@ -1036,8 +1145,7 @@ async def verify_ws(websocket: WebSocket) -> None:
         logger.warning("deny: origin_not_allowed origin=<%s>", origin)
         # WebSocket requirement: Close with crisp code/reason for origin mismatch
         await websocket.close(
-            code=4403,  # Forbidden - origin not allowed
-            reason="origin_not_allowed"
+            code=4403, reason="origin_not_allowed"  # Forbidden - origin not allowed
         )
         return
 
@@ -1073,8 +1181,7 @@ async def verify_ws(websocket: WebSocket) -> None:
         # Close connection for missing token - require authentication
         logger.warning("deny: missing_token")
         await websocket.close(
-            code=4401,  # Unauthorized - missing token
-            reason="missing_token"
+            code=4401, reason="missing_token"  # Unauthorized - missing token
         )
         return
 
@@ -1099,8 +1206,7 @@ async def verify_ws(websocket: WebSocket) -> None:
         # Close connection for invalid token
         logger.warning("deny: invalid_token error=<%s>", str(e))
         await websocket.close(
-            code=4401,  # Unauthorized - invalid token
-            reason="invalid_token"
+            code=4401, reason="invalid_token"  # Unauthorized - invalid token
         )
         return
 
@@ -1114,7 +1220,7 @@ async def rate_limit_ws(websocket: WebSocket) -> None:
         payload = getattr(websocket.state, "jwt_payload", None)
         if isinstance(payload, dict):
             uid = payload.get("user_id") or payload.get("sub")
-    
+
     # Build base key (user or IP)
     if uid:
         base_key = f"user:{uid}"
@@ -1122,11 +1228,15 @@ async def rate_limit_ws(websocket: WebSocket) -> None:
         # Fix WS XFF: when _TRUST_XFF is false, use websocket.client.host; when true, parse the first X-Forwarded-For
         if _TRUST_XFF:
             ip = websocket.headers.get("X-Forwarded-For")
-            ip = ip.split(",")[0].strip() if ip else (websocket.client.host if websocket.client else "anon")
+            ip = (
+                ip.split(",")[0].strip()
+                if ip
+                else (websocket.client.host if websocket.client else "anon")
+            )
         else:
             ip = websocket.client.host if websocket.client else "anon"
         base_key = f"ip:{ip}"
-    
+
     # Add test salt for deterministic testing
     test_salt = os.getenv("PYTEST_CURRENT_TEST") or ""
     if test_salt:
@@ -1155,7 +1265,9 @@ async def rate_limit_ws(websocket: WebSocket) -> None:
         count, ttl = await _daily_incr(r_daily, str(key))
         if count > daily_cap:
             try:
-                metrics.RATE_LIMIT_BLOCKS.labels("ws", "daily", "redis" if r_daily else "memory").inc()
+                metrics.RATE_LIMIT_BLOCKS.labels(
+                    "ws", "daily", "redis" if r_daily else "memory"
+                ).inc()
             except Exception:
                 pass
             raise WebSocketException(code=1013)
@@ -1182,14 +1294,18 @@ async def rate_limit_ws(websocket: WebSocket) -> None:
                 # Mirror best-effort for debugging/metrics
                 try:
                     ws_burst[key] = max(0, b_count)
-                    ws_burst["_reset"] = time.time() + max(0, int(b_ttl)) - _burst_window
+                    ws_burst["_reset"] = (
+                        time.time() + max(0, int(b_ttl)) - _burst_window
+                    )
                     _ws_requests[key] = max(0, l_count)
                     _ws_requests["_reset"] = time.time() + max(0, int(l_ttl)) - _window
                 except Exception:
                     pass
                 if l_count > RATE_LIMIT:
                     try:
-                        metrics.RATE_LIMIT_BLOCKS.labels("ws", "long", backend_label).inc()
+                        metrics.RATE_LIMIT_BLOCKS.labels(
+                            "ws", "long", backend_label
+                        ).inc()
                     except Exception:
                         pass
                     raise WebSocketException(code=1013)
@@ -1255,10 +1371,13 @@ _nonce_store: dict[str, float] = {}
 async def _nonce_user_dep(request: Request) -> str:
     # Lazy import to avoid circular imports at module import time
     from app.deps.user import get_current_user_id  # type: ignore
+
     return get_current_user_id(request=request)
 
 
-async def require_nonce(request: Request, user_id: str = Depends(_nonce_user_dep)) -> None:
+async def require_nonce(
+    request: Request, user_id: str = Depends(_nonce_user_dep)
+) -> None:
     """Enforce a one-time nonce for state-changing requests.
 
     Header: X-Nonce: <random-string>
@@ -1283,6 +1402,7 @@ async def require_nonce(request: Request, user_id: str = Depends(_nonce_user_dep
         # Namespace by user/session and test id to prevent cross-user reuse
         try:
             from ..deps.user import resolve_session_id
+
             sid = resolve_session_id(request=request)
             did = request.headers.get("X-Device-ID") or request.cookies.get("did")
         except Exception:
@@ -1300,6 +1420,7 @@ async def require_nonce(request: Request, user_id: str = Depends(_nonce_user_dep
 # ---------------------------------------------------------------------------
 # Webhook signing/verification (e.g., HA callbacks)
 # ---------------------------------------------------------------------------
+
 
 def _load_webhook_secrets() -> list[str]:
     # Allow multiple secrets for rotation via env or file
@@ -1338,7 +1459,9 @@ def sign_webhook(body: bytes, secret: str, timestamp: str | None = None) -> str:
     New contract: when ``timestamp`` is provided, sign over ``body || "." || timestamp``.
     Legacy callers that omit timestamp continue to be supported for a transition window.
     """
-    payload = body if timestamp is None else (body + b"." + str(timestamp).encode("utf-8"))
+    payload = (
+        body if timestamp is None else (body + b"." + str(timestamp).encode("utf-8"))
+    )
     return hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
 
 
@@ -1377,7 +1500,12 @@ async def verify_webhook(
         except Exception:
             x_timestamp = None
     sig = (x_signature or "").strip().lower()
-    require_ts = os.getenv("REQUIRE_WEBHOOK_TS", "1").strip().lower() in {"1", "true", "yes", "on"}
+    require_ts = os.getenv("REQUIRE_WEBHOOK_TS", "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     # Parse and validate timestamp if required
     ts_val: float | None = None
     max_skew = float(os.getenv("WEBHOOK_MAX_SKEW_S", "300") or 300)
@@ -1433,8 +1561,13 @@ def rotate_webhook_secret() -> str:
     path = Path(os.getenv("HA_WEBHOOK_SECRET_FILE", "data/ha_webhook_secret.txt"))
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        existing = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-        contents = "\n".join([new] + [line.strip() for line in existing if line.strip()]) + "\n"
+        existing = (
+            path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+        )
+        contents = (
+            "\n".join([new] + [line.strip() for line in existing if line.strip()])
+            + "\n"
+        )
         path.write_text(contents, encoding="utf-8")
     except Exception:
         pass
@@ -1462,6 +1595,7 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # Public helpers for rate limit metadata
 # ---------------------------------------------------------------------------
+
 
 def _current_key_for_headers(request: Request | None) -> str:
     # Keep this helper independent of per-route scoping for determinism in tests
@@ -1506,15 +1640,19 @@ def _current_key_for_headers(request: Request | None) -> str:
 def get_rate_limit_snapshot(request: Request | None) -> dict:
     _maybe_refresh_settings_for_test()
     """Return a snapshot of long and burst rate limit state for headers."""
-    
+
     key = _current_key_for_headers(request)
-    
+
     # Read rate limit values dynamically from environment
     long_limit = int(os.getenv("RATE_LIMIT_PER_MIN", os.getenv("RATE_LIMIT", "60")))
     burst_limit = int(os.getenv("RATE_LIMIT_BURST", "10"))
     window = float(os.getenv("RATE_LIMIT_WINDOW_S", "60"))
-    burst_window = float(os.getenv("RATE_LIMIT_BURST_WINDOW_S", os.getenv("RATE_LIMIT_BURST_WINDOW", "60")))
-    
+    burst_window = float(
+        os.getenv(
+            "RATE_LIMIT_BURST_WINDOW_S", os.getenv("RATE_LIMIT_BURST_WINDOW", "60")
+        )
+    )
+
     # Snapshot from local mirrors (works for both memory and distributed modes)
     long_count = int(_http_requests.get(key, 0))
     long_reset = _bucket_retry_after(_http_requests, window)
@@ -1529,12 +1667,14 @@ def get_rate_limit_snapshot(request: Request | None) -> dict:
         "burst_reset": burst_reset,
     }
 
+
 __all__.append("get_rate_limit_snapshot")
 
 
 # ---------------------------------------------------------------------------
 # Per-route and per-scope rate limit overrides
 # ---------------------------------------------------------------------------
+
 
 def rate_limit_with(long_limit: int | None = None, burst_limit: int | None = None):
     """Return a dependency enforcing custom limits for this route.
@@ -1563,7 +1703,9 @@ def rate_limit_with(long_limit: int | None = None, burst_limit: int | None = Non
             if b_count != -1:
                 try:
                     http_burst[key] = b_count
-                    http_burst["_reset"] = time.time() + max(0, int(b_ttl)) - _burst_window
+                    http_burst["_reset"] = (
+                        time.time() + max(0, int(b_ttl)) - _burst_window
+                    )
                 except Exception:
                     pass
                 if b_count > _burst:
@@ -1577,14 +1719,19 @@ def rate_limit_with(long_limit: int | None = None, burst_limit: int | None = Non
                 if l_count != -1:
                     try:
                         _http_requests[key] = l_count
-                        _http_requests["_reset"] = time.time() + max(0, int(l_ttl)) - _window
+                        _http_requests["_reset"] = (
+                            time.time() + max(0, int(l_ttl)) - _window
+                        )
                     except Exception:
                         pass
                     if l_count > _long:
                         retry_after = max(0, int(l_ttl))
                         raise HTTPException(
                             status_code=429,
-                            detail={"error": "rate_limited", "retry_after": retry_after},
+                            detail={
+                                "error": "rate_limited",
+                                "retry_after": retry_after,
+                            },
                             headers={"Retry-After": str(retry_after)},
                         )
                     return
@@ -1610,7 +1757,9 @@ def rate_limit_with(long_limit: int | None = None, burst_limit: int | None = Non
     return _dep
 
 
-def scope_rate_limit(scope: str, long_limit: int | None = None, burst_limit: int | None = None):
+def scope_rate_limit(
+    scope: str, long_limit: int | None = None, burst_limit: int | None = None
+):
     """Enforce custom limits when JWT includes a given scope; otherwise default.
 
     Usage:
@@ -1651,7 +1800,14 @@ def scope_rate_limit(scope: str, long_limit: int | None = None, burst_limit: int
 # Route-local helper: strict rate limit with custom window + RFC7807 on block
 # ---------------------------------------------------------------------------
 
-async def rate_limit_problem(request: Request, *, long_limit: int = 1, burst_limit: int = 1, window_s: float = 30.0) -> None:
+
+async def rate_limit_problem(
+    request: Request,
+    *,
+    long_limit: int = 1,
+    burst_limit: int = 1,
+    window_s: float = 30.0,
+) -> None:
     """Apply a tight rate limit with a custom window and return RFC7807 on 429.
 
     Sets per-request overrides for long/burst limits and long window seconds. On
@@ -1691,7 +1847,9 @@ async def rate_limit_problem(request: Request, *, long_limit: int = 1, burst_lim
             "retry_after": retry_after,
         }
         # Preserve original detail under nested key to keep both forms available
-        problem["detail"] = (exc.detail if isinstance(exc.detail, str) else (exc.detail or {}))
+        problem["detail"] = (
+            exc.detail if isinstance(exc.detail, str) else (exc.detail or {})
+        )
         headers = dict(exc.headers or {})
         headers["Content-Type"] = "application/problem+json"
         headers["X-RateLimit-Remaining"] = str(remaining)

@@ -22,7 +22,7 @@ The issue was a **configuration mismatch** between frontend and backend:
 
 ### 1. Environment Configuration
 **File**: `.env`
-**Change**: 
+**Change**:
 ```diff
 - CORS_ALLOW_CREDENTIALS=false
 + CORS_ALLOW_CREDENTIALS=true

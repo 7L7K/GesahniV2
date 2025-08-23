@@ -75,5 +75,3 @@ export const useSceneManager = create<SceneState>((set, get) => ({
 export function useScene(): SceneState {
   return useSceneManager();
 }
-
-

@@ -62,7 +62,11 @@ async def append_history(
     # PHI/PII scrubber unless explicitly allowed
     # ------------------------------------------------------------------
     try:
-        allow_phi = os.getenv("ALLOW_PHI_STORAGE", "").strip().lower() in {"1", "true", "yes"}
+        allow_phi = os.getenv("ALLOW_PHI_STORAGE", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }
         if not allow_phi:
             import re
 
@@ -73,9 +77,17 @@ async def append_history(
                 # SSN (simple US pattern)
                 t = re.sub(r"\b\d{3}-\d{2}-\d{4}\b", "[REDACTED-SSN]", t)
                 # Emails
-                t = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "[REDACTED-EMAIL]", t)
+                t = re.sub(
+                    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+                    "[REDACTED-EMAIL]",
+                    t,
+                )
                 # Phone numbers (loose) e.g. +1 555-123-4567, (555) 123-4567, 5551234567
-                t = re.sub(r"(?<!\d)(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{3}\)?[\s-]?)?\d{3}[\s-]?\d{4}(?!\d)", "[REDACTED-PHONE]", t)
+                t = re.sub(
+                    r"(?<!\d)(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{3}\)?[\s-]?)?\d{3}[\s-]?\d{4}(?!\d)",
+                    "[REDACTED-PHONE]",
+                    t,
+                )
                 return t
 
             for key in ("prompt", "response"):
@@ -104,7 +116,7 @@ async def append_history(
         except Exception:
             logger.exception("Failed to append history")
 
- 
+
 async def get_record_by_req_id(req_id: str) -> dict[str, Any] | None:
     """Return the most recent history record with the given request id.
 

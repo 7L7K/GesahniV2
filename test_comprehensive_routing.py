@@ -4,16 +4,17 @@
 import os
 import sys
 
-sys.path.insert(0, '.')
+sys.path.insert(0, ".")
+
 
 def test_allowlist_validation():
     """Test allow-list validation."""
     print("=" * 60)
     print("ALLOW-LIST VALIDATION TEST")
     print("=" * 60)
-    
+
     from app.router import _validate_model_allowlist
-    
+
     # Test valid models
     print("✅ Testing valid models...")
     try:
@@ -22,7 +23,7 @@ def test_allowlist_validation():
         print("  ✅ Valid models pass validation")
     except Exception as e:
         print(f"  ❌ Valid models failed: {e}")
-    
+
     # Test invalid models
     print("✅ Testing invalid models...")
     try:
@@ -30,7 +31,7 @@ def test_allowlist_validation():
         print("  ❌ Invalid model should have failed")
     except Exception as e:
         print(f"  ✅ Invalid model correctly rejected: {e}")
-    
+
     # Test unknown vendor
     print("✅ Testing unknown vendor...")
     try:
@@ -39,34 +40,36 @@ def test_allowlist_validation():
     except Exception as e:
         print(f"  ✅ Unknown vendor correctly rejected: {e}")
 
+
 def test_fallback_logic():
     """Test fallback logic."""
     print("\n" + "=" * 60)
     print("FALLBACK LOGIC TEST")
     print("=" * 60)
-    
+
     from app.router import _get_fallback_model, _get_fallback_vendor
-    
+
     # Test fallback vendor selection
     print("✅ Testing fallback vendor selection...")
     assert _get_fallback_vendor("openai") == "ollama"
     assert _get_fallback_vendor("ollama") == "openai"
     print("  ✅ Fallback vendor selection works")
-    
+
     # Test fallback model selection
     print("✅ Testing fallback model selection...")
     assert _get_fallback_model("openai") == "gpt-4o"
     assert _get_fallback_model("ollama") == "llama3"
     print("  ✅ Fallback model selection works")
 
+
 def test_keyword_detection():
     """Test keyword detection."""
     print("\n" + "=" * 60)
     print("KEYWORD DETECTION TEST")
     print("=" * 60)
-    
+
     from app.model_picker import pick_model
-    
+
     # Test keyword detection
     print("✅ Testing keyword detection...")
     engine, model, reason, keyword = pick_model("Write some code for me", "chat", 10)
@@ -74,7 +77,7 @@ def test_keyword_detection():
         print(f"  ✅ Keyword detected: {keyword}")
     else:
         print(f"  ⚠️  No keyword detected: {reason}")
-    
+
     # Test heavy length
     print("✅ Testing heavy length...")
     long_prompt = "This is a very long prompt with many words " * 10
@@ -84,14 +87,15 @@ def test_keyword_detection():
     else:
         print(f"  ⚠️  Heavy length not detected: {reason}")
 
+
 def test_golden_trace_structure():
     """Test golden trace structure."""
     print("\n" + "=" * 60)
     print("GOLDEN TRACE STRUCTURE TEST")
     print("=" * 60)
-    
+
     from app.router import _log_golden_trace
-    
+
     print("✅ Testing golden trace logging...")
     _log_golden_trace(
         request_id="test123",
@@ -114,48 +118,59 @@ def test_golden_trace_structure():
     )
     print("  ✅ Golden trace logged successfully")
 
+
 def test_environment_configuration():
     """Test environment configuration."""
     print("\n" + "=" * 60)
     print("ENVIRONMENT CONFIGURATION TEST")
     print("=" * 60)
-    
+
     print("✅ Testing environment variables...")
     print(f"  ROUTER_BUDGET_MS: {os.getenv('ROUTER_BUDGET_MS', '7000')}")
     print(f"  OPENAI_TIMEOUT_MS: {os.getenv('OPENAI_TIMEOUT_MS', '6000')}")
     print(f"  OLLAMA_TIMEOUT_MS: {os.getenv('OLLAMA_TIMEOUT_MS', '4500')}")
     print(f"  MODEL_ROUTER_HEAVY_WORDS: {os.getenv('MODEL_ROUTER_HEAVY_WORDS', '30')}")
-    print(f"  MODEL_ROUTER_HEAVY_TOKENS: {os.getenv('MODEL_ROUTER_HEAVY_TOKENS', '1000')}")
-    print(f"  MODEL_ROUTER_KEYWORDS: {os.getenv('MODEL_ROUTER_KEYWORDS', 'code,unit test,analyze,sql,benchmark,vector')}")
-    print(f"  ALLOWED_GPT_MODELS: {os.getenv('ALLOWED_GPT_MODELS', 'gpt-4o,gpt-4o-mini,gpt-4.1-nano')}")
-    print(f"  ALLOWED_LLAMA_MODELS: {os.getenv('ALLOWED_LLAMA_MODELS', 'llama3,llama3.2,llama3.1')}")
+    print(
+        f"  MODEL_ROUTER_HEAVY_TOKENS: {os.getenv('MODEL_ROUTER_HEAVY_TOKENS', '1000')}"
+    )
+    print(
+        f"  MODEL_ROUTER_KEYWORDS: {os.getenv('MODEL_ROUTER_KEYWORDS', 'code,unit test,analyze,sql,benchmark,vector')}"
+    )
+    print(
+        f"  ALLOWED_GPT_MODELS: {os.getenv('ALLOWED_GPT_MODELS', 'gpt-4o,gpt-4o-mini,gpt-4.1-nano')}"
+    )
+    print(
+        f"  ALLOWED_LLAMA_MODELS: {os.getenv('ALLOWED_LLAMA_MODELS', 'llama3,llama3.2,llama3.1')}"
+    )
+
 
 def test_endpoints():
     """Test endpoint availability."""
     print("\n" + "=" * 60)
     print("ENDPOINT AVAILABILITY TEST")
     print("=" * 60)
-    
+
     print("✅ Testing endpoint availability...")
     endpoints = [
         "/v1/ask",
-        "/v1/ask/dry-explain", 
+        "/v1/ask/dry-explain",
         "/v1/ask/stream",
         "/v1/ask/replay/{rid}",
         "/healthz/ready",
         "/healthz/deps",
-        "/metrics"
+        "/metrics",
     ]
-    
+
     for endpoint in endpoints:
         print(f"  ✅ {endpoint}")
+
 
 def test_metrics_structure():
     """Test metrics structure."""
     print("\n" + "=" * 60)
     print("METRICS STRUCTURE TEST")
     print("=" * 60)
-    
+
     print("✅ Testing metrics structure...")
     metrics = [
         "gesahni_router_requests_total{vendor,model,reason}",
@@ -164,107 +179,112 @@ def test_metrics_structure():
         "gesahni_router_duration_ms{vendor,model}",
         "gesahni_router_shape_normalized_total{from_shape,to_shape}",
         "gesahni_health_ready_failures_total{reason}",
-        "gesahni_health_check_duration_seconds{check}"
+        "gesahni_health_check_duration_seconds{check}",
     ]
-    
+
     for metric in metrics:
         print(f"  ✅ {metric}")
+
 
 def test_fallback_metrics_labeling():
     """Test that fallback metrics correctly label the original vendor as from_vendor."""
     print("\n" + "=" * 60)
     print("FALLBACK METRICS LABELING TEST")
     print("=" * 60)
-    
+
     from app.router import _get_fallback_vendor
-    
+
     # Test the core issue: when we have a fallback, from_vendor should be the original vendor
     print("✅ Testing fallback metrics labeling logic...")
-    
+
     # Simulate the original problematic logic
     original_vendor = "openai"
     fallback_vendor = _get_fallback_vendor(original_vendor)  # "ollama"
-    
+
     # OLD LOGIC (problematic):
     # chosen_vendor = fallback_vendor  # "ollama"
     # from_vendor = _get_fallback_vendor(chosen_vendor)  # _get_fallback_vendor("ollama") = "openai"
     # This works by coincidence but is confusing and error-prone
-    
+
     # NEW LOGIC (correct):
-    # original_vendor = chosen_vendor  # "openai" 
+    # original_vendor = chosen_vendor  # "openai"
     # chosen_vendor = fallback_vendor  # "ollama"
     # from_vendor = original_vendor  # "openai"
-    
+
     # Verify the new logic is correct
     expected_from_vendor = original_vendor  # "openai"
-    expected_to_vendor = fallback_vendor    # "ollama"
-    
+    expected_to_vendor = fallback_vendor  # "ollama"
+
     print(f"  Original vendor: {original_vendor}")
     print(f"  Fallback vendor: {fallback_vendor}")
     print(f"  Expected from_vendor: {expected_from_vendor}")
     print(f"  Expected to_vendor: {expected_to_vendor}")
-    
+
     # Verify the fallback function works correctly
     assert _get_fallback_vendor("openai") == "ollama"
     assert _get_fallback_vendor("ollama") == "openai"
-    
+
     print("  ✅ Fallback metrics labeling logic is correct")
+
 
 def test_user_circuit_breaker_thread_safety():
     """Test that user circuit breaker is thread-safe and works correctly."""
     print("\n" + "=" * 60)
     print("USER CIRCUIT BREAKER THREAD SAFETY TEST")
     print("=" * 60)
-    
+
     import asyncio
 
     from app.router import _user_cb_record_failure, _user_cb_reset, _user_circuit_open
-    
+
     async def test_concurrent_access():
         """Test concurrent access to user circuit breaker functions."""
         print("✅ Testing concurrent access to user circuit breaker...")
-        
+
         user_id = "test_user_123"
-        
+
         # Test initial state
         is_open = await _user_circuit_open(user_id)
         assert not is_open, "Circuit breaker should be closed initially"
         print("  ✅ Initial state: circuit breaker closed")
-        
+
         # Test recording multiple failures concurrently
         tasks = []
         for i in range(5):
             task = _user_cb_record_failure(user_id)
             tasks.append(task)
-        
+
         # Execute all tasks concurrently
         await asyncio.gather(*tasks)
-        
+
         # Check if circuit breaker is open (should be after 3+ failures)
         is_open = await _user_circuit_open(user_id)
         assert is_open, "Circuit breaker should be open after multiple failures"
         print("  ✅ After concurrent failures: circuit breaker open")
-        
+
         # Test reset
         await _user_cb_reset(user_id)
         is_open = await _user_circuit_open(user_id)
         assert not is_open, "Circuit breaker should be closed after reset"
         print("  ✅ After reset: circuit breaker closed")
-        
+
         # Test concurrent reads
         read_tasks = []
         for i in range(10):
             task = _user_circuit_open(user_id)
             read_tasks.append(task)
-        
+
         results = await asyncio.gather(*read_tasks)
-        assert all(not result for result in results), "All concurrent reads should return False"
+        assert all(
+            not result for result in results
+        ), "All concurrent reads should return False"
         print("  ✅ Concurrent reads work correctly")
-        
+
         print("  ✅ Thread safety test passed")
-    
+
     # Run the async test
     asyncio.run(test_concurrent_access())
+
 
 if __name__ == "__main__":
     test_allowlist_validation()
@@ -276,7 +296,7 @@ if __name__ == "__main__":
     test_metrics_structure()
     test_fallback_metrics_labeling()
     test_user_circuit_breaker_thread_safety()
-    
+
     print("\n" + "=" * 60)
     print("COMPREHENSIVE ROUTING SYSTEM SUMMARY")
     print("=" * 60)

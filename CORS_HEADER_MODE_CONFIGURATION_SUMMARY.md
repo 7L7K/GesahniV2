@@ -52,11 +52,11 @@ def is_same_address_family(origin_list):
     """Check if all origins are in the same address family (localhost or IP)"""
     if not origin_list:
         return True
-    
+
     # Check if all are localhost or all are IP addresses
     localhost_count = sum(1 for o in origin_list if "localhost" in o)
     ip_count = sum(1 for o in origin_list if "localhost" not in o and "127.0.0.1" not in o)
-    
+
     # All should be localhost OR all should be IP addresses
     return localhost_count == 0 or ip_count == 0
 

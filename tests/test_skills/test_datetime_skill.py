@@ -21,5 +21,3 @@ def test_datetime_relative():
     m = s.match("what is the date tomorrow")
     out = asyncio.run(s.run("what is the date tomorrow", m))
     assert "-" in out
-
-

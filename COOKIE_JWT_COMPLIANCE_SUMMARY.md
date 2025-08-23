@@ -9,7 +9,7 @@ This document summarizes the analysis of cookie and JWT usage patterns in the Ge
 ### Cookie Operations
 **May import cookies.py:**
 - `app/api/auth.py` - Authentication flows
-- `app/api/google_oauth.py` - Google OAuth flows  
+- `app/api/google_oauth.py` - Google OAuth flows
 - `app/api/oauth_apple.py` - Apple OAuth flows
 - `app/middleware.py` - If it must set/clear an auth/CSRF/state cookie
 - `app/auth_device/__init__.py` - Device cookie via facade
@@ -37,7 +37,7 @@ This document summarizes the analysis of cookie and JWT usage patterns in the Ge
 - **✅ All cookie operations go through centralized facade** in `app/cookies.py`
 - **✅ Proper usage of `set_auth_cookies()`** in authentication flows
 
-### JWT Usage Analysis  
+### JWT Usage Analysis
 - **✅ No unauthorized `jwt.encode()` calls** in application code
 - **✅ All app token minting goes through `tokens.py`**
 - **✅ IdP token signing only in allowed locations**
@@ -56,7 +56,7 @@ The codebase has successfully implemented cookie centralization through:
 
 1. **`app/cookies.py`** - Centralized facade providing:
    - `set_auth_cookies()` - Authentication token cookies
-   - `set_oauth_state_cookies()` - OAuth state cookies  
+   - `set_oauth_state_cookies()` - OAuth state cookies
    - `set_device_cookie()` - Device trust cookies
    - `set_csrf_cookie()` - CSRF protection cookies
    - `set_named_cookie()` - Generic cookies
@@ -102,7 +102,7 @@ The codebase has successfully implemented token centralization through:
 The `test_cookie_jwt_compliance.py` script provides automated verification:
 
 1. **Cookie Usage Compliance** - Checks for unauthorized `set_cookie()` calls
-2. **JWT Usage Compliance** - Checks for unauthorized `jwt.encode()` calls  
+2. **JWT Usage Compliance** - Checks for unauthorized `jwt.encode()` calls
 3. **App Token Minting Compliance** - Verifies all app tokens go through tokens.py
 4. **IdP Token Signing Compliance** - Verifies IdP tokens only in allowed locations
 5. **Centralized Usage Compliance** - Verifies use of centralized facades

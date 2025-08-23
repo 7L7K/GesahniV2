@@ -24,5 +24,3 @@ def test_logout_clears_and_blocks_refresh(monkeypatch):
     # refresh now denied
     r4 = client.post("/v1/auth/refresh")
     assert r4.status_code == HTTPStatus.UNAUTHORIZED
-
-

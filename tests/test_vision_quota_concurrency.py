@@ -14,7 +14,9 @@ def test_vision_quota_concurrency(monkeypatch):
         return "gpt-4o-mini", "vision-remote"
 
     async def worker():
-        model, reason = await mr.route_vision(ask_func=fake_ask, images=[b"x"], text_hint="ok")
+        model, reason = await mr.route_vision(
+            ask_func=fake_ask, images=[b"x"], text_hint="ok"
+        )
         return reason
 
     # Run 3 concurrent; only first two should pass cap
@@ -24,5 +26,3 @@ def test_vision_quota_concurrency(monkeypatch):
     reasons = asyncio.run(run_all())
     assert reasons.count("vision-remote") >= 1
     assert reasons.count("vision-local-cap") >= 1
-
-

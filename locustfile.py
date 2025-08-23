@@ -18,5 +18,3 @@ class APISmokeUser(HttpUser):
     def ask(self):
         r = self.client.post("/v1/ask", json={"prompt": "hello"})
         assert r.status_code in (200, 400, 401, 500)
-
-

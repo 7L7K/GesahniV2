@@ -20,7 +20,9 @@ def test_get_rate_limit_defaults_keys():
     import app.security as sec
 
     d = sec.get_rate_limit_defaults()
-    assert set(["limit", "burst_limit", "window_s", "burst_window_s"]).issubset(d.keys())
+    assert set(["limit", "burst_limit", "window_s", "burst_window_s"]).issubset(
+        d.keys()
+    )
 
 
 def test_bucket_rate_limit_counts_and_limit():
@@ -42,7 +44,11 @@ def test_bucket_retry_after_non_negative():
 def test_get_request_payload_from_header():
     import app.security as sec
 
-    tok = jwt.encode({"user_id": "u1", "scope": "admin"}, os.getenv("JWT_SECRET", "secret"), algorithm="HS256")
+    tok = jwt.encode(
+        {"user_id": "u1", "scope": "admin"},
+        os.getenv("JWT_SECRET", "secret"),
+        algorithm="HS256",
+    )
     scope = {
         "type": "http",
         "method": "GET",
@@ -97,10 +103,14 @@ async def test_verify_webhook_missing_secret(monkeypatch):
 
     monkeypatch.delenv("HA_WEBHOOK_SECRETS", raising=False)
     monkeypatch.delenv("HA_WEBHOOK_SECRET", raising=False)
-    monkeypatch.setenv("HA_WEBHOOK_SECRET_FILE", str(Path("/tmp/nonexistent_secret.txt")))
+    monkeypatch.setenv(
+        "HA_WEBHOOK_SECRET_FILE", str(Path("/tmp/nonexistent_secret.txt"))
+    )
     req = Request({"type": "http", "method": "POST", "path": "/", "headers": []})
+
     async def _set_body():
         return b"{}"
+
     # Patch body method to return bytes
     req.body = _set_body  # type: ignore
     with pytest.raises(HTTPException) as e:
@@ -184,7 +194,12 @@ def test_scope_rate_limit_no_scope_delegates_to_default(monkeypatch):
     monkeypatch.setenv("RATE_LIMIT_PER_MIN", "1000")
     app = FastAPI()
 
-    @app.get("/admin", dependencies=[Depends(sec.scope_rate_limit("admin", long_limit=1, burst_limit=1))])
+    @app.get(
+        "/admin",
+        dependencies=[
+            Depends(sec.scope_rate_limit("admin", long_limit=1, burst_limit=1))
+        ],
+    )
     async def admin():
         return {"ok": True}
 
@@ -192,5 +207,3 @@ def test_scope_rate_limit_no_scope_delegates_to_default(monkeypatch):
     h = _auth_header("u_scope")  # no admin scope
     for _ in range(3):
         assert c.get("/admin", headers=h).status_code == 200
-
-

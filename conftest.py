@@ -15,6 +15,7 @@ def client(monkeypatch):
     monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
     return TestClient(app)
 
+
 # conftest.py
 #
 # Pytest bootstrap that hermetically seals the test runtime.
@@ -52,6 +53,7 @@ os.environ["OLLAMA_MODEL"] = "llama3"
 os.environ["ALLOWED_LLAMA_MODELS"] = "llama3"
 os.environ["ALLOWED_GPT_MODELS"] = "gpt-4o,gpt-4,gpt-3.5-turbo"
 
+
 # ──────────────────────────────────────────────────────────────────────────────
 # 🧪  ChromaDB full stub (in-mem cosine search)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -70,7 +72,9 @@ class _CollectionStub:
     # --- Chroma surface ------------------------------------------------------
     def upsert(self, *, ids, documents, metadatas, embeddings=None):
         embeddings = embeddings or self._embed(documents)
-        for i, doc, meta, emb in zip(ids, documents, metadatas, embeddings, strict=False):
+        for i, doc, meta, emb in zip(
+            ids, documents, metadatas, embeddings, strict=False
+        ):
             self._store[i] = {"document": doc, "metadata": meta, "embedding": emb}
 
     def delete(self, *, ids):
@@ -102,7 +106,10 @@ class _CollectionStub:
                     continue
                 if self._space == "l2":
                     dist = math.sqrt(
-                        sum((x - y) ** 2 for x, y in zip(q_emb, rec["embedding"], strict=False))
+                        sum(
+                            (x - y) ** 2
+                            for x, y in zip(q_emb, rec["embedding"], strict=False)
+                        )
                     )
                 else:
                     dist = 1.0 - _cosine_similarity(q_emb, rec["embedding"])
@@ -146,6 +153,7 @@ sys.modules["chromadb.config"] = types.SimpleNamespace(
 )
 sys.modules["chromadb.utils"] = types.SimpleNamespace()
 sys.modules["chromadb.utils.embedding_functions"] = types.SimpleNamespace()
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 🛟  Ensure openai.OpenAIError exists even if openai is stubbed
@@ -210,6 +218,7 @@ def _isolate_debug_and_flags(monkeypatch):
     # Reset vector store to ensure test isolation
     try:
         from app.memory.api import close_store
+
         close_store()
     except Exception:
         pass  # Ignore if vector store not available
@@ -217,6 +226,7 @@ def _isolate_debug_and_flags(monkeypatch):
     # Reset rate-limiter buckets (HTTP & WS) between tests
     try:
         import app.security as security
+
         security.http_requests.clear()
         security.ws_requests.clear()
         security.http_burst.clear()

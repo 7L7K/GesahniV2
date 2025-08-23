@@ -66,48 +66,55 @@ def _jwks_client() -> tuple[PyJWKClient, str, str | None]:
 def _extract_bearer_from_request(request: Request) -> str | None:
     token = None
     token_source = "none"
-    
+
     # 1) Try access_token first (Authorization header or cookie)
     auth = request.headers.get("Authorization")
     if auth and auth.startswith("Bearer "):
         token = auth.split(" ", 1)[1]
         token_source = "authorization_header"
-    
+
     # Fallback to access_token cookie
     if not token:
         token = request.cookies.get("access_token")
         if token:
             token_source = "access_token_cookie"
-    
+
     # 2) Try __session cookie if access_token failed
     if not token:
         token = request.cookies.get("__session") or request.cookies.get("session")
         if token:
             token_source = "__session_cookie"
-    
+
     # Log which cookie/token source authenticated the request
     if token:
-        logger.info("auth.token_source", extra={
-            "token_source": token_source,
-            "has_token": bool(token),
-            "token_length": len(token) if token else 0,
-            "request_path": getattr(request, "url", {}).path if hasattr(getattr(request, "url", {}), "path") else "unknown",
-            "auth_method": "clerk",
-        })
-    
+        logger.info(
+            "auth.token_source",
+            extra={
+                "token_source": token_source,
+                "has_token": bool(token),
+                "token_length": len(token) if token else 0,
+                "request_path": (
+                    getattr(request, "url", {}).path
+                    if hasattr(getattr(request, "url", {}), "path")
+                    else "unknown"
+                ),
+                "auth_method": "clerk",
+            },
+        )
+
     return token
 
 
 def _extract_bearer_from_ws(ws: WebSocket) -> str | None:
     token = None
     token_source = "none"
-    
+
     # 1) Try access_token first (Authorization header, query param, or cookie)
     auth = ws.headers.get("Authorization")
     if auth and auth.startswith("Bearer "):
         token = auth.split(" ", 1)[1]
         token_source = "authorization_header"
-    
+
     # WS query param fallback for browser WebSocket handshakes
     if not token:
         try:
@@ -117,7 +124,7 @@ def _extract_bearer_from_ws(ws: WebSocket) -> str | None:
                 token_source = "websocket_query_param"
         except Exception:
             token = None
-    
+
     # Cookie header fallback for WS handshakes
     if not token:
         try:
@@ -130,7 +137,7 @@ def _extract_bearer_from_ws(ws: WebSocket) -> str | None:
                     break
         except Exception:
             token = None
-    
+
     # 2) Try __session cookie if access_token failed
     if not token:
         try:
@@ -143,17 +150,20 @@ def _extract_bearer_from_ws(ws: WebSocket) -> str | None:
                     break
         except Exception:
             token = None
-    
+
     # Log which cookie/token source authenticated the request
     if token:
-        logger.info("auth.token_source", extra={
-            "token_source": token_source,
-            "has_token": bool(token),
-            "token_length": len(token) if token else 0,
-            "request_path": "websocket",
-            "auth_method": "clerk",
-        })
-    
+        logger.info(
+            "auth.token_source",
+            extra={
+                "token_source": token_source,
+                "has_token": bool(token),
+                "token_length": len(token) if token else 0,
+                "request_path": "websocket",
+                "auth_method": "clerk",
+            },
+        )
+
     return token
 
 
@@ -192,7 +202,9 @@ def verify_clerk_token(token: str) -> dict[str, Any]:
             kwargs["issuer"] = iss
         if aud:
             kwargs["audience"] = aud
-        claims = _jwt_decode(token, signing_key.key, algorithms=["RS256"], options=options, **kwargs)
+        claims = _jwt_decode(
+            token, signing_key.key, algorithms=["RS256"], options=options, **kwargs
+        )
         return claims
     except Exception:
         raise _std_401()
@@ -249,5 +261,3 @@ async def require_user_ws(ws: WebSocket) -> str:
 
 
 __all__ = ["require_user", "require_user_ws", "verify_clerk_token"]
-
-

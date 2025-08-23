@@ -10,5 +10,3 @@ class PttState:
 
 def read_ptt_state() -> PttState:
     return PttState(pressed=False)
-
-

@@ -34,5 +34,3 @@ describe('BackendBanner', () => {
         expect(init.cache).toBe('no-store');
     });
 });
-
-

@@ -7,7 +7,9 @@ from app.deps.scopes import docs_security_with
 from app.deps.user import get_current_user_id
 from app.memory.profile_store import profile_store
 
-router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
+router = APIRouter(
+    tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))]
+)
 
 
 class UserProfile(BaseModel):
@@ -57,7 +59,9 @@ class ProfileOk(BaseModel):
     "/profile",
     responses={200: {"model": ProfileOk}},
 )
-async def update_profile(profile: UserProfile, user_id: str = Depends(get_current_user_id)):
+async def update_profile(
+    profile: UserProfile, user_id: str = Depends(get_current_user_id)
+):
     # CSRF: uniform enforcement when enabled
     try:
         # Attempt to access a global request via context; if unavailable, skip
@@ -79,17 +83,26 @@ async def get_onboarding_status(user_id: str = Depends(get_current_user_id)):
     p = profile_store.get(user_id)
     # Track steps in the same order as the frontend flow
     device_prefs_done = any(
-        bool(p.get(k)) for k in ("speech_rate", "input_mode", "font_scale", "wake_word_enabled")
+        bool(p.get(k))
+        for k in ("speech_rate", "input_mode", "font_scale", "wake_word_enabled")
     )
     steps = [
         {"step": "welcome", "completed": True, "data": None},
-        {"step": "basic_info", "completed": bool(p.get("name")), "data": {"name": p.get("name")}},
-        {"step": "device_prefs", "completed": device_prefs_done, "data": {
-            "speech_rate": p.get("speech_rate"),
-            "input_mode": p.get("input_mode"),
-            "font_scale": p.get("font_scale"),
-            "wake_word_enabled": p.get("wake_word_enabled"),
-        }},
+        {
+            "step": "basic_info",
+            "completed": bool(p.get("name")),
+            "data": {"name": p.get("name")},
+        },
+        {
+            "step": "device_prefs",
+            "completed": device_prefs_done,
+            "data": {
+                "speech_rate": p.get("speech_rate"),
+                "input_mode": p.get("input_mode"),
+                "font_scale": p.get("font_scale"),
+                "wake_word_enabled": p.get("wake_word_enabled"),
+            },
+        },
         {
             "step": "preferences",
             "completed": bool(p.get("communication_style")),
@@ -97,21 +110,38 @@ async def get_onboarding_status(user_id: str = Depends(get_current_user_id)):
         },
         {
             "step": "integrations",
-            "completed": bool(p.get("calendar_integration") or p.get("gmail_integration")),
-            "data": {"calendar": p.get("calendar_integration"), "gmail": p.get("gmail_integration")},
+            "completed": bool(
+                p.get("calendar_integration") or p.get("gmail_integration")
+            ),
+            "data": {
+                "calendar": p.get("calendar_integration"),
+                "gmail": p.get("gmail_integration"),
+            },
         },
-        {"step": "complete", "completed": p.get("onboarding_completed", False), "data": None},
+        {
+            "step": "complete",
+            "completed": p.get("onboarding_completed", False),
+            "data": None,
+        },
     ]
     return {
         "completed": p.get("onboarding_completed", False),
         "steps": steps,
-        "current_step": next((i for i, s in enumerate(steps) if not s["completed"]), len(steps) - 1),
+        "current_step": next(
+            (i for i, s in enumerate(steps) if not s["completed"]), len(steps) - 1
+        ),
     }
 
 
 @router.post(
     "/onboarding/complete",
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "success"}}}}}},
+    responses={
+        200: {
+            "content": {
+                "application/json": {"schema": {"example": {"status": "success"}}}
+            }
+        }
+    },
 )
 async def complete_onboarding(user_id: str = Depends(get_current_user_id)):
     # Use canonical update API and persist to disk
@@ -121,5 +151,3 @@ async def complete_onboarding(user_id: str = Depends(get_current_user_id)):
     except Exception:
         pass
     return {"status": "success"}
-
-

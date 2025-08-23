@@ -40,8 +40,11 @@ class TestAuthCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             set_auth_cookies(
@@ -51,7 +54,7 @@ class TestAuthCookies:
                 session_id="session_789",
                 access_ttl=1800,
                 refresh_ttl=86400,
-                request=request
+                request=request,
             )
 
         # Verify headers were appended
@@ -91,8 +94,11 @@ class TestAuthCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             set_auth_cookies(
@@ -102,7 +108,7 @@ class TestAuthCookies:
                 session_id="session_789",
                 access_ttl=1800,
                 refresh_ttl=86400,
-                request=request
+                request=request,
             )
 
         # Verify only access and session cookies were set (no refresh)
@@ -123,8 +129,11 @@ class TestAuthCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             set_auth_cookies(
@@ -134,7 +143,7 @@ class TestAuthCookies:
                 session_id=None,  # No session ID
                 access_ttl=1800,
                 refresh_ttl=86400,
-                request=request
+                request=request,
             )
 
         # Verify only access and refresh cookies were set (no session)
@@ -155,8 +164,11 @@ class TestAuthCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             clear_auth_cookies(response, request)
@@ -194,8 +206,11 @@ class TestOAuthStateCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             set_oauth_state_cookies(
@@ -204,7 +219,7 @@ class TestOAuthStateCookies:
                 next_url="https://example.com/callback",
                 request=request,
                 ttl=600,
-                provider="g"
+                provider="g",
             )
 
         # Verify two cookies were set (state and next)
@@ -241,8 +256,11 @@ class TestOAuthStateCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             clear_oauth_state_cookies(response, request, provider="g")
@@ -277,15 +295,15 @@ class TestCSRFCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": False,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": False,
+                "path": "/",
+                "domain": None,
             }
 
             set_csrf_cookie(
-                resp=response,
-                token="csrf_token_123",
-                ttl=3600,
-                request=request
+                resp=response, token="csrf_token_123", ttl=3600, request=request
             )
 
         # Verify cookie was set
@@ -311,15 +329,15 @@ class TestCSRFCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": False, "samesite": "none", "httponly": False,
-                "path": "/", "domain": None
+                "secure": False,
+                "samesite": "none",
+                "httponly": False,
+                "path": "/",
+                "domain": None,
             }
 
             set_csrf_cookie(
-                resp=response,
-                token="csrf_token_123",
-                ttl=3600,
-                request=request
+                resp=response, token="csrf_token_123", ttl=3600, request=request
             )
 
         cookie_header = response.headers.append.call_args[0][1]
@@ -338,8 +356,11 @@ class TestCSRFCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": False,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": False,
+                "path": "/",
+                "domain": None,
             }
 
             clear_csrf_cookie(response, request)
@@ -369,8 +390,11 @@ class TestDeviceCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": False,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": False,
+                "path": "/",
+                "domain": None,
             }
 
             set_device_cookie(
@@ -378,7 +402,7 @@ class TestDeviceCookies:
                 value="device_trust_123",
                 ttl=86400,
                 request=request,
-                cookie_name="device_trust"
+                cookie_name="device_trust",
             )
 
         # Verify cookie was set
@@ -404,8 +428,11 @@ class TestDeviceCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": False,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": False,
+                "path": "/",
+                "domain": None,
             }
 
             clear_device_cookie(response, request, cookie_name="device_trust")
@@ -435,8 +462,11 @@ class TestNamedCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             set_named_cookie(
@@ -444,7 +474,7 @@ class TestNamedCookies:
                 name="test_cookie",
                 value="test_value",
                 ttl=3600,
-                request=request
+                request=request,
             )
 
         # Verify cookie was set
@@ -469,8 +499,11 @@ class TestNamedCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             set_named_cookie(
@@ -482,7 +515,7 @@ class TestNamedCookies:
                 httponly=False,
                 path="/api",
                 secure=False,
-                samesite="strict"
+                samesite="strict",
             )
 
         cookie_header = response.headers.append.call_args[0][1]
@@ -506,8 +539,11 @@ class TestNamedCookies:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             clear_named_cookie(response, name="test_cookie", request=request)
@@ -537,8 +573,11 @@ class TestCookieSecurityAttributes:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": False, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": False,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             set_auth_cookies(
@@ -548,7 +587,7 @@ class TestCookieSecurityAttributes:
                 session_id=None,
                 access_ttl=1800,
                 refresh_ttl=86400,
-                request=request
+                request=request,
             )
 
         cookie_calls = [call.args[1] for call in response.headers.append.call_args_list]
@@ -568,8 +607,11 @@ class TestCookieSecurityAttributes:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             set_auth_cookies(
@@ -579,7 +621,7 @@ class TestCookieSecurityAttributes:
                 session_id=None,
                 access_ttl=1800,
                 refresh_ttl=86400,
-                request=request
+                request=request,
             )
 
         cookie_calls = [call.args[1] for call in response.headers.append.call_args_list]
@@ -613,7 +655,7 @@ class TestCookieNegativeScenarios:
                     session_id=None,
                     access_ttl=1800,
                     refresh_ttl=86400,
-                    request=request
+                    request=request,
                 )
                 # If no exception, verify no cookies were set
                 assert response.headers.append.call_count == 0
@@ -631,8 +673,11 @@ class TestCookieNegativeScenarios:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             # Test with None values (should handle gracefully)
@@ -643,16 +688,20 @@ class TestCookieNegativeScenarios:
                 session_id=None,
                 access_ttl=1800,
                 refresh_ttl=86400,
-                request=request
+                request=request,
             )
 
             # Should still set cookies (with string "None")
             assert response.headers.append.call_count >= 1
-            cookie_calls = [call.args[1] for call in response.headers.append.call_args_list]
+            cookie_calls = [
+                call.args[1] for call in response.headers.append.call_args_list
+            ]
 
             # Verify cookies were set with string representations
             for cookie_header in cookie_calls:
-                assert "Max-Age=1800" in cookie_header or "Max-Age=86400" in cookie_header
+                assert (
+                    "Max-Age=1800" in cookie_header or "Max-Age=86400" in cookie_header
+                )
 
     def test_empty_cookie_values_on_clear(self):
         """Test that cleared cookies have empty values."""
@@ -664,8 +713,11 @@ class TestCookieNegativeScenarios:
 
         with patch("app.cookies.get_cookie_config") as mock_config:
             mock_config.return_value = {
-                "secure": True, "samesite": "lax", "httponly": True,
-                "path": "/", "domain": None
+                "secure": True,
+                "samesite": "lax",
+                "httponly": True,
+                "path": "/",
+                "domain": None,
             }
 
             clear_auth_cookies(response, request)

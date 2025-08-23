@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 def _client():
     from app.main import app
+
     return TestClient(app)
 
 
@@ -35,7 +36,7 @@ def test_examples_present_for_post_endpoints():
         rb = op.get("requestBody") or {}
         has_req_example = False
         for content in (rb.get("content") or {}).values():
-            schema = (content.get("schema") or {})
+            schema = content.get("schema") or {}
             if "example" in schema:
                 has_req_example = True
                 break
@@ -43,12 +44,16 @@ def test_examples_present_for_post_endpoints():
         res = (op.get("responses") or {}).get("200") or {}
         has_res_model = False
         for content in (res.get("content") or {}).values():
-            schema = (content.get("schema") or {})
+            schema = content.get("schema") or {}
             if schema:
                 has_res_model = True
                 break
         if not (has_req_example and has_res_model):
-            missing.append((path, method, f"req_example={has_req_example} res_model={has_res_model}"))
+            missing.append(
+                (
+                    path,
+                    method,
+                    f"req_example={has_req_example} res_model={has_res_model}",
+                )
+            )
     assert not missing, f"Missing examples/models: {missing}"
-
-

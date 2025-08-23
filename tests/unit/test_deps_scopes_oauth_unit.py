@@ -53,7 +53,7 @@ def test_require_any_scope_allows_when_present(monkeypatch):
         return {"ok": True}
 
     c = TestClient(app)
-    h = {"Authorization": _make_token(["b"]) }
+    h = {"Authorization": _make_token(["b"])}
     assert c.get("/any", headers=h).status_code == 200
 
 
@@ -66,7 +66,7 @@ def test_require_any_scope_blocks_when_missing(monkeypatch):
         return {"ok": True}
 
     c = TestClient(app)
-    h = {"Authorization": _make_token(["c"]) }
+    h = {"Authorization": _make_token(["c"])}
     assert c.get("/any", headers=h).status_code == 403
 
 
@@ -98,10 +98,10 @@ def test_optional_require_scope_enforces_when_enabled(monkeypatch):
     r0 = c.get("/opt")
     assert r0.status_code in (401, 403)
     # Wrong scopes -> 403
-    h_bad = {"Authorization": _make_token(["music:control"]) }
+    h_bad = {"Authorization": _make_token(["music:control"])}
     assert c.get("/opt", headers=h_bad).status_code == 403
     # Correct -> 200
-    h_ok = {"Authorization": _make_token(["admin:write"]) }
+    h_ok = {"Authorization": _make_token(["admin:write"])}
     assert c.get("/opt", headers=h_ok).status_code == 200
 
 
@@ -110,7 +110,9 @@ def test_docs_security_with_runtime_noop(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "secret")
     app = FastAPI()
 
-    @app.get("/docs-bound", dependencies=[Depends(docs_security_with(["music:control"]))])
+    @app.get(
+        "/docs-bound", dependencies=[Depends(docs_security_with(["music:control"]))]
+    )
     async def handler():
         return {"ok": True}
 
@@ -121,5 +123,3 @@ def test_docs_security_with_runtime_noop(monkeypatch):
 def test_oauth2_scopes_mapping_contains_expected_keys():
     for k in ["care:resident", "care:caregiver", "music:control", "admin:write"]:
         assert k in OAUTH2_SCOPES
-
-

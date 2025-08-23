@@ -24,5 +24,3 @@ describe('Admin /admin/metrics page', () => {
         expect(await screen.findByText(/Cache Hit Rate/i)).toBeInTheDocument()
     })
 })
-
-

@@ -58,7 +58,7 @@ async def check_jwt_secret() -> HealthResult:
 
 **Files Modified**:
 - `app/api/auth.py`
-- `app/auth.py` 
+- `app/auth.py`
 - `app/api/caregiver_auth.py`
 
 **Changes**:
@@ -78,7 +78,7 @@ if sec.strip().lower() in {"change-me", "default", "placeholder", "secret", "key
 **Detected Insecure Values**:
 - `change-me` (original fallback)
 - `default`
-- `placeholder` 
+- `placeholder`
 - `secret`
 - `key`
 
@@ -89,15 +89,15 @@ if sec.strip().lower() in {"change-me", "default", "placeholder", "secret", "key
 async def check_jwt_secret() -> HealthResult:
     jwt_secret = os.getenv("JWT_SECRET")
     jwt_public_key = os.getenv("JWT_PUBLIC_KEY")
-    
+
     # Check if JWT_SECRET is configured
     if not jwt_secret and not jwt_public_key:
         return "error"
-    
+
     # Security check: detect insecure default values
     if jwt_secret and jwt_secret.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
         return "error"
-    
+
     return "ok"
 ```
 
@@ -238,7 +238,7 @@ This fix addresses several security best practices:
 **Before**: Critical security vulnerability allowing JWT forgery
 **After**: Secure by default with clear error handling
 
-**Mitigation**: 
+**Mitigation**:
 - Immediate deployment recommended
 - No breaking changes for properly configured systems
 - Clear error messages guide proper configuration

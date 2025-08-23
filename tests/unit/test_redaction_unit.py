@@ -1,5 +1,3 @@
-
-
 def test_redact_pii_and_store(tmp_path, monkeypatch):
     from app import redaction
 
@@ -7,6 +5,7 @@ def test_redact_pii_and_store(tmp_path, monkeypatch):
 
     # re-import to apply new base dir
     import importlib
+
     importlib.reload(redaction)
 
     text = "Email a@b.com call +1 555-123-4567 and ssn 123-45-6789"
@@ -19,5 +18,3 @@ def test_redact_pii_and_store(tmp_path, monkeypatch):
 
     again = redaction.redact_and_store("test", "item2", text)
     assert again != text
-
-

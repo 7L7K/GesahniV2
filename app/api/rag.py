@@ -11,7 +11,9 @@ except Exception:
 
 from app.deps.scopes import docs_security_with
 
-router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
+router = APIRouter(
+    tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))]
+)
 
 
 @router.get("/rag/search")
@@ -24,5 +26,3 @@ async def rag_search(
         return {"items": []}
     docs = _safe_query(user_id, q, k=k)
     return {"items": docs}
-
-

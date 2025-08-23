@@ -11,7 +11,9 @@ DENY_LIST = [
 ]
 
 
-def moderation_precheck(text: str, *, extra_phrases: Iterable[str] | None = None) -> bool:
+def moderation_precheck(
+    text: str, *, extra_phrases: Iterable[str] | None = None
+) -> bool:
     """Return True if text passes a deny-list moderation pre-check.
 
     This is a conservative, local check intended to guard model-generated
@@ -28,5 +30,3 @@ def moderation_precheck(text: str, *, extra_phrases: Iterable[str] | None = None
 
 
 __all__ = ["moderation_precheck"]
-
-

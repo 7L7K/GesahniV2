@@ -17,6 +17,7 @@ from app.telemetry import hash_user_id
 # ---------------------------------------------------------------------------
 try:
     from .chroma_store import ChromaVectorStore  # real implementation
+
     _CHROMA_IMPORT_ERROR: Exception | None = None
 except Exception as _e:  # pragma: no cover - exercised only when chroma not importable
     _CHROMA_IMPORT_ERROR = _e
@@ -27,10 +28,14 @@ except Exception as _e:  # pragma: no cover - exercised only when chroma not imp
         Instantiation will raise with the original import error, but test
         collection and `from ... import ChromaVectorStore` won’t explode.
         """
+
         AVAILABLE = False
 
         def __init__(self, *a, **kw) -> None:
-            raise RuntimeError(f"ChromaVectorStore unavailable: {_CHROMA_IMPORT_ERROR!r}")
+            raise RuntimeError(
+                f"ChromaVectorStore unavailable: {_CHROMA_IMPORT_ERROR!r}"
+            )
+
 
 from .env_utils import _get_mem_top_k, _normalized_hash
 from .memory_store import MemoryVectorStore, VectorStore
@@ -50,13 +55,19 @@ logger = logging.getLogger(__name__)
 # Backend selection helpers
 # ---------------------------------------------------------------------------
 
+
 def _strict_mode() -> bool:
     """Return True if strict init policy is enabled.
 
     In strict mode, any backend initialisation error is fatal, regardless of
     the environment. Enable with ``STRICT_VECTOR_STORE=1|true|yes``.
     """
-    if (os.getenv("STRICT_VECTOR_STORE") or "").strip().lower() in {"1", "true", "yes", "on"}:
+    if (os.getenv("STRICT_VECTOR_STORE") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         return True
     # Treat staging/production-like envs as strict by default
     env = (os.getenv("ENV") or os.getenv("APP_ENV") or "").strip().lower()
@@ -67,7 +78,7 @@ def _strict_mode() -> bool:
 
 def _get_store() -> VectorStore:
     """Return the configured vector store backend using unified VECTOR_DSN configuration.
-    
+
     Uses the new unified_store.create_vector_store() factory which supports:
     - memory:// (in-memory store for tests)
     - chroma:///path/to/data (local ChromaDB)
@@ -75,13 +86,14 @@ def _get_store() -> VectorStore:
     - qdrant://host:port?api_key=xxx (Qdrant HTTP)
     - qdrant+grpc://host:port?api_key=xxx (Qdrant gRPC)
     - dual://qdrant://host:port?api_key=xxx&chroma_path=/path (Dual read)
-    
+
     Maintains backward compatibility with legacy VECTOR_STORE env var.
     """
     try:
         from .unified_store import create_vector_store
+
         store = create_vector_store()
-        
+
         # Record metrics
         logger.debug("Vector store backend selected: %s", type(store).__name__)
         try:
@@ -101,21 +113,28 @@ def _get_store() -> VectorStore:
                 metrics.VECTOR_SELECTED_TOTAL.labels("memory").inc()
         except Exception:
             pass
-        
+
         if type(store).__name__ == "QdrantVectorStore":
-            logger.info("VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)")
-        
+            logger.info(
+                "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)"
+            )
+
         return store
-        
+
     except Exception as exc:
         if _strict_mode():
             logger.error("FATAL: Vector store init failed: %s", exc)
             raise
-        
-        logger.warning("Vector store init failed (%s: %s); falling back to MemoryVectorStore", 
-                      type(exc).__name__, exc)
+
+        logger.warning(
+            "Vector store init failed (%s: %s); falling back to MemoryVectorStore",
+            type(exc).__name__,
+            exc,
+        )
         try:
-            metrics.VECTOR_INIT_FALLBACKS.labels(requested="unified", reason=type(exc).__name__).inc()
+            metrics.VECTOR_INIT_FALLBACKS.labels(
+                requested="unified", reason=type(exc).__name__
+            ).inc()
         except Exception:
             pass
         return MemoryVectorStore()
@@ -135,9 +154,11 @@ def get_store() -> VectorStore:
         return _store
     return _store
 
+
 # ---------------------------------------------------------------------------
 # Public helpers
 # ---------------------------------------------------------------------------
+
 
 def add_user_memory(user_id: str, memory: str) -> str:
     """Persist a single memory string for *user_id* with PII redaction.
@@ -246,7 +267,9 @@ def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> str | None:
     across models. Otherwise, fallback to the vector similarity lookup.
     """
     # Fast path: exact id style (vN|...|...|)
-    is_cid = isinstance(prompt, str) and "|" in prompt and prompt[:2].lower().startswith("v")
+    is_cid = (
+        isinstance(prompt, str) and "|" in prompt and prompt[:2].lower().startswith("v")
+    )
     if is_cid:
         try:
             res = _store.qa_cache.get_items(ids=[prompt], include=["metadatas"])  # type: ignore[attr-defined]
@@ -281,6 +304,7 @@ def record_feedback(prompt: str, feedback: str) -> None:
 
 class _QACacheProxy:
     """Thin proxy so callers can treat ``qa_cache`` like a module-level var."""
+
     def __call__(self):  # noqa: D401
         return _store.qa_cache
 

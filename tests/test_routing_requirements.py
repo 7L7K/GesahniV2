@@ -19,10 +19,12 @@ sys.modules.setdefault(
 sys.modules.setdefault("chromadb", types.SimpleNamespace(PersistentClient=object))
 sys.modules.setdefault("aiosqlite", types.SimpleNamespace(connect=lambda *a, **k: None))
 
+
 # Mock OpenAI and related imports
 class _Emb:
     def create(self, *a, **k):
         return types.SimpleNamespace(data=[types.SimpleNamespace(embedding=[0.0])])
+
 
 class _ChatCompletionStream:
     def __aiter__(self):
@@ -30,6 +32,7 @@ class _ChatCompletionStream:
 
     async def __anext__(self):
         raise StopAsyncIteration
+
 
 class _ChatCompletions:
     async def create(self, *a, **k):
@@ -46,6 +49,7 @@ class _ChatCompletions:
             usage=types.SimpleNamespace(prompt_tokens=0, completion_tokens=0),
         )
 
+
 class _AsyncOpenAI:
     def __init__(self, *a, **k):
         self.chat = types.SimpleNamespace(completions=_ChatCompletions())
@@ -54,8 +58,10 @@ class _AsyncOpenAI:
     async def close(self):
         pass
 
+
 class _OpenAIError(Exception):
     pass
+
 
 builtins.AsyncOpenAI = _AsyncOpenAI
 sys.modules["openai"] = types.SimpleNamespace(
@@ -72,6 +78,7 @@ os.environ["OLLAMA_URL"] = "http://localhost:11434"
 os.environ["OLLAMA_MODEL"] = "llama3:latest"
 os.environ["HOME_ASSISTANT_URL"] = "http://ha"
 os.environ["HOME_ASSISTANT_TOKEN"] = "token"
+
 
 @pytest.fixture(autouse=True)
 def patch_dependencies(monkeypatch):
@@ -136,11 +143,11 @@ class TestOverridePathRespectsAllowlistAndHealth:
         monkeypatch.setattr("app.llama_integration.ask_llama", fake_llama)
 
         # Should succeed with allowed model
-        result = asyncio.run(router.route_prompt(
-            TEST_PROMPT,
-            model_override="llama3:latest",
-            user_id=TEST_USER_ID
-        ))
+        result = asyncio.run(
+            router.route_prompt(
+                TEST_PROMPT, model_override="llama3:latest", user_id=TEST_USER_ID
+            )
+        )
         assert result == "llama_response"
 
     def test_override_with_disallowed_model_fails(self, monkeypatch):
@@ -151,11 +158,13 @@ class TestOverridePathRespectsAllowlistAndHealth:
 
         # Should fail with disallowed model
         with pytest.raises(HTTPException) as exc:
-            asyncio.run(router.route_prompt(
-                TEST_PROMPT,
-                model_override="llama3:disallowed",
-                user_id=TEST_USER_ID
-            ))
+            asyncio.run(
+                router.route_prompt(
+                    TEST_PROMPT,
+                    model_override="llama3:disallowed",
+                    user_id=TEST_USER_ID,
+                )
+            )
 
         assert exc.value.status_code == 403
         assert "model_not_allowed" in str(exc.value.detail)
@@ -173,12 +182,14 @@ class TestOverridePathRespectsAllowlistAndHealth:
 
         # Should fail when vendor unhealthy and no fallback allowed
         with pytest.raises(HTTPException) as exc:
-            asyncio.run(router.route_prompt(
-                TEST_PROMPT,
-                model_override="llama3:latest",
-                user_id=TEST_USER_ID,
-                allow_fallback=False
-            ))
+            asyncio.run(
+                router.route_prompt(
+                    TEST_PROMPT,
+                    model_override="llama3:latest",
+                    user_id=TEST_USER_ID,
+                    allow_fallback=False,
+                )
+            )
 
         assert exc.value.status_code == 503
         assert "vendor_unavailable" in str(exc.value.detail)
@@ -206,12 +217,14 @@ class TestOverridePathRespectsAllowlistAndHealth:
         monkeypatch.setattr("app.gpt_client.ask_gpt", fake_gpt)
 
         # Should fallback to GPT when LLaMA is unhealthy
-        result = asyncio.run(router.route_prompt(
-            TEST_PROMPT,
-            model_override="llama3:latest",
-            user_id=TEST_USER_ID,
-            allow_fallback=True
-        ))
+        result = asyncio.run(
+            router.route_prompt(
+                TEST_PROMPT,
+                model_override="llama3:latest",
+                user_id=TEST_USER_ID,
+                allow_fallback=True,
+            )
+        )
         assert result == "gpt_fallback_response"
 
     def test_override_unknown_vendor_fails(self, monkeypatch):
@@ -220,11 +233,13 @@ class TestOverridePathRespectsAllowlistAndHealth:
 
         # Should fail with unknown vendor
         with pytest.raises(HTTPException) as exc:
-            asyncio.run(router.route_prompt(
-                TEST_PROMPT,
-                model_override="unknown-model-123",
-                user_id=TEST_USER_ID
-            ))
+            asyncio.run(
+                router.route_prompt(
+                    TEST_PROMPT,
+                    model_override="unknown-model-123",
+                    user_id=TEST_USER_ID,
+                )
+            )
 
         assert exc.value.status_code == 400
         assert "unknown_model" in str(exc.value.detail)
@@ -275,8 +290,11 @@ class TestDefaultPickerPathPicksExpectedVendorModel:
 
         # Verify the picker would choose GPT for heavy tokens
         from app.token_utils import count_tokens
+
         actual_tokens = count_tokens(prompt)
-        engine, model, reason, _ = model_picker.pick_model(prompt, "analysis", actual_tokens)
+        engine, model, reason, _ = model_picker.pick_model(
+            prompt, "analysis", actual_tokens
+        )
         assert engine == "gpt"
         assert model == GPT_HEAVY_MODEL
         assert reason == "heavy_length"  # The actual reason when words exceed threshold
@@ -299,7 +317,9 @@ class TestDefaultPickerPathPicksExpectedVendorModel:
         assert result == "gpt_keyword_response"
 
         # Verify the picker would choose GPT for keyword
-        engine, model, reason, keyword_hit = model_picker.pick_model(keyword_prompt, "chat", 100)
+        engine, model, reason, keyword_hit = model_picker.pick_model(
+            keyword_prompt, "chat", 100
+        )
         assert engine == "gpt"
         assert model == GPT_HEAVY_MODEL
         assert reason == "keyword"
@@ -325,7 +345,9 @@ class TestDefaultPickerPathPicksExpectedVendorModel:
         engine, model, reason, _ = model_picker.pick_model(prompt, "analysis", 100)
         assert engine == "gpt"
         assert model == GPT_HEAVY_MODEL
-        assert reason == "keyword"  # The prompt contains "summarize" which matches keywords
+        assert (
+            reason == "keyword"
+        )  # The prompt contains "summarize" which matches keywords
 
     def test_light_task_routes_to_llama(self, monkeypatch):
         """Test that light tasks route to LLaMA."""
@@ -334,7 +356,9 @@ class TestDefaultPickerPathPicksExpectedVendorModel:
         light_prompt = "Hello, how are you?"
 
         # Mock health check to return healthy for ollama
-        monkeypatch.setattr(router, "_check_vendor_health", lambda vendor: vendor == "ollama")
+        monkeypatch.setattr(
+            router, "_check_vendor_health", lambda vendor: vendor == "ollama"
+        )
         monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
 
         async def fake_llama(prompt, model=None, **kwargs):
@@ -439,7 +463,11 @@ class TestLlamaFailureGptFallbackPath:
         async def fake_llama(prompt, model=None, **kwargs):
             call_count["llama"] += 1
             # Simulate server error
-            raise httpx.HTTPStatusError("500 Internal Server Error", request=MagicMock(), response=MagicMock(status_code=500))
+            raise httpx.HTTPStatusError(
+                "500 Internal Server Error",
+                request=MagicMock(),
+                response=MagicMock(status_code=500),
+            )
 
         async def fake_gpt(prompt, model=None, **kwargs):
             call_count["gpt"] += 1
@@ -479,7 +507,11 @@ class TestLlamaFailureGptFallbackPath:
         async def fake_llama(prompt, model=None, **kwargs):
             call_count["llama"] += 1
             # Simulate client error (should not fallback)
-            raise httpx.HTTPStatusError("400 Bad Request", request=MagicMock(), response=MagicMock(status_code=400))
+            raise httpx.HTTPStatusError(
+                "400 Bad Request",
+                request=MagicMock(),
+                response=MagicMock(status_code=400),
+            )
 
         async def fake_gpt(prompt, model=None, **kwargs):
             call_count["gpt"] += 1
@@ -530,8 +562,7 @@ class TestGoldenTraceEmitsExactlyOnce:
 
         # Count golden trace logs
         golden_trace_count = sum(
-            1 for record in caplog.records
-            if "GOLDEN_TRACE:" in record.message
+            1 for record in caplog.records if "GOLDEN_TRACE:" in record.message
         )
 
         assert golden_trace_count == 1
@@ -571,8 +602,7 @@ class TestGoldenTraceEmitsExactlyOnce:
 
         # Count golden trace logs
         golden_trace_count = sum(
-            1 for record in caplog.records
-            if "GOLDEN_TRACE:" in record.message
+            1 for record in caplog.records if "GOLDEN_TRACE:" in record.message
         )
 
         assert golden_trace_count == 1
@@ -597,16 +627,15 @@ class TestGoldenTraceEmitsExactlyOnce:
         # Clear any existing log records
         caplog.clear()
 
-        result = asyncio.run(router.route_prompt(
-            TEST_PROMPT,
-            model_override="llama3:latest",
-            user_id=TEST_USER_ID
-        ))
+        result = asyncio.run(
+            router.route_prompt(
+                TEST_PROMPT, model_override="llama3:latest", user_id=TEST_USER_ID
+            )
+        )
 
         # Count golden trace logs
         golden_trace_count = sum(
-            1 for record in caplog.records
-            if "GOLDEN_TRACE:" in record.message
+            1 for record in caplog.records if "GOLDEN_TRACE:" in record.message
         )
 
         assert golden_trace_count == 1
@@ -636,8 +665,7 @@ class TestGoldenTraceEmitsExactlyOnce:
 
         # Find golden trace log
         golden_trace_record = next(
-            record for record in caplog.records
-            if "GOLDEN_TRACE:" in record.message
+            record for record in caplog.records if "GOLDEN_TRACE:" in record.message
         )
 
         # Parse JSON from log message
@@ -647,10 +675,25 @@ class TestGoldenTraceEmitsExactlyOnce:
 
         # Verify required fields are present
         required_fields = [
-            "ts", "rid", "uid", "path", "shape", "intent", "tokens_est",
-            "picker_reason", "chosen_vendor", "chosen_model", "dry_run",
-            "cb_user_open", "cb_global_open", "allow_fallback", "stream",
-            "latency_ms", "timeout_ms", "fallback_reason", "cache_hit"
+            "ts",
+            "rid",
+            "uid",
+            "path",
+            "shape",
+            "intent",
+            "tokens_est",
+            "picker_reason",
+            "chosen_vendor",
+            "chosen_model",
+            "dry_run",
+            "cb_user_open",
+            "cb_global_open",
+            "allow_fallback",
+            "stream",
+            "latency_ms",
+            "timeout_ms",
+            "fallback_reason",
+            "cache_hit",
         ]
 
         for field in required_fields:

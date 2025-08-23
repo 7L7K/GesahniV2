@@ -13,15 +13,15 @@ class TestMetricsMiddleware:
     def setup_method(self):
         """Reset metrics before each test."""
         # Reset Prometheus metrics (this is a simple approach for testing)
-        if hasattr(REQUESTS, '_metrics'):
+        if hasattr(REQUESTS, "_metrics"):
             REQUESTS._metrics.clear()
-        if hasattr(LATENCY, '_metrics'):
+        if hasattr(LATENCY, "_metrics"):
             LATENCY._metrics.clear()
-        if hasattr(AUTH_FAIL, '_metrics'):
+        if hasattr(AUTH_FAIL, "_metrics"):
             AUTH_FAIL._metrics.clear()
-        if hasattr(RBAC_DENY, '_metrics'):
+        if hasattr(RBAC_DENY, "_metrics"):
             RBAC_DENY._metrics.clear()
-        if hasattr(RATE_LIMITED, '_metrics'):
+        if hasattr(RATE_LIMITED, "_metrics"):
             RATE_LIMITED._metrics.clear()
 
     def test_metrics_middleware_basic(self, client):
@@ -66,19 +66,19 @@ class TestAuthMetrics:
     def test_auth_fail_metrics_import(self):
         """Test that AUTH_FAIL metrics can be imported."""
         assert AUTH_FAIL is not None
-        assert hasattr(AUTH_FAIL, 'labels')
+        assert hasattr(AUTH_FAIL, "labels")
         assert callable(AUTH_FAIL.labels)
 
     def test_rbac_deny_metrics_import(self):
         """Test that RBAC_DENY metrics can be imported."""
         assert RBAC_DENY is not None
-        assert hasattr(RBAC_DENY, 'labels')
+        assert hasattr(RBAC_DENY, "labels")
         assert callable(RBAC_DENY.labels)
 
     def test_rate_limited_metrics_import(self):
         """Test that RATE_LIMITED metrics can be imported."""
         assert RATE_LIMITED is not None
-        assert hasattr(RATE_LIMITED, 'labels')
+        assert hasattr(RATE_LIMITED, "labels")
         assert callable(RATE_LIMITED.labels)
 
 
@@ -87,34 +87,34 @@ class TestMetricsStructure:
 
     def test_requests_metric_structure(self):
         """Test REQUESTS metric has correct label names."""
-        assert hasattr(REQUESTS, 'labelnames')
+        assert hasattr(REQUESTS, "labelnames")
         expected_labels = ("route", "method", "status")
         assert REQUESTS.labelnames == expected_labels
 
     def test_latency_metric_structure(self):
         """Test LATENCY metric has correct label names and buckets."""
-        assert hasattr(LATENCY, 'labelnames')
+        assert hasattr(LATENCY, "labelnames")
         expected_labels = ("route", "method")
         assert LATENCY.labelnames == expected_labels
 
-        assert hasattr(LATENCY, 'buckets')
+        assert hasattr(LATENCY, "buckets")
         expected_buckets = (0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5)
         assert LATENCY.buckets == expected_buckets
 
     def test_auth_fail_metric_structure(self):
         """Test AUTH_FAIL metric has correct label names."""
-        assert hasattr(AUTH_FAIL, 'labelnames')
+        assert hasattr(AUTH_FAIL, "labelnames")
         expected_labels = ("reason",)
         assert AUTH_FAIL.labelnames == expected_labels
 
     def test_rbac_deny_metric_structure(self):
         """Test RBAC_DENY metric has correct label names."""
-        assert hasattr(RBAC_DENY, 'labelnames')
+        assert hasattr(RBAC_DENY, "labelnames")
         expected_labels = ("scope",)
         assert RBAC_DENY.labelnames == expected_labels
 
     def test_rate_limited_metric_structure(self):
         """Test RATE_LIMITED metric has correct label names."""
-        assert hasattr(RATE_LIMITED, 'labelnames')
+        assert hasattr(RATE_LIMITED, "labelnames")
         expected_labels = ("route",)
         assert RATE_LIMITED.labelnames == expected_labels

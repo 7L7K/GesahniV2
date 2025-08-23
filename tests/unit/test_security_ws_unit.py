@@ -53,5 +53,3 @@ async def test_rate_limit_ws(monkeypatch):
     await sec.rate_limit_ws(ws)
     await sec.rate_limit_ws(ws)
     await sec.rate_limit_ws(ws)
-
-

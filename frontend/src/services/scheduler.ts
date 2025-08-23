@@ -296,5 +296,3 @@ scheduler.addScorer((id) => {
 
 // Prefs: placeholder constant mid-weight
 scheduler.addScorer((_id) => ({ prefs: 0.5 }));
-
-

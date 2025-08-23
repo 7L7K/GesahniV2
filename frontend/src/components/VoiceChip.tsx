@@ -21,5 +21,3 @@ export default function VoiceChip({ engine, tier, cost, className = '' }: { engi
         </span>
     )
 }
-
-

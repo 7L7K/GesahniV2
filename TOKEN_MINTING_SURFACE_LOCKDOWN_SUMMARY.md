@@ -26,7 +26,7 @@ import warnings
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT access token with the given data.
-    
+
     DEPRECATED: Use make_access() instead for better TTL management and claim normalization.
     """
     warnings.warn(

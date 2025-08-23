@@ -6,13 +6,13 @@ This document summarizes the implementation of sharp and consistent cookie handl
 
 ## Requirements Addressed
 
-✅ **Host-only cookies (no Domain)** - All cookies are set without Domain attribute  
-✅ **Path=/** - All cookies use consistent path  
-✅ **SameSite=Lax** - Consistent SameSite attribute across all endpoints  
-✅ **HttpOnly** - All auth cookies are HttpOnly  
-✅ **Secure=False in dev, True in production** - Environment-aware Secure flag  
-✅ **Consistent TTLs** - Access and refresh tokens use centralized TTL configuration  
-✅ **No redirects before cookies** - Cookies are written before any redirects occur  
+✅ **Host-only cookies (no Domain)** - All cookies are set without Domain attribute
+✅ **Path=/** - All cookies use consistent path
+✅ **SameSite=Lax** - Consistent SameSite attribute across all endpoints
+✅ **HttpOnly** - All auth cookies are HttpOnly
+✅ **Secure=False in dev, True in production** - Environment-aware Secure flag
+✅ **Consistent TTLs** - Access and refresh tokens use centralized TTL configuration
+✅ **No redirects before cookies** - Cookies are written before any redirects occur
 
 ## Implementation Details
 
@@ -27,12 +27,12 @@ def get_cookie_config(request: Request) -> dict:
     cookie_secure = os.getenv("COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
     dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
-    
+
     # Development mode detection: force Secure=False for HTTP in dev
     if dev_mode or _is_dev_environment(request):
         if _get_scheme(request) != "https":
             cookie_secure = False
-    
+
     return {
         "secure": cookie_secure,
         "samesite": cookie_samesite,
@@ -49,10 +49,10 @@ def get_token_ttls() -> Tuple[int, int]:
     """Get consistent TTLs for access and refresh tokens."""
     access_minutes = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
     access_ttl = access_minutes * 60
-    
+
     refresh_minutes = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
     refresh_ttl = refresh_minutes * 60
-    
+
     return access_ttl, refresh_ttl
 ```
 
@@ -64,7 +64,7 @@ Enhanced `_append_cookie_with_priority` function to use centralized configuratio
 def _append_cookie_with_priority(response: Response, *, key: str, value: str, max_age: int, secure: bool, samesite: str, path: str = "/") -> None:
     try:
         from ..cookie_config import format_cookie_header
-        
+
         header = format_cookie_header(
             key=key,
             value=value,
@@ -148,7 +148,7 @@ DEV_MODE=0
 Created comprehensive integration tests in `tests/integration/test_cookie_consistency.py`:
 
 - ✅ Login cookies consistency
-- ✅ Refresh cookies consistency  
+- ✅ Refresh cookies consistency
 - ✅ Logout cookies consistency
 - ✅ OAuth cookies consistency
 - ✅ Device trust cookies consistency

@@ -19,5 +19,3 @@ async def test_benchmark_stub(monkeypatch):
     monkeypatch.setenv("EMBEDDING_BACKEND", "stub")
     stats = await emb.benchmark("hello", iterations=2)
     assert set(["latency", "throughput"]).issubset(stats.keys())
-
-

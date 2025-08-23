@@ -42,14 +42,14 @@ Created a new centralized function `resolve_session_id()` in `app/deps/user.py` 
 def resolve_session_id(request: Request | None = None, websocket: WebSocket | None = None, user_id: str | None = None) -> str:
     """
     Centralized function to resolve session ID consistently across the codebase.
-    
+
     Priority order:
     1. X-Session-ID header (primary source)
     2. sid cookie (fallback)
     3. user_id from Authorization header (if available)
     4. user_id parameter (if provided and not None)
     5. "anon" (ultimate fallback)
-    
+
     This ensures refresh token families are properly aligned regardless of which code path
     is taken to resolve the session ID.
     """

@@ -74,7 +74,7 @@ JWT_REFRESH_EXPIRE_MINUTES=43200
 
 ### Cookie Types
 - `access_token`: JWT access token
-- `refresh_token`: JWT refresh token  
+- `refresh_token`: JWT refresh token
 - `__session`: Session cookie for Clerk
 - `X-Local-Mode`: Development indicator
 

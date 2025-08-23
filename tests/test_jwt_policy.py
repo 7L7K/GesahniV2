@@ -8,6 +8,7 @@ def _reload_app():
     if "app.main" in importlib.sys.modules:
         del importlib.sys.modules["app.main"]
     import app.main as main
+
     return main
 
 
@@ -36,5 +37,3 @@ def test_prod_weak_secret_rejects(monkeypatch):
     # Manually call the JWT enforcement function that should raise
     with pytest.raises(RuntimeError):
         app.main._enforce_jwt_strength()
-
-

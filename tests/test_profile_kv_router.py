@@ -26,6 +26,3 @@ def test_profile_kv_short_ask_flow(monkeypatch):
     r2 = c.post("/v1/ask", json={"prompt": "what's my favorite color"})
     assert r2.status_code == 200
     assert "blue" in (r2.text or r2.content.decode("utf-8"))
-
-
-

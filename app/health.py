@@ -19,9 +19,11 @@ logger = logging.getLogger(__name__)
 # Health Check Data Structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class HealthCheckResult:
     """Result of a health check."""
+
     healthy: bool
     status: str
     latency_ms: float | None = None
@@ -29,9 +31,11 @@ class HealthCheckResult:
     metadata: dict[str, Any] | None = None
     timestamp: float | None = None
 
+
 @dataclass
 class VendorHealthState:
     """Health state for a vendor with failure tracking."""
+
     vendor_name: str
     unhealthy_until: float = 0.0
     failure_times: deque = field(default_factory=lambda: deque(maxlen=100))
@@ -39,9 +43,10 @@ class VendorHealthState:
     last_success_time: float = 0.0
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
+
 # Configuration for eager health gating
 EAGER_HEALTH_CONFIG = {
-    "failure_threshold": 5,      # N failures
+    "failure_threshold": 5,  # N failures
     "failure_window_seconds": 60.0,  # M seconds
     "unhealthy_duration_seconds": 300.0,  # T seconds
 }
@@ -49,6 +54,7 @@ EAGER_HEALTH_CONFIG = {
 # Global vendor health tracker
 _vendor_health_states: dict[str, VendorHealthState] = {}
 _vendor_health_lock = threading.Lock()
+
 
 class VendorHealthTracker:
     """
@@ -91,7 +97,9 @@ class VendorHealthTracker:
             # Check if we should mark unhealthy
             if len(state.failure_times) >= EAGER_HEALTH_CONFIG["failure_threshold"]:
                 if current_time > state.unhealthy_until:
-                    state.unhealthy_until = current_time + EAGER_HEALTH_CONFIG["unhealthy_duration_seconds"]
+                    state.unhealthy_until = (
+                        current_time + EAGER_HEALTH_CONFIG["unhealthy_duration_seconds"]
+                    )
                     # Emit structured metric-like warning for alerting systems
                     logger.warning(
                         f"Vendor {vendor_name} marked unhealthy for {EAGER_HEALTH_CONFIG['unhealthy_duration_seconds']}s "
@@ -100,8 +108,12 @@ class VendorHealthTracker:
                             "meta": {
                                 "vendor": vendor_name,
                                 "failure_count": len(state.failure_times),
-                                "failure_window_seconds": EAGER_HEALTH_CONFIG["failure_window_seconds"],
-                                "unhealthy_duration_seconds": EAGER_HEALTH_CONFIG["unhealthy_duration_seconds"],
+                                "failure_window_seconds": EAGER_HEALTH_CONFIG[
+                                    "failure_window_seconds"
+                                ],
+                                "unhealthy_duration_seconds": EAGER_HEALTH_CONFIG[
+                                    "unhealthy_duration_seconds"
+                                ],
                             }
                         },
                     )
@@ -164,13 +176,17 @@ class VendorHealthTracker:
                 "vendor_name": vendor_name,
                 "is_healthy": current_time > state.unhealthy_until,
                 "unhealthy_until": state.unhealthy_until,
-                "remaining_unhealthy_seconds": max(0, state.unhealthy_until - current_time),
+                "remaining_unhealthy_seconds": max(
+                    0, state.unhealthy_until - current_time
+                ),
                 "recent_failures": len(state.failure_times),
                 "consecutive_failures": state.consecutive_failures,
                 "last_success_time": state.last_success_time,
                 "failure_threshold": EAGER_HEALTH_CONFIG["failure_threshold"],
                 "failure_window_seconds": EAGER_HEALTH_CONFIG["failure_window_seconds"],
-                "unhealthy_duration_seconds": EAGER_HEALTH_CONFIG["unhealthy_duration_seconds"]
+                "unhealthy_duration_seconds": EAGER_HEALTH_CONFIG[
+                    "unhealthy_duration_seconds"
+                ],
             }
 
     @classmethod
@@ -195,14 +211,20 @@ class VendorHealthTracker:
             Dictionary mapping vendor names to their health info
         """
         with _vendor_health_lock:
-            return {vendor: cls.get_vendor_health_info(vendor)
-                    for vendor in _vendor_health_states.keys()}
+            return {
+                vendor: cls.get_vendor_health_info(vendor)
+                for vendor in _vendor_health_states.keys()
+            }
+
 
 # ---------------------------------------------------------------------------
 # Eager Health Gating Integration
 # ---------------------------------------------------------------------------
 
-async def _check_vendor_health(vendor_name: str, record_failure: bool = False, record_success: bool = False) -> bool:
+
+async def _check_vendor_health(
+    vendor_name: str, record_failure: bool = False, record_success: bool = False
+) -> bool:
     """
     Check vendor health with eager gating.
 
@@ -250,6 +272,7 @@ async def _check_vendor_health(vendor_name: str, record_failure: bool = False, r
             VendorHealthTracker.record_vendor_failure(vendor_name)
         return False
 
+
 def record_vendor_failure(vendor_name: str) -> None:
     """
     Record a failure for a vendor (for eager health gating).
@@ -258,6 +281,7 @@ def record_vendor_failure(vendor_name: str) -> None:
         vendor_name: The vendor that failed
     """
     VendorHealthTracker.record_vendor_failure(vendor_name)
+
 
 def record_vendor_success(vendor_name: str) -> None:
     """
@@ -268,32 +292,36 @@ def record_vendor_success(vendor_name: str) -> None:
     """
     VendorHealthTracker.record_vendor_success(vendor_name)
 
+
 @dataclass
 class CachedHealthCheck:
     """Cached health check result."""
+
     result: HealthCheckResult
     expires_at: float
     check_duration_ms: float
+
 
 # ---------------------------------------------------------------------------
 # Health Check Cache
 # ---------------------------------------------------------------------------
 
+
 class HealthCheckCache:
     """Cache for health check results to avoid excessive checking."""
-    
+
     def __init__(self, default_ttl_seconds: float = 60.0):
         self.default_ttl = default_ttl_seconds
         self._cache: dict[str, CachedHealthCheck] = {}
         self._lock = asyncio.Lock()
-    
+
     async def get(self, key: str) -> HealthCheckResult | None:
         """
         Get a cached health check result if it's still valid.
-        
+
         Args:
             key: Cache key for the health check
-            
+
         Returns:
             HealthCheckResult if valid and cached, None otherwise
         """
@@ -302,11 +330,13 @@ class HealthCheckCache:
             if cached and time.time() < cached.expires_at:
                 return cached.result
             return None
-    
-    async def set(self, key: str, result: HealthCheckResult, ttl_seconds: float | None = None) -> None:
+
+    async def set(
+        self, key: str, result: HealthCheckResult, ttl_seconds: float | None = None
+    ) -> None:
         """
         Cache a health check result.
-        
+
         Args:
             key: Cache key for the health check
             result: Health check result
@@ -317,23 +347,24 @@ class HealthCheckCache:
             self._cache[key] = CachedHealthCheck(
                 result=result,
                 expires_at=time.time() + ttl,
-                check_duration_ms=0.0  # Will be set by the caller
+                check_duration_ms=0.0,  # Will be set by the caller
             )
-    
+
     async def invalidate(self, key: str) -> None:
         """
         Invalidate a cached health check.
-        
+
         Args:
             key: Cache key to invalidate
         """
         async with self._lock:
             self._cache.pop(key, None)
-    
+
     async def clear(self) -> None:
         """Clear all cached health checks."""
         async with self._lock:
             self._cache.clear()
+
 
 # Global health check cache
 health_cache = HealthCheckCache()
@@ -342,32 +373,33 @@ health_cache = HealthCheckCache()
 # OpenAI Health Checks
 # ---------------------------------------------------------------------------
 
+
 async def check_openai_health(cache_result: bool = True) -> HealthCheckResult:
     """
     Check OpenAI health with optional caching.
-    
+
     Args:
         cache_result: Whether to cache the result
-        
+
     Returns:
         HealthCheckResult
     """
     cache_key = "openai_health"
-    
+
     # Check cache first
     if cache_result:
         cached = await health_cache.get(cache_key)
         if cached:
             return cached
-    
+
     start_time = time.perf_counter()
-    
+
     try:
         # Import here to avoid circular imports
         import os
 
         from .gpt_client import ask_gpt
-        
+
         # Use minimal generation to keep health checks snappy
         model = os.getenv("OPENAI_MODEL", "gpt-4o")
         text, _, _, _ = await ask_gpt(
@@ -376,295 +408,305 @@ async def check_openai_health(cache_result: bool = True) -> HealthCheckResult:
             "You are a helpful assistant.",
             timeout=5.0,  # Short timeout for health checks
             allow_test=True,
-            routing_decision=None
+            routing_decision=None,
         )
-        
+
         duration_ms = (time.perf_counter() - start_time) * 1000
-        
+
         result = HealthCheckResult(
             healthy=True,
             status="healthy",
             latency_ms=duration_ms,
-            timestamp=time.time()
+            timestamp=time.time(),
         )
-        
+
         if cache_result:
             await health_cache.set(cache_key, result, ttl_seconds=60.0)
-        
+
         return result
-        
+
     except Exception as e:
         duration_ms = (time.perf_counter() - start_time) * 1000
-        
+
         result = HealthCheckResult(
             healthy=False,
             status="unhealthy",
             latency_ms=duration_ms,
             error=str(e),
-            timestamp=time.time()
+            timestamp=time.time(),
         )
-        
+
         if cache_result:
             # Cache failures for shorter time
             await health_cache.set(cache_key, result, ttl_seconds=30.0)
-        
+
         return result
+
 
 # ---------------------------------------------------------------------------
 # Ollama Health Checks
 # ---------------------------------------------------------------------------
 
+
 async def check_ollama_health(cache_result: bool = True) -> HealthCheckResult:
     """
     Check Ollama health with optional caching.
-    
+
     Args:
         cache_result: Whether to cache the result
-        
+
     Returns:
         HealthCheckResult
     """
     cache_key = "ollama_health"
-    
+
     # Check cache first
     if cache_result:
         cached = await health_cache.get(cache_key)
         if cached:
             return cached
-    
+
     start_time = time.perf_counter()
-    
+
     try:
         # Import here to avoid circular imports
         from .llama_integration import get_status
-        
+
         status = await get_status()
         duration_ms = (time.perf_counter() - start_time) * 1000
-        
+
         result = HealthCheckResult(
             healthy=status.get("status") == "healthy",
             status=status.get("status", "unknown"),
             latency_ms=duration_ms,
             metadata=status,
-            timestamp=time.time()
+            timestamp=time.time(),
         )
-        
+
         if cache_result:
             await health_cache.set(cache_key, result, ttl_seconds=60.0)
-        
+
         return result
-        
+
     except Exception as e:
         duration_ms = (time.perf_counter() - start_time) * 1000
-        
+
         result = HealthCheckResult(
             healthy=False,
             status="unhealthy",
             latency_ms=duration_ms,
             error=str(e),
-            timestamp=time.time()
+            timestamp=time.time(),
         )
-        
+
         if cache_result:
             # Cache failures for shorter time
             await health_cache.set(cache_key, result, ttl_seconds=30.0)
-        
+
         return result
+
 
 # ---------------------------------------------------------------------------
 # Vector Store Health Checks
 # ---------------------------------------------------------------------------
 
+
 async def check_vector_store_health(cache_result: bool = True) -> HealthCheckResult:
     """
     Check vector store health with optional caching.
-    
+
     Args:
         cache_result: Whether to cache the result
-        
+
     Returns:
         HealthCheckResult
     """
     cache_key = "vector_store_health"
-    
+
     # Check cache first
     if cache_result:
         cached = await health_cache.get(cache_key)
         if cached:
             return cached
-    
+
     start_time = time.perf_counter()
-    
+
     try:
         # Import here to avoid circular imports
         from .memory.api import get_store
-        
+
         store = get_store()
-        
+
         # Try a simple operation to test connectivity
-        if hasattr(store, 'qa_cache'):
+        if hasattr(store, "qa_cache"):
             # For vector stores with cache, try a simple query
             try:
                 # This is a minimal test - just check if the store responds
                 pass  # Placeholder for actual health check
             except Exception as e:
                 raise Exception(f"Vector store cache test failed: {e}")
-        
+
         duration_ms = (time.perf_counter() - start_time) * 1000
-        
+
         result = HealthCheckResult(
             healthy=True,
             status="healthy",
             latency_ms=duration_ms,
-            timestamp=time.time()
+            timestamp=time.time(),
         )
-        
+
         if cache_result:
             await health_cache.set(cache_key, result, ttl_seconds=120.0)
-        
+
         return result
-        
+
     except Exception as e:
         duration_ms = (time.perf_counter() - start_time) * 1000
-        
+
         result = HealthCheckResult(
             healthy=False,
             status="unhealthy",
             latency_ms=duration_ms,
             error=str(e),
-            timestamp=time.time()
+            timestamp=time.time(),
         )
-        
+
         if cache_result:
             # Cache failures for shorter time
             await health_cache.set(cache_key, result, ttl_seconds=60.0)
-        
+
         return result
+
 
 # ---------------------------------------------------------------------------
 # Home Assistant Health Checks
 # ---------------------------------------------------------------------------
 
+
 async def check_home_assistant_health(cache_result: bool = True) -> HealthCheckResult:
     """
     Check Home Assistant health with optional caching.
-    
+
     Args:
         cache_result: Whether to cache the result
-        
+
     Returns:
         HealthCheckResult
     """
     cache_key = "home_assistant_health"
-    
+
     # Check cache first
     if cache_result:
         cached = await health_cache.get(cache_key)
         if cached:
             return cached
-    
+
     start_time = time.perf_counter()
-    
+
     try:
         # Import here to avoid circular imports
         from .home_assistant import _request
-        
+
         await _request("GET", "/states")
         duration_ms = (time.perf_counter() - start_time) * 1000
-        
+
         result = HealthCheckResult(
             healthy=True,
             status="healthy",
             latency_ms=duration_ms,
-            timestamp=time.time()
+            timestamp=time.time(),
         )
-        
+
         if cache_result:
             await health_cache.set(cache_key, result, ttl_seconds=60.0)
-        
+
         return result
-        
+
     except Exception as e:
         duration_ms = (time.perf_counter() - start_time) * 1000
-        
+
         result = HealthCheckResult(
             healthy=False,
             status="unhealthy",
             latency_ms=duration_ms,
             error=str(e),
-            timestamp=time.time()
+            timestamp=time.time(),
         )
-        
+
         if cache_result:
             # Cache failures for shorter time
             await health_cache.set(cache_key, result, ttl_seconds=30.0)
-        
+
         return result
+
 
 # ---------------------------------------------------------------------------
 # Database Health Checks
 # ---------------------------------------------------------------------------
 
+
 async def check_database_health(cache_result: bool = True) -> HealthCheckResult:
     """
     Check database health with optional caching.
-    
+
     Args:
         cache_result: Whether to cache the result
-        
+
     Returns:
         HealthCheckResult
     """
     cache_key = "database_health"
-    
+
     # Check cache first
     if cache_result:
         cached = await health_cache.get(cache_key)
         if cached:
             return cached
-    
+
     start_time = time.perf_counter()
-    
+
     try:
         # Import here to avoid circular imports
         from .memory.profile_store import profile_store
-        
+
         # Try a simple read operation
         profile_store.get("test_health_check")
         duration_ms = (time.perf_counter() - start_time) * 1000
-        
+
         result = HealthCheckResult(
             healthy=True,
             status="healthy",
             latency_ms=duration_ms,
-            timestamp=time.time()
+            timestamp=time.time(),
         )
-        
+
         if cache_result:
             await health_cache.set(cache_key, result, ttl_seconds=120.0)
-        
+
         return result
-        
+
     except Exception as e:
         duration_ms = (time.perf_counter() - start_time) * 1000
-        
+
         result = HealthCheckResult(
             healthy=False,
             status="unhealthy",
             latency_ms=duration_ms,
             error=str(e),
-            timestamp=time.time()
+            timestamp=time.time(),
         )
-        
+
         if cache_result:
             # Cache failures for shorter time
             await health_cache.set(cache_key, result, ttl_seconds=60.0)
-        
+
         return result
+
 
 # ---------------------------------------------------------------------------
 # Comprehensive Health Check
 # ---------------------------------------------------------------------------
+
 
 async def check_system_health(
     include_openai: bool = True,
@@ -672,11 +714,11 @@ async def check_system_health(
     include_vector_store: bool = True,
     include_home_assistant: bool = True,
     include_database: bool = True,
-    cache_results: bool = True
+    cache_results: bool = True,
 ) -> dict[str, HealthCheckResult]:
     """
     Perform comprehensive system health check.
-    
+
     Args:
         include_openai: Whether to check OpenAI
         include_ollama: Whether to check Ollama
@@ -684,15 +726,15 @@ async def check_system_health(
         include_home_assistant: Whether to check Home Assistant
         include_database: Whether to check database
         cache_results: Whether to cache individual results
-        
+
     Returns:
         Dictionary of health check results
     """
     results = {}
-    
+
     # Define health checks to run
     checks = []
-    
+
     if include_openai:
         checks.append(("openai", check_openai_health))
     if include_ollama:
@@ -703,10 +745,10 @@ async def check_system_health(
         checks.append(("home_assistant", check_home_assistant_health))
     if include_database:
         checks.append(("database", check_database_health))
-    
+
     # Run health checks concurrently
     tasks = [(name, check_func(cache_results)) for name, check_func in checks]
-    
+
     for name, task in tasks:
         try:
             result = await task
@@ -714,88 +756,91 @@ async def check_system_health(
         except Exception as e:
             logger.error(f"Health check for {name} failed: {e}")
             results[name] = HealthCheckResult(
-                healthy=False,
-                status="error",
-                error=str(e),
-                timestamp=time.time()
+                healthy=False, status="error", error=str(e), timestamp=time.time()
             )
-    
+
     return results
+
 
 # ---------------------------------------------------------------------------
 # Health Metrics
 # ---------------------------------------------------------------------------
 
+
 def get_health_metrics() -> dict[str, Any]:
     """
     Get health-related metrics.
-    
+
     Returns:
         Dictionary of health metrics
     """
     try:
         from .metrics import HEALTH_CHECK_DURATION_SECONDS
-        
+
         # This would return actual metrics if available
         return {
             "health_check_duration_seconds": "available",
             "cache_size": len(health_cache._cache),
-            "cache_hit_rate": "calculated_on_request"
+            "cache_hit_rate": "calculated_on_request",
         }
     except ImportError:
         return {
             "health_check_duration_seconds": "unavailable",
             "cache_size": len(health_cache._cache),
-            "cache_hit_rate": "unavailable"
+            "cache_hit_rate": "unavailable",
         }
+
 
 # ---------------------------------------------------------------------------
 # Health Check Utilities
 # ---------------------------------------------------------------------------
+
 
 async def force_refresh_health_checks() -> None:
     """Force refresh all cached health checks."""
     await health_cache.clear()
     logger.info("Health check cache cleared")
 
+
 async def get_cached_health_status() -> dict[str, HealthCheckResult]:
     """
     Get all cached health check results.
-    
+
     Returns:
         Dictionary of cached health check results
     """
     results = {}
-    
+
     # Check each component's cache
     cache_keys = [
         "openai_health",
-        "ollama_health", 
+        "ollama_health",
         "vector_store_health",
         "home_assistant_health",
-        "database_health"
+        "database_health",
     ]
-    
+
     for key in cache_keys:
         result = await health_cache.get(key)
         if result:
             component_name = key.replace("_health", "")
             results[component_name] = result
-    
+
     return results
+
 
 def is_system_healthy(health_results: dict[str, HealthCheckResult]) -> bool:
     """
     Determine if the overall system is healthy.
-    
+
     Args:
         health_results: Dictionary of health check results
-        
+
     Returns:
         True if all critical components are healthy
     """
     critical_components = ["openai", "ollama", "vector_store"]
-    
+
     for component in critical_components:
         if component in health_results:
             if not health_results[component].healthy:
@@ -803,5 +848,5 @@ def is_system_healthy(health_results: dict[str, HealthCheckResult]) -> bool:
         else:
             # If we don't have a result for a critical component, assume unhealthy
             return False
-    
+
     return True

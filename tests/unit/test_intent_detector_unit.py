@@ -31,5 +31,3 @@ def test_detect_intent_thresholding(prompt, threshold):
 
     intent, priority = detect_intent(prompt, threshold=threshold)
     assert intent in {"chat", "unknown", "smalltalk", "control", "recall_story"}
-
-

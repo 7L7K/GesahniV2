@@ -87,7 +87,9 @@ class TestSessionCookieStore:
                 mock_redis.setex.assert_called_once()
                 call_args = mock_redis.setex.call_args
                 assert call_args[0][0].startswith("session:sess_")
-                assert abs(call_args[0][1] - 3600) <= 1  # TTL (allow small variance due to timing)
+                assert (
+                    abs(call_args[0][1] - 3600) <= 1
+                )  # TTL (allow small variance due to timing)
                 assert call_args[0][2] == expected_data
 
     def test_get_session_valid_memory_backend(self):
@@ -233,6 +235,7 @@ class TestSessionCookieStore:
     def test_cleanup_expired_standalone_function(self):
         """Test that cleanup_expired function exists and can be called."""
         from app.session_store import get_session_store
+
         store = get_session_store()
         # Just test that the method exists and can be called without error
         store.cleanup_expired()
@@ -363,7 +366,9 @@ class TestSessionMetadataStore:
         meta = create_session()
         session_id = meta["session_id"]
 
-        updated_meta = update_session(session_id, status=SessionStatus.PROCESSING_WHISPER.value, retry_count=1)
+        updated_meta = update_session(
+            session_id, status=SessionStatus.PROCESSING_WHISPER.value, retry_count=1
+        )
 
         assert updated_meta["status"] == SessionStatus.PROCESSING_WHISPER.value
         assert updated_meta["retry_count"] == 1
@@ -448,6 +453,7 @@ class TestSessionMetadataStore:
 
     def test_concurrent_session_operations(self, temp_dir):
         """Test concurrent session metadata operations."""
+
         def create_and_update_sessions(count=5):
             for i in range(count):
                 meta = create_session()

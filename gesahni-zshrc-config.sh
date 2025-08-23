@@ -59,21 +59,21 @@ gesahni-front() {
 gesahni-status() {
     echo "🔍 Checking Gesahni Development Status"
     echo "====================================="
-    
+
     # Check backend
     if curl -s http://localhost:8000/healthz/ready >/dev/null 2>&1; then
         echo "✅ Backend: http://localhost:8000 (running)"
     else
         echo "❌ Backend: http://localhost:8000 (not running)"
     fi
-    
+
     # Check frontend
     if curl -s http://localhost:3000 >/dev/null 2>&1; then
         echo "✅ Frontend: http://localhost:3000 (running)"
     else
         echo "❌ Frontend: http://localhost:3000 (not running)"
     fi
-    
+
     # Check processes
     echo ""
     echo "📊 Active Processes:"
@@ -144,7 +144,7 @@ _gesahni_commands() {
         "open:Open in browser"
         "help:Show help"
     )
-    
+
     _describe -t commands 'gesahni commands' commands
 }
 

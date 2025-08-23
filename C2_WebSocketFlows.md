@@ -144,4 +144,3 @@ async def _broadcast(topic: str, payload: dict) -> None:
 - WS endpoints, subscription, and broadcast helpers in `app/api/care_ws.py` and `app/api/music.py`.
 - Event publishers in `app/api/care.py`, `app/api/tv.py`, and `app/api/music.py`.
 - Session streaming endpoints in `app/api/sessions.py`.
-

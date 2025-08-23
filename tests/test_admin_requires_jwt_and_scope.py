@@ -8,6 +8,7 @@ def _client(monkeypatch):
     os.environ["ADMIN_TOKEN"] = "t"
     monkeypatch.setenv("PYTEST_RUNNING", "1")
     from app.main import app
+
     return TestClient(app)
 
 
@@ -33,10 +34,16 @@ def test_admin_requires_scope_with_jwt(monkeypatch):
     monkeypatch.setenv("ENFORCE_JWT_SCOPES", "1")
     c = _client(monkeypatch)
     # With JWT but no admin scope → 403
-    r = c.get("/v1/admin/config", params={"token": "t"}, headers={"Authorization": f"Bearer {_tok('')}"})
+    r = c.get(
+        "/v1/admin/config",
+        params={"token": "t"},
+        headers={"Authorization": f"Bearer {_tok('')}"},
+    )
     assert r.status_code in {401, 403}
     # With admin scope → 200
-    r2 = c.get("/v1/admin/config", params={"token": "t"}, headers={"Authorization": f"Bearer {_tok('admin:write')}"})
+    r2 = c.get(
+        "/v1/admin/config",
+        params={"token": "t"},
+        headers={"Authorization": f"Bearer {_tok('admin:write')}"},
+    )
     assert r2.status_code == 200
-
-

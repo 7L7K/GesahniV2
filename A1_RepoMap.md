@@ -146,5 +146,3 @@
 
 - `README.md`:
   - "Enable with env: `DETERMINISTIC_ROUTER=1`. ... | `VECTOR_STORE` | `chroma` | ... (`memory`, `chroma`, `qdrant`, `dual`, or `cloud`)"
-
-

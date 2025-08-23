@@ -15,6 +15,10 @@ def test_ha_error_taxonomy(monkeypatch):
     try:
         asyncio.run(ha.call_service("light", "toggle", {"entity_id": "light.k"}))
     except ha.HomeAssistantAPIError as e:
-        assert str(e) in {"unauthorized", "confirm_required", "not_found", "timeout", "http_error"}
-
-
+        assert str(e) in {
+            "unauthorized",
+            "confirm_required",
+            "not_found",
+            "timeout",
+            "http_error",
+        }

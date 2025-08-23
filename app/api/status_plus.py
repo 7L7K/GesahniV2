@@ -33,7 +33,10 @@ async def features(user_id: str = Depends(get_current_user_id)):
 async def status_vector_store() -> dict:
     backend = (os.getenv("VECTOR_STORE") or "unknown").lower()
     try:
-        from app.memory.vector_store.qdrant import get_stats as _get_q_stats  # type: ignore
+        from app.memory.vector_store.qdrant import (
+            get_stats as _get_q_stats,
+        )  # type: ignore
+
         return {"backend": backend, **_get_q_stats()}  # type: ignore[misc]
     except Exception:
         return {
@@ -49,11 +52,18 @@ class BackupResponse(BaseModel):
     path: str
 
     model_config = ConfigDict(
-        json_schema_extra={"example": {"status": "ok", "path": "/app/backups/backup.tar.gz.enc"}}
+        json_schema_extra={
+            "example": {"status": "ok", "path": "/app/backups/backup.tar.gz.enc"}
+        }
     )
 
 
-@router.post("/admin/backup", dependencies=[Depends(optional_require_scope("admin"))], response_model=BackupResponse, responses={200: {"model": BackupResponse}})
+@router.post(
+    "/admin/backup",
+    dependencies=[Depends(optional_require_scope("admin"))],
+    response_model=BackupResponse,
+    responses={200: {"model": BackupResponse}},
+)
 async def admin_backup(
     token: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),
@@ -70,7 +80,9 @@ async def admin_backup(
     if _tok and token != _tok:
         raise HTTPException(status_code=403, detail="forbidden")
 
-    backup_dir = Path(os.getenv("BACKUP_DIR", str(Path(__file__).resolve().parent.parent / "backups")))
+    backup_dir = Path(
+        os.getenv("BACKUP_DIR", str(Path(__file__).resolve().parent.parent / "backups"))
+    )
     backup_dir.mkdir(parents=True, exist_ok=True)
     key = os.getenv("BACKUP_KEY", "")
     if not key:
@@ -123,6 +135,7 @@ async def admin_backup(
     except Exception:
         try:
             import base64
+
             raw = tar_path.read_bytes()
             masked = bytearray(raw)
             kbytes = key.encode("utf-8") or b"k"
@@ -137,5 +150,3 @@ async def admin_backup(
             raise HTTPException(status_code=500, detail=f"encrypt_failed:{e}")
 
     return {"status": "ok", "path": str(out)}
-
-

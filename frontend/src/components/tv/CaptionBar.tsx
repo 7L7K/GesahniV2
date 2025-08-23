@@ -7,5 +7,3 @@ export function CaptionBar({ text }: { text?: string }) {
         </div>
     );
 }
-
-

@@ -29,5 +29,3 @@ def test_prod_weak_secret_rejects(monkeypatch):
     # Reloading should raise due to weak JWT in production
     with pytest.raises(RuntimeError):
         _reload_app()
-
-

@@ -16,5 +16,3 @@ def test_cross_site_secure_flags(monkeypatch):
     # In None mode, helper ensures Priority=High and SameSite=None; Secure may be omitted in http tests
     assert any("SameSite=None" in h for h in set_cookies)
     assert any("Priority=High" in h for h in set_cookies)
-
-

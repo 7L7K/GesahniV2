@@ -64,7 +64,9 @@ def _coerce_k(value: int | str | None) -> int:
         try:
             k_int = int(value)
         except (TypeError, ValueError):
-            logger.warning("Invalid top_k %r; defaulting to %s", value, _fallback_default())
+            logger.warning(
+                "Invalid top_k %r; defaulting to %s", value, _fallback_default()
+            )
             coerced = _fallback_default()
         else:
             if k_int <= 0:
@@ -85,6 +87,7 @@ def _coerce_k(value: int | str | None) -> int:
 def _get_mem_top_k() -> int:  # pragma: no cover - thin wrapper
     try:
         from app.memory import api as memory_api
+
         return int(memory_api._get_mem_top_k())
     except Exception:
         return 3
@@ -133,7 +136,11 @@ class PromptBuilder:
         date_time = datetime.utcnow().replace(tzinfo=UTC).isoformat()
         # Conversation recap: enabled by default in tests for snapshot stability; otherwise opt-in via env
         _default_flag = "1" if os.getenv("PYTEST_CURRENT_TEST") else "0"
-        include_recap = os.getenv("INCLUDE_CONVO_SUMMARY", _default_flag).lower() in {"1", "true", "yes"}
+        include_recap = os.getenv("INCLUDE_CONVO_SUMMARY", _default_flag).lower() in {
+            "1",
+            "true",
+            "yes",
+        }
         # For small asks, disable conversation recap entirely
         if _ and isinstance(_, dict):
             pass  # pragma: no cover - placeholder for kwargs future
@@ -180,7 +187,9 @@ class PromptBuilder:
                 sources_text = "\n".join(blocks)
                 rec_local = log_record_var.get()
                 if rec_local:
-                    rec_local.rag_doc_ids = [_normalized_hash(d.get("text", "")) for d in rag_docs]
+                    rec_local.rag_doc_ids = [
+                        _normalized_hash(d.get("text", "")) for d in rag_docs
+                    ]
                     rec_local.rag_top_k = rk
 
         # ------------------------------------------------------------------
@@ -201,14 +210,20 @@ class PromptBuilder:
                 facts_block = "[USER_PROFILE_FACTS]\n" + "\n".join(items) + "\n"
         rec_pf = log_record_var.get()
         if rec_pf and facts_block:
-            rec_pf.profile_facts_keys = list(profile_facts.keys()) if profile_facts else []
+            rec_pf.profile_facts_keys = (
+                list(profile_facts.keys()) if profile_facts else []
+            )
             rec_pf.facts_block = facts_block
 
         # ------------------------------------------------------------------
         # Memory lookup & trimming (skip for small asks)
         # ------------------------------------------------------------------
         # Prefer modular retrieval pipeline when enabled; fallback to legacy
-        use_pipeline = os.getenv("USE_RETRIEVAL_PIPELINE", "0").lower() in {"1", "true", "yes"}
+        use_pipeline = os.getenv("USE_RETRIEVAL_PIPELINE", "0").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
         if small_ask:
             summary = ""
             memories = []
@@ -216,7 +231,10 @@ class PromptBuilder:
             cfg = get_config()
             try:
                 # Preferred: new pipeline signature
-                from app.retrieval.pipeline import run_pipeline as _run_pipeline  # type: ignore
+                from app.retrieval.pipeline import (
+                    run_pipeline as _run_pipeline,
+                )  # type: ignore
+
                 coll = os.getenv("QDRANT_COLLECTION") or "kb:default"
                 memories, trace = _run_pipeline(
                     user_id=user_id,
@@ -229,7 +247,9 @@ class PromptBuilder:
                 memories = memories[: int(getattr(cfg.retrieval, "topk_final", 3))]
             except Exception:
                 # Fallback: legacy helper with k parameter
-                memories, trace = run_retrieval(user_prompt, user_id, k=min(k, cfg.retrieval.topk_final))
+                memories, trace = run_retrieval(
+                    user_prompt, user_id, k=min(k, cfg.retrieval.topk_final)
+                )
             rec = log_record_var.get()
             if rec:
                 # store short why-logs summary
@@ -298,8 +318,7 @@ class PromptBuilder:
             prompt_tokens = count_tokens(prompt)
 
             fits_budget = (
-                prompt_tokens <= MAX_PROMPT_TOKENS
-                and prompt_tokens - base_tokens <= 75
+                prompt_tokens <= MAX_PROMPT_TOKENS and prompt_tokens - base_tokens <= 75
             )
             if fits_budget:
                 break

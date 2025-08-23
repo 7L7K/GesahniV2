@@ -6,5 +6,3 @@ def test_stop_normalization_iterables(monkeypatch):
 
     merged2 = mp.merge_params({"stop": ["x", "y"]})
     assert merged2["stop"] == ["x", "y"]
-
-

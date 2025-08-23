@@ -14,7 +14,9 @@ def _mint(secret: str, sub: str, ttl_s: int = 300) -> str:
 
 
 def test_cookie_only_session_ready(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-testing-only-not-for-production")
+    monkeypatch.setenv(
+        "JWT_SECRET", "test-secret-key-for-testing-only-not-for-production"
+    )
     c = TestClient(app)
     tok = _mint("test-secret-key-for-testing-only-not-for-production", "alice")
     c.cookies.set("access_token", tok)
@@ -28,7 +30,9 @@ def test_cookie_only_session_ready(monkeypatch):
 
 
 def test_header_only_session_ready(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-testing-only-not-for-production")
+    monkeypatch.setenv(
+        "JWT_SECRET", "test-secret-key-for-testing-only-not-for-production"
+    )
     c = TestClient(app)
     tok = _mint("test-secret-key-for-testing-only-not-for-production", "bob")
     r = c.get("/v1/whoami", headers={"Authorization": f"Bearer {tok}"})
@@ -41,7 +45,9 @@ def test_header_only_session_ready(monkeypatch):
 
 
 def test_neither_token(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-testing-only-not-for-production")
+    monkeypatch.setenv(
+        "JWT_SECRET", "test-secret-key-for-testing-only-not-for-production"
+    )
     c = TestClient(app)
     r = c.get("/v1/whoami")
     # We tolerate 200 with session_ready=false to ease UX
@@ -53,10 +59,14 @@ def test_neither_token(monkeypatch):
 
 
 def test_expired_access_token(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-testing-only-not-for-production")
+    monkeypatch.setenv(
+        "JWT_SECRET", "test-secret-key-for-testing-only-not-for-production"
+    )
     c = TestClient(app)
     # ttl -1 to force expiry
-    tok = _mint("test-secret-key-for-testing-only-not-for-production", "expired", ttl_s=-1)
+    tok = _mint(
+        "test-secret-key-for-testing-only-not-for-production", "expired", ttl_s=-1
+    )
     c.cookies.set("access_token", tok)
     r = c.get("/v1/whoami")
     assert r.status_code == HTTPStatus.OK
@@ -64,5 +74,3 @@ def test_expired_access_token(monkeypatch):
     assert body["is_authenticated"] is False
     assert body["session_ready"] is False
     assert body["user"]["id"] is None
-
-

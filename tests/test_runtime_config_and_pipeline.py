@@ -91,10 +91,12 @@ def test_reranker_minilm_orders_overlap():
 
 def test_memgpt_policy_injects_by_threshold():
     claims = [
-        MemoryClaim(claim="likes jazz", evidence=["conv1"], confidence=0.8, horizons=["long"]),
-        MemoryClaim(claim="iffy note", evidence=["conv2"], confidence=0.4, horizons=["short"]),
+        MemoryClaim(
+            claim="likes jazz", evidence=["conv1"], confidence=0.8, horizons=["long"]
+        ),
+        MemoryClaim(
+            claim="iffy note", evidence=["conv2"], confidence=0.4, horizons=["short"]
+        ),
     ]
     out = inject_for_task("chat", claims)
     assert "likes jazz" in out and "iffy note" not in out
-
-

@@ -19,5 +19,3 @@ describe('SceneManager', () => {
         expect(useSceneManager.getState().scene).toBe('alert')
     })
 })
-
-

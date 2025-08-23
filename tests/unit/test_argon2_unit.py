@@ -23,5 +23,3 @@ def test_argon2_register_and_login(tmp_path):
     # Wrong password
     r3 = c.post("/v1/auth/login_pw", json={"username": "bob", "password": "WRONG"})
     assert r3.status_code == 401
-
-

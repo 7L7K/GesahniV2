@@ -45,4 +45,3 @@ def test_reply_len_target_reduced_under_budget(monkeypatch):
     # Should not escalate and score should be computed against reduced target;
     # not asserting exact score, only that no escalation occurred
     assert escalated is False
-

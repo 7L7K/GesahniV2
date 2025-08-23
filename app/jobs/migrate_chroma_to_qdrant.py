@@ -51,7 +51,10 @@ def _open_qdrant():
     try:
         c.get_collection(cache_col)
     except Exception:
-        c.recreate_collection(collection_name=cache_col, vectors_config=VectorParams(size=1, distance=Distance.COSINE))
+        c.recreate_collection(
+            collection_name=cache_col,
+            vectors_config=VectorParams(size=1, distance=Distance.COSINE),
+        )
     return c
 
 
@@ -128,11 +131,15 @@ def _export_user_memories(chroma_client) -> list[tuple[str, str, dict]]:
 
 def _ensure_qdrant_indexes(client, name: str) -> None:
     from qdrant_client.http.models import Distance, VectorParams
+
     try:
         client.get_collection(name)
     except Exception:
         # dimension will be checked by caller for non-cache collections
-        client.recreate_collection(collection_name=name, vectors_config=VectorParams(size=1, distance=Distance.COSINE))
+        client.recreate_collection(
+            collection_name=name,
+            vectors_config=VectorParams(size=1, distance=Distance.COSINE),
+        )
 
 
 def _upsert_qa(qc, items: list[tuple[str, str, dict]], dry_run: bool = False) -> int:
@@ -143,7 +150,10 @@ def _upsert_qa(qc, items: list[tuple[str, str, dict]], dry_run: bool = False) ->
     n = 0
     batch: list[PointStruct] = []
     for cid, doc, meta in items:
-        payload = {"doc": doc, **{k: meta.get(k) for k in ("answer", "timestamp", "feedback")}}
+        payload = {
+            "doc": doc,
+            **{k: meta.get(k) for k in ("answer", "timestamp", "feedback")},
+        }
         batch.append(PointStruct(id=cid, vector=None, payload=payload))
         if len(batch) >= 256:
             if not dry_run:
@@ -159,10 +169,14 @@ def _upsert_qa(qc, items: list[tuple[str, str, dict]], dry_run: bool = False) ->
 
 def _ensure_user_collection(qc, name: str, dim: int) -> None:
     from qdrant_client.http.models import Distance, VectorParams
+
     try:
         qc.get_collection(name)
     except Exception:
-        qc.recreate_collection(collection_name=name, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
+        qc.recreate_collection(
+            collection_name=name,
+            vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
+        )
     # Create helpful payload indexes (best-effort)
     for field, schema in (
         ("user_id", "keyword"),
@@ -173,13 +187,18 @@ def _ensure_user_collection(qc, name: str, dim: int) -> None:
         ("pinned", "bool"),
     ):
         try:
-            qc.create_payload_index(collection_name=name, field_name=field, field_schema=schema)
+            qc.create_payload_index(
+                collection_name=name, field_name=field, field_schema=schema
+            )
         except Exception:
             pass
 
 
-def _upsert_user_memories(qc, items: list[tuple[str, str, dict]], dry_run: bool = False) -> int:
+def _upsert_user_memories(
+    qc, items: list[tuple[str, str, dict]], dry_run: bool = False
+) -> int:
     from qdrant_client.http.models import PointStruct
+
     # target dim from env
     dim = int(os.getenv("EMBED_DIM", "1536"))
     n = 0
@@ -225,6 +244,7 @@ def _upsert_user_memories(qc, items: list[tuple[str, str, dict]], dry_run: bool 
 def _write_jsonl(path: str, rows: list[dict]) -> None:
     import json
     import os
+
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         for r in rows:
@@ -233,9 +253,15 @@ def _write_jsonl(path: str, rows: list[dict]) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser("migrate_chroma_to_qdrant")
-    p.add_argument("command", choices=["inventory", "export", "migrate"], help="What to run")
+    p.add_argument(
+        "command", choices=["inventory", "export", "migrate"], help="What to run"
+    )
     p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--out-dir", default=None, help="When exporting, write JSONL under this directory")
+    p.add_argument(
+        "--out-dir",
+        default=None,
+        help="When exporting, write JSONL under this directory",
+    )
     args = p.parse_args(argv)
 
     if args.command == "inventory":
@@ -249,12 +275,14 @@ def main(argv: list[str] | None = None) -> None:
         qa = _export_qa(cli)
         um = _export_user_memories(cli)
         if args.out_dir:
-            _write_jsonl(os.path.join(args.out_dir, "qa_cache.jsonl"), [
-                {"id": i, "document": d, "metadata": m} for (i, d, m) in qa
-            ])
-            _write_jsonl(os.path.join(args.out_dir, "user_memories.jsonl"), [
-                {"id": i, "text": d, "metadata": m} for (i, d, m) in um
-            ])
+            _write_jsonl(
+                os.path.join(args.out_dir, "qa_cache.jsonl"),
+                [{"id": i, "document": d, "metadata": m} for (i, d, m) in qa],
+            )
+            _write_jsonl(
+                os.path.join(args.out_dir, "user_memories.jsonl"),
+                [{"id": i, "text": d, "metadata": m} for (i, d, m) in um],
+            )
         print({"qa_cache": len(qa), "user_memories": len(um)})
         return
 
@@ -269,5 +297,3 @@ def main(argv: list[str] | None = None) -> None:
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry
     main(sys.argv[1:])
-
-

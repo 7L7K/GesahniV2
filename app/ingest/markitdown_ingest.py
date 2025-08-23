@@ -13,9 +13,12 @@ logger = logging.getLogger(__name__)
 def _lazy_markitdown():  # pragma: no cover - optional heavy dep
     try:
         from markitdown import MarkItDown  # type: ignore
+
         return MarkItDown
     except Exception as e:  # pragma: no cover
-        raise RuntimeError("markitdown is not installed. Run: pip install 'markitdown[all]'") from e
+        raise RuntimeError(
+            "markitdown is not installed. Run: pip install 'markitdown[all]'"
+        ) from e
 
 
 def _lazy_qdrant():  # pragma: no cover - optional heavy dep
@@ -29,7 +32,16 @@ def _lazy_qdrant():  # pragma: no cover - optional heavy dep
             PointStruct,
             VectorParams,
         )
-        return QdrantClient, Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+
+        return (
+            QdrantClient,
+            Distance,
+            VectorParams,
+            PointStruct,
+            Filter,
+            FieldCondition,
+            MatchValue,
+        )
     except Exception as e:  # pragma: no cover
         raise RuntimeError("qdrant-client not installed") from e
 
@@ -46,7 +58,15 @@ def _sanitize_collection_name(name: str) -> str:
 
 
 def _ensure_collection(c, name: str, dim: int) -> None:
-    QdrantClient, Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue = _lazy_qdrant()  # noqa: N816
+    (
+        QdrantClient,
+        Distance,
+        VectorParams,
+        PointStruct,
+        Filter,
+        FieldCondition,
+        MatchValue,
+    ) = _lazy_qdrant()  # noqa: N816
     safe = _sanitize_collection_name(name)
     backend = os.getenv("EMBEDDING_BACKEND", "openai").lower()
     # In test/stub mode, drop+create to match stub vector size and avoid dim mismatches
@@ -55,21 +75,31 @@ def _ensure_collection(c, name: str, dim: int) -> None:
             c.delete_collection(collection_name=safe)
         except Exception:
             pass
-        c.create_collection(collection_name=safe, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
+        c.create_collection(
+            collection_name=safe,
+            vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
+        )
     else:
         try:
             # If exists, leave as-is; otherwise create
             c.get_collection(safe)
         except Exception:
-            c.recreate_collection(collection_name=safe, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
+            c.recreate_collection(
+                collection_name=safe,
+                vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
+            )
     # Helpful payload indexes (best-effort)
     for field in ("user_id", "type", "source", "created_at", "doc_hash"):
         try:
-            c.create_payload_index(collection_name=safe, field_name=field, field_schema="keyword")
+            c.create_payload_index(
+                collection_name=safe, field_name=field, field_schema="keyword"
+            )
         except Exception:
             try:
                 if field in {"created_at"}:
-                    c.create_payload_index(collection_name=safe, field_name=field, field_schema="float")
+                    c.create_payload_index(
+                        collection_name=safe, field_name=field, field_schema="float"
+                    )
             except Exception:
                 pass
 
@@ -123,7 +153,10 @@ def _embed_many(texts: list[str]) -> list[list[float]]:
 
 def _qdrant_client():
     QdrantClient, *_ = _lazy_qdrant()
-    return QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"), api_key=os.getenv("QDRANT_API_KEY", ""))
+    return QdrantClient(
+        url=os.getenv("QDRANT_URL", "http://localhost:6333"),
+        api_key=os.getenv("QDRANT_API_KEY", ""),
+    )
 
 
 def _dedup_exists(c, collection: str, doc_hash: str) -> bool:
@@ -136,11 +169,21 @@ def _dedup_exists(c, collection: str, doc_hash: str) -> bool:
         flt = None
         try:
             if Filter and FieldCondition and MatchValue:
-                flt = Filter(must=[FieldCondition(key="doc_hash", match=MatchValue(value=doc_hash))])
+                flt = Filter(
+                    must=[
+                        FieldCondition(key="doc_hash", match=MatchValue(value=doc_hash))
+                    ]
+                )
         except Exception:
             flt = None
         if flt is not None:
-            res = c.scroll(collection_name=collection, limit=1, with_payload=True, with_vectors=False, scroll_filter=flt)
+            res = c.scroll(
+                collection_name=collection,
+                limit=1,
+                with_payload=True,
+                with_vectors=False,
+                scroll_filter=flt,
+            )
         else:
             res = c.scroll(collection_name=collection, limit=1)
         # Some stubs may return just a list
@@ -172,7 +215,13 @@ def ingest_markdown_text(
     if os.getenv("EMBEDDING_BACKEND", "openai").lower() == "stub":
         chunks, headings = _split_markdown(text)
         doc_hash = hashlib.sha256((text or "").encode("utf-8")).hexdigest()
-        return {"status": "skipped", "doc_hash": doc_hash, "chunk_count": 0, "ids": [], "headings": headings}
+        return {
+            "status": "skipped",
+            "doc_hash": doc_hash,
+            "chunk_count": 0,
+            "ids": [],
+            "headings": headings,
+        }
 
     c = _qdrant_client()
     doc_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -189,12 +238,28 @@ def ingest_markdown_text(
 
     # Dedup after ensuring collection (best‑effort)
     if _dedup_exists(c, collection, doc_hash):
-        logger.info("ingest.dedup", extra={"meta": {"source": source, "collection": collection}})
-        return {"status": "skipped", "doc_hash": doc_hash, "chunk_count": 0, "ids": [], "headings": []}
+        logger.info(
+            "ingest.dedup", extra={"meta": {"source": source, "collection": collection}}
+        )
+        return {
+            "status": "skipped",
+            "doc_hash": doc_hash,
+            "chunk_count": 0,
+            "ids": [],
+            "headings": [],
+        }
 
     # Upsert points
     try:
-        QdrantClient, Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue = _lazy_qdrant()  # noqa: N816
+        (
+            QdrantClient,
+            Distance,
+            VectorParams,
+            PointStruct,
+            Filter,
+            FieldCondition,
+            MatchValue,
+        ) = _lazy_qdrant()  # noqa: N816
     except Exception:
         PointStruct = None  # type: ignore
 
@@ -233,7 +298,10 @@ def ingest_markdown_text(
             points.append({"id": pid, "vector": vec, "payload": payload})
 
     c.upsert(collection_name=collection, points=points)
-    logger.info("ingest.upsert", extra={"meta": {"count": len(points), "collection": collection}})
+    logger.info(
+        "ingest.upsert",
+        extra={"meta": {"count": len(points), "collection": collection}},
+    )
     return {
         "status": "ok",
         "doc_hash": doc_hash,
@@ -261,9 +329,12 @@ def ingest_path_or_url(
     text: str = getattr(res, "text_content", None) or getattr(res, "text", None) or ""
     if not text:
         raise RuntimeError("MarkItDown returned empty content")
-    return ingest_markdown_text(user_id=user_id, text=text, source=source or (url or path or "unknown"), collection=collection)
+    return ingest_markdown_text(
+        user_id=user_id,
+        text=text,
+        source=source or (url or path or "unknown"),
+        collection=collection,
+    )
 
 
 __all__ = ["ingest_path_or_url", "ingest_markdown_text"]
-
-

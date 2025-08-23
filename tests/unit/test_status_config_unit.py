@@ -12,5 +12,3 @@ def test_config_endpoint_includes_env_defaults():
         body = r.json()
         assert "SIM_THRESHOLD" in body
         assert "RETRIEVE_POLICY" in body
-
-

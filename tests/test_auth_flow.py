@@ -25,8 +25,14 @@ def test_login_throttling(monkeypatch):
     assert r.status_code == 200
 
     # Two bad attempts
-    assert client.post("/login", json={"username": "user1", "password": "bad"}).status_code == 401
-    assert client.post("/login", json={"username": "user1", "password": "bad"}).status_code == 401
+    assert (
+        client.post("/login", json={"username": "user1", "password": "bad"}).status_code
+        == 401
+    )
+    assert (
+        client.post("/login", json={"username": "user1", "password": "bad"}).status_code
+        == 401
+    )
     # Third should be 429 with retry_after
     rr = client.post("/login", json={"username": "user1", "password": "bad"})
     assert rr.status_code == 429
@@ -40,13 +46,19 @@ def test_password_reset(monkeypatch):
     os.close(fd)
     monkeypatch.setenv("USERS_DB", db_path)
     from app import auth
+
     importlib.reload(auth)
     app = FastAPI()
     app.include_router(auth.router)
     client = TestClient(app)
 
     # Register
-    assert client.post("/register", json={"username": "resetme", "password": "secret"}).status_code == 200
+    assert (
+        client.post(
+            "/register", json={"username": "resetme", "password": "secret"}
+        ).status_code
+        == 200
+    )
     # Request reset token (in tests returns token)
     fr = client.post("/forgot", json={"username": "resetme"})
     tok = fr.json().get("token")
@@ -57,4 +69,3 @@ def test_password_reset(monkeypatch):
     # Can login with new password
     ok = client.post("/login", json={"username": "resetme", "password": "secret99"})
     assert ok.status_code == 200
-

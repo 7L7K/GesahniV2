@@ -15,64 +15,74 @@ CRITICAL_SECRETS = {
     "JWT_SECRET": {
         "description": "JWT signing secret for authentication",
         "required": True,
-        "insecure_defaults": {"change-me", "default", "placeholder", "secret", "key", ""}
+        "insecure_defaults": {
+            "change-me",
+            "default",
+            "placeholder",
+            "secret",
+            "key",
+            "",
+        },
     },
     "OPENAI_API_KEY": {
         "description": "OpenAI API key for LLM services",
         "required": True,
-        "insecure_defaults": {""}
+        "insecure_defaults": {""},
     },
     "HOME_ASSISTANT_TOKEN": {
         "description": "Home Assistant long-lived access token",
         "required": False,
-        "insecure_defaults": {""}
+        "insecure_defaults": {""},
     },
     "GOOGLE_CLIENT_SECRET": {
         "description": "Google OAuth client secret",
         "required": False,
-        "insecure_defaults": {""}
+        "insecure_defaults": {""},
     },
     "CLERK_SECRET_KEY": {
         "description": "Clerk authentication secret key",
         "required": False,
-        "insecure_defaults": {""}
+        "insecure_defaults": {""},
     },
     "SPOTIFY_CLIENT_SECRET": {
         "description": "Spotify API client secret",
         "required": False,
-        "insecure_defaults": {""}
+        "insecure_defaults": {""},
     },
     "TWILIO_AUTH_TOKEN": {
         "description": "Twilio authentication token",
         "required": False,
-        "insecure_defaults": {""}
-    }
+        "insecure_defaults": {""},
+    },
 }
+
 
 def verify_secrets_on_boot() -> dict[str, dict[str, str]]:
     """
     Verify all critical secrets on application startup.
-    
+
     Returns:
         Dict containing verification results for each secret
     """
     results = {}
-    
+
     for secret_name, config in CRITICAL_SECRETS.items():
         secret_value = os.getenv(secret_name)
         is_set = bool(secret_value)
         is_required = config["required"]
-        
+
         # Check if using insecure default
         is_insecure = False
         if secret_value and secret_value.strip().lower() in config["insecure_defaults"]:
             is_insecure = True
-        
+
         # Determine status
         if not is_set:
             if is_required:
                 status = "MISSING_REQUIRED"
-                logger.error(f"{secret_name}: MISSING (REQUIRED) - {config['description']}")
+                logger.error(
+                    f"{secret_name}: MISSING (REQUIRED) - {config['description']}"
+                )
             else:
                 status = "MISSING_OPTIONAL"
         elif is_insecure:
@@ -80,20 +90,21 @@ def verify_secrets_on_boot() -> dict[str, dict[str, str]]:
             logger.warning(f"{secret_name}: INSECURE DEFAULT - {config['description']}")
         else:
             status = "SET_SECURE"
-        
+
         results[secret_name] = {
             "status": status,
             "description": config["description"],
             "required": is_required,
             "is_set": is_set,
-            "is_insecure": is_insecure
+            "is_insecure": is_insecure,
         }
-    
+
     # Additional checks for specific secrets
     _check_openai_key_format(results)
     _check_jwt_secret_strength(results)
-    
+
     return results
+
 
 def _check_openai_key_format(results: dict[str, dict[str, str]]) -> None:
     """Check OpenAI API key format."""
@@ -107,8 +118,11 @@ def _check_openai_key_format(results: dict[str, dict[str, str]]) -> None:
                 else:
                     logger.info("OPENAI_API_KEY: Production key format detected")
             else:
-                logger.warning("OPENAI_API_KEY: Unexpected format (should start with 'sk-')")
+                logger.warning(
+                    "OPENAI_API_KEY: Unexpected format (should start with 'sk-')"
+                )
                 results["OPENAI_API_KEY"]["status"] = "INVALID_FORMAT"
+
 
 def _check_jwt_secret_strength(results: dict[str, dict[str, str]]) -> None:
     """Check JWT secret strength."""
@@ -116,7 +130,10 @@ def _check_jwt_secret_strength(results: dict[str, dict[str, str]]) -> None:
         jwt_secret = os.getenv("JWT_SECRET")
         if jwt_secret:
             # Basic strength check - only update status if not already flagged as insecure
-            if len(jwt_secret) < 32 and results["JWT_SECRET"]["status"] not in ["INSECURE_DEFAULT", "MISSING_REQUIRED"]:
+            if len(jwt_secret) < 32 and results["JWT_SECRET"]["status"] not in [
+                "INSECURE_DEFAULT",
+                "MISSING_REQUIRED",
+            ]:
                 logger.warning("JWT_SECRET: Weak secret (less than 32 characters)")
                 results["JWT_SECRET"]["status"] = "WEAK_SECRET"
             elif len(jwt_secret) >= 64:
@@ -134,24 +151,30 @@ def _in_test_mode() -> bool:
         or v("PYTEST_MODE") in {"1", "true", "yes", "on"}
         or env == "test"
         or env == "dev"  # Allow dev mode to use weak secrets
-        or dev_mode      # Allow DEV_MODE=1 to use weak secrets
+        or dev_mode  # Allow DEV_MODE=1 to use weak secrets
     )
+
 
 def get_missing_required_secrets() -> list[str]:
     """Get list of missing required secrets."""
     results = verify_secrets_on_boot()
     return [
-        secret_name for secret_name, result in results.items()
+        secret_name
+        for secret_name, result in results.items()
         if result["status"] == "MISSING_REQUIRED"
     ]
+
 
 def get_insecure_secrets() -> list[str]:
     """Get list of secrets using insecure defaults."""
     results = verify_secrets_on_boot()
     return [
-        secret_name for secret_name, result in results.items()
-        if result["status"] in ["INSECURE_DEFAULT", "WEAK_SECRET", "INVALID_FORMAT", "TEST_KEY"]
+        secret_name
+        for secret_name, result in results.items()
+        if result["status"]
+        in ["INSECURE_DEFAULT", "WEAK_SECRET", "INVALID_FORMAT", "TEST_KEY"]
     ]
+
 
 def audit_prod_env() -> None:
     """Strict production environment audit - refuse placeholder values in prod."""
@@ -175,22 +198,30 @@ def audit_prod_env() -> None:
             if openai_key.startswith("sk-test"):
                 raise RuntimeError("OPENAI_API_KEY: Test key not allowed in production")
             if openai_key in {"test", "fake", "placeholder", "change-me"}:
-                raise RuntimeError("OPENAI_API_KEY: Placeholder value not allowed in production")
+                raise RuntimeError(
+                    "OPENAI_API_KEY: Placeholder value not allowed in production"
+                )
 
         # Feature-gated requirements
         if os.getenv("OTEL_ENABLED", "0").lower() in {"1", "true", "yes", "on"}:
             otel_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
             if not otel_endpoint:
-                raise RuntimeError("Missing required env: OTEL_EXPORTER_OTLP_ENDPOINT (OTEL_ENABLED=1)")
+                raise RuntimeError(
+                    "Missing required env: OTEL_EXPORTER_OTLP_ENDPOINT (OTEL_ENABLED=1)"
+                )
 
         # OAuth credentials if enabled
         if os.getenv("ENABLE_GOOGLE_AUTH", "1").lower() in {"1", "true", "yes", "on"}:
             google_client_id = os.getenv("GOOGLE_CLIENT_ID", "")
             google_client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "")
             if not google_client_id:
-                raise RuntimeError("Missing required env: GOOGLE_CLIENT_ID (Google auth enabled)")
+                raise RuntimeError(
+                    "Missing required env: GOOGLE_CLIENT_ID (Google auth enabled)"
+                )
             if not google_client_secret:
-                raise RuntimeError("Missing required env: GOOGLE_CLIENT_SECRET (Google auth enabled)")
+                raise RuntimeError(
+                    "Missing required env: GOOGLE_CLIENT_SECRET (Google auth enabled)"
+                )
 
         # CORS configuration
         cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "")
@@ -201,14 +232,18 @@ def audit_prod_env() -> None:
         if os.getenv("ENABLE_APPLE_AUTH", "0").lower() in {"1", "true", "yes", "on"}:
             apple_client_id = os.getenv("APPLE_CLIENT_ID", "")
             if not apple_client_id:
-                raise RuntimeError("Missing required env: APPLE_CLIENT_ID (Apple auth enabled)")
+                raise RuntimeError(
+                    "Missing required env: APPLE_CLIENT_ID (Apple auth enabled)"
+                )
 
         # Vector store configuration
         vector_store = os.getenv("VECTOR_STORE", "chroma").lower()
         if vector_store == "qdrant":
             qdrant_url = os.getenv("QDRANT_URL", "")
             if not qdrant_url:
-                raise RuntimeError("Missing required env: QDRANT_URL (VECTOR_STORE=qdrant)")
+                raise RuntimeError(
+                    "Missing required env: QDRANT_URL (VECTOR_STORE=qdrant)"
+                )
         elif vector_store == "chroma":
             chroma_path = os.getenv("CHROMA_PATH", "")
             if not chroma_path:
@@ -239,7 +274,11 @@ def log_secret_summary() -> None:
         jwt_res = results.get("JWT_SECRET")
         if jwt_res:
             status = jwt_res.get("status")
-            if not _in_test_mode() and status in {"MISSING_REQUIRED", "WEAK_SECRET", "INSECURE_DEFAULT"}:
+            if not _in_test_mode() and status in {
+                "MISSING_REQUIRED",
+                "WEAK_SECRET",
+                "INSECURE_DEFAULT",
+            }:
                 # Raise a clear error to stop startup
                 raise RuntimeError("JWT_SECRET too weak (need >=32 bytes)")
     except RuntimeError:

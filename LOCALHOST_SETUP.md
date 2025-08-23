@@ -87,7 +87,7 @@ This will:
 
 If you need to manually clear cookies:
 
-1. **Chrome/Edge**: 
+1. **Chrome/Edge**:
    - Open DevTools (F12)
    - Go to Application > Storage > Cookies
    - Clear cookies for `localhost:3000` and `localhost:8000`

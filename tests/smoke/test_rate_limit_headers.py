@@ -16,4 +16,3 @@ def test_rate_limit_headers_present():
     assert "RateLimit-Limit" in r.headers
     assert "RateLimit-Remaining" in r.headers
     assert "RateLimit-Reset" in r.headers
-

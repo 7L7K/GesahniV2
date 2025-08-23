@@ -9,6 +9,7 @@ def _reload_app_with_env(env_value: str):
     os.environ["ENV"] = env_value
     try:
         from app import main as _main
+
         importlib.reload(_main)
         return _main.app
     finally:
@@ -23,6 +24,7 @@ def _reload_app_with_overrides(overrides: dict[str, str]):
     os.environ.update({k: v for k, v in overrides.items() if v is not None})
     try:
         from app import main as _main
+
         importlib.reload(_main)
         return _main.app
     finally:
@@ -131,4 +133,3 @@ def test_openapi_tags_present():
     # Our curated tags should be present
     expected = {"Care", "Music", "Calendar", "TV", "Admin", "Auth"}
     assert expected.issubset(tag_names)
-

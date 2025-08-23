@@ -10,5 +10,3 @@ describe('VitalsBadge', () => {
         expect(getByText(/Online|Offline|Reconnecting/)).toBeInTheDocument()
     })
 })
-
-

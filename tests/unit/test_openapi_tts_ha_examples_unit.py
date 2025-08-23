@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 def _spec():
     from app.main import app
+
     return TestClient(app).get("/openapi.json").json()
 
 
@@ -16,7 +17,9 @@ def test_tts_post_response_model_present():
     spec = _spec()
     op = spec["paths"]["/v1/tts/speak"]["post"]
     res = op["responses"]["200"]
-    any_schema = any((c.get("schema") or {}) for c in (res.get("content") or {}).values())
+    any_schema = any(
+        (c.get("schema") or {}) for c in (res.get("content") or {}).values()
+    )
     assert any_schema
 
 
@@ -24,7 +27,9 @@ def test_ha_service_post_response_model_present():
     spec = _spec()
     op = spec["paths"]["/v1/ha/service"]["post"]
     res = op["responses"]["200"]
-    any_schema = any((c.get("schema") or {}) for c in (res.get("content") or {}).values())
+    any_schema = any(
+        (c.get("schema") or {}) for c in (res.get("content") or {}).values()
+    )
     assert any_schema
 
 
@@ -32,7 +37,9 @@ def test_ha_webhook_post_response_model_present():
     spec = _spec()
     op = spec["paths"]["/v1/ha/webhook"]["post"]
     res = op["responses"]["200"]
-    any_schema = any((c.get("schema") or {}) for c in (res.get("content") or {}).values())
+    any_schema = any(
+        (c.get("schema") or {}) for c in (res.get("content") or {}).values()
+    )
     assert any_schema
 
 
@@ -52,5 +59,3 @@ def test_paths_include_tts_and_ha():
     spec = _spec()
     p = spec["paths"].keys()
     assert "/v1/tts/speak" in p and "/v1/ha/service" in p and "/v1/ha/webhook" in p
-
-

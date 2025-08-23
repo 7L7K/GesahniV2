@@ -10,7 +10,9 @@ def test_rate_limit_problem_returns_problem_json(monkeypatch):
 
     @app.get("/limited")
     async def limited(request: Request):
-        await sec.rate_limit_problem(request, long_limit=1, burst_limit=1, window_s=30.0)
+        await sec.rate_limit_problem(
+            request, long_limit=1, burst_limit=1, window_s=30.0
+        )
         return {"ok": True}
 
     c = TestClient(app)
@@ -21,5 +23,3 @@ def test_rate_limit_problem_returns_problem_json(monkeypatch):
     assert r2.headers.get("X-RateLimit-Remaining") is not None
     body = r2.json()
     assert body.get("status") == 429 and body.get("title") == "Too Many Requests"
-
-

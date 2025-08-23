@@ -71,21 +71,21 @@ private readonly BASE_BACKOFF = 1000; // 1 second base backoff
 ```typescript
 private shouldThrottleCall(): boolean {
     const now = Date.now();
-    
+
     // Check if we're in backoff period
     if (now < this.backoffUntil) {
         const remaining = this.backoffUntil - now;
         console.info(`AUTH Orchestrator: In backoff period, ${remaining}ms remaining`);
         return true;
     }
-    
+
     // Check minimum interval between calls
     if (now - this.lastWhoamiCall < this.MIN_CALL_INTERVAL) {
         const remaining = this.MIN_CALL_INTERVAL - (now - this.lastWhoamiCall);
         console.info(`AUTH Orchestrator: Too soon since last call, ${remaining}ms remaining`);
         return true;
     }
-    
+
     return false;
 }
 ```

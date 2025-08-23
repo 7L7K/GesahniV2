@@ -1,10 +1,6 @@
 import asyncio
 
-from app.model_config import (
-    GPT_BASELINE_MODEL,
-    GPT_HEAVY_MODEL,
-    GPT_MID_MODEL,
-)
+from app.model_config import GPT_BASELINE_MODEL, GPT_HEAVY_MODEL, GPT_MID_MODEL
 from app.model_router import (
     compose_cache_id,
     route_text,
@@ -31,7 +27,9 @@ async def fake_ask(prompt, model, system, **kwargs):
 
 def test_compose_cache_id_stable():
     cid1 = compose_cache_id("gpt-5-nano", "Hello World", ["doc A", "doc B"])
-    cid2 = compose_cache_id("gpt-5-nano", "Hello  World ", ["doc B", "doc A"])  # reordered
+    cid2 = compose_cache_id(
+        "gpt-5-nano", "Hello  World ", ["doc B", "doc A"]
+    )  # reordered
     assert cid1 == cid2
     assert cid1.startswith("v1|gpt-5-nano|")
 
@@ -75,7 +73,9 @@ def test_vision_triage():
 
 
 def test_route_text_attachments_branch():
-    d = route_text(user_prompt="see image", prompt_tokens=3, retrieved_docs=[], attachments_count=1)
+    d = route_text(
+        user_prompt="see image", prompt_tokens=3, retrieved_docs=[], attachments_count=1
+    )
     assert d.model == "gpt-4.1-nano"
     assert d.reason == "attachments"
 
@@ -108,6 +108,7 @@ def test_route_vision_cap(monkeypatch):
     monkeypatch.setenv("VISION_MAX_IMAGES_PER_DAY", "1")
     # Reset vision counters to avoid cross-test flakiness
     import app.model_router as mr
+
     mr._VISION_DAY = None
     mr._VISION_COUNT = 0
 
@@ -118,10 +119,18 @@ def test_route_vision_cap(monkeypatch):
         return "ok", 0, 0, 0.0
 
     # first call allowed → remote mini
-    model, reason = asyncio.run(route_vision(ask_func=ask_stub, images=[b"img"], text_hint="person", allow_test=True))
+    model, reason = asyncio.run(
+        route_vision(
+            ask_func=ask_stub, images=[b"img"], text_hint="person", allow_test=True
+        )
+    )
     assert model in {GPT_BASELINE_MODEL, GPT_MID_MODEL}
     # second call blocked → local
-    model2, reason2 = asyncio.run(route_vision(ask_func=ask_stub, images=[b"img"], text_hint="person", allow_test=True))
+    model2, reason2 = asyncio.run(
+        route_vision(
+            ask_func=ask_stub, images=[b"img"], text_hint="person", allow_test=True
+        )
+    )
     assert model2 == "local"
     assert reason2 == "vision-local-cap"
 
@@ -171,5 +180,3 @@ def test_self_check_single_retry_to_mid_tier():
     )
     assert model == "gpt-4.1-nano"
     assert escalated is True
-
-

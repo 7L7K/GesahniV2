@@ -21,7 +21,9 @@ def test_get_rate_limit_snapshot_and_current_key(monkeypatch):
     sec._http_requests["u1"] = 3
     sec.http_burst["u1"] = 1
     snap = sec.get_rate_limit_snapshot(req)
-    assert set(["limit", "remaining", "reset", "burst_limit", "burst_remaining", "burst_reset"]).issubset(snap.keys())
+    assert set(
+        ["limit", "remaining", "reset", "burst_limit", "burst_remaining", "burst_reset"]
+    ).issubset(snap.keys())
 
 
 @pytest.mark.asyncio
@@ -47,6 +49,7 @@ async def test_verify_token_success(monkeypatch):
 
     monkeypatch.setenv("JWT_SECRET", "secret")
     from app.tokens import create_access_token
+
     token = create_access_token({"user_id": "u2"})
     headers = [(b"authorization", f"Bearer {token}".encode())]
     scope = {"type": "http", "method": "GET", "path": "/", "headers": headers}
@@ -69,6 +72,7 @@ async def test_rate_limit_paths(monkeypatch):
     sec.http_burst.clear()
 
     from app.tokens import create_access_token
+
     token = create_access_token({"user_id": "u2"})
     headers = [(b"authorization", f"Bearer {token}".encode())]
     scope = {"type": "http", "method": "GET", "path": "/", "headers": headers}
@@ -90,12 +94,15 @@ async def test_require_nonce(monkeypatch):
     monkeypatch.setenv("REQUIRE_NONCE", "1")
     monkeypatch.setenv("NONCE_TTL_SECONDS", "1")
 
-    scope = {"type": "http", "method": "POST", "path": "/", "headers": [(b"x-nonce", b"n1")]}
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/",
+        "headers": [(b"x-nonce", b"n1")],
+    }
     req = Request(scope)
     await sec.require_nonce(req)
 
     # reuse -> conflict
     with pytest.raises(Exception):
         await sec.require_nonce(req)
-
-

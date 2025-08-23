@@ -29,5 +29,3 @@ def test_samesite_none(monkeypatch):
     _login(client)
     r = client.get("/v1/whoami")
     assert r.status_code == 200
-
-

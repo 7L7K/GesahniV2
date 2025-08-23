@@ -29,7 +29,7 @@ def test_no_decorator_middlewares():
             content = py_file.read_text(encoding="utf-8")
 
             # Look for @app.middleware("http") patterns
-            if '@app.middleware' in content and 'http' in content:
+            if "@app.middleware" in content and "http" in content:
                 hits.append(str(py_file.relative_to(root.parent)))
 
             # Also check for any @middleware decorators that might be problematic
@@ -63,16 +63,19 @@ def test_no_asgi_middleware_patterns():
 
             # Look for direct ASGI middleware usage patterns
             patterns = [
-                r'\.add_middleware\s*\(\s*\w+,\s*',  # Direct function middleware
-                r'\.add_asgi_middleware\s*\(',        # ASGI middleware wrapper
-                r'from\s+starlette\.middleware\s+import.*Middleware\b',  # Starlette function middleware
+                r"\.add_middleware\s*\(\s*\w+,\s*",  # Direct function middleware
+                r"\.add_asgi_middleware\s*\(",  # ASGI middleware wrapper
+                r"from\s+starlette\.middleware\s+import.*Middleware\b",  # Starlette function middleware
             ]
 
             for pattern in patterns:
                 if re.search(pattern, content):
                     # This is a potential hit, but we need to check if it's actually problematic
                     # Skip known safe patterns like CORSMiddleware which is a class
-                    if 'CORSMiddleware' not in content and 'BaseHTTPMiddleware' not in content:
+                    if (
+                        "CORSMiddleware" not in content
+                        and "BaseHTTPMiddleware" not in content
+                    ):
                         hits.append(f"{py_file.relative_to(root.parent)}: {pattern}")
 
         except (UnicodeDecodeError, OSError):

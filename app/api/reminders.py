@@ -26,7 +26,9 @@ def _read() -> list[dict]:
 
 def _write(data: list[dict]) -> None:
     REMINDERS_STORE.parent.mkdir(parents=True, exist_ok=True)
-    REMINDERS_STORE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    REMINDERS_STORE.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 @router.get("/reminders")
@@ -64,9 +66,7 @@ class OkResponse(CommonOkResponse):
             "content": {
                 "application/json": {
                     "schema": {
-                        "allOf": [
-                            {"$ref": "#/components/schemas/ReminderCreate"}
-                        ],
+                        "allOf": [{"$ref": "#/components/schemas/ReminderCreate"}],
                         "example": {
                             "text": "Take meds",
                             "when": "2025-01-01T09:00:00Z",
@@ -78,7 +78,9 @@ class OkResponse(CommonOkResponse):
         }
     },
 )
-async def add_reminder(payload: ReminderCreate, user_id: str = Depends(get_current_user_id)):
+async def add_reminder(
+    payload: ReminderCreate, user_id: str = Depends(get_current_user_id)
+):
     text = (payload.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="empty")
@@ -93,6 +95,3 @@ async def add_reminder(payload: ReminderCreate, user_id: str = Depends(get_curre
 async def clear_reminders(user_id: str = Depends(get_current_user_id)):
     _write([])
     return {"status": "ok"}
-
-
-

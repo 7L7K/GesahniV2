@@ -15,5 +15,3 @@ describe('remote keymap', () => {
         detach()
     })
 })
-
-

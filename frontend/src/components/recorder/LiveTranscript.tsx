@@ -60,5 +60,3 @@ export function LiveTranscript({ text, onClear }: { text: string; onClear: () =>
         </div>
     );
 }
-
-

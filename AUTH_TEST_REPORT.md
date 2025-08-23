@@ -44,7 +44,7 @@
 
 **Tested Endpoints:**
 - `GET /v1/state` - Status: 401, Content-Type: application/json
-- `GET /v1/auth/refresh` - Status: 405, Content-Type: application/json  
+- `GET /v1/auth/refresh` - Status: 405, Content-Type: application/json
 - `GET /v1/whoami` - Status: 200, Content-Type: application/json
 
 **Source Receipts:**
@@ -117,7 +117,7 @@
 
 ### Pass/Fail Summary:
 - ✅ **A) Boot Sequence**: PASS
-- ✅ **B) 401 Handling**: PASS  
+- ✅ **B) 401 Handling**: PASS
 - ✅ **C) No HTML redirects**: PASS
 - ❌ **D) CORS vs Auth**: FAIL (missing CORS headers on 401)
 - ✅ **E) Refresh call discipline**: PASS

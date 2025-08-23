@@ -26,7 +26,7 @@ def _generate_error_code(status_code: int, error_type: str = None) -> str:
             413: "PAYLOAD_TOO_LARGE",
             415: "UNSUPPORTED_MEDIA_TYPE",
             422: "UNPROCESSABLE_ENTITY",
-            429: "TOO_MANY_REQUESTS"
+            429: "TOO_MANY_REQUESTS",
         }.get(status_code, "CLIENT_ERROR")
     elif 500 <= status_code < 600:
         prefix = "SERVER"
@@ -34,7 +34,7 @@ def _generate_error_code(status_code: int, error_type: str = None) -> str:
             500: "INTERNAL_ERROR",
             502: "BAD_GATEWAY",
             503: "SERVICE_UNAVAILABLE",
-            504: "GATEWAY_TIMEOUT"
+            504: "GATEWAY_TIMEOUT",
         }.get(status_code, "SERVER_ERROR")
     else:
         return f"HTTP_{status_code}"
@@ -49,12 +49,13 @@ def _generate_error_code(status_code: int, error_type: str = None) -> str:
             "HTTPException": "HTTP_EXCEPTION",
             "JWTError": "JWT_INVALID",
             "ConnectionError": "CONNECTION",
-            "TimeoutError": "TIMEOUT"
+            "TimeoutError": "TIMEOUT",
         }.get(error_type, "UNKNOWN")
 
         return f"{prefix}_{category}_{error_suffix}"
 
     return f"{prefix}_{category}"
+
 
 # ===== Enhanced Error Handling (class wrapper around your function body) =====
 class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
@@ -62,10 +63,13 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
     Wraps the enhanced_error_handling(request, call_next) function semantics
     into a class middleware so we can control order with add_middleware.
     """
+
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable]):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable]
+    ):
         # Inline the logic from your enhanced_error_handling function:
         import time
         from datetime import datetime
@@ -89,12 +93,15 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
                 auth_header = request.headers.get("authorization")
                 if auth_header:
                     import hashlib
+
                     token = auth_header.split()[-1]
                     user_anon = hashlib.md5(token.encode()).hexdigest()
             except Exception:
                 user_anon = "local"
 
-            logger.debug(f"Request started: {request.method} {request.url.path} (ID: {req_id})")
+            logger.debug(
+                f"Request started: {request.method} {request.url.path} (ID: {req_id})"
+            )
             if logger.isEnabledFor(logging.DEBUG):
                 headers = dict(request.headers)
                 for key in ["authorization", "cookie", "x-api-key"]:
@@ -102,14 +109,18 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
                         headers[key] = "[REDACTED]"
                 logger.debug(
                     f"Request details: {request.method} {request.url.path}",
-                    extra={"meta": {
-                        "req_id": req_id,
-                        "route": route_name,
-                        "user_anon": user_anon,
-                        "headers": headers,
-                        "query_params": dict(request.query_params),
-                        "client_ip": request.client.host if request.client else None,
-                    }},
+                    extra={
+                        "meta": {
+                            "req_id": req_id,
+                            "route": route_name,
+                            "user_anon": user_anon,
+                            "headers": headers,
+                            "query_params": dict(request.query_params),
+                            "client_ip": (
+                                request.client.host if request.client else None
+                            ),
+                        }
+                    },
                 )
 
             response = await call_next(request)
@@ -145,18 +156,21 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
             logger.error(
                 f"Request failed: {request.method} {request.url.path} -> {type(e).__name__}: {e}",
                 exc_info=True,
-                extra={"meta": {
-                    "req_id": req_id,
-                    "route": route_name,
-                    "user_anon": user_anon,
-                    "duration_ms": duration * 1000,
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "error_code": error_code,
-                }},
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "route": route_name,
+                        "user_anon": user_anon,
+                        "duration_ms": duration * 1000,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                        "error_code": error_code,
+                    }
+                },
             )
             # unify error shape
             from fastapi.responses import JSONResponse
+
             return JSONResponse(
                 status_code=500,
                 content={
@@ -166,21 +180,28 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
                 },
             )
 
+
 # ===== Silent Refresh as a class wrapper (reuses your function) =====
 class SilentRefreshMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable]):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable]
+    ):
         return await _silent_refresh_fn(request, call_next)
+
 
 # ===== Reload Env as a class wrapper (reuses your function; dev-only) =====
 class ReloadEnvMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable]):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable]
+    ):
         return await _reload_env_fn(request, call_next)
+
 
 # Notes
 # We intentionally wrap your existing function middlewares so behavior is unchanged.

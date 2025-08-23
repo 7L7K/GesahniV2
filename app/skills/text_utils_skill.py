@@ -19,5 +19,3 @@ class TextUtilsSkill(Skill):
         text = match.group("text")
         words = len([w for w in re.split(r"\s+", text.strip()) if w])
         return str(words)
-
-

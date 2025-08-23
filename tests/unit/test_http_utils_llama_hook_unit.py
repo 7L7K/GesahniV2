@@ -34,5 +34,3 @@ async def test_json_request_uses_llama_httpx(monkeypatch):
     data, err = await http_utils.json_request("GET", "https://x/y")
     assert data == {"ok": True} and err is None
     assert calls["used"] is True
-
-

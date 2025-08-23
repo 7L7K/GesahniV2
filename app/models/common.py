@@ -12,6 +12,3 @@ class OkResponse(BaseModel):
         title="OkResponse",
         json_schema_extra={"example": {"ok": True, "status": "ok"}},
     )
-
-
-

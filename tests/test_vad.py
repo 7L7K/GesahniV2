@@ -12,4 +12,3 @@ def test_vad_webrtc_backend_no_crash(monkeypatch):
     monkeypatch.setenv("VAD_BACKEND", "webrtc")
     # With no real audio and possibly missing webrtcvad, should return False gracefully
     assert has_speech(b"\x00" * 320) in (False, True)
-

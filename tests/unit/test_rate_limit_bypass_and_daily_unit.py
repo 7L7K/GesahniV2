@@ -41,4 +41,3 @@ def test_daily_cap_blocks(monkeypatch):
     # 3rd should be blocked by daily cap
     r = client.get("/rl", headers=h)
     assert r.status_code == 429
-

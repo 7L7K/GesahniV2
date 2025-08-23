@@ -10,8 +10,10 @@ from app.security_ws import verify_ws
 
 # Public: no auth.
 
+
 def deps_protected_http():
     return [Depends(verify_token)]
+
 
 def deps_admin_http():
     return [
@@ -20,12 +22,14 @@ def deps_admin_http():
         Depends(docs_security_with(["admin:write"])),
     ]
 
+
 def deps_ha_http():
     return [
         Depends(verify_token),
         Depends(require_any_scopes(["ha", "care:resident", "care:caregiver"])),
         Depends(docs_security_with(["care:resident"])),
     ]
+
 
 def deps_music_http():
     return [
@@ -34,11 +38,14 @@ def deps_music_http():
         Depends(docs_security_with(["music:control"])),
     ]
 
+
 def dep_verify_ws():
     return Depends(verify_ws)
 
+
 def require_admin_scope():
     """Simple dependency that checks if request has admin scope."""
+
     async def check_admin(request: Request):
         # First try to get user_id from JWT token directly
         auth_header = request.headers.get("authorization", "")
@@ -48,6 +55,7 @@ def require_admin_scope():
                 import os
 
                 from app.security import _jwt_decode
+
                 payload = _jwt_decode(token, key=os.getenv("JWT_SECRET"))
                 scopes = payload.get("scopes", [])
                 if isinstance(scopes, str):
@@ -63,12 +71,11 @@ def require_admin_scope():
             return getattr(request.state, "user_id", None)
 
         from fastapi import HTTPException
-        raise HTTPException(
-            status_code=403,
-            detail="Admin scope required"
-        )
+
+        raise HTTPException(status_code=403, detail="Admin scope required")
 
     return Depends(check_admin)
+
 
 def dep_nonce():
     return Depends(require_nonce)

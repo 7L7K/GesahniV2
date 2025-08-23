@@ -27,5 +27,3 @@ class SmokeUser(HttpUser):
     @task(1)
     def status_features(self):
         self.client.get("/v1/status/features")
-
-

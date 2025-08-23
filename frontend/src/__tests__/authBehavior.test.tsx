@@ -1,26 +1,26 @@
 /**
  * Frontend Authentication Behavior Tests
- * 
+ *
  * These tests verify the client-side authentication behavior matches the requirements:
- * 
+ *
  * Boot (logged out → logged in):
  * - Load app: Network panel shows no 401 from your own APIs.
  * - Sign in: finisher runs once, then exactly one whoami. authed flips once to true.
  * - After auth, getMusicState runs once and succeeds.
- * 
+ *
  * Refresh while logged in:
  * - One whoami on mount, no duplicates, no flips. No component makes its own whoami.
- * 
+ *
  * Logout:
  * - Cookies cleared symmetrically. authed flips to false once. No privileged calls fire afterward.
- * 
+ *
  * WS behavior:
  * - Connect happens only when authed === true.
  * - On forced WS close: one reconnect try; if it fails, UI shows "disconnected" without auth churn.
- * 
+ *
  * Health checks:
  * - After "ready: ok", polling slows down. Health calls never mutate auth state.
- * 
+ *
  * CSP/service worker sanity:
  * - whoami responses are never cached; no SW intercepts; headers show no-store.
  */

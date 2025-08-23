@@ -50,5 +50,3 @@ describe('Onboarding UI basics', () => {
     expect(screen.getByText(/Step/i)).toBeInTheDocument()
   })
 })
-
-

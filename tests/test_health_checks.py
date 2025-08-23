@@ -17,4 +17,3 @@ def test_health_chroma_endpoint_present():
     r = c.get("/v1/health/chroma")
     assert r.status_code == 200
     assert "ok" in r.json()
-

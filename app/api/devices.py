@@ -32,7 +32,9 @@ def _now() -> int:
 
 
 @router.post("/devices/pair/start")
-async def pair_start(request: Request, user_id: str = Depends(get_current_user_id)) -> dict[str, Any]:
+async def pair_start(
+    request: Request, user_id: str = Depends(get_current_user_id)
+) -> dict[str, Any]:
     if not user_id or user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     label = (request.headers.get("X-Device-Label") or "tv").strip()
@@ -70,14 +72,25 @@ async def pair_complete(body: dict[str, Any]) -> dict[str, Any]:
     }
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_access
-    token = make_access({"user_id": owner_id, "jti": jti, "device": label or "tv"}, ttl_s=ttl)
+
+    token = make_access(
+        {"user_id": owner_id, "jti": jti, "device": label or "tv"}, ttl_s=ttl
+    )
     # Persist token id for revocation and metadata lookup
     await upsert_device_token(jti, owner_id, label or "tv", ttl)
     return {"access_token": token, "token_type": "bearer", "expires_in": ttl}
 
 
-@router.post("/devices/{device_id}/revoke", dependencies=[Depends(verify_token), Depends(require_roles(["resident", "caregiver", "admin"]))])
-async def device_revoke(device_id: str, request: Request, user_id: str = Depends(get_current_user_id)) -> dict[str, str]:
+@router.post(
+    "/devices/{device_id}/revoke",
+    dependencies=[
+        Depends(verify_token),
+        Depends(require_roles(["resident", "caregiver", "admin"])),
+    ],
+)
+async def device_revoke(
+    device_id: str, request: Request, user_id: str = Depends(get_current_user_id)
+) -> dict[str, str]:
     # Revoke the current device token for this owner+device by deleting the stored token id
     # Clients should rotate token immediately after this call
     jti = request.headers.get("X-Device-Token-ID") or ""
@@ -92,5 +105,3 @@ async def device_revoke(device_id: str, request: Request, user_id: str = Depends
         return {"status": "ok"}
     await revoke_device_token(str(jti))
     return {"status": "ok"}
-
-

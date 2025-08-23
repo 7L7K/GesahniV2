@@ -11,5 +11,3 @@ class AppleCalendarConfig:
 
 def disconnect() -> None:
     pass
-
-

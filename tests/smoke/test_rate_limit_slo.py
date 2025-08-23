@@ -20,5 +20,3 @@ def test_basic_route_latency_budget():
         assert r.status_code == 200
         samples.append((time.perf_counter() - t0) * 1000.0)
     assert median(samples) < 200.0
-
-

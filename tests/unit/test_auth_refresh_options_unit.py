@@ -16,7 +16,7 @@ def test_options_refresh_with_cors_headers(client: TestClient):
     headers = {
         "Origin": "http://localhost:3000",
         "Access-Control-Request-Method": "POST",
-        "Access-Control-Request-Headers": "content-type,x-auth-intent"
+        "Access-Control-Request-Headers": "content-type,x-auth-intent",
     }
     response = client.options("/v1/auth/refresh", headers=headers)
     assert response.status_code == 200
@@ -35,7 +35,7 @@ def test_options_refresh_cors_credentials(client: TestClient):
     headers = {
         "Origin": "http://localhost:3000",
         "Access-Control-Request-Method": "POST",
-        "Access-Control-Request-Headers": "content-type,x-auth-intent"
+        "Access-Control-Request-Headers": "content-type,x-auth-intent",
     }
     response = client.options("/v1/auth/refresh", headers=headers)
     assert response.status_code == 200

@@ -141,7 +141,15 @@ async def ensure_tables() -> None:
 
 
 # ------------------------------ users ----------------------------------------
-async def create_user(*, id: str, email: str, password_hash: str | None = None, name: str | None = None, avatar_url: str | None = None, auth_providers: list[str] | None = None) -> None:
+async def create_user(
+    *,
+    id: str,
+    email: str,
+    password_hash: str | None = None,
+    name: str | None = None,
+    avatar_url: str | None = None,
+    auth_providers: list[str] | None = None,
+) -> None:
     """Create or upsert a user, honoring the provided id.
 
     If a user already exists with the same email, update that row's id to the
@@ -157,12 +165,23 @@ async def create_user(*, id: str, email: str, password_hash: str | None = None, 
         await db.execute("BEGIN IMMEDIATE")
         await db.execute("PRAGMA defer_foreign_keys=ON")
         # Check for existing by email
-        async with db.execute("SELECT id FROM users WHERE email=?", (norm_email,)) as cur:
+        async with db.execute(
+            "SELECT id FROM users WHERE email=?", (norm_email,)
+        ) as cur:
             row = await cur.fetchone()
         if row is None:
             await db.execute(
                 "INSERT INTO users(id,email,password_hash,name,avatar_url,created_at,verified_at,auth_providers) VALUES (?,?,?,?,?,?,?,?)",
-                (id, norm_email, password_hash, name, avatar_url, _now(), None, providers_json),
+                (
+                    id,
+                    norm_email,
+                    password_hash,
+                    name,
+                    avatar_url,
+                    _now(),
+                    None,
+                    providers_json,
+                ),
             )
             await db.commit()
             return
@@ -182,7 +201,9 @@ async def create_user(*, id: str, email: str, password_hash: str | None = None, 
                 ("pat_tokens", "user_id"),
                 ("audit_log", "user_id"),  # best-effort; nullable
             ):
-                await db.execute(f"UPDATE {table} SET {col}=? WHERE {col}=?", (id, old_id))
+                await db.execute(
+                    f"UPDATE {table} SET {col}=? WHERE {col}=?", (id, old_id)
+                )
             await db.commit()
             return
         # Same id: update mutable fields
@@ -198,7 +219,10 @@ async def get_user_by_email(email: str) -> dict[str, Any] | None:
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
         norm_email = (email or "").strip().lower()
-        async with db.execute("SELECT id,email,password_hash,name,avatar_url,created_at,verified_at,auth_providers FROM users WHERE email=?", (norm_email,)) as cur:
+        async with db.execute(
+            "SELECT id,email,password_hash,name,avatar_url,created_at,verified_at,auth_providers FROM users WHERE email=?",
+            (norm_email,),
+        ) as cur:
             row = await cur.fetchone()
     if not row:
         return None
@@ -222,7 +246,9 @@ async def verify_user(user_id: str) -> None:
 
 
 # ----------------------------- devices ---------------------------------------
-async def create_device(*, id: str, user_id: str, device_name: str | None, ua_hash: str, ip_hash: str) -> None:
+async def create_device(
+    *, id: str, user_id: str, device_name: str | None, ua_hash: str, ip_hash: str
+) -> None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
@@ -236,12 +262,16 @@ async def create_device(*, id: str, user_id: str, device_name: str | None, ua_ha
 async def touch_device(device_id: str) -> None:
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
-        await db.execute("UPDATE devices SET last_seen_at=? WHERE id=?", (_now(), device_id))
+        await db.execute(
+            "UPDATE devices SET last_seen_at=? WHERE id=?", (_now(), device_id)
+        )
         await db.commit()
 
 
 # ----------------------------- sessions --------------------------------------
-async def create_session(*, id: str, user_id: str, device_id: str, mfa_passed: bool = False) -> None:
+async def create_session(
+    *, id: str, user_id: str, device_id: str, mfa_passed: bool = False
+) -> None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
@@ -255,19 +285,25 @@ async def create_session(*, id: str, user_id: str, device_id: str, mfa_passed: b
 async def touch_session(session_id: str) -> None:
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
-        await db.execute("UPDATE sessions SET last_seen_at=? WHERE id=?", (_now(), session_id))
+        await db.execute(
+            "UPDATE sessions SET last_seen_at=? WHERE id=?", (_now(), session_id)
+        )
         await db.commit()
 
 
 async def revoke_session(session_id: str) -> None:
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
-        await db.execute("UPDATE sessions SET revoked_at=? WHERE id=?", (_now(), session_id))
+        await db.execute(
+            "UPDATE sessions SET revoked_at=? WHERE id=?", (_now(), session_id)
+        )
         await db.commit()
 
 
 # ------------------------- oauth identities ----------------------------------
-async def link_oauth_identity(*, id: str, user_id: str, provider: str, provider_user_id: str, email: str) -> None:
+async def link_oauth_identity(
+    *, id: str, user_id: str, provider: str, provider_user_id: str, email: str
+) -> None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
@@ -282,13 +318,30 @@ async def link_oauth_identity(*, id: str, user_id: str, provider: str, provider_
 
 
 # ---------------------------- PAT tokens -------------------------------------
-async def create_pat(*, id: str, user_id: str, name: str, token_hash: str, scopes: list[str], exp_at: float | None = None) -> None:
+async def create_pat(
+    *,
+    id: str,
+    user_id: str,
+    name: str,
+    token_hash: str,
+    scopes: list[str],
+    exp_at: float | None = None,
+) -> None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
         await db.execute(
             "INSERT INTO pat_tokens(id,user_id,name,token_hash,scopes,exp_at,created_at,revoked_at) VALUES (?,?,?,?,?,?,?,?)",
-            (id, user_id, name, token_hash, json.dumps(scopes or []), exp_at, _now(), None),
+            (
+                id,
+                user_id,
+                name,
+                token_hash,
+                json.dumps(scopes or []),
+                exp_at,
+                _now(),
+                None,
+            ),
         )
         await db.commit()
 
@@ -296,7 +349,9 @@ async def create_pat(*, id: str, user_id: str, name: str, token_hash: str, scope
 async def revoke_pat(pat_id: str) -> None:
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
-        await db.execute("UPDATE pat_tokens SET revoked_at=? WHERE id=?", (_now(), pat_id))
+        await db.execute(
+            "UPDATE pat_tokens SET revoked_at=? WHERE id=?", (_now(), pat_id)
+        )
         await db.commit()
 
 
@@ -347,7 +402,14 @@ async def get_pat_by_hash(token_hash: str) -> dict[str, Any] | None:
 
 
 # ---------------------------- audit log --------------------------------------
-async def record_audit(*, id: str, user_id: str | None, session_id: str | None, event_type: str, meta: dict[str, Any] | None = None) -> None:
+async def record_audit(
+    *,
+    id: str,
+    user_id: str | None,
+    session_id: str | None,
+    event_type: str,
+    meta: dict[str, Any] | None = None,
+) -> None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
@@ -381,5 +443,3 @@ __all__ = [
     # audit
     "record_audit",
 ]
-
-

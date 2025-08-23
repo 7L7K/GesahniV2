@@ -11,7 +11,9 @@ router = APIRouter(tags=["auth"], include_in_schema=False)
 
 
 @router.get("/sessions")
-async def list_sessions(user_id: str = Depends(get_current_user_id)) -> dict[str, list[dict[str, Any]]]:
+async def list_sessions_endpoint(
+    user_id: str = Depends(get_current_user_id),
+) -> dict[str, list[dict[str, Any]]]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     out = await sessions_store.list_user_sessions(user_id)
@@ -19,7 +21,9 @@ async def list_sessions(user_id: str = Depends(get_current_user_id)) -> dict[str
 
 
 @router.post("/sessions/{sid}/revoke")
-async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) -> dict[str, str]:
+async def revoke_session(
+    sid: str, user_id: str = Depends(get_current_user_id)
+) -> dict[str, str]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     await sessions_store.revoke_family(sid)
@@ -27,7 +31,9 @@ async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) 
 
 
 @router.post("/devices/{did}/rename")
-async def rename_device(did: str, new_name: str, user_id: str = Depends(get_current_user_id)) -> dict[str, str]:
+async def rename_device(
+    did: str, new_name: str, user_id: str = Depends(get_current_user_id)
+) -> dict[str, str]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     ok = await sessions_store.rename_device(user_id, did, new_name)
@@ -42,22 +48,23 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Request, UploadFile, WebSocket
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    Request,
+    UploadFile,
+    WebSocket,
+)
 
 from app.deps.user import get_current_user_id
-from app.session_manager import (
-    SESSIONS_DIR,
-    get_session_meta,
-)
-from app.session_manager import (
-    generate_tags as queue_tag_extraction,
-)
-from app.session_manager import (
-    save_session as finalize_capture_session,
-)
-from app.session_manager import (
-    start_session as start_capture_session,
-)
+from app.session_manager import SESSIONS_DIR
+from app.session_manager import generate_tags as queue_tag_extraction
+from app.session_manager import get_session_meta
+from app.session_manager import save_session as finalize_capture_session
+from app.session_manager import start_session as start_capture_session
 from app.session_store import SessionStatus
 from app.session_store import list_sessions as list_session_store
 from app.tasks import enqueue_summary, enqueue_transcription
@@ -131,7 +138,7 @@ async def capture_status(
 
 
 @router.get("/sessions")
-async def list_sessions(
+async def list_sessions_listing(
     status: str | None = None,
     user_id: str = Depends(get_current_user_id),
 ):
@@ -240,5 +247,3 @@ async def get_transcription(
     if alt.exists():
         return {"text": ""}
     raise HTTPException(status_code=404, detail="Transcript not found")
-
-

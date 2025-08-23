@@ -13,5 +13,3 @@ def test_healthz_includes_retry_after_when_limited(monkeypatch):
     r2 = c.get("/v1/healthz")
     if r2.status_code == 429:
         assert "Retry-After" in r2.headers
-
-

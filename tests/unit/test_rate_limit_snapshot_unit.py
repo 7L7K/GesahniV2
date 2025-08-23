@@ -11,5 +11,3 @@ def test_rate_limit_snapshot_headers_present():
     assert r.headers.get("RateLimit-Remaining") is not None
     # Ensure request id and basic headers are present
     assert r.headers.get("X-Request-ID")
-
-

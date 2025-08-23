@@ -19,5 +19,3 @@ describe('sendPrompt SSE', () => {
     expect(res).toBe('ab');
   });
 });
-
-

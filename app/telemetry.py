@@ -80,7 +80,9 @@ class LogRecord(BaseModel):
     escalated: bool | None = None
 
     # authentication events
-    auth_event_type: str | None = None  # "finish.start", "finish.end", "whoami.start", "whoami.end", "lock.on", "lock.off", "authed.change"
+    auth_event_type: str | None = (
+        None  # "finish.start", "finish.end", "whoami.start", "whoami.end", "lock.on", "lock.off", "authed.change"
+    )
     auth_user_id: str | None = None
     auth_source: str | None = None  # "cookie", "header", "clerk"
     auth_jwt_status: str | None = None  # "ok", "invalid", "missing"

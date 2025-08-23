@@ -54,20 +54,17 @@ STANDARD_SCOPES = {
     "admin:system:write": "Modify system configuration and settings",
     "admin:security:read": "Read security configuration and policies",
     "admin:security:write": "Modify security policies and configurations",
-
     # Care and user management
     "care:resident": "Resident-level care features (presence, sessions, HA actions)",
     "care:caregiver": "Caregiver portal and actions",
     "care:emergency": "Emergency contact and alert management",
     "care:monitoring": "Access to monitoring and health data",
-
     # Music and media
     "music:control": "Control music playback and devices",
     "music:library:read": "Browse music library and playlists",
     "music:library:write": "Modify playlists and music preferences",
     "music:devices:read": "View available music devices",
     "music:devices:write": "Configure and control music devices",
-
     # User data and privacy
     "user:profile": "Access to user profile and personal data",
     "user:profile:read": "Read own profile information",
@@ -77,7 +74,6 @@ STANDARD_SCOPES = {
     "user:settings:write": "Modify user settings and preferences",
     "user:privacy:read": "Access privacy settings and data usage",
     "user:privacy:write": "Modify privacy settings and data permissions",
-
     # Memory and AI features
     "memory:read": "Read personal memories and conversation history",
     "memory:write": "Create and modify memories",
@@ -86,20 +82,17 @@ STANDARD_SCOPES = {
     "ai:chat": "Access AI chat and conversation features",
     "ai:voice": "Use voice synthesis and recognition features",
     "ai:personalization": "Access personalized AI features and preferences",
-
     # Calendar and scheduling
     "calendar:read": "Read calendar events and schedules",
     "calendar:write": "Create and modify calendar events",
     "calendar:share": "Share calendar access with others",
     "reminders:read": "Read reminders and notifications",
     "reminders:write": "Create and modify reminders",
-
     # Photos and media
     "photos:read": "View and browse photos",
     "photos:write": "Upload and modify photos",
     "photos:share": "Share photos with others",
     "photos:albums": "Create and manage photo albums",
-
     # Health and device integration
     "health:read": "Read health data and device status",
     "health:write": "Modify health settings and configurations",
@@ -107,7 +100,6 @@ STANDARD_SCOPES = {
     "device:read": "Read device status and information",
     "device:write": "Configure and control devices",
     "device:notify": "Receive device notifications and alerts",
-
     # Communication and social features
     "contacts:read": "Read contact information",
     "contacts:write": "Manage contact information",
@@ -115,7 +107,6 @@ STANDARD_SCOPES = {
     "messages:write": "Send and manage messages",
     "calls:read": "Access call history and logs",
     "calls:write": "Make and manage calls",
-
     # System and infrastructure
     "system:logs": "Access system logs and debugging information",
     "system:metrics": "Access system performance metrics",
@@ -130,55 +121,89 @@ ROLE_SCOPES = {
     "caregiver": ["care:caregiver", "user:profile"],
     "resident": ["care:resident", "user:profile", "user:settings"],
     "user": ["user:profile", "user:settings"],
-
     # New granular roles following least-privilege principle
     "admin_readonly": [
-        "admin:read", "admin:users:read", "admin:audit:read",
-        "admin:metrics:read", "admin:system:read", "admin:security:read"
+        "admin:read",
+        "admin:users:read",
+        "admin:audit:read",
+        "admin:metrics:read",
+        "admin:system:read",
+        "admin:security:read",
     ],
     "admin_metrics": ["admin:metrics:read", "admin:metrics:write"],
     "admin_users": ["admin:users:read", "admin:users:write"],
     "admin_security": ["admin:security:read", "admin:security:write"],
     "admin_audit": ["admin:audit:read"],
     "admin_system": ["admin:system:read", "admin:system:write"],
-
     # Care roles with specific capabilities
     "caregiver_basic": [
-        "care:caregiver", "user:profile:read", "user:settings:read",
-        "memory:read", "calendar:read", "health:read"
+        "care:caregiver",
+        "user:profile:read",
+        "user:settings:read",
+        "memory:read",
+        "calendar:read",
+        "health:read",
     ],
     "caregiver_advanced": [
-        "care:caregiver", "user:profile:write", "user:settings:write",
-        "memory:read", "memory:write", "calendar:read", "calendar:write",
-        "health:read", "health:write", "care:emergency"
+        "care:caregiver",
+        "user:profile:write",
+        "user:settings:write",
+        "memory:read",
+        "memory:write",
+        "calendar:read",
+        "calendar:write",
+        "health:read",
+        "health:write",
+        "care:emergency",
     ],
     "care_monitor": ["care:monitoring", "health:read", "device:read"],
     "care_emergency": ["care:emergency", "health:emergency", "device:notify"],
-
     # User roles with privacy-focused scopes
     "user_basic": [
-        "user:profile:read", "user:settings:read", "user:privacy:read",
-        "memory:read", "calendar:read", "photos:read"
+        "user:profile:read",
+        "user:settings:read",
+        "user:privacy:read",
+        "memory:read",
+        "calendar:read",
+        "photos:read",
     ],
     "user_premium": [
-        "user:profile:read", "user:profile:write",
-        "user:settings:read", "user:settings:write",
-        "user:privacy:read", "user:privacy:write",
-        "memory:read", "memory:write", "memory:search",
-        "ai:chat", "ai:voice", "ai:personalization",
-        "calendar:read", "calendar:write", "calendar:share",
-        "photos:read", "photos:write", "photos:share", "photos:albums",
-        "music:library:read", "music:library:write",
-        "contacts:read", "contacts:write",
-        "reminders:read", "reminders:write"
+        "user:profile:read",
+        "user:profile:write",
+        "user:settings:read",
+        "user:settings:write",
+        "user:privacy:read",
+        "user:privacy:write",
+        "memory:read",
+        "memory:write",
+        "memory:search",
+        "ai:chat",
+        "ai:voice",
+        "ai:personalization",
+        "calendar:read",
+        "calendar:write",
+        "calendar:share",
+        "photos:read",
+        "photos:write",
+        "photos:share",
+        "photos:albums",
+        "music:library:read",
+        "music:library:write",
+        "contacts:read",
+        "contacts:write",
+        "reminders:read",
+        "reminders:write",
     ],
-
     # System and infrastructure roles
     "system_monitor": ["system:status", "system:metrics", "system:logs"],
-    "system_maintainer": ["system:status", "system:metrics", "system:logs", "system:maintenance"],
+    "system_maintainer": [
+        "system:status",
+        "system:metrics",
+        "system:logs",
+        "system:maintenance",
+    ],
     "device_manager": ["device:read", "device:write", "device:notify"],
     "backup_operator": ["admin:system:read", "system:maintenance"],
-
     # Communication roles
     "messaging_user": ["messages:read", "messages:write", "contacts:read"],
     "calling_user": ["calls:read", "calls:write", "contacts:read"],
@@ -200,6 +225,7 @@ def _get_user_id_from_request(request: Request) -> str | None:
 
 def require_scope(scope: str) -> Callable[[Request], bool]:
     """Require a specific scope. Returns 401 if not authenticated, 403 if missing scope."""
+
     async def _checker(request: Request) -> bool:
         user_id = _get_user_id_from_request(request)
         scopes = _get_scopes_from_request(request)
@@ -219,11 +245,16 @@ def require_scope(scope: str) -> Callable[[Request], bool]:
             # Record audit event for authorization failure
             try:
                 from ..audit import append_audit
-                append_audit("auth.unauthorized", user_id_hashed=user_id, data={
-                    "scope": scope,
-                    "route": route,
-                    "reason": "not_authenticated"
-                })
+
+                append_audit(
+                    "auth.unauthorized",
+                    user_id_hashed=user_id,
+                    data={
+                        "scope": scope,
+                        "route": route,
+                        "reason": "not_authenticated",
+                    },
+                )
             except Exception:
                 pass  # Continue even if audit fails
 
@@ -247,23 +278,28 @@ def require_scope(scope: str) -> Callable[[Request], bool]:
             request.state.auth_failure_reason = f"missing_scope:{scope}"
             if RBAC_DENY:
                 RBAC_DENY.labels(scope=scope).inc()
-            logger.warning("rbac.forbidden",
-                         user_id=user_id or "anonymous",
-                         required_scope=scope,
-                         available_scopes=sorted(scopes))
+            logger.warning(
+                "rbac.forbidden",
+                user_id=user_id or "anonymous",
+                required_scope=scope,
+                available_scopes=sorted(scopes),
+            )
 
             # Record audit event for scope denial
             try:
                 from ..audit import append_audit
+
                 audit_data = {
                     "scope": scope,
                     "route": route,
                     "available_scopes": sorted(scopes),
-                    "reason": "missing_scope"
+                    "reason": "missing_scope",
                 }
                 if scope.startswith("admin:") and "admin" in scopes:
                     audit_data["reason"] = "admin_superset_check_failed"
-                append_audit("auth.scope_denied", user_id_hashed=user_id, data=audit_data)
+                append_audit(
+                    "auth.scope_denied", user_id_hashed=user_id, data=audit_data
+                )
             except Exception:
                 pass  # Continue even if audit fails
 
@@ -274,28 +310,31 @@ def require_scope(scope: str) -> Callable[[Request], bool]:
 
         # Access granted - record success
         request.state.scope_check_results[scope] = "granted"
-        logger.info("rbac.access_granted",
-                   user_id=user_id or "anonymous",
-                   scope=scope)
+        logger.info("rbac.access_granted", user_id=user_id or "anonymous", scope=scope)
 
         # Record audit event for successful scope access
         try:
             from app.audit import append_audit
-            append_audit("auth.scope_granted", user_id_hashed=user_id, data={
-                "scope": scope,
-                "route": route,
-                "granted": True
-            })
+
+            append_audit(
+                "auth.scope_granted",
+                user_id_hashed=user_id,
+                data={"scope": scope, "route": route, "granted": True},
+            )
         except Exception:
             pass  # Continue even if audit fails
 
         return True
+
     return _checker
 
 
-def require_any_scopes(required_scopes: list[str] | set[str]) -> Callable[[Request], bool]:
+def require_any_scopes(
+    required_scopes: list[str] | set[str],
+) -> Callable[[Request], bool]:
     """Require any of the specified scopes. Returns 401 if not authenticated, 403 if missing all scopes."""
     req = set(required_scopes)
+
     async def _checker(request: Request) -> bool:
         user_id = _get_user_id_from_request(request)
         scopes = _get_scopes_from_request(request)
@@ -309,19 +348,24 @@ def require_any_scopes(required_scopes: list[str] | set[str]) -> Callable[[Reque
             )
 
         if not (req & scopes):
-            logger.warning("rbac.forbidden",
-                         user_id=user_id or "anonymous",
-                         required_any=sorted(req),
-                         available_scopes=sorted(scopes))
+            logger.warning(
+                "rbac.forbidden",
+                user_id=user_id or "anonymous",
+                required_any=sorted(req),
+                available_scopes=sorted(scopes),
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"missing_any_scope:{','.join(sorted(req))}",
             )
 
-        logger.info("rbac.access_granted",
-                   user_id=user_id or "anonymous",
-                   matched_scope=list(req & scopes)[0])
+        logger.info(
+            "rbac.access_granted",
+            user_id=user_id or "anonymous",
+            matched_scope=list(req & scopes)[0],
+        )
         return True
+
     return _checker
 
 
@@ -341,19 +385,23 @@ def require_admin() -> Callable[[Request], bool]:
 
 def optional_scope(scope: str) -> Callable[[Request], str | None]:
     """Optional scope check - returns the scope if present, None if not. Never raises exceptions."""
+
     async def _checker(request: Request) -> str | None:
         scopes = _get_scopes_from_request(request)
         if scopes and scope in scopes:
             return scope
         return None
+
     return _checker
 
 
 def get_user_scopes() -> Callable[[Request], set[str]]:
     """Dependency that returns the user's current scopes (empty set if not authenticated)."""
+
     async def _getter(request: Request) -> set[str]:
         scopes = _get_scopes_from_request(request)
         return scopes or set()
+
     return _getter
 
 
@@ -430,7 +478,11 @@ def require_scope(required: str) -> Callable[[Request], None]:
             scope_satisfied = True
 
         if not scope_satisfied:
-            logger.warning("deny: missing_scope scope=<%s> available=<%s>", required, ",".join(scopes))
+            logger.warning(
+                "deny: missing_scope scope=<%s> available=<%s>",
+                required,
+                ",".join(scopes),
+            )
             raise HTTPException(status_code=403, detail="Forbidden: missing scope")
 
     return _dep
@@ -470,13 +522,20 @@ def require_any_scope(required: Iterable[str]) -> Callable[[Request], None]:
             return
         payload = _extract_payload(request)
         if not isinstance(payload, dict):
-            logger.warning("deny: missing_scope scopes=<%s> reason=no_payload", ",".join(required_set))
+            logger.warning(
+                "deny: missing_scope scopes=<%s> reason=no_payload",
+                ",".join(required_set),
+            )
             raise HTTPException(status_code=401, detail="Unauthorized")
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
         if not (set(scopes) & required_set):
-            logger.warning("deny: missing_scope required=<%s> available=<%s>", ",".join(required_set), ",".join(scopes))
+            logger.warning(
+                "deny: missing_scope required=<%s> available=<%s>",
+                ",".join(required_set),
+                ",".join(scopes),
+            )
             raise HTTPException(status_code=403, detail="Forbidden: missing scope")
 
     return _dep
@@ -512,6 +571,7 @@ def docs_security_with(scopes: list[str]):
 # Unified helpers: pluralized names that accept lists and can be used for
 # both HTTP and WebSocket routes (via FastAPI dependency system).
 
+
 def require_scopes(required: Iterable[str]) -> Callable[[Request], None]:
     """Enforce that ALL required scopes are present on the JWT.
 
@@ -531,13 +591,20 @@ def require_scopes(required: Iterable[str]) -> Callable[[Request], None]:
             return
         payload = _extract_payload(request)
         if not isinstance(payload, dict):
-            logger.warning("deny: missing_scope scopes=<%s> reason=no_payload", ",".join(required_set))
+            logger.warning(
+                "deny: missing_scope scopes=<%s> reason=no_payload",
+                ",".join(required_set),
+            )
             raise HTTPException(status_code=401, detail="Unauthorized")
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
         if not required_set <= set(scopes):
-            logger.warning("deny: missing_scope required=<%s> available=<%s>", ",".join(required_set), ",".join(scopes))
+            logger.warning(
+                "deny: missing_scope required=<%s> available=<%s>",
+                ",".join(required_set),
+                ",".join(scopes),
+            )
             raise HTTPException(status_code=403, detail="Forbidden: missing scope")
 
     return _dep
@@ -559,13 +626,20 @@ def require_any_scopes(required: Iterable[str]) -> Callable[[Request], None]:
             return
         payload = _extract_payload(request)
         if not isinstance(payload, dict):
-            logger.warning("deny: missing_scope scopes=<%s> reason=no_payload", ",".join(required_set))
+            logger.warning(
+                "deny: missing_scope scopes=<%s> reason=no_payload",
+                ",".join(required_set),
+            )
             raise HTTPException(status_code=401, detail="Unauthorized")
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
         if not (set(scopes) & required_set):
-            logger.warning("deny: missing_scope required=<%s> available=<%s>", ",".join(required_set), ",".join(scopes))
+            logger.warning(
+                "deny: missing_scope required=<%s> available=<%s>",
+                ",".join(required_set),
+                ",".join(scopes),
+            )
             raise HTTPException(status_code=403, detail="Forbidden: missing scope")
 
     return _dep
@@ -630,5 +704,3 @@ __all__ = [
     "optional_scope",
     "get_user_scopes",
 ]
-
-

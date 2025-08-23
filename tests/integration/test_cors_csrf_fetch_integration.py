@@ -28,9 +28,11 @@ class TestCORSConfiguration:
                 "Access-Control-Request-Headers": "content-type,x-csrf-token",
             },
         )
-        
+
         assert response.status_code == 200
-        assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
+        assert (
+            response.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
+        )
         assert response.headers["Access-Control-Allow-Credentials"] == "true"
         assert "Vary" in response.headers
         assert "Origin" in response.headers["Vary"]
@@ -45,7 +47,7 @@ class TestCORSConfiguration:
                 "Access-Control-Request-Headers": "content-type,x-csrf-token",
             },
         )
-        
+
         assert response.status_code == 200
         assert response.headers["Access-Control-Allow-Credentials"] == "true"
 
@@ -60,7 +62,9 @@ class TestCORSConfiguration:
             },
         )
         assert response.status_code == 200
-        assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
+        assert (
+            response.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
+        )
 
         # Test with disallowed origin (should return 400 for invalid origin)
         response = client.options(
@@ -117,7 +121,7 @@ class TestCSRFProtection:
             response = client.post(
                 "/v1/profile",
                 json={"name": "test"},
-                headers={"X-CSRF-Token": csrf_token}
+                headers={"X-CSRF-Token": csrf_token},
             )
             # Should not be blocked by CSRF (may fail for other reasons like auth)
             assert response.status_code != 403  # Not blocked by CSRF
@@ -130,10 +134,10 @@ class TestFetchCredentials:
         """Verify fetch credentials configuration is documented."""
         # This test verifies that the frontend is configured to use credentials: 'include'
         # The actual implementation is in frontend/src/lib/api.ts
-        
+
         # Check that the requirement is documented in the test
         assert True, "Frontend fetch should use credentials: 'include' by default"
-        
+
         # The actual verification would be done in frontend tests
         # This is documented in frontend/src/lib/api.ts line 393:
         # credentials = 'include'
@@ -152,7 +156,7 @@ class TestCORSHeadersExposure:
                 "Access-Control-Request-Headers": "content-type,x-csrf-token",
             },
         )
-        
+
         assert response.status_code == 200
         # Verify X-CSRF-Token is not in exposed headers
         if "Access-Control-Expose-Headers" in response.headers:
@@ -168,7 +172,7 @@ class TestCORSHeadersExposure:
                 "Access-Control-Request-Method": "GET",
             },
         )
-        
+
         assert response.status_code == 200
         # Should only expose X-Request-ID
         if "Access-Control-Expose-Headers" in response.headers:
@@ -186,23 +190,27 @@ class TestEnvironmentConfiguration:
             "CORS_ALLOW_ORIGINS",
             "CORS_ALLOW_CREDENTIALS",
         ]
-        
+
         # Read env.example to verify variables are documented
         with open("env.example") as f:
             env_content = f.read()
-            
+
         for var in expected_vars:
-            assert var in env_content, f"Environment variable {var} should be documented in env.example"
+            assert (
+                var in env_content
+            ), f"Environment variable {var} should be documented in env.example"
 
     def test_csrf_environment_variables(self):
         """Verify CSRF environment variables are documented."""
         expected_vars = [
             "CSRF_ENABLED",
         ]
-        
+
         # Read env.example to verify variables are documented
         with open("env.example") as f:
             env_content = f.read()
-            
+
         for var in expected_vars:
-            assert var in env_content, f"Environment variable {var} should be documented in env.example"
+            assert (
+                var in env_content
+            ), f"Environment variable {var} should be documented in env.example"

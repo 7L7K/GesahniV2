@@ -16,7 +16,10 @@ from .utils import RetrievedItem
 def _client() -> QdrantClient:  # type: ignore[name-defined]
     if QdrantClient is None:
         raise RuntimeError("qdrant-client not installed")
-    return QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"), api_key=os.getenv("QDRANT_API_KEY", ""))
+    return QdrantClient(
+        url=os.getenv("QDRANT_URL", "http://localhost:6333"),
+        api_key=os.getenv("QDRANT_API_KEY", ""),
+    )
 
 
 def _payload_filter(user_id: str, extra: dict[str, Any] | None = None) -> Any:
@@ -66,7 +69,12 @@ def dense_search(
 ) -> list[RetrievedItem]:
     c = _client()
     f = _payload_filter(user_id, extra_filter)
-    res = c.search(collection_name=collection, query_vector=query_vector, limit=limit, query_filter=f)
+    res = c.search(
+        collection_name=collection,
+        query_vector=query_vector,
+        limit=limit,
+        query_filter=f,
+    )
     items = _to_items(res)
     # Enforce keep threshold: sim>=THRESH (dist<=1-THRESH). Default 0.75
     try:
@@ -96,12 +104,12 @@ def sparse_search(
     try:
         # Prefer the dedicated text search API when available (qdrant >= 1.7)
         f = _payload_filter(user_id, extra_filter)
-        res = c.search(collection_name=collection, query_text=query, limit=limit, query_filter=f)
+        res = c.search(
+            collection_name=collection, query_text=query, limit=limit, query_filter=f
+        )
         return _to_items(res)
     except Exception:
         return []
 
 
 __all__ = ["dense_search", "sparse_search"]
-
-

@@ -39,5 +39,3 @@ export default function TvLive() {
         </main>
     );
 }
-
-

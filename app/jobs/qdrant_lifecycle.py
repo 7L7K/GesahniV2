@@ -13,7 +13,9 @@ except Exception:  # pragma: no cover
 def _client() -> QdrantClient:  # type: ignore[name-defined]
     if QdrantClient is None:
         raise RuntimeError("qdrant-client not installed")
-    return QdrantClient(url=os.getenv("QDRANT_URL", ""), api_key=os.getenv("QDRANT_API_KEY", ""))
+    return QdrantClient(
+        url=os.getenv("QDRANT_URL", ""), api_key=os.getenv("QDRANT_API_KEY", "")
+    )
 
 
 def bootstrap_collection(name: str, dim: int = 1536) -> dict[str, str]:
@@ -25,7 +27,10 @@ def bootstrap_collection(name: str, dim: int = 1536) -> dict[str, str]:
         exists = False
         from qdrant_client.http.models import Distance, VectorParams
 
-        c.recreate_collection(collection_name=name, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
+        c.recreate_collection(
+            collection_name=name,
+            vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
+        )
     # Ensure payload indexes
     for field, schema in (
         ("user_id", "keyword"),
@@ -36,7 +41,9 @@ def bootstrap_collection(name: str, dim: int = 1536) -> dict[str, str]:
         ("pinned", "bool"),
     ):
         try:
-            c.create_payload_index(collection_name=name, field_name=field, field_schema=schema)
+            c.create_payload_index(
+                collection_name=name, field_name=field, field_schema=schema
+            )
         except Exception:
             pass
     return {"status": "ok", "collection": name, "existed": str(exists)}
@@ -55,7 +62,9 @@ def collection_stats(name: str) -> dict[str, float | int | str]:
     }
 
 
-def purge_soft_deleted(name: str, older_than_seconds: int = 14 * 24 * 3600) -> dict[str, int]:
+def purge_soft_deleted(
+    name: str, older_than_seconds: int = 14 * 24 * 3600
+) -> dict[str, int]:
     # Qdrant purging of deleted points is not a separate API; we can compact by snapshot+restore or rely on server-side compaction.
     # Here we only return a stub; production purge could execute via snapshots.
     return {"purged": 0}
@@ -71,13 +80,26 @@ def upsert_versioned_chunk(
     """Upsert with hash dedup and doc_version soft-retire policy."""
     try:
         c = _client()
-        from qdrant_client.http.models import FieldCondition, Filter, MatchValue, PointStruct
+        from qdrant_client.http.models import (
+            FieldCondition,
+            Filter,
+            MatchValue,
+            PointStruct,
+        )
+
         # dedup by content hash
         h = payload.get("hash")
         if h:
             try:
-                flt = Filter(must=[FieldCondition(key="hash", match=MatchValue(value=h))])
-                pts, _ = c.scroll(collection_name=collection, with_payload=True, limit=1, scroll_filter=flt)
+                flt = Filter(
+                    must=[FieldCondition(key="hash", match=MatchValue(value=h))]
+                )
+                pts, _ = c.scroll(
+                    collection_name=collection,
+                    with_payload=True,
+                    limit=1,
+                    scroll_filter=flt,
+                )
                 if pts:
                     return True
             except Exception:
@@ -87,8 +109,15 @@ def upsert_versioned_chunk(
         version = float(payload.get("doc_version") or 1)
         if doc_id:
             try:
-                flt2 = Filter(must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))])
-                pts_all, _ = c.scroll(collection_name=collection, with_payload=True, limit=10000, scroll_filter=flt2)
+                flt2 = Filter(
+                    must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))]
+                )
+                pts_all, _ = c.scroll(
+                    collection_name=collection,
+                    with_payload=True,
+                    limit=10000,
+                    scroll_filter=flt2,
+                )
                 max_v = 0.0
                 for p in pts_all:
                     pv = float((p.payload or {}).get("doc_version") or 0)
@@ -97,13 +126,22 @@ def upsert_versioned_chunk(
                 if version > max_v and pts_all:
                     for p in pts_all:
                         try:
-                            c.set_payload(collection_name=collection, points=[p.id], payload={"pinned": False, "decay_at": float(time.time() - 1)})
+                            c.set_payload(
+                                collection_name=collection,
+                                points=[p.id],
+                                payload={
+                                    "pinned": False,
+                                    "decay_at": float(time.time() - 1),
+                                },
+                            )
                         except Exception:
                             pass
             except Exception:
                 pass
-        c.upsert(collection_name=collection, points=[PointStruct(id=point_id, vector=vector, payload=payload)])
+        c.upsert(
+            collection_name=collection,
+            points=[PointStruct(id=point_id, vector=vector, payload=payload)],
+        )
         return True
     except Exception:
         return False
-

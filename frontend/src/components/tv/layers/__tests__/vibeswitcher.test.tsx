@@ -11,5 +11,3 @@ describe('VibeSwitcher', () => {
         expect(getByText('Vibe')).toBeInTheDocument()
     })
 })
-
-

@@ -46,5 +46,3 @@ def test_final_retry_o4_mini():
     # with high threshold and one retry, it should escalate at least once
     assert escalated is True
     assert model in {"gpt-4.1-nano", "o4-mini"}
-
-

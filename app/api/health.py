@@ -42,36 +42,51 @@ async def health_ready() -> dict[str, object]:
     # JWT secret check
     t = time.perf_counter()
     jwt_result = await hu.with_timeout(hu.check_jwt_secret, ms=500)
-    try: _m.HEALTH_CHECK_DURATION_SECONDS.labels("jwt").observe(time.perf_counter() - t)
-    except Exception: pass
+    try:
+        _m.HEALTH_CHECK_DURATION_SECONDS.labels("jwt").observe(time.perf_counter() - t)
+    except Exception:
+        pass
     components["jwt"] = {"status": "healthy" if jwt_result == "ok" else "unhealthy"}
 
     # Database check
     t = time.perf_counter()
     db_result = await hu.with_timeout(hu.check_db, ms=500)
-    try: _m.HEALTH_CHECK_DURATION_SECONDS.labels("db").observe(time.perf_counter() - t)
-    except Exception: pass
+    try:
+        _m.HEALTH_CHECK_DURATION_SECONDS.labels("db").observe(time.perf_counter() - t)
+    except Exception:
+        pass
     components["database"] = {"status": "healthy" if db_result == "ok" else "unhealthy"}
 
     # Vector store check (read-only)
     t = time.perf_counter()
     try:
         from ..memory.api import _get_store
+
         store = _get_store()
-        if hasattr(store, 'ping'):
+        if hasattr(store, "ping"):
             await hu.with_timeout(store.ping, ms=500)
-        elif hasattr(store, 'search_memories'):
-            await hu.with_timeout(lambda: store.search_memories("", "", limit=0), ms=500)
+        elif hasattr(store, "search_memories"):
+            await hu.with_timeout(
+                lambda: store.search_memories("", "", limit=0), ms=500
+            )
         vector_status = "healthy"
     except Exception:
         vector_status = "unhealthy"
-    try: _m.HEALTH_CHECK_DURATION_SECONDS.labels("vector_store").observe(time.perf_counter() - t)
-    except Exception: pass
+    try:
+        _m.HEALTH_CHECK_DURATION_SECONDS.labels("vector_store").observe(
+            time.perf_counter() - t
+        )
+    except Exception:
+        pass
     components["vector_store"] = {"status": vector_status}
 
     # Determine overall status
-    unhealthy_components = [name for name, comp in components.items() if comp["status"] == "unhealthy"]
-    degraded_components = [name for name, comp in components.items() if comp["status"] == "degraded"]
+    unhealthy_components = [
+        name for name, comp in components.items() if comp["status"] == "unhealthy"
+    ]
+    degraded_components = [
+        name for name, comp in components.items() if comp["status"] == "degraded"
+    ]
 
     if unhealthy_components:
         overall_status = "unhealthy"
@@ -88,7 +103,7 @@ async def health_ready() -> dict[str, object]:
         "status": overall_status,
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
         "version": "1.0.0",
-        "components": components
+        "components": components,
     }
 
     if unhealthy_components:
@@ -111,8 +126,10 @@ async def health_ready() -> dict[str, object]:
 
 @router.get("/v1/ping", include_in_schema=False)
 async def ping_vendor_health(
-    vendor: str = Query(..., description="Vendor name to ping (e.g., 'openai', 'ollama')"),
-    clear: bool = Query(False, description="Clear unhealthy status for the vendor")
+    vendor: str = Query(
+        ..., description="Vendor name to ping (e.g., 'openai', 'ollama')"
+    ),
+    clear: bool = Query(False, description="Clear unhealthy status for the vendor"),
 ) -> dict[str, object]:
     """
     Lightweight ping endpoint to check/clear vendor health status.
@@ -134,7 +151,7 @@ async def ping_vendor_health(
             return {
                 "status": "cleared",
                 "vendor": vendor,
-                "message": f"Unhealthy status cleared for vendor {vendor}"
+                "message": f"Unhealthy status cleared for vendor {vendor}",
             }
 
         # Get current health info
@@ -145,7 +162,7 @@ async def ping_vendor_health(
                 "status": "healthy",
                 "vendor": vendor,
                 "healthy": True,
-                "message": f"Vendor {vendor} is healthy"
+                "message": f"Vendor {vendor} is healthy",
             }
         else:
             return {
@@ -155,7 +172,7 @@ async def ping_vendor_health(
                 "remaining_seconds": health_info["remaining_unhealthy_seconds"],
                 "recent_failures": health_info["recent_failures"],
                 "failure_threshold": health_info["failure_threshold"],
-                "message": f"Vendor {vendor} is unhealthy for {health_info['remaining_unhealthy_seconds']:.1f} more seconds"
+                "message": f"Vendor {vendor} is unhealthy for {health_info['remaining_unhealthy_seconds']:.1f} more seconds",
             }
 
     except Exception as e:
@@ -163,7 +180,7 @@ async def ping_vendor_health(
             "status": "error",
             "vendor": vendor,
             "error": str(e),
-            "message": f"Error checking health for vendor {vendor}: {e}"
+            "message": f"Error checking health for vendor {vendor}: {e}",
         }
 
 
@@ -182,14 +199,16 @@ async def get_vendor_health_status() -> dict[str, object]:
             "status": "ok",
             "vendors": all_health_info,
             "total_vendors": len(all_health_info),
-            "unhealthy_vendors": sum(1 for info in all_health_info.values() if not info["is_healthy"])
+            "unhealthy_vendors": sum(
+                1 for info in all_health_info.values() if not info["is_healthy"]
+            ),
         }
 
     except Exception as e:
         return {
             "status": "error",
             "error": str(e),
-            "message": f"Error getting vendor health status: {e}"
+            "message": f"Error getting vendor health status: {e}",
         }
 
 
@@ -207,9 +226,11 @@ async def health_deps() -> dict[str, object]:
         "qdrant": await hu.with_timeout(hu.check_qdrant, ms=500),
         "spotify": await hu.with_timeout(hu.check_spotify, ms=500),
     }
-    status = "ok" if all(v in {"ok", "skipped"} for v in checks.values()) else "degraded"
+    status = (
+        "ok" if all(v in {"ok", "skipped"} for v in checks.values()) else "degraded"
+    )
     resp = JSONResponse({"status": status, "checks": checks})
-    resp.headers["Cache-Control"] = "no-store"; resp.headers["Pragma"] = "no-cache"; resp.headers.setdefault("Vary","Accept")
+    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers.setdefault("Vary", "Accept")
     return resp
-
-

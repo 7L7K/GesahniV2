@@ -12,5 +12,3 @@ class MicConfig:
 def open_microphone(config: MicConfig) -> None:
     _ = config
     return None
-
-

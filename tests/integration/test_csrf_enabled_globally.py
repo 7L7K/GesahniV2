@@ -16,5 +16,3 @@ def test_csrf_enabled_globally(monkeypatch):
     c.cookies.set("csrf_token", "tok")
     r2 = c.post("/v1/profile", headers={"X-CSRF-Token": "tok"}, json={})
     assert r2.status_code == HTTPStatus.OK
-
-

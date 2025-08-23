@@ -39,7 +39,7 @@ def mock_get_current_user_id(request: Request) -> str:
             payload = jwt.decode(
                 auth_header.split(" ", 1)[1],
                 "test-jwt-secret-for-testing",
-                algorithms=["HS256"]
+                algorithms=["HS256"],
             )
             return payload.get("user_id", "dev")
         except:
@@ -49,7 +49,9 @@ def mock_get_current_user_id(request: Request) -> str:
     access_token = request.cookies.get("access_token")
     if access_token:
         try:
-            payload = jwt.decode(access_token, "test-jwt-secret-for-testing", algorithms=["HS256"])
+            payload = jwt.decode(
+                access_token, "test-jwt-secret-for-testing", algorithms=["HS256"]
+            )
             return payload.get("user_id", "dev")
         except:
             pass
@@ -81,8 +83,9 @@ def create_test_app() -> FastAPI:
 
     # Patch the JWT_SECRET at module level for modules that read it at import time
     import app.api.auth
-    with patch.object(app.api.auth, '_jwt_secret', "test-jwt-secret-for-testing"):
-        with patch.object(app.api.auth, '_get_refresh_ttl_seconds', lambda: 604800):
+
+    with patch.object(app.api.auth, "_jwt_secret", "test-jwt-secret-for-testing"):
+        with patch.object(app.api.auth, "_get_refresh_ttl_seconds", lambda: 604800):
             # Create a new FastAPI app instance
             test_app = FastAPI(title="Test API", version="1.0.0")
 
@@ -93,7 +96,9 @@ def create_test_app() -> FastAPI:
             test_app.include_router(ask_router, prefix="/v1")
 
             # Override dependencies
-            test_app.dependency_overrides[get_current_user_id] = mock_get_current_user_id
+            test_app.dependency_overrides[get_current_user_id] = (
+                mock_get_current_user_id
+            )
             test_app.dependency_overrides[verify_token] = mock_verify_token
 
             # Import and override additional dependencies that might be used
@@ -105,13 +110,19 @@ def create_test_app() -> FastAPI:
             # Mock require_user dependency if it exists
             try:
                 from app.deps.clerk_auth import require_user as clerk_require_user
+
                 test_app.dependency_overrides[clerk_require_user] = lambda: "testuser"
             except ImportError:
                 pass
 
             # Mock optional scopes dependencies
             try:
-                from app.deps.scopes import require_any_scopes, require_scope, require_scopes
+                from app.deps.scopes import (
+                    require_any_scopes,
+                    require_scope,
+                    require_scopes,
+                )
+
                 test_app.dependency_overrides[require_scope] = lambda scope: None
                 test_app.dependency_overrides[require_scopes] = lambda scopes: None
                 test_app.dependency_overrides[require_any_scopes] = lambda scopes: None
@@ -120,6 +131,7 @@ def create_test_app() -> FastAPI:
 
             # Add CORS middleware for test environment
             from starlette.middleware.cors import CORSMiddleware
+
             test_app.add_middleware(
                 CORSMiddleware,
                 allow_origins=["http://localhost:3000"],
@@ -138,12 +150,27 @@ def create_test_client() -> TestClient:
     patches = [
         patch("app.api.auth._jwt_secret", "test-jwt-secret-for-testing"),
         patch("app.api.auth._get_refresh_ttl_seconds", lambda: 604800),
-        patch("app.api.auth._decode_any", lambda token, **kwargs: jwt.decode(token, "test-jwt-secret-for-testing", algorithms=["HS256"])),
+        patch(
+            "app.api.auth._decode_any",
+            lambda token, **kwargs: jwt.decode(
+                token, "test-jwt-secret-for-testing", algorithms=["HS256"]
+            ),
+        ),
         patch("app.api.auth.rotate_refresh_cookies", AsyncMock()),
         patch("app.cookies.set_auth_cookies", MagicMock()),
         patch("app.cookies.clear_auth_cookies", MagicMock()),
-        patch("app.tokens.make_access", lambda claims, ttl_s: jwt.encode(claims, "test-jwt-secret-for-testing", algorithm="HS256")),
-        patch("app.tokens.make_refresh", lambda claims, ttl_s: jwt.encode(claims, "test-jwt-secret-for-testing", algorithm="HS256")),
+        patch(
+            "app.tokens.make_access",
+            lambda claims, ttl_s: jwt.encode(
+                claims, "test-jwt-secret-for-testing", algorithm="HS256"
+            ),
+        ),
+        patch(
+            "app.tokens.make_refresh",
+            lambda claims, ttl_s: jwt.encode(
+                claims, "test-jwt-secret-for-testing", algorithm="HS256"
+            ),
+        ),
         # Also patch JWT_SECRET in deps.user module
         patch("app.deps.user.JWT_SECRET", "test-jwt-secret-for-testing"),
         patch("app.tokens.get_default_access_ttl", lambda: 1800),
@@ -152,9 +179,14 @@ def create_test_client() -> TestClient:
         patch("app.user_store.user_store.increment_login", AsyncMock()),
         patch("app.auth_store.ensure_tables", AsyncMock()),
         patch("app.token_store.allow_refresh", AsyncMock()),
-        patch("app.token_store.is_refresh_family_revoked", AsyncMock(return_value=False)),
+        patch(
+            "app.token_store.is_refresh_family_revoked", AsyncMock(return_value=False)
+        ),
         patch("app.token_store.revoke_refresh_family", AsyncMock()),
-        patch("app.token_store.claim_refresh_jti_with_retry", AsyncMock(return_value=(True, None))),
+        patch(
+            "app.token_store.claim_refresh_jti_with_retry",
+            AsyncMock(return_value=(True, None)),
+        ),
         patch("app.token_store.get_last_used_jti", AsyncMock(return_value=None)),
         patch("app.token_store.set_last_used_jti", AsyncMock()),
         patch("app.token_store.incr_login_counter", AsyncMock(return_value=1)),
@@ -191,7 +223,7 @@ def create_auth_cookies(user_id: str = "dev") -> dict[str, str]:
         "sub": user_id,
         "iat": now,
         "exp": now + 1800,  # 30 minutes
-        "jti": f"access_{user_id}_{now}"
+        "jti": f"access_{user_id}_{now}",
     }
 
     refresh_payload = {
@@ -200,16 +232,17 @@ def create_auth_cookies(user_id: str = "dev") -> dict[str, str]:
         "type": "refresh",
         "iat": now,
         "exp": now + 604800,  # 7 days
-        "jti": f"refresh_{user_id}_{now}"
+        "jti": f"refresh_{user_id}_{now}",
     }
 
-    access_token = jwt.encode(access_payload, "test-jwt-secret-for-testing", algorithm="HS256")
-    refresh_token = jwt.encode(refresh_payload, "test-jwt-secret-for-testing", algorithm="HS256")
+    access_token = jwt.encode(
+        access_payload, "test-jwt-secret-for-testing", algorithm="HS256"
+    )
+    refresh_token = jwt.encode(
+        refresh_payload, "test-jwt-secret-for-testing", algorithm="HS256"
+    )
 
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token
-    }
+    return {"access_token": access_token, "refresh_token": refresh_token}
 
 
 def create_auth_headers(user_id: str = "dev") -> dict[str, str]:
@@ -221,17 +254,14 @@ def create_auth_headers(user_id: str = "dev") -> dict[str, str]:
         "sub": user_id,
         "iat": now,
         "exp": now + 1800,  # 30 minutes
-        "jti": f"access_{user_id}_{now}"
+        "jti": f"access_{user_id}_{now}",
     }
 
-    access_token = jwt.encode(access_payload, "test-jwt-secret-for-testing", algorithm="HS256")
+    access_token = jwt.encode(
+        access_payload, "test-jwt-secret-for-testing", algorithm="HS256"
+    )
     return {"Authorization": f"Bearer {access_token}"}
 
 
 # Export for use in tests
-__all__ = [
-    "client",
-    "create_auth_cookies",
-    "create_auth_headers",
-    "mock_jwt_secret"
-]
+__all__ = ["client", "create_auth_cookies", "create_auth_headers", "mock_jwt_secret"]

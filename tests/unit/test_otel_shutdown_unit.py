@@ -48,5 +48,3 @@ def test_shutdown_tracing_calls_provider_and_processor(monkeypatch):
     assert len(processor.calls) >= 1
     # Provider shutdown was called (idempotent and safe)
     assert provider.shutdown_called >= 1
-
-

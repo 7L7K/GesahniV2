@@ -41,7 +41,7 @@ Overall: 8/8 tests passed
 
 ### 2. Auth Orchestrator Enhancement
 - **File**: `frontend/src/services/authOrchestrator.ts`
-- **Changes**: 
+- **Changes**:
   - Added finisher call tracking
   - Implemented automatic whoami after auth finish
   - Added stable whoamiOk state
@@ -54,7 +54,7 @@ Overall: 8/8 tests passed
 - **Impact**: Prevents state oscillation and ensures single source of truth
 
 ### 4. Authentication Gates
-- **Files**: 
+- **Files**:
   - `frontend/src/lib/uiEffects.ts`
   - `frontend/src/app/tv/music/page.tsx`
 - **Changes**: Added authentication checks to all music API calls

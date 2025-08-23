@@ -29,7 +29,9 @@ def _allow_redirect(url: str) -> bool:
         return False
 
 
-def _sign_client_secret(team_id: str, client_id: str, key_id: str, private_key_pem: str) -> str:
+def _sign_client_secret(
+    team_id: str, client_id: str, key_id: str, private_key_pem: str
+) -> str:
     import jwt
 
     now = int(time.time())
@@ -56,6 +58,7 @@ async def apple_start(request: Request) -> Response:
         next_url = "/"
     # Generate a random state and set short-lived cookies to validate callback and redirect target
     import secrets
+
     state = secrets.token_urlsafe(16)
     qs = urlencode(
         {
@@ -69,20 +72,22 @@ async def apple_start(request: Request) -> Response:
     )
     resp = Response(status_code=302)
     resp.headers["Location"] = f"https://appleid.apple.com/auth/authorize?{qs}"
-    
+
     # Use centralized cookie configuration
     from ..cookie_config import get_cookie_config
+
     cookie_config = get_cookie_config(request)
-    
+
     # Set OAuth state cookies using centralized cookie surface
     from ..cookies import set_oauth_state_cookies
+
     set_oauth_state_cookies(
         resp=resp,
         state=state,
         next_url=next_url,
         request=request,
         ttl=600,  # 10 minutes
-        provider="oauth"  # Apple uses default oauth prefix
+        provider="oauth",  # Apple uses default oauth prefix
     )
     return resp
 
@@ -134,7 +139,11 @@ async def apple_callback(request: Request, response: Response) -> Response:
         except Exception:
             payload = {}
 
-    user_id = (str(payload.get("email")) if payload.get("email") else str(payload.get("sub") or "")).lower()
+    user_id = (
+        str(payload.get("email"))
+        if payload.get("email")
+        else str(payload.get("sub") or "")
+    ).lower()
     if not user_id:
         raise HTTPException(status_code=400, detail="no_user")
 
@@ -146,19 +155,21 @@ async def apple_callback(request: Request, response: Response) -> Response:
     now = datetime.utcnow()
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_access, make_refresh
+
     # Use default TTLs from tokens.py
     access = make_access({"user_id": user_id, "sid": sid, "did": did})
     refresh = make_refresh({"user_id": user_id, "sid": sid, "did": did})
 
     # Use centralized cookie configuration for sharp and consistent cookies
     from ..cookie_config import get_cookie_config, get_token_ttls
-    
+
     cookie_config = get_cookie_config(request)
     access_ttl, refresh_ttl = get_token_ttls()
-    
+
     # Create opaque session ID instead of using JWT
     try:
         from ..auth import _create_session_id
+
         payload = _jwt_decode(access, SECRET_KEY, algorithms=[ALGORITHM])
         jti = payload.get("jti")
         expires_at = payload.get("exp", time.time() + access_ttl)
@@ -168,20 +179,33 @@ async def apple_callback(request: Request, response: Response) -> Response:
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
     except Exception as e:
         import logging
+
         logging.getLogger(__name__).warning(f"Failed to create session ID: {e}")
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-    
+
     # Use centralized cookie functions
     from ..cookies import clear_oauth_state_cookies, set_auth_cookies
-    set_auth_cookies(response, access=access, refresh=refresh, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
-    
+
+    set_auth_cookies(
+        response,
+        access=access,
+        refresh=refresh,
+        session_id=session_id,
+        access_ttl=access_ttl,
+        refresh_ttl=refresh_ttl,
+        request=request,
+    )
+
     # Clear OAuth state cookies after successful authentication
     clear_oauth_state_cookies(response, request, provider="oauth")
 
     try:
         import logging
 
-        logging.getLogger(__name__).info("AUTH_OAUTH_LOGIN_SUCCESS", extra={"meta": {"provider": "apple", "user_id": user_id}})
+        logging.getLogger(__name__).info(
+            "AUTH_OAUTH_LOGIN_SUCCESS",
+            extra={"meta": {"provider": "apple", "user_id": user_id}},
+        )
     except Exception:
         pass
 
@@ -195,5 +219,3 @@ async def apple_callback(request: Request, response: Response) -> Response:
 
 
 __all__ = ["router"]
-
-

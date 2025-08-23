@@ -69,7 +69,9 @@ def _load_skill_class():
     sys.modules["app.skills.base"] = base_module
 
     sports_path = repo_root / "app" / "skills" / "sports_skill.py"
-    sports_spec = importlib.util.spec_from_file_location("app.skills.sports_skill", sports_path)
+    sports_spec = importlib.util.spec_from_file_location(
+        "app.skills.sports_skill", sports_path
+    )
     sports_module = importlib.util.module_from_spec(sports_spec)
     sports_spec.loader.exec_module(sports_module)  # type: ignore[union-attr]
     return sports_module.SportsSkill

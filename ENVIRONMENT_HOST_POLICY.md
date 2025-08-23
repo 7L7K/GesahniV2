@@ -9,7 +9,7 @@ This document outlines the standardized environment and host policy for GesahniV
 - **Purpose**: Single frontend origin for all client-side applications
 - **Usage**: CORS origins, CSRF tokens, cookies, OAuth callbacks
 
-### Backend Canonical URL  
+### Backend Canonical URL
 - **URL**: `http://127.0.0.1:8000`
 - **Purpose**: API server with IPv4 consistency to avoid dual-stack surprises
 - **Usage**: All API calls, WebSocket connections, metrics endpoints

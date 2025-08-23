@@ -70,15 +70,20 @@ def test_dictionary_no_meanings(monkeypatch):
     class EmptyClient:
         async def __aenter__(self):
             return self
+
         async def __aexit__(self, exc_type, exc, tb):
             pass
+
         async def get(self, url):
             class R:
                 status_code = 200
+
                 def json(self_inner):
                     return [{}]
+
                 def raise_for_status(self_inner):
                     pass
+
             return R()
 
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: EmptyClient())
@@ -92,8 +97,10 @@ def test_dictionary_service_unreachable(monkeypatch):
     class BadClient:
         async def __aenter__(self):
             return self
+
         async def __aexit__(self, exc_type, exc, tb):
             pass
+
         async def get(self, url):
             raise RuntimeError("boom")
 

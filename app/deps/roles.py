@@ -54,7 +54,9 @@ def _extract_roles(request: Request) -> set[str]:
     return set()
 
 
-def has_roles(request: Request, required: Iterable[str], *, any_of: bool = True) -> bool:
+def has_roles(
+    request: Request, required: Iterable[str], *, any_of: bool = True
+) -> bool:
     roles = _extract_roles(request)
     wanted = {str(r).strip().lower() for r in required if str(r).strip()}
     if not wanted:
@@ -82,5 +84,3 @@ def require_roles(required: Iterable[str], *, any_of: bool = True):
 
 
 __all__ = ["require_roles", "has_roles"]
-
-

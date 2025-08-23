@@ -18,5 +18,3 @@ export function SessionTimeline({ meta }: { meta: { status?: string; tags?: stri
         </div>
     );
 }
-
-

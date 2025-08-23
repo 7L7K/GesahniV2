@@ -12,5 +12,3 @@ describe('AlertLayer', () => {
         expect(container.querySelector('div')).not.toBeNull()
     })
 })
-
-

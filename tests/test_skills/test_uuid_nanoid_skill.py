@@ -21,5 +21,3 @@ def test_nanoid_custom_length():
     m = s.match(q)
     out = asyncio.run(s.run(q, m))
     assert len(out) == 10
-
-

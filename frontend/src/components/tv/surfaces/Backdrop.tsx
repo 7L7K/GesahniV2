@@ -41,5 +41,3 @@ export function Backdrop({ dim = 0.25, blur = 8, children }: Props) {
     </div>
   );
 }
-
-

@@ -13,6 +13,7 @@ from app.telemetry import hash_user_id
 
 try:  # pragma: no cover - optional dependency
     import chromadb
+
     try:
         # Newer Chroma exposes first‑class embedding functions with config
         from chromadb.utils import embedding_functions as chroma_ef  # type: ignore
@@ -22,8 +23,9 @@ except ImportError:  # pragma: no cover - optional dependency
     chromadb = None
     chroma_ef = None  # type: ignore
 
-from .env_utils import _clean_meta, _normalize
+from .env_utils import _clean_meta
 from .env_utils import _get_sim_threshold as _env_get_sim_threshold
+from .env_utils import _normalize
 from .memory_store import VectorStore
 
 logger = logging.getLogger(__name__)
@@ -38,7 +40,7 @@ def _get_sim_threshold() -> float:
     fallbacks in dual-read flows. Otherwise, defer to the global env value.
     """
 
-    embed_kind = (os.getenv("CHROMA_EMBEDDER", "length").strip().lower())
+    embed_kind = os.getenv("CHROMA_EMBEDDER", "length").strip().lower()
     # Respect explicit SIM_THRESHOLD when provided. Only use the
     # embedder-specific default (0.6) when unset.
     if embed_kind == "length" and ("SIM_THRESHOLD" not in os.environ):
@@ -80,7 +82,9 @@ def _length_similarity(a: str, b: str) -> float:
 class _NoopCache:
     """No-op collection used when QA cache is disabled via env flag."""
 
-    def get_items(self, *args, include: list[str] | None = None, **kwargs) -> dict[str, list]:
+    def get_items(
+        self, *args, include: list[str] | None = None, **kwargs
+    ) -> dict[str, list]:
         out: dict[str, list] = {"ids": []}
         if include is None or "metadatas" in include:
             out["metadatas"] = []
@@ -150,8 +154,7 @@ class _ChromaCacheWrapper:
         if include is None or "metadatas" in include:
             metas = res.get("metadatas", [])
             res["metadatas"] = [
-                _normalize_meta(m) if m is not None else {}
-                for m in metas
+                _normalize_meta(m) if m is not None else {} for m in metas
             ]
         return res
 
@@ -202,7 +205,10 @@ class ChromaVectorStore(VectorStore):
                         api_key=os.getenv("OPENAI_API_KEY", ""),
                         model_name=os.getenv("EMBED_MODEL", "text-embedding-3-small"),
                     )
-                    logger.info("Chroma embedder selected: chroma.openai (%s)", os.getenv("EMBED_MODEL", "text-embedding-3-small"))
+                    logger.info(
+                        "Chroma embedder selected: chroma.openai (%s)",
+                        os.getenv("EMBED_MODEL", "text-embedding-3-small"),
+                    )
                 except Exception as e:  # pragma: no cover - defensive
                     logger.warning(
                         "Chroma OpenAIEmbeddingFunction failed (%s); using local OpenAI embedder",
@@ -223,12 +229,17 @@ class ChromaVectorStore(VectorStore):
                 # OpenAI embeddings default to 1536 for text-embedding-3-small
                 exp_dim = int(os.getenv("EMBED_DIM", "1536"))
                 if exp_dim not in {1536, 3072}:  # allow future variants
-                    logger.warning("EMBED_DIM=%s may not match OpenAI embedder; expected 1536/3072", exp_dim)
+                    logger.warning(
+                        "EMBED_DIM=%s may not match OpenAI embedder; expected 1536/3072",
+                        exp_dim,
+                    )
             else:
                 # Length embedder emits dimension=1
                 exp_dim = int(os.getenv("EMBED_DIM", "1536"))
                 if exp_dim != 1:
-                    logger.warning("EMBED_DIM=%s mismatch: length embedder uses dim=1", exp_dim)
+                    logger.warning(
+                        "EMBED_DIM=%s mismatch: length embedder uses dim=1", exp_dim
+                    )
         except Exception:
             pass
 
@@ -315,8 +326,8 @@ class ChromaVectorStore(VectorStore):
             k,
         )
         # Determine which embedder is active to interpret cutoff semantics
-        use_length = (
-            not hasattr(self, "_embedder") or isinstance(self._embedder, _LengthEmbedder)
+        use_length = not hasattr(self, "_embedder") or isinstance(
+            self._embedder, _LengthEmbedder
         )
         # Optional explicit query threshold (similarity in [0,1]) wins if provided
         _vqt_raw = os.getenv("VECTOR_QUERY_THRESHOLD")
@@ -332,8 +343,10 @@ class ChromaVectorStore(VectorStore):
                 vqt_override = vqt
             except Exception:
                 vqt_override = None
-        sim_threshold = vqt_override if (vqt_override is not None) else _get_sim_threshold()
-        env_has_sim = ("SIM_THRESHOLD" in os.environ)
+        sim_threshold = (
+            vqt_override if (vqt_override is not None) else _get_sim_threshold()
+        )
+        env_has_sim = "SIM_THRESHOLD" in os.environ
         if (vqt_override is None) and use_length and not env_has_sim:
             # For length embedder without explicit env override, interpret
             # the embedder default as a distance cutoff (relaxed from 0.5→0.6)
@@ -399,7 +412,9 @@ class ChromaVectorStore(VectorStore):
                 # Fall back to a simple length‑ratio distance only when distances are missing.
                 dist_val = dvals[idx] if idx < len(dvals) else None
                 if dist_val is None:
-                    dist = abs(len(doc) - len(norm_prompt)) / max(len(doc), len(norm_prompt), 1)
+                    dist = abs(len(doc) - len(norm_prompt)) / max(
+                        len(doc), len(norm_prompt), 1
+                    )
                 else:
                     dist = float(dist_val)
             # Apply strict global cutoff: only keep items with distance < cutoff
@@ -428,7 +443,10 @@ class ChromaVectorStore(VectorStore):
         except Exception:
             # Fallback to query with broad limit
             res = self._user_memories.query(
-                query_texts=["*"], where={"user_id": user_id}, n_results=1000, include=["ids", "documents", "metadatas"]
+                query_texts=["*"],
+                where={"user_id": user_id},
+                n_results=1000,
+                include=["ids", "documents", "metadatas"],
             )
         ids = (res.get("ids") or [[]])[0]
         docs = (res.get("documents") or [[]])[0]
@@ -465,9 +483,7 @@ class ChromaVectorStore(VectorStore):
             metadatas=[cleaned],
         )
 
-    def lookup_cached_answer(
-        self, prompt: str, ttl_seconds: int = 86400
-    ) -> str | None:
+    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> str | None:
         self._dist_cutoff = 1.0 - _get_sim_threshold()
         hash_, norm = _normalize(prompt)
         if (
@@ -478,7 +494,9 @@ class ChromaVectorStore(VectorStore):
             logger.debug("QA cache disabled; miss for %s", hash_)
             return None
         res = self._cache.query(
-            query_texts=[norm], n_results=1, include=["metadatas", "documents", "distances"]
+            query_texts=[norm],
+            n_results=1,
+            include=["metadatas", "documents", "distances"],
         )
         ids = res.get("ids", [[]])[0]
         if not ids:
@@ -488,8 +506,8 @@ class ChromaVectorStore(VectorStore):
         meta_raw = res.get("metadatas", [[]])
         meta = _normalize_meta(meta_raw[0][0] if meta_raw and meta_raw[0] else {})
         dvals = res.get("distances", [[None]])[0]
-        use_length = (
-            not hasattr(self, "_embedder") or isinstance(self._embedder, _LengthEmbedder)
+        use_length = not hasattr(self, "_embedder") or isinstance(
+            self._embedder, _LengthEmbedder
         )
         if use_length:
             # Guard: never consider equal-length-but-different-text similar

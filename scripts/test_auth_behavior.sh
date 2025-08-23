@@ -1,27 +1,27 @@
 #!/bin/bash
 
 # Authentication Behavior Test Runner
-# 
+#
 # This script runs comprehensive tests to verify all authentication behavior requirements:
-# 
+#
 # Boot (logged out → logged in):
 # - Load app: Network panel shows no 401 from your own APIs.
 # - Sign in: finisher runs once, then exactly one whoami. authed flips once to true.
 # - After auth, getMusicState runs once and succeeds.
-# 
+#
 # Refresh while logged in:
 # - One whoami on mount, no duplicates, no flips. No component makes its own whoami.
-# 
+#
 # Logout:
 # - Cookies cleared symmetrically. authed flips to false once. No privileged calls fire afterward.
-# 
+#
 # WS behavior:
 # - Connect happens only when authed === true.
 # - On forced WS close: one reconnect try; if it fails, UI shows "disconnected" without auth churn.
-# 
+#
 # Health checks:
 # - After "ready: ok", polling slows down. Health calls never mutate auth state.
-# 
+#
 # CSP/service worker sanity:
 # - whoami responses are never cached; no SW intercepts; headers show no-store.
 
@@ -59,26 +59,26 @@ command_exists() {
 # Function to run backend tests
 run_backend_tests() {
     print_status "Running backend authentication behavior tests..."
-    
+
     if ! command_exists python; then
         print_error "Python is not installed"
         return 1
     fi
-    
+
     if ! command_exists pytest; then
         print_warning "pytest not found, installing..."
         pip install pytest pytest-asyncio
     fi
-    
+
     # Set test environment variables
     export PYTEST_CURRENT_TEST="auth_behavior"
     export JWT_SECRET="test-secret-key"
     export USERS_DB=":memory:"
-    
+
     # Run the backend tests
     cd "$(dirname "$0")/.."
     python -m pytest tests/test_auth_behavior.py -v --tb=short
-    
+
     if [ $? -eq 0 ]; then
         print_success "Backend authentication behavior tests passed"
         return 0
@@ -91,32 +91,32 @@ run_backend_tests() {
 # Function to run frontend tests
 run_frontend_tests() {
     print_status "Running frontend authentication behavior tests..."
-    
+
     if ! command_exists node; then
         print_error "Node.js is not installed"
         return 1
     fi
-    
+
     if ! command_exists npm; then
         print_error "npm is not installed"
         return 1
     fi
-    
+
     # Check if we're in the right directory
     if [ ! -f "package.json" ]; then
         print_error "package.json not found. Please run this script from the frontend directory or project root."
         return 1
     fi
-    
+
     # Install dependencies if node_modules doesn't exist
     if [ ! -d "node_modules" ]; then
         print_warning "Installing frontend dependencies..."
         npm install
     fi
-    
+
     # Run the frontend tests
     npm test -- --testPathPattern=authBehavior.test.tsx --verbose
-    
+
     if [ $? -eq 0 ]; then
         print_success "Frontend authentication behavior tests passed"
         return 0
@@ -129,15 +129,15 @@ run_frontend_tests() {
 # Function to run integration tests
 run_integration_tests() {
     print_status "Running integration tests..."
-    
+
     # This would run tests that verify the full stack works together
     # For now, we'll just run both backend and frontend tests
     run_backend_tests
     backend_result=$?
-    
+
     run_frontend_tests
     frontend_result=$?
-    
+
     if [ $backend_result -eq 0 ] && [ $frontend_result -eq 0 ]; then
         print_success "All authentication behavior tests passed"
         return 0
@@ -150,7 +150,7 @@ run_integration_tests() {
 # Function to check test coverage
 check_coverage() {
     print_status "Checking test coverage..."
-    
+
     # Backend coverage
     if command_exists coverage; then
         cd "$(dirname "$0")/.."
@@ -159,7 +159,7 @@ check_coverage() {
     else
         print_warning "coverage not installed, skipping coverage report"
     fi
-    
+
     # Frontend coverage
     if [ -f "package.json" ]; then
         npm test -- --coverage --testPathPattern=authBehavior.test.tsx --collectCoverageFrom="src/services/auth*,src/hooks/useAuth*,src/lib/api*"
@@ -209,7 +209,7 @@ main() {
     print_status "Starting Authentication Behavior Test Suite"
     echo "=================================================="
     echo ""
-    
+
     # Parse command line arguments
     case "${1:-all}" in
         "backend")
@@ -254,7 +254,7 @@ main() {
             exit 1
             ;;
     esac
-    
+
     echo ""
     show_summary
 }

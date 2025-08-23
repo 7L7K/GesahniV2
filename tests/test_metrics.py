@@ -33,5 +33,3 @@ def test_metrics_health_requests_count_and_latency():
     # /metrics is unauthenticated
     r = c.get("/metrics", headers={"Cookie": "access_token=bogus"})
     assert r.status_code == 200
-
-

@@ -146,7 +146,7 @@ LOG_LEVEL=DEBUG python -m uvicorn app.main:app --reload
 ## Files Modified
 
 1. `app/csrf.py` - Added CSRF deny path logging
-2. `app/deps/scopes.py` - Added scope validation deny path logging  
+2. `app/deps/scopes.py` - Added scope validation deny path logging
 3. `app/security.py` - Added token verification, rate limiting, and WebSocket origin deny path logging
 
 ## Next Steps

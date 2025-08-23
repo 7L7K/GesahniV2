@@ -176,8 +176,12 @@ class TestAPIEndpointsComprehensive:
         assert "refresh_token" in data
 
         # Verify tokens are valid JWTs
-        new_access = jwt.decode(data["access_token"], mock_jwt_secret(), algorithms=["HS256"])
-        new_refresh = jwt.decode(data["refresh_token"], mock_jwt_secret(), algorithms=["HS256"])
+        new_access = jwt.decode(
+            data["access_token"], mock_jwt_secret(), algorithms=["HS256"]
+        )
+        new_refresh = jwt.decode(
+            data["refresh_token"], mock_jwt_secret(), algorithms=["HS256"]
+        )
 
         assert new_access["user_id"] == "testuser"
         assert new_refresh["type"] == "refresh"
@@ -230,13 +234,13 @@ class TestAPIEndpointsComprehensive:
         client.cookies.set("access_token", cookies["access_token"])
 
         # Prepare ask request
-        ask_data = {
-            "prompt": "Hello, how are you?",
-            "model": "gpt-4o"
-        }
+        ask_data = {"prompt": "Hello, how are you?", "model": "gpt-4o"}
 
         # Mock route_prompt to return a specific response
-        with patch("app.main.route_prompt", AsyncMock(return_value="Hello! I'm doing well, thank you for asking.")):
+        with patch(
+            "app.main.route_prompt",
+            AsyncMock(return_value="Hello! I'm doing well, thank you for asking."),
+        ):
             response = client.post("/v1/ask", json=ask_data)
 
         assert response.status_code == 200
@@ -273,11 +277,7 @@ class TestAPIEndpointsComprehensive:
         cookies = create_auth_cookies("testuser")
         client.cookies.set("access_token", cookies["access_token"])
 
-        ask_data = {
-            "messages": [
-                {"role": "user", "content": "Hello!"}
-            ]
-        }
+        ask_data = {"messages": [{"role": "user", "content": "Hello!"}]}
 
         with patch("app.main.route_prompt", AsyncMock(return_value="Hi there!")):
             response = client.post("/v1/ask", json=ask_data)
@@ -321,7 +321,7 @@ class TestAPIEndpointsComprehensive:
         response = client.post(
             "/v1/ask",
             data="not json",  # Not JSON
-            headers={"Content-Type": "text/plain"}
+            headers={"Content-Type": "text/plain"},
         )
 
         assert response.status_code == 415
@@ -360,7 +360,10 @@ class TestAPIEndpointsComprehensive:
 
         headers = response.headers
         assert "cache-control" in headers
-        assert "no-store" in headers["cache-control"] or "no-cache" in headers["cache-control"]
+        assert (
+            "no-store" in headers["cache-control"]
+            or "no-cache" in headers["cache-control"]
+        )
         assert "pragma" in headers
         assert headers["pragma"] == "no-cache"
 
@@ -378,10 +381,7 @@ class TestAPIEndpointsComprehensive:
         cookies = create_auth_cookies("testuser")
         client.cookies.set("access_token", cookies["access_token"])
 
-        response = client.get(
-            "/v1/auth/whoami",
-            headers={"X-Request-ID": request_id}
-        )
+        response = client.get("/v1/auth/whoami", headers={"X-Request-ID": request_id})
 
         # Should echo back the request ID
         if "x-request-id" in response.headers:
@@ -401,7 +401,10 @@ class TestAPIEndpointsComprehensive:
 
         # 3. Make authenticated request to protected endpoint
         ask_response = client.post("/v1/ask", json={"prompt": "test"})
-        assert ask_response.status_code in [200, 401]  # May succeed or fail due to mocking
+        assert ask_response.status_code in [
+            200,
+            401,
+        ]  # May succeed or fail due to mocking
 
         # 4. Logout
         logout_response = client.post("/v1/auth/logout")
@@ -452,7 +455,11 @@ class TestAPIEndpointsComprehensive:
         response = client.post("/v1/ask", json=ask_data)
 
         # Should handle large payload gracefully
-        assert response.status_code in [200, 413, 422]  # Success, too large, or validation error
+        assert response.status_code in [
+            200,
+            413,
+            422,
+        ]  # Success, too large, or validation error
 
     def test_malformed_json_handling(self, client: TestClient):
         """Test handling of malformed JSON."""
@@ -463,7 +470,7 @@ class TestAPIEndpointsComprehensive:
         response = client.post(
             "/v1/ask",
             data='{"prompt": "test", invalid}',
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json"},
         )
 
         # Should get a 422 Unprocessable Entity
@@ -516,15 +523,12 @@ class TestAPIEndpointsComprehensive:
 
     def test_unauthorized_access_patterns(self, client: TestClient):
         """Test various unauthorized access patterns."""
-        endpoints = [
-            "/v1/ask",
-            "/v1/auth/logout",
-            "/v1/auth/refresh",
-            "/v1/models"
-        ]
+        endpoints = ["/v1/ask", "/v1/auth/logout", "/v1/auth/refresh", "/v1/models"]
 
         for endpoint in endpoints:
-            response = client.get(endpoint) if "GET" in endpoint else client.post(endpoint)
+            response = (
+                client.get(endpoint) if "GET" in endpoint else client.post(endpoint)
+            )
 
             # Should either be 401/403 (unauthorized) or 422 (validation error)
             assert response.status_code in [401, 403, 404, 422, 405]
@@ -566,7 +570,10 @@ class TestAPIEndpointsComprehensive:
         client.cookies.set("access_token", cookies["access_token"])
 
         # Mock a slow response
-        with patch("app.main.route_prompt", AsyncMock(side_effect=lambda *args, **kwargs: asyncio.sleep(30))):
+        with patch(
+            "app.main.route_prompt",
+            AsyncMock(side_effect=lambda *args, **kwargs: asyncio.sleep(30)),
+        ):
             # This should timeout and return an error
             response = client.post("/v1/ask", json={"prompt": "test"}, timeout=1.0)
 
@@ -583,7 +590,9 @@ class TestAPIEndpointsComprehensive:
         assert response.status_code == 200
 
         # Then simulate an error
-        with patch("app.main.route_prompt", AsyncMock(side_effect=Exception("Test error"))):
+        with patch(
+            "app.main.route_prompt", AsyncMock(side_effect=Exception("Test error"))
+        ):
             response = client.post("/v1/ask", json={"prompt": "test"})
             assert response.status_code == 500
 
@@ -664,10 +673,7 @@ class TestAPIEndpointsComprehensive:
 
     def test_response_format_consistency(self, client: TestClient):
         """Test that all responses follow consistent format."""
-        endpoints = [
-            "/healthz/ready",
-            "/v1/models"
-        ]
+        endpoints = ["/healthz/ready", "/v1/models"]
 
         for endpoint in endpoints:
             response = client.get(endpoint)
@@ -703,7 +709,7 @@ class TestAPIEndpointsComprehensive:
         # Timestamp should be ISO format string
         assert isinstance(data["timestamp"], str)
         # Should be parseable as ISO format
-        datetime.fromisoformat(data["timestamp"].replace('Z', '+00:00'))
+        datetime.fromisoformat(data["timestamp"].replace("Z", "+00:00"))
 
     def test_auth_token_format_validation(self, client: TestClient):
         """Test that auth tokens follow expected format."""
@@ -739,6 +745,7 @@ class TestAPIEndpointsComprehensive:
         results = []
 
         for _ in range(5):
+
             def worker():
                 status = make_auth_request()
                 results.append(status)

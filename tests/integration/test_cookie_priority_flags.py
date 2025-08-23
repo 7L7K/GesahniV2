@@ -15,5 +15,3 @@ def test_cookie_priority_flags_after_login(monkeypatch):
     set_cookies = r.headers.get_list("set-cookie")
     assert any("access_token=" in h for h in set_cookies)
     assert any("Priority=High" in h for h in set_cookies)
-
-

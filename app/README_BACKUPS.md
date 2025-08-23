@@ -41,4 +41,3 @@ Security notes
   - `OTEL_ENABLED=1`
   - `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317` (or your collector)
   - Optional: `OTEL_SERVICE_NAME=gesahni`, `OTEL_SERVICE_VERSION=dev`
-

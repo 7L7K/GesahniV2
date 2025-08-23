@@ -8,5 +8,3 @@ describe('PrimaryStage', () => {
         render(<PrimaryStage />)
     })
 })
-
-

@@ -20,11 +20,15 @@ class _DualQACache(SupportsQACache):
     also go to Chroma for easy rollback.
     """
 
-    def __init__(self, primary: SupportsQACache, fallback: SupportsQACache | None) -> None:
+    def __init__(
+        self, primary: SupportsQACache, fallback: SupportsQACache | None
+    ) -> None:
         self.primary = primary
         self.fallback = fallback
 
-    def get_items(self, ids: list[str] | None = None, include: list[str] | None = None) -> dict[str, list]:
+    def get_items(
+        self, ids: list[str] | None = None, include: list[str] | None = None
+    ) -> dict[str, list]:
         try:
             res = self.primary.get_items(ids=ids, include=include)
         except Exception:
@@ -37,7 +41,9 @@ class _DualQACache(SupportsQACache):
                 pass
         return res
 
-    def upsert(self, *, ids: list[str], documents: list[str], metadatas: list[dict]) -> None:
+    def upsert(
+        self, *, ids: list[str], documents: list[str], metadatas: list[dict]
+    ) -> None:
         self.primary.upsert(ids=ids, documents=documents, metadatas=metadatas)
         if self.fallback is not None and _flag("VECTOR_DUAL_QA_WRITE_BOTH"):
             try:
@@ -91,7 +97,9 @@ class DualReadVectorStore:
         try:  # primary
             from app.memory.vector_store.qdrant import QdrantVectorStore  # type: ignore
         except Exception as e:  # pragma: no cover - optional dep guard
-            raise RuntimeError("DualReadVectorStore requires qdrant-client installed") from e
+            raise RuntimeError(
+                "DualReadVectorStore requires qdrant-client installed"
+            ) from e
 
         self._primary = QdrantVectorStore()  # type: ignore[no-redef]
 
@@ -118,7 +126,9 @@ class DualReadVectorStore:
             try:
                 self._fallback.add_user_memory(user_id, memory)
             except Exception:
-                logger.warning("Dual add_user_memory fallback write failed", exc_info=True)
+                logger.warning(
+                    "Dual add_user_memory fallback write failed", exc_info=True
+                )
         return mid
 
     def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> list[str]:
@@ -134,6 +144,7 @@ class DualReadVectorStore:
             if fb:
                 try:
                     from app import metrics  # lazy
+
                     metrics.VECTOR_FALLBACK_READS.labels("memory").inc()
                 except Exception:
                     pass
@@ -187,6 +198,7 @@ class DualReadVectorStore:
                 if fb is not None:
                     try:
                         from app import metrics  # lazy
+
                         metrics.VECTOR_FALLBACK_READS.labels("qa").inc()
                     except Exception:
                         pass
@@ -218,5 +230,3 @@ class DualReadVectorStore:
 
 
 __all__ = ["DualReadVectorStore"]
-
-

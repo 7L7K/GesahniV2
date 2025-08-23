@@ -8,7 +8,7 @@ The environment configuration system consists of:
 
 1. **`env.template`** - Base template with all available configuration options
 2. **`env.dev`** - Development environment configuration
-3. **`env.staging`** - Staging environment configuration  
+3. **`env.staging`** - Staging environment configuration
 4. **`env.prod`** - Production environment configuration
 5. **`scripts/switch_env.sh`** - Script to easily switch between environments
 

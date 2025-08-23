@@ -14,5 +14,3 @@ def test_observe_with_exemplar_fallbacks():
     h = Hist()
     otel_utils.observe_with_exemplar(h, 1.23, exemplar_labels={"a": "b"})
     assert h.values == [1.23]
-
-

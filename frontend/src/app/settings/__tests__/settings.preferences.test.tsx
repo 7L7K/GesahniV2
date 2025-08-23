@@ -42,5 +42,3 @@ describe('SettingsPage AI preferences', () => {
     expect((checkboxes[1] as HTMLInputElement).checked).toBe(false);
   });
 });
-
-

@@ -11,5 +11,3 @@ class GoogleCalendarConfig:
 
 def disconnect() -> None:
     pass
-
-

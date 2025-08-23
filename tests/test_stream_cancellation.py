@@ -33,5 +33,3 @@ def test_stream_cancels_cleanly(monkeypatch):
         # Read only first chunk and then break (simulate client disconnect)
         next(resp.iter_text())
         # context manager exit will cancel the response stream; no exception expected
-
-

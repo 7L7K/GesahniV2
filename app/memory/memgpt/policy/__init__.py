@@ -5,7 +5,9 @@ from typing import List
 from ..contracts import MemoryClaim
 
 
-def should_store(claim: MemoryClaim, *, novelty_tau: float = 0.6, importance_tau: float = 0.6) -> bool:
+def should_store(
+    claim: MemoryClaim, *, novelty_tau: float = 0.6, importance_tau: float = 0.6
+) -> bool:
     """Decide whether to store a claim based on naive thresholds.
 
     Replace with task-type specific rules as needed.
@@ -22,5 +24,3 @@ def inject_for_task(task: str, claims: list[MemoryClaim]) -> list[str]:
 
 
 __all__ = ["should_store", "inject_for_task"]
-
-

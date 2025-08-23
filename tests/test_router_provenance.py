@@ -29,6 +29,7 @@ def _setup_test_environment(monkeypatch):
         def get(self, *a, **k):
             def decorator(fn):
                 return fn
+
             return decorator
 
     fastapi_mod.APIRouter = _APIRouter
@@ -45,14 +46,24 @@ def _setup_test_environment(monkeypatch):
         "sentence_transformers",
         types.SimpleNamespace(SentenceTransformer=object, util=None),
     )
-    monkeypatch.setitem(sys.modules, "chromadb", types.SimpleNamespace(PersistentClient=object))
-    monkeypatch.setitem(sys.modules, "aiosqlite", types.SimpleNamespace(connect=lambda *a, **k: None))
-    monkeypatch.setitem(sys.modules, "pydantic", types.SimpleNamespace(BaseModel=object))
-    monkeypatch.setitem(sys.modules, "aiofiles", types.SimpleNamespace(open=lambda *a, **k: None))
+    monkeypatch.setitem(
+        sys.modules, "chromadb", types.SimpleNamespace(PersistentClient=object)
+    )
+    monkeypatch.setitem(
+        sys.modules, "aiosqlite", types.SimpleNamespace(connect=lambda *a, **k: None)
+    )
+    monkeypatch.setitem(
+        sys.modules, "pydantic", types.SimpleNamespace(BaseModel=object)
+    )
+    monkeypatch.setitem(
+        sys.modules, "aiofiles", types.SimpleNamespace(open=lambda *a, **k: None)
+    )
     monkeypatch.setitem(
         sys.modules,
         "rapidfuzz",
-        types.SimpleNamespace(fuzz=types.SimpleNamespace(partial_ratio=lambda *a, **k: 0)),
+        types.SimpleNamespace(
+            fuzz=types.SimpleNamespace(partial_ratio=lambda *a, **k: 0)
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -122,7 +133,9 @@ def _setup_test_environment(monkeypatch):
     monkeypatch.setitem(
         sys.modules,
         "openai",
-        types.SimpleNamespace(OpenAI=_OpenAI, AsyncOpenAI=_AsyncOpenAI, OpenAIError=_OpenAIError),
+        types.SimpleNamespace(
+            OpenAI=_OpenAI, AsyncOpenAI=_AsyncOpenAI, OpenAIError=_OpenAIError
+        ),
     )
 
     yield

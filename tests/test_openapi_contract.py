@@ -10,6 +10,7 @@ def _client():
     os.environ.setdefault("JWT_OPTIONAL_IN_TESTS", "1")
     os.environ.setdefault("ADMIN_TOKEN", "t")
     from app.main import app
+
     return TestClient(app)
 
 
@@ -51,7 +52,7 @@ def test_openapi_contract_models_examples_present():
             json_schema = None
             for mt, item in content.items():
                 if mt.startswith("application/json"):
-                    json_schema = (item.get("schema") or {})
+                    json_schema = item.get("schema") or {}
                     break
             # Require example for JSON bodies when present
             if json_schema is not None:
@@ -60,7 +61,9 @@ def test_openapi_contract_models_examples_present():
                     missing.append((path, method, "request.example_missing"))
             # Require response model schema for 200
             resp = (op.get("responses") or {}).get("200") or {}
-            any_schema = any((c.get("schema") or {}) for c in (resp.get("content") or {}).values())
+            any_schema = any(
+                (c.get("schema") or {}) for c in (resp.get("content") or {}).values()
+            )
             if not any_schema:
                 missing.append((path, method, "response.schema_missing"))
     assert not missing, f"Missing OpenAPI examples/schemas: {missing}"
@@ -98,7 +101,7 @@ def test_openapi_contract_hits_examples():
             json_schema = None
             for mt, item in content.items():
                 if mt.startswith("application/json"):
-                    json_schema = (item.get("schema") or {})
+                    json_schema = item.get("schema") or {}
                     break
             if json_schema is None:
                 continue
@@ -115,5 +118,3 @@ def test_openapi_contract_hits_examples():
             if resp.status_code not in (200, 400, 401, 403):
                 errors.append((path, method, f"status={resp.status_code}"))
     assert not errors, f"Example POST/PUT calls failed: {errors}"
-
-

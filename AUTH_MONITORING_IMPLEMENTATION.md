@@ -10,7 +10,7 @@ This document summarizes the implementation of structured logging and monitoring
 
 **Auth Event Types:**
 - ✅ `auth.finish.start/end` - Authentication finish process timing
-- ✅ `auth.whoami.start/end` - Whoami endpoint call timing  
+- ✅ `auth.whoami.start/end` - Whoami endpoint call timing
 - ✅ `auth.lock.on/off` - Authentication lock events
 - ✅ `auth.authed.change` - Authentication state changes
 

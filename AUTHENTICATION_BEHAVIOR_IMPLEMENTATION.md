@@ -123,10 +123,10 @@ class AuthOrchestratorImpl {
   async checkAuth(): Promise<void> {
     // Prevent duplicate calls
     if (this.state.isLoading) return;
-    
+
     // Coordinate with bootstrap manager
     if (!this.bootstrapManager.startAuthBootstrap()) return;
-    
+
     // Single whoami call
     const response = await apiFetch('/v1/whoami', { auth: false });
     // Update state and notify subscribers
@@ -141,13 +141,13 @@ class WsHub {
   start(channels?: Record<WSName, boolean>) {
     // Only connect when authenticated
     if (!authState.isAuthenticated) return;
-    
+
     // Connect to specified channels
     Object.entries(channels).forEach(([name, enabled]) => {
       if (enabled) this.connect(name);
     });
   }
-  
+
   private connect(name: WSName) {
     // Limited reconnection attempts
     if (this.connections[name].reconnectAttempts >= 1) {

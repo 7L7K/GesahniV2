@@ -24,5 +24,3 @@ def default_ui_state() -> UiState:
         consent_calendar=None,
         do_not_disturb_window=None,
     )
-
-

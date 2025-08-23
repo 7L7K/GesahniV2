@@ -47,5 +47,3 @@ def test_ablation_modes(monkeypatch):
     assert isinstance(mmr.get("items"), list)
     assert isinstance(hyde.get("items"), list)
     assert isinstance(cascade.get("items"), list)
-
-

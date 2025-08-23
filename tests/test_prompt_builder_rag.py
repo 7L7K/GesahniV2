@@ -34,6 +34,7 @@ chromadb_stub = types.SimpleNamespace(
 )
 sys.modules.setdefault("chromadb", chromadb_stub)
 
+
 class _Settings:
     def __init__(self, *a, **k):
         pass
@@ -61,7 +62,9 @@ class _DummyRAG:
 
 
 def test_prompt_builder_appends_rag_sources(monkeypatch):
-    monkeypatch.setattr(prompt_builder.memgpt, "summarize_session", lambda sid, user_id=None: "")
+    monkeypatch.setattr(
+        prompt_builder.memgpt, "summarize_session", lambda sid, user_id=None: ""
+    )
     monkeypatch.setattr(
         prompt_builder, "safe_query_user_memories", lambda uid, q, k=5: []
     )

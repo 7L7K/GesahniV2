@@ -37,22 +37,29 @@ def init_tracing() -> bool:
     try:
         import os
 
-        enabled = os.getenv("OTEL_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
+        enabled = os.getenv("OTEL_ENABLED", "1").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         if not enabled:
             return False
         if _trace is None:
             return False
 
         # Avoid reinitialization if a provider is already set
-        if getattr(_trace, "get_tracer_provider", None) and getattr(_trace.get_tracer_provider(), "_configured", False):
+        if getattr(_trace, "get_tracer_provider", None) and getattr(
+            _trace.get_tracer_provider(), "_configured", False
+        ):
             return True
 
         # Lazy import SDK bits; guarded to avoid hard dependency in minimal envs
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
             OTLPSpanExporter,
-        )
-        from opentelemetry.sdk.resources import (  # type: ignore
-            SERVICE_NAME,
+        )  # type: ignore
+        from opentelemetry.sdk.resources import (
+            SERVICE_NAME,  # type: ignore
             SERVICE_VERSION,
             Resource,
         )
@@ -61,14 +68,18 @@ def init_tracing() -> bool:
 
         service_name = os.getenv("OTEL_SERVICE_NAME", "gesahni")
         service_version = os.getenv("OTEL_SERVICE_VERSION", "0")
-        resource = Resource.create({SERVICE_NAME: service_name, SERVICE_VERSION: service_version})
+        resource = Resource.create(
+            {SERVICE_NAME: service_name, SERVICE_VERSION: service_version}
+        )
 
         provider = TracerProvider(resource=resource)
         # mark configured to avoid double init
         provider._configured = True
 
         # Exporter endpoint (e.g., http://localhost:4317)
-        endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") or os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+        endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") or os.getenv(
+            "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"
+        )
         kwargs: dict[str, Any] = {}
         if endpoint:
             kwargs["endpoint"] = endpoint
@@ -158,7 +169,9 @@ def get_trace_id_hex() -> str:
         return ""
 
 
-def observe_with_exemplar(hist, value: float, *, exemplar_labels: dict[str, str] | None = None):
+def observe_with_exemplar(
+    hist, value: float, *, exemplar_labels: dict[str, str] | None = None
+):
     """Attempt to observe a Histogram with exemplars; fall back if unsupported."""
     try:
         if exemplar_labels:
@@ -170,7 +183,6 @@ def observe_with_exemplar(hist, value: float, *, exemplar_labels: dict[str, str]
         hist.observe(value)
     except Exception:
         hist.observe(value)
-
 
 
 def shutdown_tracing(timeout_millis: int = 200) -> None:
@@ -203,4 +215,3 @@ def shutdown_tracing(timeout_millis: int = 200) -> None:
                 pass
     except Exception:  # pragma: no cover - never crash on shutdown
         pass
-

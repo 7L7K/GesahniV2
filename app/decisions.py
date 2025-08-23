@@ -78,5 +78,3 @@ __all__ = [
     "get_explain",
     "add_trace_event",
 ]
-
-

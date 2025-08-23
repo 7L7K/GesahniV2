@@ -15,7 +15,11 @@ def test_refresh_requires_intent_when_none(monkeypatch):
     # With header
     r2 = c.post("/v1/auth/refresh", headers={"X-Auth-Intent": "refresh"})
     # Will likely 401 due to missing cookies, but must NOT fail for missing intent
-    assert r2.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.OK, HTTPStatus.BAD_REQUEST}
+    assert r2.status_code in {
+        HTTPStatus.UNAUTHORIZED,
+        HTTPStatus.OK,
+        HTTPStatus.BAD_REQUEST,
+    }
 
 
 def test_refresh_allowed_first_party(monkeypatch):
@@ -24,6 +28,8 @@ def test_refresh_allowed_first_party(monkeypatch):
     c = TestClient(app)
     r = c.post("/v1/auth/refresh")
     # In lax mode, header not required; backend may still 401 for other reasons
-    assert r.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.OK, HTTPStatus.BAD_REQUEST}
-
-
+    assert r.status_code in {
+        HTTPStatus.UNAUTHORIZED,
+        HTTPStatus.OK,
+        HTTPStatus.BAD_REQUEST,
+    }

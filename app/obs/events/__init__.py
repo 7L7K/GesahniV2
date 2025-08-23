@@ -8,6 +8,7 @@ def voice_stage_event(stage: str, ms: int) -> None:
 def skill_latency(skill: str, ms: int) -> None:
     _ = (skill, ms)
 
+
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -25,5 +26,3 @@ def emit(stage: str, **meta: Any) -> None:
 
 
 __all__ = ["emit"]
-
-

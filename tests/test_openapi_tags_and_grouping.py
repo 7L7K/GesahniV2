@@ -43,7 +43,7 @@ def test_no_extra_operation_tags():
     for _path, methods in o.get("paths", {}).items():
         for _m, op in methods.items():
             if isinstance(op, dict):
-                for t in (op.get("tags") or []):
+                for t in op.get("tags") or []:
                     seen.add(t)
     assert seen.issubset(allowed), f"unexpected tags present: {sorted(seen - allowed)}"
     # ensure each group appears at least once
@@ -63,10 +63,14 @@ def test_no_extra_operation_tags():
         ("/v1/login", "post", "Auth"),
     ],
 )
-def test_specific_endpoints_are_grouped_by_expected_tag(path: str, method: str, expected_tag: str):
+def test_specific_endpoints_are_grouped_by_expected_tag(
+    path: str, method: str, expected_tag: str
+):
     o = _openapi()
     op = _find_op(o, path, method)
-    assert expected_tag in (op.get("tags") or []), f"{path} not tagged as {expected_tag}"
+    assert expected_tag in (
+        op.get("tags") or []
+    ), f"{path} not tagged as {expected_tag}"
 
 
 def test_healthz_is_admin_tag():
@@ -87,24 +91,30 @@ def test_healthz_is_admin_tag():
         ("/v1/care/alerts", "post", "AlertCreate", "AlertRecord"),
     ],
 )
-def test_examples_present_on_request_and_response_models(path, method, req_schema_name, res_schema_name):
+def test_examples_present_on_request_and_response_models(
+    path, method, req_schema_name, res_schema_name
+):
     o = _openapi()
     op = _find_op(o, path, method)
     # Request schema example
     rb = op.get("requestBody", {})
     assert isinstance(rb, dict) and rb, f"missing requestBody for {path}"
     content = rb.get("content", {}).get("application/json", {})
-    sch = (content.get("schema") or {})
+    sch = content.get("schema") or {}
     ref = sch.get("$ref")
-    assert ref and ref.endswith("/" + req_schema_name), f"unexpected request schema for {path}: {ref}"
+    assert ref and ref.endswith(
+        "/" + req_schema_name
+    ), f"unexpected request schema for {path}: {ref}"
     req_schema = _schema(o, ref)
     assert "example" in req_schema, f"missing example on {req_schema_name}"
     # Response schema example
     res = (op.get("responses") or {}).get("200") or {}
     content = (res.get("content") or {}).get("application/json") or {}
-    sch = (content.get("schema") or {})
+    sch = content.get("schema") or {}
     ref = sch.get("$ref")
-    assert ref and ref.endswith("/" + res_schema_name), f"unexpected 200 model for {path}: {ref}"
+    assert ref and ref.endswith(
+        "/" + res_schema_name
+    ), f"unexpected 200 model for {path}: {ref}"
     res_schema = _schema(o, ref)
     assert "example" in res_schema, f"missing example on {res_schema_name}"
 
@@ -113,5 +123,3 @@ def test_auth_token_endpoint_present_and_tagged_auth():
     o = _openapi()
     op = _find_op(o, "/v1/auth/token", "post")
     assert "Auth" in (op.get("tags") or [])
-
-

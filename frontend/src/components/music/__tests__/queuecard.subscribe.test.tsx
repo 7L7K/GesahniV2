@@ -17,5 +17,3 @@ describe('QueueCard subscribes to hub events', () => {
         expect(((global as any).WebSocket?.mock?.calls || []).some((c: any[]) => String(c?.[0] || '').includes('/v1/ws/music'))).toBe(false)
     })
 })
-
-

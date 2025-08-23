@@ -68,7 +68,7 @@ def test_login_is_public_endpoint(monkeypatch):
     # Verify tokens are returned
     assert "access_token" in data
     assert "refresh_token" in data
-    
+
     # Verify token contents
     token = data["access_token"]
     refresh = data["refresh_token"]

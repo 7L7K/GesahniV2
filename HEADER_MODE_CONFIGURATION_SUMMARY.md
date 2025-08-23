@@ -123,7 +123,7 @@ export function wsUrl(path: string): string {
 ## Files Modified
 
 1. `frontend/env.localhost` - Environment configuration
-2. `env.localhost` - Backend environment configuration  
+2. `env.localhost` - Backend environment configuration
 3. `frontend/src/lib/api.ts` - API layer authentication logic
 4. `test_header_auth_config.py` - Configuration verification script
 

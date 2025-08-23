@@ -24,5 +24,3 @@ export function NowPlayingCard() {
         </div>
     );
 }
-
-

@@ -123,7 +123,12 @@ async def _check_doors_unlocked() -> None:
             if eid.startswith("lock.") and str(data.get("state")) == "unlocked":
                 unlocked.append(eid)
         if unlocked:
-            msg = {"type": "self_task", "task": "door_unlocked", "entities": unlocked, "ts": _now_iso()}
+            msg = {
+                "type": "self_task",
+                "task": "door_unlocked",
+                "entities": unlocked,
+                "ts": _now_iso(),
+            }
             try:
                 from .history import append_history
 
@@ -142,7 +147,9 @@ def _write_self_review() -> None:
             "ts": _now_iso(),
             "metrics": analytics.get_metrics(),
         }
-        _SELF_REVIEW_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        _SELF_REVIEW_PATH.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         logger.info("self_review written")
     except Exception:
         logger.debug("self_review write failed", exc_info=True)
@@ -279,7 +286,13 @@ async def refresh_snapshot(user_id: str) -> Snapshot:
     presence = await _fetch_presence(user_id)
     weather = await _fetch_weather(user_id)
     calendar = await _fetch_calendar(user_id)
-    snap = Snapshot(user_id=user_id, created_at=now, presence_ok=presence, weather=weather, calendar=calendar)
+    snap = Snapshot(
+        user_id=user_id,
+        created_at=now,
+        presence_ok=presence,
+        weather=weather,
+        calendar=calendar,
+    )
     _SNAP[user_id] = (snap, now + _TTL)
     return snap
 
@@ -306,11 +319,17 @@ def _missing_profile_key(user_id: str) -> str | None:
     return None
 
 
-async def maybe_curiosity_prompt(user_id: str, last_confidence: float | None) -> str | None:
+async def maybe_curiosity_prompt(
+    user_id: str, last_confidence: float | None
+) -> str | None:
     tau = _dynamic_tau(user_id)
     need = _missing_profile_key(user_id)
     snap = await refresh_snapshot(user_id)
-    if (last_confidence is not None and last_confidence < tau) or need or _is_anomalous(snap):
+    if (
+        (last_confidence is not None and last_confidence < tau)
+        or need
+        or _is_anomalous(snap)
+    ):
         if need:
             return f"Quick question: what's your {need.replace('_', ' ')}?"
         return "Quick check-in: anything you'd like to adjust for tonight?"
@@ -325,6 +344,7 @@ def handle_user_reply(user_id: str, text: str) -> None:
         val = parts[1].strip()
         try:
             from .memory.write_policy import memory_write_policy
+
             if memory_write_policy.should_write_profile(text, key):
                 profile_store.upsert(user_id, key, val, source="utterance")
         except Exception:
@@ -332,6 +352,7 @@ def handle_user_reply(user_id: str, text: str) -> None:
             profile_store.set(user_id, key, val)
         try:
             from .memory.write_policy import memory_write_policy
+
             if memory_write_policy.should_write_memory(text):
                 add_user_memory(user_id, f"{key} = {val}")
         except Exception:
@@ -386,7 +407,13 @@ def _start_scheduler() -> None:
         scheduler = getattr(sched_mod, "scheduler", None)
         if scheduler and hasattr(scheduler, "add_job"):
             # Hourly persistence
-            scheduler.add_job(profile_store.persist_all, trigger="cron", minute=0, id="profile_persist_hourly", replace_existing=True)
+            scheduler.add_job(
+                profile_store.persist_all,
+                trigger="cron",
+                minute=0,
+                id="profile_persist_hourly",
+                replace_existing=True,
+            )
     except Exception:
         # optional dependency; ignore in tests
         pass
@@ -447,5 +474,3 @@ __all__ = [
     "set_presence",
     "on_ha_event",
 ]
-
-

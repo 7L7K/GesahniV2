@@ -61,7 +61,9 @@ class WSSubscribeExample(BaseModel):
     action: str = "subscribe"
     topic: str = "resident:r1"
 
-    model_config = ConfigDict(json_schema_extra={"example": {"action": "subscribe", "topic": "resident:r1"}})
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"action": "subscribe", "topic": "resident:r1"}}
+    )
 
 
 class WSTopicsInfo(BaseModel):
@@ -94,7 +96,9 @@ class WSTopicsInfo(BaseModel):
     )
 
 
-@router.get("/ws/care", response_model=WSTopicsInfo, responses={200: {"model": WSTopicsInfo}})
+@router.get(
+    "/ws/care", response_model=WSTopicsInfo, responses={200: {"model": WSTopicsInfo}}
+)
 async def ws_care_docs(_user_id: str = Depends(get_current_user_id)):
     """WebSocket entry point documentation.
 
@@ -120,7 +124,16 @@ async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
         except Exception:
             pass
         try:
-            logger.info("ws.close policy", extra={"meta": {"endpoint": "/v1/ws/care", "reason": "unauthorized", "code": 1008}})
+            logger.info(
+                "ws.close policy",
+                extra={
+                    "meta": {
+                        "endpoint": "/v1/ws/care",
+                        "reason": "unauthorized",
+                        "code": 1008,
+                    }
+                },
+            )
         except Exception:
             pass
         return
@@ -133,6 +146,7 @@ async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
     # Phase 6.2: Audit WebSocket connect
     try:
         from app.audit import append_audit
+
         append_audit(
             action="ws_connect",
             user_id_hashed=uid,
@@ -146,7 +160,9 @@ async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
     # Post-accept handshake burst control (per-IP). Close immediately with 1013 when exceeded.
     try:
         ip = _client_ip(ws)
-        test_salt = os.getenv("PYTEST_RUNNING") or os.getenv("PYTEST_CURRENT_TEST") or ""
+        test_salt = (
+            os.getenv("PYTEST_RUNNING") or os.getenv("PYTEST_CURRENT_TEST") or ""
+        )
         key = f"{ip}:{test_salt}" if test_salt else ip
         now = time.monotonic()
         async with _hs_lock:
@@ -162,7 +178,17 @@ async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
             except Exception:
                 pass
             try:
-                logger.info("ws.close policy", extra={"meta": {"endpoint": "/v1/ws/care", "reason": "too_busy", "code": 1013, "ip": ip}})
+                logger.info(
+                    "ws.close policy",
+                    extra={
+                        "meta": {
+                            "endpoint": "/v1/ws/care",
+                            "reason": "too_busy",
+                            "code": 1013,
+                            "ip": ip,
+                        }
+                    },
+                )
             except Exception:
                 pass
             return
@@ -170,15 +196,28 @@ async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
         # Do not fail connection on limiter bookkeeping error
         pass
     try:
-        logger.info("ws.accept", extra={"meta": {"endpoint": "/v1/ws/care", "user_id": uid, "subprotocol": "json.realtime.v1"}})
+        logger.info(
+            "ws.accept",
+            extra={
+                "meta": {
+                    "endpoint": "/v1/ws/care",
+                    "user_id": uid,
+                    "subprotocol": "json.realtime.v1",
+                }
+            },
+        )
     except Exception:
         pass
     import time as _t
+
     last_pong = _t.monotonic()
     try:
         while True:
             import asyncio as _aio
-            done, _ = await _aio.wait({_aio.create_task(ws.receive_text())}, timeout=25.0)
+
+            done, _ = await _aio.wait(
+                {_aio.create_task(ws.receive_text())}, timeout=25.0
+            )
             if not done:
                 try:
                     await ws.send_text("ping")
@@ -198,6 +237,7 @@ async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
             # Schema-validate client messages
             try:
                 import json
+
                 msg = json.loads(data)
             except Exception:
                 msg = data
@@ -208,17 +248,25 @@ async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
                 try:
                     # Get scopes from WebSocket state (set by verify_ws)
                     scopes = getattr(ws.state, "scopes", [])
-                    if topic == f"resident:{uid}" or ("admin" in scopes or "admin:write" in scopes):
+                    if topic == f"resident:{uid}" or (
+                        "admin" in scopes or "admin:write" in scopes
+                    ):
                         allow = True
                 except Exception:
                     allow = False
-                if topic.startswith("resident:") and len(topic) > len("resident:") and allow:
+                if (
+                    topic.startswith("resident:")
+                    and len(topic) > len("resident:")
+                    and allow
+                ):
                     async with _lock:
                         _topics.setdefault(topic, set()).add(ws)
                 else:
                     # ignore invalid or unauthorized topics silently
                     pass
-            elif msg == "ping" or (isinstance(msg, dict) and msg.get("action") == "ping"):
+            elif msg == "ping" or (
+                isinstance(msg, dict) and msg.get("action") == "ping"
+            ):
                 await ws.send_text("pong")
             else:
                 # ignore unsupported messages
@@ -229,6 +277,7 @@ async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
         # Phase 6.2: Audit WebSocket disconnect
         try:
             from app.audit import append_audit
+
             append_audit(
                 action="ws_disconnect",
                 user_id_hashed=uid,
@@ -247,5 +296,3 @@ async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
 async def broadcast_resident(resident_id: str, event: str, data: dict) -> None:
     topic = f"resident:{resident_id}"
     await _broadcast(topic, {"event": event, **data})
-
-

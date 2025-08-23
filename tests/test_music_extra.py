@@ -24,7 +24,9 @@ def _client():
 def _auth():
     import jwt as _jwt
 
-    token = _jwt.encode({"user_id": "u_test"}, os.getenv("JWT_SECRET", "secret"), algorithm="HS256")
+    token = _jwt.encode(
+        {"user_id": "u_test"}, os.getenv("JWT_SECRET", "secret"), algorithm="HS256"
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -32,19 +34,25 @@ def test_state_spotify_provider_and_track_mapping(monkeypatch):
     import app.api.music as music
 
     monkeypatch.setattr(music, "PROVIDER_SPOTIFY", True)
-    monkeypatch.setattr(music, "_provider_state", lambda uid: {
-        "is_playing": True,
-        "progress_ms": 12345,
-        "item": {
-            "id": "trkA",
-            "name": "Alpha",
-            "duration_ms": 200000,
-            "artists": [{"name": "AA"}],
-            "album": {"images": [{"url": "http://img/alpha.jpg"}]},
+    monkeypatch.setattr(
+        music,
+        "_provider_state",
+        lambda uid: {
+            "is_playing": True,
+            "progress_ms": 12345,
+            "item": {
+                "id": "trkA",
+                "name": "Alpha",
+                "duration_ms": 200000,
+                "artists": [{"name": "AA"}],
+                "album": {"images": [{"url": "http://img/alpha.jpg"}]},
+            },
         },
-    })
+    )
     # Avoid network fetch
-    monkeypatch.setattr(music, "_ensure_album_cached", lambda url, tid: "/album_art/trkA.jpg")
+    monkeypatch.setattr(
+        music, "_ensure_album_cached", lambda url, tid: "/album_art/trkA.jpg"
+    )
     c = _client()
     body = c.get("/v1/state", headers=_auth()).json()
     assert body["is_playing"] is True
@@ -56,13 +64,34 @@ def test_queue_mapping_spotify(monkeypatch):
     import app.api.music as music
 
     monkeypatch.setattr(music, "PROVIDER_SPOTIFY", True)
-    monkeypatch.setattr(music, "_provider_queue", lambda uid: (
-        {"item": {"id": "cur1", "name": "C", "artists": [{"name": "X"}], "album": {"images": []}}},
-        [
-            {"id": "n1", "name": "N1", "artists": [{"name": "Y"}], "album": {"images": []}},
-            {"id": "n2", "name": "N2", "artists": [{"name": "Z"}], "album": {"images": []}},
-        ],
-    ))
+    monkeypatch.setattr(
+        music,
+        "_provider_queue",
+        lambda uid: (
+            {
+                "item": {
+                    "id": "cur1",
+                    "name": "C",
+                    "artists": [{"name": "X"}],
+                    "album": {"images": []},
+                }
+            },
+            [
+                {
+                    "id": "n1",
+                    "name": "N1",
+                    "artists": [{"name": "Y"}],
+                    "album": {"images": []},
+                },
+                {
+                    "id": "n2",
+                    "name": "N2",
+                    "artists": [{"name": "Z"}],
+                    "album": {"images": []},
+                },
+            ],
+        ),
+    )
     monkeypatch.setattr(music, "_ensure_album_cached", lambda url, tid: None)
     c = _client()
     body = c.get("/v1/queue", headers=_auth()).json()
@@ -81,10 +110,26 @@ def test_recommendations_filtering_explicit(monkeypatch):
     st.vibe.explicit = False
     save_state("u_test", st)
     tracks = [
-        {"id": "e1", "name": "E", "artists": [], "album": {"images": []}, "explicit": True},
-        {"id": "c1", "name": "C", "artists": [], "album": {"images": []}, "explicit": False},
+        {
+            "id": "e1",
+            "name": "E",
+            "artists": [],
+            "album": {"images": []},
+            "explicit": True,
+        },
+        {
+            "id": "c1",
+            "name": "C",
+            "artists": [],
+            "album": {"images": []},
+            "explicit": False,
+        },
     ]
-    monkeypatch.setattr(music, "_provider_recommendations", lambda uid, seed_tracks=None, vibe=None, limit=10: tracks)
+    monkeypatch.setattr(
+        music,
+        "_provider_recommendations",
+        lambda uid, seed_tracks=None, vibe=None, limit=10: tracks,
+    )
     c = _client()
     out = c.get("/v1/recommendations", headers=_auth()).json()
     ids = [r["id"] for r in out["recommendations"]]
@@ -101,10 +146,20 @@ def test_recommendations_limit_clamp(monkeypatch):
     st.recs_cached_at = None
     save_state("u_test", st)
     many = [
-        {"id": f"t{i}", "name": "", "artists": [], "album": {"images": []}, "explicit": False}
+        {
+            "id": f"t{i}",
+            "name": "",
+            "artists": [],
+            "album": {"images": []},
+            "explicit": False,
+        }
         for i in range(25)
     ]
-    monkeypatch.setattr(music, "_provider_recommendations", lambda uid, seed_tracks=None, vibe=None, limit=10: many)
+    monkeypatch.setattr(
+        music,
+        "_provider_recommendations",
+        lambda uid, seed_tracks=None, vibe=None, limit=10: many,
+    )
     c = _client()
     out = c.get("/v1/recommendations?limit=50", headers=_auth()).json()
     assert len(out["recommendations"]) == 10
@@ -162,8 +217,16 @@ def test_temporary_volume_twice_restores_first(monkeypatch):
     c = _client()
     c.post("/v1/vibe", json={"energy": 0.7}, headers=_auth())
     c.post("/v1/music", json={"command": "volume", "volume": 50}, headers=_auth())
-    c.post("/v1/music", json={"command": "volume", "volume": 10, "temporary": True}, headers=_auth())
-    c.post("/v1/music", json={"command": "volume", "volume": 12, "temporary": True}, headers=_auth())
+    c.post(
+        "/v1/music",
+        json={"command": "volume", "volume": 10, "temporary": True},
+        headers=_auth(),
+    )
+    c.post(
+        "/v1/music",
+        json={"command": "volume", "volume": 12, "temporary": True},
+        headers=_auth(),
+    )
     c.post("/v1/music/restore", headers=_auth())
     after = c.get("/v1/state", headers=_auth()).json()["volume"]
     assert after == 50
@@ -219,5 +282,3 @@ def test_state_includes_device_id_after_set():
     c.post("/v1/music/device", json={"device_id": "dev-9"}, headers=_auth())
     st = c.get("/v1/state", headers=_auth()).json()
     assert st["device_id"] == "dev-9"
-
-

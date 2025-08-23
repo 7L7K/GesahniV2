@@ -64,14 +64,14 @@ private detectOscillation(prevState: AuthState, newState: AuthState): boolean {
         const timeSinceLastChange = Date.now() - this.lastWhoamiCall;
         return timeSinceLastChange < 5000; // 5 seconds threshold for oscillation
     }
-    
+
     // Check for rapid authentication state changes
-    if (prevState.isAuthenticated !== newState.isAuthenticated || 
+    if (prevState.isAuthenticated !== newState.isAuthenticated ||
         prevState.sessionReady !== newState.sessionReady) {
         const timeSinceLastChange = Date.now() - this.lastWhoamiCall;
         return timeSinceLastChange < 3000; // 3 seconds threshold for auth state oscillation
     }
-    
+
     return false;
 }
 ```
@@ -117,7 +117,7 @@ cleanup(): void {
     this.backoffUntil = 0;
     this.oscillationDetectionCount = 0;
     this.lastSuccessfulState = null;
-    
+
     // Clear any pending operations
     if (this.debounceTimer) {
         clearTimeout(this.debounceTimer);

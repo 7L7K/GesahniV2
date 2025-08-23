@@ -57,18 +57,22 @@ class TvConfigResponse(BaseModel):
 
 class TVConfigUpdate(BaseModel):
     ambient_rotation: int | None = None
-    rail: str | None = None  # allow any string; endpoints enforce allowed set for 400 not 422
+    rail: str | None = (
+        None  # allow any string; endpoints enforce allowed set for 400 not 422
+    )
     quiet_hours: QuietHours | None = None
     default_vibe: str | None = None
 
     model_config = ConfigDict(
         title="TVConfigUpdate",
         json_schema_extra={
-            "example": {"ambient_rotation": 15, "rail": "admin", "default_vibe": "Calm Night"}
+            "example": {
+                "ambient_rotation": 15,
+                "rail": "admin",
+                "default_vibe": "Calm Night",
+            }
         },
     )
 
 
 __all__ = ["QuietHours", "TvConfig", "TvConfigResponse", "TVConfigUpdate"]
-
-

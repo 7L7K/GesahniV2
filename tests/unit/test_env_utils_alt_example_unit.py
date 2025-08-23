@@ -15,5 +15,3 @@ def test_load_env_alt_example(monkeypatch, tmp_path: Path):
 
     env_utils.load_env()
     assert env_utils.os.getenv("ALT") == "1"
-
-

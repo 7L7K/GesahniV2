@@ -87,8 +87,8 @@ def test_docs_schemes_include_all_scopes(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "secret")
     c = TestClient(app)
     schema = c.get("/openapi.json").json()
-    scopes = schema["components"]["securitySchemes"]["OAuth2"]["flows"]["password"]["scopes"]
+    scopes = schema["components"]["securitySchemes"]["OAuth2"]["flows"]["password"][
+        "scopes"
+    ]
     for s in ["admin:write", "music:control", "care:resident", "care:caregiver"]:
         assert s in scopes
-
-

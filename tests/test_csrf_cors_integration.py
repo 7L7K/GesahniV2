@@ -29,7 +29,7 @@ def test_csrf_cookie_and_cors():
         bad = client.post(
             "/v1/ask",
             json={"prompt": "test"},
-            headers={"Origin": "http://localhost:3000"}
+            headers={"Origin": "http://localhost:3000"},
         )
 
         # Should fail due to missing auth

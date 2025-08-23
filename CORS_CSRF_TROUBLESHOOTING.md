@@ -10,7 +10,7 @@ The frontend can talk to the backend at first, but auth requests are being block
 
 **Solution**: Added `CORS_ALLOW_CREDENTIALS=true` to the `.env` file.
 
-**Verification**: 
+**Verification**:
 ```bash
 grep CORS_ALLOW_CREDENTIALS .env
 # Should show: CORS_ALLOW_CREDENTIALS=true
@@ -35,7 +35,7 @@ grep CORS_ALLOW_CREDENTIALS .env
 
 All authentication flow tests pass:
 - ✅ CORS Preflight: PASS
-- ✅ Whoami Endpoint: PASS  
+- ✅ Whoami Endpoint: PASS
 - ✅ Login Endpoint: PASS
 - ✅ Frontend Health: PASS
 
@@ -92,7 +92,7 @@ lsof -i :8000
 # Backend
 grep -E "(CORS_ALLOW|CSRF_ENABLED)" .env
 
-# Frontend  
+# Frontend
 grep -E "(NEXT_PUBLIC_API_ORIGIN|NEXT_PUBLIC_HEADER_AUTH_MODE)" frontend/.env*
 ```
 

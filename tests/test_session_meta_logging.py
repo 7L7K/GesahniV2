@@ -9,7 +9,9 @@ from app.session_manager import save_session as _save_session
 from app.session_manager import start_session as _start_session
 
 
-def test_capture_save_sets_transcript_uri_when_sharing_enabled(monkeypatch, tmp_path: Path):
+def test_capture_save_sets_transcript_uri_when_sharing_enabled(
+    monkeypatch, tmp_path: Path
+):
     monkeypatch.setenv("TRANSCRIPTS_SHARE", "1")
     monkeypatch.setenv("SESSIONS_DIR", str(tmp_path))
     # Point session store to tmp path for this test
@@ -40,5 +42,3 @@ def test_capture_save_sets_transcript_uri_when_sharing_enabled(monkeypatch, tmp_
     meta_path = tmp_path / sid / "meta.json"
     data = json.loads(meta_path.read_text(encoding="utf-8"))
     assert data.get("transcript_uri")
-
-

@@ -41,6 +41,7 @@ class DummyWS:
 @pytest.mark.asyncio
 async def test_voice_disabled(monkeypatch):
     from app.transcription import TranscriptionStream
+
     monkeypatch.setenv("VOICE_ENABLED", "0")
     ws = DummyWS()
     ws.feed({"bytes": b"abc"})
@@ -57,8 +58,10 @@ async def test_ptt_gating(monkeypatch):
     class FakeSession:
         async def start(self):
             return None
+
         async def stop(self):
             return None
+
         async def stream(self, it):
             yield "heard"
 
@@ -85,8 +88,10 @@ async def test_wake_gating(monkeypatch):
     class FakeSession:
         async def start(self):
             return None
+
         async def stop(self):
             return None
+
         async def stream(self, it):
             yield "ok"
 
@@ -112,14 +117,17 @@ async def test_llm_token_and_final_punctuation(monkeypatch):
     class FakeSession:
         def __init__(self, event_cb=None):
             self.event_cb = event_cb
+
         async def start(self):
             if self.event_cb:
                 await self.event_cb("tts.start", {})
             return None
+
         async def stop(self):
             if self.event_cb:
                 await self.event_cb("tts.stop", {})
             return None
+
         async def stream(self, it):
             if self.event_cb:
                 await self.event_cb("llm.token", {"token": "Hello"})
@@ -137,6 +145,4 @@ async def test_llm_token_and_final_punctuation(monkeypatch):
     kinds = [e.get("event") for e in events]
     assert "llm.token" in kinds and "tts.start" in kinds and "tts.stop" in kinds
     finals = [e.get("text") for e in events if e.get("event") == "stt.final"]
-    assert finals and finals[0].endswith(('.', '!', '?'))
-
-
+    assert finals and finals[0].endswith((".", "!", "?"))

@@ -25,5 +25,3 @@ def test_refresh_rotation_and_reuse_detection():
     # Re-use immediately: without Redis, permissive; with Redis and rotation, expect 401
     r3 = c.post("/v1/auth/refresh")
     assert r3.status_code in (200, 401)
-
-

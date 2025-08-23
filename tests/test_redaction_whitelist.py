@@ -22,9 +22,9 @@ def test_redaction_skips_whitelisted_numbers(monkeypatch):
     from app.redaction import redact_pii
 
     text = "Call me at 555-123-4567 or 555-000-1111"
-    red, mapping = redact_pii(text, whitelist_numbers=["+1 555-123-4567", "5551234567"])  # normalized match
+    red, mapping = redact_pii(
+        text, whitelist_numbers=["+1 555-123-4567", "5551234567"]
+    )  # normalized match
     assert "555-123-4567" in red  # whitelisted number remains
     # Non-whitelisted is redacted
     assert any(k in red for k in mapping.keys())
-
-

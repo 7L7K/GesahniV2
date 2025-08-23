@@ -50,12 +50,12 @@ def test_register_is_public_endpoint():
     app.include_router(auth.router)
 
     client = TestClient(app)
-    
+
     # Register should work without any authentication
     resp = client.post("/register", json={"username": "bob", "password": "secret"})
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
-    
+
     # Verify the user was actually created
     conn = sqlite3.connect(db_path)
     stored = conn.execute(

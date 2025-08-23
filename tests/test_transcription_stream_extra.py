@@ -32,8 +32,12 @@ async def test_final_uses_last_partial(monkeypatch):
     from app.transcription import TranscriptionStream
 
     class FakeSession:
-        async def start(self): return None
-        async def stop(self): return None
+        async def start(self):
+            return None
+
+        async def stop(self):
+            return None
+
         async def stream(self, it):
             yield "hello"
             yield "hello world"
@@ -52,8 +56,12 @@ async def test_final_when_no_partials(monkeypatch):
     from app.transcription import TranscriptionStream
 
     class FakeSession:
-        async def start(self): return None
-        async def stop(self): return None
+        async def start(self):
+            return None
+
+        async def stop(self):
+            return None
+
         async def stream(self, it):
             if False:
                 yield "never"
@@ -65,5 +73,3 @@ async def test_final_when_no_partials(monkeypatch):
     await stream.process()
     finals = [m for m in ws.sent if m.get("event") == "stt.final"]
     assert finals and finals[-1]["text"] in {"", "."}
-
-

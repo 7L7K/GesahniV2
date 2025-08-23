@@ -18,7 +18,9 @@ def test_flag_guard_legacy_router(monkeypatch):
     monkeypatch.setattr(r, "ask_gpt", fake_gpt)
     monkeypatch.setattr(r, "handle_command", lambda p: None)
     monkeypatch.setattr(r, "lookup_cached_answer", lambda p: None)
-    monkeypatch.setattr(r.PromptBuilder, "build", staticmethod(lambda *a, **k: (a[0], 1)))
+    monkeypatch.setattr(
+        r.PromptBuilder, "build", staticmethod(lambda *a, **k: (a[0], 1))
+    )
 
     assert asyncio.run(r.route_prompt("ask gpt please", user_id="u")) == "ok"
 
@@ -29,5 +31,3 @@ def test_deterministic_router_path(caplog):
         decision = route_text(user_prompt="hello" * 100, prompt_tokens=300)
     assert decision.model == "gpt-4.1-nano"
     assert "long-prompt" in caplog.text
-
-

@@ -8,8 +8,12 @@ from app.main import app
 def _login(client: TestClient):
     r = client.post("/v1/login", json={"username": "rfr_user", "password": "secret123"})
     if r.status_code in (HTTPStatus.BAD_REQUEST, HTTPStatus.UNAUTHORIZED):
-        client.post("/v1/register", json={"username": "rfr_user", "password": "secret123"})
-        r = client.post("/v1/login", json={"username": "rfr_user", "password": "secret123"})
+        client.post(
+            "/v1/register", json={"username": "rfr_user", "password": "secret123"}
+        )
+        r = client.post(
+            "/v1/login", json={"username": "rfr_user", "password": "secret123"}
+        )
     assert r.status_code in (HTTPStatus.OK, HTTPStatus.FOUND)
     return client
 
@@ -43,5 +47,3 @@ def test_access_proactive_rotation_threshold_respected(monkeypatch):
     _login(client)
     r = client.get("/v1/whoami")
     assert r.status_code == HTTPStatus.OK
-
-

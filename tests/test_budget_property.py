@@ -15,5 +15,3 @@ def test_budget_property_caps_random(monkeypatch):
         text = "x" * (cap_in * 5)
         out = clamp_prompt(text, intent)
         assert len(out) <= (cap_in * 5)  # truncated by chars heuristic
-
-

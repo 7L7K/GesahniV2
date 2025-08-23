@@ -26,5 +26,3 @@ describe('Capture auth guard', () => {
     expect(replace).toHaveBeenCalled()
   })
 })
-
-

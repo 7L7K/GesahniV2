@@ -22,7 +22,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 uid = getattr(request.state, "user_id", None)
                 req_id = req_id_var.get()
                 ip = request.client.host if request.client else None
-                route_name = getattr(request.scope.get("endpoint"), "__name__", request.url.path)
+                route_name = getattr(
+                    request.scope.get("endpoint"), "__name__", request.url.path
+                )
                 status = getattr(resp, "status_code", 500) if resp else 500
 
                 # Prefer new audit API (`app.audit_new.store.append` + AuditEvent)
@@ -30,7 +32,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     models = importlib.import_module("app.audit_new.models")
                     store = importlib.import_module("app.audit_new.store")
                     AuditEvent = models.AuditEvent
-                    print(f"AUDIT_MW: Using new audit system - models: {models}, store: {store}")
+                    print(
+                        f"AUDIT_MW: Using new audit system - models: {models}, store: {store}"
+                    )
 
                     event = AuditEvent(
                         user_id=uid,
@@ -39,7 +43,11 @@ class AuditMiddleware(BaseHTTPMiddleware):
                         status=status,
                         ip=ip,
                         req_id=req_id,
-                        scopes=list(scopes) if isinstance(scopes, (list, set, tuple)) else [],
+                        scopes=(
+                            list(scopes)
+                            if isinstance(scopes, (list, set, tuple))
+                            else []
+                        ),
                         action="http_request",
                         meta={"path": request.url.path},
                     )
@@ -64,7 +72,11 @@ class AuditMiddleware(BaseHTTPMiddleware):
                                     "method": request.method,
                                     "status": status,
                                     "path": request.url.path,
-                                    "scopes": list(scopes) if isinstance(scopes, (list, set, tuple)) else [],
+                                    "scopes": (
+                                        list(scopes)
+                                        if isinstance(scopes, (list, set, tuple))
+                                        else []
+                                    ),
                                 },
                                 ip_address=ip,
                                 request_id=req_id,
@@ -84,7 +96,11 @@ class AuditMiddleware(BaseHTTPMiddleware):
                                     "method": request.method,
                                     "status": status,
                                     "path": request.url.path,
-                                    "scopes": list(scopes) if isinstance(scopes, (list, set, tuple)) else [],
+                                    "scopes": (
+                                        list(scopes)
+                                        if isinstance(scopes, (list, set, tuple))
+                                        else []
+                                    ),
                                 },
                                 ip_address=ip,
                                 request_id=req_id,

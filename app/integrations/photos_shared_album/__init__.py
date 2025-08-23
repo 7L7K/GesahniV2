@@ -11,5 +11,3 @@ class SharedAlbumConfig:
 
 def disconnect() -> None:
     pass
-
-

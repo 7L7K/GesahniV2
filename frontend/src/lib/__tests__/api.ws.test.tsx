@@ -17,5 +17,3 @@ describe('api wsUrl formatting', () => {
     expect(withQuery).toMatch(/\?lang=en&access_token=/)
   })
 })
-
-

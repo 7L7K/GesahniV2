@@ -80,5 +80,3 @@ describe('LoginPage', () => {
     await waitFor(() => expect(assignSpy).toHaveBeenCalled());
   });
 });
-
-

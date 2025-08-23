@@ -128,7 +128,12 @@ class SpotifyClient:
     # HTTP helpers
     # ------------------------------------------------------------------
     async def _request(
-        self, method: str, path: str, *, params: dict[str, Any] | None = None, json_body: Any | None = None
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json_body: Any | None = None,
     ) -> httpx.Response:
         # If we cannot obtain a token (e.g., tests without creds), surface 401-like behavior
         try:
@@ -149,16 +154,22 @@ class SpotifyClient:
         state = getattr(self, "_cb", {"fail": 0, "ts": 0.0})
         self._cb = state
         if state["fail"] >= 3 and time.time() - state["ts"] < 30:
+
             class _Resp:
                 status_code = 503
-                def json(self): return {"error": "circuit_open"}
+
+                def json(self):
+                    return {"error": "circuit_open"}
+
             return _Resp()  # type: ignore[return-value]
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=10.0)) as s:
             attempt = 0
             while True:
                 attempt += 1
-                r = await s.request(method, url, params=params, json=json_body, headers=headers)
+                r = await s.request(
+                    method, url, params=params, json=json_body, headers=headers
+                )
                 if r.status_code >= 500 and attempt < 3:
                     # backoff: 0.1s, 0.3s
                     await asyncio.sleep(0.1 * attempt + 0.1)
@@ -179,7 +190,9 @@ class SpotifyClient:
                     return r
                 token2 = await self._get_access_token()
                 headers2 = {"Authorization": f"Bearer {token2}"}
-                r = await s.request(method, url, params=params, json=json_body, headers=headers2)
+                r = await s.request(
+                    method, url, params=params, json=json_body, headers=headers2
+                )
             return r
 
     # ------------------------------------------------------------------
@@ -193,7 +206,7 @@ class SpotifyClient:
 
     async def transfer(self, device_id: str, play: bool = True) -> bool:
         r = await self._request(
-            "PUT", 
+            "PUT",
             "/me/player",
             json_body={"device_ids": [device_id], "play": bool(play)},
         )
@@ -218,7 +231,9 @@ class SpotifyClient:
 
     async def set_volume(self, level: int) -> bool:
         level = max(0, min(100, int(level)))
-        r = await self._request("PUT", "/me/player/volume", params={"volume_percent": level})
+        r = await self._request(
+            "PUT", "/me/player/volume", params={"volume_percent": level}
+        )
         return r.status_code in (200, 202, 204)
 
     async def get_state(self) -> dict[str, Any] | None:
@@ -260,5 +275,3 @@ class SpotifyClient:
 
 
 __all__ = ["SpotifyClient", "SpotifyAuthError", "SpotifyTokens"]
-
-

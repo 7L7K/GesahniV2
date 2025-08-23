@@ -29,5 +29,3 @@ def test_planning_pass_carries_into_action(monkeypatch):
     assert out == "ok"
     # Planning text should be carried in debug_info (contains 'PLAN:')
     assert "PLAN:" in captured.get("debug_info", "")
-
-

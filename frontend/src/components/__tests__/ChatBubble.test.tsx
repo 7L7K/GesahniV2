@@ -24,5 +24,3 @@ describe('ChatBubble', () => {
         expect(screen.queryByText('```sources')).not.toBeInTheDocument();
     });
 });
-
-

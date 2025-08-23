@@ -31,5 +31,3 @@ describe('DegradedNotice', () => {
         expect(screen.queryByText(/Some services degraded/i)).toBeNull();
     });
 });
-
-

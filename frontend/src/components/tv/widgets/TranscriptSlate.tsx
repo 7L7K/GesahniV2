@@ -88,5 +88,3 @@ export function TranscriptSlate() {
     </div>
   );
 }
-
-

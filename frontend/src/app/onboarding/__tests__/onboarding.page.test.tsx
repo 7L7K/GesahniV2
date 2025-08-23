@@ -17,5 +17,3 @@ describe('Onboarding page integration', () => {
     await waitFor(() => expect(screen.queryByText(/Loading onboarding/i)).not.toBeInTheDocument())
   })
 })
-
-

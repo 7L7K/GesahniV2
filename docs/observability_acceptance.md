@@ -31,5 +31,3 @@ If you immediately repeat the same request, also expect:
 ```
 INFO retrieval.cache_hit meta={"user_hash": "a1b2...", "intent": "chat", "collection": "kb:default", "age_s": 0.1, "texts": 8}
 ```
-
-

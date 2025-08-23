@@ -39,7 +39,9 @@ async def register_pw(body: dict[str, str]):
     h = _pwd.hash(p)
     try:
         async with aiosqlite.connect(_db_path()) as db:
-            await db.execute("INSERT INTO auth_users(username,password_hash) VALUES(?,?)", (u, h))
+            await db.execute(
+                "INSERT INTO auth_users(username,password_hash) VALUES(?,?)", (u, h)
+            )
             await db.commit()
     except aiosqlite.IntegrityError:
         raise HTTPException(status_code=400, detail="username_taken")
@@ -52,7 +54,9 @@ async def login_pw(body: dict[str, str]):
     u = (body.get("username") or "").strip().lower()
     p = body.get("password") or ""
     async with aiosqlite.connect(_db_path()) as db:
-        async with db.execute("SELECT password_hash FROM auth_users WHERE username=?", (u,)) as cur:
+        async with db.execute(
+            "SELECT password_hash FROM auth_users WHERE username=?", (u,)
+        ) as cur:
             row = await cur.fetchone()
     if not row:
         raise HTTPException(status_code=401, detail="invalid")
@@ -62,5 +66,3 @@ async def login_pw(body: dict[str, str]):
 
 
 __all__ = ["router"]
-
-

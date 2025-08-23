@@ -8,6 +8,7 @@ def record_p95(stage: str, value_ms: float) -> None:
 def inc_error(name: str) -> None:
     _ = name
 
+
 from __future__ import annotations
 
 import time
@@ -19,7 +20,9 @@ from app.telemetry import log_record_var
 
 
 @contextmanager
-def stage_timer(endpoint: str, method: str, engine: str = "retrieval") -> Iterator[None]:
+def stage_timer(
+    endpoint: str, method: str, engine: str = "retrieval"
+) -> Iterator[None]:
     start = time.perf_counter()
     try:
         yield
@@ -35,5 +38,3 @@ def stage_timer(endpoint: str, method: str, engine: str = "retrieval") -> Iterat
 
 
 __all__ = ["stage_timer"]
-
-

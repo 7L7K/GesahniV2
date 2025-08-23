@@ -49,7 +49,7 @@ if _TEST_MODE:
 class MusicVibe:
     name: str
     energy: float  # 0.0 - 1.0
-    tempo: float   # bpm hint
+    tempo: float  # bpm hint
     explicit: bool
 
 
@@ -87,7 +87,9 @@ def _now_iso() -> str:
 
 
 def load_state(user_id: str) -> MusicState:
-    cur = _conn.execute("SELECT state_json FROM music_state WHERE user_id=?", (user_id,))
+    cur = _conn.execute(
+        "SELECT state_json FROM music_state WHERE user_id=?", (user_id,)
+    )
     row = cur.fetchone()
     if not row:
         st = MusicState.default()
@@ -107,7 +109,11 @@ def load_state(user_id: str) -> MusicState:
             device_id=data.get("device_id"),
             last_track_id=data.get("last_track_id"),
             last_recommendations=data.get("last_recommendations") or None,
-            recs_cached_at=float(data.get("recs_cached_at")) if data.get("recs_cached_at") is not None else None,
+            recs_cached_at=(
+                float(data.get("recs_cached_at"))
+                if data.get("recs_cached_at") is not None
+                else None
+            ),
             duck_from=data.get("duck_from"),
             quiet_hours=bool(data.get("quiet_hours", False)),
             explicit_allowed=bool(data.get("explicit_allowed", True)),
@@ -142,5 +148,3 @@ def save_state(user_id: str, state: MusicState) -> None:
 
 
 __all__ = ["MusicState", "MusicVibe", "load_state", "save_state"]
-
-

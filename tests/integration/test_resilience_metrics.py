@@ -43,5 +43,3 @@ def test_metrics_exist_after_forced_errors(monkeypatch):
     ]:
         # Use doubled braces in f-string to match literal braces in regex
         assert re.search(rf"^{name}(\{{.*\}})?\s", metrics, re.M) or (name in metrics), f"metric {name} not exported"
-
-

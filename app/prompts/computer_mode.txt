@@ -9,5 +9,3 @@ Behavior:
 - State assumptions and constraints.
 - Provide commands and config snippets ready to copy/paste.
 - Keep responses minimal but unambiguous.
-
-

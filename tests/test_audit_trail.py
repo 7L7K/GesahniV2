@@ -77,7 +77,7 @@ def test_audit_append_basic_structure(client, tmp_audit_dir):
     content = audit_file.read_text().strip()
     assert content, "Audit file should not be empty"
 
-    lines = content.split('\n')
+    lines = content.split("\n")
     assert len(lines) >= 1, "Should have at least one audit event"
 
     # Find the event for our specific request (GET /healthz)
@@ -86,16 +86,23 @@ def test_audit_append_basic_structure(client, tmp_audit_dir):
         try:
             event = json.loads(line)
             # Look for the healthz request event
-            if (event.get("action") == "http_request" and
-                event.get("method") == "GET" and
-                event.get("status") == 200 and
-                (event.get("route") == "healthz" or "/healthz" in event.get("meta", {}).get("path", ""))):
+            if (
+                event.get("action") == "http_request"
+                and event.get("method") == "GET"
+                and event.get("status") == 200
+                and (
+                    event.get("route") == "healthz"
+                    or "/healthz" in event.get("meta", {}).get("path", "")
+                )
+            ):
                 target_event = event
                 break
         except json.JSONDecodeError:
             continue
 
-    assert target_event is not None, f"Could not find healthz request event in audit log. Found {len(lines)} total events"
+    assert (
+        target_event is not None
+    ), f"Could not find healthz request event in audit log. Found {len(lines)} total events"
 
     # Verify required fields
     assert "ts" in target_event
@@ -120,7 +127,7 @@ def test_audit_append_multiple_events(client, tmp_audit_dir):
     # Read audit file
     audit_file = tmp_audit_dir / "events.ndjson"
     content = audit_file.read_text().strip()
-    lines = content.split('\n')
+    lines = content.split("\n")
 
     # Should have multiple events
     assert len(lines) >= 3, f"Expected at least 3 events, got {len(lines)}"
@@ -143,7 +150,7 @@ def test_audit_append_with_error_status(client, tmp_audit_dir):
     # Read audit file
     audit_file = tmp_audit_dir / "events.ndjson"
     content = audit_file.read_text().strip()
-    lines = content.split('\n')
+    lines = content.split("\n")
 
     # Find the 404 event
     events = [json.loads(line) for line in lines]
@@ -162,12 +169,12 @@ def test_audit_append_preserves_history(client, tmp_audit_dir):
     client.get("/healthz")
     audit_file = tmp_audit_dir / "events.ndjson"
     content1 = audit_file.read_text().strip()
-    lines1 = content1.split('\n')
+    lines1 = content1.split("\n")
 
     # Make second request
     client.get("/v1/admin/metrics")
     content2 = audit_file.read_text().strip()
-    lines2 = content2.split('\n')
+    lines2 = content2.split("\n")
 
     # Should have more lines
     assert len(lines2) > len(lines1), "Should preserve and append to history"
@@ -181,25 +188,29 @@ def test_audit_append_timestamp_format(client, tmp_audit_dir):
 
     audit_file = tmp_audit_dir / "events.ndjson"
     content = audit_file.read_text().strip()
-    lines = content.split('\n')
+    lines = content.split("\n")
 
     last_event = json.loads(lines[-1])
 
     # ISO format: 2024-01-01T12:00:00.123456 or similar
-    iso_pattern = r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}'
-    assert re.match(iso_pattern, last_event["ts"]), f"Invalid ISO timestamp: {last_event['ts']}"
+    iso_pattern = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
+    assert re.match(
+        iso_pattern, last_event["ts"]
+    ), f"Invalid ISO timestamp: {last_event['ts']}"
 
 
 def test_audit_append_includes_request_details(client, tmp_audit_dir):
     """Test that audit events include detailed request information"""
     # Make a request with specific characteristics and proper authentication
     token = _create_auth_token(scopes=["admin:read"])
-    response = client.get("/v1/admin/metrics?param=test", headers={"Authorization": f"Bearer {token}"})
+    response = client.get(
+        "/v1/admin/metrics?param=test", headers={"Authorization": f"Bearer {token}"}
+    )
     assert response.status_code == 200
 
     audit_file = tmp_audit_dir / "events.ndjson"
     content = audit_file.read_text().strip()
-    lines = content.split('\n')
+    lines = content.split("\n")
 
     last_event = json.loads(lines[-1])
 
@@ -212,11 +223,13 @@ def test_audit_append_with_authentication(client, tmp_audit_dir):
     """Test audit logging with authentication context"""
     # This would need a valid token in a real scenario
     # For now, test with invalid token to see auth-related fields
-    response = client.get("/v1/admin/config", headers={"Authorization": "Bearer invalid-token"})
+    response = client.get(
+        "/v1/admin/config", headers={"Authorization": "Bearer invalid-token"}
+    )
 
     audit_file = tmp_audit_dir / "events.ndjson"
     content = audit_file.read_text().strip()
-    lines = content.split('\n')
+    lines = content.split("\n")
 
     last_event = json.loads(lines[-1])
 
@@ -258,7 +271,7 @@ def test_audit_append_concurrent_access(client, tmp_audit_dir):
     # Check audit file
     audit_file = get_audit_file_path()
     content = audit_file.read_text().strip()
-    lines = content.split('\n')
+    lines = content.split("\n")
 
     # Should have all events
     assert len(lines) >= 10, f"Expected at least 10 audit events, got {len(lines)}"
@@ -276,7 +289,7 @@ def test_audit_append_file_rotation_scenario(client, tmp_audit_dir):
 
     audit_file = tmp_audit_dir / "events.ndjson"
     content = audit_file.read_text().strip()
-    lines = content.split('\n')
+    lines = content.split("\n")
 
     # Should have all events
     assert len(lines) >= 100, f"Expected at least 100 audit events, got {len(lines)}"

@@ -18,7 +18,10 @@ from .memory.memory_store import MemoryVectorStore
 from .memory.vector_store.qdrant import get_stats as _q_stats  # type: ignore
 from .tts_orchestrator import TTSSpend
 
-router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
+router = APIRouter(
+    tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))]
+)
+
 
 def _admin_token() -> str | None:
     """Return current admin token from environment (evaluated dynamically)."""
@@ -69,7 +72,15 @@ async def config(
     if _tok and token != _tok:
         raise HTTPException(status_code=403, detail="forbidden")
     # Never expose sensitive secrets
-    SENSITIVE_PREFIXES = ("API_KEY", "SECRET", "TOKEN", "PASSWORD", "KEY", "PRIVATE", "WEBHOOK_SECRET")
+    SENSITIVE_PREFIXES = (
+        "API_KEY",
+        "SECRET",
+        "TOKEN",
+        "PASSWORD",
+        "KEY",
+        "PRIVATE",
+        "WEBHOOK_SECRET",
+    )
     out = {}
     for k, v in os.environ.items():
         if not k.isupper():
@@ -96,7 +107,20 @@ async def budget_status(user_id: str = Depends(get_current_user_id)) -> dict:
         tts = TTSSpend.snapshot()
         return {**b, "near_cap": near_cap, "tts": tts}
     except Exception:
-        return {"tokens_used": 0.0, "minutes_used": 0.0, "reply_len_target": "normal", "escalate_allowed": True, "near_cap": False, "tts": {"spent_usd": 0.0, "cap_usd": float(os.getenv("MONTHLY_TTS_CAP", "15") or 15), "ratio": 0.0, "near_cap": False, "blocked": False}}
+        return {
+            "tokens_used": 0.0,
+            "minutes_used": 0.0,
+            "reply_len_target": "normal",
+            "escalate_allowed": True,
+            "near_cap": False,
+            "tts": {
+                "spent_usd": 0.0,
+                "cap_usd": float(os.getenv("MONTHLY_TTS_CAP", "15") or 15),
+                "ratio": 0.0,
+                "near_cap": False,
+                "blocked": False,
+            },
+        }
 
 
 # Back-compat alias used by some frontends
@@ -139,9 +163,11 @@ async def full_status(user_id: str = Depends(get_current_user_id)) -> dict:
         q_enabled = os.getenv("QUIET_HOURS", "0").lower() in {"1", "true", "yes", "on"}
         start_s = os.getenv("QUIET_HOURS_START", "22:00")
         end_s = os.getenv("QUIET_HOURS_END", "07:00")
+
         def _parse(t: str) -> dt_time:
             hh, mm = (t or "0:0").split(":", 1)
             return dt_time(int(hh), int(mm))
+
         active = False
         if q_enabled:
             now = datetime.now().time()
@@ -152,7 +178,12 @@ async def full_status(user_id: str = Depends(get_current_user_id)) -> dict:
             else:
                 # Crosses midnight
                 active = now >= start_t or now <= end_t
-        out["quiet_hours"] = {"enabled": q_enabled, "start": start_s, "end": end_s, "active": active}
+        out["quiet_hours"] = {
+            "enabled": q_enabled,
+            "start": start_s,
+            "end": end_s,
+            "active": active,
+        }
     except Exception:
         out["quiet_hours"] = {"enabled": False, "active": False}
     try:
@@ -202,10 +233,14 @@ async def full_status(user_id: str = Depends(get_current_user_id)) -> dict:
                     pass
         # Qdrant health: basic collection existence for cache:qa and mem:user
         try:
-            if out.get("vector_backend", "").startswith("qdrant") or "dual" in str(out.get("vector_backend", "")):
+            if out.get("vector_backend", "").startswith("qdrant") or "dual" in str(
+                out.get("vector_backend", "")
+            ):
                 out.setdefault("vector_health", {})
                 try:
-                    out["vector_health"]["qdrant_cache_qa"] = _q_stats(os.getenv("QDRANT_QA_COLLECTION", "cache:qa"))
+                    out["vector_health"]["qdrant_cache_qa"] = _q_stats(
+                        os.getenv("QDRANT_QA_COLLECTION", "cache:qa")
+                    )
                 except Exception:
                     out["vector_health"]["qdrant_cache_qa"] = {"error": True}
         except Exception:
@@ -221,7 +256,11 @@ async def full_status(user_id: str = Depends(get_current_user_id)) -> dict:
         out["vector_backend"] = "unknown"
 
     # Dry-run flag
-    out["dry_run"] = os.getenv("DEBUG_MODEL_ROUTING", "").lower() in {"1", "true", "yes"}
+    out["dry_run"] = os.getenv("DEBUG_MODEL_ROUTING", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
     # Budget snapshot
     try:

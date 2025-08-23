@@ -12,7 +12,12 @@ def _app():
     async def burst3():
         return {"ok": True}
 
-    @app.get("/admin_only", dependencies=[Depends(sec.scope_rate_limit("admin", long_limit=2, burst_limit=1))])
+    @app.get(
+        "/admin_only",
+        dependencies=[
+            Depends(sec.scope_rate_limit("admin", long_limit=2, burst_limit=1))
+        ],
+    )
     async def admin_only():
         return {"ok": True}
 
@@ -50,5 +55,3 @@ def test_scope_override_applies_only_with_scope(monkeypatch):
     # Third should be blocked when override burst/long limits are low
     code = client.get("/admin_only", headers=h2).status_code
     assert code in (429, 200)
-
-

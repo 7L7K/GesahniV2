@@ -22,5 +22,3 @@ async def device_status() -> dict:
 async def raise_alert(kind: str = "help", note: str | None = None) -> dict:
     # Placeholder for escalation channel (SMS/call/webhook)
     return {"status": "accepted", "kind": kind, "note": note}
-
-

@@ -20,7 +20,7 @@ class TestCORSConfigFilter:
             lineno=0,
             msg="CORS CONFIGURATION DEBUG",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         assert not filter_obj.filter(record)
 
@@ -33,7 +33,7 @@ class TestCORSConfigFilter:
             lineno=0,
             msg="CORS CONFIGURATION DEBUG",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         assert filter_obj.filter(record)
 
@@ -46,7 +46,7 @@ class TestCORSConfigFilter:
             lineno=0,
             msg="Normal log message",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         assert filter_obj.filter(record)
 
@@ -61,7 +61,7 @@ class TestVectorStoreWarningFilter:
             lineno=0,
             msg="Vector store warning message",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         # First occurrence should be shown
         assert filter_obj.filter(record)
@@ -77,7 +77,7 @@ class TestVectorStoreWarningFilter:
             lineno=0,
             msg="Other warning message",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         assert filter_obj.filter(record)
 
@@ -90,7 +90,7 @@ class TestVectorStoreWarningFilter:
             lineno=0,
             msg="Vector store info message",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         assert filter_obj.filter(record)
 
@@ -105,7 +105,7 @@ class TestOllamaHealthFilter:
             lineno=0,
             msg="Ollama health check successful",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         assert not filter_obj.filter(record)
 
@@ -118,7 +118,7 @@ class TestOllamaHealthFilter:
             lineno=0,
             msg="Normal log message",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         assert filter_obj.filter(record)
 
@@ -131,7 +131,7 @@ class TestOllamaHealthFilter:
             lineno=0,
             msg="Ollama health check failed",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         assert filter_obj.filter(record)
 
@@ -146,7 +146,7 @@ class TestCookieTTLFilter:
             lineno=0,
             msg="Cookie TTL: ttl=3600",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         filter_obj.filter(record)
         assert "Cookie TTL: enabled" in record.msg
@@ -160,7 +160,7 @@ class TestCookieTTLFilter:
             lineno=0,
             msg="🔍 Debug message with emoji",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         filter_obj.filter(record)
         assert "Debug message with emoji" in record.msg
@@ -177,7 +177,7 @@ class TestSecretCheckFilter:
             lineno=0,
             msg="SECRET USAGE VERIFICATION ON BOOT",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         # First occurrence should be shown
         assert filter_obj.filter(record)
@@ -193,7 +193,7 @@ class TestSecretCheckFilter:
             lineno=0,
             msg="SECRET USAGE VERIFICATION ON BOOT",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         record2 = logging.LogRecord(
             name="test",
@@ -202,7 +202,7 @@ class TestSecretCheckFilter:
             lineno=0,
             msg="Different secret message",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         # Both should be shown as they're different
         assert filter_obj.filter(record1)
@@ -219,7 +219,7 @@ class TestHealthCheckFilter:
             lineno=0,
             msg="Request to /healthz",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         # Set the path attribute that the filter checks
         record.path = "/healthz"
@@ -234,7 +234,7 @@ class TestHealthCheckFilter:
             lineno=0,
             msg="Request to /api/v1/users",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
         record.path = "/api/v1/users"
         assert filter_obj.filter(record)

@@ -26,7 +26,12 @@ def admin_enabled() -> bool:
 
     # In production, require explicit opt-in
     if env == "prod":
-        return os.getenv("ENABLE_ADMIN_ROUTES", "1").lower() in {"1", "true", "yes", "on"}
+        return os.getenv("ENABLE_ADMIN_ROUTES", "1").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
 
     # In dev/staging/test, always enable for convenience
     return True
@@ -76,5 +81,5 @@ def feature_status() -> dict[str, Any]:
             "ENABLE_APPLE_OAUTH": os.getenv("ENABLE_APPLE_OAUTH"),
             "APPLE_CLIENT_ID": bool(os.getenv("APPLE_CLIENT_ID")),
             "APPLE_CLIENT_SECRET": bool(os.getenv("APPLE_CLIENT_SECRET")),
-        }
+        },
     }

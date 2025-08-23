@@ -21,5 +21,3 @@ def test_uuid_v5():
     m = s.match("new uuid v5")
     out = asyncio.run(s.run("new uuid v5", m))
     assert len(out) >= 36 and out.count("-") >= 4
-
-

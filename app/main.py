@@ -11,11 +11,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import (
-    Depends,
-    FastAPI,
-    Request,
-)
+from fastapi import Depends, FastAPI, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -25,7 +21,6 @@ from starlette.middleware.cors import CORSMiddleware
 from . import router
 from .deps.scheduler import shutdown as scheduler_shutdown
 from .gpt_client import close_client
-
 
 async def route_prompt(*args, **kwargs):
     logger.info("⬇️ main.route_prompt args=%s kwargs=%s", args, kwargs)
@@ -42,14 +37,14 @@ import jwt as _pyjwt
 
 import app.skills  # populate SKILLS
 
-from .home_assistant import (
-    startup_check as ha_startup,
-)
+from .home_assistant import startup_check as ha_startup
 from .llama_integration import startup_check as llama_startup
 from .logging_config import configure_logging, req_id_var
 
 # Patch PyJWT decode to apply a sane default clock skew across the app
 _PYJWT_DECODE_ORIG = getattr(_pyjwt, "decode", None)
+
+
 def _pyjwt_decode_with_leeway(token, key=None, *args, **kwargs):
     # Default leeway from env (seconds)
     if "leeway" not in kwargs:
@@ -60,6 +55,7 @@ def _pyjwt_decode_with_leeway(token, key=None, *args, **kwargs):
     if _PYJWT_DECODE_ORIG is None:
         raise RuntimeError("pyjwt.decode not available")
     return _PYJWT_DECODE_ORIG(token, key, *args, **kwargs)
+
 
 _pyjwt.decode = _pyjwt_decode_with_leeway
 from .api.health import router as health_router
@@ -82,10 +78,14 @@ except Exception:
 
 try:
     from app.auth_providers import apple_enabled
+
     if apple_enabled():
         from app.api.oauth_apple_stub import router as apple_stub_router
-        app.include_router(apple_stub_router)                 # unversioned include for dev convenience
-        app.include_router(apple_stub_router, prefix="/v1")   # versioned include for tests
+
+        app.include_router(apple_stub_router)  # unversioned include for dev convenience
+        app.include_router(
+            apple_stub_router, prefix="/v1"
+        )  # versioned include for tests
 except Exception:
     pass
 try:
@@ -108,9 +108,7 @@ except Exception:  # pragma: no cover - optional
     record_ws_reconnect_attempt = lambda *a, **k: None
 from .session_manager import SESSIONS_DIR as SESSIONS_DIR  # re-export for tests
 from .storytime import schedule_nightly_jobs
-from .transcription import (
-    close_whisper_client,
-)
+from .transcription import close_whisper_client
 
 try:
     from .proactive_engine import get_self_review as _get_self_review  # type: ignore
@@ -154,16 +152,22 @@ except Exception:  # pragma: no cover - optional
             return None
 
         return _noop
+
     optional_require_scope = require_scope  # type: ignore
+
     def optional_require_any_scope(scopes):  # type: ignore
         return require_scope(next(iter(scopes), ""))
+
     def require_scopes(scopes):  # type: ignore
         return require_scope(next(iter(scopes), ""))
+
     def require_any_scopes(scopes):  # type: ignore
         return require_scope(next(iter(scopes), ""))
+
     def docs_security_with(scopes):  # type: ignore
         async def _noop2(*args, **kwargs):
             return None
+
         return _noop2
 
 
@@ -183,9 +187,7 @@ from app.middleware import (
 from app.middleware.audit_mw import AuditMiddleware
 from app.middleware.metrics_mw import MetricsMiddleware
 
-from .security import (
-    verify_token,
-)
+from .security import verify_token
 
 # ensure optional import does not crash in test environment
 try:
@@ -212,6 +214,35 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 
+def _safe_import_router(import_statement: str, feature_name: str, required_in_prod: bool = False):
+    """
+    Safely execute a router import with different behavior in dev vs prod.
+
+    Args:
+        import_statement: The import statement to execute (e.g., "from .api.sessions import router as sessions_router")
+        feature_name: Human-readable name for logging (e.g., "sessions")
+        required_in_prod: Whether this router is required in production
+    """
+    is_dev = os.getenv("ENV", "dev").lower() == "dev" or os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
+
+    try:
+        # Execute the import statement in the current namespace
+        exec(import_statement, globals())
+        logger.debug(f"Router {feature_name} imported successfully")
+        return True
+
+    except Exception as e:
+        if is_dev:
+            logger.warning(f"Feature {feature_name} disabled (import failed: {e})")
+            return False
+        else:
+            if required_in_prod:
+                raise RuntimeError(f"Required feature {feature_name} failed to import in production: {e}")
+            else:
+                logger.warning(f"Feature {feature_name} disabled in production (import failed: {e})")
+                return False
+
+
 def _enforce_jwt_strength() -> None:
     """Enforce JWT_SECRET strength at runtime during startup (not import).
 
@@ -231,15 +262,19 @@ def _enforce_jwt_strength() -> None:
 
     # Weak secret handling
     if _is_dev():
-        logger.warning("JWT secret: WEAK (len=%d) — allowed in dev/tests only", len(sec))
+        logger.warning(
+            "JWT secret: WEAK (len=%d) — allowed in dev/tests only", len(sec)
+        )
         return
 
     # Production (or non-dev): fail startup
     raise RuntimeError("JWT_SECRET too weak (need >= 32 characters)")
 
+
 # Global error tracking
 _startup_errors = []
 _runtime_errors = []
+
 
 def _record_error(error: Exception, context: str = "unknown"):
     """Record an error for monitoring and debugging."""
@@ -248,20 +283,68 @@ def _record_error(error: Exception, context: str = "unknown"):
         "error_type": type(error).__name__,
         "error_message": str(error),
         "context": context,
-        "traceback": "".join(traceback.format_exception(type(error), error, error.__traceback__)),
+        "traceback": "".join(
+            traceback.format_exception(type(error), error, error.__traceback__)
+        ),
     }
     _runtime_errors.append(error_info)
     if len(_runtime_errors) > 100:  # Keep only last 100 errors
         _runtime_errors.pop(0)
+
+    # Also log to persistent audit trail for long-term diagnostics
+    try:
+        from .audit_new import AuditEvent, append
+        audit_event = AuditEvent(
+            user_id="system",
+            route=f"system.{context}",
+            method="ERROR",
+            status=500,
+            action="system_error",
+            meta={
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+                "context": context,
+                "traceback": "".join(
+                    traceback.format_exception(type(error), error, error.__traceback__)
+                ),
+            }
+        )
+        append(audit_event)
+    except Exception as audit_error:
+        # Don't let audit logging failures break the main error handling
+        logger.debug(f"Failed to write error to audit log: {audit_error}")
+
     logger.error(f"Error in {context}: {error}", exc_info=True)
+
 
 # Enhanced startup with comprehensive error tracking
 async def _enhanced_startup():
     """Enhanced startup with comprehensive error tracking and logging."""
     startup_start = time.time()
     logger.info("Starting enhanced application startup")
-    
+
     try:
+        # Verify secret usage on boot
+        from .secret_verification import audit_prod_env, log_secret_summary
+
+        log_secret_summary()
+
+        # Enforce JWT strength at startup (moved from import-time)
+        try:
+            _enforce_jwt_strength()
+        except Exception as e:
+            logger.error("JWT secret validation failed: %s", e)
+            _record_error(e, "startup.jwt_secret")
+            raise  # This should be fatal
+
+        # Production environment audit (strict checks for prod)
+        try:
+            audit_prod_env()
+        except Exception as e:
+            logger.error("Production environment audit failed: %s", e)
+            _record_error(e, "startup.prod_audit")
+            raise  # This should be fatal
+
         # Initialize core components with error tracking
         components = [
             ("Database", _init_database),
@@ -271,7 +354,7 @@ async def _enhanced_startup():
             ("Memory Store", _init_memory_store),
             ("Scheduler", _init_scheduler),
         ]
-        
+
         for name, init_func in components:
             try:
                 logger.info(f"Initializing {name}")
@@ -283,42 +366,61 @@ async def _enhanced_startup():
                 _record_error(e, f"startup.{name.lower().replace(' ', '_')}")
                 # Continue startup even if some components fail
                 continue
-        
+
+        # Schedule nightly jobs (no-op if scheduler unavailable)
+        try:
+            schedule_nightly_jobs()
+        except Exception as e:
+            logger.debug("schedule_nightly_jobs failed", exc_info=True)
+            _record_error(e, "startup.nightly_jobs")
+
+        try:
+            proactive_startup()
+        except Exception as e:
+            logger.debug("proactive_startup failed", exc_info=True)
+            _record_error(e, "startup.proactive")
+
+        # Start token store cleanup task
+        try:
+            from .token_store import start_cleanup_task
+            await start_cleanup_task()
+        except Exception as e:
+            logger.debug("token store cleanup task not started", exc_info=True)
+            _record_error(e, "startup.token_store")
+
         startup_time = time.time() - startup_start
         logger.info(f"Application startup completed in {startup_time:.2f}s")
-        # Validate critical runtime secrets (non-blocking): JWT secret
-        try:
-            _enforce_jwt_strength()
-            logger.info("JWT secret validation passed")
-        except Exception as e:
-            logger.error("JWT secret validation failed: %s", e)
-            _record_error(e, "startup.jwt_secret")
+
     except Exception as e:
         error_msg = f"Critical startup failure: {e}"
         logger.error(error_msg, exc_info=True)
         _record_error(e, "startup.critical")
         raise
 
+
 async def _init_database():
     """Initialize database connections and verify connectivity."""
     try:
         # Test database connectivity
         from .auth import _ensure_table
+
         await _ensure_table()
         logger.debug("Database initialization successful")
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
         raise
 
+
 async def _init_vector_store():
     """Initialize vector store with read-only health check."""
     try:
         from .memory.api import _get_store
+
         store = _get_store()
         # Read-only connectivity test - no side effects
-        if hasattr(store, 'ping'):
+        if hasattr(store, "ping"):
             await store.ping()
-        elif hasattr(store, 'search_memories'):
+        elif hasattr(store, "search_memories"):
             # Search with limit=0 for minimal overhead
             await store.search_memories("", "", limit=0)
         else:
@@ -329,20 +431,24 @@ async def _init_vector_store():
         logger.error(f"Vector store initialization failed: {e}")
         raise
 
+
 async def _init_llama():
     """Initialize LLaMA integration with health check."""
     try:
         from .llama_integration import _check_and_set_flag
+
         await _check_and_set_flag()
         logger.debug("LLaMA integration initialization successful")
     except Exception as e:
         logger.error(f"LLaMA integration initialization failed: {e}")
         raise
 
+
 async def _init_home_assistant():
     """Initialize Home Assistant integration."""
     try:
         from .home_assistant import get_states
+
         # Test HA connectivity if configured
         if os.getenv("HOME_ASSISTANT_URL"):
             await get_states()
@@ -353,20 +459,24 @@ async def _init_home_assistant():
         logger.error(f"Home Assistant initialization failed: {e}")
         raise
 
+
 async def _init_memory_store():
     """Initialize memory store."""
     try:
         from .memory.api import _get_store
+
         _ = _get_store()
         logger.debug("Memory store initialization successful")
     except Exception as e:
         logger.error(f"Memory store initialization failed: {e}")
         raise
 
+
 async def _init_scheduler():
     """Initialize scheduler."""
     try:
         from .deps.scheduler import scheduler
+
         if scheduler.running:
             logger.debug("Scheduler already running")
         else:
@@ -376,12 +486,13 @@ async def _init_scheduler():
         logger.error(f"Scheduler initialization failed: {e}")
         raise
 
+
 # Enhanced error handling middleware
 async def enhanced_error_handling(request: Request, call_next):
     """Enhanced error handling middleware with comprehensive logging."""
     start_time = time.time()
     req_id = req_id_var.get()
-    
+
     try:
         # Augment logs with route and anonymized user id for observability
         route_name = None
@@ -392,7 +503,9 @@ async def enhanced_error_handling(request: Request, call_next):
 
         user_anon = _anon_user_id(request.headers.get("authorization"))
 
-        logger.debug(f"Request started: {request.method} {request.url.path} (ID: {req_id})")
+        logger.debug(
+            f"Request started: {request.method} {request.url.path} (ID: {req_id})"
+        )
 
         # Log request details in debug mode
         if logger.isEnabledFor(logging.DEBUG):
@@ -402,48 +515,60 @@ async def enhanced_error_handling(request: Request, call_next):
                 if key in headers:
                     headers[key] = "[REDACTED]"
 
-            logger.debug(f"Request details: {request.method} {request.url.path}", extra={
+            logger.debug(
+                f"Request details: {request.method} {request.url.path}",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "route": route_name,
+                        "user_anon": user_anon,
+                        "headers": headers,
+                        "query_params": dict(request.query_params),
+                        "client_ip": request.client.host if request.client else None,
+                    }
+                },
+            )
+
+        response = await call_next(request)
+
+        # Log response details
+        duration = time.time() - start_time
+        logger.info(
+            f"Request completed: {request.method} {request.url.path} -> {response.status_code} ({duration:.3f}s)",
+            extra={
                 "meta": {
                     "req_id": req_id,
                     "route": route_name,
                     "user_anon": user_anon,
-                    "headers": headers,
-                    "query_params": dict(request.query_params),
-                    "client_ip": request.client.host if request.client else None,
+                    "status_code": response.status_code,
+                    "duration_ms": duration * 1000,
                 }
-            })
-        
-        response = await call_next(request)
-        
-        # Log response details
-        duration = time.time() - start_time
-        logger.info(f"Request completed: {request.method} {request.url.path} -> {response.status_code} ({duration:.3f}s)", extra={
-            "meta": {
-                "req_id": req_id,
-                "route": route_name,
-                "user_anon": user_anon,
-                "status_code": response.status_code,
-                "duration_ms": duration * 1000,
-            }
-        })
-        
+            },
+        )
+
         return response
-        
+
     except Exception as e:
         duration = time.time() - start_time
         error_msg = f"Request failed: {request.method} {request.url.path} -> {type(e).__name__}: {e}"
-        logger.error(error_msg, exc_info=True, extra={
-            "meta": {
-                "req_id": req_id,
-                "route": route_name,
-                "user_anon": user_anon,
-                "duration_ms": duration * 1000,
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-            }
-        })
-        _record_error(e, f"request.{request.method.lower()}.{request.url.path.replace('/', '_')}")
-        
+        logger.error(
+            error_msg,
+            exc_info=True,
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "route": route_name,
+                    "user_anon": user_anon,
+                    "duration_ms": duration * 1000,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                }
+            },
+        )
+        _record_error(
+            e, f"request.{request.method.lower()}.{request.url.path.replace('/', '_')}"
+        )
+
         # Return a proper error response
         return JSONResponse(
             status_code=500,
@@ -451,31 +576,19 @@ async def enhanced_error_handling(request: Request, call_next):
                 "error": "Internal server error",
                 "req_id": req_id,
                 "timestamp": datetime.utcnow().isoformat(),
-            }
+            },
         )
 
 
-
-# Enhanced startup event
-async def enhanced_startup_event():
-    """Enhanced startup event with comprehensive initialization."""
-    app.state._start_time = time.time()
-    logger.info("Enhanced startup event triggered")
-    
-    try:
-        await _enhanced_startup()
-        logger.info("Enhanced startup completed successfully")
-    except Exception as e:
-        logger.error(f"Enhanced startup failed: {e}", exc_info=True)
-        _record_error(e, "startup.event")
-        # Don't raise here - let the app start even with some failures
-
-# Startup will be handled by the existing startup functions
-# Enhanced startup is available but not automatically triggered
+# Startup is now handled directly in the lifespan function
+# using the enhanced startup with comprehensive error tracking
 
 
 tags_metadata = [
-    {"name": "Care", "description": "Care features, contacts, sessions, and Home Assistant actions."},
+    {
+        "name": "Care",
+        "description": "Care features, contacts, sessions, and Home Assistant actions.",
+    },
     {"name": "Music", "description": "Music playback, voices, and TTS."},
     {"name": "Calendar", "description": "Calendar and reminders."},
     {"name": "TV", "description": "TV UI and related endpoints."},
@@ -514,7 +627,7 @@ def _get_version() -> str:
     return "0.0.0"
 
 
-_IS_DEV_ENV = (os.getenv("ENV", "dev").strip().lower() == "dev")
+_IS_DEV_ENV = os.getenv("ENV", "dev").strip().lower() == "dev"
 
 _docs_url = "/docs" if _IS_DEV_ENV else None
 _redoc_url = "/redoc" if _IS_DEV_ENV else None
@@ -535,71 +648,24 @@ _DEV_SERVERS_SNAPSHOT = os.getenv("OPENAPI_DEV_SERVERS")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        # Verify secret usage on boot
-        from .secret_verification import audit_prod_env, log_secret_summary
-        log_secret_summary()
-        # Enforce JWT strength at startup (moved from import-time)
-        try:
-            _enforce_jwt_strength()
-        except Exception:
-            # Let higher-level startup logic capture and surface this error
-            raise
+        # Use enhanced startup with comprehensive error tracking and logging
+        await _enhanced_startup()
 
-        # Production environment audit (strict checks for prod)
-        try:
-            audit_prod_env()
-        except Exception:
-            # Let higher-level startup logic capture and surface this error
-            raise
-        
-        # Make startup checks non-blocking for development
-        try:
-            await llama_startup()
-        except Exception as e:
-            logger.warning("LLaMA startup failed (non-blocking): %s", e)
-        
-        try:
-            await ha_startup()
-        except Exception as e:
-            logger.warning("Home Assistant startup failed (non-blocking): %s", e)
-        
-        # OpenAI startup check
-        try:
-            from .router import _check_openai_health
-            await _check_openai_health()
-        except Exception as e:
-            logger.warning("OpenAI startup check failed (non-blocking): %s", e)
-        
-        # Schedule nightly jobs (no-op if scheduler unavailable)
-        try:
-            schedule_nightly_jobs()
-        except Exception:
-            logger.debug("schedule_nightly_jobs failed", exc_info=True)
-        try:
-            proactive_startup()
-        except Exception:
-            logger.debug("proactive_startup failed", exc_info=True)
+        # Additional startup tasks that aren't part of the core enhanced startup
         # Start care daemons
         try:
             from .care_daemons import heartbeat_monitor_loop
-
             asyncio.create_task(heartbeat_monitor_loop())
         except Exception:
             logger.debug("heartbeat_monitor_loop not started", exc_info=True)
+
         # Start SMS worker
         try:
             from .api.sms_queue import sms_worker
             asyncio.create_task(sms_worker())
         except Exception:
             logger.debug("sms_worker not started", exc_info=True)
-        
-        # Start token store cleanup task
-        try:
-            from .token_store import start_cleanup_task
-            await start_cleanup_task()
-        except Exception:
-            logger.debug("token store cleanup task not started", exc_info=True)
-        
+
         yield
     finally:
         # Log health flip to offline on shutdown
@@ -623,10 +689,11 @@ async def lifespan(app: FastAPI):
             shutdown_tracing()
         except Exception:
             pass
-        
+
         # Stop token store cleanup task
         try:
             from .token_store import stop_cleanup_task
+
             await stop_cleanup_task()
         except Exception:
             logger.debug("token store cleanup task shutdown failed", exc_info=True)
@@ -683,7 +750,9 @@ origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 
 # Normalize common localhost variants (127.0.0.1 -> localhost)
 origins = [
-    o.replace("http://127.0.0.1:", "http://localhost:").replace("https://127.0.0.1:", "https://localhost:")
+    o.replace("http://127.0.0.1:", "http://localhost:").replace(
+        "https://127.0.0.1:", "https://localhost:"
+    )
     for o in origins
 ]
 
@@ -738,17 +807,25 @@ if not origins:
     logging.warning("No CORS origins configured. Defaulting to http://localhost:3000")
     origins = ["http://localhost:3000"]
 
+
 def is_same_address_family(origin_list):
     """Check if all origins are in the same address family (localhost or IP)"""
     if not origin_list:
         return True
-    localhost_count = sum(1 for o in origin_list if "localhost" in o or "127.0.0.1" in o)
-    ip_count = sum(1 for o in origin_list if "localhost" not in o and "127.0.0.1" not in o)
+    localhost_count = sum(
+        1 for o in origin_list if "localhost" in o or "127.0.0.1" in o
+    )
+    ip_count = sum(
+        1 for o in origin_list if "localhost" not in o and "127.0.0.1" not in o
+    )
     return localhost_count == 0 or ip_count == 0
+
 
 if not is_same_address_family(origins):
     logging.warning("Mixed address families detected in CORS origins (post-sanitize).")
-    logging.warning("This may cause WebSocket connection issues. Consider using consistent addressing.")
+    logging.warning(
+        "This may cause WebSocket connection issues. Consider using consistent addressing."
+    )
 
 # Allow credentials: yes (cookies/tokens) — enforce true for local dev to support cookies with exact origin
 allow_credentials = True
@@ -773,11 +850,13 @@ logging.info(
 
 # Removed legacy unversioned /whoami to ensure a single canonical /v1/whoami
 
-    # Optional static mount for TV shared photos
+# Optional static mount for TV shared photos
 try:
     _tv_dir = os.getenv("TV_PHOTOS_DIR", "data/shared_photos")
     if _tv_dir:
-        app.mount("/shared_photos", StaticFiles(directory=_tv_dir), name="shared_photos")
+        app.mount(
+            "/shared_photos", StaticFiles(directory=_tv_dir), name="shared_photos"
+        )
 except Exception:
     pass
 
@@ -808,16 +887,16 @@ class AskRequest(BaseModel):
     # Accept both legacy text and chat-style array
     prompt: str | list[dict]
     model_override: str | None = Field(None, alias="model")
-    stream: bool | None = Field(False, description="Force SSE when true; otherwise negotiated via Accept")
+    stream: bool | None = Field(
+        False, description="Force SSE when true; otherwise negotiated via Accept"
+    )
 
     # Pydantic v2 config: allow both alias ("model") and field name ("model_override")
     model_config = ConfigDict(
         title="AskRequest",
         validate_by_name=True,
         validate_by_alias=True,
-        json_schema_extra={
-            "example": {"prompt": "hello"}
-        },
+        json_schema_extra={"example": {"prompt": "hello"}},
     )
 
 
@@ -837,7 +916,6 @@ class ServiceRequest(BaseModel):
     )
 
 
-
 # Profile and onboarding endpoints have moved to app.api.profile
 
 
@@ -851,91 +929,53 @@ class ServiceRequest(BaseModel):
 # The business handlers were removed from main.py to keep it focused on bootstrap and router includes.
 
 
-
-
 # =============================================================================
 # NEW MODULAR ROUTERS - Extracted from local handlers
 # =============================================================================
-try:
-    from .api.sessions import router as sessions_router
+if _safe_import_router("from .api.sessions import router as sessions_router", "sessions"):
     app.include_router(sessions_router, prefix="/v1/sessions")
     app.include_router(sessions_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.capture import router as capture_router
+if _safe_import_router("from .api.capture import router as capture_router", "capture"):
     app.include_router(capture_router, prefix="/v1")
     app.include_router(capture_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.transcribe import router as transcribe_router
+if _safe_import_router("from .api.transcribe import router as transcribe_router", "transcribe"):
     app.include_router(transcribe_router, prefix="/v1")
     app.include_router(transcribe_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.ha_local import router as ha_local_router
+if _safe_import_router("from .api.ha_local import router as ha_local_router", "ha_local"):
     app.include_router(ha_local_router, prefix="/v1")
     app.include_router(ha_local_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.memories import router as memories_router
+if _safe_import_router("from .api.memories import router as memories_router", "memories"):
     app.include_router(memories_router, prefix="/v1")
     app.include_router(memories_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.util import router as util_router
+if _safe_import_router("from .api.util import router as util_router", "util"):
+    # Single mount provides both API docs visibility and routing
+    # The include_in_schema=True (default) allows docs while still handling requests
     app.include_router(util_router, prefix="/v1")
-    # Ensure the router isn't also mounted at root with include_in_schema=False
-    # which would register method-only matches for all root paths and cause
-    # unexpected 405s. Mount the docs-suppressed registration under the same
-    # `/v1` prefix instead.
-    app.include_router(util_router, prefix="/v1", include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.ws_endpoints import router as ws_local_router
+if _safe_import_router("from .api.ws_endpoints import router as ws_local_router", "ws_endpoints"):
     app.include_router(ws_local_router, prefix="/v1")
     app.include_router(ws_local_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.debug import router as debug_router
+if _safe_import_router("from .api.debug import router as debug_router", "debug"):
     app.include_router(debug_router, prefix="/v1")
     app.include_router(debug_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.core_misc import router as core_misc_router
+if _safe_import_router("from .api.core_misc import router as core_misc_router", "core_misc"):
     app.include_router(core_misc_router, prefix="/v1")
     app.include_router(core_misc_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.metrics_root import router as metrics_root_router
+if _safe_import_router("from .api.metrics_root import router as metrics_root_router", "metrics_root"):
     app.include_router(metrics_root_router)  # keep /metrics at root
-except Exception:
-    pass
 
-try:
+if _safe_import_router("from .health import router as health_diag_router", "health_diag"):
     # Vector-store health diagnostics (e.g., /v1/health/chroma)
-    from .health import router as health_diag_router
     app.include_router(health_diag_router, prefix="/v1")
     app.include_router(health_diag_router, include_in_schema=False)
-except Exception:
-    pass
 
 # =============================================================================
 # EXISTING EXTERNAL ROUTERS - Keep in modern-first order
@@ -946,12 +986,9 @@ app.include_router(status_router, include_in_schema=False)
 app.include_router(health_router)
 
 # Include modern auth API router first to avoid route shadowing
-try:
-    from .api.auth import router as auth_api_router
+if _safe_import_router("from .api.auth import router as auth_api_router", "auth_api", required_in_prod=True):
     app.include_router(auth_api_router, prefix="/v1")
     app.include_router(auth_api_router, include_in_schema=False)
-except Exception:
-    pass
 
 # Legacy auth router (mounted after new API router to avoid shadowing)
 # Conditionally mount auth router (contains admin rate limit endpoints)
@@ -987,8 +1024,7 @@ app.include_router(google_router, prefix="/v1/google")
 app.include_router(google_router, prefix="/google", include_in_schema=False)
 
 # New modular routers for HA and profile/admin
-try:
-    from .api.ha import router as ha_api_router
+if _safe_import_router("from .api.ha import router as ha_api_router", "ha_api"):
     app.include_router(
         ha_api_router,
         prefix="/v1",
@@ -999,29 +1035,20 @@ try:
         ],
     )
     app.include_router(ha_api_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.reminders import router as reminders_router
+if _safe_import_router("from .api.reminders import router as reminders_router", "reminders"):
     app.include_router(reminders_router, prefix="/v1")
     app.include_router(reminders_router, include_in_schema=False)
-except Exception:
-    pass
 
 # Remove legacy simple cookie auth router to avoid parallel flows
 
-try:
-    from .api.profile import router as profile_router
+if _safe_import_router("from .api.profile import router as profile_router", "profile"):
     app.include_router(profile_router, prefix="/v1")
     app.include_router(profile_router, include_in_schema=False)
-except Exception:
-    pass
 
 # Conditionally mount admin router based on environment
-try:
-    if admin_enabled():
-        from .api.admin import router as admin_api_router
+if admin_enabled():
+    if _safe_import_router("from .api.admin import router as admin_api_router", "admin"):
         # Mount the new RBAC-powered admin router
         # The router already has prefix="/admin" so final paths will be /v1/admin/*
         app.include_router(
@@ -1033,68 +1060,46 @@ try:
         app.include_router(admin_api_router, include_in_schema=False)
         print("INFO: Admin routes mounted (admin_enabled=True)")
     else:
-        print("INFO: Admin routes disabled (admin_enabled=False)")
-except Exception as e:
-    print(f"WARNING: Failed to mount admin router: {e}")
+        print("INFO: Admin routes disabled (import failed)")
+else:
+    print("INFO: Admin routes disabled (admin_enabled=False)")
 
 # Admin-inspect routes are included via app.api.admin router if available
 
 # Conditionally mount all admin-related routers
 if admin_enabled():
-    try:
-        from .api.admin_ui import router as admin_ui_router
+    if _safe_import_router("from .api.admin_ui import router as admin_ui_router", "admin_ui"):
         app.include_router(admin_ui_router, prefix="/v1")
         app.include_router(admin_ui_router, include_in_schema=False)
-        # Also include experimental admin diagnostics (retrieval trace) router
-        try:
-            from .admin.routes import router as admin_extras_router
-            app.include_router(admin_extras_router, prefix="/v1")
-            app.include_router(admin_extras_router, include_in_schema=False)
-        except Exception:
-            pass
-    except Exception:
-        # Even if admin UI unavailable, still try to include admin extras
-        try:
-            from .admin.routes import router as admin_extras_router
-            app.include_router(admin_extras_router, prefix="/v1")
-            app.include_router(admin_extras_router, include_in_schema=False)
-        except Exception:
-            pass
+
+    # Also include experimental admin diagnostics (retrieval trace) router
+    if _safe_import_router("from .admin.routes import router as admin_extras_router", "admin_extras"):
+        app.include_router(admin_extras_router, prefix="/v1")
+        app.include_router(admin_extras_router, include_in_schema=False)
+
+    print("INFO: Admin UI and extras routers processed (admin_enabled=True)")
 else:
     print("INFO: Admin UI and extras routers disabled (admin_enabled=False)")
 
-try:
-    from .api.me import router as me_router
+if _safe_import_router("from .api.me import router as me_router", "me"):
     app.include_router(me_router, prefix="/v1")
-except Exception:
-    pass
 
-try:
-    from .api.devices import router as devices_router
+if _safe_import_router("from .api.devices import router as devices_router", "devices"):
     app.include_router(devices_router, prefix="/v1")
     app.include_router(devices_router, include_in_schema=False)
-except Exception:
-    pass
 
 # app.api.auth already included once above; do not include again
 
-try:
-    from .api.models import router as models_router
+if _safe_import_router("from .api.models import router as models_router", "models"):
     app.include_router(models_router, prefix="/v1")
     app.include_router(models_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.history import router as history_router
+if _safe_import_router("from .api.history import router as history_router", "history"):
     app.include_router(history_router, prefix="/v1")
     app.include_router(history_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    if admin_enabled():
-        from .api.status_plus import router as status_plus_router
+if admin_enabled():
+    if _safe_import_router("from .api.status_plus import router as status_plus_router", "status_plus"):
         app.include_router(
             status_plus_router,
             prefix="/v1",
@@ -1103,117 +1108,76 @@ try:
         app.include_router(status_plus_router, include_in_schema=False)
         print("INFO: Status plus router mounted (admin_enabled=True)")
     else:
-        print("INFO: Status plus router disabled (admin_enabled=False)")
-except Exception:
-    pass
+        print("INFO: Status plus router disabled (import failed)")
+else:
+    print("INFO: Status plus router disabled (admin_enabled=False)")
 
-try:
-    from .api.rag import router as rag_router
+if _safe_import_router("from .api.rag import router as rag_router", "rag"):
     app.include_router(rag_router, prefix="/v1")
     app.include_router(rag_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.skills import router as skills_router
+if _safe_import_router("from .api.skills import router as skills_router", "skills"):
     app.include_router(skills_router, prefix="/v1")
     app.include_router(skills_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.tv import router as tv_router
+if _safe_import_router("from .api.tv import router as tv_router", "tv"):
     app.include_router(tv_router, prefix="/v1")
     app.include_router(tv_router, include_in_schema=False)
-except Exception:
-    pass
 
 # TTS router (new)
-try:
-    from .api.tts import router as tts_router
+if _safe_import_router("from .api.tts import router as tts_router", "tts"):
     app.include_router(tts_router, prefix="/v1")
     app.include_router(tts_router, include_in_schema=False)
-except Exception:
-    pass
 
 # Additional feature routers used by TV/companion UIs
-try:
-    from .api.contacts import router as contacts_router
+if _safe_import_router("from .api.contacts import router as contacts_router", "contacts"):
     app.include_router(contacts_router, prefix="/v1")
     app.include_router(contacts_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.caregiver_auth import router as caregiver_auth_router
+if _safe_import_router("from .api.caregiver_auth import router as caregiver_auth_router", "caregiver_auth"):
     app.include_router(caregiver_auth_router, prefix="/v1")
     app.include_router(caregiver_auth_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.photos import router as photos_router
+if _safe_import_router("from .api.photos import router as photos_router", "photos"):
     app.include_router(photos_router, prefix="/v1")
     app.include_router(photos_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.calendar import router as calendar_router
+if _safe_import_router("from .api.calendar import router as calendar_router", "calendar"):
     app.include_router(calendar_router, prefix="/v1")
     app.include_router(calendar_router, include_in_schema=False)
-except Exception:
-    pass
 
 # Voices catalog
-try:
-    from .api.voices import router as voices_router
+if _safe_import_router("from .api.voices import router as voices_router", "voices"):
     app.include_router(voices_router, prefix="/v1")
     app.include_router(voices_router, include_in_schema=False)
-except Exception:
-    pass
 
-
-try:
-    from .api.memory_ingest import router as memory_ingest_router
+if _safe_import_router("from .api.memory_ingest import router as memory_ingest_router", "memory_ingest"):
     app.include_router(memory_ingest_router, prefix="/v1")
     app.include_router(memory_ingest_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.ask import router as ask_router
+if _safe_import_router("from .api.ask import router as ask_router", "ask", required_in_prod=True):
     app.include_router(ask_router, prefix="/v1")
     app.include_router(ask_router, include_in_schema=False)
-except Exception:
-    pass
 
 # Optional diagnostic/auxiliary routers -------------------------------------
-try:
-    from .api.care import router as care_router
+if _safe_import_router("from .api.care import router as care_router", "care"):
     app.include_router(
         care_router,
         prefix="/v1",
         dependencies=[Depends(docs_security_with(["care:resident"]))],
     )
     app.include_router(care_router, include_in_schema=False)
-except Exception:
-    pass
 
-try:
-    from .api.care_ws import router as care_ws_router
+if _safe_import_router("from .api.care_ws import router as care_ws_router", "care_ws"):
     app.include_router(care_ws_router, prefix="/v1")
     app.include_router(care_ws_router, include_in_schema=False)
-except Exception:
-    pass
 
 # Router includes moved to organized section above - removing duplicates
 
 # health_diag_router moved to organized section above
 
-try:
+if _safe_import_router("from .caregiver import router as caregiver_router", "caregiver"):
     # Caregiver portal scaffold (e.g., /v1/caregiver/*)
-    from .caregiver import router as caregiver_router
     app.include_router(
         caregiver_router,
         prefix="/v1",
@@ -1224,62 +1188,65 @@ try:
         ],
     )
     app.include_router(caregiver_router, include_in_schema=False)
-except Exception:
-    pass
 
 # Music API router: attach HTTP dependencies to HTTP paths only
 if music_router is not None:
-    try:
-        from .api.music_http import music_http
+    if _safe_import_router("from .api.music_http import music_http", "music_http"):
         app.include_router(music_http, prefix="/v1")
-    except Exception:
+    else:
         # Fallback: include the music router directly without building a local APIRouter
         # This avoids creating APIRouter instances inside main.py
-        try:
-            app.include_router(music_router, prefix="/v1")
-        except Exception:
-            pass
+        app.include_router(music_router, prefix="/v1")
+
     # Keep non-prefixed inclusion for schema compatibility
     app.include_router(music_router, include_in_schema=False)
+
     # Mount WS endpoints without HTTP dependencies
-    try:
-        from .api.music import ws_router as music_ws_router
+    if _safe_import_router("from .api.music import ws_router as music_ws_router", "music_ws"):
         app.include_router(music_ws_router, prefix="/v1")
         app.include_router(music_ws_router, include_in_schema=False)
-    except Exception:
-        pass
+
     # Sim WS helpers for UI duck/restore
-    try:
-        from .api.tv_music_sim import router as tv_music_sim_router
+    if _safe_import_router("from .api.tv_music_sim import router as tv_music_sim_router", "tv_music_sim"):
         app.include_router(tv_music_sim_router, prefix="/v1")
         app.include_router(tv_music_sim_router, include_in_schema=False)
-    except Exception:
-        pass
 
+    # ============================================================================
+    # MIDDLEWARE REGISTRATION (AFTER ALL ROUTERS)
+    # ============================================================================
 
-# ============================================================================
-# MIDDLEWARE REGISTRATION (AFTER ALL ROUTERS)
-# ============================================================================
+    # 1) Include routers FIRST (handlers + dependencies live here)
+    #    Routers are already included above with their dependencies
 
-# 1) Include routers FIRST (handlers + dependencies live here)
-#    Routers are already included above with their dependencies
-
-# 2) Core middlewares (inner → outer as you go DOWN)
-#    These WILL be skipped for OPTIONS by your own checks.
-#    Order: [ RequestID ] → [ Trace ] → [ CSRF ] → [ CORS ] → [ RateLimit / Router / Handlers ]
+    # 2) Core middlewares (inner → outer as you go DOWN)
+    #    These WILL be skipped for OPTIONS by your own checks.
+    #    Order: [ RequestID ] → [ Trace ] → [ CSRF ] → [ CORS ] → [ RateLimit / Router / Handlers ]
     # Core middlewares (inner → outer)
-    add_mw(app, RequestIDMiddleware,          name="RequestIDMiddleware")          # innermost - sets request ID
-    add_mw(app, DedupMiddleware,               name="DedupMiddleware")               # deduplicates requests
-    add_mw(app, HealthCheckFilterMiddleware,   name="HealthCheckFilterMiddleware")   # filters health check logs
-    add_mw(app, TraceRequestMiddleware,        name="TraceRequestMiddleware")        # traces/logs requests (skips OPTIONS)
-    add_mw(app, AuditMiddleware,               name="AuditMiddleware")               # append-only audit trail (Phase 6.2)
-    add_mw(app, RedactHashMiddleware,          name="RedactHashMiddleware")          # redact + hashing for secrets
-    add_mw(app, MetricsMiddleware,             name="MetricsMiddleware")             # clean prometheus metrics (Phase 6.1)
-    add_mw(app, RateLimitMiddleware,           name="RateLimitMiddleware")           # rate limiting (needs user_id/scopes from SessionAttachMiddleware)
-    add_mw(app, SessionAttachMiddleware,       name="SessionAttachMiddleware")       # attach user_id/scopes for downstream use (AFTER RateLimitMiddleware for metrics)
-
-
-
+    add_mw(
+        app, RequestIDMiddleware, name="RequestIDMiddleware"
+    )  # innermost - sets request ID
+    add_mw(app, DedupMiddleware, name="DedupMiddleware")  # deduplicates requests
+    add_mw(
+        app, HealthCheckFilterMiddleware, name="HealthCheckFilterMiddleware"
+    )  # filters health check logs
+    add_mw(
+        app, TraceRequestMiddleware, name="TraceRequestMiddleware"
+    )  # traces/logs requests (skips OPTIONS)
+    add_mw(
+        app, AuditMiddleware, name="AuditMiddleware"
+    )  # append-only audit trail (Phase 6.2)
+    add_mw(
+        app, RedactHashMiddleware, name="RedactHashMiddleware"
+    )  # redact + hashing for secrets
+    add_mw(
+        app, MetricsMiddleware, name="MetricsMiddleware"
+    )  # clean prometheus metrics (Phase 6.1)
+    add_mw(
+        app, RateLimitMiddleware, name="RateLimitMiddleware"
+    )  # rate limiting (needs user_id/scopes from SessionAttachMiddleware)
+    add_mw(
+        app, SessionAttachMiddleware, name="SessionAttachMiddleware"
+    )  # attach user_id/scopes for downstream use (AFTER RateLimitMiddleware for metrics)
 
 
 # 3) Third-party middlewares (still INSIDE CORS)
@@ -1304,7 +1271,9 @@ try:
         try:
             tok = "dev-check-token"
             # TTL 600s matches typical default
-            set_csrf_cookie(r, tok, request=None, ttl=600)  # request can be None for dev check
+            set_csrf_cookie(
+                r, tok, request=None, ttl=600
+            )  # request can be None for dev check
         except Exception:
             r = None
 
@@ -1315,11 +1284,18 @@ try:
                 if k.lower() == "set-cookie" and "csrf_token" in v:
                     # crude parse for dev-readable attributes
                     attrs = v.split("; ")
-                    path = next((p.split("=")[1] for p in attrs if p.startswith("Path=")), "/")
-                    samesite = next((s.split("=")[1] for s in attrs if s.startswith("SameSite=")), "Lax")
+                    path = next(
+                        (p.split("=")[1] for p in attrs if p.startswith("Path=")), "/"
+                    )
+                    samesite = next(
+                        (s.split("=")[1] for s in attrs if s.startswith("SameSite=")),
+                        "Lax",
+                    )
                     secure = any(a == "Secure" for a in attrs)
                     httponly = any(a == "HttpOnly" for a in attrs)
-                    domain = next((d.split("=")[1] for d in attrs if d.startswith("Domain=")), "∅")
+                    domain = next(
+                        (d.split("=")[1] for d in attrs if d.startswith("Domain=")), "∅"
+                    )
                     logging.info(
                         "CSRF cookie check: Path=%s, Domain=%s, SameSite=%s, Secure=%s, HttpOnly=%s",
                         path,
@@ -1332,11 +1308,11 @@ except Exception:
     pass
 
 # Dev/feature helpers (still inside CORS)
-if os.getenv("DEV_MODE", "0").lower() in {"1","true","yes","on"}:
+if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}:
     add_mw(app, ReloadEnvMiddleware, name="ReloadEnvMiddleware")  # dev-only
 
 # Silent token refresh for authenticated flows
-if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1","true","yes","on"}:
+if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1", "true", "yes", "on"}:
     add_mw(app, SilentRefreshMiddleware, name="SilentRefreshMiddleware")
 
 # Error boundary (keep inside CORS so errors still get ACAO)
@@ -1355,12 +1331,14 @@ app.add_middleware(
     max_age=600,
 )
 
+
 # DEV-only middleware order assertion
 def _current_mw_names() -> list[str]:
     try:
         return [m.cls.__name__ for m in getattr(app, "user_middleware", [])]
     except Exception:
         return []
+
 
 def _assert_middleware_order_dev(app):
     """
@@ -1380,14 +1358,22 @@ def _assert_middleware_order_dev(app):
         "CORSMiddleware",
         "EnhancedErrorHandlingMiddleware",
         # Optional dev middleware (in reverse order since they're added later)
-        *(["SilentRefreshMiddleware"] if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1", "true", "yes"} else []),
-        *(["ReloadEnvMiddleware"] if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes"} else []),
+        *(
+            ["SilentRefreshMiddleware"]
+            if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1", "true", "yes"}
+            else []
+        ),
+        *(
+            ["ReloadEnvMiddleware"]
+            if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes"}
+            else []
+        ),
         "CSRFMiddleware",
         "SessionAttachMiddleware",  # SessionAttachMiddleware runs after RateLimitMiddleware for metrics
         "RateLimitMiddleware",  # RateLimitMiddleware runs first to collect metrics
-        "MetricsMiddleware",     # Clean prometheus metrics
+        "MetricsMiddleware",  # Clean prometheus metrics
         "RedactHashMiddleware",
-        "AuditMiddleware",       # Append-only audit trail
+        "AuditMiddleware",  # Append-only audit trail
         "TraceRequestMiddleware",
         "HealthCheckFilterMiddleware",
         "DedupMiddleware",
@@ -1422,9 +1408,11 @@ Check that add_mw() calls are in the correct sequence in main.py.
 """
         raise RuntimeError(error_msg)
 
+
 # Call right after last add_middleware(...)
 if os.getenv("ENV", "dev").lower() == "dev":
     _assert_middleware_order_dev(app)
+
 
 # Debug middleware order dump
 def _dump_mw_stack(app):
@@ -1434,10 +1422,13 @@ def _dump_mw_stack(app):
     except Exception as e:
         logging.warning("MW-ORDER dump failed: %r", e)
 
+
 _dump_mw_stack(app)
 
 # Final startup logging - simplified
-logging.info(f"Server starting on {os.getenv('HOST', '0.0.0.0')}:{os.getenv('PORT', '8000')}")
+logging.info(
+    f"Server starting on {os.getenv('HOST', '0.0.0.0')}:{os.getenv('PORT', '8000')}"
+)
 
 
 if __name__ == "__main__":
@@ -1446,5 +1437,5 @@ if __name__ == "__main__":
     # Read host and port from environment variables
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", 8000))
-    
+
     uvicorn.run(app, host=host, port=port)

@@ -113,9 +113,7 @@ def _load_config() -> RuntimeConfig:
     )
     memgpt = MemGPTCfg(
         policy=os.getenv("MEM_POLICY", "default"),
-        write_quota_per_session=_as_int(
-            os.getenv("MEM_WRITE_QUOTA_PER_SESSION"), 30
-        ),
+        write_quota_per_session=_as_int(os.getenv("MEM_WRITE_QUOTA_PER_SESSION"), 30),
         importance_tau=_as_float(os.getenv("MEM_IMPORTANCE_TAU"), 0.7),
         novelty_tau=_as_float(os.getenv("MEM_NOVELTY_TAU"), 0.55),
     )
@@ -140,5 +138,3 @@ def get_config() -> RuntimeConfig:
 
 
 __all__ = ["RuntimeConfig", "get_config"]
-
-

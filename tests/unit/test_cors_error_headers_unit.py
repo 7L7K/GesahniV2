@@ -9,7 +9,7 @@ def test_401_response_has_cors_headers(client: TestClient):
     headers = {"Origin": "http://localhost:3000"}
     response = client.get("/config", headers=headers)  # Requires admin token
     assert response.status_code == 403
-    
+
     # Should have CORS headers for actual requests (not preflight)
     assert "access-control-allow-origin" in response.headers
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
@@ -28,7 +28,7 @@ def test_403_response_has_cors_headers(client: TestClient):
     headers = {"Origin": "http://localhost:3000"}
     response = client.get("/config", headers=headers)  # Requires admin token
     assert response.status_code == 403
-    
+
     # Should have CORS headers for actual requests (not preflight)
     assert "access-control-allow-origin" in response.headers
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
@@ -39,7 +39,7 @@ def test_error_response_without_origin_no_cors_headers(client: TestClient):
     """Test that error responses without Origin header don't have CORS headers."""
     response = client.get("/config")  # No Origin header
     assert response.status_code == 403
-    
+
     # Should not have CORS headers when no Origin is provided
     # Note: CORSMiddleware may still add headers, but they should not include a specific origin
     if "access-control-allow-origin" in response.headers:
@@ -51,8 +51,11 @@ def test_error_response_with_disallowed_origin_no_cors_headers(client: TestClien
     headers = {"Origin": "http://malicious-site.com"}
     response = client.get("/config", headers=headers)
     assert response.status_code == 403
-    
+
     # Should not have CORS headers for disallowed origin
     # Note: CORSMiddleware may still add headers, but they should not include the specific origin
     if "access-control-allow-origin" in response.headers:
-        assert response.headers["access-control-allow-origin"] != "http://malicious-site.com"
+        assert (
+            response.headers["access-control-allow-origin"]
+            != "http://malicious-site.com"
+        )

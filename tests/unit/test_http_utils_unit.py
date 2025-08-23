@@ -259,6 +259,7 @@ async def test_json_request_timeout_default(monkeypatch):
 
     # Mock AsyncClient to capture the timeout parameter
     captured_timeout = None
+
     def mock_async_client(timeout=None):
         nonlocal captured_timeout
         captured_timeout = timeout
@@ -298,6 +299,7 @@ async def test_json_request_custom_timeout(monkeypatch):
             return Resp()
 
     captured_timeout = None
+
     def mock_async_client(timeout=None):
         nonlocal captured_timeout
         captured_timeout = timeout
@@ -335,6 +337,7 @@ async def test_json_request_asyncclient_typeerror_fallback(monkeypatch):
 
     # Mock AsyncClient to raise TypeError on first call, then succeed
     call_count = 0
+
     def mock_async_client(timeout=None):
         nonlocal call_count
         call_count += 1
@@ -512,6 +515,7 @@ async def test_json_request_context_manager_exception(monkeypatch):
 
                 def json(self):
                     return {"ok": True}
+
             return Resp()
 
     monkeypatch.setattr(http_utils.httpx, "AsyncClient", lambda: Client())
@@ -519,5 +523,3 @@ async def test_json_request_context_manager_exception(monkeypatch):
     data, err = await http_utils.json_request("GET", "https://x/y")
     assert data is None
     assert err == "unknown_error"
-
-

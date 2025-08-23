@@ -18,5 +18,3 @@ describe('Capture UI', () => {
     expect(screen.getByText(/Press and hold to speak/i)).toBeInTheDocument()
   })
 })
-
-

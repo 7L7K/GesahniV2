@@ -13,5 +13,3 @@ describe('AlertPanel', () => {
         fireEvent.click(getByText('Cancel'))
     })
 })
-
-

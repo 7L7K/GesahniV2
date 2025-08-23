@@ -53,5 +53,3 @@ describe('LoginPage OAuth capture', () => {
     expect(replaceMock).toHaveBeenCalledWith('/');
   });
 });
-
-

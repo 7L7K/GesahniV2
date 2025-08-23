@@ -27,22 +27,27 @@ from fastapi import Request
 def get_cookie_config(request: Request) -> dict[str, Any]:
     """
     Get consistent cookie configuration for the current request.
-    
+
     Computes secure, samesite, domain, path, max_age from environment variables
     and request context. This is the single source of truth for all cookie attributes.
-    
+
     Args:
         request: FastAPI Request object for context detection
-        
+
     Returns:
         dict: Cookie configuration with secure, samesite, httponly, path, domain
     """
     # Base configuration from environment
     # Determine secure flag automatically: HTTPS requests should be secure
-    env_force_secure = os.getenv("COOKIE_SECURE", "").strip().lower() in {"1", "true", "yes", "on"}
+    env_force_secure = os.getenv("COOKIE_SECURE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
     dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
-    
+
     # Development mode detection: on dev + non-HTTPS, ensure cookies are
     # localhost-safe: Secure=False, SameSite != None, host-only (no Domain).
     dev_env_detected = dev_mode or _is_dev_environment(request)
@@ -55,16 +60,16 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
         # Prevent SameSite=None in dev HTTP (browsers require Secure for None). Use Lax as safe default.
         if cookie_samesite == "none":
             cookie_samesite = "lax"
-    
+
     # SameSite=None requires Secure=True. If SameSite=None is requested but secure is not
     # set, force secure=True to avoid creating invalid cookie combinations.
     if cookie_samesite == "none":
         cookie_secure = True
-    
+
     # Always use host-only cookies (no Domain) for better security and Safari compatibility
     # Ports don't matter for cookies; Domain does. Host-only is the least-surprising choice.
     domain = None
-    
+
     return {
         "secure": cookie_secure,
         "samesite": cookie_samesite,
@@ -83,10 +88,10 @@ def _is_dev_environment(request: Request) -> bool:
         os.getenv("ENVIRONMENT") == "development",
         os.getenv("NODE_ENV") == "development",
     ]
-    
+
     if any(dev_indicators):
         return True
-    
+
     # Check request host for localhost/dev patterns
     try:
         host = request.headers.get("host", "").lower()
@@ -95,7 +100,7 @@ def _is_dev_environment(request: Request) -> bool:
             return True
     except Exception:
         pass
-    
+
     return False
 
 
@@ -117,22 +122,22 @@ def _get_scheme(request: Request) -> str:
 def get_token_ttls() -> tuple[int, int]:
     """
     Get consistent TTLs for access and refresh tokens.
-    
+
     Reads from environment variables:
     - JWT_EXPIRE_MINUTES: Access token TTL in minutes (default: 15)
     - JWT_REFRESH_EXPIRE_MINUTES: Refresh token TTL in minutes (default: 43200)
-    
+
     Returns:
         Tuple[int, int]: (access_ttl_seconds, refresh_ttl_seconds)
     """
     # Access token TTL (default: 15 minutes)
     access_minutes = int(os.getenv("JWT_EXPIRE_MINUTES", "15"))
     access_ttl = access_minutes * 60
-    
+
     # Refresh token TTL (default: 30 days)
     refresh_minutes = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "43200"))
     refresh_ttl = refresh_minutes * 60
-    
+
     return access_ttl, refresh_ttl
 
 
@@ -148,10 +153,10 @@ def format_cookie_header(
 ) -> str:
     """
     Format a Set-Cookie header with consistent attributes.
-    
+
     This is the only place that formats Set-Cookie headers, ensuring
     consistent attribute ordering and formatting across all cookies.
-    
+
     Args:
         key: Cookie name
         value: Cookie value
@@ -161,42 +166,49 @@ def format_cookie_header(
         path: Cookie path
         httponly: Whether cookie is HttpOnly
         domain: Cookie domain (None for host-only)
-    
+
     Returns:
         str: Formatted Set-Cookie header
     """
     # Normalize SameSite value - use proper case
     samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
     ss = samesite_map.get(samesite.lower(), "Lax")
-    
+
     parts = [
         f"{key}={value}",
         f"Max-Age={int(max_age)}",
         f"Path={path}",
         f"SameSite={ss}",
     ]
-    
+
     if httponly:
         parts.append("HttpOnly")
-    
+
     if secure:
         parts.append("Secure")
-    
+
     if domain:
         parts.append(f"Domain={domain}")
-    
+
     # Add Priority=High for critical auth cookies (legacy + canonical names)
     try:
         from .cookie_names import ACCESS_TOKEN, REFRESH_TOKEN, SESSION
-        priority_names = {ACCESS_TOKEN, REFRESH_TOKEN, SESSION, "access_token", "refresh_token", "__session"}
+
+        priority_names = {
+            ACCESS_TOKEN,
+            REFRESH_TOKEN,
+            SESSION,
+            "access_token",
+            "refresh_token",
+            "__session",
+        }
     except Exception:
         priority_names = {"access_token", "refresh_token", "__session"}
     if key in priority_names:
         parts.append("Priority=High")
-    
+
     return "; ".join(parts)
 
 
 # Export the main functions for easy access
 __all__ = ["get_cookie_config", "get_token_ttls", "format_cookie_header"]
-

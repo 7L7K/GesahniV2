@@ -16,5 +16,3 @@ describe('wsUrl', () => {
     expect(url).toMatch(/access_token=/)
   })
 })
-
-

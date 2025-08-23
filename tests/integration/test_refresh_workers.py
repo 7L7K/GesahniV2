@@ -22,7 +22,9 @@ def test_concurrent_refresh_simulated_workers(monkeypatch):
 
     def _call(delay_ms: int):
         time.sleep(delay_ms / 1000.0)
-        return c.post("/v1/auth/refresh", headers={"X-Auth-Intent": "refresh"}).status_code
+        return c.post(
+            "/v1/auth/refresh", headers={"X-Auth-Intent": "refresh"}
+        ).status_code
 
     with ThreadPoolExecutor(max_workers=5) as ex:
         futures = [ex.submit(_call, i * 5) for i in range(5)]
@@ -41,5 +43,3 @@ def test_csrf_intent_required_in_none(monkeypatch):
     # With header
     r2 = c.post("/v1/auth/refresh", headers={"X-Auth-Intent": "refresh"})
     assert r2.status_code == HTTPStatus.OK
-
-

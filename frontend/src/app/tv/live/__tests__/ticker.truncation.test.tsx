@@ -9,5 +9,3 @@ describe('Ticker truncation', () => {
         expect(container.firstChild).toBeNull()
     })
 })
-
-

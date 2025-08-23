@@ -1009,4 +1009,3 @@ export async function initiateGoogleSignIn(next?: string): Promise<void> {
   // Perform a top-level navigation to the returned URL so Google takes over
   window.location.href = authUrl;
 }
-

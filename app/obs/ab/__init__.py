@@ -14,7 +14,7 @@ _LOSSES: dict[str, int] = {}
 
 
 def record_result(flag: str, win: bool) -> None:
-    ( _WINS if win else _LOSSES )[flag] = ( _WINS if win else _LOSSES ).get(flag, 0) + 1
+    (_WINS if win else _LOSSES)[flag] = (_WINS if win else _LOSSES).get(flag, 0) + 1
 
 
 def snapshot() -> dict[str, tuple[int, int]]:
@@ -26,5 +26,3 @@ def snapshot() -> dict[str, tuple[int, int]]:
 
 
 __all__ = ["is_enabled", "record_result", "snapshot"]
-
-

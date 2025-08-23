@@ -16,5 +16,3 @@ describe('Onboarding page incomplete flow', () => {
     await waitFor(() => expect(screen.getByText(/Step 1 of/i)).toBeInTheDocument())
   })
 })
-
-

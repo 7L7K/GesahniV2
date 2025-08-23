@@ -22,8 +22,7 @@ class MisconfiguredStoreError(VectorStoreError):
 class SupportsQACache(Protocol):
     def get_items(
         self, ids: list[str] | None = None, include: list[str] | None = None
-    ) -> dict[str, list]:
-        ...
+    ) -> dict[str, list]: ...
 
     def upsert(
         self,
@@ -31,17 +30,13 @@ class SupportsQACache(Protocol):
         ids: list[str],
         documents: list[str],
         metadatas: list[dict],
-    ) -> None:
-        ...
+    ) -> None: ...
 
-    def delete(self, *, ids: list[str] | None = None) -> None:
-        ...
+    def delete(self, *, ids: list[str] | None = None) -> None: ...
 
-    def update(self, *, ids: list[str], metadatas: list[dict]) -> None:
-        ...
+    def update(self, *, ids: list[str], metadatas: list[dict]) -> None: ...
 
-    def keys(self) -> list[str]:
-        ...
+    def keys(self) -> list[str]: ...
 
 
 @runtime_checkable
@@ -55,7 +50,9 @@ class VectorStoreProtocol(Protocol):
     # User memory operations -------------------------------------------------
     def add_user_memory(self, user_id: str, memory: str) -> str: ...
 
-    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> list[str]: ...
+    def query_user_memories(
+        self, user_id: str, prompt: str, k: int = 5
+    ) -> list[str]: ...
 
     def list_user_memories(self, user_id: str) -> list[dict]: ...
 
@@ -67,7 +64,9 @@ class VectorStoreProtocol(Protocol):
 
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None: ...
 
-    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> str | None: ...
+    def lookup_cached_answer(
+        self, prompt: str, ttl_seconds: int = 86400
+    ) -> str | None: ...
 
     def record_feedback(self, prompt: str, feedback: str) -> None: ...
 
@@ -91,5 +90,3 @@ __all__ = [
     "VectorStoreProtocol",
     "ScoredDocument",
 ]
-
-

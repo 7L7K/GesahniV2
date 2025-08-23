@@ -154,7 +154,7 @@ decision = route_text(
 
 **Deterministic Routing Rules:**
 - **Attachments**: Any images/files → `gpt-4.1-nano`
-- **Ops (File Operations)**: 
+- **Ops (File Operations)**:
   - ≤2 files → `gpt-5-nano`
   - >2 files → `gpt-4.1-nano`
 - **Long Prompts**: >240 tokens → `gpt-4.1-nano`

@@ -11,7 +11,12 @@ from pydantic import BaseModel, ConfigDict
 from app.security import verify_token
 
 # Public-by-default in tests; gate auth via CALENDAR_PUBLIC
-CAL_PUBLIC = os.getenv("CALENDAR_PUBLIC", "1").strip().lower() in {"1", "true", "yes", "on"}
+CAL_PUBLIC = os.getenv("CALENDAR_PUBLIC", "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 _DEPS = [] if CAL_PUBLIC else [Depends(verify_token)]
 router = APIRouter(tags=["Calendar"], dependencies=_DEPS)
 
@@ -75,11 +80,22 @@ class EventsResponse(BaseModel):
 def _sort_key(e: dict) -> tuple[str, str]:
     return (str(e.get("date") or ""), str(e.get("time") or ""))
 
+
 # OpenAPI examples -------------------------------------------------------------
 EXAMPLE_TODAY = {
     "items": [
-        {"date": "2025-08-12", "time": "09:30", "title": "Doctor appointment", "location": "Clinic"},
-        {"date": "2025-08-12", "time": "13:00", "title": "Lunch with Sam", "location": "Cafe"},
+        {
+            "date": "2025-08-12",
+            "time": "09:30",
+            "title": "Doctor appointment",
+            "location": "Clinic",
+        },
+        {
+            "date": "2025-08-12",
+            "time": "13:00",
+            "title": "Lunch with Sam",
+            "location": "Cafe",
+        },
     ]
 }
 
@@ -141,7 +157,11 @@ async def next_three() -> EventsResponse:
             items = [
                 {
                     "date": e.get("start_local", "").split("T")[0],
-                    "time": e.get("start_local", "").split("T")[1][:5] if "T" in (e.get("start_local") or "") else None,
+                    "time": (
+                        e.get("start_local", "").split("T")[1][:5]
+                        if "T" in (e.get("start_local") or "")
+                        else None
+                    ),
                     "title": e.get("title"),
                 }
                 for e in ev
@@ -183,5 +203,3 @@ async def list_all() -> EventsResponse:
     items = list(_read())
     items.sort(key=_sort_key)
     return EventsResponse(items=[Event(**it) for it in items])
-
-

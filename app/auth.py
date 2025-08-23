@@ -7,6 +7,7 @@ import re
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import aiosqlite
@@ -15,6 +16,7 @@ from passlib.context import CryptContext
 from passlib.exc import UnknownHashError
 from pydantic import BaseModel
 
+from .deps.scopes import require_scope
 from .deps.user import get_current_user_id
 from .security import _jwt_decode
 from .user_store import user_store
@@ -24,8 +26,6 @@ DB_PATH = os.getenv("USERS_DB", "users.db")
 # In tests, default to an isolated temp file per test to avoid collisions
 if "PYTEST_CURRENT_TEST" in os.environ and not os.getenv("USERS_DB"):
     try:
-        import hashlib
-
         ident = os.environ.get("PYTEST_CURRENT_TEST", "")
         digest = hashlib.md5(ident.encode()).hexdigest()[:8]
         DB_PATH = str((Path.cwd() / f".tmp_auth_{digest}.db").resolve())
@@ -43,9 +43,6 @@ JWT_AUD = os.getenv("JWT_AUD")
 EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
 REFRESH_EXPIRE_MINUTES = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
 
-# Revocation store
-revoked_tokens: set[str] = set()
-
 # Rate limiting configuration
 _attempts: dict[str, tuple[int, float]] = {}
 _ATTEMPT_WINDOW = int(os.getenv("LOGIN_ATTEMPT_WINDOW_SECONDS", "300"))
@@ -57,15 +54,49 @@ _EXPONENTIAL_BACKOFF_MAX = int(os.getenv("LOGIN_BACKOFF_MAX_MS", "1000"))
 _EXPONENTIAL_BACKOFF_THRESHOLD = int(os.getenv("LOGIN_BACKOFF_THRESHOLD", "3"))
 _HARD_LOCKOUT_THRESHOLD = int(os.getenv("LOGIN_HARD_LOCKOUT_THRESHOLD", "6"))
 
+# Dynamic configuration getters to avoid import-time staleness
+def _jwt_exp_minutes() -> int:
+    return int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
+
+def _jwt_refresh_exp_minutes() -> int:
+    return int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
+
+def _attempt_window_s() -> int:
+    return int(os.getenv("LOGIN_ATTEMPT_WINDOW_SECONDS", "300"))
+
+def _attempt_max() -> int:
+    return int(os.getenv("LOGIN_ATTEMPT_MAX", "5"))
+
+def _lockout_seconds() -> int:
+    return int(os.getenv("LOGIN_LOCKOUT_SECONDS", "60"))
+
+def _backoff_start_ms() -> int:
+    return int(os.getenv("LOGIN_BACKOFF_START_MS", "200"))
+
+def _backoff_max_ms() -> int:
+    return int(os.getenv("LOGIN_BACKOFF_MAX_MS", "1000"))
+
+def _backoff_threshold() -> int:
+    return int(os.getenv("LOGIN_BACKOFF_THRESHOLD", "3"))
+
+def _hard_lockout_threshold() -> int:
+    return int(os.getenv("LOGIN_HARD_LOCKOUT_THRESHOLD", "6"))
+
 # Password hashing: prefer bcrypt if a working backend is present; otherwise pbkdf2
 _TEST_ENV = "PYTEST_CURRENT_TEST" in os.environ
+
+
 def _has_working_bcrypt() -> bool:
     try:
         import bcrypt as _bcrypt  # type: ignore
+
         # passlib probes _bcrypt.__about__.__version__; guard for broken wheels
-        return hasattr(_bcrypt, "__about__") and hasattr(_bcrypt.__about__, "__version__")
+        return hasattr(_bcrypt, "__about__") and hasattr(
+            _bcrypt.__about__, "__version__"
+        )
     except Exception:
         return False
+
 
 try:
     if _TEST_ENV or not _has_working_bcrypt():
@@ -80,26 +111,22 @@ router = APIRouter(tags=["Auth"])
 logger = logging.getLogger(__name__)
 
 
-def _ensure_jwt_secret_present() -> None:
-    """Raise a clear ValueError if JWT_SECRET is missing or insecure."""
-    if not SECRET_KEY or not SECRET_KEY.strip():
-        raise ValueError("JWT_SECRET environment variable must be set")
-    if SECRET_KEY.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
-        raise ValueError("JWT_SECRET cannot use insecure default values")
+
 
 
 def _create_session_id(jti: str, expires_at: float) -> str:
     """
     Create a new session ID and store it mapped to the access token JTI.
-    
+
     Args:
         jti: JWT ID from access token
         expires_at: Unix timestamp when session expires
-        
+
     Returns:
         str: New session ID
     """
     from .session_store import get_session_store
+
     store = get_session_store()
     return store.create_session(jti, expires_at)
 
@@ -107,15 +134,16 @@ def _create_session_id(jti: str, expires_at: float) -> str:
 def _verify_session_id(session_id: str, jti: str) -> bool:
     """
     Verify a session ID against the expected JTI.
-    
+
     Args:
         session_id: The session ID from __session cookie
         jti: The JWT ID from access token
-        
+
     Returns:
         bool: True if the session is valid and matches the JTI
     """
     from .session_store import get_session_store
+
     store = get_session_store()
     stored_jti = store.get_session(session_id)
     return stored_jti == jti
@@ -124,14 +152,15 @@ def _verify_session_id(session_id: str, jti: str) -> bool:
 def _delete_session_id(session_id: str) -> bool:
     """
     Delete a session ID.
-    
+
     Args:
         session_id: The session ID to delete
-        
+
     Returns:
         bool: True if session was deleted, False if not found
     """
     from .session_store import get_session_store
+
     store = get_session_store()
     return store.delete_session(session_id)
 
@@ -147,9 +176,7 @@ class RegisterRequest(BaseModel):
     password: str
 
     class Config:
-        json_schema_extra = {
-            "example": {"username": "demo", "password": "secret123"}
-        }
+        json_schema_extra = {"example": {"username": "demo", "password": "secret123"}}
 
 
 class LoginRequest(BaseModel):
@@ -157,9 +184,7 @@ class LoginRequest(BaseModel):
     password: str
 
     class Config:
-        json_schema_extra = {
-            "example": {"username": "demo", "password": "secret123"}
-        }
+        json_schema_extra = {"example": {"username": "demo", "password": "secret123"}}
 
 
 class TokenResponse(BaseModel):
@@ -193,6 +218,7 @@ class ResetPasswordRequest(BaseModel):
         json_schema_extra = {
             "example": {"token": "abcd1234", "new_password": "NewPass123"}
         }
+
 
 # Ensure auth table exists and migrate legacy schemas
 async def _ensure_table() -> None:
@@ -232,6 +258,7 @@ async def _ensure_table() -> None:
         except Exception:
             pass
         await db.commit()
+
 
 async def _fetch_password_hash(db: aiosqlite.Connection, username: str) -> str | None:
     """Return stored password hash for the given username.
@@ -303,19 +330,19 @@ def _validate_password(password: str) -> None:
 
 def _record_attempt(key: str, *, success: bool) -> None:
     """Record a login attempt for rate limiting.
-    
+
     Args:
         key: Rate limiting key (user or IP)
         success: Whether the login was successful
     """
     now = time.time()
     count, ts = _attempts.get(key, (0, now))
-    
+
     # Reset counter if window has expired
-    if now - ts > _ATTEMPT_WINDOW:
+    if now - ts > _attempt_window_s():
         count = 0
         ts = now
-    
+
     if success:
         # Clear successful attempts immediately
         _attempts.pop(key, None)
@@ -326,16 +353,16 @@ def _record_attempt(key: str, *, success: bool) -> None:
 
 def _throttled(key: str) -> int | None:
     """Return seconds to wait if throttled; None if allowed.
-    
+
     Args:
         key: Rate limiting key (user or IP)
-        
+
     Returns:
         Seconds to wait if throttled, None if allowed
     """
     now = time.time()
     attempt_data = _attempts.get(key, (0, now))
-    
+
     # Handle malformed data gracefully
     try:
         count, ts = attempt_data
@@ -347,28 +374,28 @@ def _throttled(key: str) -> int | None:
         # Reset malformed data
         _attempts.pop(key, None)
         return None
-    
+
     # Reset if window has expired
-    if now - ts > _ATTEMPT_WINDOW:
+    if now - ts > _attempt_window_s():
         return None
-    
+
     # Check if we've exceeded the attempt limit
-    if count >= _ATTEMPT_MAX:
+    if count >= _attempt_max():
         elapsed = now - ts
-        remaining = max(0, _LOCKOUT_SECONDS - int(elapsed))
+        remaining = max(0, _lockout_seconds() - int(elapsed))
         # Ensure we return at least 1 second to prevent immediate retry
         return max(1, remaining)
-    
+
     return None
 
 
 def _get_throttle_status(user_key: str, ip_key: str) -> tuple[int | None, int | None]:
     """Get throttling status for both user and IP keys.
-    
+
     Args:
         user_key: Rate limiting key for username
         ip_key: Rate limiting key for IP address
-        
+
     Returns:
         Tuple of (user_throttle_seconds, ip_throttle_seconds)
     """
@@ -379,33 +406,33 @@ def _get_throttle_status(user_key: str, ip_key: str) -> tuple[int | None, int | 
 
 def _should_apply_backoff(user_key: str) -> bool:
     """Check if exponential backoff should be applied.
-    
+
     Args:
         user_key: Rate limiting key for username
-        
+
     Returns:
         True if backoff should be applied
     """
     count, _ = _attempts.get(user_key, (0, 0))
-    return count >= _EXPONENTIAL_BACKOFF_THRESHOLD
+    return count >= _backoff_threshold()
 
 
 def _should_hard_lockout(user_key: str) -> bool:
     """Check if hard lockout should be applied.
-    
+
     Args:
         user_key: Rate limiting key for username
-        
+
     Returns:
         True if hard lockout should be applied
     """
     count, _ = _attempts.get(user_key, (0, 0))
-    return count >= _HARD_LOCKOUT_THRESHOLD
+    return count >= _hard_lockout_threshold()
 
 
 def _clear_rate_limit_data(key: str = None) -> None:
     """Clear rate limiting data for testing or admin purposes.
-    
+
     Args:
         key: Specific key to clear, or None to clear all
     """
@@ -415,27 +442,27 @@ def _clear_rate_limit_data(key: str = None) -> None:
         _attempts.clear()
 
 
-def _get_rate_limit_stats(key: str) -> dict[str, any] | None:
+def _get_rate_limit_stats(key: str) -> dict[str, Any] | None:
     """Get rate limiting statistics for a key.
-    
+
     Args:
         key: Rate limiting key
-        
+
     Returns:
         Dictionary with count and timestamp, or None if not found
     """
     if key not in _attempts:
         return None
-    
+
     count, ts = _attempts[key]
     now = time.time()
     return {
         "count": count,
         "timestamp": ts,
-        "window_expires": ts + _ATTEMPT_WINDOW,
-        "time_remaining": max(0, ts + _ATTEMPT_WINDOW - now),
-        "is_throttled": count >= _ATTEMPT_MAX,
-        "throttle_remaining": _throttled(key)
+        "window_expires": ts + _attempt_window_s(),
+        "time_remaining": max(0, ts + _attempt_window_s() - now),
+        "is_throttled": count >= _attempt_max(),
+        "throttle_remaining": _throttled(key),
     }
 
 
@@ -502,7 +529,12 @@ async def register(req: RegisterRequest):
                         "INSERT OR IGNORE INTO users (username, password_hash) VALUES (?, ?)",
                         (norm_user, hashed),
                     )
-                elif {"user_id", "password_hash", "login_count", "request_count"}.issubset(set(cols)):
+                elif {
+                    "user_id",
+                    "password_hash",
+                    "login_count",
+                    "request_count",
+                }.issubset(set(cols)):
                     await db.execute(
                         "INSERT OR IGNORE INTO users (user_id, password_hash, login_count, request_count) VALUES (?, ?, 0, 0)",
                         (norm_user, hashed),
@@ -517,9 +549,11 @@ async def register(req: RegisterRequest):
 
 # Admin endpoint to view rate limiting statistics
 @router.get("/admin/rate-limits/{key}")
-async def get_rate_limit_stats(key: str, user_id: str = Depends(get_current_user_id)):
+async def get_rate_limit_stats(
+    key: str,
+    _=Depends(require_scope("admin:read"))
+):
     """Get rate limiting statistics for a specific key (admin only)."""
-    # In a real implementation, you'd check admin permissions here
     stats = _get_rate_limit_stats(key)
     if stats is None:
         raise HTTPException(status_code=404, detail="Rate limit data not found")
@@ -528,11 +562,16 @@ async def get_rate_limit_stats(key: str, user_id: str = Depends(get_current_user
 
 # Admin endpoint to clear rate limiting data
 @router.delete("/admin/rate-limits/{key}")
-async def clear_rate_limit_data(key: str = None, user_id: str = Depends(get_current_user_id)):
+async def clear_rate_limit_data(
+    key: str = None,
+    _=Depends(require_scope("admin:write"))
+):
     """Clear rate limiting data for a specific key or all keys (admin only)."""
-    # In a real implementation, you'd check admin permissions here
     _clear_rate_limit_data(key)
-    return {"status": "ok", "message": f"Cleared rate limit data for key: {key or 'all'}"}
+    return {
+        "status": "ok",
+        "message": f"Cleared rate limit data for key: {key or 'all'}",
+    }
 
 
 # Login endpoint with backoff after failures
@@ -544,245 +583,283 @@ async def login(
 
     CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
     """
-    logger.info("auth.login_start", extra={
-        "meta": {
-            "username": req.username,
-            "ip": _client_ip(request),
-            "user_agent": request.headers.get("User-Agent", "unknown"),
-            "content_type": request.headers.get("Content-Type", "unknown"),
-            "has_csrf": bool(request.headers.get("X-CSRF-Token")),
-            "has_cookie": bool(request.cookies.get("csrf_token")),
-        }
-    })
-    
+    logger.info(
+        "auth.login_start",
+        extra={
+            "meta": {
+                "username": req.username,
+                "ip": _client_ip(request),
+                "user_agent": request.headers.get("User-Agent", "unknown"),
+                "content_type": request.headers.get("Content-Type", "unknown"),
+                "has_csrf": bool(request.headers.get("X-CSRF-Token")),
+                "has_cookie": bool(request.cookies.get("csrf_token")),
+            }
+        },
+    )
+
     await _ensure_table()
     norm_user = _sanitize_username(req.username)
-    logger.info("auth.login_username_normalized", extra={
-        "meta": {
-            "original_username": req.username,
-            "normalized_username": norm_user,
-            "ip": _client_ip(request),
-        }
-    })
-    
+    logger.info(
+        "auth.login_username_normalized",
+        extra={
+            "meta": {
+                "original_username": req.username,
+                "normalized_username": norm_user,
+                "ip": _client_ip(request),
+            }
+        },
+    )
+
     # Rate limiting keys
     user_key = f"user:{norm_user}"
     ip_key = f"ip:{_client_ip(request)}"
-    
+
     # Check throttling status for both user and IP
     user_throttle, ip_throttle = _get_throttle_status(user_key, ip_key)
-    logger.info("auth.login_rate_limit_check", extra={
-        "meta": {
-            "username": norm_user,
-            "ip": _client_ip(request),
-            "user_throttle": user_throttle,
-            "ip_throttle": ip_throttle,
-            "user_key": user_key,
-            "ip_key": ip_key,
-        }
-    })
-    
-    # Apply the most restrictive throttling (longest wait time)
-    if user_throttle is not None or ip_throttle is not None:
-        max_throttle = max(user_throttle or 0, ip_throttle or 0)
-        logger.warning("auth.login_rate_limited", extra={
+    logger.info(
+        "auth.login_rate_limit_check",
+        extra={
             "meta": {
                 "username": norm_user,
                 "ip": _client_ip(request),
                 "user_throttle": user_throttle,
                 "ip_throttle": ip_throttle,
-                "max_throttle": max_throttle,
+                "user_key": user_key,
+                "ip_key": ip_key,
             }
-        })
-        raise HTTPException(
-            status_code=429, 
-            detail={"error": "rate_limited", "retry_after": max_throttle}
+        },
+    )
+
+    # Apply the most restrictive throttling (longest wait time)
+    if user_throttle is not None or ip_throttle is not None:
+        max_throttle = max(user_throttle or 0, ip_throttle or 0)
+        logger.warning(
+            "auth.login_rate_limited",
+            extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "user_throttle": user_throttle,
+                    "ip_throttle": ip_throttle,
+                    "max_throttle": max_throttle,
+                }
+            },
         )
-    
+        raise HTTPException(
+            status_code=429,
+            detail={"error": "rate_limited", "retry_after": max_throttle},
+        )
+
     # Apply exponential backoff before authentication to prevent timing attacks
     if _should_apply_backoff(user_key):
-        delay_ms = random.randint(_EXPONENTIAL_BACKOFF_START, _EXPONENTIAL_BACKOFF_MAX)
-        logger.info("auth.login_applying_backoff", extra={
-            "meta": {
-                "username": norm_user,
-                "ip": _client_ip(request),
-                "delay_ms": delay_ms,
-            }
-        })
+        delay_ms = random.randint(_backoff_start_ms(), _backoff_max_ms())
+        logger.info(
+            "auth.login_applying_backoff",
+            extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "delay_ms": delay_ms,
+                }
+            },
+        )
         await asyncio.sleep(delay_ms / 1000.0)
-    
+
     # Check for hard lockout before attempting authentication
     if _should_hard_lockout(user_key):
-        logger.warning("auth.login_hard_lockout", extra={
+        logger.warning(
+            "auth.login_hard_lockout",
+            extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "lockout_seconds": _lockout_seconds(),
+                }
+            },
+        )
+        raise HTTPException(
+            status_code=429,
+            detail={"error": "rate_limited", "retry_after": _lockout_seconds()},
+        )
+
+    # Perform authentication
+    logger.info(
+        "auth.login_attempting_authentication",
+        extra={
             "meta": {
                 "username": norm_user,
                 "ip": _client_ip(request),
-                "lockout_seconds": _LOCKOUT_SECONDS,
+                "db_path": DB_PATH,
             }
-        })
-        raise HTTPException(
-            status_code=429, 
-            detail={"error": "rate_limited", "retry_after": _LOCKOUT_SECONDS}
-        )
-    
-    # Perform authentication
-    logger.info("auth.login_attempting_authentication", extra={
-        "meta": {
-            "username": norm_user,
-            "ip": _client_ip(request),
-            "db_path": DB_PATH,
-        }
-    })
-    
+        },
+    )
+
     async with aiosqlite.connect(DB_PATH) as db:
         # Try both auth table and legacy users table
         hashed = await _fetch_password_hash(db, norm_user)
-        logger.info("auth.login_password_hash_fetched", extra={
-            "meta": {
-                "username": norm_user,
-                "ip": _client_ip(request),
-                "hash_found": bool(hashed),
-                "hash_length": len(hashed) if hashed else 0,
-            }
-        })
+        logger.info(
+            "auth.login_password_hash_fetched",
+            extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "hash_found": bool(hashed),
+                    "hash_length": len(hashed) if hashed else 0,
+                }
+            },
+        )
 
     valid = False
     if hashed:
         try:
             valid = bool(pwd_context.verify(req.password, hashed))
-            logger.info("auth.login_password_verification", extra={
-                "meta": {
-                    "username": norm_user,
-                    "ip": _client_ip(request),
-                    "password_valid": valid,
-                    "hash_algorithm": hashed.split('$')[1] if hashed and '$' in hashed else "unknown",
-                }
-            })
+            logger.info(
+                "auth.login_password_verification",
+                extra={
+                    "meta": {
+                        "username": norm_user,
+                        "ip": _client_ip(request),
+                        "password_valid": valid,
+                        "hash_algorithm": (
+                            hashed.split("$")[1]
+                            if hashed and "$" in hashed
+                            else "unknown"
+                        ),
+                    }
+                },
+            )
         except UnknownHashError as e:
             # Treat unrecognized/badly formatted hashes as invalid credentials
-            logger.error("auth.login_unknown_hash_error", extra={
-                "meta": {
-                    "username": norm_user,
-                    "ip": _client_ip(request),
-                    "error": str(e),
-                    "hash_preview": hashed[:20] + "..." if hashed else "none",
-                }
-            })
+            logger.error(
+                "auth.login_unknown_hash_error",
+                extra={
+                    "meta": {
+                        "username": norm_user,
+                        "ip": _client_ip(request),
+                        "error": str(e),
+                        "hash_preview": hashed[:20] + "..." if hashed else "none",
+                    }
+                },
+            )
             valid = False
         except Exception as e:
-            logger.error("auth.login_password_verification_error", extra={
-                "meta": {
-                    "username": norm_user,
-                    "ip": _client_ip(request),
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                }
-            })
+            logger.error(
+                "auth.login_password_verification_error",
+                extra={
+                    "meta": {
+                        "username": norm_user,
+                        "ip": _client_ip(request),
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    }
+                },
+            )
             valid = False
-    
+
     if not valid:
         # Record failed attempts for both user and IP
         _record_attempt(user_key, success=False)
         _record_attempt(ip_key, success=False)
-        
-        logger.warning("auth.login_failed", extra={
-            "meta": {
-                "username": norm_user,
-                "ip": _client_ip(request),
-                "reason": "invalid_credentials",
-                "hash_found": bool(hashed),
-            }
-        })
+
+        logger.warning(
+            "auth.login_failed",
+            extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "reason": "invalid_credentials",
+                    "hash_found": bool(hashed),
+                }
+            },
+        )
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+
     # Record successful attempts for both user and IP
     _record_attempt(user_key, success=True)
     _record_attempt(ip_key, success=True)
 
-    logger.info("auth.login_creating_tokens", extra={
-        "meta": {
-            "username": norm_user,
-            "ip": _client_ip(request),
-            "expire_minutes": EXPIRE_MINUTES,
-            "refresh_expire_minutes": REFRESH_EXPIRE_MINUTES,
-        }
-    })
+    logger.info(
+        "auth.login_creating_tokens",
+        extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "expire_minutes": _jwt_exp_minutes(),
+                "refresh_expire_minutes": _jwt_refresh_exp_minutes(),
+            }
+        },
+    )
 
-    # Create access token
-    expire = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
-    jti = uuid4().hex
-    access_payload = {
-        "sub": req.username,
-        "user_id": req.username,
-        "exp": expire,
-        "jti": jti,
-        "type": "access",
-        "scopes": ["care:resident", "music:control"],  # Default scopes for regular users
-    }
-    if JWT_ISS:
-        access_payload["iss"] = JWT_ISS
-    if JWT_AUD:
-        access_payload["aud"] = JWT_AUD
-    # Use tokens.py facade instead of direct JWT encoding
+    # Create access token using centralized tokens module
     from .tokens import make_access, make_refresh
-    
+
     access_token = make_access({"user_id": req.username})
 
     # Create refresh token
     refresh_jti = uuid4().hex
     refresh_token = make_refresh({"user_id": req.username, "jti": refresh_jti})
 
-    logger.info("auth.login_tokens_created", extra={
-        "meta": {
-            "username": norm_user,
-            "ip": _client_ip(request),
-            "access_token_length": len(access_token),
-            "refresh_token_length": len(refresh_token),
-            "access_jti": jti,
-            "refresh_jti": refresh_jti,
-        }
-    })
+    logger.info(
+        "auth.login_tokens_created",
+        extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "access_token_length": len(access_token),
+                "refresh_token_length": len(refresh_token),
+                "access_jti": jti,
+                "refresh_jti": refresh_jti,
+            }
+        },
+    )
 
     await user_store.ensure_user(norm_user)
     await user_store.increment_login(norm_user)
     stats = await user_store.get_stats(norm_user) or {}
-    logger.info("auth.login_success", extra={
-        "meta": {
-            "username": norm_user,
-            "ip": _client_ip(request),
-            "user_stats": stats,
-        }
-    })
+    logger.info(
+        "auth.login_success",
+        extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "user_stats": stats,
+            }
+        },
+    )
 
     # Set HttpOnly cookies for browser clients (unified flow: header + cookie)
     try:
         from .cookie_config import get_cookie_config, get_token_ttls
-        
+
         # Get consistent cookie configuration
         cookie_config = get_cookie_config(request)
         access_ttl, refresh_ttl = get_token_ttls()
-        
-        logger.info("auth.login_cookie_config", extra={
-            "meta": {
-                "username": norm_user,
-                "ip": _client_ip(request),
-                "cookie_config": cookie_config,
-                "access_ttl": access_ttl,
-                "refresh_ttl": refresh_ttl,
-            }
-        })
-        
+
+        logger.info(
+            "auth.login_cookie_config",
+            extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "cookie_config": cookie_config,
+                    "access_ttl": access_ttl,
+                    "refresh_ttl": refresh_ttl,
+                }
+            },
+        )
+
         # Create a session ID mapped to the access token JTI
         # This provides better security by using an opaque session ID
         try:
             # Decode the access token to get the JTI
             # Use dynamic JWT secret function to handle test environment changes
             from .api.auth import _jwt_secret
+
             secret = _jwt_secret()
             payload = _jwt_decode(access_token, secret, algorithms=[ALGORITHM])
             jti = payload.get("jti")
             expires_at = payload.get("exp", time.time() + access_ttl)
-            
+
             if jti:
                 session_id = _create_session_id(jti, expires_at)
             else:
@@ -792,48 +869,66 @@ async def login(
             logger.warning(f"Failed to decode access token for session creation: {e}")
             # Fallback session ID
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        
+
         # Use centralized cookie functions
         from .cookies import set_auth_cookies
-        set_auth_cookies(response, access=access_token, refresh=refresh_token, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
-        
-        logger.info("auth.login_cookies_set", extra={
-            "meta": {
-                "username": norm_user,
-                "ip": _client_ip(request),
-                "secure": cookie_config["secure"],
-                "samesite": cookie_config["samesite"],
-                "access_ttl": access_ttl,
-                "refresh_ttl": refresh_ttl,
-                "domain": cookie_config["domain"],
-                "cookies_set": ["access_token", "refresh_token", "__session"],
-            }
-        })
-        
-        try:
-            logger.info(
-            "login.set_cookie secure=%s samesite=%s ttl=%ds/%ds cookies=3",
-            cookie_config['secure'], cookie_config['samesite'], access_ttl, refresh_ttl,
+
+        set_auth_cookies(
+            response,
+            access=access_token,
+            refresh=refresh_token,
+            session_id=session_id,
+            access_ttl=access_ttl,
+            refresh_ttl=refresh_ttl,
+            request=request,
+        )
+
+        logger.info(
+            "auth.login_cookies_set",
             extra={
                 "meta": {
-                    "secure": cookie_config['secure'],
-                    "samesite": cookie_config['samesite'],
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "secure": cookie_config["secure"],
+                    "samesite": cookie_config["samesite"],
                     "access_ttl": access_ttl,
                     "refresh_ttl": refresh_ttl,
+                    "domain": cookie_config["domain"],
+                    "cookies_set": ["access_token", "refresh_token", "__session"],
                 }
-            }
+            },
         )
+
+        try:
+            logger.info(
+                "login.set_cookie secure=%s samesite=%s ttl=%ds/%ds cookies=3",
+                cookie_config["secure"],
+                cookie_config["samesite"],
+                access_ttl,
+                refresh_ttl,
+                extra={
+                    "meta": {
+                        "secure": cookie_config["secure"],
+                        "samesite": cookie_config["samesite"],
+                        "access_ttl": access_ttl,
+                        "refresh_ttl": refresh_ttl,
+                    }
+                },
+            )
         except Exception:
             pass
     except Exception as e:
-        logger.error("auth.login_cookie_set_error", extra={
-            "meta": {
-                "username": norm_user,
-                "ip": _client_ip(request),
-                "error": str(e),
-                "error_type": type(e).__name__,
-            }
-        })
+        logger.error(
+            "auth.login_cookie_set_error",
+            extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }
+            },
+        )
         logger.error("login.set_cookie error: %s", e)
         # Fallback to centralized cookie functions if header append fails
         try:
@@ -842,58 +937,71 @@ async def login(
                 # Decode the access token to get the JTI
                 # Use dynamic JWT secret function to handle test environment changes
                 from .api.auth import _jwt_secret
+
                 secret = _jwt_secret()
                 payload = _jwt_decode(access_token, secret, algorithms=[ALGORITHM])
                 jti = payload.get("jti")
                 expires_at = payload.get("exp", time.time() + access_ttl)
-                
+
                 if jti:
                     session_id = _create_session_id(jti, expires_at)
                 else:
                     # Fallback if no JTI found
                     session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
             except Exception as e:
-                logger.warning(f"Failed to decode access token for session creation (fallback): {e}")
+                logger.warning(
+                    f"Failed to decode access token for session creation (fallback): {e}"
+                )
                 # Fallback session ID
                 session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-            
+
             # Use centralized cookie functions
             from .cookies import set_auth_cookies
+
             set_auth_cookies(
-                response, 
-                access=access_token, 
-                refresh=refresh_token, 
-                session_id=session_id, 
-                access_ttl=access_ttl, 
-                refresh_ttl=refresh_ttl, 
-                request=request
+                response,
+                access=access_token,
+                refresh=refresh_token,
+                session_id=session_id,
+                access_ttl=access_ttl,
+                refresh_ttl=refresh_ttl,
+                request=request,
             )
-            logger.info("auth.login_cookie_fallback_success", extra={
-                "meta": {
-                    "username": norm_user,
-                    "ip": _client_ip(request),
-                    "cookies_set": ["access_token", "refresh_token", "__session"],
-                }
-            })
+            logger.info(
+                "auth.login_cookie_fallback_success",
+                extra={
+                    "meta": {
+                        "username": norm_user,
+                        "ip": _client_ip(request),
+                        "cookies_set": ["access_token", "refresh_token", "__session"],
+                    }
+                },
+            )
         except Exception as fallback_error:
-            logger.error("auth.login_cookie_fallback_error", extra={
-                "meta": {
-                    "username": norm_user,
-                    "ip": _client_ip(request),
-                    "error": str(fallback_error),
-                    "error_type": type(fallback_error).__name__,
-                }
-            })
+            logger.error(
+                "auth.login_cookie_fallback_error",
+                extra={
+                    "meta": {
+                        "username": norm_user,
+                        "ip": _client_ip(request),
+                        "error": str(fallback_error),
+                        "error_type": type(fallback_error).__name__,
+                    }
+                },
+            )
             logger.error("login.set_cookie fallback error: %s", fallback_error)
             pass
 
-    logger.info("auth.login_complete", extra={
-        "meta": {
-            "username": norm_user,
-            "ip": _client_ip(request),
-            "response_status": 200,
-        }
-    })
+    logger.info(
+        "auth.login_complete",
+        extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "response_status": 200,
+            }
+        },
+    )
 
     return TokenResponse(
         access_token=access_token,
@@ -905,8 +1013,21 @@ async def login(
 
 _DEPRECATE_REFRESH_LOGGED = False
 
+
 # Refresh endpoint (legacy path) delegates to modern implementation with full parity
-@router.post("/refresh", response_model=TokenResponse, openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/RefreshRequest"}}}}})
+@router.post(
+    "/refresh",
+    response_model=TokenResponse,
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/RefreshRequest"}
+                }
+            }
+        }
+    },
+)
 async def refresh(req: RefreshRequest | None = None, request: Request = None, response: Response = None) -> TokenResponse:  # type: ignore[assignment]
     global _DEPRECATE_REFRESH_LOGGED
     if not _DEPRECATE_REFRESH_LOGGED:
@@ -917,6 +1038,7 @@ async def refresh(req: RefreshRequest | None = None, request: Request = None, re
         _DEPRECATE_REFRESH_LOGGED = True
     # Delegate to /v1/auth/refresh parity logic
     from .api.auth import refresh as _refresh  # type: ignore
+
     # Construct a starlette Request/Response compatible invocation
     # Ensure intent/CSRF parity is enforced by delegated handler
     body_tokens = None
@@ -941,12 +1063,14 @@ async def refresh(req: RefreshRequest | None = None, request: Request = None, re
 
 _DEPRECATE_LOGOUT_LOGGED = False
 
+
 # Logout endpoint (legacy path) - delegate to main logout endpoint
 @router.post("/logout")
 async def logout(request: Request, response: Response):
     """Legacy logout endpoint - delegates to /v1/auth/logout."""
     # Import and call the main logout function
     from app.api.auth import logout as main_logout
+
     return await main_logout(request, response)
 
 

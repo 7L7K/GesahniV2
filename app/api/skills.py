@@ -9,7 +9,9 @@ except Exception:
 
 from app.deps.scopes import docs_security_with
 
-router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
+router = APIRouter(
+    tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))]
+)
 
 
 @router.get("/skills/list")
@@ -19,7 +21,14 @@ async def skills_list():
         if isinstance(entry, tuple) and len(entry) == 2:
             keywords, SkillClass = entry
             name = getattr(SkillClass, "__name__", str(SkillClass))
-            items.append({"name": name, "keywords": list(keywords) if isinstance(keywords, (list, set, tuple)) else [str(keywords)]})
+            items.append(
+                {
+                    "name": name,
+                    "keywords": (
+                        list(keywords)
+                        if isinstance(keywords, (list, set, tuple))
+                        else [str(keywords)]
+                    ),
+                }
+            )
     return {"items": items}
-
-

@@ -8,5 +8,3 @@ def test_get_config_pytest_flag(monkeypatch):
     cfg = cr.get_config()
     assert cfg.store.vector_store == "qdrant"
     assert cfg.store.qdrant_url == "http://qdrant"
-
-

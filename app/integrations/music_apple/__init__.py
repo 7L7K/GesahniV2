@@ -11,5 +11,3 @@ class AppleMusicConfig:
 
 def disconnect() -> None:
     pass
-
-

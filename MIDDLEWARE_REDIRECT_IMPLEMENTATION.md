@@ -86,7 +86,7 @@ next_path = sanitize_redirect_path(request.query_params.get("next"), "/")
 ```python
 # Rejected patterns
 "http://evil.com/login"     # Absolute URL
-"https://evil.com/login"    # Absolute URL  
+"https://evil.com/login"    # Absolute URL
 "//evil.com/login"          # Protocol-relative URL
 "javascript:alert('xss')"   # JavaScript URL
 "data:text/html,<script>"   # Data URL
@@ -102,7 +102,7 @@ next_path = sanitize_redirect_path(request.query_params.get("next"), "/")
 # Request from https://app.example.com
 # Redirects to https://app.example.com/login
 
-# Request from https://staging.example.com  
+# Request from https://staging.example.com
 # Redirects to https://staging.example.com/login
 
 # Request from http://localhost:3000
@@ -113,7 +113,7 @@ next_path = sanitize_redirect_path(request.query_params.get("next"), "/")
 ```python
 # 1. Try Origin header
 origin = request.headers.get("origin")
-# 2. Try Referer header  
+# 2. Try Referer header
 referer = request.headers.get("referer")
 # 3. Try request URL
 parsed = urlparse(str(request.url))
@@ -144,7 +144,7 @@ def test_open_redirect_prevention():
     """Test that open redirects are prevented."""
     malicious_urls = [
         "http://evil.com/login",
-        "https://evil.com/login", 
+        "https://evil.com/login",
         "//evil.com/login",
         "javascript:alert('xss')"
     ]
@@ -170,7 +170,7 @@ CORS_ALLOW_ORIGINS=https://app.example.com,https://staging.example.com
 APP_URL=http://localhost:3000
 CORS_ALLOW_ORIGINS=http://localhost:3000
 
-# Production  
+# Production
 APP_URL=https://app.example.com
 CORS_ALLOW_ORIGINS=https://app.example.com
 ```

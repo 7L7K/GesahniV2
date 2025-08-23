@@ -16,7 +16,10 @@ _SAFE_CHARS = (
 class PasswordSkill(Skill):
     PATTERNS = [
         # capture 1-3 digits to allow 100 and clamp later
-        re.compile(r"\b(?:make|generate|create) (?:a )?(?:strong )?password(?: (\d{1,3}))?\b", re.I),
+        re.compile(
+            r"\b(?:make|generate|create) (?:a )?(?:strong )?password(?: (\d{1,3}))?\b",
+            re.I,
+        ),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
@@ -29,5 +32,3 @@ class PasswordSkill(Skill):
         rng = random.SystemRandom()
         password = "".join(rng.choice(_SAFE_CHARS) for _ in range(length))
         return password
-
-

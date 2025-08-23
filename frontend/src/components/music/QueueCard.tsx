@@ -56,5 +56,3 @@ export default function QueueCard() {
         </div>
     );
 }
-
-

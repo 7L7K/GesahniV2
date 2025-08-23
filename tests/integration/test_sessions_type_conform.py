@@ -26,5 +26,3 @@ def test_sessions_type_conforms(monkeypatch):
         assert "created_at" in it
         assert "last_seen_at" in it
         assert "current" in it
-
-

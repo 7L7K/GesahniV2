@@ -16,4 +16,3 @@ def test_auth_cookies_secure_in_https_context(monkeypatch):
     cookies = r.headers.get("set-cookie", "")
     assert "access_token=" in cookies
     assert "Secure" in cookies or "secure" in cookies
-

@@ -79,7 +79,7 @@ The `verify_ws` function in `app/security.py` validates WebSocket origins:
 ```python
 async def verify_ws(websocket: WebSocket) -> None:
     """JWT validation for WebSocket connections.
-    
+
     WebSocket requirement: Validates origin to ensure only http://localhost:3000 is accepted.
     """
     # WebSocket requirement: Origin validation - only accept http://localhost:3000
@@ -171,9 +171,9 @@ ws.onclose = (event) => {
 
 ## Requirements Met
 
-✅ **WS URL builder reads canonical frontend origin and flips http→ws consistently**  
-✅ **Origin checks on backend accept only http://localhost:3000**  
-✅ **On failure, close with crisp code/reason (no 404 masking)**  
-✅ **Comprehensive test coverage**  
-✅ **Security validation**  
+✅ **WS URL builder reads canonical frontend origin and flips http→ws consistently**
+✅ **Origin checks on backend accept only http://localhost:3000**
+✅ **On failure, close with crisp code/reason (no 404 masking)**
+✅ **Comprehensive test coverage**
+✅ **Security validation**
 ✅ **Error handling with proper codes**

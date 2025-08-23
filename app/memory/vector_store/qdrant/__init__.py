@@ -36,7 +36,12 @@ import os as _os
 import sys as _sys
 
 if ("PYTEST_CURRENT_TEST" in _os.environ) or ("pytest" in _sys.modules):
-    if _os.getenv("ALLOW_QDRANT_IN_TESTS", "0").strip().lower() not in {"1", "true", "yes", "on"}:
+    if _os.getenv("ALLOW_QDRANT_IN_TESTS", "0").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         QdrantClient = None  # type: ignore
 
 
@@ -72,7 +77,9 @@ class _QACollection(SupportsQACache):
         self.client = client
         self.name = name
 
-    def get_items(self, ids: list[str] | None = None, include: list[str] | None = None) -> dict[str, list]:
+    def get_items(
+        self, ids: list[str] | None = None, include: list[str] | None = None
+    ) -> dict[str, list]:
         include = include or ["metadatas", "documents"]
         want_payload = ("metadatas" in include) or ("documents" in include)
         if ids:
@@ -96,7 +103,9 @@ class _QACollection(SupportsQACache):
         for pt in res:
             out_ids.append(str(pt.id))
             payload = pt.payload or {}
-            metadatas.append({k: payload.get(k) for k in ("answer", "timestamp", "feedback")})
+            metadatas.append(
+                {k: payload.get(k) for k in ("answer", "timestamp", "feedback")}
+            )
             documents.append(payload.get("doc") if "documents" in include else None)
         out: dict[str, list] = {"ids": out_ids}
         if "metadatas" in include:
@@ -105,7 +114,9 @@ class _QACollection(SupportsQACache):
             out["documents"] = documents
         return out
 
-    def upsert(self, *, ids: list[str], documents: list[str], metadatas: list[dict]) -> None:
+    def upsert(
+        self, *, ids: list[str], documents: list[str], metadatas: list[dict]
+    ) -> None:
         points = []
         for i, doc, meta in zip(ids, documents, metadatas, strict=False):
             payload = dict(meta or {})
@@ -124,11 +135,15 @@ class _QACollection(SupportsQACache):
             return
         if len(metadatas) == 1 and len(ids) >= 1:
             # Single metadata for multiple ids: apply same payload to all ids
-            self.client.set_payload(collection_name=self.name, points=ids, payload=metadatas[0])
+            self.client.set_payload(
+                collection_name=self.name, points=ids, payload=metadatas[0]
+            )
             return
         for i, meta in zip(ids, metadatas, strict=False):
             try:
-                self.client.set_payload(collection_name=self.name, points=[i], payload=meta)
+                self.client.set_payload(
+                    collection_name=self.name, points=[i], payload=meta
+                )
             except Exception:
                 # best-effort; continue
                 pass
@@ -149,7 +164,9 @@ class QdrantVectorStore:
         api_key = os.getenv("QDRANT_API_KEY") or None
         self.client = QdrantClient(url=url, api_key=api_key)
         try:
-            logger.info("Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)")
+            logger.info(
+                "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)"
+            )
         except Exception:
             pass
 
@@ -172,7 +189,11 @@ class QdrantVectorStore:
         # Health signal: record when we recreate to help detect drift
         try:
             import logging as _logging
-            _logging.getLogger(__name__).info("qdrant.bootstrap.cache_qa_collection", extra={"meta": {"name": self.cache_collection}})
+
+            _logging.getLogger(__name__).info(
+                "qdrant.bootstrap.cache_qa_collection",
+                extra={"meta": {"name": self.cache_collection}},
+            )
         except Exception:
             pass
 
@@ -187,34 +208,55 @@ class QdrantVectorStore:
             self.client.recreate_collection(
                 collection_name=name,
                 vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
-                hnsw_config=HnswConfigDiff(m=int(os.getenv("QDRANT_HNSW_M", "32")), ef_construct=int(os.getenv("QDRANT_HNSW_EF_CONSTRUCT", "128"))),
+                hnsw_config=HnswConfigDiff(
+                    m=int(os.getenv("QDRANT_HNSW_M", "32")),
+                    ef_construct=int(os.getenv("QDRANT_HNSW_EF_CONSTRUCT", "128")),
+                ),
             )
         else:
             # Ensure HNSW params on existing collection
             try:
                 self.client.update_collection(
                     collection_name=name,
-                    hnsw_config=HnswConfigDiff(m=int(os.getenv("QDRANT_HNSW_M", "32")), ef_construct=int(os.getenv("QDRANT_HNSW_EF_CONSTRUCT", "128"))),
+                    hnsw_config=HnswConfigDiff(
+                        m=int(os.getenv("QDRANT_HNSW_M", "32")),
+                        ef_construct=int(os.getenv("QDRANT_HNSW_EF_CONSTRUCT", "128")),
+                    ),
                 )
             except Exception:
                 pass
         finally:
             try:
-                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "ensure_collection").observe(time.perf_counter() - t0)
+                DEPENDENCY_LATENCY_SECONDS.labels(
+                    "qdrant", "ensure_collection"
+                ).observe(time.perf_counter() - t0)
             except Exception:
                 pass
         # Attempt to create useful payload indexes (best-effort)
-        for field in ("user_id", "type", "topic", "created_at", "source_tier", "pinned"):
+        for field in (
+            "user_id",
+            "type",
+            "topic",
+            "created_at",
+            "source_tier",
+            "pinned",
+        ):
             try:
                 # Field schema names are client-version dependent; pass plain strings
-                self.client.create_payload_index(collection_name=name, field_name=field, field_schema="keyword")
+                self.client.create_payload_index(
+                    collection_name=name, field_name=field, field_schema="keyword"
+                )
             except Exception:
                 try:
                     # created_at/source_tier/pinned types can be numeric/bool
                     if field in {"created_at", "source_tier"}:
-                        self.client.create_payload_index(collection_name=name, field_name=field, field_schema="float")
+                        self.client.create_payload_index(
+                            collection_name=name, field_name=field, field_schema="float"
+                        )
                     elif field == "pinned":
-                        self.client.create_payload_index(collection_name=name, field_name=field, field_schema="bool")
+                        self.client.create_payload_index(
+                            collection_name=name, field_name=field, field_schema="bool"
+                        )
                 except Exception:
                     pass
 
@@ -224,6 +266,7 @@ class QdrantVectorStore:
     # -------------------- User memory API --------------------
     def add_user_memory(self, user_id: str, memory: str) -> str:
         from app.embeddings import embed_sync
+
         t0 = time.perf_counter()
         try:
             dim = int(os.getenv("EMBED_DIM", "1536"))
@@ -265,8 +308,12 @@ class QdrantVectorStore:
                 points=[PointStruct(id=mem_id, vector=vec, payload=payload)],
             )
             try:
-                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "upsert").observe(time.perf_counter() - t1)
-                VECTOR_OP_LATENCY_SECONDS.labels("upsert").observe(time.perf_counter() - t1)
+                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "upsert").observe(
+                    time.perf_counter() - t1
+                )
+                VECTOR_OP_LATENCY_SECONDS.labels("upsert").observe(
+                    time.perf_counter() - t1
+                )
             except Exception:
                 pass
             return mem_id
@@ -287,7 +334,11 @@ class QdrantVectorStore:
             dim = int(os.getenv("EMBED_DIM", "1536"))
             self._ensure_collection(col, dim)
             try:
-                flt = Filter(must=[FieldCondition(key="user_id", match=MatchValue(value=user_id))])
+                flt = Filter(
+                    must=[
+                        FieldCondition(key="user_id", match=MatchValue(value=user_id))
+                    ]
+                )
             except Exception:
                 flt = None  # not strictly needed with per-user collections
             t1 = time.perf_counter()
@@ -296,12 +347,18 @@ class QdrantVectorStore:
                 query_vector=vec,
                 limit=max(k, 10),
                 query_filter=flt,
-                search_params=SearchParams(hnsw_ef=int(os.getenv("QDRANT_SEARCH_EF", "128"))),
+                search_params=SearchParams(
+                    hnsw_ef=int(os.getenv("QDRANT_SEARCH_EF", "128"))
+                ),
                 with_payload=True,
             )
             try:
-                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "search").observe(time.perf_counter() - t1)
-                VECTOR_OP_LATENCY_SECONDS.labels("search").observe(time.perf_counter() - t1)
+                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "search").observe(
+                    time.perf_counter() - t1
+                )
+                VECTOR_OP_LATENCY_SECONDS.labels("search").observe(
+                    time.perf_counter() - t1
+                )
             except Exception:
                 pass
             docs: list[tuple[float, float, str]] = []
@@ -316,7 +373,9 @@ class QdrantVectorStore:
                 dist = 1.0 - score
                 raw_scores.append(round(score, 4))
                 if dist <= cutoff:
-                    ts = float(payload.get("updated_at") or payload.get("created_at") or 0.0)
+                    ts = float(
+                        payload.get("updated_at") or payload.get("created_at") or 0.0
+                    )
                     docs.append((dist, -ts, text))
                     kept += 1
                 else:
@@ -347,10 +406,16 @@ class QdrantVectorStore:
         t0 = time.perf_counter()
         try:
             t1 = time.perf_counter()
-            res, _ = self.client.scroll(collection_name=col, with_payload=True, limit=1000)
+            res, _ = self.client.scroll(
+                collection_name=col, with_payload=True, limit=1000
+            )
             try:
-                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "scroll").observe(time.perf_counter() - t1)
-                VECTOR_OP_LATENCY_SECONDS.labels("scroll").observe(time.perf_counter() - t1)
+                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "scroll").observe(
+                    time.perf_counter() - t1
+                )
+                VECTOR_OP_LATENCY_SECONDS.labels("scroll").observe(
+                    time.perf_counter() - t1
+                )
             except Exception:
                 pass
         except Exception:
@@ -361,7 +426,13 @@ class QdrantVectorStore:
             _rec_latency_ms(t0)
         out: list[dict] = []
         for pt in res:
-            out.append({"id": str(pt.id), "text": (pt.payload or {}).get("text"), "meta": pt.payload or {}})
+            out.append(
+                {
+                    "id": str(pt.id),
+                    "text": (pt.payload or {}).get("text"),
+                    "meta": pt.payload or {},
+                }
+            )
         return out
 
     def delete_user_memory(self, user_id: str, mem_id: str) -> bool:
@@ -373,8 +444,12 @@ class QdrantVectorStore:
             t1 = time.perf_counter()
             self.client.delete(collection_name=col, points_selector=[mem_id])
             try:
-                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "delete").observe(time.perf_counter() - t1)
-                VECTOR_OP_LATENCY_SECONDS.labels("delete").observe(time.perf_counter() - t1)
+                DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "delete").observe(
+                    time.perf_counter() - t1
+                )
+                VECTOR_OP_LATENCY_SECONDS.labels("delete").observe(
+                    time.perf_counter() - t1
+                )
             except Exception:
                 pass
             return True
@@ -393,13 +468,19 @@ class QdrantVectorStore:
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None:
         if os.getenv("DISABLE_QA_CACHE", "").lower() in {"1", "true", "yes", "on"}:
             return
-        self._qa.upsert(ids=[cache_id], documents=[prompt], metadatas=[{"answer": answer, "timestamp": time.time(), "feedback": None}])
+        self._qa.upsert(
+            ids=[cache_id],
+            documents=[prompt],
+            metadatas=[{"answer": answer, "timestamp": time.time(), "feedback": None}],
+        )
 
     def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> str | None:
         if os.getenv("DISABLE_QA_CACHE", "").lower() in {"1", "true", "yes", "on"}:
             return None
         # Lightweight exact-id path: treat prompts like hashes via env usage in app.memory.api
-        res = self._qa.get_items(ids=None, include=["metadatas", "documents"])  # scan small cache (<=1k)
+        res = self._qa.get_items(
+            ids=None, include=["metadatas", "documents"]
+        )  # scan small cache (<=1k)
         ids = res.get("ids", [])
         docs = res.get("documents", [])
         metas = res.get("metadatas", [])
@@ -408,6 +489,7 @@ class QdrantVectorStore:
             import numpy as _np
 
             from app.embeddings import embed_sync
+
             q = embed_sync(prompt)
             for _id, d, m in zip(ids, docs, metas, strict=False):
                 if not isinstance(d, str):
@@ -444,5 +526,3 @@ class QdrantVectorStore:
 
 
 __all__ = ["QdrantVectorStore"]
-
-

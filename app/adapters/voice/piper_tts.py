@@ -3,7 +3,12 @@ from __future__ import annotations
 import os
 import time
 
-from ...metrics import TTS_COST_USD, TTS_LATENCY_SECONDS, TTS_REQUEST_COUNT, normalize_model_label
+from ...metrics import (
+    TTS_COST_USD,
+    TTS_LATENCY_SECONDS,
+    TTS_REQUEST_COUNT,
+    normalize_model_label,
+)
 
 
 async def synthesize_piper(
@@ -17,7 +22,9 @@ async def synthesize_piper(
 
     # Use normalized voice label to prevent cardinality explosion
     normalized_voice = normalize_model_label(voice or "default")
-    TTS_REQUEST_COUNT.labels("piper", "piper", os.getenv("VOICE_MODE", "auto"), "auto", normalized_voice).inc()
+    TTS_REQUEST_COUNT.labels(
+        "piper", "piper", os.getenv("VOICE_MODE", "auto"), "auto", normalized_voice
+    ).inc()
     start = time.perf_counter()
     # Minimal stub: avoid shelling out in CI; emulate tiny WAV header and silence
     try:
@@ -41,5 +48,3 @@ async def synthesize_piper(
     TTS_LATENCY_SECONDS.labels("piper", "piper").observe(latency)
     TTS_COST_USD.labels("piper", "piper").observe(0.0)
     return audio_bytes, 0.0
-
-

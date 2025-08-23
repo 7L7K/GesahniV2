@@ -23,5 +23,3 @@ def test_cookie_pressure_priority(monkeypatch):
     assert who.status_code == 200
     body = who.json()
     assert body.get("is_authenticated") is True
-
-

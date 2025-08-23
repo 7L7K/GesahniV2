@@ -239,7 +239,9 @@ async def test_get_csrf_token():
     # Should return different tokens each time
     assert token1 != token2
     # Should be URL-safe strings
-    assert len(token1) == 22  # 16 bytes * 4/3 for base64url (actual length with padding)
+    assert (
+        len(token1) == 22
+    )  # 16 bytes * 4/3 for base64url (actual length with padding)
     assert len(token2) == 22
 
 
@@ -247,10 +249,7 @@ async def test_get_csrf_token():
 def test_extract_csrf_header_prefers_new_header():
     """Test that X-CSRF-Token is preferred over legacy X-CSRF."""
     mock_request = Mock(spec=Request)
-    mock_request.headers = {
-        "X-CSRF-Token": "new_token",
-        "X-CSRF": "legacy_token"
-    }
+    mock_request.headers = {"X-CSRF-Token": "new_token", "X-CSRF": "legacy_token"}
 
     with patch("app.csrf.os.getenv", return_value="1"):  # Legacy grace enabled
         token, used_legacy, legacy_allowed = _extract_csrf_header(mock_request)
@@ -350,15 +349,18 @@ def test_csrf_malformed_header():
 
 
 # Test different HTTP methods comprehensively
-@pytest.mark.parametrize("method,endpoint", [
-    ("GET", "/ping"),
-    ("HEAD", "/head"),
-    ("OPTIONS", "/options"),
-    ("POST", "/post"),
-    ("PUT", "/put"),
-    ("PATCH", "/patch"),
-    ("DELETE", "/delete"),
-])
+@pytest.mark.parametrize(
+    "method,endpoint",
+    [
+        ("GET", "/ping"),
+        ("HEAD", "/head"),
+        ("OPTIONS", "/options"),
+        ("POST", "/post"),
+        ("PUT", "/put"),
+        ("PATCH", "/patch"),
+        ("DELETE", "/delete"),
+    ],
+)
 def test_csrf_all_methods_with_token(method, endpoint):
     """Test all HTTP methods with valid CSRF token."""
     c = TestClient(_app())
@@ -375,12 +377,15 @@ def test_csrf_all_methods_with_token(method, endpoint):
         assert response.status_code == 200
 
 
-@pytest.mark.parametrize("method,endpoint", [
-    ("POST", "/post"),
-    ("PUT", "/put"),
-    ("PATCH", "/patch"),
-    ("DELETE", "/delete"),
-])
+@pytest.mark.parametrize(
+    "method,endpoint",
+    [
+        ("POST", "/post"),
+        ("PUT", "/put"),
+        ("PATCH", "/patch"),
+        ("DELETE", "/delete"),
+    ],
+)
 def test_csrf_all_methods_without_token(method, endpoint):
     """Test all HTTP methods without CSRF token (should fail for non-safe methods)."""
     c = TestClient(_app())
@@ -389,5 +394,3 @@ def test_csrf_all_methods_without_token(method, endpoint):
 
     # Should fail for non-safe methods
     assert response.status_code in [400, 403]
-
-

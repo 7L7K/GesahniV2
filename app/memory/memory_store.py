@@ -85,7 +85,9 @@ class _Collection:
     ) -> None:
         if embeddings is None:
             embeddings = [embed_sync(doc) for doc in documents]
-        for i, emb, doc, meta in zip(ids, embeddings, documents, metadatas, strict=False):
+        for i, emb, doc, meta in zip(
+            ids, embeddings, documents, metadatas, strict=False
+        ):
             self._store[i] = _CacheRecord(
                 embedding=emb,
                 doc=doc,
@@ -114,7 +116,11 @@ class _Collection:
         # Evict expired items lazily on read when TTL enabled
         now = time.time()
         if self._ttl_seconds > 0:
-            expired = [i for i, rec in list(self._store.items()) if now - rec.timestamp > self._ttl_seconds]
+            expired = [
+                i
+                for i, rec in list(self._store.items())
+                if now - rec.timestamp > self._ttl_seconds
+            ]
             for i in expired:
                 self._store.pop(i, None)
 
@@ -200,14 +206,15 @@ class MemoryVectorStore(VectorStore):
         sims_out = [round(float(sim), 4) for sim, _, _ in top_items]
         try:
             logger.info(
-                "vector.query", extra={
+                "vector.query",
+                extra={
                     "meta": {
                         "backend": "memory",
                         "sim_threshold": round(sim_threshold, 4),
                         "kept": len(docs_out),
                         "total": total,
                     }
-                }
+                },
             )
         except Exception:
             pass
@@ -252,9 +259,7 @@ class MemoryVectorStore(VectorStore):
             metadatas=[cleaned],
         )
 
-    def lookup_cached_answer(
-        self, prompt: str, ttl_seconds: int = 86400
-    ) -> str | None:
+    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> str | None:
         # Track last similarity for UI provenance
         global _LAST_SIMILARITY  # type: ignore[assignment]
         self._dist_cutoff = 1.0 - _get_sim_threshold()
@@ -308,14 +313,15 @@ class MemoryVectorStore(VectorStore):
             return None
         try:
             logger.info(
-                "vector.cache_lookup", extra={
+                "vector.cache_lookup",
+                extra={
                     "meta": {
                         "backend": "memory",
                         "sim_threshold": round(sim_threshold, 4),
                         "kept": kept,
                         "total": total,
                     }
-                }
+                },
             )
         except Exception:
             pass
@@ -344,6 +350,7 @@ __all__ = ["VectorStore", "MemoryVectorStore"]
 
 # Module-level last similarity for UI provenance (MemoryVectorStore only)
 _LAST_SIMILARITY: float | None = None
+
 
 def _get_last_similarity() -> float | None:
     return _LAST_SIMILARITY

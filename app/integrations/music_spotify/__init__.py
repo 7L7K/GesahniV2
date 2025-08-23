@@ -11,5 +11,3 @@ class SpotifyConfig:
 
 def disconnect() -> None:
     pass
-
-

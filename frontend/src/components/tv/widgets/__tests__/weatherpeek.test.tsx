@@ -13,5 +13,3 @@ describe('WeatherPeek', () => {
         expect(await screen.findByText('Now')).toBeInTheDocument()
     })
 })
-
-

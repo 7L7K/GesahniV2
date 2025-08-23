@@ -14,16 +14,10 @@ from ..care_store import (
     get_device,
     insert_alert,
     insert_event,
-    update_alert,
-    update_session,
-    upsert_device,
 )
-from ..care_store import (
-    list_alerts as list_alerts_db,
-)
-from ..care_store import (
-    list_sessions as list_sessions_db,
-)
+from ..care_store import list_alerts as list_alerts_db
+from ..care_store import list_sessions as list_sessions_db
+from ..care_store import update_alert, update_session, upsert_device
 from ..deps.roles import require_roles
 from ..deps.scopes import optional_require_scope
 from ..deps.user import get_current_user_id
@@ -66,9 +60,7 @@ class AlertCreate(BaseModel):
 class AckBody(BaseModel):
     by: str | None = None  # caregiver id or name
 
-    model_config = ConfigDict(
-        json_schema_extra={"example": {"by": "caregiver_123"}}
-    )
+    model_config = ConfigDict(json_schema_extra={"example": {"by": "caregiver_123"}})
 
 
 def _now() -> float:
@@ -93,6 +85,7 @@ async def _notify_sms(resident_id: str, msg: str) -> bool:
     # Enqueue for background worker
     try:
         from ..queue import get_queue
+
         q = get_queue("care_sms")
         # for MVP, route to a single test number via env
         to = os.getenv("TWILIO_TEST_TO", "+10000000000")
@@ -170,12 +163,13 @@ class AlertRecord(BaseModel):
 )
 async def create_alert(
     body: AlertCreate = Body(
-        ..., example={
+        ...,
+        example={
             "resident_id": "r1",
             "kind": "help",
             "severity": "critical",
             "note": "Grandma pressed the help button",
-        }
+        },
     ),
     request: Request = None,  # type: ignore[assignment]
     user_id: str = Depends(get_current_user_id),
@@ -206,8 +200,15 @@ async def create_alert(
     # Notify caregivers (MVP: one SMS)
     await _notify_sms(body.resident_id, f"Alert: {body.kind} ({body.severity})")
     try:
-        from .care_ws import broadcast_resident  # local import to avoid cycle at import time
-        await broadcast_resident(body.resident_id, "alert.created", {"id": aid, "kind": body.kind, "severity": body.severity})
+        from .care_ws import (
+            broadcast_resident,
+        )  # local import to avoid cycle at import time
+
+        await broadcast_resident(
+            body.resident_id,
+            "alert.created",
+            {"id": aid, "kind": body.kind, "severity": body.severity},
+        )
     except Exception:
         pass
     return rec
@@ -217,8 +218,15 @@ async def create_alert(
     "/care/alerts/{alert_id}/ack",
     response_model=AlertRecord,
     responses={200: {"model": AlertRecord}},
-    openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"example": {"by": "cg1"}}}}}},
-    dependencies=[Depends(optional_require_scope("care:caregiver")), Depends(require_roles(["caregiver"]))],
+    openapi_extra={
+        "requestBody": {
+            "content": {"application/json": {"schema": {"example": {"by": "cg1"}}}}
+        }
+    },
+    dependencies=[
+        Depends(optional_require_scope("care:caregiver")),
+        Depends(require_roles(["caregiver"])),
+    ],
 )
 async def ack_alert(alert_id: str, body: AckBody | None = None):
     rec = ALERTS.get(alert_id) or await get_alert(alert_id)
@@ -234,13 +242,23 @@ async def ack_alert(alert_id: str, body: AckBody | None = None):
     TIME_TO_ACK_SECONDS.observe(max(dt, 0.0))
     try:
         from .care_ws import broadcast_resident
-        await broadcast_resident(rec["resident_id"], "alert.acknowledged", {"id": alert_id, "by": (body.by if body else None)})
+
+        await broadcast_resident(
+            rec["resident_id"],
+            "alert.acknowledged",
+            {"id": alert_id, "by": (body.by if body else None)},
+        )
     except Exception:
         pass
     return rec
 
 
-@router.post("/care/alerts/{alert_id}/resolve", response_model=AlertRecord, responses={200: {"model": AlertRecord}}, dependencies=[Depends(require_roles(["caregiver", "admin"]))])
+@router.post(
+    "/care/alerts/{alert_id}/resolve",
+    response_model=AlertRecord,
+    responses={200: {"model": AlertRecord}},
+    dependencies=[Depends(require_roles(["caregiver", "admin"]))],
+)
 async def resolve_alert(alert_id: str):
     rec = ALERTS.get(alert_id) or await get_alert(alert_id)
     if not rec:
@@ -271,11 +289,18 @@ class OkResponse(CommonOkResponse):
     model_config = ConfigDict(title="OkResponse")
 
 
-@router.post("/care/devices/{device_id}/heartbeat", response_model=OkResponse, responses={200: {"model": OkResponse}}, dependencies=[Depends(require_roles(["caregiver", "resident"]))])
+@router.post(
+    "/care/devices/{device_id}/heartbeat",
+    response_model=OkResponse,
+    responses={200: {"model": OkResponse}},
+    dependencies=[Depends(require_roles(["caregiver", "resident"]))],
+)
 async def heartbeat(device_id: str, body: Heartbeat):
     now = _now()
     st = await upsert_device(device_id, body.resident_id, battery_pct=body.battery_pct)
-    late = now - float(st.get("last_seen") or 0.0) > 90.0 if st.get("last_seen") else False
+    late = (
+        now - float(st.get("last_seen") or 0.0) > 90.0 if st.get("last_seen") else False
+    )
     if late:
         HEARTBEAT_LATE.inc()
     else:
@@ -283,16 +308,21 @@ async def heartbeat(device_id: str, body: Heartbeat):
     return {"status": "ok"}
 
 
-@router.get("/care/device_status", dependencies=[Depends(require_roles(["caregiver", "resident"]))])
+@router.get(
+    "/care/device_status",
+    dependencies=[Depends(require_roles(["caregiver", "resident"]))],
+)
 async def device_status(device_id: str) -> dict:
     st = await get_device(device_id)
     if not st:
         return {"device_id": device_id, "online": False}
-    online = (_now() - float(st.get("last_seen") or 0.0) <= 90.0)
+    online = _now() - float(st.get("last_seen") or 0.0) <= 90.0
     return {"device_id": device_id, "online": online, "battery": st.get("battery_pct")}
 
 
-@router.get("/care/alerts", dependencies=[Depends(require_roles(["caregiver", "resident"]))])
+@router.get(
+    "/care/alerts", dependencies=[Depends(require_roles(["caregiver", "resident"]))]
+)
 async def list_alerts(resident_id: str | None = None):
     items = await list_alerts_db(resident_id)
     return {"items": items}
@@ -317,7 +347,20 @@ class SessionBody(BaseModel):
     )
 
 
-@router.post("/care/sessions", response_model=OkResponse, responses={200: {"model": OkResponse}}, openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/SessionBody"}}}}})
+@router.post(
+    "/care/sessions",
+    response_model=OkResponse,
+    responses={200: {"model": OkResponse}},
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/SessionBody"}
+                }
+            }
+        }
+    },
+)
 async def create_care_session(body: SessionBody):
     # Avoid duplicate session ids during OpenAPI smoke calls
     try:
@@ -328,7 +371,11 @@ async def create_care_session(body: SessionBody):
     return {"status": "ok"}
 
 
-@router.patch("/care/sessions/{session_id}", response_model=OkResponse, responses={200: {"model": OkResponse}})
+@router.patch(
+    "/care/sessions/{session_id}",
+    response_model=OkResponse,
+    responses={200: {"model": OkResponse}},
+)
 async def patch_care_session(session_id: str, body: dict):
     await update_session(session_id, **body)
     return {"status": "ok"}
@@ -337,5 +384,3 @@ async def patch_care_session(session_id: str, body: dict):
 @router.get("/care/sessions")
 async def list_care_sessions(resident_id: str | None = None):
     return {"items": await list_sessions_db(resident_id)}
-
-

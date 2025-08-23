@@ -5,8 +5,12 @@ from fastapi.responses import HTMLResponse
 
 router = APIRouter(tags=["Admin"])
 
+
 def _is_dev():
-    return os.getenv("ENV","dev").lower()=="dev" or os.getenv("DEV_MODE","0").lower() in {"1","true","yes","on"}
+    return os.getenv("ENV", "dev").lower() == "dev" or os.getenv(
+        "DEV_MODE", "0"
+    ).lower() in {"1", "true", "yes", "on"}
+
 
 @router.get("/debug/config", include_in_schema=False)
 async def debug_config():
@@ -15,6 +19,7 @@ async def debug_config():
     import os
 
     from app.main import allow_credentials, origins
+
     return {
         "environment": {
             "CORS_ALLOW_ORIGINS": os.getenv("CORS_ALLOW_ORIGINS"),
@@ -33,8 +38,9 @@ async def debug_config():
         "frontend": {
             "expected_origin": "http://localhost:3000",
             "next_public_api_origin": os.getenv("NEXT_PUBLIC_API_ORIGIN"),
-        }
+        },
     }
+
 
 @router.get("/docs/ws", include_in_schema=False)
 async def ws_helper_page():

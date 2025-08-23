@@ -30,4 +30,3 @@ def test_exactly_one_final_retry():
     # Final model should be the heavy model per configuration
     assert final_model in ("o4-mini", "gpt-4.1-nano")
     assert escalated is True
-

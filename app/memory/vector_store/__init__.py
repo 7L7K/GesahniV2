@@ -26,21 +26,11 @@ from ..api import (
     qa_cache,
     record_feedback,
 )
-from ..env_utils import (
-    _cosine_similarity as _cosine_similarity,
-)
-from ..env_utils import (
-    _get_mem_top_k as _get_mem_top_k,
-)
-from ..env_utils import (
-    _get_sim_threshold as _get_sim_threshold,
-)
-from ..env_utils import (
-    _normalize as _normalize,
-)
-from ..env_utils import (
-    _normalized_hash as _normalized_hash,
-)
+from ..env_utils import _cosine_similarity as _cosine_similarity
+from ..env_utils import _get_mem_top_k as _get_mem_top_k
+from ..env_utils import _get_sim_threshold as _get_sim_threshold
+from ..env_utils import _normalize as _normalize
+from ..env_utils import _normalized_hash as _normalized_hash
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +38,7 @@ logger = logging.getLogger(__name__)
 embed_sync = _embed_sync  # noqa: N816
 
 # ------------------------- internal helpers -------------------------
+
 
 def _coerce_k(k: int | str | None) -> int:
     raw = k
@@ -63,14 +54,18 @@ def _coerce_k(k: int | str | None) -> int:
     logger.debug("_coerce_k: raw=%r → %d", raw, result)
     return result
 
+
 def _similarity(prompt: str, memory: str) -> float:
     return _cosine_similarity(embed_sync(prompt), embed_sync(memory))
 
+
 # --------------------------- safe API layer --------------------------
+
 
 def add_user_memory(user_id: str, memory: str) -> str:
     # Lazy import to avoid side-effects during pytest collection
     from app.adapters.memory import mem
+
     try:
         # Redact before storage and persist map out-of-band
         from app.redaction import redact_pii, store_redaction_map
@@ -86,6 +81,7 @@ def add_user_memory(user_id: str, memory: str) -> str:
         # Fallback to raw store if redaction utility is unavailable
         return mem.add(user_id, memory)
 
+
 def query_user_memories(
     user_id: str,
     prompt: str,
@@ -95,6 +91,7 @@ def query_user_memories(
 ) -> list[str]:
     # Lazy import keeps this module light
     from app.adapters.memory import mem
+
     k_int = _coerce_k(int(k) if isinstance(k, str) and k.isdigit() else k)
     docs = mem.search(user_id, prompt, k=k_int, filters=filters)
     sim_threshold = _get_sim_threshold()
@@ -110,18 +107,20 @@ def query_user_memories(
     out = [t for _, t in filtered[:k_int]]
     try:
         logger.info(
-            "vector.query", extra={
+            "vector.query",
+            extra={
                 "meta": {
                     "backend": "adapter",
                     "sim_threshold": round(sim_threshold, 4),
                     "kept": len(out),
                     "total": total,
                 }
-            }
+            },
         )
     except Exception:
         pass
     return out
+
 
 def safe_query_user_memories(
     user_id: str,
@@ -129,7 +128,9 @@ def safe_query_user_memories(
     *,
     k: int | str | None = None,
 ) -> list[str]:
-    logger.debug("safe_query_user_memories(user_id=%s, prompt=%r, k=%r)", user_id, prompt, k)
+    logger.debug(
+        "safe_query_user_memories(user_id=%s, prompt=%r, k=%r)", user_id, prompt, k
+    )
     coerced = None
     if isinstance(k, str):
         try:
@@ -143,9 +144,12 @@ def safe_query_user_memories(
     person = re.search(r"person:([^\s]+)", prompt)
     topic = re.search(r"topic:([^\s]+)", prompt)
     date = re.search(r"date:([^\s]+)", prompt)
-    if person: filters["person"] = person.group(1)
-    if topic:  filters["topic"]  = topic.group(1)
-    if date:   filters["date"]   = date.group(1)
+    if person:
+        filters["person"] = person.group(1)
+    if topic:
+        filters["topic"] = topic.group(1)
+    if date:
+        filters["date"] = date.group(1)
 
     try:
         if filters:
@@ -157,13 +161,16 @@ def safe_query_user_memories(
         logger.warning("safe_query_user_memories failed: %s", e, exc_info=True)
         return []
 
+
 def get_last_cache_similarity() -> float | None:
     # Lazy import avoids import-time coupling to memory_store
     try:
         from ..memory_store import _get_last_similarity  # type: ignore
+
         return _get_last_similarity()
     except Exception:
         return None
+
 
 __all__ = [
     # Core helpers

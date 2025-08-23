@@ -19,6 +19,6 @@ def test_sessions_returns_array(monkeypatch):
     body = r.json()
     assert isinstance(body, list), f"expected array, got {type(body)}"
     # Must not be { items: [...] } on canonical route
-    assert not (isinstance(body, dict) and "items" in body), "canonical /sessions must not wrap items"
-
-
+    assert not (
+        isinstance(body, dict) and "items" in body
+    ), "canonical /sessions must not wrap items"

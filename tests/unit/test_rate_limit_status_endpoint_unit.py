@@ -11,5 +11,3 @@ def test_rate_limit_status_endpoint_defaults():
     assert "backend" in data
     assert data["backend"] in ("memory", "redis")
     assert "limits" in data and "windows_s" in data
-
-

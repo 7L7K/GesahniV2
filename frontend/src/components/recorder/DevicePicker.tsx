@@ -35,5 +35,3 @@ export function DevicePicker({ onChange }: { onChange: (ids: { audio?: string; v
         </div>
     );
 }
-
-

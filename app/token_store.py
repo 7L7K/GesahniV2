@@ -15,6 +15,7 @@ _redis_client: object | None = None
 _cleanup_task: asyncio.Task | None = None
 _cleanup_running = False
 
+
 # Local storage with better structure and TTL tracking
 @dataclass
 class LocalEntry:
@@ -22,64 +23,68 @@ class LocalEntry:
     expires_at: float
     created_at: float
 
+
 class LocalStorage:
     """Thread-safe local storage with automatic cleanup and TTL support."""
-    
+
     def __init__(self, cleanup_interval: int = 300):  # 5 minutes default
         self._storage: dict[str, LocalEntry] = {}
         self._lock = threading.RLock()
         self._cleanup_interval = cleanup_interval
         self._last_cleanup = time.time()
-    
+
     def set(self, key: str, value: Any, ttl_seconds: int) -> None:
         """Set a key with TTL."""
         expires_at = time.time() + max(1, ttl_seconds)
         entry = LocalEntry(value=value, expires_at=expires_at, created_at=time.time())
-        
+
         with self._lock:
             self._storage[key] = entry
             self._maybe_cleanup()
-    
+
     def get(self, key: str) -> Any:
         """Get a key, returning None if expired or not found."""
         with self._lock:
             entry = self._storage.get(key)
             if entry is None:
                 return None
-            
+
             if time.time() > entry.expires_at:
                 del self._storage[key]
                 return None
-            
+
             return entry.value
-    
+
     def exists(self, key: str) -> bool:
         """Check if key exists and is not expired."""
         return self.get(key) is not None
-    
+
     def delete(self, key: str) -> bool:
         """Delete a key, returns True if it existed."""
         with self._lock:
             return self._storage.pop(key, None) is not None
-    
+
     def _maybe_cleanup(self) -> None:
         """Clean up expired entries if enough time has passed."""
         now = time.time()
         if now - self._last_cleanup < self._cleanup_interval:
             return
-        
+
         self._last_cleanup = now
         expired_keys = []
-        
+
         for key, entry in self._storage.items():
             if now > entry.expires_at:
                 expired_keys.append(key)
-        
+
         for key in expired_keys:
             self._storage.pop(key, None)
-        
+
         if expired_keys:
-            logger.debug(f"Cleaned up {len(expired_keys)} expired entries from local storage")
+            logger.debug(
+                f"Cleaned up {len(expired_keys)} expired entries from local storage"
+            )
+
 
 # Initialize local storage instances
 _local_used_refresh = LocalStorage()
@@ -92,11 +97,14 @@ _local_revoked_access = LocalStorage()
 try:
     _local_lock = threading.RLock()
 except Exception:  # pragma: no cover - fallback
+
     class _Dummy:
         def __enter__(self):
             return None
+
         def __exit__(self, *a):
             return False
+
     _local_lock = _Dummy()
 
 
@@ -140,12 +148,12 @@ async def has_redis() -> bool:
 async def start_cleanup_task() -> None:
     """Start the background cleanup task for local storage."""
     global _cleanup_task, _cleanup_running
-    
+
     if _cleanup_running:
         return
-    
+
     _cleanup_running = True
-    
+
     async def cleanup_worker():
         """Background task to periodically clean up expired entries."""
         while _cleanup_running:
@@ -156,27 +164,29 @@ async def start_cleanup_task() -> None:
                 _local_last_used_jti._maybe_cleanup()
                 _local_revoked_families._maybe_cleanup()
                 _local_revoked_access._maybe_cleanup()
-                
+
                 # Log memory usage for monitoring
                 total_entries = (
-                    len(_local_used_refresh._storage) +
-                    len(_local_counters._storage) +
-                    len(_local_last_used_jti._storage) +
-                    len(_local_revoked_families._storage) +
-                    len(_local_revoked_access._storage)
+                    len(_local_used_refresh._storage)
+                    + len(_local_counters._storage)
+                    + len(_local_last_used_jti._storage)
+                    + len(_local_revoked_families._storage)
+                    + len(_local_revoked_access._storage)
                 )
-                
+
                 if total_entries > 1000:  # Log warning if too many entries
-                    logger.warning(f"High local storage usage: {total_entries} total entries")
+                    logger.warning(
+                        f"High local storage usage: {total_entries} total entries"
+                    )
                 elif total_entries > 100:  # Log info for moderate usage
                     logger.info(f"Local storage usage: {total_entries} total entries")
-                
+
                 await asyncio.sleep(60)  # Run every minute
-                
+
             except Exception as e:
                 logger.error(f"Error in cleanup task: {e}")
                 await asyncio.sleep(60)  # Continue even if there's an error
-    
+
     _cleanup_task = asyncio.create_task(cleanup_worker())
     logger.info("Started local storage cleanup task")
 
@@ -184,7 +194,7 @@ async def start_cleanup_task() -> None:
 async def stop_cleanup_task() -> None:
     """Stop the background cleanup task."""
     global _cleanup_task, _cleanup_running
-    
+
     _cleanup_running = False
     if _cleanup_task:
         _cleanup_task.cancel()
@@ -216,7 +226,7 @@ async def allow_refresh(sid: str, jti: str, ttl_seconds: int) -> None:
             return
         except Exception as e:
             logger.warning(f"Redis allow_refresh failed, falling back to local: {e}")
-    
+
     # Local fallback
     key = f"refresh_allow:{sid}"
     _local_used_refresh.set(key, jti, ttl_seconds)
@@ -230,8 +240,10 @@ async def is_refresh_allowed(sid: str, jti: str) -> bool:
             cur = await r.get(_key_refresh_allow(sid))
             return cur is None or str(cur) == str(jti)
         except Exception as e:
-            logger.warning(f"Redis is_refresh_allowed failed, falling back to local: {e}")
-    
+            logger.warning(
+                f"Redis is_refresh_allowed failed, falling back to local: {e}"
+            )
+
     # Local fallback
     key = f"refresh_allow:{sid}"
     stored_jti = _local_used_refresh.get(key)
@@ -252,8 +264,10 @@ async def claim_refresh_jti(sid: str, jti: str, ttl_seconds: int) -> bool:
             ok = await r.set(key, "1", ex=max(1, int(ttl_seconds)), nx=True)
             return bool(ok)
         except Exception as e:
-            logger.warning(f"Redis claim_refresh_jti failed, falling back to local: {e}")
-    
+            logger.warning(
+                f"Redis claim_refresh_jti failed, falling back to local: {e}"
+            )
+
     # Local fallback with thread-safe operation
     with _local_lock:
         if _local_used_refresh.exists(key):
@@ -262,16 +276,18 @@ async def claim_refresh_jti(sid: str, jti: str, ttl_seconds: int) -> bool:
         return True
 
 
-async def claim_refresh_jti_with_retry(sid: str, jti: str, ttl_seconds: int, max_retries: int = 3) -> tuple[bool, str | None]:
+async def claim_refresh_jti_with_retry(
+    sid: str, jti: str, ttl_seconds: int, max_retries: int = 3
+) -> tuple[bool, str | None]:
     """Atomically mark a refresh ``jti`` for ``sid`` as used with retry logic for race conditions.
-    
+
     Returns (success, error_reason) where success is True only for the first caller.
     Handles race conditions by implementing a distributed lock mechanism.
     """
     key = f"refresh_used:{sid}:{jti}"
     lock_key = f"refresh_lock:{sid}:{jti}"
     r = await _get_redis()
-    
+
     if r is not None:
         try:
             # First, try to acquire a distributed lock to prevent race conditions
@@ -283,26 +299,28 @@ async def claim_refresh_jti_with_retry(sid: str, jti: str, ttl_seconds: int, max
                     lock_acquired = await r.set(lock_key, "1", ex=5, nx=True)
                     if lock_acquired:
                         break
-                
+
                 if not lock_acquired:
                     return False, "lock_timeout"
-            
+
             try:
                 # Check if JTI was already used while we were waiting for lock
                 already_used = await r.get(key)
                 if already_used:
                     return False, "already_used"
-                
+
                 # Set the JTI as used
                 ok = await r.set(key, "1", ex=max(1, int(ttl_seconds)), nx=True)
                 return bool(ok), None
             finally:
                 # Always release the lock
                 await r.delete(lock_key)
-                
+
         except Exception as e:
-            logger.warning(f"Redis claim_refresh_jti_with_retry failed, falling back to local: {e}")
-    
+            logger.warning(
+                f"Redis claim_refresh_jti_with_retry failed, falling back to local: {e}"
+            )
+
     # Local fallback with thread-safe operation
     with _local_lock:
         if _local_used_refresh.exists(key):
@@ -323,8 +341,10 @@ async def set_last_used_jti(sid: str, jti: str, ttl_seconds: int | None = None) 
                 await r.set(key, jti)
             return
         except Exception as e:
-            logger.warning(f"Redis set_last_used_jti failed, falling back to local: {e}")
-    
+            logger.warning(
+                f"Redis set_last_used_jti failed, falling back to local: {e}"
+            )
+
     # Local fallback
     if ttl_seconds and ttl_seconds > 0:
         _local_last_used_jti.set(key, jti, ttl_seconds)
@@ -342,8 +362,10 @@ async def get_last_used_jti(sid: str) -> str | None:
             val = await r.get(key)
             return str(val) if val is not None else None
         except Exception as e:
-            logger.warning(f"Redis get_last_used_jti failed, falling back to local: {e}")
-    
+            logger.warning(
+                f"Redis get_last_used_jti failed, falling back to local: {e}"
+            )
+
     # Local fallback
     val = _local_last_used_jti.get(key)
     return str(val) if val is not None else None
@@ -354,11 +376,15 @@ async def revoke_refresh_family(sid: str, ttl_seconds: int) -> None:
     r = await _get_redis()
     if r is not None:
         try:
-            await r.set(_key_revoked_refresh_family(sid), "1", ex=max(1, int(ttl_seconds)))
+            await r.set(
+                _key_revoked_refresh_family(sid), "1", ex=max(1, int(ttl_seconds))
+            )
             return
         except Exception as e:
-            logger.warning(f"Redis revoke_refresh_family failed, falling back to local: {e}")
-    
+            logger.warning(
+                f"Redis revoke_refresh_family failed, falling back to local: {e}"
+            )
+
     # Local fallback
     key = f"fam:{sid}"
     _local_revoked_families.set(key, "1", ttl_seconds)
@@ -372,8 +398,10 @@ async def is_refresh_family_revoked(sid: str) -> bool:
             val = await r.get(_key_revoked_refresh_family(sid))
             return val is not None
         except Exception as e:
-            logger.warning(f"Redis is_refresh_family_revoked failed, falling back to local: {e}")
-    
+            logger.warning(
+                f"Redis is_refresh_family_revoked failed, falling back to local: {e}"
+            )
+
     # Local fallback
     key = f"fam:{sid}"
     return _local_revoked_families.exists(key)
@@ -395,7 +423,7 @@ async def revoke_access(jti: str, ttl_seconds: int) -> None:
             return
         except Exception as e:
             logger.warning(f"Redis revoke_access failed, falling back to local: {e}")
-    
+
     # Local fallback
     _local_revoked_access.set(jti, "1", ttl_seconds)
 
@@ -408,8 +436,10 @@ async def is_access_revoked(jti: str) -> bool:
             val = await r.get(_key_revoked_access(jti))
             return val is not None
         except Exception as e:
-            logger.warning(f"Redis is_access_revoked failed, falling back to local: {e}")
-    
+            logger.warning(
+                f"Redis is_access_revoked failed, falling back to local: {e}"
+            )
+
     # Local fallback
     return _local_revoked_access.exists(jti)
 
@@ -436,8 +466,10 @@ async def incr_login_counter(key: str, ttl_seconds: int) -> int:
             res = await p.execute()
             return int(res[0]) if isinstance(res, (list, tuple)) and res else 0
         except Exception as e:
-            logger.warning(f"Redis incr_login_counter failed, falling back to local: {e}")
-    
+            logger.warning(
+                f"Redis incr_login_counter failed, falling back to local: {e}"
+            )
+
     # Local fallback with atomic increment
     with _local_lock:
         current_value = _local_counters.get(key)
@@ -445,7 +477,7 @@ async def incr_login_counter(key: str, ttl_seconds: int) -> int:
             new_count = 1
         else:
             new_count = int(current_value) + 1
-        
+
         _local_counters.set(key, str(new_count), ttl_seconds)
         return new_count
 
@@ -463,8 +495,10 @@ async def record_pat_last_used(pat_id: str, ttl_seconds: int | None = None) -> N
                 await r.set(key, timestamp)
             return
         except Exception as e:
-            logger.warning(f"Redis record_pat_last_used failed, falling back to local: {e}")
-    
+            logger.warning(
+                f"Redis record_pat_last_used failed, falling back to local: {e}"
+            )
+
     # Local fallback
     key = f"pat:last_used:{pat_id}"
     timestamp = str(int(asyncio.get_event_loop().time() * 1000))
@@ -525,5 +559,3 @@ __all__ = [
     "clear_local_storage",
     "has_redis",
 ]
-
-

@@ -11,7 +11,9 @@ class DateTimeSkill(Skill):
         re.compile(r"\bwhat(?:'s| is)? today'?s date\b", re.I),
         re.compile(r"\bwhat day is it\b", re.I),
         re.compile(r"\bwhat(?:'s| is)? the date (?:tomorrow|yesterday)\b", re.I),
-        re.compile(r"\bwhat(?:'s| is)? the date on (?P<delta>\d+) days from now\b", re.I),
+        re.compile(
+            r"\bwhat(?:'s| is)? the date on (?P<delta>\d+) days from now\b", re.I
+        ),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
@@ -27,5 +29,3 @@ class DateTimeSkill(Skill):
             days = int(match.group("delta"))
             return (now + timedelta(days=days)).strftime("%A, %Y-%m-%d")
         return now.strftime("%Y-%m-%d")
-
-

@@ -17,13 +17,16 @@ app.add_middleware(
     max_age=600,
 )
 
+
 @app.get("/healthz/ready")
 async def health_check():
     return {"status": "ok"}
 
+
 @app.get("/v1/whoami")
 async def whoami():
     return {"user_id": "test", "is_authenticated": True}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

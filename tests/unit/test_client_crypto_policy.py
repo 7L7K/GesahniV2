@@ -12,5 +12,3 @@ def test_crypto_policy_advertised():
     assert set(data.get("key_wrap_methods", [])) >= {"webauthn", "pbkdf2"}
     assert data.get("storage") in {"indexeddb"}
     assert data.get("deks") == "per-user-per-device"
-
-

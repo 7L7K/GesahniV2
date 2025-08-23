@@ -81,4 +81,6 @@ class UnitConversionSkill(Skill):
         # singular/plural formatting with better rounding for tiny values
         plural_from = "" if abs(amount - 1.0) < 1e-9 else "s"
         plural_to = "" if abs(result - 1.0) < 1e-9 else "s"
-        return f"{amount:g} {from_unit}{plural_from} is {result:.2f} {to_unit}{plural_to}."
+        return (
+            f"{amount:g} {from_unit}{plural_from} is {result:.2f} {to_unit}{plural_to}."
+        )

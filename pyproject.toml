@@ -12,6 +12,3 @@ extend-exclude = [
 # Keep rule surface focused on correctness + clarity
 select = ["E","F","I","UP","B","N"]
 ignore = ["E501"]
-
-
-

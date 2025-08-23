@@ -6,5 +6,3 @@ def test_music_state_default_values():
     assert st.volume == 25
     assert st.vibe.name == "Calm Night"
     assert st.radio_playing is True
-
-

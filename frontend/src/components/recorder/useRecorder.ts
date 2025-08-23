@@ -341,5 +341,3 @@ export function useRecorder(): RecorderExports {
         media: { stream: streamRef.current, videoEl: camRef },
     };
 }
-
-

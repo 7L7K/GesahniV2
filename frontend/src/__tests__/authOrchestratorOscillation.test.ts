@@ -1,6 +1,6 @@
 /**
  * Tests for Auth Orchestrator Oscillation Prevention
- * 
+ *
  * These tests verify that the auth orchestrator properly prevents oscillation
  * loops where whoamiOk state flips between true/false rapidly.
  */

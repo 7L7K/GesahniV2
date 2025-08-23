@@ -11,5 +11,3 @@ def test_clear_csrf_cookie_sets_max_age_zero_and_same_path():
     assert "csrf_token=" in sc
     assert "Max-Age=0" in sc or "max-age=0" in sc
     assert "Path=/" in sc
-
-

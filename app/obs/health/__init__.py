@@ -3,5 +3,3 @@
 
 def self_test() -> dict:
     return {"mic": True, "speakers": True, "network": True}
-
-

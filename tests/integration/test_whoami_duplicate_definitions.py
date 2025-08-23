@@ -20,8 +20,16 @@ def _find_whoami_defs(root: Path) -> list[tuple[str, int]]:
             decos = getattr(node, "decorator_list", [])
             for d in decos:
                 try:
-                    if isinstance(d, ast.Call) and hasattr(d.func, "attr") and d.func.attr in {"get", "post"}:
-                        if len(d.args) >= 1 and isinstance(d.args[0], ast.Constant) and str(d.args[0].value).endswith("/whoami"):
+                    if (
+                        isinstance(d, ast.Call)
+                        and hasattr(d.func, "attr")
+                        and d.func.attr in {"get", "post"}
+                    ):
+                        if (
+                            len(d.args) >= 1
+                            and isinstance(d.args[0], ast.Constant)
+                            and str(d.args[0].value).endswith("/whoami")
+                        ):
                             results.append((str(p), getattr(d, "lineno", 0)))
                 except Exception:
                     pass
@@ -34,5 +42,3 @@ def test_single_whoami_definition():
     defs = _find_whoami_defs(root)
     # Allow exactly one definition under app/
     assert len(defs) == 1, f"Expected 1 /whoami route, found {len(defs)}: {defs}"
-
-

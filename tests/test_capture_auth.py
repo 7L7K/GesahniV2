@@ -52,6 +52,8 @@ def test_capture_start_sets_user_id_from_token(monkeypatch):
 def test_capture_start_invalid_token(monkeypatch):
     client, _ = _build_client(monkeypatch)
     # Create an expired token by using a very short TTL
-    token = create_access_token({"user_id": "alice"}, expires_delta=timedelta(seconds=-10))
+    token = create_access_token(
+        {"user_id": "alice"}, expires_delta=timedelta(seconds=-10)
+    )
     resp = client.post("/capture/start", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 401

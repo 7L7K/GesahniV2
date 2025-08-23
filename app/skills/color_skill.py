@@ -23,7 +23,9 @@ def _hex_to_rgb(hex_code: str) -> tuple[int, int, int] | None:
 class ColorSkill(Skill):
     PATTERNS = [
         re.compile(r"\brgb of\s*(#[0-9a-fA-F]{3,6})\b", re.I),
-        re.compile(r"\bhex of\s*\(?(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\)?\b", re.I),
+        re.compile(
+            r"\bhex of\s*\(?(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\)?\b", re.I
+        ),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
@@ -38,5 +40,3 @@ class ColorSkill(Skill):
         g = max(0, min(255, g))
         b = max(0, min(255, b))
         return f"#{r:02X}{g:02X}{b:02X}"
-
-

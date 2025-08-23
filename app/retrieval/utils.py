@@ -106,6 +106,7 @@ def mmr_diversify(
     candidates.remove(first)
 
     while candidates and len(selected) < k:
+
         def _mmr_score(idx: int) -> float:
             # relevance: sim(query, doc)
             rel = _cos_sim(q_emb, item_embs[idx])
@@ -114,7 +115,9 @@ def mmr_diversify(
                 div = 1.0
             else:
                 emb_sims = [_cos_sim(item_embs[idx], item_embs[j]) for j in selected]
-                lex_overlaps = [_jaccard(item_tokens[idx], item_tokens[j]) for j in selected]
+                lex_overlaps = [
+                    _jaccard(item_tokens[idx], item_tokens[j]) for j in selected
+                ]
                 # combine similarities then convert to diversity (1 - sim)
                 sim = 0.5 * (max(emb_sims) if emb_sims else 0.0) + 0.5 * (
                     max(lex_overlaps) if lex_overlaps else 0.0
@@ -200,5 +203,3 @@ __all__ = [
     "compose_final_score",
     "truncate_to_token_budget",
 ]
-
-

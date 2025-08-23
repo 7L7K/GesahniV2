@@ -36,5 +36,3 @@ def test_post_with_matching_cookie_and_header_passes():
     c.cookies.set("csrf_token", "tok")
     r = c.post("/change", headers={"X-CSRF-Token": "tok"})
     assert r.status_code == 200
-
-

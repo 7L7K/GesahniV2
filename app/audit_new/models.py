@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class AuditEvent(BaseModel):
     """Structured audit event model for append-only logging."""
+
     ts: datetime = Field(default_factory=datetime.utcnow)
     user_id: str | None = None
     route: str
@@ -19,6 +20,4 @@ class AuditEvent(BaseModel):
     meta: dict[str, Any] = {}
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}

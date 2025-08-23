@@ -85,7 +85,7 @@ The authentication contract has been locked to ensure consistent behavior for cr
 No auth: 200 ✅
 Invalid token: 200 ✅
 
-# AUTH/FINISH TESTS  
+# AUTH/FINISH TESTS
 POST no auth: 204 ✅
 POST with mock auth: 204 ✅ (idempotent_skip) ✅
 ```

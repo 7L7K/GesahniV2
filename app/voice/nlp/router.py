@@ -29,5 +29,3 @@ def detect_intent(text: str) -> Intent:
     if any(k in t for k in ("help", "emergency", "scam")):
         return Intent(domain="safety", action="assist", entities={})
     return Intent(domain="smalltalk", action="chat", entities={})
-
-

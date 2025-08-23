@@ -8,5 +8,3 @@ class MediaOverlay:
     title: str | None = None
     is_playing: bool = False
     progress_seconds: int = 0
-
-

@@ -54,5 +54,3 @@ Examples
 - `/healthz/live` → `{ "status": "ok" }`
 - `/healthz/ready` → `{ "status": "ok" }` or `{ "status": "fail", "failing": ["db"] }`
 - `/healthz/deps` → `{ "status": "degraded", "checks": { "backend": "ok", "llama": "error", "ha": "skipped", "qdrant": "ok", "spotify": "skipped" } }`
-
-

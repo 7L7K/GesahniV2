@@ -26,31 +26,36 @@ class SLOTester:
             response = requests.request(method, f"{self.base_url}{endpoint}", **kwargs)
             latency = time.perf_counter() - start_time
 
-            self.measurements.append({
-                "endpoint": endpoint,
-                "method": method,
-                "status": response.status_code,
-                "latency": latency,
-                "timestamp": time.time()
-            })
+            self.measurements.append(
+                {
+                    "endpoint": endpoint,
+                    "method": method,
+                    "status": response.status_code,
+                    "latency": latency,
+                    "timestamp": time.time(),
+                }
+            )
 
             return latency
         except Exception as e:
             latency = time.perf_counter() - start_time
-            self.measurements.append({
-                "endpoint": endpoint,
-                "method": method,
-                "status": 500,
-                "latency": latency,
-                "error": str(e),
-                "timestamp": time.time()
-            })
+            self.measurements.append(
+                {
+                    "endpoint": endpoint,
+                    "method": method,
+                    "status": 500,
+                    "latency": latency,
+                    "error": str(e),
+                    "timestamp": time.time(),
+                }
+            )
             return latency
 
     def calculate_p95_latency(self, method_filter: str = None) -> float:
         """Calculate P95 latency from measurements."""
         filtered = [
-            m["latency"] for m in self.measurements
+            m["latency"]
+            for m in self.measurements
             if method_filter is None or m["method"] == method_filter
         ]
 
@@ -65,7 +70,8 @@ class SLOTester:
     def calculate_success_rate(self, endpoint_filter: str = None) -> float:
         """Calculate success rate from measurements."""
         filtered = [
-            m for m in self.measurements
+            m
+            for m in self.measurements
             if endpoint_filter is None or m["endpoint"] == endpoint_filter
         ]
 
@@ -119,7 +125,7 @@ class TestSLOCompliance:
             "/healthz",
             "/v1/admin/metrics",
             "/v1/admin/system/status",
-            "/v1/admin/flags"
+            "/v1/admin/flags",
         ]
 
         # Measure each endpoint multiple times
@@ -157,7 +163,7 @@ class TestSLOCompliance:
         slo_tester.measurements = [
             {"status": 200, "method": "GET"} for _ in range(1990)  # 1990 successful
         ] + [
-            {"status": 400, "method": "GET"} for _ in range(10)    # 10 bad requests
+            {"status": 400, "method": "GET"} for _ in range(10)  # 10 bad requests
         ]
 
         error_rate_4xx = slo_tester.calculate_error_rate("4xx")
@@ -172,7 +178,7 @@ class TestSLOCompliance:
         slo_tester.measurements = [
             {"status": 200, "method": "GET"} for _ in range(1995)  # 1995 successful
         ] + [
-            {"status": 500, "method": "GET"} for _ in range(5)     # 5 server errors
+            {"status": 500, "method": "GET"} for _ in range(5)  # 5 server errors
         ]
 
         error_rate_5xx = slo_tester.calculate_error_rate("5xx")
@@ -187,7 +193,7 @@ class TestSLOCompliance:
         slo_tester.measurements = [
             {"status": 200, "method": "GET"} for _ in range(990)  # 990 successful
         ] + [
-            {"status": 429, "method": "GET"} for _ in range(10)   # 10 rate limited
+            {"status": 429, "method": "GET"} for _ in range(10)  # 10 rate limited
         ]
 
         rate_limit_rate = slo_tester.calculate_error_rate("429")
@@ -201,9 +207,7 @@ class TestSLOCompliance:
         # Test availability violation
         slo_tester.measurements = [
             {"status": 200, "endpoint": "/healthz"} for _ in range(95)
-        ] + [
-            {"status": 500, "endpoint": "/healthz"} for _ in range(5)
-        ]
+        ] + [{"status": 500, "endpoint": "/healthz"} for _ in range(5)]
 
         availability = slo_tester.calculate_success_rate("/healthz")
 
@@ -214,18 +218,42 @@ class TestSLOCompliance:
     def test_slo_compliance_reporting(self, slo_tester):
         """Test comprehensive SLO compliance reporting"""
         # Generate comprehensive test data
-        slo_tester.measurements = [
-            # Health checks
-            {"status": 200, "endpoint": "/healthz", "method": "GET", "latency": 0.1} for _ in range(1000)
-        ] + [
-            # API calls
-            {"status": 200, "endpoint": "/v1/admin/metrics", "method": "GET", "latency": 0.2} for _ in range(100)
-        ] + [
-            {"status": 201, "endpoint": "/v1/admin/config", "method": "POST", "latency": 0.3} for _ in range(50)
-        ] + [
-            # Some errors
-            {"status": 400, "endpoint": "/v1/admin/config", "method": "POST", "latency": 0.1} for _ in range(5)
-        ]
+        slo_tester.measurements = (
+            [
+                # Health checks
+                {"status": 200, "endpoint": "/healthz", "method": "GET", "latency": 0.1}
+                for _ in range(1000)
+            ]
+            + [
+                # API calls
+                {
+                    "status": 200,
+                    "endpoint": "/v1/admin/metrics",
+                    "method": "GET",
+                    "latency": 0.2,
+                }
+                for _ in range(100)
+            ]
+            + [
+                {
+                    "status": 201,
+                    "endpoint": "/v1/admin/config",
+                    "method": "POST",
+                    "latency": 0.3,
+                }
+                for _ in range(50)
+            ]
+            + [
+                # Some errors
+                {
+                    "status": 400,
+                    "endpoint": "/v1/admin/config",
+                    "method": "POST",
+                    "latency": 0.1,
+                }
+                for _ in range(5)
+            ]
+        )
 
         # Calculate all SLO metrics
         availability = slo_tester.calculate_success_rate("/healthz")
@@ -243,11 +271,31 @@ class TestSLOCompliance:
 
         # Generate compliance report
         report = {
-            "availability_slo": {"value": availability, "target": 0.999, "met": availability >= 0.999},
-            "read_latency_slo": {"value": p95_read, "target": 0.25, "met": p95_read <= 0.25},
-            "write_latency_slo": {"value": p95_write, "target": 0.5, "met": p95_write <= 0.5},
-            "error_4xx_slo": {"value": error_4xx, "target": 0.005, "met": error_4xx <= 0.005},
-            "error_5xx_slo": {"value": error_5xx, "target": 0.001, "met": error_5xx <= 0.001},
+            "availability_slo": {
+                "value": availability,
+                "target": 0.999,
+                "met": availability >= 0.999,
+            },
+            "read_latency_slo": {
+                "value": p95_read,
+                "target": 0.25,
+                "met": p95_read <= 0.25,
+            },
+            "write_latency_slo": {
+                "value": p95_write,
+                "target": 0.5,
+                "met": p95_write <= 0.5,
+            },
+            "error_4xx_slo": {
+                "value": error_4xx,
+                "target": 0.005,
+                "met": error_4xx <= 0.005,
+            },
+            "error_5xx_slo": {
+                "value": error_5xx,
+                "target": 0.001,
+                "met": error_5xx <= 0.001,
+            },
         }
 
         print("SLO Compliance Report:")
@@ -262,6 +310,7 @@ class TestSLOCompliance:
 
 
 # CI/CD Integration Examples
+
 
 def test_slo_compliance_for_deployment():
     """Example test that could be used in CI/CD deployment gates"""
@@ -285,11 +334,7 @@ def test_performance_regression_detection():
     tester = SLOTester()
 
     # Test key endpoints
-    endpoints = [
-        "/healthz",
-        "/v1/admin/metrics",
-        "/v1/admin/system/status"
-    ]
+    endpoints = ["/healthz", "/v1/admin/metrics", "/v1/admin/system/status"]
 
     for endpoint in endpoints:
         for _ in range(10):

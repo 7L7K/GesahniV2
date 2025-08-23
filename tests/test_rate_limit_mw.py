@@ -18,10 +18,13 @@ def _spin():
 
     # Clear the rate limit bucket to ensure test isolation
     from app.middleware.rate_limit import _BUCKET
+
     _BUCKET.clear()
 
     from app.main import app
+
     return TestClient(app)
+
 
 def test_rate_limit_basic(monkeypatch):
     """Test basic rate limiting functionality."""
@@ -51,6 +54,7 @@ def test_rate_limit_basic(monkeypatch):
     # Verify the response has proper rate limit headers
     assert r4.headers.get("retry-after") == "1"
 
+
 def test_rate_limit_options_exempt():
     """Test that OPTIONS requests are not rate limited."""
     c = _spin()
@@ -59,6 +63,7 @@ def test_rate_limit_options_exempt():
     for _ in range(5):
         r = c.options("/v1/csrf")
         assert r.status_code == 200
+
 
 def test_rate_limit_window_reset():
     """Test that rate limit resets after window expires."""
@@ -77,6 +82,7 @@ def test_rate_limit_window_reset():
     r4 = c.get("/v1/csrf")
     assert r4.status_code == 200
 
+
 def test_rate_limit_headers():
     """Test that rate limit headers are present in responses."""
     c = _spin()
@@ -90,6 +96,7 @@ def test_rate_limit_headers():
     # Check header values
     assert r.headers["ratelimit-limit"] == "2"
     assert int(r.headers["ratelimit-remaining"]) <= 2
+
 
 def test_rate_limit_user_isolation():
     """Test that rate limits are per-user (simulated via different IPs)."""
@@ -142,7 +149,7 @@ def test_csrf_middleware_enhancements():
         "type": "http",
         "method": "POST",
         "path": "/test",
-        "headers": Headers({"x-csrf-token": "test-token"}).raw
+        "headers": Headers({"x-csrf-token": "test-token"}).raw,
     }
     request = Request(scope)
 

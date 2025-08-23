@@ -27,6 +27,3 @@ def test_get_values_and_snapshot(monkeypatch):
     snap = store.get_snapshot(uid)
     assert set(snap.keys()) == {"preferred_name"}
     assert isinstance(snap["preferred_name"], dict)
-
-
-

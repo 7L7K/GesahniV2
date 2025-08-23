@@ -18,6 +18,7 @@ def test_ws_allows_query_param_token(monkeypatch):
     client = TestClient(app)
 
     import jwt
+
     token = jwt.encode({"user_id": "wsuser"}, "secret", algorithm="HS256")
 
     # The websocket route requires token; pass via query param to simulate browser
@@ -26,5 +27,3 @@ def test_ws_allows_query_param_token(monkeypatch):
         ws.send_text("{}")
         # close cleanly
         ws.close()
-
-

@@ -21,7 +21,13 @@ def _secret() -> str:
     if not secret or secret.strip() == "":
         raise HTTPException(status_code=500, detail="missing_care_secret")
     # Security check: prevent use of default/placeholder secrets
-    if secret.strip().lower() in {"change-me", "default", "placeholder", "secret", "key"}:
+    if secret.strip().lower() in {
+        "change-me",
+        "default",
+        "placeholder",
+        "secret",
+        "key",
+    }:
         raise HTTPException(status_code=500, detail="insecure_care_secret")
     return secret
 
@@ -68,11 +74,12 @@ class AckViaLinkResponse(BaseModel):
     )
 
 
-@router.post("/care/alerts/ack_via_link", responses={200: {"model": AckViaLinkResponse}})
+@router.post(
+    "/care/alerts/ack_via_link", responses={200: {"model": AckViaLinkResponse}}
+)
 async def ack_via_link(token: str):
     from .care import ack_alert  # avoid circular import at module import time
+
     alert_id = verify_ack_token(token)
     # Pass-through to core ack endpoint (no requester identity for MVP)
     return await ack_alert(alert_id, None)
-
-

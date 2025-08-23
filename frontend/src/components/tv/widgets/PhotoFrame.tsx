@@ -63,5 +63,3 @@ export function PhotoFrame() {
     </div>
   );
 }
-
-

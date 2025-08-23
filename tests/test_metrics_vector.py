@@ -12,6 +12,9 @@ from app.metrics import (
 
 def test_metric_objects_exist():
     # These are either real prometheus metrics or stubs with .name/.value
-    for m in (DEPENDENCY_LATENCY_SECONDS, EMBEDDING_LATENCY_SECONDS, VECTOR_OP_LATENCY_SECONDS):
+    for m in (
+        DEPENDENCY_LATENCY_SECONDS,
+        EMBEDDING_LATENCY_SECONDS,
+        VECTOR_OP_LATENCY_SECONDS,
+    ):
         assert m is not None
-

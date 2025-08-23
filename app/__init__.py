@@ -38,12 +38,21 @@ def __getattr__(name: str) -> Any:  # pragma: no cover - trivial
             globals()[name] = module
             return module
         except Exception:
-            legacy_module: ModuleType = importlib.import_module(".audit_legacy", __name__)
+            legacy_module: ModuleType = importlib.import_module(
+                ".audit_legacy", __name__
+            )
             # Create a simple package-like object that re-exports commonly used
             # names from the legacy module.
             pkg = ModuleType("app.audit")
             # Re-export functions and constants used by tests
-            for attr in ("append_audit", "append_ws_audit", "append_http_audit", "get_audit_events", "verify_audit_integrity", "AUDIT_EVENT_TYPES"):
+            for attr in (
+                "append_audit",
+                "append_ws_audit",
+                "append_http_audit",
+                "get_audit_events",
+                "verify_audit_integrity",
+                "AUDIT_EVENT_TYPES",
+            ):
                 if hasattr(legacy_module, attr):
                     setattr(pkg, attr, getattr(legacy_module, attr))
             globals()[name] = pkg

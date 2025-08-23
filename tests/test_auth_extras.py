@@ -22,6 +22,7 @@ def _make_auth_app(monkeypatch, extra_env: dict | None = None):
     sys.modules.pop("app.auth", None)
     auth = import_module("app.auth")
     from app.api.auth import router as auth_api_router
+
     app = FastAPI()
     app.include_router(auth.router)
     app.include_router(auth_api_router, prefix="/v1")
@@ -54,7 +55,9 @@ def test_password_strength_policy(monkeypatch):
     # Enable strong policy; fallback heuristics apply when zxcvbn missing
     _auth, client = _make_auth_app(monkeypatch, {"PASSWORD_STRENGTH": "1"})
     # weak: only letters
-    r = client.post("/register", json={"username": "charlie", "password": "onlyletters"})
+    r = client.post(
+        "/register", json={"username": "charlie", "password": "onlyletters"}
+    )
     assert r.status_code == 400
     assert r.json()["detail"] == "weak_password"
     # strong enough: alnum mix and >= 8
@@ -96,7 +99,9 @@ def test_refresh_with_access_token_rejected(monkeypatch):
 
     client.app.dependency_overrides[get_current_user_id] = fake_user_id
 
-    login = client.post("/login", json={"username": "dana", "password": "abcd1234"}).json()
+    login = client.post(
+        "/login", json={"username": "dana", "password": "abcd1234"}
+    ).json()
     access = login["access_token"]
     r = client.post("/v1/auth/refresh", json={"refresh_token": access})
     assert r.status_code == 400
@@ -115,7 +120,9 @@ def test_refresh_issuer_mismatch(monkeypatch):
 
     client.app.dependency_overrides[get_current_user_id] = fake_user_id
 
-    login = client.post("/login", json={"username": "erin", "password": "abcd1234"}).json()
+    login = client.post(
+        "/login", json={"username": "erin", "password": "abcd1234"}
+    ).json()
     # Craft a refresh token with wrong issuer
     payload = jwt.get_unverified_claims(login["refresh_token"])
     payload["iss"] = "bad"
@@ -160,5 +167,3 @@ def test_forgot_and_reset_password_flow(monkeypatch):
 
     r = client.post("/login", json={"username": "sam", "password": "newpass"})
     assert r.status_code == 200
-
-

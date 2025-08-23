@@ -19,7 +19,9 @@ def test_metrics_endpoint_exists(client):
     """Test that /metrics endpoint exists and returns 200"""
     response = client.get("/metrics")
     assert response.status_code == 200
-    assert response.headers["content-type"] == "text/plain; version=0.0.4; charset=utf-8"
+    assert (
+        response.headers["content-type"] == "text/plain; version=0.0.4; charset=utf-8"
+    )
 
 
 def test_metrics_expose_http_requests_total(client):
@@ -43,7 +45,9 @@ def test_metrics_expose_http_requests_total(client):
 def test_metrics_expose_auth_fail_total(client):
     """Test that auth_fail_total metric is exposed"""
     # Make a request with invalid token to trigger auth failure
-    response = client.get("/v1/admin/config", headers={"Authorization": "Bearer invalid_token"})
+    response = client.get(
+        "/v1/admin/config", headers={"Authorization": "Bearer invalid_token"}
+    )
     assert response.status_code == 401
 
     # Check metrics endpoint
@@ -57,7 +61,9 @@ def test_metrics_expose_auth_fail_total(client):
 def test_metrics_expose_rbac_deny_total(client):
     """Test that rbac_deny_total metric is exposed"""
     # Make a request without proper scope
-    response = client.get("/v1/admin/config", headers={"Authorization": "Bearer valid_but_no_scope_token"})
+    response = client.get(
+        "/v1/admin/config", headers={"Authorization": "Bearer valid_but_no_scope_token"}
+    )
     assert response.status_code in [401, 403]
 
     # Check metrics endpoint
@@ -104,18 +110,18 @@ def test_metrics_format_is_prometheus_compliant(client):
     response = client.get("/metrics")
     body = response.text
 
-    lines = body.strip().split('\n')
+    lines = body.strip().split("\n")
 
     # Each metric line should follow Prometheus format
-    metric_lines = [line for line in lines if not line.startswith('#') and line.strip()]
+    metric_lines = [line for line in lines if not line.startswith("#") and line.strip()]
 
     for line in metric_lines:
         # Should have metric_name{labels} value format or just metric_name value
-        if '{' in line:
+        if "{" in line:
             # Has labels - find the closing brace
-            if '}' in line:
+            if "}" in line:
                 # Extract the value part after the closing brace
-                parts = line.split('}')
+                parts = line.split("}")
                 if len(parts) >= 2:
                     value_part = parts[-1].strip()
                 else:

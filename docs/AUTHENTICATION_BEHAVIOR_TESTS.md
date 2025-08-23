@@ -167,18 +167,18 @@ def test_boot_logged_out_to_logged_in(self, client, mock_network_panel, mock_aut
     # 1. Load app while logged out
     response = client.get("/")
     assert response.status_code == 200
-    
+
     # 2. Verify no 401s during boot
     four_oh_ones = mock_network_panel.get_401s()
     assert len(four_oh_ones) == 0
-    
+
     # 3. Sign in process
     login_response = client.post("/login", json={"username": "testuser", "password": "testpass123"})
     assert login_response.status_code == 200
-    
+
     # 4. Verify exactly one whoami call
     assert mock_auth_orchestrator.whoami_calls == 1
-    
+
     # 5. Verify auth state flips once to true
     auth_changes = mock_auth_orchestrator.auth_state_changes
     assert len(auth_changes) == 1
@@ -193,16 +193,16 @@ def test_websocket_behavior(self, mock_ws_hub, mock_auth_orchestrator):
     mock_auth_orchestrator.setAuthenticated(False)
     mock_ws_hub.start({'music': True, 'care': True})
     assert mock_ws_hub.connection_attempts == 0
-    
+
     # 2. Test connection when authenticated
     mock_auth_orchestrator.setAuthenticated(True)
     mock_ws_hub.start({'music': True, 'care': True})
     assert mock_ws_hub.connection_attempts == 1
-    
+
     # 3. Test forced WS close behavior
     mock_ws_hub.simulate_connection_failure('music', 'Connection lost')
     assert mock_ws_hub.reconnect_attempts == 1
-    
+
     # 4. Test second failure shows disconnected without auth churn
     mock_ws_hub.simulate_connection_failure('music', 'Connection lost again')
     assert mock_ws_hub.reconnect_attempts == 2
@@ -215,18 +215,18 @@ def test_health_check_behavior(self, mock_health_checker, mock_auth_orchestrator
     # 1. Initial health check
     health_result = mock_health_checker.check_health()
     assert health_result['status'] == 'ok'
-    
+
     # 2. Verify polling slows down after "ready: ok"
     initial_interval = mock_health_checker.polling_interval
     assert initial_interval == 60.0
-    
+
     # 3. Verify health calls never mutate auth state
     initial_auth_changes = len(mock_auth_orchestrator.auth_state_changes)
-    
+
     # Perform multiple health checks
     for _ in range(5):
         mock_health_checker.check_health()
-    
+
     # Verify auth state unchanged
     final_auth_changes = len(mock_auth_orchestrator.auth_state_changes)
     assert final_auth_changes == initial_auth_changes
@@ -242,26 +242,26 @@ def test_complete_auth_flow(self, client, mock_network_panel, mock_auth_orchestr
     response = client.get("/")
     assert response.status_code == 200
     assert len(mock_network_panel.get_401s()) == 0
-    
+
     # 2. Sign in
     mock_auth_orchestrator.setAuthenticated(True)
     assert mock_auth_orchestrator.whoami_calls == 1
-    
+
     # 3. Verify WebSocket connects
     mock_ws_hub.start({'music': True})
     assert mock_ws_hub.connection_attempts == 1
-    
+
     # 4. Verify health checks work
     health_result = mock_health_checker.check_health()
     assert health_result['status'] == 'ok'
-    
+
     # 5. Logout
     mock_auth_orchestrator.setAuthenticated(False)
-    
+
     # 6. Verify WebSocket disconnects
     music_status = mock_ws_hub.getConnectionStatus('music')
     assert music_status['isOpen'] == False
-    
+
     # 7. Verify no privileged calls work
     response = client.get("/v1/state")
     assert response.status_code == 401

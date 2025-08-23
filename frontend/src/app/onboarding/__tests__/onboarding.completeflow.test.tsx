@@ -35,5 +35,3 @@ describe('Onboarding end-to-end happy path', () => {
     expect(onComplete).toHaveBeenCalled()
   })
 })
-
-

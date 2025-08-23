@@ -30,7 +30,7 @@ Successfully configured the Gesahni application for header mode authentication w
 NEXT_PUBLIC_HEADER_AUTH_MODE=1
 NEXT_PUBLIC_API_ORIGIN=http://10.0.0.138:8000
 
-# Backend configuration  
+# Backend configuration
 NEXT_PUBLIC_HEADER_AUTH_MODE=1
 APP_URL=http://10.0.0.138:8000
 API_URL=http://10.0.0.138:8000
@@ -102,7 +102,7 @@ The backend automatically:
 # Bypass CSRF when Authorization header is present (header auth mode)
 auth_header = request.headers.get("Authorization")
 if auth_header and auth_header.startswith("Bearer "):
-    logger.info("bypass: csrf_authorization_header_present header=<%s>", 
+    logger.info("bypass: csrf_authorization_header_present header=<%s>",
                auth_header[:8] + "..." if auth_header else "None")
     return await call_next(request)
 ```

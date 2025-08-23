@@ -85,6 +85,7 @@ def test_webhook_sign_verify_roundtrip(tmp_path, monkeypatch):
     # Minimal endpoint to exercise verify_webhook through the router
     body = b"hello"
     from app.security import sign_webhook
+
     sig = sign_webhook(body, "abc123")
     # Call underlying function via FastAPI dependency path is complex; directly exercise
     from starlette.requests import Request
@@ -104,5 +105,3 @@ def test_webhook_sign_verify_roundtrip(tmp_path, monkeypatch):
         assert out == body
 
     asyncio.run(_run())
-
-

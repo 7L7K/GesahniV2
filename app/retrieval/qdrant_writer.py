@@ -22,12 +22,18 @@ def _default_horizon_days(kind: str) -> float:
     if kind.lower() == "preference":
         return float(os.getenv("MEMGPT_HORIZON_PREF_DAYS", "180"))
     # fact/default
-    return float(os.getenv("MEMGPT_HORIZON_FACT_DAYS", os.getenv("MEMGPT_HORIZON_DEFAULT_DAYS", "365")))
+    return float(
+        os.getenv(
+            "MEMGPT_HORIZON_FACT_DAYS", os.getenv("MEMGPT_HORIZON_DEFAULT_DAYS", "365")
+        )
+    )
 
 
 def _redact_pii(text: str) -> str:
     email_re = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-    phone_re = re.compile(r"\b(?:\+?\d{1,3}[\s-]?)?(?:\(\d{3}\)|\d{3})[\s-]?\d{3}[\s-]?\d{4}\b")
+    phone_re = re.compile(
+        r"\b(?:\+?\d{1,3}[\s-]?)?(?:\(\d{3}\)|\d{3})[\s-]?\d{3}[\s-]?\d{4}\b"
+    )
     ssn_re = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
     t = email_re.sub("[PII_EMAIL]", text)
     t = phone_re.sub("[PII_PHONE]", t)
@@ -96,12 +102,13 @@ def upsert_claim(
     }
 
     try:
-        c.upsert(collection_name=col, points=[PointStruct(id=doc_id, vector=vec, payload=payload)])
+        c.upsert(
+            collection_name=col,
+            points=[PointStruct(id=doc_id, vector=vec, payload=payload)],
+        )
         return True
     except Exception:
         return False
 
 
 __all__ = ["upsert_claim"]
-
-

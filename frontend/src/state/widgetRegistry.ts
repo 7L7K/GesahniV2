@@ -42,5 +42,3 @@ export const useWidgetRegistry = create<RegistryState>((set, get) => ({
   },
   setEnabled: (id, enabled) => set((s) => ({ items: { ...s.items, [id]: { ...s.items[id], enabled } } })),
 }));
-
-

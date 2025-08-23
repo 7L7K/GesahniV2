@@ -17,5 +17,3 @@ Audit log
 Operating notes
 - Set `ENFORCE_JWT_SCOPES=1` to enforce scopes in all environments with JWTs.
 - Ensure filesystem permissions restrict access to `data/redactions/` and backups output.
-
-

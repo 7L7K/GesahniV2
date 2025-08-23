@@ -8,7 +8,9 @@ from fastapi import APIRouter, Depends
 
 from app.deps.scopes import docs_security_with
 
-router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
+router = APIRouter(
+    tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))]
+)
 
 
 def _parse_models_env(val: str | None) -> list[dict[str, Any]]:
@@ -41,7 +43,10 @@ async def list_models() -> dict[str, Any]:
             meta: dict[str, Any] = {"engine": "gpt", "name": m}
             price = MODEL_PRICING.get(m)
             if isinstance(price, dict):
-                meta["pricing_per_1k_tokens"] = {"input": price.get("in"), "output": price.get("out")}
+                meta["pricing_per_1k_tokens"] = {
+                    "input": price.get("in"),
+                    "output": price.get("out"),
+                }
             items.append(meta)
         for m in llama:
             items.append({"engine": "llama", "name": m, "pricing_per_1k_tokens": None})
@@ -57,5 +62,3 @@ async def list_models() -> dict[str, Any]:
 
 
 __all__ = ["router"]
-
-

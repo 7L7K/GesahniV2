@@ -255,7 +255,10 @@ async def call_service(domain: str, service: str, data: dict) -> Any:
             pass
         # Dynamic: large group operations for lights/switches/fans
         try:
-            if domain in {"light", "switch", "fan"} and service in {"turn_off", "turn_on"}:
+            if domain in {"light", "switch", "fan"} and service in {
+                "turn_off",
+                "turn_on",
+            }:
                 ids = (data or {}).get("entity_id")
                 if isinstance(ids, (list, tuple)):
                     max_group = int(os.getenv("HA_CONFIRM_GROUP_SIZE", "5") or 5)
@@ -266,7 +269,13 @@ async def call_service(domain: str, service: str, data: dict) -> Any:
         if needs_confirm:
             confirm = False
             for key in ("confirm", "__confirm__", "requires_confirm_ack"):
-                if isinstance(data, dict) and data.get(key) in (True, 1, "1", "true", "yes"):
+                if isinstance(data, dict) and data.get(key) in (
+                    True,
+                    1,
+                    "1",
+                    "true",
+                    "yes",
+                ):
                     confirm = True
                     break
             if not confirm:
@@ -384,7 +393,11 @@ async def resolve_entity(name: str) -> list[str]:
         }
         domain = plural_to_domain.get(target)
         if domain:
-            matches = [st.get("entity_id", "") for st in states if st.get("entity_id", "").startswith(domain + ".")]
+            matches = [
+                st.get("entity_id", "")
+                for st in states
+                if st.get("entity_id", "").startswith(domain + ".")
+            ]
 
     return [m for m in matches if m]
 
@@ -428,7 +441,9 @@ async def handle_command(prompt: str) -> CommandResult | None:
             if not eid:
                 return CommandResult(False, "entity_not_found", {"name": name})
             if score < 0.8:
-                return CommandResult(False, "confirm_required", {"entities": [eid], "confidence": score})
+                return CommandResult(
+                    False, "confirm_required", {"entities": [eid], "confidence": score}
+                )
             entities = [eid]
         if len(entities) > 1:
             return CommandResult(False, "confirm_required", {"entities": entities})
@@ -460,13 +475,17 @@ async def handle_command(prompt: str) -> CommandResult | None:
             if not eid:
                 return CommandResult(False, "entity_not_found", {"name": name})
             if score < 0.8:
-                return CommandResult(False, "confirm_required", {"entities": [eid], "confidence": score})
+                return CommandResult(
+                    False, "confirm_required", {"entities": [eid], "confidence": score}
+                )
             entities = [eid]
         if len(entities) > 1:
             return CommandResult(False, "confirm_required", {"entities": entities})
         eid = entities[0]
         try:
-            await call_service("light", "turn_on", {"entity_id": eid, "brightness_pct": level})
+            await call_service(
+                "light", "turn_on", {"entity_id": eid, "brightness_pct": level}
+            )
             return CommandResult(True, f"Set {eid} brightness to {level}%")
         except Exception as e:
             logger.exception("Failed to set brightness for %s: %s", eid, e)
@@ -487,7 +506,9 @@ async def handle_command(prompt: str) -> CommandResult | None:
         if not eid:
             return CommandResult(False, "entity_not_found", {"name": name})
         if score < 0.8:
-            return CommandResult(False, "confirm_required", {"entities": [eid], "confidence": score})
+            return CommandResult(
+                False, "confirm_required", {"entities": [eid], "confidence": score}
+            )
         entities = [eid]
     if len(entities) > 1:
         return CommandResult(False, "confirm_required", {"entities": entities})

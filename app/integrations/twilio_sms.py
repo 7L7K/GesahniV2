@@ -31,5 +31,3 @@ async def send_sms(to_number: str, body: str) -> bool:
         return True
     except Exception:
         return False
-
-

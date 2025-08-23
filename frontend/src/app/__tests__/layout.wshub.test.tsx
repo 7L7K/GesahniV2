@@ -19,5 +19,3 @@ describe('RootLayout WsBootstrap', () => {
         expect(calls.some((p: string) => p.includes('/v1/ws/care'))).toBe(false)
     })
 })
-
-

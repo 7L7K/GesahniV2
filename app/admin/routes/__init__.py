@@ -11,7 +11,9 @@ from app.obs.ab import snapshot as ab_snapshot
 from app.retrieval import run_pipeline
 from app.retrieval.diagnostics import why_logs
 
-router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))]) 
+router = APIRouter(
+    tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))]
+)
 
 
 @router.get("/admin/collections")
@@ -80,5 +82,3 @@ async def retrieval_trace(
 
 
 __all__ = ["router"]
-
-

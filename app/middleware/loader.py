@@ -24,7 +24,9 @@ def add_mw(app, mw_cls: type[BaseHTTPMiddleware], *, name: str):
     """
     # Validate middleware class is not None
     if mw_cls is None:
-        raise RuntimeError(f"Middleware '{name}' resolved to None - check imports in app.middleware")
+        raise RuntimeError(
+            f"Middleware '{name}' resolved to None - check imports in app.middleware"
+        )
 
     # Validate it's actually a class
     if not inspect.isclass(mw_cls):
@@ -32,12 +34,15 @@ def add_mw(app, mw_cls: type[BaseHTTPMiddleware], *, name: str):
 
     # Validate it subclasses BaseHTTPMiddleware
     if not issubclass(mw_cls, BaseHTTPMiddleware):
-        raise RuntimeError(f"Middleware '{name}' must subclass BaseHTTPMiddleware (got {mw_cls})")
+        raise RuntimeError(
+            f"Middleware '{name}' must subclass BaseHTTPMiddleware (got {mw_cls})"
+        )
 
     # Add the middleware
     app.add_middleware(mw_cls)
 
     # Log successful addition (for debugging)
     import logging
+
     logger = logging.getLogger(__name__)
     logger.debug(f"✅ Added middleware: {name} ({mw_cls.__name__})")

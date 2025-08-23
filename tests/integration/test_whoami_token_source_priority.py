@@ -26,5 +26,3 @@ def test_cookie_preferred_over_header_when_both_valid(monkeypatch):
     assert body["session_ready"] is True
     assert body["source"] == "cookie"
     assert body["user"]["id"] == "cookie_user"
-
-

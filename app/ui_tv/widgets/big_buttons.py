@@ -16,5 +16,3 @@ def default_buttons() -> list[BigButton]:
         BigButton(label="Music", action="music"),
         BigButton(label="Photos", action="photos"),
     ]
-
-

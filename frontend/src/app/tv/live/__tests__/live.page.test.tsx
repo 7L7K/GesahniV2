@@ -8,5 +8,3 @@ describe('TV Live page', () => {
         render(<Page />)
     })
 })
-
-

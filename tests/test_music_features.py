@@ -28,7 +28,10 @@ def test_volume_cap_in_quiet_hours(monkeypatch):
     monkeypatch.setattr(music, "_in_quiet_hours", lambda now=None: True)
     client = _client()
     # Set high-energy vibe to increase base cap (still capped by quiet hours at 30)
-    r = client.post("/v1/vibe", json={"name": "Turn Up", "energy": 0.95, "tempo": 130, "explicit": False})
+    r = client.post(
+        "/v1/vibe",
+        json={"name": "Turn Up", "energy": 0.95, "tempo": 130, "explicit": False},
+    )
     assert r.status_code == 200
     # Attempt to set volume above cap
     r = client.post("/v1/music", json={"command": "volume", "volume": 100})
@@ -44,13 +47,18 @@ def test_duck_and_restore(monkeypatch):
     monkeypatch.setattr(music, "_in_quiet_hours", lambda now=None: False)
     client = _client()
     # Ensure a vibe with a generous cap
-    client.post("/v1/vibe", json={"name": "Uplift Morning", "energy": 0.6, "tempo": 110, "explicit": False})
+    client.post(
+        "/v1/vibe",
+        json={"name": "Uplift Morning", "energy": 0.6, "tempo": 110, "explicit": False},
+    )
     # Set a baseline volume
     client.post("/v1/music", json={"command": "volume", "volume": 40})
     base = client.get("/v1/state").json()["volume"]
     assert base >= 35  # sanity (cap for 0.6 energy is ~62)
     # Duck temporarily
-    client.post("/v1/music", json={"command": "volume", "volume": 12, "temporary": True})
+    client.post(
+        "/v1/music", json={"command": "volume", "volume": 12, "temporary": True}
+    )
     ducked = client.get("/v1/state").json()["volume"]
     assert ducked == 12
     # Restore
@@ -65,7 +73,13 @@ def test_recommendations_cache():
     user_id = "anon"
     st = load_state(user_id)
     st.last_recommendations = [
-        {"id": "t1", "name": "Test Track", "artists": "Tester", "art_url": None, "explicit": False}
+        {
+            "id": "t1",
+            "name": "Test Track",
+            "artists": "Tester",
+            "art_url": None,
+            "explicit": False,
+        }
     ]
     st.recs_cached_at = time.time()
     save_state(user_id, st)
@@ -99,5 +113,3 @@ def test_device_set_and_state_reflects():
     assert r.status_code == 200
     st = client.get("/v1/state").json()
     assert st["device_id"] == "dev-1"
-
-

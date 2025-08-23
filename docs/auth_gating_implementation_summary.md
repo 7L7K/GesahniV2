@@ -35,14 +35,14 @@ All privileged API calls are now properly gated behind authentication. Component
     // Only start status polling if authenticated
     const checkAuthAndPoll = () => {
       if (!authState.isAuthenticated) return null;
-      
+
       const i = setInterval(async () => {
         const res = await apiFetch('/v1/status', { auth: true });
         // ... handle response
       }, 60000);
       return i;
     };
-    
+
     const intervalId = checkAuthAndPoll();
     return () => {
       if (intervalId) clearInterval(intervalId);
@@ -72,7 +72,7 @@ All privileged API calls are now properly gated behind authentication. Component
       router.replace('/login?next=%2Fonboarding');
       return;
     }
-    
+
     const checkOnboardingStatus = async () => {
       const status = await getOnboardingStatus();
       // ... handle response
@@ -87,7 +87,7 @@ All privileged API calls are now properly gated behind authentication. Component
   useEffect(() => {
     // Only fetch budget if authenticated
     if (!authState.isAuthenticated) return;
-    
+
     getBudget().then((b) => setBudget(b as any)).catch(() => setBudget(null));
   }, [authState.isAuthenticated]);
   ```
@@ -100,10 +100,10 @@ import { useAuthState } from '@/hooks/useAuth';
 
 function MyComponent() {
   const authState = useAuthState();
-  
+
   useEffect(() => {
     if (!authState.isAuthenticated) return; // Gate behind authentication
-    
+
     // Make privileged API call
     const fetchData = async () => {
       const data = await apiFetch('/v1/privileged-endpoint', { auth: true });

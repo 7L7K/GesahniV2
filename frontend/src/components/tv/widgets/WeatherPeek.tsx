@@ -52,5 +52,3 @@ export function WeatherPeek() {
     </div>
   );
 }
-
-

@@ -81,13 +81,15 @@ async def startup_check() -> None:
     """
     missing = [
         name
-        for name, val in {"OLLAMA_URL": OLLAMA_URL, "OLLAMA_MODEL": OLLAMA_MODEL}.items()
+        for name, val in {
+            "OLLAMA_URL": OLLAMA_URL,
+            "OLLAMA_MODEL": OLLAMA_MODEL,
+        }.items()
         if not val
     ]
     if missing:
         logger.debug(
-            "OLLAMA startup skipped – missing env vars: %s",
-            ", ".join(missing)
+            "OLLAMA startup skipped – missing env vars: %s", ", ".join(missing)
         )
         return
 
@@ -151,9 +153,11 @@ async def ask_llama(
         if now - llama_last_failure_ts > 120:
             _reset_failures()
         else:
+
             async def _open() -> AsyncIterator[str]:
                 raise RuntimeError("llama_circuit_open")
                 yield  # noqa: unreachable
+
             return _open()
 
     # -- Streaming generator ----------------------------------------------
@@ -192,10 +196,15 @@ async def ask_llama(
                                     token = data.get("response")
                                     if token:
                                         yield token
-                                    if data.get("prompt_eval_count") is not None and prompt_tokens == 0:
+                                    if (
+                                        data.get("prompt_eval_count") is not None
+                                        and prompt_tokens == 0
+                                    ):
                                         prompt_tokens = data.get("prompt_eval_count", 0)
                                     if data.get("eval_count") is not None:
-                                        completion_tokens = data.get("eval_count", completion_tokens)
+                                        completion_tokens = data.get(
+                                            "eval_count", completion_tokens
+                                        )
                                     if data.get("done"):
                                         break
                     # on success
@@ -207,7 +216,7 @@ async def ask_llama(
                     _record_failure()
                     logger.warning(
                         "Ollama request failed",
-                        extra={"meta": {"req_id": req_id_var.get(), "error": str(e)}}
+                        extra={"meta": {"req_id": req_id_var.get(), "error": str(e)}},
                     )
                     raise
 

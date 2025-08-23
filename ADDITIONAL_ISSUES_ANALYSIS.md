@@ -75,7 +75,7 @@
    ```bash
    # Option 1: Kill existing process
    kill 55265
-   
+
    # Option 2: Use different port
    cd frontend && npm run dev -- -p 3001
    ```

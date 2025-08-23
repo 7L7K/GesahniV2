@@ -24,4 +24,3 @@ Notes:
   to retrieve a server-generated auth URL and relies on short-lived CSRF cookies.
 - `NEXT_PUBLIC_*` variables are injected at build time and are accessible to browser code.
   Never place secrets (client secret, tokens) in `NEXT_PUBLIC_*`.
-

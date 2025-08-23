@@ -23,43 +23,63 @@ _METRICS = {
     "requests_by_user": {},
     "requests_by_scope": {},
     "rate_limited_by_user": {},
-    "rate_limited_by_scope": {}
+    "rate_limited_by_scope": {},
 }
+
+
 # These will be read dynamically in the middleware to support test configuration
 def _get_window_s():
     return int(os.getenv("RATE_LIMIT_WINDOW_S", "60"))
 
+
 def _get_max_req():
     return int(os.getenv("RATE_LIMIT_PER_MIN", "60"))
 
+
 def _get_bypass_scopes():
-    return set((os.getenv("RATE_LIMIT_BYPASS_SCOPES") or "").split(",")) if os.getenv("RATE_LIMIT_BYPASS_SCOPES") else set()
+    return (
+        set((os.getenv("RATE_LIMIT_BYPASS_SCOPES") or "").split(","))
+        if os.getenv("RATE_LIMIT_BYPASS_SCOPES")
+        else set()
+    )
+
 
 def _key(client_ip: str, path: str, user_id: str | None) -> str:
     raw = f"{client_ip}|{path}|{user_id or 'anon'}"
     return hashlib.sha256(raw.encode()).hexdigest()
+
 
 def _record_request_metrics(user_id: str | None, scopes):
     """Record metrics for a request."""
     _METRICS["requests_total"] += 1
 
     if user_id:
-        _METRICS["requests_by_user"][user_id] = _METRICS["requests_by_user"].get(user_id, 0) + 1
+        _METRICS["requests_by_user"][user_id] = (
+            _METRICS["requests_by_user"].get(user_id, 0) + 1
+        )
 
     if scopes:
         for scope in scopes:
-            _METRICS["requests_by_scope"][scope] = _METRICS["requests_by_scope"].get(scope, 0) + 1
+            _METRICS["requests_by_scope"][scope] = (
+                _METRICS["requests_by_scope"].get(scope, 0) + 1
+            )
+
 
 def _record_rate_limit_metrics(user_id: str | None, scopes):
     """Record metrics for a rate limited request."""
     _METRICS["rate_limited_total"] += 1
 
     if user_id:
-        _METRICS["rate_limited_by_user"][user_id] = _METRICS["rate_limited_by_user"].get(user_id, 0) + 1
+        _METRICS["rate_limited_by_user"][user_id] = (
+            _METRICS["rate_limited_by_user"].get(user_id, 0) + 1
+        )
 
     if scopes:
         for scope in scopes:
-            _METRICS["rate_limited_by_scope"][scope] = _METRICS["rate_limited_by_scope"].get(scope, 0) + 1
+            _METRICS["rate_limited_by_scope"][scope] = (
+                _METRICS["rate_limited_by_scope"].get(scope, 0) + 1
+            )
+
 
 def get_metrics():
     """Get current metrics for /metrics endpoint."""
@@ -67,7 +87,11 @@ def get_metrics():
 
 
 # Test helpers for dynamic configuration
-def _test_set_config(max_req: int | None = None, window_s: int | None = None, bypass_scopes: str | None = None):
+def _test_set_config(
+    max_req: int | None = None,
+    window_s: int | None = None,
+    bypass_scopes: str | None = None,
+):
     """Test helper to dynamically set rate limit configuration."""
     if max_req is not None:
         os.environ["RATE_LIMIT_PER_MIN"] = str(max_req)
@@ -76,16 +100,19 @@ def _test_set_config(max_req: int | None = None, window_s: int | None = None, by
     if bypass_scopes is not None:
         os.environ["RATE_LIMIT_BYPASS_SCOPES"] = bypass_scopes
 
+
 def _test_reset_config():
     """Test helper to reset rate limit configuration to defaults."""
     os.environ.pop("RATE_LIMIT_PER_MIN", None)
     os.environ.pop("RATE_LIMIT_WINDOW_S", None)
     os.environ.pop("RATE_LIMIT_BYPASS_SCOPES", None)
 
+
 def _test_clear_buckets():
     """Test helper to clear all rate limit buckets."""
     global _BUCKET
     _BUCKET.clear()
+
 
 def _test_clear_metrics():
     """Test helper to clear all rate limit metrics."""
@@ -96,8 +123,9 @@ def _test_clear_metrics():
         "requests_by_user": {},
         "requests_by_scope": {},
         "rate_limited_by_user": {},
-        "rate_limited_by_scope": {}
+        "rate_limited_by_scope": {},
     }
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp):
@@ -117,8 +145,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Debug: track that middleware is being called
         _METRICS["requests_total"] += 1
-
-
 
         # Get configuration dynamically to support test overrides
         window_s = _get_window_s()
@@ -157,6 +183,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 route_name = getattr(request.scope.get("endpoint"), "__name__", None)
                 metric_label = route_name if route_name else p
                 RATE_LIMITED.labels(route=metric_label).inc()
-            return PlainTextResponse("rate_limited", status_code=429, headers={"Retry-After": str(window_s)})
+            return PlainTextResponse(
+                "rate_limited", status_code=429, headers={"Retry-After": str(window_s)}
+            )
 
         return await call_next(request)

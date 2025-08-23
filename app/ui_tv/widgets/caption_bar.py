@@ -1,4 +1,4 @@
-"""Caption bar scaffold: "You said: …""" 
+"""Caption bar scaffold: "You said: …"""
 
 from dataclasses import dataclass
 
@@ -7,5 +7,3 @@ from dataclasses import dataclass
 class CaptionBarModel:
     transcript: str | None
     is_visible: bool = True
-
-

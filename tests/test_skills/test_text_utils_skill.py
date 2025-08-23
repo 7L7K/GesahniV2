@@ -21,5 +21,3 @@ def test_word_count():
     m = s.match(q)
     out = asyncio.run(s.run(q, m))
     assert out == "3"
-
-

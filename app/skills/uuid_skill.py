@@ -17,5 +17,3 @@ class UUIDSkill(Skill):
             return str(uuid.uuid5(uuid.NAMESPACE_URL, str(uuid.uuid4())))
         # default v4
         return str(uuid.uuid4())
-
-

@@ -35,5 +35,3 @@ def verify_signature(body: bytes, signature: str, max_age: int = 300) -> bool:
 
 
 __all__ = ["sign_payload", "verify_signature"]
-
-

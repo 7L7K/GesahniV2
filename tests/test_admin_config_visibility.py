@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 def test_admin_config_guard_and_shape():
     os.environ["ADMIN_TOKEN"] = "t"
     from app.api.admin import router as admin_router
+
     app = FastAPI()
     app.include_router(admin_router, prefix="/v1")
     client = TestClient(app)
@@ -21,6 +22,7 @@ def test_admin_config_guard_and_shape():
 
 def test_admin_config_flags_reflected(monkeypatch):
     from app.main import app
+
     # Tests force in-memory vector store; we only verify that /admin/config reflects the env overrides
     monkeypatch.setenv("VECTOR_STORE", "qdrant")
     monkeypatch.setenv("QDRANT_COLLECTION", "kb:test")
@@ -49,5 +51,3 @@ def test_admin_config_flags_reflected(monkeypatch):
     assert cfg["rerank"]["cascade"] is True and cfg["rerank"]["hosted"] == "voyage"
     assert cfg["memgpt"]["write_quota_per_session"] == 42
     assert "hyde" in cfg["obs"]["ablation_flags"]
-
-

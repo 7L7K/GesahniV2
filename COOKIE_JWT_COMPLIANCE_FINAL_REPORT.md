@@ -8,7 +8,7 @@
 
 ### Cookie Usage Compliance ✅
 - **No unauthorized `set_cookie()` calls** found outside allowed files
-- **No unauthorized `Set-Cookie` header manipulation** found outside allowed files  
+- **No unauthorized `Set-Cookie` header manipulation** found outside allowed files
 - **All cookie operations go through centralized facade** in `app/cookies.py`
 - **Proper usage of `set_auth_cookies()`** in authentication flows
 
@@ -72,7 +72,7 @@ The codebase has successfully implemented cookie centralization through:
 
 1. **`app/cookies.py`** - Comprehensive centralized facade providing:
    - `set_auth_cookies()` - Authentication token cookies
-   - `set_oauth_state_cookies()` - OAuth state cookies  
+   - `set_oauth_state_cookies()` - OAuth state cookies
    - `set_device_cookie()` - Device trust cookies
    - `set_csrf_cookie()` - CSRF protection cookies
    - `set_named_cookie()` - Generic cookies
@@ -102,7 +102,7 @@ The codebase has successfully implemented token centralization through:
 The `test_cookie_jwt_compliance.py` script provides automated verification:
 
 1. **Cookie Usage Compliance** ✅ - No unauthorized `set_cookie()` calls
-2. **JWT Usage Compliance** ✅ - No unauthorized `jwt.encode()` calls  
+2. **JWT Usage Compliance** ✅ - No unauthorized `jwt.encode()` calls
 3. **App Token Minting Compliance** ✅ - All app tokens go through tokens.py
 4. **IdP Token Signing Compliance** ✅ - IdP tokens only in allowed locations
 5. **Centralized Usage Compliance** ✅ - Use of centralized facades verified

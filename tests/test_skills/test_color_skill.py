@@ -21,5 +21,3 @@ def test_color_rgb_to_hex():
     m = s.match(q)
     out = asyncio.run(s.run(q, m))
     assert out == "#FF8800"
-
-

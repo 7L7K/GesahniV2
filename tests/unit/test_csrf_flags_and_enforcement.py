@@ -26,13 +26,16 @@ def test_csrf_cookie_flags_respect_env():
         assert "SameSite=Lax" in sc or "SameSite=lax" in sc
 
     # Test cross-site production configuration
-    with patch.dict(os.environ, {"COOKIE_SAMESITE": "none", "COOKIE_SECURE": "1", "DEV_MODE": "0"}):
+    with patch.dict(
+        os.environ, {"COOKIE_SAMESITE": "none", "COOKIE_SECURE": "1", "DEV_MODE": "0"}
+    ):
         # Import and patch the configuration functions directly
         # Reload the modules to pick up new environment variables
         from importlib import reload
 
         import app.cookie_config as cookie_cfg
         import app.cookies as cookies_mod
+
         reload(cookie_cfg)
         reload(cookies_mod)
 
@@ -41,5 +44,3 @@ def test_csrf_cookie_flags_respect_env():
             sc = r.headers.get("set-cookie", "")
             assert "SameSite=None" in sc
             assert "Secure" in sc
-
-

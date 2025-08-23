@@ -1,5 +1,3 @@
-
-
 def test_dual_read_fallbacks_to_chroma_when_primary_empty(monkeypatch, tmp_path):
     # Configure dual; make chroma available
     monkeypatch.setenv("VECTOR_STORE", "dual")
@@ -51,5 +49,3 @@ def test_dual_read_fallbacks_to_chroma_when_primary_empty(monkeypatch, tmp_path)
 
     res = dual.query_user_memories("u", "hello")
     assert res == ["hello world"]
-
-

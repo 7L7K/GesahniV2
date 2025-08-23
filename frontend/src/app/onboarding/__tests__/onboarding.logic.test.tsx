@@ -137,5 +137,3 @@ describe('OnboardingFlow logic', () => {
     expect(onComplete).toHaveBeenCalled()
   })
 })
-
-

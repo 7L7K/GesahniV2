@@ -8,5 +8,3 @@ describe('RecorderProvider', () => {
     render(<RecorderProvider><div>child</div></RecorderProvider>)
   })
 })
-
-

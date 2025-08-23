@@ -15,5 +15,3 @@ export function AlertLayer() {
     if (!active && scene.scene !== "alert") return null;
     return <AlertPanel />;
 }
-
-

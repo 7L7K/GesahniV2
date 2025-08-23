@@ -21,5 +21,3 @@ describe('Capture recorder controls', () => {
     fireEvent.click(reset)
   })
 })
-
-

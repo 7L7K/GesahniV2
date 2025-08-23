@@ -52,5 +52,3 @@ def clamp_prompt(prompt: str, intent: str | None) -> str:
 
 
 __all__ = ["clamp_prompt", "_table"]
-
-

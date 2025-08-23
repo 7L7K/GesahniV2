@@ -38,8 +38,12 @@ def test_preflight_no_rate_limit_headers():
         r = _preflight(client, p)
         assert r.status_code == 200  # FastAPI CORS middleware returns 200, not 204
         # Check that no rate limit headers are present
-        rate_limit_headers = [k for k in r.headers.keys() if k.lower().startswith("ratelimit-")]
-        assert len(rate_limit_headers) == 0, f"Rate limit headers found: {rate_limit_headers}"
+        rate_limit_headers = [
+            k for k in r.headers.keys() if k.lower().startswith("ratelimit-")
+        ]
+        assert (
+            len(rate_limit_headers) == 0
+        ), f"Rate limit headers found: {rate_limit_headers}"
 
 
 def test_preflight_no_auth_headers():
@@ -49,7 +53,11 @@ def test_preflight_no_auth_headers():
         r = _preflight(client, p)
         assert r.status_code == 200  # FastAPI CORS middleware returns 200, not 204
         # Check that no auth-related headers are present
-        auth_headers = [k for k in r.headers.keys() if k.lower() in ["www-authenticate", "authorization"]]
+        auth_headers = [
+            k
+            for k in r.headers.keys()
+            if k.lower() in ["www-authenticate", "authorization"]
+        ]
         assert len(auth_headers) == 0, f"Auth headers found: {auth_headers}"
 
 
@@ -60,20 +68,20 @@ def test_preflight_cors_headers_present():
         r = _preflight(client, p)
         assert r.status_code == 200  # FastAPI CORS middleware returns 200, not 204
         h = {k.lower(): v for k, v in r.headers.items()}
-        
+
         # Required CORS headers
         required_headers = [
             "access-control-allow-origin",
-            "access-control-allow-credentials", 
+            "access-control-allow-credentials",
             "access-control-allow-headers",
             "access-control-allow-methods",
             "access-control-max-age",
-            "vary"
+            "vary",
         ]
-        
+
         for header in required_headers:
             assert header in h, f"Missing required CORS header: {header}"
-        
+
         # Check specific values
         assert h["access-control-allow-origin"] == "http://localhost:3000"
         assert h["access-control-allow-credentials"] == "true"

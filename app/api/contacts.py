@@ -1,5 +1,3 @@
- 
-
 import uuid
 from typing import Any
 
@@ -10,7 +8,9 @@ from app.deps.scopes import docs_security_with
 
 from ..care_store import create_contact, delete_contact, list_contacts, update_contact
 
-router = APIRouter(tags=["Care"], dependencies=[Depends(docs_security_with(["care:resident"]))])
+router = APIRouter(
+    tags=["Care"], dependencies=[Depends(docs_security_with(["care:resident"]))]
+)
 
 
 class ContactBody(BaseModel):
@@ -40,16 +40,12 @@ class ContactCreateResponse(BaseModel):
     status: str = "ok"
 
     model_config = ConfigDict(
-        json_schema_extra={
-            "example": {"id": "c_01HXYZABCD", "status": "ok"}
-        }
+        json_schema_extra={"example": {"id": "c_01HXYZABCD", "status": "ok"}}
     )
 
 
 @router.post(
     "/care/contacts",
-    
-    
     response_model=ContactCreateResponse,
     responses={200: {"model": ContactCreateResponse}},
     openapi_extra={
@@ -62,7 +58,7 @@ class ContactCreateResponse(BaseModel):
                             "name": "Leola",
                             "phone": "+15551234567",
                             "priority": 10,
-                            "quiet_hours": {"start": "22:00", "end": "06:00"}
+                            "quiet_hours": {"start": "22:00", "end": "06:00"},
                         }
                     }
                 }
@@ -88,7 +84,11 @@ class ContactUpdateResponse(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"status": "ok"}})
 
 
-@router.patch("/care/contacts/{contact_id}", response_model=ContactUpdateResponse, responses={200: {"model": ContactUpdateResponse}})
+@router.patch(
+    "/care/contacts/{contact_id}",
+    response_model=ContactUpdateResponse,
+    responses={200: {"model": ContactUpdateResponse}},
+)
 async def update_contact_api(contact_id: str, body: dict):
     if not body:
         raise HTTPException(status_code=400, detail="empty_update")
@@ -96,10 +96,15 @@ async def update_contact_api(contact_id: str, body: dict):
     return {"status": "ok"}
 
 
-@router.delete("/care/contacts/{contact_id}", response_model=ContactUpdateResponse, responses={200: {"model": ContactUpdateResponse}})
+@router.delete(
+    "/care/contacts/{contact_id}",
+    response_model=ContactUpdateResponse,
+    responses={200: {"model": ContactUpdateResponse}},
+)
 async def delete_contact_api(contact_id: str):
     await delete_contact(contact_id)
     return {"status": "ok"}
+
 
 ## NOTE: keep future import only at the very top once; consolidated below
 
@@ -111,7 +116,9 @@ from fastapi import APIRouter, Depends
 
 from app.deps.user import get_current_user_id
 
-tv_router = APIRouter(tags=["TV"], dependencies=[Depends(docs_security_with(["care:resident"]))])
+tv_router = APIRouter(
+    tags=["TV"], dependencies=[Depends(docs_security_with(["care:resident"]))]
+)
 
 
 CONTACTS_FILE = Path(os.getenv("CONTACTS_FILE", "data/contacts.json"))
@@ -132,8 +139,16 @@ async def list_tv_contacts(user_id: str = Depends(get_current_user_id)):
     return {"items": _read_contacts()}
 
 
-@tv_router.post("/tv/contacts/call", response_model=ContactUpdateResponse, responses={200: {"model": ContactUpdateResponse}})
-async def start_call(body: dict | None = None, name: str | None = None, user_id: str = Depends(get_current_user_id)):
+@tv_router.post(
+    "/tv/contacts/call",
+    response_model=ContactUpdateResponse,
+    responses={200: {"model": ContactUpdateResponse}},
+)
+async def start_call(
+    body: dict | None = None,
+    name: str | None = None,
+    user_id: str = Depends(get_current_user_id),
+):
     # Prefer JSON body { name }, fall back to query param for backward compat
     if body and isinstance(body, dict) and not name:
         name = str(body.get("name") or "")
@@ -154,10 +169,13 @@ async def start_call(body: dict | None = None, name: str | None = None, user_id:
             alerts = json.loads(alerts_path.read_text(encoding="utf-8") or "[]")
         alerts.append({"type": "call_request", "name": name})
         alerts_path.parent.mkdir(parents=True, exist_ok=True)
-        alerts_path.write_text(json.dumps(alerts, ensure_ascii=False, indent=2), encoding="utf-8")
+        alerts_path.write_text(
+            json.dumps(alerts, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
     except Exception:
         pass
     return {"status": "alerted", "message": "Pick up your phone, I’ll dial for you"}
+
 
 # Merge TV endpoints into the care router so main.py includes everything under one router
 try:
@@ -165,5 +183,3 @@ try:
 except NameError:
     router = APIRouter(tags=["Care"])  # fallback, but should not happen
 router.include_router(tv_router)
-
-
