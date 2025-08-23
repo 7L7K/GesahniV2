@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import uuid
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from fastapi import HTTPException, WebSocket
 
@@ -234,7 +234,7 @@ class TranscriptionStream:
             except Exception:
                 final_text = last_text or ""
             await self.ws.send_json({"event": "stt.final", "text": final_text, "session_id": self.session_id})
-        except Exception as e:  # pragma: no cover - best effort
+        except Exception:  # pragma: no cover - best effort
             await self.ws.send_json({"error": "listening_network_shaky"})
         finally:
             await session.stop()

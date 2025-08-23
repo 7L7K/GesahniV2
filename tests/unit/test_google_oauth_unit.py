@@ -2,16 +2,16 @@
 Unit tests for Google OAuth login URL endpoint.
 """
 
+import hashlib
+import hmac
 import os
 import time
-import hmac
-import hashlib
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.google_oauth import router, _generate_signed_state
+from app.api.google_oauth import _generate_signed_state, router
 
 
 @pytest.fixture
@@ -114,7 +114,7 @@ class TestGoogleOAuthLoginUrl:
             # Verify signature
             message = f"{timestamp}:{random_token}".encode()
             expected_sig = hmac.new(
-                "test-secret-key".encode(),
+                b"test-secret-key",
                 message,
                 hashlib.sha256
             ).hexdigest()[:12]  # Match the reduced signature length

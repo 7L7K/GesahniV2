@@ -1,6 +1,6 @@
 import importlib
-import pkgutil
 import pathlib
+import pkgutil
 
 
 def test_import_all_modules():

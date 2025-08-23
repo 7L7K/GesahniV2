@@ -1,4 +1,5 @@
 import os
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -6,7 +7,7 @@ from fastapi.testclient import TestClient
 def test_healthz_degrades_when_deps_missing(monkeypatch):
     os.environ["OLLAMA_URL"] = "http://x"
     os.environ["OLLAMA_MODEL"] = "llama3"
-    from app import status, llama_integration
+    from app import status
 
     async def bad_status():
         raise RuntimeError("down")

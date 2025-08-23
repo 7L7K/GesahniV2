@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import re
-from typing import Iterable
+from collections.abc import Iterable
 
 from dateutil import parser as dateparser
 
 from app.adapters.memory import mem
-
 
 _SENT_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 

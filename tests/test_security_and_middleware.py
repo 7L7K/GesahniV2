@@ -1,8 +1,6 @@
-import os
 from pathlib import Path
 
-import jwt
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 
@@ -55,6 +53,7 @@ def test_rate_limit_long_and_burst(monkeypatch):
 def test_response_has_security_headers(monkeypatch):
     # Build a minimal app that includes the tracing middleware which sets headers
     from fastapi import FastAPI
+
     from app.middleware import trace_request
 
     app = FastAPI()
@@ -96,7 +95,8 @@ def test_webhook_signing_and_rotation(monkeypatch, tmp_path: Path):
     # write an initial secret
     s1 = rotate()
     body = b"{}"
-    import hmac, hashlib
+    import hashlib
+    import hmac
 
     sig = hmac.new(s1.encode(), body, hashlib.sha256).hexdigest()
     r = client.post("/ha/webhook", data=body, headers={"X-Signature": sig})

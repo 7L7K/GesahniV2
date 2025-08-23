@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterable
 from functools import lru_cache
-from typing import Any, Dict, Iterable, Tuple, Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
 from rapidfuzz import fuzz
 
@@ -47,7 +48,7 @@ DEFAULT_THRESHOLD: float = float(os.getenv("INTENT_THRESHOLD", "0.7"))
 # ---------------------------------------------------------------------------
 MODEL_NAME = os.getenv("SBERT_MODEL", "sentence-transformers/paraphrase-MiniLM-L3-v2")
 
-EXAMPLE_INTENTS: Dict[str, list[str]] = {
+EXAMPLE_INTENTS: dict[str, list[str]] = {
     "chat": [
         "tell me a joke",
         "what's the weather like?",
@@ -75,10 +76,12 @@ EXAMPLE_INTENTS: Dict[str, list[str]] = {
 
 
 @lru_cache(maxsize=1)
-def _get_model() -> tuple["SentenceTransformer", Dict[str, Any]]:
+def _get_model() -> tuple[SentenceTransformer, dict[str, Any]]:
     """Return the SBERT model and prototype embeddings."""
     try:
-        from sentence_transformers import SentenceTransformer as _SentenceTransformer  # type: ignore
+        from sentence_transformers import (
+            SentenceTransformer as _SentenceTransformer,  # type: ignore
+        )
     except Exception:
         raise RuntimeError("sentence-transformers not installed")
 
@@ -91,7 +94,7 @@ def _get_model() -> tuple["SentenceTransformer", Dict[str, Any]]:
     return model, embeds
 
 
-def _semantic_classify(text: str) -> Tuple[str, float, bool]:
+def _semantic_classify(text: str) -> tuple[str, float, bool]:
     """Return ``(intent, score, exact)`` using a semantic model or fuzzy matching."""
     try:
         from sentence_transformers import util as _util  # type: ignore

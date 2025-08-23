@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
+
 from app.deps.user import get_current_user_id
 
 try:
@@ -9,7 +10,6 @@ except Exception:
     _safe_query = None  # type: ignore
 
 from app.deps.scopes import docs_security_with
-
 
 router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
 

@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps.user import get_current_user_id
 from ..sessions_store import sessions_store
 
-
 router = APIRouter(tags=["auth"], include_in_schema=False)
 
 
 @router.get("/sessions")
-async def list_sessions(user_id: str = Depends(get_current_user_id)) -> Dict[str, List[Dict[str, Any]]]:
+async def list_sessions(user_id: str = Depends(get_current_user_id)) -> dict[str, list[dict[str, Any]]]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     out = await sessions_store.list_user_sessions(user_id)
@@ -20,7 +19,7 @@ async def list_sessions(user_id: str = Depends(get_current_user_id)) -> Dict[str
 
 
 @router.post("/sessions/{sid}/revoke")
-async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) -> Dict[str, str]:
+async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) -> dict[str, str]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     await sessions_store.revoke_family(sid)
@@ -28,7 +27,7 @@ async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) 
 
 
 @router.post("/devices/{did}/rename")
-async def rename_device(did: str, new_name: str, user_id: str = Depends(get_current_user_id)) -> Dict[str, str]:
+async def rename_device(did: str, new_name: str, user_id: str = Depends(get_current_user_id)) -> dict[str, str]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     ok = await sessions_store.rename_device(user_id, did, new_name)
@@ -43,22 +42,26 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, WebSocket, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Request, UploadFile, WebSocket
 
 from app.deps.user import get_current_user_id
 from app.session_manager import (
     SESSIONS_DIR,
-    generate_tags as queue_tag_extraction,
-    save_session as finalize_capture_session,
-    search_sessions as search_session_store,
-    start_session as start_capture_session,
     get_session_meta,
 )
-from app.session_store import SessionStatus, list_sessions as list_session_store
+from app.session_manager import (
+    generate_tags as queue_tag_extraction,
+)
+from app.session_manager import (
+    save_session as finalize_capture_session,
+)
+from app.session_manager import (
+    start_session as start_capture_session,
+)
+from app.session_store import SessionStatus
+from app.session_store import list_sessions as list_session_store
 from app.tasks import enqueue_summary, enqueue_transcription
-from app.transcription import TranscriptionStream
-from app.transcription import transcribe_file
-
+from app.transcription import TranscriptionStream, transcribe_file
 
 logger = logging.getLogger(__name__)
 

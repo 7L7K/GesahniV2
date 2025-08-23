@@ -1,6 +1,8 @@
 import os
+
 import pytest
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 
@@ -24,14 +26,13 @@ def client(monkeypatch):
 # Drop this at project root; pytest auto-discovers it.
 
 import math
-import os
-import sys
 import shutil
+import sys
 import tempfile
 import types
-import inspect
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import pytest
 
@@ -55,7 +56,7 @@ os.environ["ALLOWED_GPT_MODELS"] = "gpt-4o,gpt-4,gpt-3.5-turbo"
 # 🧪  ChromaDB full stub (in-mem cosine search)
 # ──────────────────────────────────────────────────────────────────────────────
 def _cosine_similarity(a: Iterable[float], b: Iterable[float]) -> float:
-    num = sum(x * y for x, y in zip(a, b))
+    num = sum(x * y for x, y in zip(a, b, strict=False))
     denom = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
     return num / denom if denom else 0.0
 
@@ -101,7 +102,7 @@ class _CollectionStub:
                     continue
                 if self._space == "l2":
                     dist = math.sqrt(
-                        sum((x - y) ** 2 for x, y in zip(q_emb, rec["embedding"]))
+                        sum((x - y) ** 2 for x, y in zip(q_emb, rec["embedding"], strict=False))
                     )
                 else:
                     dist = 1.0 - _cosine_similarity(q_emb, rec["embedding"])
@@ -199,8 +200,8 @@ def _isolate_debug_and_flags(monkeypatch):
     monkeypatch.setenv("VECTOR_STORE", "memory")
 
     # Reset LLaMA/GPT health and circuit flags
-    import app.router as router
     import app.model_picker as model_picker
+    import app.router as router
 
     router.llama_circuit_open = False
     router.LLAMA_HEALTHY = True

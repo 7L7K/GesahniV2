@@ -1,38 +1,39 @@
 """Built‑in skill registry for Gesahni."""
 
 from . import base as _base
-from .smalltalk_skill import SmalltalkSkill
-from .clock_skill import ClockSkill
-from .world_clock_skill import WorldClockSkill
-from .weather_skill import WeatherSkill
-from .forecast_skill import ForecastSkill
-from .reminder_skill import ReminderSkill
-from .timer_skill import TimerSkill
-from .math_skill import MathSkill
-from .unit_conversion_skill import UnitConversionSkill
-from .currency_skill import CurrencySkill
 from .calendar_skill import CalendarSkill
-from .teach_skill import TeachSkill  # “my bedroom is Hija room”
+from .climate_skill import ClimateSkill
+from .clock_skill import ClockSkill
+from .cover_skill import CoverSkill
+from .currency_skill import CurrencySkill
+from .dictionary_skill import DictionarySkill
+from .door_lock_skill import DoorLockSkill
 from .entities_skill import EntitiesSkill  # “list all lights”
+from .fan_skill import FanSkill
+from .forecast_skill import ForecastSkill
+from .joke_skill import JokeSkill
+from .lights_skill import LightsSkill
+from .math_skill import MathSkill
+from .music_skill import MusicSkill
+from .news_skill import NewsSkill
+from .notes_skill import NotesSkill
+from .notify_skill import NotifySkill
+from .recipe_skill import RecipeSkill
+from .reminder_skill import ReminderSkill
+from .roku_skill import RokuSkill
 from .scene_skill import SceneSkill
 from .script_skill import ScriptSkill
-from .cover_skill import CoverSkill
-from .fan_skill import FanSkill
-from .notify_skill import NotifySkill
 from .search_skill import SearchSkill
-from .translate_skill import TranslateSkill
-from .news_skill import NewsSkill
-from .joke_skill import JokeSkill
-from .dictionary_skill import DictionarySkill
-from .recipe_skill import RecipeSkill
-from .lights_skill import LightsSkill
-from .door_lock_skill import DoorLockSkill
-from .music_skill import MusicSkill
-from .roku_skill import RokuSkill
-from .climate_skill import ClimateSkill
-from .vacuum_skill import VacuumSkill
-from .notes_skill import NotesSkill
+from .smalltalk_skill import SmalltalkSkill
 from .status_skill import StatusSkill
+from .teach_skill import TeachSkill  # “my bedroom is Hija room”
+from .timer_skill import TimerSkill
+from .translate_skill import TranslateSkill
+from .unit_conversion_skill import UnitConversionSkill
+from .vacuum_skill import VacuumSkill
+from .weather_skill import WeatherSkill
+from .world_clock_skill import WorldClockSkill
+
 try:
     from .explain_route_skill import ExplainRouteSkill  # type: ignore
 except Exception:
@@ -97,6 +98,7 @@ SKILL_CLASSES: list[type] = [
 
 # Optionally include extra skills behind env flag to preserve stable ordering in tests
 import os as _os
+
 if _os.getenv("ENABLE_EXTRA_SKILLS", "0").lower() in {"1", "true", "yes"}:
     try:
         from .shopping_list_skill import ShoppingListSkill as _ShoppingListSkill

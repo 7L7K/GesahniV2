@@ -1,0 +1,242 @@
+# Prometheus Alerting Rules for Gesahni SLOs
+# Based on docs/operability.md SLO definitions
+# Install in your Prometheus configuration under 'rule_files'
+
+groups:
+  - name: gesahni_slo_alerts
+    rules:
+
+      # Critical Alerts - Immediate Action Required
+
+      - alert: Gesahni5xxErrorSpike
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          / sum(rate(http_requests_total[5m])) > 0.005
+        for: 5m
+        labels:
+          severity: critical
+          service: gesahni
+        annotations:
+          summary: "5xx error rate > 0.5% (5x SLO target)"
+          description: |
+            5xx error rate is {{ printf "%.2f" $value }}% over last 5 minutes.
+            SLO target is 0.1%. This exceeds the critical threshold.
+          runbook_url: "https://docs.gesahni.com/runbooks/5xx-spike"
+          dashboard_url: "https://grafana.gesahni.com/d/slo-dashboard"
+
+      - alert: GesahniCriticalReadLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_latency_seconds_bucket{method="GET"}[5m])) by (le)) > 1.0
+        for: 5m
+        labels:
+          severity: critical
+          service: gesahni
+        annotations:
+          summary: "Read latency P95 > 1s (4x SLO target)"
+          description: |
+            P95 read latency is {{ printf "%.2f" $value }}s over last 5 minutes.
+            SLO target is 250ms. This exceeds the critical threshold.
+          runbook_url: "https://docs.gesahni.com/runbooks/high-latency"
+          dashboard_url: "https://grafana.gesahni.com/d/latency-dashboard"
+
+      - alert: GesahniCriticalWriteLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_latency_seconds_bucket{method=~"POST|PUT|PATCH|DELETE"}[5m])) by (le)) > 2.0
+        for: 5m
+        labels:
+          severity: critical
+          service: gesahni
+        annotations:
+          summary: "Write latency P95 > 2s (4x SLO target)"
+          description: |
+            P95 write latency is {{ printf "%.2f" $value }}s over last 5 minutes.
+            SLO target is 500ms. This exceeds the critical threshold.
+          runbook_url: "https://docs.gesahni.com/runbooks/high-latency"
+          dashboard_url: "https://grafana.gesahni.com/d/latency-dashboard"
+
+      - alert: GesahniHealthCheckAvailabilityDrop
+        expr: |
+          sum(rate(http_requests_total{route="/healthz", method="GET", status="200"}[1h]))
+          / sum(rate(http_requests_total{route="/healthz", method="GET"}[1h])) < 0.99
+        for: 10m
+        labels:
+          severity: critical
+          service: gesahni
+        annotations:
+          summary: "Health check availability < 99% over 1 hour"
+          description: |
+            Health check success rate is {{ printf "%.2f" $value }}% over last hour.
+            SLO target is 99.9%. System may be experiencing issues.
+          runbook_url: "https://docs.gesahni.com/runbooks/health-check-failure"
+          dashboard_url: "https://grafana.gesahni.com/d/health-dashboard"
+
+      # Warning Alerts - Investigation Required
+
+      - alert: Gesahni4xxErrorRateWarning
+        expr: |
+          sum(rate(http_requests_total{status=~"4..", status!~"401|403"}[5m]))
+          / sum(rate(http_requests_total[5m])) > 0.01
+        for: 15m
+        labels:
+          severity: warning
+          service: gesahni
+        annotations:
+          summary: "4xx error rate > 1% (2x SLO target)"
+          description: |
+            4xx error rate is {{ printf "%.2f" $value }}% over last 5 minutes.
+            SLO target is 0.5%. Investigate client integration issues.
+          runbook_url: "https://docs.gesahni.com/runbooks/4xx-errors"
+          dashboard_url: "https://grafana.gesahni.com/d/error-dashboard"
+
+      - alert: GesahniWriteLatencyWarning
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_latency_seconds_bucket{method=~"POST|PUT|PATCH|DELETE"}[5m])) by (le)) > 1.0
+        for: 10m
+        labels:
+          severity: warning
+          service: gesahni
+        annotations:
+          summary: "Write latency P95 > 1s (2x SLO target)"
+          description: |
+            P95 write latency is {{ printf "%.2f" $value }}s over last 10 minutes.
+            SLO target is 500ms. Consider performance optimization.
+          runbook_url: "https://docs.gesahni.com/runbooks/performance-optimization"
+          dashboard_url: "https://grafana.gesahni.com/d/latency-dashboard"
+
+      - alert: GesahniRateLimitWarning
+        expr: |
+          sum(rate(http_requests_total{status="429"}[5m]))
+          / sum(rate(http_requests_total[5m])) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          service: gesahni
+        annotations:
+          summary: "Rate limit hit rate > 2% (2x SLO target)"
+          description: |
+            Rate limit percentage is {{ printf "%.2f" $value }}% over last 10 minutes.
+            SLO target is 1%. Review rate limit configuration or usage patterns.
+          runbook_url: "https://docs.gesahni.com/runbooks/rate-limiting"
+          dashboard_url: "https://grafana.gesahni.com/d/rate-limit-dashboard"
+
+      # Info Alerts - Monitoring and Trending
+
+      - alert: GesahniReadLatencyDegradation
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_latency_seconds_bucket{method="GET"}[5m])) by (le)) > 0.5
+        for: 30m
+        labels:
+          severity: info
+          service: gesahni
+        annotations:
+          summary: "Read latency P95 > 500ms (approaching SLO limit)"
+          description: |
+            P95 read latency is {{ printf "%.2f" $value }}s over last 30 minutes.
+            SLO target is 250ms. Monitor for continued degradation.
+          runbook_url: "https://docs.gesahni.com/runbooks/performance-monitoring"
+          dashboard_url: "https://grafana.gesahni.com/d/latency-dashboard"
+
+      - alert: GesahniAvailabilityTrend
+        expr: |
+          sum(rate(http_requests_total{route="/healthz", method="GET", status="200"}[24h]))
+          / sum(rate(http_requests_total{route="/healthz", method="GET"}[24h])) < 0.995
+        for: 1h
+        labels:
+          severity: info
+          service: gesahni
+        annotations:
+          summary: "Health check availability trending below 99.5%"
+          description: |
+            24-hour health check success rate is {{ printf "%.2f" $value }}%.
+            SLO target is 99.9%. Monitor trend for potential issues.
+          runbook_url: "https://docs.gesahni.com/runbooks/availability-monitoring"
+          dashboard_url: "https://grafana.gesahni.com/d/availability-dashboard"
+
+  - name: gesahni_error_budget_alerts
+    rules:
+
+      - alert: GesahniErrorBudgetLow
+        expr: |
+          # Calculate daily error budget consumption for 5xx errors
+          # This is a simplified version - in practice you'd calculate based on your SLO
+          sum(increase(http_requests_total{status=~"5.."}[24h]))
+          / (sum(increase(http_requests_total[24h])) * 0.001) > 0.8
+        for: 1h
+        labels:
+          severity: warning
+          service: gesahni
+        annotations:
+          summary: "5xx error budget > 80% consumed"
+          description: |
+            Daily 5xx error budget is {{ printf "%.1f" $value }}% consumed.
+            SLO allows 0.1% 5xx errors. Consider delaying non-critical changes.
+          runbook_url: "https://docs.gesahni.com/runbooks/error-budget"
+          dashboard_url: "https://grafana.gesahni.com/d/error-budget-dashboard"
+
+      - alert: GesahniErrorBudgetExhausted
+        expr: |
+          # Calculate daily error budget consumption for 5xx errors
+          sum(increase(http_requests_total{status=~"5.."}[24h]))
+          / (sum(increase(http_requests_total[24h])) * 0.001) > 1.0
+        for: 5m
+        labels:
+          severity: critical
+          service: gesahni
+        annotations:
+          summary: "5xx error budget exhausted"
+          description: |
+            Daily 5xx error budget is {{ printf "%.1f" $value }}% consumed.
+            SLO allows 0.1% 5xx errors. Stop all deployments and investigate.
+          runbook_url: "https://docs.gesahni.com/runbooks/error-budget-exhausted"
+          dashboard_url: "https://grafana.gesahni.com/d/error-budget-dashboard"
+
+  - name: gesahni_security_alerts
+    rules:
+
+      - alert: GesahniHighAuthFailureRate
+        expr: |
+          sum(rate(auth_fail_total[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: gesahni
+        annotations:
+          summary: "Authentication failure rate > 5%"
+          description: |
+            Auth failure rate is {{ printf "%.2f" $value }}% over last 10 minutes.
+            Investigate potential security issues or configuration problems.
+          runbook_url: "https://docs.gesahni.com/runbooks/auth-failures"
+          dashboard_url: "https://grafana.gesahni.com/d/security-dashboard"
+
+      - alert: GesahniHighRBACDenialRate
+        expr: |
+          sum(rate(rbac_deny_total[5m])) / sum(rate(http_requests_total[5m])) > 0.02
+        for: 15m
+        labels:
+          severity: info
+          service: gesahni
+        annotations:
+          summary: "RBAC denial rate > 2%"
+          description: |
+            RBAC denial rate is {{ printf "%.2f" $value }}% over last 15 minutes.
+            Review access patterns and scope assignments.
+          runbook_url: "https://docs.gesahni.com/runbooks/rbac-monitoring"
+          dashboard_url: "https://grafana.gesahni.com/d/rbac-dashboard"
+
+  - name: gesahni_performance_alerts
+    rules:
+
+      - alert: GesahniSlowEndpointDetected
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_latency_seconds_bucket[10m])) by (le, route)) > 1.0
+        for: 5m
+        labels:
+          severity: info
+          service: gesahni
+        annotations:
+          summary: "Endpoint P95 latency > 1s detected"
+          description: |
+            Endpoint {{ $labels.route }} has P95 latency of {{ printf "%.2f" $value }}s.
+            Consider performance optimization.
+          runbook_url: "https://docs.gesahni.com/runbooks/endpoint-optimization"
+          dashboard_url: "https://grafana.gesahni.com/d/performance-dashboard"

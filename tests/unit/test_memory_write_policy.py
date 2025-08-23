@@ -1,6 +1,5 @@
 """Tests for memory write policy functionality."""
 
-import pytest
 from app.memory.write_policy import MemoryWritePolicy
 
 

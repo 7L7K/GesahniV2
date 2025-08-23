@@ -3,20 +3,17 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
 from app.memory.profile_store import profile_store
-from app.metrics import REQUEST_LATENCY
-
 
 router = APIRouter(tags=["TV"])  # intentionally no auth deps for device-trusted kiosk
 
 
-def _list_images(dir_path: Path) -> List[str]:
+def _list_images(dir_path: Path) -> list[str]:
     try:
         files = [
             p.name
@@ -28,7 +25,7 @@ def _list_images(dir_path: Path) -> List[str]:
         return []
 
 
-def _estimate_brightness_and_smile(img_path: Path) -> Tuple[float, bool]:
+def _estimate_brightness_and_smile(img_path: Path) -> tuple[float, bool]:
     try:
         from PIL import Image, ImageStat  # type: ignore
         # Brightness via grayscale mean
@@ -46,7 +43,8 @@ def _estimate_brightness_and_smile(img_path: Path) -> Tuple[float, bool]:
 
 def _is_quiet_hours_active() -> bool:
     try:
-        from datetime import datetime, time as dt_time
+        from datetime import datetime
+        from datetime import time as dt_time
 
         q_enabled = os.getenv("QUIET_HOURS", "0").lower() in {"1", "true", "yes", "on"}
         if not q_enabled:
@@ -80,7 +78,7 @@ async def tv_photos(user_id: str = Depends(get_current_user_id)):
     # Photo safety filter during quiet hours: prefer bright/smiling images
     if _is_quiet_hours_active():
         min_brightness = float(os.getenv("PHOTO_MIN_BRIGHTNESS_NIGHT", "60") or 60)
-        safe: List[str] = []
+        safe: list[str] = []
         for name in items:
             b, smile = _estimate_brightness_and_smile(dir_path / name)
             if b >= min_brightness or smile:
@@ -413,7 +411,7 @@ async def tv_photos_favorite(name: str, user_id: str = Depends(get_current_user_
         raise HTTPException(status_code=400, detail="missing_name")
     try:
         _FAV_FILE.parent.mkdir(parents=True, exist_ok=True)
-        data: List[str] = []
+        data: list[str] = []
         if _FAV_FILE.exists():
             try:
                 raw = json.loads(_FAV_FILE.read_text(encoding="utf-8") or "[]")
@@ -571,7 +569,7 @@ async def tv_set_prefs(
 
 
 class Stage2Body(BaseModel):
-    tiles: List[str] | None = None
+    tiles: list[str] | None = None
     rhythm: str | None = None
     helpfulness: str | None = None
 

@@ -1,7 +1,9 @@
 from __future__ import annotations
-from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials
+
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
 
 def _refresh(creds: Credentials) -> Credentials:
     if creds.expired and creds.refresh_token:

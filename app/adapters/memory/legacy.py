@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from app.memory import api as _api
+from app.redaction import redact_pii, store_redaction_map
 
 from ._types import MemoryBackend
-from app.redaction import redact_pii, store_redaction_map
 
 
 class LegacyMemoryBackend(MemoryBackend):

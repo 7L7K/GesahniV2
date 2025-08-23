@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import List
 
 
-def hyde_queries(query: str) -> List[str]:
+def hyde_queries(query: str) -> list[str]:
     return [query, f"In other words: {query}"]
 
 
-def reciprocal_rank_fusion(ranked_lists: List[List[str]], k: int = 60) -> List[str]:
+def reciprocal_rank_fusion(ranked_lists: list[list[str]], k: int = 60) -> list[str]:
     scores: dict[str, float] = {}
     for rl in ranked_lists:
         for rank, doc in enumerate(rl, start=1):
@@ -27,7 +27,7 @@ def time_decay(weight_seconds: float) -> float:
     return max(0.0, min(1.0, 1.0 / (1.0 + age)))
 
 
-def temporal_boost_order(scores: List[float], ages_seconds: List[float], alpha: float = 0.1) -> List[int]:
+def temporal_boost_order(scores: list[float], ages_seconds: list[float], alpha: float = 0.1) -> list[int]:
     """Return indices sorted by score adjusted with a simple temporal decay.
 
     Newer items (smaller age) keep more of their base score; older items are penalized.

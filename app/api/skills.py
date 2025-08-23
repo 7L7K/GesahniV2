@@ -9,7 +9,6 @@ except Exception:
 
 from app.deps.scopes import docs_security_with
 
-
 router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
 
 

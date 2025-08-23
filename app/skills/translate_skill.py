@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import os
 import re
+
 import httpx
 
-from .base import Skill
 from ..telemetry import log_record_var
+from .base import Skill
 
 TRANSLATE_URL = os.getenv("TRANSLATE_URL", "http://localhost:5000")
 

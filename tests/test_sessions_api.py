@@ -1,5 +1,5 @@
-import os
 import json
+import os
 from pathlib import Path
 
 import jwt
@@ -11,13 +11,13 @@ os.environ.setdefault("OLLAMA_MODEL", "llama3")
 os.environ.setdefault("HOME_ASSISTANT_URL", "http://ha")
 os.environ.setdefault("HOME_ASSISTANT_TOKEN", "token")
 
-from app.main import app
-import app.session_manager as sm
-import app.tasks as tasks
-import app.main as main
 import app.history as history
-from app.session_store import SessionStatus
+import app.main as main
+import app.session_manager as sm
 import app.session_store as store
+import app.tasks as tasks
+from app.main import app
+from app.session_store import SessionStatus
 
 
 def setup_temp(monkeypatch, tmp_path: Path):

@@ -1,11 +1,10 @@
 """Test locked contract behavior for auth endpoints."""
 
-import pytest
 import time
-import os
 from unittest.mock import patch
+
+import pytest
 from fastapi.testclient import TestClient
-import jwt
 
 from app.main import app
 
@@ -147,7 +146,6 @@ class TestAuthFinishLockedContract:
         
         with patch.dict("os.environ", {"JWT_SECRET": TEST_JWT_SECRET}):
             # Create token for different user
-            import jwt
             import time
             
             payload = {

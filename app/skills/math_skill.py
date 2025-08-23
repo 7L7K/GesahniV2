@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import re
-from .base import Skill
+
 from ..telemetry import log_record_var
+from .base import Skill
 
 
 class MathSkill(Skill):

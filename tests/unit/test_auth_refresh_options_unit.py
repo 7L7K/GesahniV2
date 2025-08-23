@@ -1,6 +1,5 @@
 """Test that OPTIONS requests to /v1/auth/refresh are handled correctly by CORS middleware."""
 
-import pytest
 from fastapi.testclient import TestClient
 
 

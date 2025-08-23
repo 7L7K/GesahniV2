@@ -8,8 +8,8 @@ This test suite verifies that CORS and CSRF work together correctly with the new
 4. CORS exposes only required headers
 """
 
-import pytest
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 

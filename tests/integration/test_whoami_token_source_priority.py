@@ -1,5 +1,6 @@
-from http import HTTPStatus
 import time
+from http import HTTPStatus
+
 import jwt
 from fastapi.testclient import TestClient
 

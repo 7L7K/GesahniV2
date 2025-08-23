@@ -14,12 +14,12 @@ the import no longer fails when the dependency is missing.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
-from collections.abc import Awaitable, Callable, AsyncIterator
-import asyncio
 from typing import TYPE_CHECKING
 
 try:  # pragma: no cover - exercised indirectly
@@ -34,19 +34,19 @@ except Exception:  # pragma: no cover - import-time guard
 
 
 from .metrics import (
+    MODEL_LATENCY_SECONDS,
     REQUEST_COST,
     REQUEST_COUNT,
     REQUEST_LATENCY,
-    MODEL_LATENCY_SECONDS,
 )
-from .model_params import for_openai
-from .telemetry import log_record_var
-from .otel_utils import start_span
 from .model_config import (
     GPT_BASELINE_MODEL,
-    GPT_MID_MODEL,
     GPT_HEAVY_MODEL,
+    GPT_MID_MODEL,
 )
+from .model_params import for_openai
+from .otel_utils import start_span
+from .telemetry import log_record_var
 
 if TYPE_CHECKING:  # pragma: no cover - only for type checkers
     from openai import AsyncOpenAI

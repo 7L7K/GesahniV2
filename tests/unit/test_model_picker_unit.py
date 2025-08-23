@@ -10,8 +10,7 @@ import pytest
     ],
 )
 def test_pick_model_gpt_paths(monkeypatch, prompt, intent, tokens, expect_engine):
-    from app import model_picker
-    from app import llama_integration
+    from app import llama_integration, model_picker
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)
@@ -21,8 +20,7 @@ def test_pick_model_gpt_paths(monkeypatch, prompt, intent, tokens, expect_engine
 
 
 def test_pick_model_llama_path(monkeypatch):
-    from app import model_picker
-    from app import llama_integration
+    from app import llama_integration, model_picker
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)
@@ -45,8 +43,7 @@ def test_pick_model_llama_path(monkeypatch):
 )
 def test_pick_model_gpt_reasons(monkeypatch, prompt, intent, tokens, expected_reason):
     """Test that GPT paths return correct reasons."""
-    from app import model_picker
-    from app import llama_integration
+    from app import llama_integration, model_picker
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)
@@ -60,8 +57,7 @@ def test_pick_model_gpt_reasons(monkeypatch, prompt, intent, tokens, expected_re
 
 def test_pick_model_llama_unhealthy_fallback(monkeypatch):
     """Test fallback to GPT when llama is unhealthy."""
-    from app import model_picker
-    from app import llama_integration
+    from app import llama_integration, model_picker
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)
@@ -75,8 +71,7 @@ def test_pick_model_llama_unhealthy_fallback(monkeypatch):
 
 def test_pick_model_circuit_breaker_fallback(monkeypatch):
     """Test fallback to GPT when circuit breaker is open."""
-    from app import model_picker
-    from app import llama_integration
+    from app import llama_integration, model_picker
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", True)
@@ -90,8 +85,7 @@ def test_pick_model_circuit_breaker_fallback(monkeypatch):
 
 def test_pick_model_no_llama_model_configured(monkeypatch):
     """Test fallback when no llama model is configured."""
-    from app import model_picker
-    from app import llama_integration
+    from app import llama_integration, model_picker
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)
@@ -107,8 +101,7 @@ def test_pick_model_no_llama_model_configured(monkeypatch):
 
 def test_pick_model_empty_llama_model_configured(monkeypatch):
     """Test fallback when no llama model is configured."""
-    from app import model_picker
-    from app import llama_integration
+    from app import llama_integration, model_picker
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)
@@ -124,8 +117,7 @@ def test_pick_model_empty_llama_model_configured(monkeypatch):
 
 def test_pick_model_environment_ollama_model(monkeypatch):
     """Test that environment OLLAMA_MODEL is used when llama_integration.OLLAMA_MODEL is None."""
-    from app import model_picker
-    from app import llama_integration
+    from app import llama_integration, model_picker
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)
@@ -140,8 +132,7 @@ def test_pick_model_environment_ollama_model(monkeypatch):
 
 def test_pick_model_keyword_detection_case_insensitive(monkeypatch):
     """Test that keyword detection is case insensitive."""
-    from app import model_picker
-    from app import llama_integration
+    from app import llama_integration, model_picker
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)
@@ -164,8 +155,7 @@ def test_pick_model_keyword_detection_case_insensitive(monkeypatch):
 
 def test_pick_model_heavy_intents(monkeypatch):
     """Test that heavy intents trigger GPT selection."""
-    from app import model_picker
-    from app import llama_integration
+    from app import llama_integration, model_picker
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)
@@ -184,8 +174,7 @@ def test_pick_model_heavy_intents(monkeypatch):
 
 def test_pick_model_light_task_default_path(monkeypatch):
     """Test the default light task path when all conditions are met for llama."""
-    from app import model_picker
-    from app import llama_integration
+    from app import llama_integration, model_picker
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)
@@ -202,8 +191,7 @@ def test_pick_model_light_task_default_path(monkeypatch):
 
 def test_pick_model_environment_variables_override(monkeypatch):
     """Test that environment variables properly override defaults."""
-    from app import model_picker
-    from app import llama_integration
+    from app import llama_integration, model_picker
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(llama_integration, "llama_circuit_open", False)

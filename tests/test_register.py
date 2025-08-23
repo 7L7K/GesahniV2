@@ -1,11 +1,10 @@
+import importlib
 import os
 import sqlite3
 import tempfile
-import importlib
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
 
-from app.deps.user import get_current_user_id
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 
 def test_register_and_duplicate():

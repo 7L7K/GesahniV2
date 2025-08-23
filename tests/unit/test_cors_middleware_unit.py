@@ -10,8 +10,8 @@ middleware and that OPTIONS requests are handled correctly according to the rule
    must not add headers on OPTIONS
 """
 
-import pytest
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 

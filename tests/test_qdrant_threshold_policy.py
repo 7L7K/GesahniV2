@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import os
 import pytest
-
-from app.retrieval.utils import RetrievedItem
-from app.retrieval.pipeline import run_pipeline
 
 
 @pytest.fixture(autouse=True)

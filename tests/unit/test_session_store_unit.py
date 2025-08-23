@@ -2,24 +2,24 @@ from __future__ import annotations
 
 import json
 import os
-import time
-import threading
 import tempfile
+import threading
+import time
 from pathlib import Path
 from unittest.mock import Mock, patch
+
 import pytest
-from fastapi import Request
+
 from app.session_store import (
     SessionCookieStore,
+    SessionStatus,
+    append_error,
     create_session,
+    get_session,
+    get_session_store,
+    list_sessions,
     update_session,
     update_status,
-    append_error,
-    get_session,
-    list_sessions,
-    SessionStatus,
-    get_session_store,
-    SESSIONS_DIR
 )
 
 

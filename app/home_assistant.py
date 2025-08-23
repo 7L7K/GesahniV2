@@ -1,19 +1,18 @@
-import os
+import json as json_module
 import logging
+import os
 import re
 import time
-import json as json_module
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Any, List, Optional
+from typing import Any
 
-from .http_utils import json_request, log_exceptions
-from . import analytics as _analytics
 from . import alias_store
-
-from .telemetry import log_record_var
-from .audit import append_audit
+from . import analytics as _analytics
+from .audit import append_audit  # Use the old audit.py directly
+from .http_utils import json_request, log_exceptions
 from .policy import moderation_precheck
+from .telemetry import log_record_var
 
 # ---------------------------------------------------------------------------
 # Environment & Defaults
@@ -323,7 +322,7 @@ async def startup_check() -> None:
 # ---------------------------------------------------------------------------
 # Prompt‑style command parser (very lightweight)
 # ---------------------------------------------------------------------------
-async def resolve_entity(name: str) -> List[str]:
+async def resolve_entity(name: str) -> list[str]:
     """Return entity IDs that match the given name, alias, or its synonyms.
 
     Resolution order:
@@ -366,7 +365,7 @@ async def resolve_entity(name: str) -> List[str]:
                 return [eid]
 
     # 4) Substring fallback
-    matches: List[str] = []
+    matches: list[str] = []
     for st in states:
         eid = st.get("entity_id", "")
         friendly = st.get("attributes", {}).get("friendly_name", "")
@@ -405,7 +404,7 @@ def _best_fuzzy_match(target: str, states: list[dict]) -> tuple[str | None, floa
     return best_id, best_score
 
 
-async def handle_command(prompt: str) -> Optional[CommandResult]:
+async def handle_command(prompt: str) -> CommandResult | None:
     """Parse HA control commands and execute them.
 
     Supports:

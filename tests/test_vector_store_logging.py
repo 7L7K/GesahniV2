@@ -1,9 +1,10 @@
 import logging
 import os
+
 import pytest
 
-from app.memory.memory_store import MemoryVectorStore
 from app.memory.chroma_store import ChromaVectorStore
+from app.memory.memory_store import MemoryVectorStore
 
 
 def test_memory_store_logs(caplog):

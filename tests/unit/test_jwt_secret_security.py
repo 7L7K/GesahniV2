@@ -1,8 +1,6 @@
-import pytest
-import os
 from unittest.mock import patch
+
 from fastapi.testclient import TestClient
-import jwt
 
 from app.main import app
 

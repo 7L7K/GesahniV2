@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import importlib.util
+
 # Compatibility shim: this subpackage name conflicts with the sibling
 # module file `app/retrieval/pipeline.py`. Re-export symbols from the
 # module file so legacy imports like `from app.retrieval.pipeline import run_retrieval`
 # keep working.
-
 import os
-import importlib.util
 from pathlib import Path
 
 _impl_path = Path(__file__).resolve().parent.parent / "pipeline.py"
@@ -17,7 +17,7 @@ if _spec and _spec.loader:  # pragma: no cover - import glue
 else:  # pragma: no cover - defensive
     raise ImportError("Failed to load retrieval pipeline implementation")
 
-run_pipeline = getattr(_mod, "run_pipeline")
+run_pipeline = _mod.run_pipeline
 
 
 def run_retrieval(q: str, user_id: str, k: int | None = None, **kwargs):

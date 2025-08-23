@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
-import time
-import hashlib
-from pathlib import Path
 import sys
 import tempfile
-from typing import Any, Dict, List, Optional
+import time
+from pathlib import Path
+from typing import Any
 
 import aiosqlite
 
@@ -161,7 +161,7 @@ async def ensure_tables() -> None:
         await db.commit()
 
 
-async def insert_alert(rec: Dict[str, Any]) -> None:
+async def insert_alert(rec: dict[str, Any]) -> None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute(
@@ -184,7 +184,7 @@ async def insert_alert(rec: Dict[str, Any]) -> None:
         await db.commit()
 
 
-async def get_alert(alert_id: str) -> Optional[Dict[str, Any]]:
+async def get_alert(alert_id: str) -> dict[str, Any] | None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         async with db.execute(
@@ -219,7 +219,7 @@ async def update_alert(alert_id: str, **fields: Any) -> None:
         await db.commit()
 
 
-async def insert_event(alert_id: str, type_: str, meta: Dict[str, Any] | None = None) -> None:
+async def insert_event(alert_id: str, type_: str, meta: dict[str, Any] | None = None) -> None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute(
@@ -229,7 +229,7 @@ async def insert_event(alert_id: str, type_: str, meta: Dict[str, Any] | None = 
         await db.commit()
 
 
-async def list_alerts(resident_id: Optional[str] = None) -> List[Dict[str, Any]]:
+async def list_alerts(resident_id: str | None = None) -> list[dict[str, Any]]:
     await ensure_tables()
     q = "SELECT id,resident_id,kind,severity,note,created_at,status,ack_at,resolved_at FROM alerts"
     params: tuple = ()
@@ -237,7 +237,7 @@ async def list_alerts(resident_id: Optional[str] = None) -> List[Dict[str, Any]]
         q += " WHERE resident_id=?"
         params = (resident_id,)
     q += " ORDER BY created_at DESC"
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     async with aiosqlite.connect(str(DB_PATH)) as db:
         async with db.execute(q, params) as cur:
             async for row in cur:
@@ -257,7 +257,7 @@ async def list_alerts(resident_id: Optional[str] = None) -> List[Dict[str, Any]]
     return out
 
 
-async def upsert_device(device_id: str, resident_id: str, *, battery_pct: Optional[int] = None) -> Dict[str, Any]:
+async def upsert_device(device_id: str, resident_id: str, *, battery_pct: int | None = None) -> dict[str, Any]:
     await ensure_tables()
     now = _now()
     async with aiosqlite.connect(str(DB_PATH)) as db:
@@ -316,7 +316,7 @@ async def upsert_device(device_id: str, resident_id: str, *, battery_pct: Option
         }
 
 
-async def get_device(device_id: str) -> Optional[Dict[str, Any]]:
+async def get_device(device_id: str) -> dict[str, Any] | None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         async with db.execute(
@@ -359,9 +359,9 @@ async def set_device_flags(device_id: str, **flags: Any) -> None:
         await db.commit()
 
 
-async def list_devices() -> List[Dict[str, Any]]:
+async def list_devices() -> list[dict[str, Any]]:
     await ensure_tables()
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     async with aiosqlite.connect(str(DB_PATH)) as db:
         async with db.execute(
             "SELECT id,resident_id,last_seen,battery_pct,battery_low_since,battery_notified,offline_since,offline_notified FROM devices"
@@ -384,7 +384,7 @@ async def list_devices() -> List[Dict[str, Any]]:
 
 # TV Config -------------------------------------------------------------------
 
-async def get_tv_config(resident_id: str) -> Optional[Dict[str, Any]]:
+async def get_tv_config(resident_id: str) -> dict[str, Any] | None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         async with db.execute(
@@ -409,7 +409,7 @@ async def set_tv_config(
     *,
     ambient_rotation: int,
     rail: str,
-    quiet_hours: Dict[str, Any] | None,
+    quiet_hours: dict[str, Any] | None,
     default_vibe: str,
 ) -> None:
     await ensure_tables()
@@ -435,7 +435,7 @@ async def set_tv_config(
 
 # Sessions --------------------------------------------------------------------
 
-async def create_session(rec: Dict[str, Any]) -> None:
+async def create_session(rec: dict[str, Any]) -> None:
     await ensure_tables()
     now = _now()
     async with aiosqlite.connect(str(DB_PATH)) as db:
@@ -465,7 +465,7 @@ async def update_session(session_id: str, **fields: Any) -> None:
         await db.commit()
 
 
-async def list_sessions(resident_id: Optional[str] = None) -> List[Dict[str, Any]]:
+async def list_sessions(resident_id: str | None = None) -> list[dict[str, Any]]:
     await ensure_tables()
     q = "SELECT id,resident_id,title,transcript_uri,created_at,updated_at FROM care_sessions"
     params: tuple = ()
@@ -473,7 +473,7 @@ async def list_sessions(resident_id: Optional[str] = None) -> List[Dict[str, Any
         q += " WHERE resident_id=?"
         params = (resident_id,)
     q += " ORDER BY created_at DESC"
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     async with aiosqlite.connect(str(DB_PATH)) as db:
         async with db.execute(q, params) as cur:
             async for row in cur:
@@ -490,7 +490,7 @@ async def list_sessions(resident_id: Optional[str] = None) -> List[Dict[str, Any
     return out
 
 
-async def create_contact(rec: Dict[str, Any]) -> None:
+async def create_contact(rec: dict[str, Any]) -> None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute(
@@ -500,9 +500,9 @@ async def create_contact(rec: Dict[str, Any]) -> None:
         await db.commit()
 
 
-async def list_contacts(resident_id: str) -> List[Dict[str, Any]]:
+async def list_contacts(resident_id: str) -> list[dict[str, Any]]:
     await ensure_tables()
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     async with aiosqlite.connect(str(DB_PATH)) as db:
         async with db.execute(
             "SELECT id,resident_id,name,phone,priority,quiet_hours FROM contacts WHERE resident_id=? ORDER BY priority DESC",

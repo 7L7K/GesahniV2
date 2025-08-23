@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import os
 import logging
+import os
 from functools import lru_cache
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from fastapi import HTTPException, Request, WebSocket
-import jwt
 from jwt import PyJWKClient
+
+from ..security import _jwt_decode
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ def _read_env(name: str) -> str:
     return os.getenv(name, "").strip()
 
 
-def _derive_issuer_and_jwks() -> Tuple[str, str]:
+def _derive_issuer_and_jwks() -> tuple[str, str]:
     """Resolve Clerk issuer and JWKS URL from env.
 
     Supported env variables:
@@ -52,7 +53,7 @@ def _derive_issuer_and_jwks() -> Tuple[str, str]:
 
 
 @lru_cache(maxsize=1)
-def _jwks_client() -> Tuple[PyJWKClient, str, Optional[str]]:
+def _jwks_client() -> tuple[PyJWKClient, str, str | None]:
     iss, jwks_url = _derive_issuer_and_jwks()
     if not jwks_url:
         raise _std_500("clerk_not_configured")
@@ -62,7 +63,7 @@ def _jwks_client() -> Tuple[PyJWKClient, str, Optional[str]]:
     return client, iss, (aud or None)
 
 
-def _extract_bearer_from_request(request: Request) -> Optional[str]:
+def _extract_bearer_from_request(request: Request) -> str | None:
     token = None
     token_source = "none"
     
@@ -97,7 +98,7 @@ def _extract_bearer_from_request(request: Request) -> Optional[str]:
     return token
 
 
-def _extract_bearer_from_ws(ws: WebSocket) -> Optional[str]:
+def _extract_bearer_from_ws(ws: WebSocket) -> str | None:
     token = None
     token_source = "none"
     
@@ -156,42 +157,42 @@ def _extract_bearer_from_ws(ws: WebSocket) -> Optional[str]:
     return token
 
 
-def _claims_to_state(request_or_ws: Any, claims: Dict[str, Any]) -> None:
+def _claims_to_state(request_or_ws: Any, claims: dict[str, Any]) -> None:
     try:
-        setattr(request_or_ws.state, "jwt_payload", claims)
+        request_or_ws.state.jwt_payload = claims
     except Exception:
         pass
     # Clerk user id is in sub; also mirror to user_id
     uid = str(claims.get("sub") or claims.get("user_id") or "")
     if uid:
         try:
-            setattr(request_or_ws.state, "user_id", uid)
+            request_or_ws.state.user_id = uid
         except Exception:
             pass
     # Email and roles (best-effort)
     email = claims.get("email") or claims.get("email_address")
     roles = claims.get("roles") or []
     try:
-        setattr(request_or_ws.state, "email", email)
+        request_or_ws.state.email = email
     except Exception:
         pass
     try:
-        setattr(request_or_ws.state, "roles", roles if isinstance(roles, (list, tuple)) else [])
+        request_or_ws.state.roles = roles if isinstance(roles, (list, tuple)) else []
     except Exception:
         pass
 
 
-def verify_clerk_token(token: str) -> Dict[str, Any]:
+def verify_clerk_token(token: str) -> dict[str, Any]:
     client, iss, aud = _jwks_client()
     try:
         signing_key = client.get_signing_key_from_jwt(token)
         options = {"require": ["exp", "iat", "sub"]}
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         if iss:
             kwargs["issuer"] = iss
         if aud:
             kwargs["audience"] = aud
-        claims = jwt.decode(token, signing_key.key, algorithms=["RS256"], options=options, **kwargs)
+        claims = _jwt_decode(token, signing_key.key, algorithms=["RS256"], options=options, **kwargs)
         return claims
     except Exception:
         raise _std_401()

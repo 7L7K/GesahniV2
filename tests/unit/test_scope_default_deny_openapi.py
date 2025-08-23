@@ -1,6 +1,5 @@
 from app.main import app
 
-
 PRIVILEGED_TAGS = {"Admin", "Care", "HomeAssistant", "Ops"}
 
 

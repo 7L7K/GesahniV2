@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import re
+
 import httpx
+
 from .base import Skill
 
 

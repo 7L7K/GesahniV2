@@ -1,7 +1,8 @@
 import os
-from fastapi import FastAPI, Depends
-from fastapi.testclient import TestClient
+
 import jwt
+from fastapi import Depends, FastAPI
+from fastapi.testclient import TestClient
 
 
 def _auth(scopes: str | None = None) -> dict:

@@ -5,9 +5,8 @@ This allows us to test from http://localhost:8080 instead of file://
 """
 
 import http.server
-import socketserver
 import os
-import sys
+import socketserver
 from pathlib import Path
 
 PORT = 8080

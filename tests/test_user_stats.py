@@ -14,9 +14,9 @@ def test_login_and_me(tmp_path, monkeypatch):
     import app.user_store as user_store
 
     reload(user_store)
-    from app.user_store import user_store as store
-
     import sys
+
+    from app.user_store import user_store as store
 
     sys.modules.pop("app.auth", None)
     auth = import_module("app.auth")

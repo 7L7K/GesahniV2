@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 import time
-from typing import List, Optional
 
-from app.telemetry import hash_user_id
 from app import metrics
 from app.redaction import redact_pii, store_redaction_map
+from app.telemetry import hash_user_id
 
 # ---------------------------------------------------------------------------
 # Export real ChromaVectorStore if available, but ALWAYS define the symbol
@@ -36,6 +34,7 @@ except Exception as _e:  # pragma: no cover - exercised only when chroma not imp
 
 from .env_utils import _get_mem_top_k, _normalized_hash
 from .memory_store import MemoryVectorStore, VectorStore
+
 try:
     from .vector_store.qdrant import QdrantVectorStore  # type: ignore
 except Exception:  # pragma: no cover - optional
@@ -179,7 +178,7 @@ def _coerce_k(k: int | str | None) -> int:
 
 def query_user_memories(
     user_id: str, prompt: str, k: int | str | None = None
-) -> List[str]:
+) -> list[str]:
     """Retrieve up to *k* memories relevant to *prompt* for the given user."""
     k_int = _coerce_k(k)
     logger.debug(
@@ -239,7 +238,7 @@ def cache_answer_legacy(*args) -> None:  # pragma: no cover - shim for callers
         raise TypeError("cache_answer_legacy expects 2 or 3 arguments")
 
 
-def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
+def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> str | None:
     """Return a cached answer.
 
     If *prompt* looks like a deterministic cache id (e.g. "v1|…|…|"), perform

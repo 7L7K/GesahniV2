@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import List, Optional, Any, Union
 from contextvars import ContextVar
+from datetime import UTC, datetime
 from hashlib import sha256
+from typing import Any
 
 from pydantic import BaseModel
 
 
-def hash_user_id(user_id: Optional[Union[str, bytes]]) -> str:
+def hash_user_id(user_id: str | bytes | None) -> str:
     """Return a stable hash for a user identifier."""
     if user_id is None:
         return "anon"
@@ -21,85 +21,85 @@ def hash_user_id(user_id: Optional[Union[str, bytes]]) -> str:
 
 def utc_now() -> datetime:
     """Return current UTC time."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class LogRecord(BaseModel):
     # existing keys
     req_id: str
-    prompt: Optional[str] = None
-    engine_used: Optional[str] = None
-    response: Optional[str] = None
-    timestamp: Optional[str] = None
+    prompt: str | None = None
+    engine_used: str | None = None
+    response: str | None = None
+    timestamp: str | None = None
 
     # core request metadata
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
-    channel: Optional[str] = None
+    session_id: str | None = None
+    user_id: str | None = None
+    channel: str | None = None
 
     # timing & status
-    received_at: Optional[str] = None
-    started_at: Optional[str] = None
-    finished_at: Optional[str] = None
-    latency_ms: Optional[int] = None
-    p95_latency_ms: Optional[int] = None
-    status: Optional[str] = None
+    received_at: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    latency_ms: int | None = None
+    p95_latency_ms: int | None = None
+    status: str | None = None
 
     # routing / skills
-    matched_skill: Optional[str] = None
-    match_confidence: Optional[float] = None
-    intent: Optional[str] = None
-    intent_confidence: Optional[float] = None
+    matched_skill: str | None = None
+    match_confidence: float | None = None
+    intent: str | None = None
+    intent_confidence: float | None = None
 
     # llm usage
-    model_name: Optional[str] = None
-    prompt_tokens: Optional[int] = None
-    completion_tokens: Optional[int] = None
-    prompt_cost_usd: Optional[float] = None
-    completion_cost_usd: Optional[float] = None
-    cost_usd: Optional[float] = None
+    model_name: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    prompt_cost_usd: float | None = None
+    completion_cost_usd: float | None = None
+    cost_usd: float | None = None
 
     # home assistant audit
-    ha_service_called: Optional[str] = None
-    entity_ids: Optional[List[str]] = None
-    state_before: Optional[Any] = None
-    state_after: Optional[Any] = None
+    ha_service_called: str | None = None
+    entity_ids: list[str] | None = None
+    state_before: Any | None = None
+    state_after: Any | None = None
 
     # vector/RAG debugging
-    rag_top_k: Optional[int] = None
-    rag_doc_ids: Optional[List[str]] = None
-    rag_scores: Optional[List[float]] = None
-    embed_tokens: Optional[int] = None
-    retrieval_count: Optional[int] = None
-    cache_hit: Optional[bool] = None
+    rag_top_k: int | None = None
+    rag_doc_ids: list[str] | None = None
+    rag_scores: list[float] | None = None
+    embed_tokens: int | None = None
+    retrieval_count: int | None = None
+    cache_hit: bool | None = None
 
     # deterministic routing / observability
-    route_reason: Optional[str] = None
-    retrieved_tokens: Optional[int] = None
-    self_check_score: Optional[float] = None
-    escalated: Optional[bool] = None
+    route_reason: str | None = None
+    retrieved_tokens: int | None = None
+    self_check_score: float | None = None
+    escalated: bool | None = None
 
     # authentication events
-    auth_event_type: Optional[str] = None  # "finish.start", "finish.end", "whoami.start", "whoami.end", "lock.on", "lock.off", "authed.change"
-    auth_user_id: Optional[str] = None
-    auth_source: Optional[str] = None  # "cookie", "header", "clerk"
-    auth_jwt_status: Optional[str] = None  # "ok", "invalid", "missing"
-    auth_session_ready: Optional[bool] = None
-    auth_is_authenticated: Optional[bool] = None
-    auth_lock_reason: Optional[str] = None  # For lock events
-    auth_boot_phase: Optional[bool] = None  # True if during boot phase
+    auth_event_type: str | None = None  # "finish.start", "finish.end", "whoami.start", "whoami.end", "lock.on", "lock.off", "authed.change"
+    auth_user_id: str | None = None
+    auth_source: str | None = None  # "cookie", "header", "clerk"
+    auth_jwt_status: str | None = None  # "ok", "invalid", "missing"
+    auth_session_ready: bool | None = None
+    auth_is_authenticated: bool | None = None
+    auth_lock_reason: str | None = None  # For lock events
+    auth_boot_phase: bool | None = None  # True if during boot phase
 
     # profile facts / KV observability
-    profile_facts_keys: Optional[List[str]] = None
-    facts_block: Optional[str] = None
-    route_trace: Optional[list] = None
+    profile_facts_keys: list[str] | None = None
+    facts_block: str | None = None
+    route_trace: list | None = None
 
     # tts usage
-    tts_engine: Optional[str] = None
-    tts_tier: Optional[str] = None
-    tts_chars: Optional[int] = None
-    tts_minutes: Optional[float] = None
-    tts_cost_usd: Optional[float] = None
+    tts_engine: str | None = None
+    tts_tier: str | None = None
+    tts_chars: int | None = None
+    tts_minutes: float | None = None
+    tts_cost_usd: float | None = None
 
 
 log_record_var: ContextVar[LogRecord | None] = ContextVar("log_record", default=None)

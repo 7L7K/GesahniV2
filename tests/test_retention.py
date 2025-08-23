@@ -2,8 +2,8 @@ import json
 from datetime import datetime
 
 import app.session_manager as sm
-from app.session_store import SessionStatus
 import app.session_store as store
+from app.session_store import SessionStatus
 
 
 def test_archive_old_sessions(tmp_path, monkeypatch):

@@ -3,9 +3,9 @@ import os
 os.environ["OLLAMA_MODEL"] = "llama3"
 os.environ.setdefault("OLLAMA_URL", "http://localhost:11434")
 
-from app.model_picker import pick_model
-from app.model_config import GPT_HEAVY_MODEL
 from app import llama_integration
+from app.model_config import GPT_HEAVY_MODEL
+from app.model_picker import pick_model
 
 
 def test_pick_model_llama():

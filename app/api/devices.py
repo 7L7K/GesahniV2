@@ -3,21 +3,19 @@ from __future__ import annotations
 import os
 import secrets
 import time
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-import jwt
 
-from app.deps.user import get_current_user_id
-from app.security import verify_token
 from app.deps.roles import require_roles
+from app.deps.user import get_current_user_id
 from app.device_tokens import (
-    store_pair_code,
     consume_pair_code,
-    upsert_device_token,
     revoke_device_token,
+    store_pair_code,
+    upsert_device_token,
 )
-
+from app.security import verify_token
 
 router = APIRouter(tags=["Devices"])
 
@@ -34,7 +32,7 @@ def _now() -> int:
 
 
 @router.post("/devices/pair/start")
-async def pair_start(request: Request, user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
+async def pair_start(request: Request, user_id: str = Depends(get_current_user_id)) -> dict[str, Any]:
     if not user_id or user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     label = (request.headers.get("X-Device-Label") or "tv").strip()
@@ -45,7 +43,7 @@ async def pair_start(request: Request, user_id: str = Depends(get_current_user_i
 
 
 @router.post("/devices/pair/complete")
-async def pair_complete(body: Dict[str, Any]) -> Dict[str, Any]:
+async def pair_complete(body: dict[str, Any]) -> dict[str, Any]:
     code = str(body.get("code") or "").strip().lower()
     if not code:
         raise HTTPException(status_code=400, detail="missing_code")
@@ -79,7 +77,7 @@ async def pair_complete(body: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.post("/devices/{device_id}/revoke", dependencies=[Depends(verify_token), Depends(require_roles(["resident", "caregiver", "admin"]))])
-async def device_revoke(device_id: str, request: Request, user_id: str = Depends(get_current_user_id)) -> Dict[str, str]:
+async def device_revoke(device_id: str, request: Request, user_id: str = Depends(get_current_user_id)) -> dict[str, str]:
     # Revoke the current device token for this owner+device by deleting the stored token id
     # Clients should rotate token immediately after this call
     jti = request.headers.get("X-Device-Token-ID") or ""

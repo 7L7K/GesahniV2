@@ -1,12 +1,12 @@
 import logging
-import pytest
+
 from app.logging_config import (
-    CORSConfigFilter,
-    VectorStoreWarningFilter,
-    OllamaHealthFilter,
     CookieTTLFilter,
+    CORSConfigFilter,
+    HealthCheckFilter,
+    OllamaHealthFilter,
     SecretCheckFilter,
-    HealthCheckFilter
+    VectorStoreWarningFilter,
 )
 
 

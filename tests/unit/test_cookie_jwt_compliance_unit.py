@@ -6,10 +6,8 @@ for cookie and JWT usage.
 """
 
 import os
-import re
 import subprocess
-from pathlib import Path
-from typing import List, Set
+
 import pytest
 
 
@@ -44,7 +42,7 @@ class TestCookieJWTCompliance:
         "app/api/oauth_apple.py",  # Apple IdP
     }
     
-    def run_grep_command(self, pattern: str, include_pattern: str = "app/**/*.py", exclude_pattern: str = "tests/**") -> List[str]:
+    def run_grep_command(self, pattern: str, include_pattern: str = "app/**/*.py", exclude_pattern: str = "tests/**") -> list[str]:
         """Run grep command and return matching lines."""
         try:
             cmd = ["rg", "-n", pattern, "-g", include_pattern, "-g", f"!{exclude_pattern}"]
@@ -66,7 +64,7 @@ class TestCookieJWTCompliance:
                 if file_path not in self.ALLOWED_COOKIE_FILES:
                     violations.append(f"Direct set_cookie() call in {line}")
         
-        assert len(violations) == 0, f"Found unauthorized set_cookie() calls:\n" + "\n".join(violations)
+        assert len(violations) == 0, "Found unauthorized set_cookie() calls:\n" + "\n".join(violations)
     
     def test_no_unauthorized_set_cookie_headers(self):
         """Test that no unauthorized files manipulate Set-Cookie headers directly."""
@@ -79,7 +77,7 @@ class TestCookieJWTCompliance:
                 if file_path not in self.ALLOWED_COOKIE_FILES:
                     violations.append(f"Direct Set-Cookie header manipulation in {line}")
         
-        assert len(violations) == 0, f"Found unauthorized Set-Cookie header manipulation:\n" + "\n".join(violations)
+        assert len(violations) == 0, "Found unauthorized Set-Cookie header manipulation:\n" + "\n".join(violations)
     
     def test_no_unauthorized_jwt_encode_calls(self):
         """Test that no unauthorized files call jwt.encode() directly."""
@@ -96,7 +94,7 @@ class TestCookieJWTCompliance:
                     if not file_path.startswith("app/integrations/google/"):
                         violations.append(f"Unauthorized jwt.encode() call in {line}")
         
-        assert len(violations) == 0, f"Found unauthorized jwt.encode() calls:\n" + "\n".join(violations)
+        assert len(violations) == 0, "Found unauthorized jwt.encode() calls:\n" + "\n".join(violations)
     
     def test_app_token_minting_goes_through_tokens_py(self):
         """Test that app token minting goes through tokens.py."""
@@ -113,7 +111,7 @@ class TestCookieJWTCompliance:
                     if file_path not in self.APP_TOKEN_MINTING_FILES:
                         violations.append(f"Unauthorized app token minting in {line}")
         
-        assert len(violations) == 0, f"Found unauthorized app token minting:\n" + "\n".join(violations)
+        assert len(violations) == 0, "Found unauthorized app token minting:\n" + "\n".join(violations)
     
     def test_idp_token_signing_only_in_allowed_locations(self):
         """Test that IdP token signing only occurs in allowed locations."""
@@ -129,14 +127,14 @@ class TestCookieJWTCompliance:
                     if not file_path.startswith("app/integrations/google/"):
                         violations.append(f"Unauthorized IdP token signing in {line}")
         
-        assert len(violations) == 0, f"Found unauthorized IdP token signing:\n" + "\n".join(violations)
+        assert len(violations) == 0, "Found unauthorized IdP token signing:\n" + "\n".join(violations)
     
     def test_auth_py_uses_centralized_functions(self):
         """Test that auth.py uses centralized cookie and token functions."""
         auth_file = "app/api/auth.py"
         assert os.path.exists(auth_file), f"Auth file {auth_file} not found"
         
-        with open(auth_file, 'r') as f:
+        with open(auth_file) as f:
             content = f.read()
             
             # Check for centralized cookie usage
@@ -150,7 +148,7 @@ class TestCookieJWTCompliance:
         cookies_file = "app/cookies.py"
         assert os.path.exists(cookies_file), f"Cookies file {cookies_file} not found"
         
-        with open(cookies_file, 'r') as f:
+        with open(cookies_file) as f:
             content = f.read()
             
             # Check for key centralized functions
@@ -170,7 +168,7 @@ class TestCookieJWTCompliance:
         tokens_file = "app/tokens.py"
         assert os.path.exists(tokens_file), f"Tokens file {tokens_file} not found"
         
-        with open(tokens_file, 'r') as f:
+        with open(tokens_file) as f:
             content = f.read()
             
             # Check for key centralized functions
@@ -189,7 +187,7 @@ class TestCookieJWTCompliance:
         config_file = "app/cookie_config.py"
         assert os.path.exists(config_file), f"Cookie config file {config_file} not found"
         
-        with open(config_file, 'r') as f:
+        with open(config_file) as f:
             content = f.read()
             
             # Check for key configuration functions
@@ -227,7 +225,7 @@ class TestCookieJWTCompliance:
                             continue
                         violations.append(f"Direct cookie manipulation in {line}")
         
-        assert len(violations) == 0, f"Found unauthorized cookie manipulation:\n" + "\n".join(violations)
+        assert len(violations) == 0, "Found unauthorized cookie manipulation:\n" + "\n".join(violations)
     
     def test_proper_separation_of_token_types(self):
         """Test that app tokens and IdP tokens are properly separated."""
@@ -284,9 +282,9 @@ class TestCookieJWTComplianceIntegration:
     def test_centralized_functions_are_importable(self):
         """Test that centralized functions can be imported."""
         try:
+            from app.cookie_config import get_cookie_config, get_token_ttls
             from app.cookies import set_auth_cookies, set_oauth_state_cookies
             from app.tokens import make_access, make_refresh
-            from app.cookie_config import get_cookie_config, get_token_ttls
         except ImportError as e:
             pytest.fail(f"Failed to import centralized functions: {e}")
     

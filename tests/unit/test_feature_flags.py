@@ -1,20 +1,19 @@
 """Tests for feature flags module."""
 
 import os
-import pytest
 from unittest.mock import patch
 
 from app.feature_flags import (
-    Flag,
-    register,
-    coerce,
-    get_value,
-    get,
-    set_value,
-    clear_value,
-    list_flags,
     _REGISTRY,
+    Flag,
     _overrides,
+    clear_value,
+    coerce,
+    get,
+    get_value,
+    list_flags,
+    register,
+    set_value,
 )
 
 

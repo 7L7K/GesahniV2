@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import WebSocket, WebSocketException
 
 from ..security import verify_ws
 
 
-async def handle_reauth(ws: WebSocket, message: Dict[str, Any]) -> bool:
+async def handle_reauth(ws: WebSocket, message: dict[str, Any]) -> bool:
     """Handle `{type: "reauth", token}` messages.
 
     Returns True if the connection context was updated; False if message not handled.

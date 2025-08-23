@@ -1,17 +1,6 @@
 from __future__ import annotations
 
-import base64
-import os
-import time
-import hashlib
-import secrets
-from urllib.parse import urlencode
-
-import httpx
-from fastapi import APIRouter, HTTPException, Request, Response
-
-from ..sessions_store import sessions_store
-
+from fastapi import APIRouter
 
 router = APIRouter(tags=["auth"], include_in_schema=False)
 

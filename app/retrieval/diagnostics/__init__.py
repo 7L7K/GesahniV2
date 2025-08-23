@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 
-def why_logs(events: List[Dict[str, Any]]) -> Dict[str, Any]:
+def why_logs(events: list[dict[str, Any]]) -> dict[str, Any]:
     # Summarize the new pipeline trace list into a compact dict
     counts = {ev.get("event"): ev.get("meta", {}) for ev in events}
     pre = counts.get("hybrid", {}).get("dense", 0) + counts.get("hybrid", {}).get("sparse", 0)

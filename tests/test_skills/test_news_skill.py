@@ -1,10 +1,12 @@
-import os, sys, asyncio
+import asyncio
+import os
+import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import httpx
-from app.skills.news_skill import NewsSkill
 
+from app.skills.news_skill import NewsSkill
 
 RSS_SAMPLE = """<rss><channel><item><title>A</title></item><item><title>B</title></item><item><title>C</title></item></channel></rss>"""
 

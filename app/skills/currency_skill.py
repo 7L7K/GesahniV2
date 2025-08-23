@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import os
-import re
-import httpx
 import logging
+import re
 
-from .base import Skill
+import httpx
+
 from ..telemetry import log_record_var
+from .base import Skill
 
 log = logging.getLogger(__name__)
 

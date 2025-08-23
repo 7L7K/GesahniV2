@@ -1,5 +1,5 @@
-from importlib import reload
 import wave
+from importlib import reload
 
 import pytest
 from fastapi import HTTPException

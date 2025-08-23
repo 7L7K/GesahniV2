@@ -14,7 +14,6 @@ async def ask_then_strong(prompt, model, system, **kwargs):
 
 
 def test_escalates_after_two_failures():
-    import asyncio
 
     text, model, reason, score, pt, ct, cost, escalated = asyncio.run(
         run_with_self_check(
@@ -32,7 +31,6 @@ def test_escalates_after_two_failures():
 
 
 def test_final_retry_o4_mini():
-    import asyncio
 
     text, model, reason, score, pt, ct, cost, escalated = asyncio.run(
         run_with_self_check(

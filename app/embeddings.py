@@ -22,9 +22,10 @@ import logging
 import os
 import time
 from functools import lru_cache
-from typing import Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import numpy as np
+
 from .metrics import EMBEDDING_LATENCY_SECONDS
 
 if TYPE_CHECKING:  # pragma: no cover - for type checkers only
@@ -50,7 +51,7 @@ except Exception:  # pragma: no cover
 # Deterministic stub (for tests / in-memory stores)
 # ---------------------------------------------------------------------------
 
-def _embed_stub(text: str) -> List[float]:
+def _embed_stub(text: str) -> list[float]:
     """Return a deterministic local embedding used for tests and in-memory stores.
 
     8-dim “thumbprint” keeps semantic-cache tests meaningful without external calls.
@@ -91,14 +92,14 @@ def _reset_llama_model_for_tests():  # pragma: no cover - test helper
 # OpenAI backend (sync path with TTL cache)
 # ---------------------------------------------------------------------------
 
-def get_openai_client() -> "OpenAI":
+def get_openai_client() -> OpenAI:
     """Return a synchronous OpenAI client (instantiate per call for test isolation)."""
     from openai import OpenAI  # type: ignore
     return OpenAI()
 
 
 @lru_cache(maxsize=5_000)
-def _embed_openai_sync(text: str, ttl_bucket: int) -> List[float]:
+def _embed_openai_sync(text: str, ttl_bucket: int) -> list[float]:
     """Return an embedding using the OpenAI sync client (cached by TTL bucket)."""
     client = get_openai_client()
     model = os.getenv("EMBED_MODEL", "text-embedding-3-small")
@@ -122,7 +123,7 @@ def _embed_openai_sync(text: str, ttl_bucket: int) -> List[float]:
     return embedding  # type: ignore[return-value]
 
 
-async def _embed_openai(text: str) -> List[float]:
+async def _embed_openai(text: str) -> list[float]:
     """Asynchronously compute an OpenAI embedding with caching."""
     bucket = int(time.time() // _TTL)
     loop = asyncio.get_running_loop()
@@ -136,10 +137,10 @@ async def _embed_openai(text: str) -> List[float]:
             pass
 
 
-async def _embed_llama(text: str) -> List[float]:
+async def _embed_llama(text: str) -> list[float]:
     model = _get_llama_model()
 
-    def _run() -> List[float]:
+    def _run() -> list[float]:
         result = model.create_embedding(text)
         return result["data"][0]["embedding"]
 
@@ -158,7 +159,7 @@ async def _embed_llama(text: str) -> List[float]:
 # Public API
 # ---------------------------------------------------------------------------
 
-def embed_sync(text: str) -> List[float]:
+def embed_sync(text: str) -> list[float]:
     """Synchronous helper used by vector stores."""
     backend = os.getenv("EMBEDDING_BACKEND", "openai").lower()
 
@@ -194,7 +195,7 @@ def embed_sync(text: str) -> List[float]:
     raise ValueError(f"Unsupported EMBEDDING_BACKEND: {backend}")
 
 
-async def embed(text: str) -> List[float]:
+async def embed(text: str) -> list[float]:
     """Return an embedding vector for ``text`` (async).
 
     Backend chosen by ``EMBEDDING_BACKEND`` (default: ``openai``).
@@ -224,7 +225,7 @@ async def embed(text: str) -> List[float]:
     raise ValueError(f"Unsupported EMBEDDING_BACKEND: {backend}")
 
 
-async def benchmark(text: str, iterations: int = 10, user_id: str | None = None) -> Dict[str, float]:
+async def benchmark(text: str, iterations: int = 10, user_id: str | None = None) -> dict[str, float]:
     """Run ``embed`` ``iterations`` times and log latency & throughput.
 
     ``user_id`` is accepted for interface parity but is not used.

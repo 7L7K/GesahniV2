@@ -1,7 +1,7 @@
-import os
-import sys
 import asyncio
 import logging
+import os
+import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -32,7 +32,7 @@ async def _fail(*args, **kwargs):  # pragma: no cover - should not be called
 
 def test_dry_run_llama_path(monkeypatch, caplog):
     _setup_env(monkeypatch)
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     _common_patches(monkeypatch, router)
@@ -48,7 +48,7 @@ def test_dry_run_llama_path(monkeypatch, caplog):
 
 def test_dry_run_gpt_fallback(monkeypatch, caplog):
     _setup_env(monkeypatch)
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
     _common_patches(monkeypatch, router)

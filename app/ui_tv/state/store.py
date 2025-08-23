@@ -5,16 +5,15 @@ signals emitted by the voice pipeline.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 
 @dataclass
 class UiState:
     voice_active: bool
     onboarding_stage: int
-    consent_microphone: Optional[bool]
-    consent_calendar: Optional[bool]
-    do_not_disturb_window: Optional[Tuple[int, int]]
+    consent_microphone: bool | None
+    consent_calendar: bool | None
+    do_not_disturb_window: tuple[int, int] | None
 
 
 def default_ui_state() -> UiState:

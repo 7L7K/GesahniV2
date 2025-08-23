@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import logging
+import os
+import sys
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
-import os
-import sys
 
 from app import metrics
 from app.embeddings import embed_sync
@@ -22,7 +21,6 @@ from .env_utils import (
     _normalize,
     _normalized_hash,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +43,9 @@ class VectorStore:
 
     def query_user_memories(
         self, user_id: str, prompt: str, k: int = 5
-    ) -> List[str]: ...
+    ) -> list[str]: ...
 
-    def list_user_memories(self, user_id: str) -> List[Dict]: ...
+    def list_user_memories(self, user_id: str) -> list[dict]: ...
 
     def delete_user_memory(self, user_id: str, mem_id: str) -> bool: ...
 
@@ -55,7 +53,7 @@ class VectorStore:
 
     def lookup_cached_answer(
         self, prompt: str, ttl_seconds: int = 86400
-    ) -> Optional[str]: ...
+    ) -> str | None: ...
 
     def record_feedback(self, prompt: str, feedback: str) -> None: ...
 
@@ -64,30 +62,30 @@ class VectorStore:
 
 @dataclass
 class _CacheRecord:
-    embedding: List[float]
+    embedding: list[float]
     doc: str
     answer: str
     timestamp: float
-    feedback: Optional[str] = None
+    feedback: str | None = None
 
 
 class _Collection:
     def __init__(self) -> None:
-        self._store: Dict[str, _CacheRecord] = {}
+        self._store: dict[str, _CacheRecord] = {}
         # Optional TTL for entries (seconds); 0 disables TTL eviction on read
         self._ttl_seconds: float = float(os.getenv("QA_CACHE_TTL_SECONDS", "86400"))
 
     def upsert(
         self,
         *,
-        ids: List[str],
-        embeddings: List[List[float]] | None = None,
-        documents: List[str],
-        metadatas: List[Dict],
+        ids: list[str],
+        embeddings: list[list[float]] | None = None,
+        documents: list[str],
+        metadatas: list[dict],
     ) -> None:
         if embeddings is None:
             embeddings = [embed_sync(doc) for doc in documents]
-        for i, emb, doc, meta in zip(ids, embeddings, documents, metadatas):
+        for i, emb, doc, meta in zip(ids, embeddings, documents, metadatas, strict=False):
             self._store[i] = _CacheRecord(
                 embedding=emb,
                 doc=doc,
@@ -97,8 +95,8 @@ class _Collection:
             )
 
     def get_items(
-        self, ids: List[str] | None = None, include: List[str] | None = None
-    ) -> Dict[str, List]:
+        self, ids: list[str] | None = None, include: list[str] | None = None
+    ) -> dict[str, list]:
         """Return selected items from the collection.
 
         Args:
@@ -121,8 +119,8 @@ class _Collection:
                 self._store.pop(i, None)
 
         ids = ids or list(self._store)
-        metas: List[Dict | None] = []
-        docs: List[str | None] = []
+        metas: list[dict | None] = []
+        docs: list[str | None] = []
         for i in ids:
             rec = self._store.get(i)
             metas.append(
@@ -137,23 +135,23 @@ class _Collection:
             docs.append(
                 rec.doc if rec and (include is None or "documents" in include) else None
             )
-        out: Dict[str, List] = {"ids": ids}
+        out: dict[str, list] = {"ids": ids}
         if include is None or "metadatas" in include:
             out["metadatas"] = metas
         if include is None or "documents" in include:
             out["documents"] = docs
         return out
 
-    def keys(self) -> List[str]:
+    def keys(self) -> list[str]:
         """Return all document identifiers stored in the collection."""
         return list(self._store)
 
-    def delete(self, *, ids: List[str] | None = None) -> None:
+    def delete(self, *, ids: list[str] | None = None) -> None:
         for i in ids or []:
             self._store.pop(i, None)
 
-    def update(self, *, ids: List[str], metadatas: List[Dict]) -> None:
-        for i, meta in zip(ids, metadatas):
+    def update(self, *, ids: list[str], metadatas: list[dict]) -> None:
+        for i, meta in zip(ids, metadatas, strict=False):
             rec = self._store.get(i)
             if rec:
                 for k, v in meta.items():
@@ -166,7 +164,7 @@ class MemoryVectorStore(VectorStore):
     def __init__(self) -> None:
         self._dist_cutoff = 1.0 - _get_sim_threshold()
         self._cache = _Collection()
-        self._user_memories: Dict[str, List[Tuple[str, str, List[float], float]]] = {}
+        self._user_memories: dict[str, list[tuple[str, str, list[float], float]]] = {}
 
     def add_user_memory(self, user_id: str, memory: str) -> str:
         mem_id = str(uuid.uuid4())
@@ -178,7 +176,7 @@ class MemoryVectorStore(VectorStore):
         logger.debug("Added user memory %s for %s", mem_id, hashed)
         return mem_id
 
-    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
+    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> list[str]:
         sim_threshold = _get_sim_threshold()
         self._dist_cutoff = 1.0 - sim_threshold
         logger.info(
@@ -188,7 +186,7 @@ class MemoryVectorStore(VectorStore):
             k,
         )
         q_emb = embed_sync(prompt)
-        items: List[Tuple[float, float, str]] = []
+        items: list[tuple[float, float, str]] = []
         total = 0
         for _mid, doc, emb, ts in self._user_memories.get(user_id, []):
             total += 1
@@ -221,8 +219,8 @@ class MemoryVectorStore(VectorStore):
         )
         return docs_out
 
-    def list_user_memories(self, user_id: str) -> List[Dict]:
-        items: List[Dict] = []
+    def list_user_memories(self, user_id: str) -> list[dict]:
+        items: list[dict] = []
         for mid, doc, _emb, ts in list(self._user_memories.get(user_id, [])):
             items.append({"id": mid, "text": doc, "ts": ts})
         return items
@@ -256,7 +254,7 @@ class MemoryVectorStore(VectorStore):
 
     def lookup_cached_answer(
         self, prompt: str, ttl_seconds: int = 86400
-    ) -> Optional[str]:
+    ) -> str | None:
         # Track last similarity for UI provenance
         global _LAST_SIMILARITY  # type: ignore[assignment]
         self._dist_cutoff = 1.0 - _get_sim_threshold()

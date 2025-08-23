@@ -2,43 +2,19 @@
 Tests for extracted modules: router_policy, adapters, postcall, health
 """
 
-import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-from dataclasses import dataclass
+from unittest.mock import patch
 
+import pytest
+
+from app.health import HealthCheckCache, HealthCheckResult, check_system_health
+from app.llm_adapters import LLMError, LLMRequest, LLMResponse, call_llm
+from app.postcall import PostCallData, PostCallResult, process_openai_response, process_postcall
 from app.router_policy import (
     RoutingDecision,
+    get_fallback_decision,
     pick_model_with_policy,
-    validate_model_allowlist,
-    check_vendor_health,
     should_fallback,
-    get_fallback_decision
-)
-
-from app.llm_adapters import (
-    LLMRequest,
-    LLMResponse,
-    LLMError,
-    call_openai,
-    call_ollama,
-    call_llm
-)
-
-from app.postcall import (
-    PostCallData,
-    PostCallResult,
-    process_postcall,
-    process_openai_response,
-    process_ollama_response
-)
-
-from app.health import (
-    HealthCheckResult,
-    HealthCheckCache,
-    check_openai_health,
-    check_ollama_health,
-    check_system_health
+    validate_model_allowlist,
 )
 
 

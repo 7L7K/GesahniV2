@@ -1,8 +1,8 @@
-import os
 import asyncio
 import logging
 
 from app.model_router import route_text
+
 
 def test_flag_guard_legacy_router(monkeypatch):
     # Ensure we do not accidentally break legacy router without flag
@@ -20,7 +20,6 @@ def test_flag_guard_legacy_router(monkeypatch):
     monkeypatch.setattr(r, "lookup_cached_answer", lambda p: None)
     monkeypatch.setattr(r.PromptBuilder, "build", staticmethod(lambda *a, **k: (a[0], 1)))
 
-    import asyncio
     assert asyncio.run(r.route_prompt("ask gpt please", user_id="u")) == "ok"
 
 

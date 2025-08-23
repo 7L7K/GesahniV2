@@ -1,23 +1,20 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from fastapi import APIRouter, Depends, Request, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from ..deps.user import get_current_user_id, get_current_session_device
-from ..sessions_store import sessions_store
-from ..auth_store import ensure_tables as _ensure_auth, create_pat as _create_pat
-import secrets
 from ..config_runtime import get_config
+from ..deps.user import get_current_user_id
+from ..sessions_store import sessions_store
 from ..user_store import user_store
-
 
 router = APIRouter(tags=["Auth"])
 
 
 @router.get("/me")
-async def me(user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
+async def me(user_id: str = Depends(get_current_user_id)) -> dict[str, Any]:
     is_auth = user_id != "anon"
     stats = await user_store.get_stats(user_id) if is_auth else None
 
@@ -42,9 +39,9 @@ async def me(user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
 # /v1/whoami is canonically served from app.api.auth; keep no duplicate here.
 
 
-def _to_session_info(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _to_session_info(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     current_sid = os.getenv("CURRENT_SESSION_ID")
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for i, r in enumerate(rows):
         out.append(
             {
@@ -63,8 +60,8 @@ def _to_session_info(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 async def sessions(
     request: Request,
     user_id: str = Depends(get_current_user_id),
-    legacy: Optional[int] = Query(default=None, description="Return legacy wrapped shape when 1 (deprecated; TODO remove by 2026-01-31)"),
-) -> List[Dict[str, Any]] | Dict[str, Any]:
+    legacy: int | None = Query(default=None, description="Return legacy wrapped shape when 1 (deprecated; TODO remove by 2026-01-31)"),
+) -> list[dict[str, Any]] | dict[str, Any]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     rows = await sessions_store.list_user_sessions(user_id)
@@ -82,8 +79,8 @@ async def sessions_paginated(
     request: Request,
     user_id: str = Depends(get_current_user_id),
     limit: int = Query(default=50, ge=1, le=500),
-    cursor: Optional[str] = Query(default=None),
-) -> Dict[str, Any]:
+    cursor: str | None = Query(default=None),
+) -> dict[str, Any]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     rows = await sessions_store.list_user_sessions(user_id)
@@ -95,12 +92,12 @@ async def sessions_paginated(
         start = 0
     end = min(len(rows), start + int(limit))
     page = rows[start:end]
-    next_cursor: Optional[str] = str(end) if end < len(rows) else None
+    next_cursor: str | None = str(end) if end < len(rows) else None
     return {"items": _to_session_info(page), "next_cursor": next_cursor}
 
 
 @router.post("/sessions/{sid}/revoke")
-async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) -> Dict[str, str]:
+async def revoke_session(sid: str, user_id: str = Depends(get_current_user_id)) -> dict[str, str]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     await sessions_store.revoke_family(sid)

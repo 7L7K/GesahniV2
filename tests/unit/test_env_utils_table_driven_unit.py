@@ -1,8 +1,8 @@
-import pytest
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestLoadEnvPrecedence:
@@ -82,8 +82,8 @@ class TestLoadEnvPrecedence:
             {"FOO": "value", "BAR": "quoted value", "BAZ": "double quoted"}
         ),
     ])
-    def test_load_env_precedence(self, monkeypatch, tmp_path: Path, env_files: Dict[str, str], 
-                                existing_env: Dict[str, str], expected_values: Dict[str, str]):
+    def test_load_env_precedence(self, monkeypatch, tmp_path: Path, env_files: dict[str, str], 
+                                existing_env: dict[str, str], expected_values: dict[str, str]):
         """Test environment variable precedence rules."""
         from app import env_utils
         
@@ -197,7 +197,7 @@ class TestLoadEnvTestMode:
         ({"ENV": "test", "PYTEST_RUNNING": "1"}, True),
         ({"ENV": "production", "PYTEST_RUNNING": "1"}, True),
     ])
-    def test_load_env_test_mode(self, monkeypatch, tmp_path: Path, test_env_vars: Dict[str, str], should_bypass_cache: bool):
+    def test_load_env_test_mode(self, monkeypatch, tmp_path: Path, test_env_vars: dict[str, str], should_bypass_cache: bool):
         """Test that test mode bypasses caching."""
         from app import env_utils
         
@@ -263,7 +263,7 @@ class TestLoadEnvFileHandling:
         # File with escaped characters
         ({".env": "FOO=value\\nwith\\tnewlines"}, "escaped_chars"),
     ])
-    def test_load_env_file_scenarios(self, monkeypatch, tmp_path: Path, file_scenarios: Dict[str, str], expected_behavior: str):
+    def test_load_env_file_scenarios(self, monkeypatch, tmp_path: Path, file_scenarios: dict[str, str], expected_behavior: str):
         """Test various file content scenarios."""
         from app import env_utils
         
@@ -325,7 +325,7 @@ class TestLoadEnvCaching:
         # File deleted
         ({"delete": ".env"}, True),
     ])
-    def test_load_env_caching(self, monkeypatch, tmp_path: Path, file_changes: Dict[str, str], should_reload: bool):
+    def test_load_env_caching(self, monkeypatch, tmp_path: Path, file_changes: dict[str, str], should_reload: bool):
         """Test caching behavior with file modifications."""
         from app import env_utils
         
@@ -559,7 +559,7 @@ class TestLoadEnvEnvironmentSpecific:
         # Environment files with existing variables
         ({"env.dev": "EXISTING_VAR=dev_value"}, {"EXISTING_VAR": "dev_value"}),
     ])
-    def test_load_env_environment_specific(self, monkeypatch, tmp_path: Path, env_files: Dict[str, str], expected_vars: Dict[str, str]):
+    def test_load_env_environment_specific(self, monkeypatch, tmp_path: Path, env_files: dict[str, str], expected_vars: dict[str, str]):
         """Test loading of environment-specific files."""
         from app import env_utils
         

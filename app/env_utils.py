@@ -1,7 +1,8 @@
-import os
 import logging
+import os
 from pathlib import Path
-from dotenv import load_dotenv, dotenv_values
+
+from dotenv import dotenv_values
 
 _ENV_PATH = Path(".env").resolve()  # absolute path = no cwd surprises
 _ENV_EXAMPLE_PATH = Path(".env.example").resolve()
@@ -70,7 +71,7 @@ def load_env(force: bool | int | str = False) -> None:
         if _last_mtimes is not None and _last_mtimes == current:
             # Nothing changed since last run → still ensure example defaults are present
             # Apply examples as non-overriding top-ups so new keys get filled if files changed outside mtime granularity
-            filled_example = filled_alt = filled_dev = filled_staging = filled_prod = 0
+            filled_example = filled_alt = filled_dev = filled_staging = filled_prod = filled_localhost = 0
             if current["example"] >= 0:
                 for k, v in (dotenv_values(_ENV_EXAMPLE_PATH) or {}).items():
                     if k and v is not None and k not in os.environ:
@@ -116,10 +117,15 @@ def load_env(force: bool | int | str = False) -> None:
     # Compute counts and apply precedence
     applied_env = filled_example = filled_alt = filled_dev = filled_staging = filled_prod = filled_localhost = 0
 
-    # 1) .env overrides existing values
+    # 1) .env populates missing values only (do not clobber existing env vars)
+    #    Tests and monkeypatches expect programmatic env overrides to take
+    #    precedence over committed .env files.
     if current["env"] >= 0:
         for k, v in (dotenv_values(_ENV_PATH) or {}).items():
             if not k or v is None:
+                continue
+            # Respect any existing value (e.g., set by monkeypatch in tests)
+            if k in os.environ:
                 continue
             os.environ[str(k)] = str(v)
             applied_env += 1

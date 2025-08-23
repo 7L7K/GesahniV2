@@ -1,4 +1,5 @@
 import os
+
 from fastapi.testclient import TestClient
 
 
@@ -9,8 +10,8 @@ def _auth():
 
 
 def test_recommendations_cache_respects_limit(monkeypatch):
-    from app.main import app
     import app.api.music as music
+    from app.main import app
     from app.models.music_state import load_state, save_state
 
     monkeypatch.setenv("JWT_SECRET", "secret")

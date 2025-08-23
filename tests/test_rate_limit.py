@@ -1,12 +1,12 @@
 import asyncio
-import time
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
-from fastapi import FastAPI, Depends, WebSocket
+from fastapi import Depends, FastAPI, WebSocket
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 

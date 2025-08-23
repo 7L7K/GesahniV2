@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-import os
-from typing import Any, Dict, List
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
-from app.deps.user import get_current_user_id
 from app.deps.scopes import docs_security_with
+from app.deps.user import get_current_user_id
 from app.status import _admin_token
-from app.decisions import get_recent as decisions_recent
-from app.analytics import get_metrics, cache_hit_rate
-
 
 router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
 
@@ -23,7 +17,7 @@ def _guard(token: str | None) -> None:
 
 
 def _html_page(title: str, body: str) -> str:
-    return f"""
+    html = """
 <!doctype html>
 <html>
 <head>
@@ -84,28 +78,19 @@ def _html_page(title: str, body: str) -> str:
 </body>
 </html>
 """
+    return html.replace("{title}", title).replace("{body}", body)
 
 
 @router.get("/admin/ui", response_class=HTMLResponse)
-async def admin_ui_home(token: str | None = Query(default=None), user_id: str = Depends(get_current_user_id)):
+def admin_ui_home(token: str | None = Query(default=None), user_id: str = Depends(get_current_user_id)):
     _guard(token)
-    # Simple cards + table of decisions
-    body = f"""
-    <div>
-      Admin token: <input id='adm_tok' placeholder='optional' size='32'/> <button onclick='saveToken()'>Save</button>
-    </div>
-    <section style='margin:16px 0;'>
-      <span class='badge'>LLaMA Hits: <span id='m_llama'>…</span></span>
-      <span class='badge'>GPT Hits: <span id='m_gpt'>…</span></span>
-      <span class='badge'>Fallbacks: <span id='m_fallback'>…</span></span>
-      <span class='badge'>Cache Hit Rate: <span id='m_cache'>…</span></span>
-    </section>
-    <table>
-      <thead><tr><th>Req ID</th><th>Intent</th><th>Engine</th><th>Model</th><th>Reason</th><th>Latency</th></tr></thead>
-      <tbody id='decisions_tbody'></tbody>
-    </table>
-    """
-    return _html_page("Admin Dashboard", body)
+    from pathlib import Path
+
+    from fastapi import Response
+
+    _ASSETS = Path(__file__).resolve().parents[1] / "admin_ui_assets"
+    html = (_ASSETS / "index.html").read_text(encoding="utf-8")
+    return Response(content=html, media_type="text/html")
 
 
 @router.get("/admin/ui/retrieval", response_class=HTMLResponse)

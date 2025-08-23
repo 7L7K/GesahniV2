@@ -1,15 +1,15 @@
 """Test that legacy refresh endpoint properly delegates to canonical endpoint."""
 
-import pytest
-from fastapi.testclient import TestClient
+from unittest.mock import patch
+
 from fastapi import FastAPI
-from unittest.mock import patch, AsyncMock
+from fastapi.testclient import TestClient
 
 
 def test_legacy_refresh_delegates_to_canonical():
     """Test that /v1/refresh delegates to /v1/auth/refresh."""
-    from app.auth import router as legacy_router
     from app.api.auth import router as canonical_router
+    from app.auth import router as legacy_router
     
     app = FastAPI()
     app.include_router(legacy_router, prefix="/v1")

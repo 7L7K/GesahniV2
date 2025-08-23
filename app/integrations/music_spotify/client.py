@@ -6,10 +6,9 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import httpx
-
 
 _TOKENS_DIR = Path(os.getenv("SPOTIFY_TOKENS_DIR", "data/spotify_tokens")).resolve()
 _TOKENS_DIR.mkdir(parents=True, exist_ok=True)
@@ -54,7 +53,7 @@ class SpotifyClient:
     def _token_path(self) -> Path:
         return _TOKENS_DIR / f"{self.user_id}.json"
 
-    def _read_tokens(self) -> Optional[SpotifyTokens]:
+    def _read_tokens(self) -> SpotifyTokens | None:
         try:
             data = json.loads(self._token_path().read_text())
             return SpotifyTokens(
@@ -129,7 +128,7 @@ class SpotifyClient:
     # HTTP helpers
     # ------------------------------------------------------------------
     async def _request(
-        self, method: str, path: str, *, params: Dict[str, Any] | None = None, json_body: Any | None = None
+        self, method: str, path: str, *, params: dict[str, Any] | None = None, json_body: Any | None = None
     ) -> httpx.Response:
         # If we cannot obtain a token (e.g., tests without creds), surface 401-like behavior
         try:
@@ -146,7 +145,7 @@ class SpotifyClient:
         url = f"{self.api_base}{path}"
         headers = {"Authorization": f"Bearer {token}"}
         # Basic retry with jitter + simple circuit breaker on 5xx
-        cb_key = f"cb:{self.user_id}"
+        # cb_key = f"cb:{self.user_id}"  # intentionally unused; state key stored on instance
         state = getattr(self, "_cb", {"fail": 0, "ts": 0.0})
         self._cb = state
         if state["fail"] >= 3 and time.time() - state["ts"] < 30:
@@ -186,7 +185,7 @@ class SpotifyClient:
     # ------------------------------------------------------------------
     # Player controls
     # ------------------------------------------------------------------
-    async def devices(self) -> List[Dict[str, Any]]:
+    async def devices(self) -> list[dict[str, Any]]:
         r = await self._request("GET", "/me/player/devices")
         if r.status_code != 200:
             return []
@@ -200,7 +199,7 @@ class SpotifyClient:
         )
         return r.status_code in (200, 202, 204)
 
-    async def play(self, uris: Optional[List[str]] = None) -> bool:
+    async def play(self, uris: list[str] | None = None) -> bool:
         body = {"uris": uris} if uris else None
         r = await self._request("PUT", "/me/player/play", json_body=body)
         return r.status_code in (200, 202, 204)
@@ -222,7 +221,7 @@ class SpotifyClient:
         r = await self._request("PUT", "/me/player/volume", params={"volume_percent": level})
         return r.status_code in (200, 202, 204)
 
-    async def get_state(self) -> Dict[str, Any] | None:
+    async def get_state(self) -> dict[str, Any] | None:
         r = await self._request("GET", "/me/player")
         if r.status_code == 204:
             return None
@@ -230,7 +229,7 @@ class SpotifyClient:
             return None
         return r.json()
 
-    async def get_queue(self) -> Tuple[Dict[str, Any] | None, List[Dict[str, Any]]]:
+    async def get_queue(self) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
         r = await self._request("GET", "/me/player/queue")
         if r.status_code != 200:
             return None, []
@@ -240,12 +239,12 @@ class SpotifyClient:
     async def recommendations(
         self,
         *,
-        seed_tracks: Optional[List[str]] = None,
-        target_energy: Optional[float] = None,
-        target_tempo: Optional[float] = None,
+        seed_tracks: list[str] | None = None,
+        target_energy: float | None = None,
+        target_tempo: float | None = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
-        params: Dict[str, Any] = {"limit": max(1, min(100, limit))}
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"limit": max(1, min(100, limit))}
         if seed_tracks:
             # Spotify requires up to 5 comma-separated track IDs (not URIs)
             ids = [t.split(":")[-1] for t in seed_tracks][:5]

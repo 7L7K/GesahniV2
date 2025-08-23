@@ -4,6 +4,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_verify_webhook_missing_secret(monkeypatch):
     from fastapi import Request
+
     from app import security as sec
 
     # ensure no env/file secrets

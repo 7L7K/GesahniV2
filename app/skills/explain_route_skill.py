@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List
+from typing import Any
 
+from ..decisions import get_explain as _get
+from ..decisions import get_recent as _recent
 from .base import Skill
-from ..decisions import get_explain as _get, get_recent as _recent
 
 
 class ExplainRouteSkill(Skill):
@@ -14,10 +15,10 @@ class ExplainRouteSkill(Skill):
         re.compile(r"/explain(?:\?req_id=(?P<rid>[a-f0-9\-]{8,}))?", re.I),
     ]
 
-    def _format(self, data: Dict[str, Any] | None) -> str:
+    def _format(self, data: dict[str, Any] | None) -> str:
         if not data:
             return "No routing record found."
-        parts: List[str] = []
+        parts: list[str] = []
         parts.append(f"engine={data.get('engine')} model={data.get('model')} reason={data.get('route_reason')}")
         if data.get("latency_ms") is not None:
             parts.append(f"latency={int(data['latency_ms'])}ms")

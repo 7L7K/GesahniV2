@@ -11,17 +11,19 @@ Tests all cookie writer and clearer functions with comprehensive coverage:
 Verifies correct attributes, Max-Age=0 on clear, HttpOnly, Path=/, SameSite=Lax in dev, Secure on prod.
 """
 
-import os
-import pytest
 from unittest.mock import Mock, patch
-from fastapi import Response, Request
 
 from app.cookies import (
-    set_auth_cookies, clear_auth_cookies,
-    set_oauth_state_cookies, clear_oauth_state_cookies,
-    set_csrf_cookie, clear_csrf_cookie,
-    set_device_cookie, clear_device_cookie,
-    set_named_cookie, clear_named_cookie,
+    clear_auth_cookies,
+    clear_csrf_cookie,
+    clear_device_cookie,
+    clear_named_cookie,
+    clear_oauth_state_cookies,
+    set_auth_cookies,
+    set_csrf_cookie,
+    set_device_cookie,
+    set_named_cookie,
+    set_oauth_state_cookies,
 )
 
 

@@ -8,11 +8,8 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass
-from typing import Dict
 
-
-_STATE: Dict[str, Dict[str, float]] = {}
+_STATE: dict[str, dict[str, float]] = {}
 _DAY_EPOCH: float | None = None
 
 
@@ -58,7 +55,7 @@ def add_usage(user_id: str, *, prompt_tokens: int = 0, completion_tokens: int = 
         state["tokens"] = hard_cap
 
 
-def get_budget_state(user_id: str) -> Dict[str, object]:
+def get_budget_state(user_id: str) -> dict[str, object]:
     _reset_if_new_day()
     max_tokens, max_minutes = _quotas()
     st = _STATE.get(user_id, {"tokens": 0.0, "minutes": 0.0})

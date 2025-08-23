@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
+
 import httpx
-import logging
+
 from .base import Skill
 
 log = logging.getLogger(__name__)

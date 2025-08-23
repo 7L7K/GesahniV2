@@ -3,8 +3,9 @@ from __future__ import annotations
 import math
 import os
 import re
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Sequence, Tuple
+from typing import Any
 
 from ..embeddings import embed_sync
 
@@ -23,12 +24,12 @@ class RetrievedItem:
     id: str
     text: str
     score: float
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 def reciprocal_rank_fusion(
     rankings: Sequence[Sequence[RetrievedItem]], *, k: float = 60.0
-) -> List[RetrievedItem]:
+) -> list[RetrievedItem]:
     """Combine multiple ranked lists using Reciprocal Rank Fusion.
 
     Each input ranking must be in descending relevance order (best first).
@@ -36,7 +37,7 @@ def reciprocal_rank_fusion(
     with an attached "rrf_score" in metadata.
     """
 
-    fused: Dict[str, Tuple[RetrievedItem, float]] = {}
+    fused: dict[str, tuple[RetrievedItem, float]] = {}
     for ranking in rankings:
         for rank, item in enumerate(ranking):
             contrib = 1.0 / (k + (rank + 1))
@@ -57,7 +58,7 @@ def reciprocal_rank_fusion(
     return items
 
 
-def _tokenize(text: str) -> List[str]:
+def _tokenize(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", (text or "").lower())
 
 
@@ -76,7 +77,7 @@ def mmr_diversify(
     *,
     k: int,
     lambda_: float = 0.6,
-) -> List[RetrievedItem]:
+) -> list[RetrievedItem]:
     """Select a diverse subset using MMR over embeddings + lexical overlap.
 
     Diversity is computed as the average of cosine distance in embedding space
@@ -90,14 +91,14 @@ def mmr_diversify(
     item_embs = [embed_sync(it.text) for it in items]
     item_tokens = [_tokenize(it.text) for it in items]
 
-    def _cos_sim(a: List[float], b: List[float]) -> float:
-        dot = sum(x * y for x, y in zip(a, b))
+    def _cos_sim(a: list[float], b: list[float]) -> float:
+        dot = sum(x * y for x, y in zip(a, b, strict=False))
         na = math.sqrt(sum(x * x for x in a)) or 1.0
         nb = math.sqrt(sum(y * y for y in b)) or 1.0
         return dot / (na * nb)
 
-    selected: List[int] = []
-    candidates: List[int] = list(range(len(items)))
+    selected: list[int] = []
+    candidates: list[int] = list(range(len(items)))
 
     # Seed with the highest base score
     first = max(candidates, key=lambda idx: items[idx].score)
@@ -163,7 +164,7 @@ def compose_final_score(
     time_boost: float,
     quality: float,
     pinned: bool,
-    weights: Tuple[float, float, float] = (0.7, 0.2, 0.1),
+    weights: tuple[float, float, float] = (0.7, 0.2, 0.1),
 ) -> float:
     """Blend base score with boosts and an optional pin bonus.
 
@@ -175,11 +176,11 @@ def compose_final_score(
     return float(w0 * base + w1 * time_boost + w2 * quality + bonus)
 
 
-def truncate_to_token_budget(texts: List[str], *, max_tokens: int) -> List[str]:
+def truncate_to_token_budget(texts: list[str], *, max_tokens: int) -> list[str]:
     """Greedy keep from top until token budget is met."""
     from ..token_utils import count_tokens
 
-    out: List[str] = []
+    out: list[str] = []
     used = 0
     for t in texts:
         c = count_tokens(t)

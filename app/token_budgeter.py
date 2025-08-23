@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import os
-from typing import Tuple
 
 from .token_utils import count_tokens
 
 
-def _table(intent: str | None) -> Tuple[int, int]:
+def _table(intent: str | None) -> tuple[int, int]:
     """Return (max_in, max_out) token caps for a given intent.
 
     Defaults may be overridden via env like INTENT_CAP_chat_IN, INTENT_CAP_chat_OUT.

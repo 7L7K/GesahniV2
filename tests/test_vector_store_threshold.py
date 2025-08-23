@@ -1,6 +1,8 @@
 
-import pytest
 import sys
+
+import pytest
+
 print("DEBUG sys.path[0]:", sys.path[0])
 from app.memory.chroma_store import ChromaVectorStore
 

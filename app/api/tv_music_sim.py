@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 
-from ..deps.user import get_current_user_id
-from .music import music_command
 from app.models.common import OkResponse as CommonOkResponse
 
+from ..deps.user import get_current_user_id
+from .music import music_command
 
 router = APIRouter(tags=["TV"], prefix="")
 

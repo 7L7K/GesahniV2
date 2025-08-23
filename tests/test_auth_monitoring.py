@@ -2,20 +2,21 @@
 Tests for authentication monitoring system.
 """
 
-import pytest
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
+import pytest
 
 from app.auth_monitoring import (
+    _is_boot_phase,
     log_auth_event,
-    track_auth_event,
-    record_whoami_call,
-    record_finish_call,
-    record_privileged_call_blocked,
-    record_ws_reconnect_attempt,
     record_auth_lock_event,
     record_auth_state_change,
-    _is_boot_phase,
+    record_finish_call,
+    record_privileged_call_blocked,
+    record_whoami_call,
+    record_ws_reconnect_attempt,
+    track_auth_event,
 )
 
 

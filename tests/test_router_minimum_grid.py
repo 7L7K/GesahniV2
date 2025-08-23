@@ -4,16 +4,15 @@ Tests the core routing, fallback, caching, and circuit breaker behaviors.
 """
 
 import asyncio
+import builtins
 import os
 import sys
 import types
-import builtins
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
-from fastapi import HTTPException
 import pytest
+from fastapi import HTTPException
 
 # Setup sys.modules mocks for import isolation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -105,8 +104,7 @@ def patch_memgpt_and_vector(monkeypatch):
 @pytest.fixture(autouse=True)
 def reset_router_state(monkeypatch):
     """Reset router state between tests."""
-    from app import router
-    from app import llama_integration
+    from app import llama_integration, router
     
     # Reset circuit breakers
     router.openai_failures = 0
@@ -288,7 +286,6 @@ class TestUserCircuitBreaker:
     async def test_user_cb_opens_and_cools_down(self, monkeypatch):
         """Test that user circuit breaker opens after failures and cools down."""
         from app import router
-        import time
         
         # Set low threshold for testing
         monkeypatch.setenv("LLAMA_USER_CB_THRESHOLD", "2")

@@ -1,22 +1,19 @@
 from __future__ import annotations
 
-import os
-from typing import Dict, List
+import time
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
-import time
-from .. import metrics as _m
 
 from .. import health_utils as hu
+from .. import metrics as _m
 from ..health import VendorHealthTracker
-
 
 router = APIRouter(tags=["Health"])  # unauthenticated health; not privileged
 
 
 @router.get("/healthz/live", include_in_schema=False)
-async def health_live() -> Dict[str, str]:
+async def health_live() -> dict[str, str]:
     """Liveness: process is up. No I/O, no auth, no side effects."""
     resp = JSONResponse({"status": "ok"})
     resp.headers["Cache-Control"] = "no-store"
@@ -26,51 +23,89 @@ async def health_live() -> Dict[str, str]:
 
 
 @router.get("/healthz/ready", include_in_schema=False)
-async def health_ready() -> Dict[str, object]:
-    """Core readiness only.
+async def health_ready() -> dict[str, object]:
+    """Core readiness with structured component status.
 
     Required checks (all must pass):
     - JWT secret present
     - DB/session store basic open
-    Each check is timeboxed (500ms).
+    - Vector store connectivity (read-only)
+
+    Each component returns: healthy | degraded | unhealthy
+    Overall status is unhealthy if any required component is unhealthy.
     """
     import datetime
-    failing: List[str] = []
 
+    # Component health checks
+    components = {}
+
+    # JWT secret check
     t = time.perf_counter()
-    jwt = await hu.with_timeout(hu.check_jwt_secret, ms=500)
+    jwt_result = await hu.with_timeout(hu.check_jwt_secret, ms=500)
     try: _m.HEALTH_CHECK_DURATION_SECONDS.labels("jwt").observe(time.perf_counter() - t)
     except Exception: pass
-    if jwt != "ok":
-        failing.append("jwt")
+    components["jwt"] = {"status": "healthy" if jwt_result == "ok" else "unhealthy"}
 
+    # Database check
     t = time.perf_counter()
-    db = await hu.with_timeout(hu.check_db, ms=500)
+    db_result = await hu.with_timeout(hu.check_db, ms=500)
     try: _m.HEALTH_CHECK_DURATION_SECONDS.labels("db").observe(time.perf_counter() - t)
     except Exception: pass
-    if db != "ok":
-        failing.append("db")
+    components["database"] = {"status": "healthy" if db_result == "ok" else "unhealthy"}
 
-    # Prepare response data with required fields
+    # Vector store check (read-only)
+    t = time.perf_counter()
+    try:
+        from ..memory.api import _get_store
+        store = _get_store()
+        if hasattr(store, 'ping'):
+            await hu.with_timeout(store.ping, ms=500)
+        elif hasattr(store, 'search_memories'):
+            await hu.with_timeout(lambda: store.search_memories("", "", limit=0), ms=500)
+        vector_status = "healthy"
+    except Exception:
+        vector_status = "unhealthy"
+    try: _m.HEALTH_CHECK_DURATION_SECONDS.labels("vector_store").observe(time.perf_counter() - t)
+    except Exception: pass
+    components["vector_store"] = {"status": vector_status}
+
+    # Determine overall status
+    unhealthy_components = [name for name, comp in components.items() if comp["status"] == "unhealthy"]
+    degraded_components = [name for name, comp in components.items() if comp["status"] == "degraded"]
+
+    if unhealthy_components:
+        overall_status = "unhealthy"
+        status_code = 503
+    elif degraded_components:
+        overall_status = "degraded"
+        status_code = 200
+    else:
+        overall_status = "healthy"
+        status_code = 200
+
+    # Prepare response data
     response_data = {
-        "status": "ok" if not failing else "fail",
+        "status": overall_status,
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "components": components
     }
 
-    if failing:
-        response_data["failing"] = failing
+    if unhealthy_components:
+        response_data["unhealthy_components"] = unhealthy_components
         try:
-            for r in failing:
-                _m.HEALTH_READY_FAILURES_TOTAL.labels(r).inc()
+            for component in unhealthy_components:
+                _m.HEALTH_READY_FAILURES_TOTAL.labels(component).inc()
         except Exception:
             pass
-        resp = JSONResponse(response_data, status_code=503)
-        resp.headers["Cache-Control"] = "no-store"; resp.headers["Pragma"] = "no-cache"; resp.headers.setdefault("Vary","Accept")
-        return resp
 
-    resp = JSONResponse(response_data)
-    resp.headers["Cache-Control"] = "no-store"; resp.headers["Pragma"] = "no-cache"; resp.headers.setdefault("Vary","Accept")
+    if degraded_components:
+        response_data["degraded_components"] = degraded_components
+
+    resp = JSONResponse(response_data, status_code=status_code)
+    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers.setdefault("Vary", "Accept")
     return resp
 
 
@@ -78,7 +113,7 @@ async def health_ready() -> Dict[str, object]:
 async def ping_vendor_health(
     vendor: str = Query(..., description="Vendor name to ping (e.g., 'openai', 'ollama')"),
     clear: bool = Query(False, description="Clear unhealthy status for the vendor")
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """
     Lightweight ping endpoint to check/clear vendor health status.
 
@@ -133,7 +168,7 @@ async def ping_vendor_health(
 
 
 @router.get("/v1/vendor-health", include_in_schema=False)
-async def get_vendor_health_status() -> Dict[str, object]:
+async def get_vendor_health_status() -> dict[str, object]:
     """
     Get health status for all vendors being tracked by the eager health gating system.
 
@@ -159,7 +194,7 @@ async def get_vendor_health_status() -> Dict[str, object]:
 
 
 @router.get("/healthz/deps", include_in_schema=False)
-async def health_deps() -> Dict[str, object]:
+async def health_deps() -> dict[str, object]:
     """Optional dependencies (non-blocking for readiness).
 
     Maps each dependency to "ok" | "error" | "skipped". Overall status is

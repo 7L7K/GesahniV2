@@ -1,22 +1,27 @@
 """Test that all dependencies properly handle OPTIONS requests with early returns."""
 
 import pytest
-from fastapi import FastAPI, Request, Depends
+from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 from starlette.responses import JSONResponse
 
+from app.deps.clerk_auth import require_user
+from app.deps.roles import require_roles
+from app.deps.scopes import (
+    optional_require_any_scope,
+    optional_require_scope,
+    require_any_scope,
+    require_scope,
+)
 from app.security import (
     rate_limit,
+    rate_limit_problem,
+    rate_limit_with,
+    require_nonce,
+    scope_rate_limit,
     verify_token,
     verify_token_strict,
-    rate_limit_with,
-    scope_rate_limit,
-    rate_limit_problem,
-    require_nonce,
 )
-from app.deps.roles import require_roles
-from app.deps.clerk_auth import require_user
-from app.deps.scopes import require_scope, require_any_scope, optional_require_scope, optional_require_any_scope
 
 
 @pytest.fixture

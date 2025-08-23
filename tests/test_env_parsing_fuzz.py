@@ -1,7 +1,6 @@
 import os
-import random
 
-from app.memory.env_utils import _get_sim_threshold, _get_mem_top_k
+from app.memory.env_utils import _get_mem_top_k, _get_sim_threshold
 
 
 def test_env_parsing_fuzz(monkeypatch):

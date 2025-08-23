@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import re
 
-from .base import Skill
 from .. import home_assistant as ha
+from .base import Skill
 
 _ALIAS = {"i'm home": "script.house_arrival"}
 

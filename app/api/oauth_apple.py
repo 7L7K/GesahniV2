@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import os
-import time
 import random
-from datetime import datetime, timedelta
-from typing import Dict
+import time
+from datetime import datetime
 from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
 
+from ..security import _jwt_decode
 from ..sessions_store import sessions_store
-
 
 router = APIRouter(tags=["auth"], include_in_schema=False)
 
@@ -34,7 +33,7 @@ def _sign_client_secret(team_id: str, client_id: str, key_id: str, private_key_p
     import jwt
 
     now = int(time.time())
-    payload: Dict[str, object] = {
+    payload: dict[str, object] = {
         "iss": team_id,
         "iat": now,
         "exp": now + 60 * 10,
@@ -129,10 +128,9 @@ async def apple_callback(request: Request, response: Response) -> Response:
         if not id_token:
             raise HTTPException(status_code=400, detail="no_id_token")
         # Basic decode without verification to extract email/sub
-        import jwt
 
         try:
-            payload = jwt.decode(id_token, options={"verify_signature": False})
+            payload = _jwt_decode(id_token, options={"verify_signature": False})
         except Exception:
             payload = {}
 
@@ -141,8 +139,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
         raise HTTPException(status_code=400, detail="no_user")
 
     # Mint session and cookies
-    from ..auth import ALGORITHM, SECRET_KEY, EXPIRE_MINUTES, REFRESH_EXPIRE_MINUTES
-    import jwt
+    from ..auth import ALGORITHM, SECRET_KEY
 
     sess = await sessions_store.create_session(user_id)
     sid, did = sess["sid"], sess["did"]
@@ -162,8 +159,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
     # Create opaque session ID instead of using JWT
     try:
         from ..auth import _create_session_id
-        import jwt
-        payload = jwt.decode(access, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = _jwt_decode(access, SECRET_KEY, algorithms=[ALGORITHM])
         jti = payload.get("jti")
         expires_at = payload.get("exp", time.time() + access_ttl)
         if jti:
@@ -176,7 +172,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
     
     # Use centralized cookie functions
-    from ..cookies import set_auth_cookies, clear_oauth_state_cookies
+    from ..cookies import clear_oauth_state_cookies, set_auth_cookies
     set_auth_cookies(response, access=access, refresh=refresh, session_id=session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
     
     # Clear OAuth state cookies after successful authentication

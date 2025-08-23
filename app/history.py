@@ -1,16 +1,15 @@
-import os
-import json
 import asyncio
+import json
+import logging
+import os
 from datetime import datetime
 from pathlib import Path
-import logging
-from typing import Any, Optional
-
-from .telemetry import LogRecord
+from typing import Any
 
 import aiofiles  # pip install aiofiles
 
 from .logging_config import req_id_var
+from .telemetry import LogRecord
 
 # --------------------------------------------------------------------------
 # CONFIG
@@ -106,7 +105,7 @@ async def append_history(
             logger.exception("Failed to append history")
 
  
-async def get_record_by_req_id(req_id: str) -> Optional[dict[str, Any]]:
+async def get_record_by_req_id(req_id: str) -> dict[str, Any] | None:
     """Return the most recent history record with the given request id.
 
     Supports both JSONL (newline-delimited objects) and a single JSON array file.

@@ -1,7 +1,9 @@
-from http import HTTPStatus
-from fastapi.testclient import TestClient
-from app.main import app
 import time
+from http import HTTPStatus
+
+from fastapi.testclient import TestClient
+
+from app.main import app
 
 
 def _setup(monkeypatch):

@@ -1,5 +1,6 @@
 # app/deps/scheduler.py
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 try:
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
 except Exception:  # pragma: no cover - optional dependency
@@ -106,7 +107,7 @@ class _CompatScheduler:
                 run_date = kwargs.pop("run_date", None)
                 seconds = kwargs.pop("seconds", None)
                 if run_date is None and seconds is not None:
-                    run_date = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+                    run_date = datetime.now(UTC) + timedelta(seconds=seconds)
                 trig_obj = _DateTrigger(run_date=run_date) if run_date is not None else None
         except Exception:
             trig_obj = None

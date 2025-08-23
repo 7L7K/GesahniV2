@@ -11,12 +11,11 @@ This script tests all the acceptance criteria mentioned in the requirements:
 6. WS does not trigger whoami on errors; no reconnect loops
 """
 
-import asyncio
-import json
-import time
-import requests
-from typing import Dict, List, Any
 import logging
+import time
+from typing import Any
+
+import requests
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -42,7 +41,7 @@ class AuthAcceptanceTester:
         try:
             response = self.session.get(f"{self.base_url}/v1/whoami")
             if response.status_code == 401:
-                self.log_test("Zero 401s during boot", False, f"whoami returned 401")
+                self.log_test("Zero 401s during boot", False, "whoami returned 401")
                 return False
             elif response.status_code == 200:
                 self.log_test("Zero 401s during boot", True, "whoami correctly returns 200")
@@ -194,7 +193,7 @@ class AuthAcceptanceTester:
             
         return True
         
-    def run_all_tests(self) -> Dict[str, Any]:
+    def run_all_tests(self) -> dict[str, Any]:
         """Run all acceptance criteria tests."""
         logger.info("Starting authentication acceptance criteria tests...")
         

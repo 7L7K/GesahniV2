@@ -1,5 +1,5 @@
-from app.model_router import compose_cache_id
 from app.memory.vector_store import cache_answer, lookup_cached_answer
+from app.model_router import compose_cache_id
 
 
 def test_cache_segregation_by_model():

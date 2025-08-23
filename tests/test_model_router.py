@@ -1,17 +1,16 @@
-import os
 import asyncio
 
-from app.model_router import (
-    route_text,
-    run_with_self_check,
-    compose_cache_id,
-    triage_scene_risk,
-    route_vision,
-)
 from app.model_config import (
     GPT_BASELINE_MODEL,
-    GPT_MID_MODEL,
     GPT_HEAVY_MODEL,
+    GPT_MID_MODEL,
+)
+from app.model_router import (
+    compose_cache_id,
+    route_text,
+    route_vision,
+    run_with_self_check,
+    triage_scene_risk,
 )
 
 

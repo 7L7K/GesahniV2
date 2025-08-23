@@ -4,11 +4,11 @@ Debug script for authentication flow testing.
 This script helps identify where the sign-in/login process is failing.
 """
 
-import requests
 import json
-import time
 import logging
-from typing import Dict, Any
+from typing import Any
+
+import requests
 
 # Configure logging
 logging.basicConfig(
@@ -32,7 +32,7 @@ class AuthDebugger:
             logger.error(f"Health check failed: {e}")
             return False
     
-    def test_whoami_unauthenticated(self) -> Dict[str, Any]:
+    def test_whoami_unauthenticated(self) -> dict[str, Any]:
         """Test whoami endpoint without authentication."""
         try:
             response = self.session.get(f"{self.base_url}/v1/whoami")
@@ -48,7 +48,7 @@ class AuthDebugger:
             logger.error(f"Whoami test failed: {e}")
             return {}
     
-    def test_login(self, username: str, password: str) -> Dict[str, Any]:
+    def test_login(self, username: str, password: str) -> dict[str, Any]:
         """Test login endpoint."""
         try:
             payload = {"username": username, "password": password}
@@ -80,7 +80,7 @@ class AuthDebugger:
             logger.error(f"Login test failed: {e}")
             return {}
     
-    def test_whoami_authenticated(self) -> Dict[str, Any]:
+    def test_whoami_authenticated(self) -> dict[str, Any]:
         """Test whoami endpoint after authentication."""
         try:
             response = self.session.get(f"{self.base_url}/v1/whoami")
@@ -96,7 +96,7 @@ class AuthDebugger:
             logger.error(f"Whoami test failed: {e}")
             return {}
     
-    def test_register(self, username: str, password: str) -> Dict[str, Any]:
+    def test_register(self, username: str, password: str) -> dict[str, Any]:
         """Test register endpoint."""
         try:
             payload = {"username": username, "password": password}

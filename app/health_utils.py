@@ -1,6 +1,7 @@
 import asyncio
 import os
-from typing import Awaitable, Callable, Literal, Optional, Union
+from collections.abc import Awaitable, Callable
+from typing import Literal
 
 try:
     import httpx
@@ -9,12 +10,11 @@ except Exception:  # pragma: no cover - optional dependency in tests
 
 from .user_store import user_store
 
-
 HealthResult = Literal["ok", "error", "skipped"]
 
 
 async def with_timeout(
-    task: Union[Awaitable[HealthResult], Callable[[], Awaitable[HealthResult]]],
+    task: Awaitable[HealthResult] | Callable[[], Awaitable[HealthResult]],
     ms: int = 500,
 ) -> HealthResult:
     """Run a coroutine with a timeout and return "ok" | "error" | "skipped".

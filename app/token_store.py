@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import os
 import asyncio
-import time
-import threading
-from typing import Optional, Dict, Tuple, Any
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 import logging
+import os
+import threading
+import time
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Global state for Redis client and cleanup task
-_redis_client: Optional[object] = None
-_cleanup_task: Optional[asyncio.Task] = None
+_redis_client: object | None = None
+_cleanup_task: asyncio.Task | None = None
 _cleanup_running = False
 
 # Local storage with better structure and TTL tracking
@@ -27,7 +26,7 @@ class LocalStorage:
     """Thread-safe local storage with automatic cleanup and TTL support."""
     
     def __init__(self, cleanup_interval: int = 300):  # 5 minutes default
-        self._storage: Dict[str, LocalEntry] = {}
+        self._storage: dict[str, LocalEntry] = {}
         self._lock = threading.RLock()
         self._cleanup_interval = cleanup_interval
         self._last_cleanup = time.time()

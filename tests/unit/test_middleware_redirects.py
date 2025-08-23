@@ -1,8 +1,8 @@
 """Tests for middleware and redirect handling to ensure origin-aware URLs."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-import os
 
 from app.url_helpers import build_origin_aware_url, sanitize_redirect_path
 

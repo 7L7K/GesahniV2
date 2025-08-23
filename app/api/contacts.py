@@ -1,16 +1,14 @@
  
 
 import uuid
-from typing import Any, Dict
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
-
-from ..care_store import create_contact, list_contacts, update_contact, delete_contact
-
 
 from app.deps.scopes import docs_security_with
 
+from ..care_store import create_contact, delete_contact, list_contacts, update_contact
 
 router = APIRouter(tags=["Care"], dependencies=[Depends(docs_security_with(["care:resident"]))])
 
@@ -74,7 +72,7 @@ class ContactCreateResponse(BaseModel):
 )
 async def create_contact_api(body: ContactBody):
     cid = body.id or uuid.uuid4().hex
-    rec: Dict[str, Any] = {**body.model_dump(), "id": cid}
+    rec: dict[str, Any] = {**body.model_dump(), "id": cid}
     await create_contact(rec)
     return {"id": cid, "status": "ok"}
 
@@ -108,12 +106,10 @@ async def delete_contact_api(contact_id: str):
 import json
 import os
 from pathlib import Path
-from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from app.deps.user import get_current_user_id
-
 
 tv_router = APIRouter(tags=["TV"], dependencies=[Depends(docs_security_with(["care:resident"]))])
 
@@ -121,7 +117,7 @@ tv_router = APIRouter(tags=["TV"], dependencies=[Depends(docs_security_with(["ca
 CONTACTS_FILE = Path(os.getenv("CONTACTS_FILE", "data/contacts.json"))
 
 
-def _read_contacts() -> List[dict]:
+def _read_contacts() -> list[dict]:
     try:
         if CONTACTS_FILE.exists():
             data = json.loads(CONTACTS_FILE.read_text(encoding="utf-8") or "[]")
@@ -147,9 +143,9 @@ async def start_call(body: dict | None = None, name: str | None = None, user_id:
     # Device capability or paired phone/VOIP bridge can be added later.
     # For now: raise caregiver alert so they can place the call.
     try:
-        from app.caregiver import router as cg  # type: ignore
+        from app.caregiver import router as _cg  # type: ignore
     except Exception:
-        cg = None
+        _cg = None
     # Best-effort: write a simple alert file the caregiver portal could watch
     alerts_path = Path(os.getenv("ALERTS_FILE", "data/caregiver_alerts.json"))
     try:

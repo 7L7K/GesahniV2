@@ -1,9 +1,9 @@
-import os
-import json
 import asyncio
+import json
+import os
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any
 from uuid import uuid4
 
 try:
@@ -14,7 +14,7 @@ except Exception:  # pragma: no cover - optional dependency
     class AsyncIOScheduler:  # minimal stub
         def __init__(self, *a, **k):
             self.running = False
-            self._jobs: Dict[str, Any] = {}
+            self._jobs: dict[str, Any] = {}
 
         def start(self):
             self.running = True
@@ -83,7 +83,7 @@ else:
 _lock = asyncio.Lock()
 
 
-def _load_followups() -> List[Dict[str, Any]]:
+def _load_followups() -> list[dict[str, Any]]:
     if FOLLOW_UPS_FILE.exists():
         try:
             return json.loads(FOLLOW_UPS_FILE.read_text(encoding="utf-8"))
@@ -92,7 +92,7 @@ def _load_followups() -> List[Dict[str, Any]]:
     return []
 
 
-def _save_followups(entries: List[Dict[str, Any]]) -> None:
+def _save_followups(entries: list[dict[str, Any]]) -> None:
     FOLLOW_UPS_FILE.write_text(
         json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -115,7 +115,7 @@ async def _fire_followup(prompt: str, session_id: str, fid: str) -> None:
         _save_followups(data)
 
 
-def _schedule(entry: Dict[str, Any]) -> None:
+def _schedule(entry: dict[str, Any]) -> None:
     run_date = datetime.fromisoformat(entry["when"])
     _scheduler.add_job(
         _fire_followup,
@@ -180,7 +180,7 @@ def schedule_follow_up(prompt: str, when: datetime | str, session_id: str) -> st
     return fid
 
 
-def list_follow_ups(session_id: str | None = None) -> List[Dict[str, Any]]:
+def list_follow_ups(session_id: str | None = None) -> list[dict[str, Any]]:
     """Return all follow-ups, optionally filtered by session."""
     entries = _load_followups()
     if session_id is not None:

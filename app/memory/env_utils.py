@@ -6,10 +6,9 @@ import hashlib
 import logging
 import os
 import unicodedata
-from typing import Any, List, Tuple
+from typing import Any
 
 import numpy as np
-
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +78,7 @@ def _clean_meta(meta: dict[str, Any]) -> dict[str, Any]:
     return {k: (v if v is not None else "") for k, v in meta.items()}
 
 
-def _normalize(text: str) -> Tuple[str, str]:
+def _normalize(text: str) -> tuple[str, str]:
     """Return a stable hash and normalized text."""
 
     norm = unicodedata.normalize("NFKD", text)
@@ -101,7 +100,7 @@ def _normalized_hash(prompt: str) -> str:
     return _normalize(prompt)[0]
 
 
-def _cosine_similarity(a: List[float], b: List[float]) -> float:
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
     """Return cosine similarity in [0, 1] for two vectors.
 
     The raw cosine ranges in [-1, 1]. We map to [0, 1] using (cos + 1) / 2

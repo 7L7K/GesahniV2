@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import os
-import types
-from typing import Any
 import sys
 import types
+from typing import Any
 
 # Provide a minimal stub for app.adapters.metrics to avoid optional voice deps
 _M = type(
@@ -328,10 +326,9 @@ def test_ensure_collection_creates_payload_indexes(monkeypatch):
 
 
 def test_split_markdown_enforces_token_budget(monkeypatch):
-    from app.ingest import markitdown_ingest as mi
-
     # Force count_tokens to count 1 per word
     import app.token_utils as tu
+    from app.ingest import markitdown_ingest as mi
 
     monkeypatch.setattr(tu, "count_tokens", lambda s, *_a, **_k: max(1, len(s.split())))
 

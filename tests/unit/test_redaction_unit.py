@@ -1,4 +1,3 @@
-from pathlib import Path
 
 
 def test_redact_pii_and_store(tmp_path, monkeypatch):

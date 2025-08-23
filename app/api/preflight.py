@@ -2,28 +2,27 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Any, Dict
+from typing import Any
 
 import httpx
 from fastapi import APIRouter
 
-
 router = APIRouter(tags=["Admin"])
 
 
-def _check_tokenizers_parallelism() -> Dict[str, Any]:
+def _check_tokenizers_parallelism() -> dict[str, Any]:
     val = (os.getenv("TOKENIZERS_PARALLELISM") or "").strip().lower()
     status = "ok" if val in {"0", "false", "no"} else ("warn" if val else "warn")
     return {"status": status, "value": val or None}
 
 
-def _check_lazy_sbert() -> Dict[str, Any]:
+def _check_lazy_sbert() -> dict[str, Any]:
     # sentence_transformers should NOT be imported before first use
     loaded = "sentence_transformers" in sys.modules
     return {"status": "ok" if not loaded else "warn", "loaded": loaded}
 
 
-def _check_vector_store() -> Dict[str, Any]:
+def _check_vector_store() -> dict[str, Any]:
     from app.memory.api import _store  # type: ignore
 
     env_vs_raw = (os.getenv("VECTOR_STORE") or "chroma").strip().lower()
@@ -42,7 +41,7 @@ def _check_vector_store() -> Dict[str, Any]:
     return {"status": "ok" if ok else "warn", "env": env_vs_raw, "runtime": runtime}
 
 
-def _check_qdrant() -> Dict[str, Any]:
+def _check_qdrant() -> dict[str, Any]:
     env_vs = (os.getenv("VECTOR_STORE") or "").strip().lower()
     if env_vs != "qdrant":
         return {"status": "skip", "detail": "VECTOR_STORE != qdrant"}
@@ -57,7 +56,7 @@ def _check_qdrant() -> Dict[str, Any]:
         return {"status": "error", "detail": str(e)}
 
 
-def _check_embeddings() -> Dict[str, Any]:
+def _check_embeddings() -> dict[str, Any]:
     backend = (os.getenv("EMBEDDING_BACKEND") or "openai").strip().lower()
     if backend == "openai":
         has_key = bool(os.getenv("OPENAI_API_KEY"))
@@ -69,7 +68,7 @@ def _check_embeddings() -> Dict[str, Any]:
 
 
 @router.api_route("/status/preflight", methods=["GET"], include_in_schema=True)
-async def preflight() -> Dict[str, Any]:
+async def preflight() -> dict[str, Any]:
     # Preflight OPTIONS requests are handled by CORSMiddleware
     if os.getenv("PYTEST_CURRENT_TEST") is None:
         pass

@@ -1,0 +1,1773 @@
+FFFFFFFFFFFF.FF.FFFFFFFFFF.........                                      [100%]
+=================================== FAILURES ===================================
+_________________ test_admin_read_requires_read_or_admin_scope _________________
+
+client = <starlette.testclient.TestClient object at 0x121469550>
+
+    def test_admin_read_requires_read_or_admin_scope(client):
+        """Test that admin read endpoints require admin:read or admin scope"""
+        # Test with admin:read scope - should succeed
+        token_read = _tok(["admin:read"])
+        response = client.get("/v1/admin/config", headers={"Authorization": f"Bearer {token_read}"})
+>       assert response.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_admin_scope_granular.py:38: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:12Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:12Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:12Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:12Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:12Z", "req_id": "c53a52bf-09ce-439a-8080-2b9bccdc4903", "level": "INFO", "component": "app.security", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:12Z", "req_id": "c53a52bf-09ce-439a-8080-2b9bccdc4903", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:12Z", "req_id": "c53a52bf-09ce-439a-8080-2b9bccdc4903", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:12Z", "req_id": "c53a52bf-09ce-439a-8080-2b9bccdc4903", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "c53a52bf-09ce-439a-8080-2b9bccdc4903", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:read", "user_id": "test-user-123", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:12Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/config -> 401 (0.015s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "c33c6182caa5a8284dd3a77f366a0e2f", "status_code": 401, "duration_ms": 15.223026275634766, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.security:security.py:741 auth.token_source
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/config -> 401 (0.015s)
+________________ test_admin_write_requires_write_or_admin_scope ________________
+
+client = <starlette.testclient.TestClient object at 0x12148eb10>
+
+    def test_admin_write_requires_write_or_admin_scope(client):
+        """Test that admin write endpoints require admin:write or admin scope"""
+        test_data = {"test": "data"}
+    
+        # Test with admin:write scope - should succeed
+        token_write = _tok(["admin:write"])
+        response = client.post("/v1/admin/config", json=test_data, headers={"Authorization": f"Bearer {token_write}"})
+>       assert response.status_code == 200
+E       assert 405 == 200
+E        +  where 405 = <Response [405 Method Not Allowed]>.status_code
+
+tests/test_admin_scope_granular.py:62: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "9cf60a06-9583-4699-8a01-b3b32b157d05", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "9cf60a06-9583-4699-8a01-b3b32b157d05", "status_code": 405, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:write", "user_id": "test-user-123", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: POST /v1/admin/config -> 405 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "99ff2e5d0a67e3c92a616c8a8ab420f9", "status_code": 405, "duration_ms": 12.648344039916992, "error_code": "CLIENT_METHOD_NOT_ALLOWED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: POST /v1/admin/config -> 405 (0.013s)
+______________________ test_admin_metrics_endpoint_scope _______________________
+
+client = <starlette.testclient.TestClient object at 0x11dce96d0>
+
+    def test_admin_metrics_endpoint_scope(client):
+        """Test that /v1/admin/metrics requires admin:read or admin scope"""
+        # Test with admin:read scope - should succeed
+        token_read = _tok(["admin:read"])
+        response = client.get("/v1/admin/metrics", headers={"Authorization": f"Bearer {token_read}"})
+>       assert response.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_admin_scope_granular.py:84: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "7b0ac3a4-6911-48ad-9324-d5cd0fdcc038", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "7b0ac3a4-6911-48ad-9324-d5cd0fdcc038", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "7b0ac3a4-6911-48ad-9324-d5cd0fdcc038", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "7b0ac3a4-6911-48ad-9324-d5cd0fdcc038", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:read", "user_id": "test-user-123", "route": "/v1/admin/metrics", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/metrics -> 401 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "ffd4c15a9f10b5523a27d775f6960fcb", "status_code": 401, "duration_ms": 12.946844100952148, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/metrics -> 401 (0.013s)
+___________________ test_admin_system_status_endpoint_scope ____________________
+
+client = <starlette.testclient.TestClient object at 0x11dfd5710>
+
+    def test_admin_system_status_endpoint_scope(client):
+        """Test that system status endpoints require admin:read or admin scope"""
+        # Test with admin:read scope - should succeed
+        token_read = _tok(["admin:read"])
+        response = client.get("/v1/admin/system/status", headers={"Authorization": f"Bearer {token_read}"})
+        assert response.status_code == 200
+    
+        # Test with admin scope - should succeed
+        token_admin = _tok(["admin"])
+        response = client.get("/v1/admin/system/status", headers={"Authorization": f"Bearer {token_admin}"})
+>       assert response.status_code == 200
+E       assert 403 == 200
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_admin_scope_granular.py:107: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "e1bedb03-6dbd-413c-994b-77b3ea735ce4", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "e1bedb03-6dbd-413c-994b-77b3ea735ce4", "status_code": 200, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:read", "user_id": "test-user-123", "route": "/v1/admin/system/status", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/system/status -> 200 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "ffd4c15a9f10b5523a27d775f6960fcb", "status_code": 200, "duration_ms": 12.71200180053711}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "35691b08-dfe1-4c0d-b66b-17feaf4e116b", "level": "WARNING", "component": "app.deps.scopes", "msg": "deny: missing_scope scope=<admin:read> available=<admin>", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "35691b08-dfe1-4c0d-b66b-17feaf4e116b", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "35691b08-dfe1-4c0d-b66b-17feaf4e116b", "status_code": 403, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin", "user_id": "test-user-123", "route": "/v1/admin/system/status", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/system/status -> 403 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "ea2ca29648386ce03f4b5d5872b3dabb", "status_code": 403, "duration_ms": 11.16180419921875, "error_code": "CLIENT_FORBIDDEN"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/system/status -> 200 (0.013s)
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+WARNING  app.deps.scopes:scopes.py:406 deny: missing_scope scope=<admin:read> available=<admin>
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/system/status -> 403 (0.011s)
+_______________________ test_admin_flags_endpoint_scope ________________________
+
+client = <starlette.testclient.TestClient object at 0x12131bcd0>
+
+    def test_admin_flags_endpoint_scope(client):
+        """Test that flags endpoint requires admin:read or admin scope"""
+        # Test with admin:read scope - should succeed
+        token_read = _tok(["admin:read"])
+        response = client.get("/v1/admin/flags", headers={"Authorization": f"Bearer {token_read}"})
+>       assert response.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_admin_scope_granular.py:120: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "f8399e23-c664-41ac-9eb0-024e55be4741", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "f8399e23-c664-41ac-9eb0-024e55be4741", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "f8399e23-c664-41ac-9eb0-024e55be4741", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "f8399e23-c664-41ac-9eb0-024e55be4741", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:read", "user_id": "test-user-123", "route": "/v1/admin/flags", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/flags -> 401 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "ffd4c15a9f10b5523a27d775f6960fcb", "status_code": 401, "duration_ms": 12.629985809326172, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/flags -> 401 (0.013s)
+_______________________ test_admin_errors_endpoint_scope _______________________
+
+client = <starlette.testclient.TestClient object at 0x12127ef10>
+
+    def test_admin_errors_endpoint_scope(client):
+        """Test that errors endpoint requires admin:read or admin scope"""
+        # Test with admin:read scope - should succeed
+        token_read = _tok(["admin:read"])
+        response = client.get("/v1/admin/errors", headers={"Authorization": f"Bearer {token_read}"})
+>       assert response.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_admin_scope_granular.py:138: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "e5638f89-2c51-4f7e-841a-ed8ea2dcbe38", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "e5638f89-2c51-4f7e-841a-ed8ea2dcbe38", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "e5638f89-2c51-4f7e-841a-ed8ea2dcbe38", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "e5638f89-2c51-4f7e-841a-ed8ea2dcbe38", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:read", "user_id": "test-user-123", "route": "/v1/admin/errors", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/errors -> 401 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "ffd4c15a9f10b5523a27d775f6960fcb", "status_code": 401, "duration_ms": 11.885881423950195, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/errors -> 401 (0.012s)
+________________________ test_admin_tv_config_put_scope ________________________
+
+client = <starlette.testclient.TestClient object at 0x11bda0450>
+
+    def test_admin_tv_config_put_scope(client):
+        """Test that TV config PUT endpoint requires admin:write or admin scope"""
+        test_data = {"config": {"theme": "dark"}}
+    
+        # Test with admin:write scope - should succeed
+        token_write = _tok(["admin:write"])
+        response = client.put("/v1/admin/tv/config", json=test_data, headers={"Authorization": f"Bearer {token_write}"})
+>       assert response.status_code == 200
+E       assert 405 == 200
+E        +  where 405 = <Response [405 Method Not Allowed]>.status_code
+
+tests/test_admin_scope_granular.py:158: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "365b5afc-ebb0-42da-bfc9-3b3bfd88ab95", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "365b5afc-ebb0-42da-bfc9-3b3bfd88ab95", "status_code": 405, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:write", "user_id": "test-user-123", "route": "/v1/admin/tv/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: PUT /v1/admin/tv/config -> 405 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "99ff2e5d0a67e3c92a616c8a8ab420f9", "status_code": 405, "duration_ms": 10.956764221191406, "error_code": "CLIENT_METHOD_NOT_ALLOWED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: PUT /v1/admin/tv/config -> 405 (0.011s)
+___________________ test_admin_vector_store_bootstrap_scope ____________________
+
+client = <starlette.testclient.TestClient object at 0x11d646dd0>
+
+    def test_admin_vector_store_bootstrap_scope(client):
+        """Test that vector store bootstrap requires admin:write or admin scope"""
+        # Test with admin:write scope - should succeed
+        token_write = _tok(["admin:write"])
+        response = client.post("/v1/admin/vector_store/bootstrap", headers={"Authorization": f"Bearer {token_write}"})
+>       assert response.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_admin_scope_granular.py:176: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "2b03066e-219b-4e35-be71-da7fb3485063", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "2b03066e-219b-4e35-be71-da7fb3485063", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "2b03066e-219b-4e35-be71-da7fb3485063", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "2b03066e-219b-4e35-be71-da7fb3485063", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:write", "user_id": "test-user-123", "route": "/v1/admin/vector_store/bootstrap", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: POST /v1/admin/vector_store/bootstrap -> 401 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "99ff2e5d0a67e3c92a616c8a8ab420f9", "status_code": 401, "duration_ms": 12.419939041137695, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: POST /v1/admin/vector_store/bootstrap -> 401 (0.012s)
+_______________________ test_user_profile_endpoint_scope _______________________
+
+client = <starlette.testclient.TestClient object at 0x11e149e10>
+
+    def test_user_profile_endpoint_scope(client):
+        """Test that user profile endpoint requires user:profile scope"""
+        # Test with user:profile scope - should succeed
+        token_profile = _tok(["user:profile"])
+        response = client.get("/v1/admin/users/me", headers={"Authorization": f"Bearer {token_profile}"})
+        assert response.status_code == 200
+    
+        # Test with admin scope - should succeed (admin can access user profile)
+        token_admin = _tok(["admin"])
+        response = client.get("/v1/admin/users/me", headers={"Authorization": f"Bearer {token_admin}"})
+>       assert response.status_code == 200
+E       assert 403 == 200
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_admin_scope_granular.py:199: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "48b86abe-f474-49a1-9f7c-c6a11579bb37", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "48b86abe-f474-49a1-9f7c-c6a11579bb37", "status_code": 200, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "user:profile", "user_id": "test-user-123", "route": "/v1/admin/users/me", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/users/me -> 200 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "7704476346cdc56234bc55e2a9785bda", "status_code": 200, "duration_ms": 11.797904968261719}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "6203a04f-22bb-485a-b96b-84b2b63dc842", "level": "WARNING", "component": "app.deps.scopes", "msg": "deny: missing_scope scope=<user:profile> available=<admin>", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "6203a04f-22bb-485a-b96b-84b2b63dc842", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "6203a04f-22bb-485a-b96b-84b2b63dc842", "status_code": 403, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin", "user_id": "test-user-123", "route": "/v1/admin/users/me", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/users/me -> 403 (0.010s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "ea2ca29648386ce03f4b5d5872b3dabb", "status_code": 403, "duration_ms": 9.840011596679688, "error_code": "CLIENT_FORBIDDEN"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/users/me -> 200 (0.012s)
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+WARNING  app.deps.scopes:scopes.py:406 deny: missing_scope scope=<user:profile> available=<admin>
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/users/me -> 403 (0.010s)
+_______________________ test_scope_combination_scenarios _______________________
+
+client = <starlette.testclient.TestClient object at 0x11dc30190>
+
+    def test_scope_combination_scenarios(client):
+        """Test various scope combination scenarios"""
+        # Test multiple scopes including required one
+        token_multi = _tok(["admin:read", "user:profile"])
+        response = client.get("/v1/admin/config", headers={"Authorization": f"Bearer {token_multi}"})
+>       assert response.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_admin_scope_granular.py:212: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "67aaa3da-c4fc-4301-97ac-11d763092d4e", "level": "INFO", "component": "app.security", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "67aaa3da-c4fc-4301-97ac-11d763092d4e", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "67aaa3da-c4fc-4301-97ac-11d763092d4e", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "67aaa3da-c4fc-4301-97ac-11d763092d4e", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "67aaa3da-c4fc-4301-97ac-11d763092d4e", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:read user:profile", "user_id": "test-user-123", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/config -> 401 (0.014s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "cd4388c77ce3f6045bcc03b36a83c5ec", "status_code": 401, "duration_ms": 13.721942901611328, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.security:security.py:741 auth.token_source
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/config -> 401 (0.014s)
+___________________ test_scope_inheritance_admin_full_access ___________________
+
+client = <starlette.testclient.TestClient object at 0x11dc334d0>
+
+    def test_scope_inheritance_admin_full_access(client):
+        """Test that admin scope provides access to all admin endpoints"""
+        token_admin = _tok(["admin"])
+    
+        # Test all admin endpoints with admin scope
+        endpoints = [
+            "/v1/admin/config",
+            "/v1/admin/metrics",
+            "/v1/admin/system/status",
+            "/v1/admin/flags",
+            "/v1/admin/errors"
+        ]
+    
+        for endpoint in endpoints:
+            response = client.get(endpoint, headers={"Authorization": f"Bearer {token_admin}"})
+>           assert response.status_code == 200, f"Admin should access {endpoint}"
+E           AssertionError: Admin should access /v1/admin/config
+E           assert 401 == 200
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_admin_scope_granular.py:240: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "68f219f2-d79b-4838-a29e-02904e9448ac", "level": "INFO", "component": "app.security", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "68f219f2-d79b-4838-a29e-02904e9448ac", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "68f219f2-d79b-4838-a29e-02904e9448ac", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "68f219f2-d79b-4838-a29e-02904e9448ac", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "68f219f2-d79b-4838-a29e-02904e9448ac", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin", "user_id": "test-user-123", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/config -> 401 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "ea2ca29648386ce03f4b5d5872b3dabb", "status_code": 401, "duration_ms": 11.540412902832031, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.security:security.py:741 auth.token_source
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/config -> 401 (0.012s)
+_____________________ test_scope_separation_read_vs_write ______________________
+
+client = <starlette.testclient.TestClient object at 0x11d645f50>
+
+    def test_scope_separation_read_vs_write(client):
+        """Test that read and write scopes are properly separated"""
+        # Test that admin:read allows reads but not writes
+        token_read = _tok(["admin:read"])
+    
+        # Read operations should work
+        read_endpoints = [
+            "/v1/admin/config",
+            "/v1/admin/metrics",
+            "/v1/admin/system/status"
+        ]
+    
+        for endpoint in read_endpoints:
+            response = client.get(endpoint, headers={"Authorization": f"Bearer {token_read}"})
+>           assert response.status_code == 200, f"admin:read should allow GET {endpoint}"
+E           AssertionError: admin:read should allow GET /v1/admin/config
+E           assert 401 == 200
+E            +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_admin_scope_granular.py:257: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "f0f77ae0-4c20-4e09-8a1c-991451a65197", "level": "INFO", "component": "app.security", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "f0f77ae0-4c20-4e09-8a1c-991451a65197", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "f0f77ae0-4c20-4e09-8a1c-991451a65197", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "f0f77ae0-4c20-4e09-8a1c-991451a65197", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "f0f77ae0-4c20-4e09-8a1c-991451a65197", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:read", "user_id": "test-user-123", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/config -> 401 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "ffd4c15a9f10b5523a27d775f6960fcb", "status_code": 401, "duration_ms": 11.862993240356445, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.security:security.py:741 auth.token_source
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/config -> 401 (0.012s)
+________________________ test_malformed_token_handling _________________________
+
+client = <starlette.testclient.TestClient object at 0x11dc9f650>
+
+    def test_malformed_token_handling(client):
+        """Test that malformed tokens are properly rejected"""
+        response = client.get("/v1/admin/config", headers={"Authorization": "Bearer malformed-token"})
+        assert response.status_code == 401
+    
+        response = client.get("/v1/admin/config", headers={"Authorization": "NotBearer token"})
+>       assert response.status_code == 401
+E       assert 500 == 401
+E        +  where 500 = <Response [500 Internal Server Error]>.status_code
+
+tests/test_admin_scope_granular.py:297: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_auth_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "985f1a74-62a1-443b-b62f-0762d300fb59", "level": "INFO", "component": "app.security", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "985f1a74-62a1-443b-b62f-0762d300fb59", "level": "INFO", "component": "app.auth_monitoring", "msg": "Authentication event", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "985f1a74-62a1-443b-b62f-0762d300fb59", "level": "WARNING", "component": "app.security", "msg": "deny: invalid_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "985f1a74-62a1-443b-b62f-0762d300fb59", "level": "WARNING", "component": "app.security", "msg": "auth.unauthorized", "env": "", "build_sha": "", "version": "", "meta": {"reason": "unauthorized"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "985f1a74-62a1-443b-b62f-0762d300fb59", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "985f1a74-62a1-443b-b62f-0762d300fb59", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "258f0bff1dd3f1fdcafae527365787a4", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/config -> 401 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "84ae974e086a7c5acfae7914253b8b40", "status_code": 401, "duration_ms": 10.977983474731445, "error_code": "CLIENT_UNAUTHORIZED"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "512f6fd2-807e-4386-bc29-cc981e672ff3", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "ERROR", "component": "app.middleware.custom", "msg": "Request failed: GET /v1/admin/config -> NameError: name '_admin_token' is not defined", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "94a08da1fecbb6e8b46990538c7b50b2", "duration_ms": 8.87298583984375, "error_type": "NameError", "error_message": "name '_admin_token' is not defined", "error_code": "SERVER_INTERNAL_ERROR_UNKNOWN"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:250 auth.invalid_token
+INFO     app.security:security.py:741 auth.token_source
+INFO     app.auth_monitoring:auth_monitoring.py:95 Authentication event
+WARNING  app.security:security.py:848 deny: invalid_token
+WARNING  app.security:security.py:853 auth.unauthorized
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/config -> 401 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.deps.user:user.py:135 auth.no_token
+ERROR    app.middleware.custom:custom.py:143 Request failed: GET /v1/admin/config -> NameError: name '_admin_token' is not defined
+Traceback (most recent call last):
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 157, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/anyio/streams/memory.py", line 126, in receive
+    raise EndOfStream from None
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/kingal/2025/GesahniV2/app/middleware/custom.py", line 113, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/custom.py", line 173, in dispatch
+    return await _silent_refresh_fn(request, call_next)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/middleware_core.py", line 656, in silent_refresh_middleware
+    response: Response = await call_next(request)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/custom.py", line 181, in dispatch
+    return await _reload_env_fn(request, call_next)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/middleware_core.py", line 789, in reload_env_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/csrf.py", line 56, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/session_attach.py", line 67, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/rate_limit.py", line 111, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/metrics_mw.py", line 41, in dispatch
+    resp: Response = await call_next(request)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/middleware_core.py", line 158, in dispatch
+    resp = await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/audit_mw.py", line 14, in dispatch
+    resp = await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/middleware_core.py", line 341, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/middleware_core.py", line 186, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/middleware_core.py", line 231, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/middleware/middleware_core.py", line 100, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 163, in call_next
+    raise app_exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/routing.py", line 715, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/routing.py", line 735, in app
+    await route.handle(scope, receive, send)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/routing.py", line 288, in handle
+    await self.app(scope, receive, send)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/routing.py", line 76, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/routing.py", line 73, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/fastapi/routing.py", line 301, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/fastapi/routing.py", line 212, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kingal/2025/GesahniV2/app/api/admin.py", line 441, in admin_config
+    _check_admin(token, request)
+  File "/Users/kingal/2025/GesahniV2/app/api/admin.py", line 232, in _check_admin
+    _tok = _admin_token()
+           ^^^^^^^^^^^^
+NameError: name '_admin_token' is not defined
+_________________________ test_scope_case_sensitivity __________________________
+
+client = <starlette.testclient.TestClient object at 0x11ddbbf10>
+
+    def test_scope_case_sensitivity(client):
+        """Test that scope matching is case sensitive"""
+        # Test with lowercase scopes (assuming our system is case-sensitive)
+        token_lowercase = _tok(["admin:read"])
+        response = client.get("/v1/admin/config", headers={"Authorization": f"Bearer {token_lowercase}"})
+>       assert response.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_admin_scope_granular.py:305: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "2ab81908-1971-4b95-b6eb-f80312efeb4f", "level": "INFO", "component": "app.security", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "2ab81908-1971-4b95-b6eb-f80312efeb4f", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "2ab81908-1971-4b95-b6eb-f80312efeb4f", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_clerk_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_clerk_token"}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "2ab81908-1971-4b95-b6eb-f80312efeb4f", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "2ab81908-1971-4b95-b6eb-f80312efeb4f", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:read", "user_id": "test-user-123", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:13Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/config -> 401 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "ffd4c15a9f10b5523a27d775f6960fcb", "status_code": 401, "duration_ms": 12.107133865356445, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.security:security.py:741 auth.token_source
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:288 auth.invalid_clerk_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/config -> 401 (0.012s)
+______________________ test_audit_append_basic_structure _______________________
+
+client = <starlette.testclient.TestClient object at 0x11dd350d0>
+tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_basic_struct0/audit')
+
+    def test_audit_append_basic_structure(client, tmp_audit_dir):
+        """Test basic structure of audit events"""
+        # Make a request
+        response = client.get("/healthz")
+        assert response.status_code == 200
+    
+        # Read audit file
+        audit_file = get_audit_file_path()
+        assert audit_file.exists()
+    
+        content = audit_file.read_text().strip()
+        assert content, "Audit file should not be empty"
+    
+        lines = content.split('\n')
+        assert len(lines) >= 1, "Should have at least one audit event"
+    
+        # Parse the last event
+        last_event = json.loads(lines[-1])
+    
+        # Verify required fields
+>       assert "ts" in last_event
+E       AssertionError: assert 'ts' in {'action': 'http_request', 'data': {'method': 'GET', 'path': '/v1/google/auth/callback', 'route': 'google_callback', '...35', 'metadata': {'audit_version': '2.0', 'ip_address': 'testclient', 'request_id': '-', 'session_id': None, ...}, ...}
+
+tests/test_audit_trail.py:65: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.009s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 9.398937225341797}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.009s)
+______________________ test_audit_append_multiple_events _______________________
+
+client = <starlette.testclient.TestClient object at 0x1214693d0>
+tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_multiple_eve0/audit')
+
+    def test_audit_append_multiple_events(client, tmp_audit_dir):
+        """Test that multiple requests create multiple audit events"""
+        # Make multiple requests
+        client.get("/healthz")
+        client.get("/v1/admin/metrics")
+        client.post("/v1/admin/config", json={"test": "data"})
+    
+        # Read audit file
+        audit_file = tmp_audit_dir / "events.ndjson"
+>       content = audit_file.read_text().strip()
+                  ^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_trail.py:86: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1058: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_multiple_eve0/audit/events.ndjson')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_multiple_eve0/audit/events.ndjson'
+
+../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1044: FileNotFoundError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 10.959148406982422}}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "437af611-8636-4466-8c05-185ef0d5b2e0", "level": "WARNING", "component": "app.deps.scopes", "msg": "deny: missing_scope scope=<admin:read> reason=no_payload", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "437af611-8636-4466-8c05-185ef0d5b2e0", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "437af611-8636-4466-8c05-185ef0d5b2e0", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "anon", "route": "/v1/admin/metrics", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/metrics -> 401 (0.009s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 401, "duration_ms": 9.48786735534668, "error_code": "CLIENT_UNAUTHORIZED"}}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "285d63fa-117e-4fc3-a62c-438c6b2fdb94", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "285d63fa-117e-4fc3-a62c-438c6b2fdb94", "status_code": 405, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "anon", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: POST /v1/admin/config -> 405 (0.010s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 405, "duration_ms": 10.325908660888672, "error_code": "CLIENT_METHOD_NOT_ALLOWED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+WARNING  app.deps.scopes:scopes.py:400 deny: missing_scope scope=<admin:read> reason=no_payload
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/metrics -> 401 (0.009s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: POST /v1/admin/config -> 405 (0.010s)
+_____________________ test_audit_append_with_error_status ______________________
+
+client = <starlette.testclient.TestClient object at 0x11cbb7a10>
+tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_with_error_s0/audit')
+
+    def test_audit_append_with_error_status(client, tmp_audit_dir):
+        """Test audit logging for error responses"""
+        # Make a request that will result in an error
+        response = client.get("/nonexistent-endpoint")
+>       assert response.status_code == 404
+E       assert 405 == 404
+E        +  where 405 = <Response [405 Method Not Allowed]>.status_code
+
+tests/test_audit_trail.py:105: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "3db0c9f8-55b4-4b30-a4b6-50b4efec383a", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "3db0c9f8-55b4-4b30-a4b6-50b4efec383a", "status_code": 405, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "anon", "route": "/nonexistent-endpoint", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /nonexistent-endpoint -> 405 (0.010s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 405, "duration_ms": 9.8419189453125, "error_code": "CLIENT_METHOD_NOT_ALLOWED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /nonexistent-endpoint -> 405 (0.010s)
+_____________________ test_audit_append_preserves_history ______________________
+
+client = <starlette.testclient.TestClient object at 0x12796ddd0>
+tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_preserves_hi0/audit')
+
+    def test_audit_append_preserves_history(client, tmp_audit_dir):
+        """Test that audit file preserves history across requests"""
+        # Make first request
+        client.get("/healthz")
+        audit_file = tmp_audit_dir / "events.ndjson"
+>       content1 = audit_file.read_text().strip()
+                   ^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_trail.py:128: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1058: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_preserves_hi0/audit/events.ndjson')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_preserves_hi0/audit/events.ndjson'
+
+../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1044: FileNotFoundError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.008s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 8.467912673950195}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.008s)
+______________________ test_audit_append_timestamp_format ______________________
+
+client = <starlette.testclient.TestClient object at 0x12798ae90>
+tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_timestamp_fo0/audit')
+
+    def test_audit_append_timestamp_format(client, tmp_audit_dir):
+        """Test that timestamps are in proper ISO format"""
+        import re
+    
+        client.get("/healthz")
+    
+        audit_file = tmp_audit_dir / "events.ndjson"
+>       content = audit_file.read_text().strip()
+                  ^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_trail.py:147: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1058: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_timestamp_fo0/audit/events.ndjson')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_timestamp_fo0/audit/events.ndjson'
+
+../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1044: FileNotFoundError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:16Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.009s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 8.565187454223633}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.009s)
+__________________ test_audit_append_includes_request_details __________________
+
+client = <starlette.testclient.TestClient object at 0x12798ba90>
+tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_includes_req0/audit')
+
+    def test_audit_append_includes_request_details(client, tmp_audit_dir):
+        """Test that audit events include detailed request information"""
+        # Make a request with specific characteristics
+        response = client.get("/v1/admin/metrics?param=test")
+>       assert response.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_audit_trail.py:161: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "a704d9dd-ebf6-4bee-817f-64b12ff289ce", "level": "WARNING", "component": "app.deps.scopes", "msg": "deny: missing_scope scope=<admin:read> reason=no_payload", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "a704d9dd-ebf6-4bee-817f-64b12ff289ce", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "a704d9dd-ebf6-4bee-817f-64b12ff289ce", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "anon", "route": "/v1/admin/metrics", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/metrics -> 401 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 401, "duration_ms": 12.084007263183594, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:135 auth.no_token
+WARNING  app.deps.scopes:scopes.py:400 deny: missing_scope scope=<admin:read> reason=no_payload
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/metrics -> 401 (0.012s)
+____________________ test_audit_append_with_authentication _____________________
+
+client = <starlette.testclient.TestClient object at 0x12795fe90>
+tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_with_authent0/audit')
+
+    def test_audit_append_with_authentication(client, tmp_audit_dir):
+        """Test audit logging with authentication context"""
+        # This would need a valid token in a real scenario
+        # For now, test with invalid token to see auth-related fields
+        response = client.get("/v1/admin/config", headers={"Authorization": "Bearer invalid-token"})
+    
+        audit_file = tmp_audit_dir / "events.ndjson"
+>       content = audit_file.read_text().strip()
+                  ^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_trail.py:181: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1058: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_with_authent0/audit/events.ndjson')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_with_authent0/audit/events.ndjson'
+
+../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1044: FileNotFoundError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_auth_token"}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "e2680925-0621-410d-bdd5-0c96883df1b8", "level": "INFO", "component": "app.security", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "e2680925-0621-410d-bdd5-0c96883df1b8", "level": "INFO", "component": "app.auth_monitoring", "msg": "Authentication event", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "e2680925-0621-410d-bdd5-0c96883df1b8", "level": "WARNING", "component": "app.security", "msg": "deny: invalid_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "e2680925-0621-410d-bdd5-0c96883df1b8", "level": "WARNING", "component": "app.security", "msg": "auth.unauthorized", "env": "", "build_sha": "", "version": "", "meta": {"reason": "unauthorized"}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "e2680925-0621-410d-bdd5-0c96883df1b8", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "e2680925-0621-410d-bdd5-0c96883df1b8", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "1e91b84fbd4d3db0804ba6dfac672d48", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/config -> 401 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "43568fa3f8f2c90181bfd1364f49b164", "status_code": 401, "duration_ms": 13.398170471191406, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:250 auth.invalid_token
+INFO     app.security:security.py:741 auth.token_source
+INFO     app.auth_monitoring:auth_monitoring.py:95 Authentication event
+WARNING  app.security:security.py:848 deny: invalid_token
+WARNING  app.security:security.py:853 auth.unauthorized
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/config -> 401 (0.013s)
+______________________ test_audit_append_file_permissions ______________________
+
+client = <starlette.testclient.TestClient object at 0x12167ead0>
+tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_file_permiss0/audit')
+
+    def test_audit_append_file_permissions(client, tmp_audit_dir):
+        """Test that audit file has appropriate permissions"""
+        client.get("/healthz")
+    
+        audit_file = tmp_audit_dir / "events.ndjson"
+>       assert audit_file.exists()
+E       AssertionError: assert False
+E        +  where False = exists()
+E        +    where exists = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_file_permiss0/audit/events.ndjson').exists
+
+tests/test_audit_trail.py:196: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.009s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 8.718013763427734}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.009s)
+_____________________ test_audit_append_concurrent_access ______________________
+
+client = <starlette.testclient.TestClient object at 0x1279b2ad0>
+tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_concurrent_a0/audit')
+
+    def test_audit_append_concurrent_access(client, tmp_audit_dir):
+        """Test audit file handling under concurrent access"""
+        import threading
+        import concurrent.futures
+    
+        def make_request():
+            return client.get("/healthz")
+    
+        # Make concurrent requests
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(make_request) for _ in range(10)]
+            responses = [f.result() for f in concurrent.futures.as_completed(futures)]
+    
+        # All should succeed
+        assert all(r.status_code == 200 for r in responses)
+    
+        # Check audit file
+        audit_file = get_audit_file_path()
+        content = audit_file.read_text().strip()
+        lines = content.split('\n')
+    
+        # Should have all events
+        assert len(lines) >= 10, f"Expected at least 10 audit events, got {len(lines)}"
+    
+        # All should be valid JSON
+        events = [json.loads(line) for line in lines]
+>       assert all(event["action"] == "http_request" for event in events)
+E       assert False
+E        +  where False = all(<generator object test_audit_append_concurrent_access.<locals>.<genexpr> at 0x127a9c6c0>)
+
+tests/test_audit_trail.py:232: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.035s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 35.111188888549805}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.035s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 34.68894958496094}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.037s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 37.116050720214844}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.036s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 36.28420829772949}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.037s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 37.381887435913086}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.021s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 21.476030349731445}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.027s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 26.827096939086914}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.024s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 23.753881454467773}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.026s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 25.712966918945312}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.028s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 28.382062911987305}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.035s)
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.035s)
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.037s)
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.036s)
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.037s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.021s)
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.027s)
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.024s)
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.026s)
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.028s)
+___________________ test_audit_append_file_rotation_scenario ___________________
+
+client = <starlette.testclient.TestClient object at 0x127bd9650>
+tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_file_rotatio0/audit')
+
+    def test_audit_append_file_rotation_scenario(client, tmp_audit_dir):
+        """Test audit file behavior (in a real system, this would test log rotation)"""
+        # Make many requests to simulate file growth
+        for i in range(100):
+            client.get("/healthz")
+    
+        audit_file = tmp_audit_dir / "events.ndjson"
+>       content = audit_file.read_text().strip()
+                  ^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_trail.py:242: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1058: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_file_rotatio0/audit/events.ndjson')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-4/test_audit_append_file_rotatio0/audit/events.ndjson'
+
+../../.pyenv/versions/3.11.9/lib/python3.11/pathlib.py:1044: FileNotFoundError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.006s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.527734756469727}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.281925201416016}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.082845687866211}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.414009094238281}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.146026611328125}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.006s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.561113357543945}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.473136901855469}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.006s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.735158920288086}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.006s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.565881729125977}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.006s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.602121353149414}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.264043807983398}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.363941192626953}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.006s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.501985549926758}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.006s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.645036697387695}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.371809005737305}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.484104156494141}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.006s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.589008331298828}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.2032470703125}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.283117294311523}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.131006240844727}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.006s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.6247711181640625}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.097866058349609}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.806041717529297}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.726171493530273}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.927873611450195}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.886865615844727}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.214214324951172}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.935979843139648}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.032777786254883}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.238056182861328}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.015134811401367}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.942178726196289}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.276918411254883}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.003929138183594}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.81724739074707}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.586935043334961}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.807949066162109}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.588127136230469}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.548788070678711}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.004s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.488945007324219}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.004s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.490137100219727}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.657983779907227}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.004s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.405975341796875}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.004s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.454135894775391}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.806041717529297}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.004s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.405975341796875}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.609107971191406}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.566669464111328}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.608154296875}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.004s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.40669059753418}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.500150680541992}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.006s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.500078201293945}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.097389221191406}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.944086074829102}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.789113998413086}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.070924758911133}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 5.057096481323242}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.81414794921875}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.005s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 4.836082458496094}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.006s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 6.145000457763672}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.007s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 7.1430206298828125}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.008s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 8.105993270874023}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.008s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 7.860898971557617}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.008s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 8.393287658691406}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.009s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 9.218931198120117}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.009s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 9.438037872314453}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.009s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 9.366989135742188}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 11.070966720581055}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 12.253761291503906}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 11.442899703979492}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 12.650012969970703}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 11.836051940917969}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 12.05587387084961}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 13.005971908569336}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 12.542963027954102}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 12.591123580932617}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 12.037277221679688}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 11.328935623168945}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 11.471748352050781}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 12.51983642578125}}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 11.562108993530273}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 10.50424575805664}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 10.934114456176758}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 11.622905731201172}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 11.411905288696289}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 12.65096664428711}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 10.9710693359375}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 11.05809211730957}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.010s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 10.015010833740234}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.010s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 10.497093200683594}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.010s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 9.508132934570312}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 10.859012603759766}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.011s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 10.73002815246582}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.010s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 9.568929672241211}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.009s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 8.72182846069336}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.009s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 9.135007858276367}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.010s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 9.505033493041992}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 11.889934539794922}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.008s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 7.548093795776367}}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:12:18Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz -> 200 (0.007s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 6.968975067138672}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.006s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.006s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.006s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.006s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.006s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.006s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.006s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.006s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.006s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.004s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.004s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.004s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.004s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.004s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.004s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.006s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.005s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.006s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.007s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.008s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.008s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.008s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.009s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.009s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.009s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.012s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.013s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.012s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.012s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.013s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.013s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.013s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.012s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.013s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.012s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.012s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.013s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.010s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.010s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.010s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.011s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.010s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.009s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.009s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.010s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.012s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.008s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /healthz -> 200 (0.007s)
+=============================== warnings summary ===============================
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/chromadb/api/collection_configuration.py:347
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/chromadb/api/collection_configuration.py:347
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/chromadb/api/collection_configuration.py:347: DeprecationWarning: legacy embedding function config: '_LengthEmbedder' object has no attribute 'is_legacy'
+    return json.dumps(create_collection_configuration_to_json(config))
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:298
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:298: PydanticDeprecatedSince20: `json_encoders` is deprecated. See https://docs.pydantic.dev/2.11/concepts/serialization/#custom-serializers for alternatives. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/passlib/utils/__init__.py:854
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+app/transcribe.py:7
+  /Users/kingal/2025/GesahniV2/app/transcribe.py:7: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
+    import audioop  # type: ignore
+
+app/main.py:1206
+  /Users/kingal/2025/GesahniV2/app/main.py:1206: DeprecationWarning: `example` has been deprecated, please use `examples` instead
+    from .api.care import router as care_router
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/testclient.py:454
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/testclient.py:454: DeprecationWarning: The `allow_redirects` argument is deprecated. Use `follow_redirects` instead.
+    warnings.warn(message, DeprecationWarning)
+
+tests/integration/test_refresh_concurrent.py:8
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_concurrent.py:8: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:26
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:26: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:52
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:52: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:77
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:77: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:103
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:103: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:132
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:132: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:158
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:158: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:192
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:192: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:220
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:220: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_replay.py:13
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_replay.py:13: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_admin_scope_granular.py::test_admin_read_requires_read_or_admin_scope
+FAILED tests/test_admin_scope_granular.py::test_admin_write_requires_write_or_admin_scope
+FAILED tests/test_admin_scope_granular.py::test_admin_metrics_endpoint_scope
+FAILED tests/test_admin_scope_granular.py::test_admin_system_status_endpoint_scope
+FAILED tests/test_admin_scope_granular.py::test_admin_flags_endpoint_scope - ...
+FAILED tests/test_admin_scope_granular.py::test_admin_errors_endpoint_scope
+FAILED tests/test_admin_scope_granular.py::test_admin_tv_config_put_scope - a...
+FAILED tests/test_admin_scope_granular.py::test_admin_vector_store_bootstrap_scope
+FAILED tests/test_admin_scope_granular.py::test_user_profile_endpoint_scope
+FAILED tests/test_admin_scope_granular.py::test_scope_combination_scenarios
+FAILED tests/test_admin_scope_granular.py::test_scope_inheritance_admin_full_access
+FAILED tests/test_admin_scope_granular.py::test_scope_separation_read_vs_write
+FAILED tests/test_admin_scope_granular.py::test_malformed_token_handling - as...
+FAILED tests/test_admin_scope_granular.py::test_scope_case_sensitivity - asse...
+FAILED tests/test_audit_trail.py::test_audit_append_basic_structure - Asserti...
+FAILED tests/test_audit_trail.py::test_audit_append_multiple_events - FileNot...
+FAILED tests/test_audit_trail.py::test_audit_append_with_error_status - asser...
+FAILED tests/test_audit_trail.py::test_audit_append_preserves_history - FileN...
+FAILED tests/test_audit_trail.py::test_audit_append_timestamp_format - FileNo...
+FAILED tests/test_audit_trail.py::test_audit_append_includes_request_details
+FAILED tests/test_audit_trail.py::test_audit_append_with_authentication - Fil...
+FAILED tests/test_audit_trail.py::test_audit_append_file_permissions - Assert...
+FAILED tests/test_audit_trail.py::test_audit_append_concurrent_access - asser...
+FAILED tests/test_audit_trail.py::test_audit_append_file_rotation_scenario - ...

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import unicodedata  # ← NEW
 from abc import ABC, abstractmethod
-from typing import Optional, Pattern, List
+from re import Pattern
 
 from ..history import append_history
 from ..telemetry import log_record_var
@@ -12,9 +12,9 @@ from ..telemetry import log_record_var
 class Skill(ABC):
     """Abstract base class for all built in skills."""
 
-    PATTERNS: List[Pattern[str]] = []
+    PATTERNS: list[Pattern[str]] = []
 
-    def match(self, prompt: str) -> Optional[re.Match]:
+    def match(self, prompt: str) -> re.Match | None:
         for pat in self.PATTERNS:
             m = pat.search(prompt)
             if m:
@@ -34,7 +34,7 @@ class Skill(ABC):
         return await self.run(prompt, m)
 
 
-SKILLS: List[Skill] = []
+SKILLS: list[Skill] = []
 
 
 # ---------- NEW helper ----------
@@ -64,7 +64,7 @@ def _normalize(text: str) -> str:
 # ---------------------------------
 
 
-async def check_builtin_skills(prompt: str) -> Optional[str]:
+async def check_builtin_skills(prompt: str) -> str | None:
     """Return a response from the first matching skill or ``None``.
 
     Any matched skill response is also logged to the history file using the

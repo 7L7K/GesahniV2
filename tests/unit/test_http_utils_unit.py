@@ -1,5 +1,5 @@
 import asyncio
-import types
+
 import pytest
 
 
@@ -65,6 +65,7 @@ async def test_json_request_json_decode_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_json_request_http_errors(monkeypatch):
     import httpx
+
     from app import http_utils
 
     class Client:
@@ -106,6 +107,7 @@ async def test_json_request_http_errors(monkeypatch):
 @pytest.mark.asyncio
 async def test_json_request_500_retries_then_success(monkeypatch):
     import httpx
+
     from app import http_utils
 
     calls = {"n": 0}
@@ -146,6 +148,7 @@ async def test_json_request_500_retries_then_success(monkeypatch):
 @pytest.mark.asyncio
 async def test_json_request_network_error(monkeypatch):
     import httpx
+
     from app import http_utils
 
     calls = {"n": 0}
@@ -351,6 +354,7 @@ async def test_json_request_asyncclient_typeerror_fallback(monkeypatch):
 async def test_json_request_all_retries_exhausted(monkeypatch):
     """Test that all retries are exhausted and final error is returned."""
     import httpx
+
     from app import http_utils
 
     class Client:
@@ -380,6 +384,7 @@ async def test_json_request_all_retries_exhausted(monkeypatch):
 async def test_json_request_network_error_all_retries_exhausted(monkeypatch):
     """Test that network errors exhaust all retries and return network_error."""
     import httpx
+
     from app import http_utils
 
     class Client:
@@ -409,6 +414,7 @@ async def test_json_request_network_error_all_retries_exhausted(monkeypatch):
 async def test_json_request_non_retryable_http_error_all_attempts(monkeypatch):
     """Test that non-retryable HTTP errors (like 400) exhaust all attempts and return http_error."""
     import httpx
+
     from app import http_utils
 
     class Client:
@@ -438,6 +444,7 @@ async def test_json_request_non_retryable_http_error_all_attempts(monkeypatch):
 async def test_json_request_final_return_statement(monkeypatch):
     """Test the final return statement when all retries are exhausted."""
     import httpx
+
     from app import http_utils
 
     class Client:

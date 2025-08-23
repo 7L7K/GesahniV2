@@ -7,7 +7,6 @@ import httpx
 
 from .base import Skill
 
-
 WIN_PATTERN = re.compile(r"did the (?P<team>[\w\s]+) win", re.I)
 NEXT_PATTERN = re.compile(r"next game for (?P<team>[\w\s]+)", re.I)
 

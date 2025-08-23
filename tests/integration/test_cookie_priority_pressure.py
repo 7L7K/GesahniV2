@@ -1,5 +1,7 @@
 from http import HTTPStatus
+
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 
@@ -13,7 +15,6 @@ def test_cookie_pressure_priority(monkeypatch):
     # Blast 50 low-priority cookies from server side (simulate set)
     for i in range(50):
         # Use helper endpoint behavior: set cookie name 'junk<i>'
-        from fastapi import Response
         # In absence of a dedicated endpoint, add them to the client directly
         c.cookies.set(f"junk{i}", "1")
 

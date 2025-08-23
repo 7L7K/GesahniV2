@@ -5,23 +5,22 @@ This module provides a stateless endpoint that generates Google OAuth URLs
 and sets short-lived CSRF state cookies for security.
 """
 
-import os
-import time
-import secrets
-import random
-import hmac
 import hashlib
+import hmac
 import logging
+import os
+import random
+import secrets
+import time
 from urllib.parse import urlencode
-from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from ..auth import SECRET_KEY
-from ..integrations.google.config import JWT_STATE_SECRET
 from .. import cookie_config as cookie_cfg
+from ..integrations.google.config import JWT_STATE_SECRET
 from ..logging_config import req_id_var
+from ..security import _jwt_decode
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["auth"])
@@ -277,10 +276,10 @@ async def google_login_url(request: Request) -> Response:
         response_data = {"auth_url": oauth_url}
         
         # Set OAuth state cookie using centralized cookie surface
-        from ..cookies import set_oauth_state_cookies
-        
         # Create a Response object to set the cookie
         import json
+
+        from ..cookies import set_oauth_state_cookies
         http_response = Response(
             content=json.dumps(response_data),
             media_type="application/json"
@@ -577,13 +576,13 @@ async def google_callback(request: Request) -> Response:
     
     # Perform token exchange and create an application session/redirect.
     try:
-        from ..integrations.google import oauth as go
-        from ..integrations.google.db import SessionLocal, GoogleToken, init_db
-
-        import jwt as pyjwt
         from urllib.parse import urlencode
-        from starlette.responses import RedirectResponse
         from uuid import uuid4
+
+        from starlette.responses import RedirectResponse
+
+        from ..integrations.google import oauth as go
+        from ..integrations.google.db import GoogleToken, SessionLocal, init_db
 
         # Exchange the authorization code (state already validated by this endpoint)
         logger.info(
@@ -598,7 +597,7 @@ async def google_callback(request: Request) -> Response:
         )
         
         # Wrap token exchange with OpenTelemetry span and capture latency
-        from ..otel_utils import start_span, get_trace_id_hex
+        from ..otel_utils import get_trace_id_hex, start_span
 
         token_exchange_start = time.time()
         with start_span("google.oauth.token.exchange", {"component": "google_oauth"}) as _span:
@@ -637,7 +636,7 @@ async def google_callback(request: Request) -> Response:
         try:
             id_token = getattr(creds, "id_token", None)
             if id_token:
-                claims = pyjwt.decode(id_token, options={"verify_signature": False})
+                claims = _jwt_decode(id_token, options={"verify_signature": False})
                 email = claims.get("email") or claims.get("email_address")
                 provider_user_id = claims.get("sub") or email
         except Exception as e:
@@ -797,8 +796,7 @@ async def google_callback(request: Request) -> Response:
             # Create opaque session ID instead of using JWT
             try:
                 from ..auth import _create_session_id
-                import jwt
-                payload = jwt.decode(at, os.getenv("JWT_SECRET"), algorithms=["HS256"])
+                payload = _jwt_decode(at, os.getenv("JWT_SECRET"), algorithms=["HS256"])
                 jti = payload.get("jti")
                 expires_at = payload.get("exp", time.time() + access_ttl)
                 if jti:

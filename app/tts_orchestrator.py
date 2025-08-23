@@ -1,21 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import time
 from dataclasses import dataclass
-from typing import Literal, Optional, Tuple
-import hashlib
+from typing import Literal
 
-from .telemetry import log_record_var
-from .metrics import TTS_FALLBACKS, TTS_COST_USD, TTS_LATENCY_SECONDS, TTS_REQUEST_COUNT
-from .intent_detector import detect_intent
-from .history import append_history
-from .policy import moderation_precheck
-
-from .adapters.voice.piper_tts import synthesize_piper
 from .adapters.voice.openai_tts import synthesize_openai_tts
-
+from .adapters.voice.piper_tts import synthesize_piper
+from .intent_detector import detect_intent
+from .metrics import TTS_COST_USD, TTS_FALLBACKS, TTS_LATENCY_SECONDS
+from .telemetry import log_record_var
 
 Mode = Literal["utility", "capture"]
 Tier = Literal["piper", "mini_tts", "tts1", "tts1_hd"]
@@ -124,7 +120,7 @@ def _is_sensitive(text: str) -> bool:
     return bool(email or phone or ssn)
 
 
-def _pick_engine(mode: Mode, intent: str, cfg: TTSConfig) -> Tuple[str, Tier]:
+def _pick_engine(mode: Mode, intent: str, cfg: TTSConfig) -> tuple[str, Tier]:
     # User override first
     if cfg.voice_mode == "always_piper":
         return "piper", "piper"
@@ -146,9 +142,9 @@ async def synthesize(
     *,
     text: str,
     mode: Mode = "utility",
-    intent_hint: Optional[str] = None,
-    sensitivity_hint: Optional[bool] = None,
-    openai_voice: Optional[str] = None,
+    intent_hint: str | None = None,
+    sensitivity_hint: bool | None = None,
+    openai_voice: str | None = None,
 ) -> bytes:
     """Central orchestrator: picks engine, enforces budget, fallbacks, logs metrics.
 
@@ -199,7 +195,7 @@ async def synthesize(
     except Exception:
         pass
 
-    async def _call() -> Tuple[bytes, float]:
+    async def _call() -> tuple[bytes, float]:
         if engine == "piper":
             return await synthesize_piper(text=text)
         audio, cost, _ = await synthesize_openai_tts(text=text, tier=tier, voice=openai_voice)
@@ -231,7 +227,7 @@ async def synthesize(
             except Exception:
                 pass
             return audio
-        except Exception as e:
+        except Exception:
             if attempt == 1:
                 await asyncio.sleep(0.05)
                 continue

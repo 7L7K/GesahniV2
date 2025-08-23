@@ -1,8 +1,9 @@
 """Unit tests for the race condition fix in refresh token rotation."""
 
-import pytest
-import asyncio
 from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from app.token_store import claim_refresh_jti_with_retry
 
 

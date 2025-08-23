@@ -1,6 +1,7 @@
 """Smoke test for unified vector store configuration."""
 
 import os
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -29,6 +30,7 @@ def _setup_app(monkeypatch, vector_dsn: str):
     
     # Force reload of memory modules to pick up new env vars
     import importlib
+
     import app.memory.api
     import app.memory.unified_store
     importlib.reload(app.memory.unified_store)
@@ -125,6 +127,7 @@ def test_vector_store_legacy_compatibility(monkeypatch, tmp_path):
     
     # Force reload of memory modules to pick up new env vars
     import importlib
+
     import app.memory.api
     import app.memory.unified_store
     importlib.reload(app.memory.unified_store)
@@ -164,6 +167,7 @@ def test_vector_store_default_fallback(monkeypatch):
     
     # Force reload of memory modules to pick up new env vars
     import importlib
+
     import app.memory.api
     import app.memory.unified_store
     importlib.reload(app.memory.unified_store)

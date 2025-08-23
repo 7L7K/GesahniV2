@@ -4,14 +4,14 @@ This test suite verifies that the new distributed lock mechanism properly handle
 concurrent refresh token requests without causing 401 errors for legitimate users.
 """
 
-import asyncio
+import concurrent.futures as cf
 import time
 from http import HTTPStatus
-from fastapi.testclient import TestClient
+
 import pytest
+from fastapi.testclient import TestClient
+
 from app.main import app
-import concurrent.futures as cf
-from typing import List, Tuple
 
 
 def _setup_user(client: TestClient, username: str = "race_test_user") -> str:

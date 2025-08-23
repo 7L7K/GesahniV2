@@ -1,0 +1,46 @@
+version: "3.8"
+
+# Uncomment and configure .env file for Slack notifications
+# cp .env.example .env
+# Edit .env with your Slack webhook URL
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prom_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+    ports: [ "9090:9090" ]
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    ports: [ "9093:9093" ]
+    volumes:
+      - ./alertmanager:/etc/alertmanager
+    environment:
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+    depends_on: [ prometheus ]
+
+  grafana:
+    image: grafana/grafana:10.4.5
+    container_name: grafana
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    ports: [ "3001:3000" ]
+    depends_on: [ prometheus ]
+
+volumes:
+  prom_data: {}
+  grafana_data: {}

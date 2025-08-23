@@ -1,50 +1,48 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import time
-import hmac
-import hashlib
-from typing import Any, Dict, Optional
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Body
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
-from ..deps.user import get_current_user_id
-from ..deps.scopes import optional_require_scope
-from ..deps.roles import require_roles
-from ..metrics import (
-    TIME_TO_ACK_SECONDS,
-    ALERT_SEND_FAILURES,
-    HEARTBEAT_OK,
-    HEARTBEAT_LATE,
-)
-from ..analytics import record  # simple counter reuse
-from ..security import rate_limit_problem
 from ..care_store import (
-    ensure_tables,
-    insert_alert,
-    get_alert,
-    update_alert,
-    insert_event,
-    list_alerts as list_alerts_db,
-    upsert_device,
-    get_device,
-    set_device_flags,
-    list_devices,
     create_session,
+    get_alert,
+    get_device,
+    insert_alert,
+    insert_event,
+    update_alert,
     update_session,
+    upsert_device,
+)
+from ..care_store import (
+    list_alerts as list_alerts_db,
+)
+from ..care_store import (
     list_sessions as list_sessions_db,
 )
-
+from ..deps.roles import require_roles
+from ..deps.scopes import optional_require_scope
+from ..deps.user import get_current_user_id
+from ..metrics import (
+    ALERT_SEND_FAILURES,
+    HEARTBEAT_LATE,
+    HEARTBEAT_OK,
+    TIME_TO_ACK_SECONDS,
+)
+from ..security import rate_limit_problem
 
 router = APIRouter(tags=["Care"], dependencies=[])
 
 
 # In-memory MVP stores; swap with DB in CARE-001
-ALERTS: Dict[str, Dict[str, Any]] = {}
-ALERT_EVENTS: Dict[str, list[Dict[str, Any]]] = {}
-DEVICES: Dict[str, Dict[str, Any]] = {}
-CONTACTS: Dict[str, Dict[str, Any]] = {}
+ALERTS: dict[str, dict[str, Any]] = {}
+ALERT_EVENTS: dict[str, list[dict[str, Any]]] = {}
+DEVICES: dict[str, dict[str, Any]] = {}
+CONTACTS: dict[str, dict[str, Any]] = {}
 
 
 class AlertCreate(BaseModel):
@@ -295,7 +293,7 @@ async def device_status(device_id: str) -> dict:
 
 
 @router.get("/care/alerts", dependencies=[Depends(require_roles(["caregiver", "resident"]))])
-async def list_alerts(resident_id: Optional[str] = None):
+async def list_alerts(resident_id: str | None = None):
     items = await list_alerts_db(resident_id)
     return {"items": items}
 
@@ -337,7 +335,7 @@ async def patch_care_session(session_id: str, body: dict):
 
 
 @router.get("/care/sessions")
-async def list_care_sessions(resident_id: Optional[str] = None):
+async def list_care_sessions(resident_id: str | None = None):
     return {"items": await list_sessions_db(resident_id)}
 
 

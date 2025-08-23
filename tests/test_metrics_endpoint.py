@@ -11,7 +11,7 @@ def test_metrics_endpoint(monkeypatch):
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
 
-    from app import main, router, home_assistant, llama_integration
+    from app import home_assistant, llama_integration, main, router
     from app.telemetry import log_record_var
 
     monkeypatch.setattr(home_assistant, "startup_check", lambda: None)

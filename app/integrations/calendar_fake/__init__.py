@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import datetime as _dt
-from dataclasses import dataclass
 import logging
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Optional
 
 try:
     from zoneinfo import ZoneInfo  # Python 3.9+
@@ -30,11 +31,11 @@ class FakeCalendarProvider:
     - Returns both local and UTC ISO8601 strings
     """
 
-    def __init__(self, tz_name: str = DETROIT_TZ, ics_path: Optional[str] = None, events: Optional[List[SimpleEvent]] = None) -> None:
+    def __init__(self, tz_name: str = DETROIT_TZ, ics_path: str | None = None, events: list[SimpleEvent] | None = None) -> None:
         self.tz_name = tz_name
         self.tz = ZoneInfo(tz_name) if ZoneInfo is not None else None
         self.ics_path = Path(ics_path) if ics_path else None
-        self._events: List[SimpleEvent] = events or []
+        self._events: list[SimpleEvent] = events or []
 
     # ----------------------
     # Public construction API
@@ -63,8 +64,8 @@ class FakeCalendarProvider:
     # ---------------
     # Listing API
     # ---------------
-    def list_next(self, n: int = 3, now: Optional[_dt.datetime] = None) -> List[dict]:
-        events: List[SimpleEvent] = []
+    def list_next(self, n: int = 3, now: _dt.datetime | None = None) -> list[dict]:
+        events: list[SimpleEvent] = []
         if self.ics_path and self.ics_path.exists():
             events.extend(self._read_ics(self.ics_path))
         events.extend(self._events)
@@ -75,7 +76,7 @@ class FakeCalendarProvider:
             base_now = now
         if base_now.tzinfo is None and self.tz is not None:
             base_now = base_now.replace(tzinfo=self.tz)
-        now_utc = base_now.astimezone(_dt.timezone.utc) if base_now.tzinfo is not None else base_now
+        now_utc = base_now.astimezone(_dt.UTC) if base_now.tzinfo is not None else base_now
         try:
             logging.getLogger(__name__).debug(
                 "calendar_now",
@@ -89,7 +90,7 @@ class FakeCalendarProvider:
             )
         except Exception:
             pass
-        out: List[dict] = []
+        out: list[dict] = []
         for ev in events:
             s_loc = self._as_local(ev.start)
             s_utc = self._to_utc(s_loc)
@@ -117,9 +118,9 @@ class FakeCalendarProvider:
     def _to_utc(self, dt: _dt.datetime) -> _dt.datetime:
         if self.tz is None:
             return dt
-        return dt.astimezone(_dt.timezone.utc)
+        return dt.astimezone(_dt.UTC)
 
-    def _read_ics(self, path: Path) -> List[SimpleEvent]:
+    def _read_ics(self, path: Path) -> list[SimpleEvent]:
         """Very small ICS parser supporting DTSTART/DTEND/SUMMARY with TZID.
 
         Supports lines like:
@@ -129,7 +130,7 @@ class FakeCalendarProvider:
         try:
             # Read and unfold RFC 5545 folded lines (continuations start with a single space)
             raw_lines = path.read_text(encoding="utf-8").splitlines()
-            lines: List[str] = []
+            lines: list[str] = []
             for _ln in raw_lines:
                 if _ln.startswith(" ") and lines:
                     lines[-1] += _ln[1:]
@@ -138,7 +139,7 @@ class FakeCalendarProvider:
         except Exception:
             return []
         current: dict = {}
-        out: List[SimpleEvent] = []
+        out: list[SimpleEvent] = []
         for raw in lines:
             line = raw.strip()
             if line == "BEGIN:VEVENT":
@@ -176,8 +177,8 @@ class FakeCalendarProvider:
                 key, val = line.split(":", 1)
                 # Normalize keys and capture DTSTART/DTEND with optional TZID param
                 base = key.split(";", 1)[0].upper()
-                params = key[len(base):]
-                tzid: Optional[str] = None
+                # params = key[len(base):]  # not used but kept for clarity
+                tzid: str | None = None
                 if ";" in key:
                     # Parse parameters like ";TZID=America/Detroit;VALUE=DATE-TIME"
                     try:
@@ -212,7 +213,7 @@ class FakeCalendarProvider:
         """
         return self._parse_ics_dt_value(value, None)
 
-    def _parse_ics_dt_value(self, value: str, tzid: Optional[str]) -> _dt.datetime:
+    def _parse_ics_dt_value(self, value: str, tzid: str | None) -> _dt.datetime:
         """Parse an ICS date-time value with an optional TZID parameter.
 
         - If the value ends with 'Z', treat as UTC and convert to tzid or provider tz.
@@ -221,7 +222,7 @@ class FakeCalendarProvider:
         """
         # UTC form
         if value.endswith("Z"):
-            dt = _dt.datetime.strptime(value.rstrip("Z"), "%Y%m%dT%H%M%S").replace(tzinfo=_dt.timezone.utc)
+            dt = _dt.datetime.strptime(value.rstrip("Z"), "%Y%m%dT%H%M%S").replace(tzinfo=_dt.UTC)
             # Convert to specific tz if requested; otherwise leave in UTC
             if tzid and ZoneInfo is not None:
                 try:

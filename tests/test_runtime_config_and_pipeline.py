@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import os
-from contextvars import ContextVar
 
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.config_runtime import get_config
-from app.telemetry import LogRecord, log_record_var
-from app.prompt_builder import PromptBuilder
-from app.memory.rerankers.local_cross_encoder import MiniLMCrossEncoder
-from app.memory.memgpt.policy import inject_for_task
+from app.main import app
 from app.memory.memgpt.contracts import MemoryClaim
+from app.memory.memgpt.policy import inject_for_task
+from app.memory.rerankers.local_cross_encoder import MiniLMCrossEncoder
+from app.prompt_builder import PromptBuilder
+from app.telemetry import LogRecord, log_record_var
 
 
 def test_runtime_config_defaults_loaded():

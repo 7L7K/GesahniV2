@@ -5,10 +5,11 @@ This script tests the auth orchestrator's rate limiting behavior.
 """
 
 import asyncio
-import aiohttp
-import time
 import json
-from typing import Dict, Any
+import time
+
+import aiohttp
+
 
 async def test_whoami_rate_limiting():
     """Test whoami endpoint rate limiting behavior."""

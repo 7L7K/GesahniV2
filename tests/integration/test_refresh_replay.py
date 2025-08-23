@@ -1,6 +1,8 @@
 from http import HTTPStatus
-from fastapi.testclient import TestClient
+
 import pytest
+from fastapi.testclient import TestClient
+
 from app.main import app
 
 
@@ -26,9 +28,7 @@ def test_refresh_replay_header_mode(monkeypatch):
         r2 = client.post('/v1/auth/refresh', json={'refresh_token': ref})
         assert r2.status_code == HTTPStatus.UNAUTHORIZED
 
-from http import HTTPStatus
 from fastapi.testclient import TestClient
-from app.main import app
 
 
 def _bootstrap(client: TestClient):

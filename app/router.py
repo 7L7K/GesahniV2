@@ -1,28 +1,22 @@
 import asyncio
+import inspect
 import logging
 import os
-import inspect
 import time
-from dataclasses import asdict, dataclass
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 import httpx
-
 from fastapi import HTTPException, status
+
+import app.llama_integration as llama_integration
 
 from .analytics import record
 from .gpt_client import SYSTEM_PROMPT, ask_gpt
-from .model_router import (
-    route_text,
-    compose_cache_id,
-    run_with_self_check,
-    load_system_prompt,
-)
 from .history import append_history
-from .home_assistant import handle_command
 from .intent_detector import detect_intent
-import app.llama_integration as llama_integration
 from .llama_integration import ask_llama
 
 # Optional prompt clamp to enforce token budgets; ignore if module absent
@@ -38,37 +32,26 @@ try:  # pragma: no cover - fall back if circuit flag missing
     from .llama_integration import llama_circuit_open  # type: ignore
 except Exception:  # pragma: no cover - defensive
     llama_circuit_open = False  # type: ignore
-from .memory import memgpt
+from .memory.profile_store import CANONICAL_KEYS, profile_store
 from .memory.vector_store import (
-    add_user_memory,
-    cache_answer,
     lookup_cached_answer,
 )
-from .model_picker import pick_model
-from . import model_picker as model_picker_module
-from .prompt_builder import PromptBuilder
-from .postcall import PostCallData, process_postcall
-from .memory.vector_store import safe_query_user_memories
-from .skills.base import SKILLS as BUILTIN_CATALOG, check_builtin_skills
-from .skills.smalltalk_skill import SmalltalkSkill
-from .telemetry import log_record_var
-from .otel_utils import start_span, set_error
-from .memory.profile_store import profile_store, CANONICAL_KEYS
 from .memory.write_policy import memory_write_policy
+from .model_picker import pick_model
+from .postcall import PostCallData, process_postcall
+from .prompt_builder import PromptBuilder
+from .skills.base import SKILLS as BUILTIN_CATALOG
+from .skills.smalltalk_skill import SmalltalkSkill
+
 try:  # optional: new retrieval pipeline
     from .retrieval.pipeline import run_pipeline as _run_retrieval_pipeline
 except Exception:  # pragma: no cover
     _run_retrieval_pipeline = None  # type: ignore
 from .token_utils import count_tokens
-from .embeddings import embed_sync as _embed
-from .memory.env_utils import _cosine_similarity as _cos, _normalized_hash as _nh
-from . import budget as _budget
-from . import analytics as _analytics
-from .adapters.rag.ragflow_adapter import RAGClient
 
 # Optional proactive engine hooks; ignore import errors in tests
 try:  # pragma: no cover - optional
-    from .proactive_engine import maybe_curiosity_prompt, handle_user_reply
+    from .proactive_engine import handle_user_reply, maybe_curiosity_prompt
 except Exception:  # pragma: no cover - fallback stubs
 
     async def maybe_curiosity_prompt(*_a, **_k):
@@ -105,7 +88,6 @@ class ErrorType(Enum):
 
 def normalize_error(error: Exception) -> ErrorType:
     """Normalize various exception types into standardized ErrorType enum."""
-    import httpx
 
     # Handle HTTP status errors
     if isinstance(error, httpx.HTTPStatusError):
@@ -242,7 +224,7 @@ def _dry(engine: str, model: str) -> str:
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # ---------------------------------------------------------------------------
 # Post-call handling (use existing postcall.py module)
@@ -269,7 +251,7 @@ def _log_golden_trace(
 ) -> None:
     """Emit exactly one post-decision log before adapter call. Make it the law."""
     trace = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "rid": request_id,
         "uid": user_id,
         "path": path,
@@ -300,8 +282,10 @@ def _log_golden_trace(
     
     # Emit metrics
     try:
-        from .metrics import ROUTER_REQUESTS_TOTAL
-        ROUTER_REQUESTS_TOTAL.labels(vendor=routing_decision.vendor, model=routing_decision.model, reason=routing_decision.reason).inc()
+        from .metrics import ROUTER_REQUESTS_TOTAL, normalize_model_label
+        # Use normalized model label to prevent cardinality explosion
+        normalized_model = normalize_model_label(routing_decision.model)
+        ROUTER_REQUESTS_TOTAL.labels(vendor=routing_decision.vendor, model=normalized_model, reason=routing_decision.reason).inc()
     except Exception:
         pass
 
@@ -1223,7 +1207,7 @@ async def _call_gpt(
         )
     except TypeError:
         text, pt, ct, cost = await ask_gpt(built_prompt, model, SYSTEM_PROMPT, timeout=OPENAI_TIMEOUT_MS/1000, routing_decision=routing_decision)
-    except Exception as e:
+    except Exception:
         # Record failure for circuit breaker
         _openai_record_failure()
         _mark_openai_unhealthy()

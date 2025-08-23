@@ -1,6 +1,6 @@
 from __future__ import annotations
+
 import os
-from typing import List
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
@@ -13,7 +13,7 @@ _SCOPES_DEFAULT = (
     "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar.events"
 )
 
-def get_google_scopes() -> List[str]:
+def get_google_scopes() -> list[str]:
     """Return Google OAuth scopes from env or sensible defaults.
 
     Uses userinfo.* scopes to align with Google's token response and avoid

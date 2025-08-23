@@ -1,7 +1,6 @@
 import asyncio
 import math
 import os
-from typing import Dict, List, Tuple
 
 _metrics = {
     "total": 0,
@@ -47,7 +46,7 @@ async def record_transcription(duration_ms: int, error: bool = False) -> None:
             _metrics["transcribe_errors"] += 1
 
 
-def get_metrics() -> Dict[str, int]:
+def get_metrics() -> dict[str, int]:
     return _metrics.copy()
 
 
@@ -70,7 +69,7 @@ def latency_p95() -> int:
 # Admin insight helpers
 # -----------------------------
 
-_skill_counts: Dict[str, int] = {}
+_skill_counts: dict[str, int] = {}
 
 
 async def record_skill(name: str) -> None:
@@ -78,7 +77,7 @@ async def record_skill(name: str) -> None:
         _skill_counts[name] = _skill_counts.get(name, 0) + 1
 
 
-def get_top_skills(n: int = 10) -> List[Tuple[str, int]]:
+def get_top_skills(n: int = 10) -> list[tuple[str, int]]:
     items = sorted(_skill_counts.items(), key=lambda kv: kv[1], reverse=True)
     return items[:n]
 
@@ -114,6 +113,6 @@ async def record_ha_failure() -> None:
         _metrics["ha_failures"] += 1
 
 
-def get_latency_samples() -> List[int]:
+def get_latency_samples() -> list[int]:
     """Return a copy of the latency samples buffer (for diagnostics)."""
     return list(_latency_samples)

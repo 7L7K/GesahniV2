@@ -1,8 +1,8 @@
 import datetime as dt
-import os
+
 from fastapi.testclient import TestClient
 
-from app.integrations.calendar_fake import FakeCalendarProvider, DETROIT_TZ
+from app.integrations.calendar_fake import DETROIT_TZ, FakeCalendarProvider
 from app.main import app
 
 

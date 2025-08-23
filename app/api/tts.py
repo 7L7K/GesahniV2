@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import io
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
-import io
 
 from ..deps.user import get_current_user_id
 from ..tts_orchestrator import synthesize
-
 
 router = APIRouter(prefix="/tts", tags=["TTS"])
 
@@ -69,7 +69,7 @@ async def speak(req: TTSRequest, request: Request, user_id: str = Depends(get_cu
         raise HTTPException(status_code=400, detail="empty_text")
     # Length/byte caps
     import os as _os
-    max_chars = int((_os.getenv("TTS_MAX_CHARS", "800") or 800))
+    max_chars = int(_os.getenv("TTS_MAX_CHARS", "800") or 800)
     if len(text) > max_chars:
         raise HTTPException(status_code=400, detail="text_too_long")
 

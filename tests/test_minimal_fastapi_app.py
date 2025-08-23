@@ -5,27 +5,24 @@ This module creates a minimal FastAPI app with mocked dependencies
 for comprehensive API endpoint testing without external services.
 """
 
-import asyncio
-import json
 import os
-import pytest
-from datetime import datetime, timedelta
-from typing import Any, Dict, Generator
+from collections.abc import Generator
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from fastapi import FastAPI, Request, Response, Depends
-from fastapi.testclient import TestClient
 import jwt
+import pytest
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
+
+from app.api.ask import router as ask_router
 
 # Import the main app and its components
-from app.main import app
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.api.models import router as models_router
-from app.api.ask import router as ask_router
 from app.deps.user import get_current_user_id
 from app.security import verify_token
-from app import analytics
 
 
 def mock_jwt_secret() -> str:
@@ -114,7 +111,7 @@ def create_test_app() -> FastAPI:
 
             # Mock optional scopes dependencies
             try:
-                from app.deps.scopes import require_scope, require_scopes, require_any_scopes
+                from app.deps.scopes import require_any_scopes, require_scope, require_scopes
                 test_app.dependency_overrides[require_scope] = lambda scope: None
                 test_app.dependency_overrides[require_scopes] = lambda scopes: None
                 test_app.dependency_overrides[require_any_scopes] = lambda scopes: None
@@ -185,7 +182,7 @@ def client() -> Generator[TestClient, None, None]:
     yield create_test_client()
 
 
-def create_auth_cookies(user_id: str = "dev") -> Dict[str, str]:
+def create_auth_cookies(user_id: str = "dev") -> dict[str, str]:
     """Create test authentication cookies."""
     now = int(datetime.utcnow().timestamp())
 
@@ -215,7 +212,7 @@ def create_auth_cookies(user_id: str = "dev") -> Dict[str, str]:
     }
 
 
-def create_auth_headers(user_id: str = "dev") -> Dict[str, str]:
+def create_auth_headers(user_id: str = "dev") -> dict[str, str]:
     """Create test authentication headers."""
     now = int(datetime.utcnow().timestamp())
 

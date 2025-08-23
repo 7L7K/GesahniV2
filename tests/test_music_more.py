@@ -13,7 +13,7 @@ os.environ.setdefault("PROVIDER_SPOTIFY", "false")
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models.music_state import MusicState, load_state, save_state
+from app.models.music_state import MusicState, save_state
 
 
 def _client():

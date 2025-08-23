@@ -1,13 +1,10 @@
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
-import jwt
-import time
-from datetime import datetime, timedelta
 
 from app.main import app
-from app.auth import SECRET_KEY, ALGORITHM
-from tests.test_helpers import assert_cookies_present, assert_cookies_cleared, assert_session_opaque
+from tests.test_helpers import assert_cookies_cleared, assert_cookies_present, assert_session_opaque
 
 
 @pytest.fixture

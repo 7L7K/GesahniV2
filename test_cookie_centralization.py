@@ -8,11 +8,10 @@ This script checks that:
 3. The cookie facade functions work correctly
 """
 
-import os
-import sys
 import subprocess
-import re
+import sys
 from pathlib import Path
+
 
 def run_grep_command(pattern, include_pattern="*.py", exclude_pattern=None):
     """Run grep command and return results."""
@@ -141,7 +140,7 @@ def test_cookie_facade_functions():
             return False
         
         # Read the file and check for function definitions
-        with open(cookie_file_path, 'r') as f:
+        with open(cookie_file_path) as f:
             content = f.read()
         
         functions_to_check = [
@@ -178,7 +177,7 @@ def test_cookie_facade_functions():
             print("❌ app/cookie_config.py not found")
             return False
         
-        with open(config_file_path, 'r') as f:
+        with open(config_file_path) as f:
             config_content = f.read()
         
         config_functions = [

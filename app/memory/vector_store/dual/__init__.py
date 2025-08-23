@@ -24,7 +24,7 @@ class _DualQACache(SupportsQACache):
         self.primary = primary
         self.fallback = fallback
 
-    def get_items(self, ids: List[str] | None = None, include: List[str] | None = None) -> Dict[str, List]:
+    def get_items(self, ids: list[str] | None = None, include: list[str] | None = None) -> dict[str, list]:
         try:
             res = self.primary.get_items(ids=ids, include=include)
         except Exception:
@@ -37,7 +37,7 @@ class _DualQACache(SupportsQACache):
                 pass
         return res
 
-    def upsert(self, *, ids: List[str], documents: List[str], metadatas: List[Dict]) -> None:
+    def upsert(self, *, ids: list[str], documents: list[str], metadatas: list[dict]) -> None:
         self.primary.upsert(ids=ids, documents=documents, metadatas=metadatas)
         if self.fallback is not None and _flag("VECTOR_DUAL_QA_WRITE_BOTH"):
             try:
@@ -45,7 +45,7 @@ class _DualQACache(SupportsQACache):
             except Exception:
                 logger.warning("Dual QA upsert to fallback failed", exc_info=True)
 
-    def delete(self, *, ids: List[str] | None = None) -> None:  # type: ignore[override]
+    def delete(self, *, ids: list[str] | None = None) -> None:  # type: ignore[override]
         try:
             self.primary.delete(ids=ids)
         finally:
@@ -55,7 +55,7 @@ class _DualQACache(SupportsQACache):
                 except Exception:
                     pass
 
-    def update(self, *, ids: List[str], metadatas: List[Dict]) -> None:  # type: ignore[override]
+    def update(self, *, ids: list[str], metadatas: list[dict]) -> None:  # type: ignore[override]
         try:
             self.primary.update(ids=ids, metadatas=metadatas)
         finally:
@@ -65,7 +65,7 @@ class _DualQACache(SupportsQACache):
                 except Exception:
                     pass
 
-    def keys(self) -> List[str]:
+    def keys(self) -> list[str]:
         try:
             return self.primary.keys()
         except Exception:
@@ -121,7 +121,7 @@ class DualReadVectorStore:
                 logger.warning("Dual add_user_memory fallback write failed", exc_info=True)
         return mid
 
-    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
+    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> list[str]:
         try:
             res = self._primary.query_user_memories(user_id, prompt, k)
         except Exception:
@@ -140,7 +140,7 @@ class DualReadVectorStore:
                 return fb
         return res
 
-    def list_user_memories(self, user_id: str) -> List[Dict]:
+    def list_user_memories(self, user_id: str) -> list[dict]:
         try:
             return self._primary.list_user_memories(user_id)
         except Exception:
@@ -176,7 +176,7 @@ class DualReadVectorStore:
             except Exception:
                 logger.warning("Dual cache_answer fallback write failed", exc_info=True)
 
-    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
+    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> str | None:
         try:
             ans = self._primary.lookup_cached_answer(prompt, ttl_seconds)
         except Exception:

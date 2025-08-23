@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset='utf-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1' />
+    <title>Admin Dashboard</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+            margin: 20px;
+            color: #222;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        nav a {
+            margin-right: 12px;
+            text-decoration: none;
+            color: #06c;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+
+        .badge {
+            padding: 2px 6px;
+            border-radius: 6px;
+            background: #efefef;
+            font-size: 12px;
+        }
+
+        .ok {
+            color: #090;
+        }
+
+        .err {
+            color: #c00;
+        }
+
+        code {
+            background: #f7f7f7;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+    </style>
+    <script>
+        async function refreshMetrics() {
+            const res = await fetch('/v1/admin/metrics?token=' + encodeURIComponent(localStorage.getItem('admin_token') || ''));
+            if (!res.ok) return;
+            const data = await res.json();
+            const m = data.metrics || {};
+            document.getElementById('m_llama').innerText = m.llama || 0;
+            document.getElementById('m_gpt').innerText = m.gpt || 0;
+            document.getElementById('m_fallback').innerText = m.fallback || 0;
+            document.getElementById('m_cache').innerText = (data.cache_hit_rate || 0).toFixed(2);
+        }
+        async function refreshDecisions() {
+            const res = await fetch('/v1/admin/router/decisions?limit=50&token=' + encodeURIComponent(localStorage.getItem('admin_token') || ''));
+            if (!res.ok) return;
+            const data = await res.json();
+            const rows = (data.items || []).slice(0, 50).map(it => `
+        <tr>
+          <td><code>${it.req_id || ''}</code></td>
+          <td>${it.intent || ''}</td>
+          <td>${it.engine || ''}</td>
+          <td>${it.model || ''}</td>
+          <td>${it.route_reason || ''}</td>
+          <td>${it.latency_ms || 0} ms</td>
+        </tr>`).join('');
+            document.getElementById('decisions_tbody').innerHTML = rows;
+        }
+        function saveToken() { const v = document.getElementById('adm_tok').value; localStorage.setItem('admin_token', v); refreshAll(); }
+        function refreshAll() { refreshMetrics(); refreshDecisions(); }
+        window.addEventListener('load', () => { refreshAll(); });
+    </script>
+</head>
+
+<body>
+    <header>
+        <div><strong>Admin Dashboard</strong></div>
+        <nav>
+            <a href='/v1/admin/ui'>Dashboard</a>
+            <a href='/v1/admin/ui/retrieval'>Retrieval</a>
+            <a href='/v1/admin/ui/config'>Config</a>
+        </nav>
+    </header>
+
+    <div>
+        Admin token: <input id='adm_tok' placeholder='optional' size='32' /> <button onclick='saveToken()'>Save</button>
+    </div>
+    <section style='margin:16px 0;'>
+        <span class='badge'>LLaMA Hits: <span id='m_llama'>…</span></span>
+        <span class='badge'>GPT Hits: <span id='m_gpt'>…</span></span>
+        <span class='badge'>Fallbacks: <span id='m_fallback'>…</span></span>
+        <span class='badge'>Cache Hit Rate: <span id='m_cache'>…</span></span>
+    </section>
+    <table>
+        <thead>
+            <tr>
+                <th>Req ID</th>
+                <th>Intent</th>
+                <th>Engine</th>
+                <th>Model</th>
+                <th>Reason</th>
+                <th>Latency</th>
+            </tr>
+        </thead>
+        <tbody id='decisions_tbody'></tbody>
+    </table>
+
+</body>
+
+</html>

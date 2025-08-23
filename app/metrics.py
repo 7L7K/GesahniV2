@@ -1,3 +1,80 @@
+# Phase 6.1: Clean Prometheus Metrics (no sampling)
+# Phase 7.6: Label Hygiene & Cardinality Management
+
+def normalize_model_label(model: str) -> str:
+    """
+    Normalize model names to prevent cardinality explosion.
+    Maps specific model names to normalized categories.
+    """
+    if not model:
+        return "unknown"
+
+    model_lower = model.lower()
+
+    # OpenAI GPT models
+    if "gpt-4o" in model_lower or "gpt-4-turbo" in model_lower:
+        return "gpt4"
+    elif "gpt-4" in model_lower:
+        return "gpt4"
+    elif "gpt-3.5" in model_lower:
+        return "gpt35"
+
+    # LLaMA models
+    elif "llama3" in model_lower:
+        return "llama3"
+    elif "llama2" in model_lower:
+        return "llama2"
+    elif "llama" in model_lower:
+        return "llama"
+
+    # Anthropic models
+    elif "claude-3" in model_lower or "claude-3-5" in model_lower:
+        return "claude3"
+    elif "claude" in model_lower:
+        return "claude"
+
+    # Fallback: extract provider from model name
+    if ":" in model:
+        provider = model.split(":")[0].lower()
+        if provider in ["openai", "ollama", "anthropic", "cohere", "ai21"]:
+            return provider
+
+    # Last resort: hash to prevent unbounded cardinality
+    return f"model_{hash(model) % 1000}"
+
+
+def normalize_shape_label(shape: str) -> str:
+    """
+    Normalize shape representations to prevent cardinality explosion.
+    Categorizes shapes instead of using raw string representations.
+    """
+    if not shape:
+        return "empty"
+
+    shape_lower = shape.lower()
+
+    # Common shape patterns
+    if "chat" in shape_lower or "completion" in shape_lower:
+        return "chat_completion"
+    elif "embedding" in shape_lower:
+        return "embedding"
+    elif "image" in shape_lower:
+        return "image_generation"
+    elif "audio" in shape_lower or "tts" in shape_lower:
+        return "audio_synthesis"
+    elif "stream" in shape_lower:
+        return "streaming"
+    else:
+        # For unknown shapes, categorize by length to limit cardinality
+        length = len(shape)
+        if length < 50:
+            return "short_shape"
+        elif length < 200:
+            return "medium_shape"
+        else:
+            return "long_shape"
+
+
 try:
     from prometheus_client import Counter, Histogram
 except Exception:  # pragma: no cover - optional dependency
@@ -18,46 +95,55 @@ except Exception:  # pragma: no cover - optional dependency
 
     Counter = Histogram = _MetricStub
 
-# Counter for total number of requests
+# 6.1.a Core HTTP Metrics
+# Requests by route & method & status
+REQUESTS = Counter(
+    "http_requests_total",
+    "Total HTTP requests",
+    labelnames=("route", "method", "status"),
+)
+
+# Latency per route
+LATENCY = Histogram(
+    "http_request_latency_seconds",
+    "HTTP request latency (seconds)",
+    labelnames=("route", "method"),
+    buckets=(0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5),
+)
+
+# Auth/RBAC signals
+AUTH_FAIL = Counter(
+    "auth_fail_total",
+    "Authentication failures",
+    labelnames=("reason",),  # e.g., "missing_token", "expired", "invalid"
+)
+
+RBAC_DENY = Counter(
+    "rbac_deny_total",
+    "Authorization (scope) denials",
+    labelnames=("scope",),
+)
+
+# Rate limiting
+RATE_LIMITED = Counter(
+    "rate_limited_total",
+    "Requests rejected by rate limit",
+    labelnames=("route",),
+)
+
+# Legacy compatibility - keep existing metrics for backward compatibility
 REQUEST_COUNT = Counter(
     "app_request_total", "Total number of requests", ["endpoint", "method", "engine"]
 )
 
-# Histogram for request latency in seconds
 REQUEST_LATENCY = Histogram(
     "app_request_latency_seconds",
-    "Request latency in seconds",
-    ["endpoint", "method", "engine"],
+    "Request latency in seconds", ["endpoint", "method", "engine"]
 )
 
-# New canonical names expected by dashboards/tests (do not remove legacy above)
-try:
-    GESAHNI_REQUESTS_TOTAL = Counter(
-        "gesahni_requests_total",
-        "Total HTTP requests",
-        ["route", "method", "status"],
-    )
-except Exception:  # pragma: no cover - metrics optional
-    class _C:
-        def labels(self, *a, **k):
-            return self
-        def inc(self, *a, **k):
-            return None
-    GESAHNI_REQUESTS_TOTAL = _C()  # type: ignore
-
-try:
-    GESAHNI_LATENCY_SECONDS = Histogram(
-        "gesahni_latency_seconds",
-        "HTTP request latency in seconds",
-        ["route"],
-    )
-except Exception:  # pragma: no cover
-    class _H:
-        def labels(self, *a, **k):
-            return self
-        def observe(self, *a, **k):
-            return None
-    GESAHNI_LATENCY_SECONDS = _H()  # type: ignore
+# Map to new canonical names for compatibility
+GESAHNI_REQUESTS_TOTAL = REQUESTS
+GESAHNI_LATENCY_SECONDS = LATENCY
 
 # Health probe metrics ---------------------------------------------------------
 try:
@@ -285,6 +371,65 @@ USER_MEMORY_ADDS = Counter(
 )
 
 # Counter for dual-read fallback hits (observability during migration)
+
+# ----------------------------
+# PHASE 6: Enhanced Observability Metrics
+# ----------------------------
+
+# Per-scope request metrics
+SCOPE_REQUESTS_TOTAL = Counter(
+    "gesahni_scope_requests_total",
+    "Total requests by scope and endpoint",
+    ["scope", "route", "method", "status"],
+)
+
+# Authorization failure metrics
+AUTH_FAILURES_TOTAL = Counter(
+    "gesahni_auth_failures_total",
+    "Authentication and authorization failures",
+    ["type", "route", "reason"],  # type: 401|403|429, reason: specific error
+)
+
+# Per-scope latency metrics
+SCOPE_LATENCY_SECONDS = Histogram(
+    "gesahni_scope_latency_seconds",
+    "Request latency by scope in seconds",
+    ["scope", "route", "method"],
+)
+
+# Rate limit metrics by scope
+SCOPE_RATE_LIMITS_TOTAL = Counter(
+    "gesahni_scope_rate_limits_total",
+    "Rate limit events by scope",
+    ["scope", "route", "action"],  # action: allowed|blocked
+)
+
+# Audit trail metrics
+AUDIT_EVENTS_TOTAL = Counter(
+    "gesahni_audit_events_total",
+    "Audit trail events",
+    ["action", "user_type"],  # user_type: authenticated|anonymous|admin
+)
+
+# WebSocket metrics (enhanced)
+WS_CONNECTIONS_TOTAL = Counter(
+    "gesahni_ws_connections_total",
+    "WebSocket connections by scope",
+    ["scope", "endpoint", "action"],  # action: connect|disconnect|error
+)
+
+WS_MESSAGES_TOTAL = Counter(
+    "gesahni_ws_messages_total",
+    "WebSocket messages by scope",
+    ["scope", "endpoint", "direction"],  # direction: inbound|outbound
+)
+
+# Granular scope usage metrics
+SCOPE_USAGE_TOTAL = Counter(
+    "gesahni_scope_usage_total",
+    "Individual scope usage tracking",
+    ["scope", "route", "result"],  # result: granted|denied|error
+)
 
 # ----------------------------
 # TTS-specific metrics

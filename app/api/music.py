@@ -1,27 +1,28 @@
 from __future__ import annotations
 
 import asyncio
-import os
-from dataclasses import asdict
-import time
-import inspect
-from datetime import datetime, time as dtime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 import hashlib
+import inspect
 import json
-
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, Request, Response
 import logging
-from pydantic import BaseModel, Field, ConfigDict
+import os
+import time
+from dataclasses import asdict
+from datetime import datetime
+from datetime import time as dtime
+from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
+from pydantic import BaseModel, ConfigDict, Field
+
 from app.models.common import OkResponse as CommonOkResponse
 
 from ..deps.user import get_current_user_id
-from ..security import verify_ws, rate_limit
+from ..integrations.music_spotify.client import SpotifyAuthError, SpotifyClient
+from ..models.music_state import MusicVibe, load_state, save_state
+from ..security import verify_ws
 from .ws_helpers import handle_reauth
-from ..integrations.music_spotify.client import SpotifyClient, SpotifyAuthError
-from ..models.music_state import MusicState, MusicVibe, load_state, save_state
-
 
 router = APIRouter(prefix="", tags=["Music"])  # rate limit applied selectively in main
 ws_router = APIRouter()
@@ -70,7 +71,7 @@ def _parse_hhmm(s: str) -> dtime:
     return dtime(hour=int(hh), minute=int(mm))
 
 
-def _in_quiet_hours(now: Optional[datetime] = None) -> bool:
+def _in_quiet_hours(now: datetime | None = None) -> bool:
     now = now or datetime.now()
     start = _parse_hhmm(QUIET_START)
     end = _parse_hhmm(QUIET_END)
@@ -156,7 +157,7 @@ def _attach_cache_headers(response: Response, etag: str) -> None:
         pass
 
 
-def _maybe_304(request: Request, response: Response, etag: str) -> Optional[Response]:
+def _maybe_304(request: Request, response: Response, etag: str) -> Response | None:
     try:
         inm = request.headers.get("if-none-match") or request.headers.get("If-None-Match")
         if inm and inm.strip() == etag:
@@ -343,8 +344,8 @@ def _recs_set_cached(key: tuple, items: list[dict]) -> None:
 
 class MusicCommand(BaseModel):
     command: str = Field(..., description="play|pause|next|previous|volume")
-    volume: Optional[int] = None
-    device_id: Optional[str] = None
+    volume: int | None = None
+    device_id: str | None = None
     temporary: bool = False  # when true, store prior volume to restore later
 
     model_config = ConfigDict(
@@ -355,10 +356,10 @@ class MusicCommand(BaseModel):
 
 
 class VibeBody(BaseModel):
-    name: Optional[str] = None
-    energy: Optional[float] = Field(None, ge=0.0, le=1.0)
-    tempo: Optional[float] = None
-    explicit: Optional[bool] = None
+    name: str | None = None
+    energy: float | None = Field(None, ge=0.0, le=1.0)
+    tempo: float | None = None
+    explicit: bool | None = None
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -562,7 +563,7 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
     finally:
         _ws_clients.discard(ws)
         try:
-            dur = int(round((_t.time() - connected_at)))
+            dur = int(round(_t.time() - connected_at))
             _logger.info("ws.music.close", extra={"meta": {"duration_s": dur}})
         except Exception:
             pass

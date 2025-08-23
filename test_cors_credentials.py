@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import asyncio
+
 import httpx
-import json
+
 
 async def test_cors_with_credentials():
     async with httpx.AsyncClient() as client:
@@ -14,7 +15,7 @@ async def test_cors_with_credentials():
             cookies={"test_cookie": "test_value"}
         )
         print(f"Status: {response.status_code}")
-        print(f"CORS Headers:")
+        print("CORS Headers:")
         for key, value in response.headers.items():
             if key.lower().startswith('access-control'):
                 print(f"  {key}: {value}")
@@ -31,7 +32,7 @@ async def test_cors_with_credentials():
             }
         )
         print(f"Status: {response.status_code}")
-        print(f"CORS Headers:")
+        print("CORS Headers:")
         for key, value in response.headers.items():
             if key.lower().startswith('access-control'):
                 print(f"  {key}: {value}")

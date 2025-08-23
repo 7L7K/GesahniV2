@@ -2,7 +2,7 @@ import os
 import sys
 import tempfile
 from importlib import import_module
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -19,7 +19,8 @@ class _StubCreds:
         self.scopes = ["openid", "email", "profile"]
         # id_token with unverified claims that include email
         # We don't need a valid signature for get_unverified_claims
-        import base64, json
+        import base64
+        import json
 
         header = base64.urlsafe_b64encode(json.dumps({"alg": "none"}).encode()).rstrip(b"=")
         payload = base64.urlsafe_b64encode(json.dumps({"email": "guser@example.com"}).encode()).rstrip(b"=")

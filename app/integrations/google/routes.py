@@ -1,23 +1,21 @@
 from __future__ import annotations
-import base64, email.utils
-from typing import Optional, List
 
-from fastapi import APIRouter, Request, HTTPException, Response
-from fastapi.responses import RedirectResponse
+import base64
+import email.utils
 import os
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from .db import SessionLocal, GoogleToken, init_db
-from . import oauth  # import module so tests can monkey‑patch its attributes
-import jwt as jose_jwt
 from app.auth import (
-    SECRET_KEY as APP_JWT_SECRET,
-    ALGORITHM as APP_JWT_ALG,
     EXPIRE_MINUTES as APP_JWT_EXPIRE_MINUTES,
-    REFRESH_EXPIRE_MINUTES as APP_REFRESH_EXPIRE_MINUTES,
 )
-from app.user_store import user_store
+from app.security import _jwt_decode
+
+from . import oauth  # import module so tests can monkey‑patch its attributes
 from .config import validate_config
+from .db import GoogleToken, SessionLocal
 
 router = APIRouter(tags=["Auth"])
 
@@ -30,15 +28,7 @@ def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "
     from datetime import datetime, timedelta
     from uuid import uuid4
 
-    access_exp = datetime.utcnow() + timedelta(minutes=APP_JWT_EXPIRE_MINUTES)
     jti = uuid4().hex
-    access_payload = {
-        "sub": user_id,
-        "user_id": user_id,
-        "exp": access_exp,
-        "jti": jti,
-        "type": "access",
-    }
     # Use tokens.py facade instead of direct JWT encoding
     from app.tokens import make_access, make_refresh
     
@@ -49,9 +39,7 @@ def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "
     refresh_token = make_refresh({"user_id": user_id, "jti": rjti})
 
     # Use centralized cookie configuration
-    from app.cookie_config import get_cookie_config, get_token_ttls
-    
-    cookie_config = get_cookie_config(request)
+    from app.cookie_config import get_token_ttls
     access_ttl, refresh_ttl = get_token_ttls()
     
     resp = RedirectResponse(url=target_url, status_code=302)
@@ -59,8 +47,7 @@ def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "
     # Create session ID for the access token
     try:
         from app.auth import _create_session_id
-        import jwt
-        payload = jwt.decode(access_token, os.getenv("JWT_SECRET"), algorithms=["HS256"])
+        payload = _jwt_decode(access_token, os.getenv("JWT_SECRET"), algorithms=["HS256"])
         jti = payload.get("jti")
         expires_at = payload.get("exp", time.time() + access_ttl)
         if jti:
@@ -128,7 +115,7 @@ class SendEmailIn(BaseModel):
     to: str
     subject: str
     body_text: str
-    from_alias: Optional[str] = None  # e.g., "King <me@gmail.com>"
+    from_alias: str | None = None  # e.g., "King <me@gmail.com>"
     class Config:
         json_schema_extra = {"example": {"to": "a@b.com", "subject": "Hi", "body_text": "Hello"}}
 
@@ -175,10 +162,10 @@ class CreateEventIn(BaseModel):
     title: str
     start_iso: str  # "2025-08-11T10:00:00-04:00"
     end_iso: str    # "2025-08-11T10:30:00-04:00"
-    description: Optional[str] = None
-    attendees: Optional[List[str]] = None
-    calendar_id: Optional[str] = "primary"
-    location: Optional[str] = None
+    description: str | None = None
+    attendees: list[str] | None = None
+    calendar_id: str | None = "primary"
+    location: str | None = None
     class Config:
         json_schema_extra = {"example": {"title": "Dentist", "start_iso": "2025-08-11T10:00:00-04:00", "end_iso": "2025-08-11T10:30:00-04:00"}}
 

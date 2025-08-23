@@ -4,9 +4,10 @@ Integration tests for CSRF validation in cross-site scenarios.
 Tests the fix for CSRF token mismatch when COOKIE_SAMESITE=none.
 """
 
-import pytest
-from fastapi.testclient import TestClient
 from unittest.mock import patch
+
+from fastapi.testclient import TestClient
+
 from app.main import app
 
 

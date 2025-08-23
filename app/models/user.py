@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Iterable, Iterator
 
 # ---------------------------------------------------------------------------
 # Database setup

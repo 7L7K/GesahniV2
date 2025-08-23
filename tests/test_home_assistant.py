@@ -1,7 +1,6 @@
+import asyncio
 import os
 import sys
-import asyncio
-import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -36,8 +35,9 @@ def test_resolve_entity_unreachable(monkeypatch):
 def test_request_picks_up_token(monkeypatch):
     monkeypatch.delenv("HOME_ASSISTANT_TOKEN", raising=False)
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
-    from app import home_assistant
     import importlib
+
+    from app import home_assistant
 
     importlib.reload(home_assistant)
 

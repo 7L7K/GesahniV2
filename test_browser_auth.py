@@ -4,10 +4,9 @@ Browser Authentication Flow Test
 Simulates the actual browser authentication flow using requests with cookies.
 """
 
-import requests
 import json
-import time
-from typing import Dict, Any, List
+
+import requests
 
 BASE_URL = "http://localhost:8000"
 FRONTEND_URL = "http://localhost:3000"

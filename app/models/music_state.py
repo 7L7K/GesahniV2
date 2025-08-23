@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any, Dict, Optional
-
+from typing import Any
 
 _TEST_MODE = (
     bool(os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING"))
@@ -70,7 +69,7 @@ class MusicState:
     skip_count: int = 0
 
     @staticmethod
-    def default() -> "MusicState":
+    def default() -> MusicState:
         return MusicState(
             vibe=MusicVibe(name="Calm Night", energy=0.25, tempo=80, explicit=False),
             volume=25,
@@ -121,7 +120,7 @@ def load_state(user_id: str) -> MusicState:
 
 
 def save_state(user_id: str, state: MusicState) -> None:
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "vibe": asdict(state.vibe),
         "volume": int(state.volume),
         "device_id": state.device_id,

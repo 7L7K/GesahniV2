@@ -1,6 +1,8 @@
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 from fastapi import Request, Response
+
 from app.middleware import silent_refresh_middleware
 
 

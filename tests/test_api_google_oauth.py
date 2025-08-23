@@ -6,17 +6,14 @@ Target coverage: 35-45% selective
 - callback: bad state (400), token exchange fail (502/500), happy path with redirect
 """
 
-import os
-import time
-import hmac
 import hashlib
-import json
+import hmac
 import secrets
-from unittest.mock import patch, MagicMock
+import time
+from unittest.mock import MagicMock, patch
 
-import pytest
-from fastapi.testclient import TestClient
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from app.api.google_oauth import router as google_oauth_router
 

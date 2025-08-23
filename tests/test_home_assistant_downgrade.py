@@ -1,12 +1,12 @@
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
 def test_ha_service_human_readable(monkeypatch):
-    from app.main import app
-    from app import home_assistant as ha
-    from app.security import verify_token, rate_limit
     import os
+
+    from app import home_assistant as ha
+    from app.main import app
+    from app.security import rate_limit, verify_token
 
     # Disable auth for this test by monkeypatching verify_token to no-op
     async def _noop():

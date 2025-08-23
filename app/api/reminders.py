@@ -3,21 +3,19 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
-from app.models.common import OkResponse as CommonOkResponse
 
 from app.deps.user import get_current_user_id
-
+from app.models.common import OkResponse as CommonOkResponse
 
 router = APIRouter(tags=["Calendar"])
 
 REMINDERS_STORE = Path(os.getenv("REMINDERS_STORE", "data/reminders.json"))
 
 
-def _read() -> List[dict]:
+def _read() -> list[dict]:
     if REMINDERS_STORE.exists():
         try:
             return json.loads(REMINDERS_STORE.read_text(encoding="utf-8") or "[]")
@@ -26,7 +24,7 @@ def _read() -> List[dict]:
     return []
 
 
-def _write(data: List[dict]) -> None:
+def _write(data: list[dict]) -> None:
     REMINDERS_STORE.parent.mkdir(parents=True, exist_ok=True)
     REMINDERS_STORE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 

@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import os
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.memory.profile_store import profile_store
 
 
 @pytest.fixture(autouse=True)

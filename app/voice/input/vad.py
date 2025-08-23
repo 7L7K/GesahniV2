@@ -6,7 +6,7 @@ Env: VAD_BACKEND = webrtc | silero | none (default: none)
 from __future__ import annotations
 
 import os
-from typing import Callable
+from collections.abc import Callable
 
 
 def _webrtc_vad_chunk(chunk: bytes) -> bool:
@@ -24,7 +24,6 @@ def _webrtc_vad_chunk(chunk: bytes) -> bool:
 def _silero_vad_chunk(chunk: bytes) -> bool:
     try:
         # Lazy import to avoid heavy deps at startup
-        import torch  # type: ignore
         import numpy as np  # type: ignore
         from torch.hub import load as torch_hub_load  # type: ignore
 
@@ -35,10 +34,10 @@ def _silero_vad_chunk(chunk: bytes) -> bool:
                 repo_or_dir="snakers4/silero-vad", model="silero_vad", verbose=False
             )
             (get_speech_timestamps, *_rest) = utils
-            setattr(_silero_vad_chunk, "_model", model)
-            setattr(_silero_vad_chunk, "_get_ts", get_speech_timestamps)
+            _silero_vad_chunk._model = model
+            _silero_vad_chunk._get_ts = get_speech_timestamps
         else:
-            get_speech_timestamps = getattr(_silero_vad_chunk, "_get_ts")
+            get_speech_timestamps = _silero_vad_chunk._get_ts
         # Expect 16kHz, 16-bit PCM little-endian
         if not chunk:
             return False

@@ -1,15 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
 import time
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import aiosqlite
-import asyncio
 
 
 def _compute_db_path() -> Path:
@@ -194,7 +193,7 @@ async def create_user(*, id: str, email: str, password_hash: str | None = None, 
         await db.commit()
 
 
-async def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+async def get_user_by_email(email: str) -> dict[str, Any] | None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
@@ -301,7 +300,7 @@ async def revoke_pat(pat_id: str) -> None:
         await db.commit()
 
 
-async def get_pat_by_id(pat_id: str) -> Optional[Dict[str, Any]]:
+async def get_pat_by_id(pat_id: str) -> dict[str, Any] | None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
@@ -324,7 +323,7 @@ async def get_pat_by_id(pat_id: str) -> Optional[Dict[str, Any]]:
     }
 
 
-async def get_pat_by_hash(token_hash: str) -> Optional[Dict[str, Any]]:
+async def get_pat_by_hash(token_hash: str) -> dict[str, Any] | None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")
@@ -348,7 +347,7 @@ async def get_pat_by_hash(token_hash: str) -> Optional[Dict[str, Any]]:
 
 
 # ---------------------------- audit log --------------------------------------
-async def record_audit(*, id: str, user_id: str | None, session_id: str | None, event_type: str, meta: Dict[str, Any] | None = None) -> None:
+async def record_audit(*, id: str, user_id: str | None, session_id: str | None, event_type: str, meta: dict[str, Any] | None = None) -> None:
     await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("PRAGMA foreign_keys=ON")

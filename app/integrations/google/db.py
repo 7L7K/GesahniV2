@@ -1,7 +1,10 @@
 from __future__ import annotations
+
 from datetime import datetime
-from sqlalchemy import create_engine, Column, String, DateTime, Text
+
+from sqlalchemy import Column, DateTime, String, Text, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+
 from .config import GOOGLE_OAUTH_DB_URL
 
 ENGINE = create_engine(GOOGLE_OAUTH_DB_URL, future=True)

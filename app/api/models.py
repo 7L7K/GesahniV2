@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-import os
 import json
-from typing import Any, Dict, List
+import os
+from typing import Any
 
 from fastapi import APIRouter, Depends
 
-
 from app.deps.scopes import docs_security_with
-
 
 router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))])
 
 
-def _parse_models_env(val: str | None) -> List[Dict[str, Any]]:
+def _parse_models_env(val: str | None) -> list[dict[str, Any]]:
     if not val:
         return []
     try:
@@ -26,21 +24,21 @@ def _parse_models_env(val: str | None) -> List[Dict[str, Any]]:
 
 
 @router.get("/models")
-async def list_models() -> Dict[str, Any]:
+async def list_models() -> dict[str, Any]:
     # Preferred: config-driven from env JSON
     models = _parse_models_env(os.getenv("MODELS_JSON"))
     if not models:
         # Fallback: construct from allowed envs
         gpt = [m for m in (os.getenv("ALLOWED_GPT_MODELS", "").split(",")) if m]
         llama = [m for m in (os.getenv("ALLOWED_LLAMA_MODELS", "").split(",")) if m]
-        items: List[Dict[str, Any]] = []
+        items: list[dict[str, Any]] = []
         # enrich GPT entries with pricing when available
         try:
             from app.gpt_client import MODEL_PRICING  # type: ignore
         except Exception:
             MODEL_PRICING = {}  # type: ignore
         for m in gpt:
-            meta: Dict[str, Any] = {"engine": "gpt", "name": m}
+            meta: dict[str, Any] = {"engine": "gpt", "name": m}
             price = MODEL_PRICING.get(m)
             if isinstance(price, dict):
                 meta["pricing_per_1k_tokens"] = {"input": price.get("in"), "output": price.get("out")}

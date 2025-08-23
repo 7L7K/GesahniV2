@@ -1,4 +1,3 @@
-import os
 from importlib import import_module
 
 from fastapi.testclient import TestClient

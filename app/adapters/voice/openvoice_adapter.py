@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)  # noqa: F401  (reserved for future debug)
 
 
 class VoiceSynth:
@@ -27,7 +26,7 @@ class VoiceSynth:
         """
         self.voice_profile_path = Path(voice_profile_path)
 
-    def speak(self, text: str, *, style: Dict | None = None) -> bytes:
+    def speak(self, text: str, *, style: dict | None = None) -> bytes:
         """Return WAV audio bytes for ``text``.
 
         ``style`` may include parameters like pitch or rate. This stub does not

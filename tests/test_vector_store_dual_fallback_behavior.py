@@ -1,6 +1,3 @@
-import os
-import types
-import pytest
 
 
 def test_dual_read_fallbacks_to_chroma_when_primary_empty(monkeypatch, tmp_path):
@@ -41,8 +38,8 @@ def test_dual_read_fallbacks_to_chroma_when_primary_empty(monkeypatch, tmp_path)
     monkeypatch.setattr(qvs, "QdrantVectorStore", _FakeQdrant)
 
     # Build dual store and seed fallback (Chroma) with a memory
-    from app.memory.vector_store.dual import DualReadVectorStore
     from app.memory.chroma_store import ChromaVectorStore
+    from app.memory.vector_store.dual import DualReadVectorStore
 
     fb = ChromaVectorStore()
     mid = fb.add_user_memory("u", "hello world")

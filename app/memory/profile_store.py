@@ -4,10 +4,10 @@ import json
 import logging
 import os
 import time
+from collections.abc import Iterable
 from pathlib import Path
 from threading import RLock
-from typing import Any, Dict, Iterable, Optional
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +54,10 @@ class ProfileStore:
         self._path = Path(base)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         # { user_id: { key: {"value": Any, "updated_at": float, "source": str} } }
-        self._mem: Dict[str, Dict[str, Dict[str, Any]]] = {}
-        self._exp: Dict[str, float] = {}
+        self._mem: dict[str, dict[str, dict[str, Any]]] = {}
+        self._exp: dict[str, float] = {}
         self._lock = RLock()
-        self._last_key: Dict[str, str] = {}
+        self._last_key: dict[str, str] = {}
         self._load()
 
     def _load(self) -> None:
@@ -65,7 +65,7 @@ class ProfileStore:
             try:
                 data = json.loads(self._path.read_text(encoding="utf-8"))
                 if isinstance(data, dict):
-                    fixed: Dict[str, Dict[str, Dict[str, Any]]] = {}
+                    fixed: dict[str, dict[str, dict[str, Any]]] = {}
                     now = time.time()
                     for uid, attrs in data.items():
                         if isinstance(attrs, dict):
@@ -92,16 +92,16 @@ class ProfileStore:
         return bool(exp and time.time() > exp)
 
     # ---------------- Public API ----------------
-    def get_snapshot(self, user_id: str) -> Dict[str, Dict[str, Any]]:
+    def get_snapshot(self, user_id: str) -> dict[str, dict[str, Any]]:
         with self._lock:
             if self._expired(user_id):
                 self._mem.pop(user_id, None)
                 self._exp.pop(user_id, None)
             return dict(self._mem.get(user_id, {}))
 
-    def get_values(self, user_id: str, keys: Iterable[str] | None = None) -> Dict[str, Any]:
+    def get_values(self, user_id: str, keys: Iterable[str] | None = None) -> dict[str, Any]:
         snap = self.get_snapshot(user_id)
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         for k, rec in snap.items():
             if keys is None or k in keys:
                 out[k] = rec.get("value")
@@ -110,7 +110,7 @@ class ProfileStore:
     def get_value(self, user_id: str, key: str) -> Any | None:
         return self.get_values(user_id, keys=[key]).get(key)
 
-    def upsert(self, user_id: str, key: str, value: Any, *, source: str = "utterance") -> Dict[str, Any]:
+    def upsert(self, user_id: str, key: str, value: Any, *, source: str = "utterance") -> dict[str, Any]:
         if key not in CANONICAL_KEYS:
             logger.warning("profile_store: non-canonical key %s", key)
         now = time.time()
@@ -139,18 +139,18 @@ class ProfileStore:
             pass
         return rec
 
-    def set_last_asked_key(self, user_id: str, key: Optional[str]) -> None:
+    def set_last_asked_key(self, user_id: str, key: str | None) -> None:
         with self._lock:
             if key:
                 self._last_key[user_id] = key
             else:
                 self._last_key.pop(user_id, None)
 
-    def get_last_asked_key(self, user_id: str) -> Optional[str]:
+    def get_last_asked_key(self, user_id: str) -> str | None:
         with self._lock:
             return self._last_key.get(user_id)
 
-    def update_bulk(self, user_id: str, attrs: Dict[str, Any], *, source: str = "import") -> None:
+    def update_bulk(self, user_id: str, attrs: dict[str, Any], *, source: str = "import") -> None:
         with self._lock:
             for k, v in (attrs or {}).items():
                 self.upsert(user_id, k, v, source=source)
@@ -161,7 +161,7 @@ class ProfileStore:
                 pass
 
     # Back-compat helper used by API layer
-    def update(self, user_id: str, attrs: Dict[str, Any], *, source: str = "api") -> None:
+    def update(self, user_id: str, attrs: dict[str, Any], *, source: str = "api") -> None:
         self.update_bulk(user_id, attrs, source=source)
 
     def persist_all(self) -> None:
@@ -169,7 +169,7 @@ class ProfileStore:
             self._save()
 
     # Legacy convenience
-    def get(self, user_id: str) -> Dict[str, Any]:
+    def get(self, user_id: str) -> dict[str, Any]:
         return self.get_values(user_id)
 
 

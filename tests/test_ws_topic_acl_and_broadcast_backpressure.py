@@ -1,5 +1,5 @@
 import os
-import asyncio
+
 import jwt
 from fastapi.testclient import TestClient
 

@@ -21,26 +21,26 @@ class MisconfiguredStoreError(VectorStoreError):
 @runtime_checkable
 class SupportsQACache(Protocol):
     def get_items(
-        self, ids: List[str] | None = None, include: List[str] | None = None
-    ) -> Dict[str, List]:
+        self, ids: list[str] | None = None, include: list[str] | None = None
+    ) -> dict[str, list]:
         ...
 
     def upsert(
         self,
         *,
-        ids: List[str],
-        documents: List[str],
-        metadatas: List[Dict],
+        ids: list[str],
+        documents: list[str],
+        metadatas: list[dict],
     ) -> None:
         ...
 
-    def delete(self, *, ids: List[str] | None = None) -> None:
+    def delete(self, *, ids: list[str] | None = None) -> None:
         ...
 
-    def update(self, *, ids: List[str], metadatas: List[Dict]) -> None:
+    def update(self, *, ids: list[str], metadatas: list[dict]) -> None:
         ...
 
-    def keys(self) -> List[str]:
+    def keys(self) -> list[str]:
         ...
 
 
@@ -55,9 +55,9 @@ class VectorStoreProtocol(Protocol):
     # User memory operations -------------------------------------------------
     def add_user_memory(self, user_id: str, memory: str) -> str: ...
 
-    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]: ...
+    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> list[str]: ...
 
-    def list_user_memories(self, user_id: str) -> List[Dict]: ...
+    def list_user_memories(self, user_id: str) -> list[dict]: ...
 
     def delete_user_memory(self, user_id: str, mem_id: str) -> bool: ...
 
@@ -67,7 +67,7 @@ class VectorStoreProtocol(Protocol):
 
     def cache_answer(self, cache_id: str, prompt: str, answer: str) -> None: ...
 
-    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]: ...
+    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> str | None: ...
 
     def record_feedback(self, prompt: str, feedback: str) -> None: ...
 
@@ -81,7 +81,7 @@ class ScoredDocument:
 
     text: str
     score: float
-    meta: Dict[str, object] | None = None
+    meta: dict[str, object] | None = None
 
 
 __all__ = [

@@ -1,6 +1,5 @@
 """Offline-first STT with cloud fallback wrapper."""
 
-from typing import Iterable
 
 from .offline import transcribe_chunks as offline_transcribe
 

@@ -4,7 +4,6 @@ import hmac
 import os
 import time
 from hashlib import sha256
-from typing import Tuple
 
 
 def _secret() -> bytes:
@@ -14,7 +13,7 @@ def _secret() -> bytes:
 
 def sign_payload(body: bytes, nonce: str, timestamp: int | None = None) -> str:
     ts = int(timestamp or time.time())
-    msg = f"{ts}.{nonce}.".encode("utf-8") + body
+    msg = f"{ts}.{nonce}.".encode() + body
     mac = hmac.new(_secret(), msg, sha256).hexdigest()
     return f"v1={ts}:{nonce}:{mac}"
 
@@ -30,7 +29,7 @@ def verify_signature(body: bytes, signature: str, max_age: int = 300) -> bool:
         return False
     if abs(time.time() - ts) > max_age:
         return False
-    msg = f"{ts}.{nonce}.".encode("utf-8") + body
+    msg = f"{ts}.{nonce}.".encode() + body
     expected = hmac.new(_secret(), msg, sha256).hexdigest()
     return hmac.compare_digest(expected, mac)
 

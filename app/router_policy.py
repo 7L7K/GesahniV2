@@ -8,14 +8,13 @@ This module handles model routing policies including:
 - Circuit breaker checks
 """
 
-import os
 import logging
+import os
 import time
-from typing import Tuple, Optional, Dict, Any, Set
 from dataclasses import dataclass
 
-from .model_picker import pick_model
 from .intent_detector import detect_intent
+from .model_picker import pick_model
 from .token_utils import count_tokens
 
 logger = logging.getLogger(__name__)
@@ -66,7 +65,7 @@ class RoutingDecision:
 
 def pick_model_with_policy(
     prompt: str,
-    model_override: Optional[str] = None,
+    model_override: str | None = None,
     allow_fallback: bool = True,
     dry_run: bool = False,
 ) -> RoutingDecision:
@@ -202,8 +201,9 @@ def check_vendor_health(vendor: str) -> bool:
     """
     try:
         # Import here to avoid circular imports
-        from .health import _check_vendor_health as eager_check_vendor_health
         import asyncio
+
+        from .health import _check_vendor_health as eager_check_vendor_health
 
         # Use the new eager health gating system
         return asyncio.run(eager_check_vendor_health(vendor, record_failure=False, record_success=False))
@@ -215,7 +215,7 @@ def check_vendor_health(vendor: str) -> bool:
         elif vendor == "ollama":
             # Import here to avoid circular imports
             try:
-                from .llama_integration import llama_circuit_open, LLAMA_HEALTHY
+                from .llama_integration import LLAMA_HEALTHY, llama_circuit_open
                 return LLAMA_HEALTHY and not llama_circuit_open
             except ImportError:
                 return True  # Assume healthy if module not available

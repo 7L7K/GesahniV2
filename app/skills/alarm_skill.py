@@ -5,13 +5,12 @@ import os
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict
 
 from .base import Skill
 from .reminder_skill import scheduler
 
 _ALARMS_PATH = Path(os.getenv("ALARMS_STORE", "data/alarms.json"))
-ALARMS: Dict[str, str] = {}
+ALARMS: dict[str, str] = {}
 
 if _ALARMS_PATH.exists():
     try:

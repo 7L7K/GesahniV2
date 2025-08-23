@@ -5,20 +5,18 @@ This module provides utilities for tracking authentication events with structure
 and Prometheus metrics for observability and alerting.
 """
 
-import time
 import logging
+import time
 from contextlib import contextmanager
-from typing import Optional, Dict, Any
-from datetime import datetime, timezone
 
-from .telemetry import LogRecord, log_record_var, utc_now
 from .metrics import (
-    WHOAMI_CALLS_TOTAL,
+    AUTH_EVENT_DURATION_SECONDS,
     FINISH_CALLS_TOTAL,
     PRIVILEGED_CALLS_BLOCKED_TOTAL,
+    WHOAMI_CALLS_TOTAL,
     WS_RECONNECT_ATTEMPTS_TOTAL,
-    AUTH_EVENT_DURATION_SECONDS,
 )
+from .telemetry import LogRecord, log_record_var, utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -43,12 +41,12 @@ def _get_or_create_log_record() -> LogRecord:
 
 def log_auth_event(
     event_type: str,
-    user_id: Optional[str] = None,
-    source: Optional[str] = None,
-    jwt_status: Optional[str] = None,
-    session_ready: Optional[bool] = None,
-    is_authenticated: Optional[bool] = None,
-    lock_reason: Optional[str] = None,
+    user_id: str | None = None,
+    source: str | None = None,
+    jwt_status: str | None = None,
+    session_ready: bool | None = None,
+    is_authenticated: bool | None = None,
+    lock_reason: str | None = None,
     **kwargs
 ) -> None:
     """
@@ -132,11 +130,11 @@ def track_auth_event(event_type: str, **kwargs):
 
 def record_whoami_call(
     status: str,
-    source: Optional[str] = None,
-    user_id: Optional[str] = None,
-    session_ready: Optional[bool] = None,
-    is_authenticated: Optional[bool] = None,
-    jwt_status: Optional[str] = None,
+    source: str | None = None,
+    user_id: str | None = None,
+    session_ready: bool | None = None,
+    is_authenticated: bool | None = None,
+    jwt_status: str | None = None,
 ) -> None:
     """Record a whoami endpoint call with metrics and logging."""
     try:
@@ -170,8 +168,8 @@ def record_finish_call(
     status: str,
     method: str,
     reason: str,
-    user_id: Optional[str] = None,
-    set_cookie: Optional[bool] = None,
+    user_id: str | None = None,
+    set_cookie: bool | None = None,
 ) -> None:
     """Record an auth finish endpoint call with metrics and logging."""
     try:
@@ -199,7 +197,7 @@ def record_finish_call(
 def record_privileged_call_blocked(
     endpoint: str,
     reason: str,
-    user_id: Optional[str] = None,
+    user_id: str | None = None,
 ) -> None:
     """Record a blocked privileged call."""
     try:
@@ -224,7 +222,7 @@ def record_privileged_call_blocked(
 def record_ws_reconnect_attempt(
     endpoint: str,
     reason: str,
-    user_id: Optional[str] = None,
+    user_id: str | None = None,
 ) -> None:
     """Record a WebSocket reconnection attempt."""
     try:
@@ -249,8 +247,8 @@ def record_ws_reconnect_attempt(
 def record_auth_lock_event(
     action: str,  # "on" or "off"
     reason: str,
-    user_id: Optional[str] = None,
-    duration_seconds: Optional[float] = None,
+    user_id: str | None = None,
+    duration_seconds: float | None = None,
 ) -> None:
     """Record an authentication lock event."""
     try:
@@ -268,9 +266,9 @@ def record_auth_lock_event(
 def record_auth_state_change(
     old_state: bool,
     new_state: bool,
-    user_id: Optional[str] = None,
-    source: Optional[str] = None,
-    reason: Optional[str] = None,
+    user_id: str | None = None,
+    source: str | None = None,
+    reason: str | None = None,
 ) -> None:
     """Record an authentication state change."""
     try:

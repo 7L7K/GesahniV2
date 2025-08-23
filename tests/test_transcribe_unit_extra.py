@@ -1,5 +1,5 @@
-import os
 import importlib
+import os
 
 
 def _fake_client_with_capture():

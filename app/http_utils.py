@@ -2,9 +2,9 @@ import asyncio
 import importlib
 import logging
 from functools import wraps
-from typing import Tuple
 
 import httpx
+
 from .otel_utils import start_span
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ def log_exceptions(module: str):
 
 async def json_request(
     method: str, url: str, **kwargs
-) -> Tuple[dict | None, str | None]:
+) -> tuple[dict | None, str | None]:
     """Perform an HTTP request and return JSON with retry logic.
 
     Returns a tuple of ``(data, error)`` where ``error`` is ``None`` on success
@@ -63,7 +63,7 @@ async def json_request(
             except Exception:  # pragma: no cover - fallback if import fails
                 pass
             timeout = kwargs.pop("timeout", 10.0)
-            factory = getattr(httpx_module, "AsyncClient")
+            factory = httpx_module.AsyncClient
             try:
                 cm = factory(timeout=timeout)
             except TypeError:

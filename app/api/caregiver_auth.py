@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import hmac
 import hashlib
+import hmac
 import os
 import time
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
-
 
 router = APIRouter(tags=["Care"])
 

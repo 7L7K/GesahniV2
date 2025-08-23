@@ -1,7 +1,7 @@
+import asyncio
 import json
 import os
 import time
-import asyncio
 from threading import Thread
 
 try:
@@ -11,19 +11,23 @@ except Exception:  # pragma: no cover - optional dependency
     Redis = None
     Queue = None
 
-from .session_manager import SESSIONS_DIR, extract_tags_from_text
-from .session_store import (
-    SessionStatus,
-    load_meta as _load_meta,
-    save_meta as _save_meta,
-    update_status,
-    append_error,
-)
-from .transcribe import transcribe_file as sync_transcribe_file
 from .analytics import record_transcription
 from .gpt_client import ask_gpt
 from .memory.vector_store import add_user_memory
 from .router import OPENAI_TIMEOUT_MS
+from .session_manager import SESSIONS_DIR, extract_tags_from_text
+from .session_store import (
+    SessionStatus,
+    append_error,
+    update_status,
+)
+from .session_store import (
+    load_meta as _load_meta,
+)
+from .session_store import (
+    save_meta as _save_meta,
+)
+from .transcribe import transcribe_file as sync_transcribe_file
 
 
 def _get_queue() -> Queue:

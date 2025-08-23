@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
-import asyncio
 
-from app.session_manager import start_session as _start_session, save_session as _save_session
-from app.session_store import SESSIONS_DIR as _SESSIONS_DIR
 import app.session_store as store
+from app.session_manager import save_session as _save_session
+from app.session_manager import start_session as _start_session
 
 
 def test_capture_save_sets_transcript_uri_when_sharing_enabled(monkeypatch, tmp_path: Path):

@@ -6,9 +6,9 @@ This module avoids import-time failures when opentelemetry isn't installed.
 Use start_span("name") as a context manager and set attributes on the span.
 """
 
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator
-
+from typing import Any
 
 try:  # optional dependency
     from opentelemetry import trace as _trace  # type: ignore
@@ -48,12 +48,16 @@ def init_tracing() -> bool:
             return True
 
         # Lazy import SDK bits; guarded to avoid hard dependency in minimal envs
-        from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource  # type: ignore
-        from opentelemetry.sdk.trace import TracerProvider  # type: ignore
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor  # type: ignore
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore
             OTLPSpanExporter,
         )
+        from opentelemetry.sdk.resources import (  # type: ignore
+            SERVICE_NAME,
+            SERVICE_VERSION,
+            Resource,
+        )
+        from opentelemetry.sdk.trace import TracerProvider  # type: ignore
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor  # type: ignore
 
         service_name = os.getenv("OTEL_SERVICE_NAME", "gesahni")
         service_version = os.getenv("OTEL_SERVICE_VERSION", "0")
@@ -61,11 +65,11 @@ def init_tracing() -> bool:
 
         provider = TracerProvider(resource=resource)
         # mark configured to avoid double init
-        setattr(provider, "_configured", True)
+        provider._configured = True
 
         # Exporter endpoint (e.g., http://localhost:4317)
         endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") or os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         if endpoint:
             kwargs["endpoint"] = endpoint
         try:
@@ -84,7 +88,7 @@ def init_tracing() -> bool:
 
 
 @contextmanager
-def start_span(name: str, attributes: Dict[str, Any] | None = None) -> Iterator[Any]:
+def start_span(name: str, attributes: dict[str, Any] | None = None) -> Iterator[Any]:
     tracer = get_tracer()
     if tracer is None:
         yield None
@@ -154,7 +158,7 @@ def get_trace_id_hex() -> str:
         return ""
 
 
-def observe_with_exemplar(hist, value: float, *, exemplar_labels: Dict[str, str] | None = None):
+def observe_with_exemplar(hist, value: float, *, exemplar_labels: dict[str, str] | None = None):
     """Attempt to observe a Histogram with exemplars; fall back if unsupported."""
     try:
         if exemplar_labels:

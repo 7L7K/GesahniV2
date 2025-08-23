@@ -12,28 +12,25 @@ This test suite focuses on:
 """
 
 import asyncio
-import time
-import json
 import logging
-import pytest
-import tempfile
 import os
-import sys
-from pathlib import Path
-from unittest.mock import Mock, patch, AsyncMock
+import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Dict, Any
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
 from fastapi.testclient import TestClient
-from fastapi import HTTPException
+
+from app.gpt_client import ask_gpt
+from app.llama_integration import _check_and_set_flag
+from app.logging_config import get_last_errors
 
 # Import app components
 from app.main import app
-from app.tokens import create_access_token, create_refresh_token
-from app.logging_config import get_last_errors, req_id_var
 from app.memory.api import _get_store
-from app.llama_integration import LLAMA_HEALTHY, _check_and_set_flag
-from app.gpt_client import ask_gpt
+from app.tokens import create_access_token
 
 
 class TestComprehensiveErrors:
@@ -170,7 +167,7 @@ class TestComprehensiveErrors:
         # Test with network timeout
         with patch('app.gpt_client.get_client') as mock_get_client:
             mock_client = AsyncMock()
-            mock_client.chat.completions.create.side_effect = asyncio.TimeoutError("Request timeout")
+            mock_client.chat.completions.create.side_effect = TimeoutError("Request timeout")
             mock_get_client.return_value = mock_client
             
             try:
@@ -245,8 +242,9 @@ class TestComprehensiveErrors:
     def test_resource_cleanup(self):
         """Test resource cleanup and memory leaks."""
         import gc
-        import psutil
         import os
+
+        import psutil
         
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss
@@ -325,7 +323,7 @@ class TestComprehensiveErrors:
         """Test network timeout scenarios."""
         # Test with slow network simulation
         with patch('app.http_utils.json_request') as mock_request:
-            mock_request.side_effect = asyncio.TimeoutError("Network timeout")
+            mock_request.side_effect = TimeoutError("Network timeout")
             
             try:
                 # This should handle timeout gracefully

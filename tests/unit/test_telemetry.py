@@ -1,8 +1,8 @@
 """Tests for telemetry module."""
 
-import pytest
-from datetime import datetime, timezone
-from app.telemetry import hash_user_id, utc_now, LogRecord, log_record_var
+from datetime import UTC, datetime
+
+from app.telemetry import LogRecord, hash_user_id, log_record_var, utc_now
 
 
 class TestHashUserId:
@@ -69,12 +69,12 @@ class TestUtcNow:
         """Test that utc_now returns datetime with timezone."""
         result = utc_now()
         assert result.tzinfo is not None
-        assert result.tzinfo == timezone.utc
+        assert result.tzinfo == UTC
 
     def test_utc_now_is_recent(self):
         """Test that utc_now returns a recent time."""
         result = utc_now()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Should be within 1 second
         assert abs((result - now).total_seconds()) < 1
 

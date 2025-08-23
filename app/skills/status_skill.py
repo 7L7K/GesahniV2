@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import os
 import re
 import time
 
+from ..status import _request, llama_get_status
 from .base import Skill
-from ..status import llama_get_status, _request
 
 START_TIME = time.time()
 

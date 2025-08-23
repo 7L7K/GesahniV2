@@ -1,4 +1,3 @@
-import os
 from app.api.auth import _get_refresh_ttl_seconds
 
 

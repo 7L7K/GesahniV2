@@ -1,5 +1,5 @@
-import os
 import asyncio
+import os
 
 import app.model_router as mr
 

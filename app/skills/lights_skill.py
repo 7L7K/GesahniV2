@@ -5,8 +5,8 @@ import difflib
 import logging
 import re
 
-from .base import Skill
 from .. import home_assistant as ha
+from .base import Skill
 
 # cache to avoid hitting HA on every call
 _LIGHT_MAP: dict[str, str] | None = None

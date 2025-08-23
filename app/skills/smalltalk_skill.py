@@ -18,8 +18,9 @@ import re
 import threading
 import time
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Literal
 
 from .base import Skill
 
@@ -91,7 +92,7 @@ def is_greeting(prompt: str) -> bool:
     return p in roots
 
 
-def memory_hook(user) -> Optional[str]:
+def memory_hook(user) -> str | None:
     """Return a formatted project hook string if available."""
 
     project = getattr(user, "last_project", None)
@@ -156,7 +157,7 @@ class SmalltalkSkill(Skill):
             raise ValueError("no greeting detected")
         return resp
 
-    def _respond(self, prompt: str, user=None) -> Optional[str]:
+    def _respond(self, prompt: str, user=None) -> str | None:
         if not is_greeting(prompt):
             return None
 
@@ -208,7 +209,7 @@ class SmalltalkSkill(Skill):
             log.debug("Greeting used", extra={"greeting": greeting})
             return greeting
 
-    def _maybe_persona_tag(self) -> Optional[str]:
+    def _maybe_persona_tag(self) -> str | None:
         """Return a persona tag based on configured rate."""
 
         if PERSONA_TAGS and random.random() < self._persona_rate:

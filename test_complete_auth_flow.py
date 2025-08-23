@@ -4,10 +4,9 @@ Complete Authentication Flow Test
 Simulates the complete authentication flow including frontend behavior and network sequence analysis.
 """
 
-import requests
 import json
-import time
-from typing import Dict, Any, List
+
+import requests
 
 BASE_URL = "http://localhost:8000"
 FRONTEND_URL = "http://localhost:3000"
@@ -137,7 +136,7 @@ def test_cors_vs_auth():
         cors_credentials = response.headers.get("Access-Control-Allow-Credentials")
         vary_header = response.headers.get("Vary")
         
-        print(f"CORS headers:")
+        print("CORS headers:")
         print(f"  Access-Control-Allow-Origin: {cors_origin}")
         print(f"  Access-Control-Allow-Credentials: {cors_credentials}")
         print(f"  Vary: {vary_header}")

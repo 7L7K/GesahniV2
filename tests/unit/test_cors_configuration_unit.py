@@ -8,8 +8,8 @@ This test suite verifies that the CORS configuration meets the specific requirem
 4. Preflight: CORS middleware registered as the outermost layer so OPTIONS short-circuits
 """
 
-import pytest
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 

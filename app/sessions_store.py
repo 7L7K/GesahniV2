@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import aiosqlite
-
 
 DB_PATH = os.getenv("USER_DB", "users.db")
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class SessionsStore:
@@ -45,7 +44,7 @@ class SessionsStore:
         await conn.commit()
         return conn
 
-    async def create_session(self, user_id: str, *, did: Optional[str] = None, device_name: Optional[str] = None) -> Dict[str, str]:
+    async def create_session(self, user_id: str, *, did: str | None = None, device_name: str | None = None) -> dict[str, str]:
         """Create a new logical login session for a device.
 
         Returns a dict with keys: sid, did.
@@ -76,10 +75,10 @@ class SessionsStore:
         finally:
             await conn.close()
 
-    async def list_user_sessions(self, user_id: str) -> List[Dict[str, Any]]:
+    async def list_user_sessions(self, user_id: str) -> list[dict[str, Any]]:
         conn = await self._get_conn()
         try:
-            out: List[Dict[str, Any]] = []
+            out: list[dict[str, Any]] = []
             async with conn.execute(
                 "SELECT sid, did, device_name, created_at, last_seen, revoked FROM device_sessions WHERE user_id = ? ORDER BY last_seen DESC",
                 (user_id,),

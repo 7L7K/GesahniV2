@@ -1,0 +1,33 @@
+route:
+  receiver: "null"
+  routes:
+    - matchers:
+        - severity = "page"
+      receiver: "slack-critical"
+    - matchers:
+        - severity = "ticket"
+      receiver: "slack-warn"
+    - matchers:
+        - severity = "info"
+      receiver: "slack-info"
+
+receivers:
+  - name: "null"
+  - name: "slack-critical"
+    slack_configs:
+      - channel: "#oncall"
+        send_resolved: true
+        text: "{{ .CommonAnnotations.summary }}\n{{ .CommonAnnotations.description }}"
+        api_url: ${SLACK_WEBHOOK_URL}
+  - name: "slack-warn"
+    slack_configs:
+      - channel: "#ops"
+        send_resolved: true
+        text: "{{ .CommonAnnotations.summary }}\n{{ .CommonAnnotations.description }}"
+        api_url: ${SLACK_WEBHOOK_URL}
+  - name: "slack-info"
+    slack_configs:
+      - channel: "#ops"
+        send_resolved: true
+        text: "{{ .CommonAnnotations.summary }}\n{{ .CommonAnnotations.description }}"
+        api_url: ${SLACK_WEBHOOK_URL}

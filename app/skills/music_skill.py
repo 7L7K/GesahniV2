@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import re
 import json
 import pathlib
+import re
 
-from .base import Skill
 from .. import home_assistant as ha
-
+from .base import Skill
 
 _MAP_PATH = pathlib.Path(__file__).with_name("artist_map.json")
 try:

@@ -46,8 +46,8 @@ sys.modules.setdefault(
     types.SimpleNamespace(EmbeddingFunction=object),
 )
 
-from app.prompt_builder import PromptBuilder
 from app import prompt_builder
+from app.prompt_builder import PromptBuilder
 
 
 def test_retriever_budget(monkeypatch):

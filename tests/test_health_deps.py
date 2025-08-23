@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-from app.main import app
 import app.health_utils as hu
+from app.main import app
 
 
 def test_health_deps_degraded_llama(monkeypatch):
@@ -49,6 +49,7 @@ def test_health_deps_skipped_when_env_missing(monkeypatch):
 def test_llama_skipped_when_disabled_env(monkeypatch):
     monkeypatch.setenv("LLAMA_ENABLED", "false")
     from importlib import reload
+
     import app.health_utils as hu
     reload(hu)
     c = TestClient(app)

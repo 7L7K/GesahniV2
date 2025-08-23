@@ -9,16 +9,16 @@ def is_enabled(flag: str, *, default: bool = False) -> bool:
     return val in {"1", "true", "yes"}
 
 
-_WINS: Dict[str, int] = {}
-_LOSSES: Dict[str, int] = {}
+_WINS: dict[str, int] = {}
+_LOSSES: dict[str, int] = {}
 
 
 def record_result(flag: str, win: bool) -> None:
     ( _WINS if win else _LOSSES )[flag] = ( _WINS if win else _LOSSES ).get(flag, 0) + 1
 
 
-def snapshot() -> Dict[str, Tuple[int, int]]:
-    out: Dict[str, Tuple[int, int]] = {}
+def snapshot() -> dict[str, tuple[int, int]]:
+    out: dict[str, tuple[int, int]] = {}
     keys = set(_WINS) | set(_LOSSES)
     for k in keys:
         out[k] = (_WINS.get(k, 0), _LOSSES.get(k, 0))

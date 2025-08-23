@@ -1,16 +1,22 @@
-import pytest
 import time
-import asyncio
-from unittest.mock import patch, AsyncMock
-from fastapi import HTTPException
+from unittest.mock import patch
+
+import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import (
-    _record_attempt, _throttled, _get_throttle_status, 
-    _should_apply_backoff, _should_hard_lockout,
-    _clear_rate_limit_data, _get_rate_limit_stats,
-    _ATTEMPT_WINDOW, _ATTEMPT_MAX, _LOCKOUT_SECONDS,
-    _EXPONENTIAL_BACKOFF_THRESHOLD, _HARD_LOCKOUT_THRESHOLD
+    _ATTEMPT_MAX,
+    _ATTEMPT_WINDOW,
+    _EXPONENTIAL_BACKOFF_THRESHOLD,
+    _HARD_LOCKOUT_THRESHOLD,
+    _LOCKOUT_SECONDS,
+    _clear_rate_limit_data,
+    _get_rate_limit_stats,
+    _get_throttle_status,
+    _record_attempt,
+    _should_apply_backoff,
+    _should_hard_lockout,
+    _throttled,
 )
 
 

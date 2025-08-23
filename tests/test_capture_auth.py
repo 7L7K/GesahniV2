@@ -1,11 +1,11 @@
-import jwt
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
+
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 
-import app.security as security
 import app.deps.user as user_deps
+import app.security as security
 from app.tokens import create_access_token
 
 

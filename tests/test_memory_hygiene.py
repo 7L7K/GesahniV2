@@ -1,9 +1,11 @@
 import os
 import time
+
 from fastapi import APIRouter, HTTPException, Query, Response
+
+from app.analytics import get_metrics
 from app.home_assistant import _request
 from app.llama_integration import get_status as llama_get_status
-from app.analytics import get_metrics
 
 router = APIRouter()
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")

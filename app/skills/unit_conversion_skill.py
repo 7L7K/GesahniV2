@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
-from typing import Callable, Dict, Tuple
+from collections.abc import Callable
 
-from .base import Skill
 from ..telemetry import log_record_var
+from .base import Skill
 
 
 # simple conversion functions
@@ -32,7 +32,7 @@ def _mi_to_km(x: float) -> float:
     return x * 1.60934
 
 
-CONVERSIONS: Dict[Tuple[str, str], Callable[[float], float]] = {
+CONVERSIONS: dict[tuple[str, str], Callable[[float], float]] = {
     ("liter", "ounce"): _l_to_oz,
     ("litre", "ounce"): _l_to_oz,
     ("ounce", "liter"): _oz_to_l,

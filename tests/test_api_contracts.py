@@ -1,4 +1,3 @@
-import os
 from fastapi.testclient import TestClient
 
 
@@ -30,8 +29,9 @@ def test_whoami_contract(monkeypatch):
 def test_sessions_contract(monkeypatch):
     monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
     # seed a session via store
-    from app.sessions_store import sessions_store
     import asyncio
+
+    from app.sessions_store import sessions_store
     asyncio.run(sessions_store.create_session("u1", did="dev_xyz", device_name="King's Mac"))
     c = _client()
     r = c.get("/v1/sessions")

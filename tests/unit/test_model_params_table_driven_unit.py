@@ -1,5 +1,7 @@
+from typing import Any
+
 import pytest
-from typing import Any, Dict, List, Optional
+
 from app import model_params as mp
 
 
@@ -51,7 +53,7 @@ class TestBaseDefaults:
             "max_tokens": 200,
         }),
     ])
-    def test_base_defaults_env_variations(self, monkeypatch, env_vars: Dict[str, str], expected: Dict[str, Any]):
+    def test_base_defaults_env_variations(self, monkeypatch, env_vars: dict[str, str], expected: dict[str, Any]):
         """Test base_defaults with various environment variable combinations."""
         # Clear all relevant env vars first
         for key in ["GEN_TEMPERATURE", "GEN_TOP_P", "GEN_MAX_TOKENS", "GEN_MAX_COMPLETION_TOKENS", "GEN_STOP"]:
@@ -127,7 +129,7 @@ class TestMergeParams:
             "custom": "value"
         }),
     ])
-    def test_merge_params_variations(self, monkeypatch, overrides: Optional[Dict[str, Any]], expected_changes: Dict[str, Any]):
+    def test_merge_params_variations(self, monkeypatch, overrides: dict[str, Any] | None, expected_changes: dict[str, Any]):
         """Test merge_params with various override combinations."""
         # Set up base environment
         monkeypatch.setenv("GEN_TEMPERATURE", "0.1")
@@ -179,7 +181,7 @@ class TestMergeParams:
         (None, None),
         (True, None),
     ])
-    def test_merge_params_stop_normalization(self, monkeypatch, stop_input: Any, expected_output: Optional[List[str]]):
+    def test_merge_params_stop_normalization(self, monkeypatch, stop_input: Any, expected_output: list[str] | None):
         """Test stop sequence normalization in merge_params."""
         monkeypatch.setenv("GEN_TEMPERATURE", "0.1")
         
@@ -235,7 +237,7 @@ class TestForOpenAI:
             "temperature": 0.3, "top_p": 0.9, "max_completion_tokens": 150, "stop": ["a", "b"]
         }),
     ])
-    def test_for_openai_mapping(self, monkeypatch, overrides: Optional[Dict[str, Any]], expected_openai_args: Dict[str, Any]):
+    def test_for_openai_mapping(self, monkeypatch, overrides: dict[str, Any] | None, expected_openai_args: dict[str, Any]):
         """Test OpenAI parameter mapping."""
         # Set up base environment
         monkeypatch.setenv("GEN_TEMPERATURE", "0.1")
@@ -296,7 +298,7 @@ class TestForOllama:
         ({"max_tokens": None}, {"temperature": 0.1, "top_p": 0.9}),
         ({"stop": None}, {"temperature": 0.1, "top_p": 0.9}),
     ])
-    def test_for_ollama_mapping(self, monkeypatch, overrides: Optional[Dict[str, Any]], expected_ollama_args: Dict[str, Any]):
+    def test_for_ollama_mapping(self, monkeypatch, overrides: dict[str, Any] | None, expected_ollama_args: dict[str, Any]):
         """Test Ollama parameter mapping."""
         # Set up base environment
         monkeypatch.setenv("GEN_TEMPERATURE", "0.1")

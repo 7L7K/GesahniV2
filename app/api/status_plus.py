@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import os
-from fastapi import APIRouter, Depends, HTTPException, Query
-from app.deps.user import get_current_user_id
-from pydantic import BaseModel, ConfigDict
-from app.deps.scopes import optional_require_scope
-from pathlib import Path
 import subprocess
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict
+
+from app.deps.scopes import optional_require_scope
+from app.deps.user import get_current_user_id
 
 router = APIRouter(tags=["Admin"])
 

@@ -1,5 +1,5 @@
-import jwt
 import types
+
 import pytest
 
 
@@ -27,6 +27,7 @@ def test_get_rate_limit_snapshot_and_current_key(monkeypatch):
 @pytest.mark.asyncio
 async def test_verify_token_missing_secret(monkeypatch):
     from fastapi import Request
+
     from app import security as sec
 
     # Missing secret but REQUIRE_JWT disabled -> pass-through
@@ -41,6 +42,7 @@ async def test_verify_token_missing_secret(monkeypatch):
 @pytest.mark.asyncio
 async def test_verify_token_success(monkeypatch):
     from fastapi import Request
+
     from app import security as sec
 
     monkeypatch.setenv("JWT_SECRET", "secret")
@@ -56,6 +58,7 @@ async def test_verify_token_success(monkeypatch):
 @pytest.mark.asyncio
 async def test_rate_limit_paths(monkeypatch):
     from fastapi import Request
+
     from app import security as sec
 
     # allow more burst to avoid flakiness
@@ -81,6 +84,7 @@ async def test_rate_limit_paths(monkeypatch):
 @pytest.mark.asyncio
 async def test_require_nonce(monkeypatch):
     from fastapi import Request
+
     from app import security as sec
 
     monkeypatch.setenv("REQUIRE_NONCE", "1")

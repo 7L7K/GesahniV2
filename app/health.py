@@ -7,12 +7,11 @@ including LLM providers, vector stores, and other dependencies.
 
 import asyncio
 import logging
-import time
-from typing import Dict, Any, Optional, List, Tuple
-from dataclasses import dataclass, field
-from functools import lru_cache
-from collections import defaultdict, deque
 import threading
+import time
+from collections import deque
+from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +24,10 @@ class HealthCheckResult:
     """Result of a health check."""
     healthy: bool
     status: str
-    latency_ms: Optional[float] = None
-    error: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    timestamp: Optional[float] = None
+    latency_ms: float | None = None
+    error: str | None = None
+    metadata: dict[str, Any] | None = None
+    timestamp: float | None = None
 
 @dataclass
 class VendorHealthState:
@@ -48,7 +47,7 @@ EAGER_HEALTH_CONFIG = {
 }
 
 # Global vendor health tracker
-_vendor_health_states: Dict[str, VendorHealthState] = {}
+_vendor_health_states: dict[str, VendorHealthState] = {}
 _vendor_health_lock = threading.Lock()
 
 class VendorHealthTracker:
@@ -147,7 +146,7 @@ class VendorHealthTracker:
             return current_time > state.unhealthy_until
 
     @classmethod
-    def get_vendor_health_info(cls, vendor_name: str) -> Dict[str, Any]:
+    def get_vendor_health_info(cls, vendor_name: str) -> dict[str, Any]:
         """
         Get detailed health information for a vendor.
 
@@ -188,7 +187,7 @@ class VendorHealthTracker:
                 logger.info(f"Cleared health state for vendor {vendor_name}")
 
     @classmethod
-    def get_all_vendor_health_info(cls) -> Dict[str, Dict[str, Any]]:
+    def get_all_vendor_health_info(cls) -> dict[str, dict[str, Any]]:
         """
         Get health information for all vendors.
 
@@ -285,10 +284,10 @@ class HealthCheckCache:
     
     def __init__(self, default_ttl_seconds: float = 60.0):
         self.default_ttl = default_ttl_seconds
-        self._cache: Dict[str, CachedHealthCheck] = {}
+        self._cache: dict[str, CachedHealthCheck] = {}
         self._lock = asyncio.Lock()
     
-    async def get(self, key: str) -> Optional[HealthCheckResult]:
+    async def get(self, key: str) -> HealthCheckResult | None:
         """
         Get a cached health check result if it's still valid.
         
@@ -304,7 +303,7 @@ class HealthCheckCache:
                 return cached.result
             return None
     
-    async def set(self, key: str, result: HealthCheckResult, ttl_seconds: Optional[float] = None) -> None:
+    async def set(self, key: str, result: HealthCheckResult, ttl_seconds: float | None = None) -> None:
         """
         Cache a health check result.
         
@@ -365,8 +364,9 @@ async def check_openai_health(cache_result: bool = True) -> HealthCheckResult:
     
     try:
         # Import here to avoid circular imports
-        from .gpt_client import ask_gpt
         import os
+
+        from .gpt_client import ask_gpt
         
         # Use minimal generation to keep health checks snappy
         model = os.getenv("OPENAI_MODEL", "gpt-4o")
@@ -673,7 +673,7 @@ async def check_system_health(
     include_home_assistant: bool = True,
     include_database: bool = True,
     cache_results: bool = True
-) -> Dict[str, HealthCheckResult]:
+) -> dict[str, HealthCheckResult]:
     """
     Perform comprehensive system health check.
     
@@ -726,7 +726,7 @@ async def check_system_health(
 # Health Metrics
 # ---------------------------------------------------------------------------
 
-def get_health_metrics() -> Dict[str, Any]:
+def get_health_metrics() -> dict[str, Any]:
     """
     Get health-related metrics.
     
@@ -758,7 +758,7 @@ async def force_refresh_health_checks() -> None:
     await health_cache.clear()
     logger.info("Health check cache cleared")
 
-async def get_cached_health_status() -> Dict[str, HealthCheckResult]:
+async def get_cached_health_status() -> dict[str, HealthCheckResult]:
     """
     Get all cached health check results.
     
@@ -784,7 +784,7 @@ async def get_cached_health_status() -> Dict[str, HealthCheckResult]:
     
     return results
 
-def is_system_healthy(health_results: Dict[str, HealthCheckResult]) -> bool:
+def is_system_healthy(health_results: dict[str, HealthCheckResult]) -> bool:
     """
     Determine if the overall system is healthy.
     

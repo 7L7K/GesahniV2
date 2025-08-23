@@ -4,10 +4,9 @@ Authentication Flow Test Script
 Tests the authentication system according to the specified test cases.
 """
 
-import requests
 import json
-import time
-from typing import Dict, Any, List
+
+import requests
 
 BASE_URL = "http://localhost:8000"
 FRONTEND_URL = "http://localhost:3000"

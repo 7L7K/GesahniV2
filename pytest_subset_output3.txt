@@ -1,0 +1,93 @@
+
+==================================== ERRORS ====================================
+________________ ERROR collecting tests/test_phase6_2_audit.py _________________
+ImportError while importing test module '/Users/kingal/2025/GesahniV2/tests/test_phase6_2_audit.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+../../.pyenv/versions/3.11.9/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_phase6_2_audit.py:13: in <module>
+    from app.audit.store import append, bulk, get_audit_file_path, get_audit_file_size
+E   ImportError: cannot import name 'append' from 'app.audit.store' (unknown location)
+=============================== warnings summary ===============================
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/chromadb/api/collection_configuration.py:347
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/chromadb/api/collection_configuration.py:347
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/chromadb/api/collection_configuration.py:347: DeprecationWarning: legacy embedding function config: '_LengthEmbedder' object has no attribute 'is_legacy'
+    return json.dumps(create_collection_configuration_to_json(config))
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:298
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:298: PydanticDeprecatedSince20: `json_encoders` is deprecated. See https://docs.pydantic.dev/2.11/concepts/serialization/#custom-serializers for alternatives. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/passlib/utils/__init__.py:854
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+app/transcribe.py:7
+  /Users/kingal/2025/GesahniV2/app/transcribe.py:7: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
+    import audioop  # type: ignore
+
+app/main.py:1206
+  /Users/kingal/2025/GesahniV2/app/main.py:1206: DeprecationWarning: `example` has been deprecated, please use `examples` instead
+    from .api.care import router as care_router
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/testclient.py:454
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/testclient.py:454: DeprecationWarning: The `allow_redirects` argument is deprecated. Use `follow_redirects` instead.
+    warnings.warn(message, DeprecationWarning)
+
+tests/integration/test_refresh_concurrent.py:8
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_concurrent.py:8: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:26
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:26: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:52
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:52: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:77
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:77: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:103
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:103: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:132
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:132: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:158
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:158: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:192
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:192: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:220
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:220: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_replay.py:13
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_replay.py:13: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/test_phase6_2_audit.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!

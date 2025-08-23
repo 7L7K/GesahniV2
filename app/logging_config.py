@@ -1,16 +1,16 @@
-import logging
 import json
+import logging
 import os
 import sys
-from datetime import datetime
 from contextvars import ContextVar
-from typing import List, Dict, Any
+from datetime import datetime
+from typing import Any
 
 # Exposed so other modules can set/request ids
 req_id_var: ContextVar[str] = ContextVar("req_id", default="-")
 
 # Lightweight in-process error ring buffer for admin dashboard
-_ERRORS: List[Dict[str, Any]] = []
+_ERRORS: list[dict[str, Any]] = []
 _MAX_ERRORS = 200
 
 
@@ -25,7 +25,9 @@ class JsonFormatter(logging.Formatter):
         }
         # Attach current trace id when available for log-trace correlation
         try:
-            from .otel_utils import get_trace_id_hex  # local import to avoid hard dep at import time
+            from .otel_utils import (
+                get_trace_id_hex,  # local import to avoid hard dep at import time
+            )
 
             tid = get_trace_id_hex()
             if tid:
@@ -60,7 +62,7 @@ class JsonFormatter(logging.Formatter):
 
                 lr = log_record_var.get()
                 if lr is not None and getattr(lr, "session_id", None):
-                    payload["session_id"] = getattr(lr, "session_id")
+                    payload["session_id"] = lr.session_id
             except Exception:
                 pass
         try:
@@ -335,9 +337,17 @@ def configure_logging() -> None:
         logging.getLogger("asyncio").setLevel(logging.WARNING)
 
 
-def get_errors() -> List[Dict[str, Any]]:
+def get_errors() -> list[dict[str, Any]]:
     """Return recent errors for admin dashboard."""
     return _ERRORS.copy()
+
+
+def get_last_errors(n: int) -> list[dict[str, Any]]:
+    """Compatibility helper: return last n errors (new name used by main)."""
+    try:
+        return _ERRORS[-int(n) :]
+    except Exception:
+        return _ERRORS.copy()
 
 
 def clear_errors() -> None:

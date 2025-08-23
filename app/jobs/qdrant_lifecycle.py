@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Dict
+from typing import Any
 
 try:  # pragma: no cover - optional dependency
     from qdrant_client import QdrantClient
@@ -10,13 +10,13 @@ except Exception:  # pragma: no cover
     QdrantClient = None  # type: ignore
 
 
-def _client() -> "QdrantClient":  # type: ignore[name-defined]
+def _client() -> QdrantClient:  # type: ignore[name-defined]
     if QdrantClient is None:
         raise RuntimeError("qdrant-client not installed")
     return QdrantClient(url=os.getenv("QDRANT_URL", ""), api_key=os.getenv("QDRANT_API_KEY", ""))
 
 
-def bootstrap_collection(name: str, dim: int = 1536) -> Dict[str, str]:
+def bootstrap_collection(name: str, dim: int = 1536) -> dict[str, str]:
     c = _client()
     try:
         c.get_collection(name)
@@ -42,7 +42,7 @@ def bootstrap_collection(name: str, dim: int = 1536) -> Dict[str, str]:
     return {"status": "ok", "collection": name, "existed": str(exists)}
 
 
-def collection_stats(name: str) -> Dict[str, float | int | str]:
+def collection_stats(name: str) -> dict[str, float | int | str]:
     c = _client()
     info = c.get_collection(name)
     # qdrant-client returns pydantic models; pick some basics
@@ -55,8 +55,7 @@ def collection_stats(name: str) -> Dict[str, float | int | str]:
     }
 
 
-def purge_soft_deleted(name: str, older_than_seconds: int = 14 * 24 * 3600) -> Dict[str, int]:
-    c = _client()
+def purge_soft_deleted(name: str, older_than_seconds: int = 14 * 24 * 3600) -> dict[str, int]:
     # Qdrant purging of deleted points is not a separate API; we can compact by snapshot+restore or rely on server-side compaction.
     # Here we only return a stub; production purge could execute via snapshots.
     return {"purged": 0}
@@ -67,12 +66,12 @@ def upsert_versioned_chunk(
     collection: str,
     point_id: str,
     vector: list[float],
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
 ) -> bool:
     """Upsert with hash dedup and doc_version soft-retire policy."""
     try:
         c = _client()
-        from qdrant_client.http.models import Filter, FieldCondition, MatchValue, PointStruct
+        from qdrant_client.http.models import FieldCondition, Filter, MatchValue, PointStruct
         # dedup by content hash
         h = payload.get("hash")
         if h:

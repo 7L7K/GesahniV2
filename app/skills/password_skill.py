@@ -6,7 +6,6 @@ import string
 
 from .base import Skill
 
-
 _SAFE_CHARS = (
     string.ascii_letters
     + string.digits

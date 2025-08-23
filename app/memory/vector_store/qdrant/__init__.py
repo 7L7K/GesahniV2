@@ -4,11 +4,12 @@ import logging
 import os
 import time
 import uuid
-from typing import Dict, List, Optional, Tuple
 from collections import deque
+from typing import Dict, List, Optional, Tuple
+
+from app.metrics import DEPENDENCY_LATENCY_SECONDS, VECTOR_OP_LATENCY_SECONDS
 
 from ..base import MisconfiguredStoreError, SupportsQACache
-from app.metrics import DEPENDENCY_LATENCY_SECONDS, VECTOR_OP_LATENCY_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +18,13 @@ try:  # optional dependency at import time
     from qdrant_client import QdrantClient
     from qdrant_client.http.models import (
         Distance,
-        VectorParams,
-        PointStruct,
-        Filter,
         FieldCondition,
-        MatchValue,
-        SearchParams,
+        Filter,
         HnswConfigDiff,
+        MatchValue,
+        PointStruct,
+        SearchParams,
+        VectorParams,
     )
 except Exception:  # pragma: no cover - symbol shim to keep import light
     QdrantClient = None  # type: ignore
@@ -33,6 +34,7 @@ except Exception:  # pragma: no cover - symbol shim to keep import light
 # Tests that need Qdrant can explicitly patch the adapter.
 import os as _os
 import sys as _sys
+
 if ("PYTEST_CURRENT_TEST" in _os.environ) or ("pytest" in _sys.modules):
     if _os.getenv("ALLOW_QDRANT_IN_TESTS", "0").strip().lower() not in {"1", "true", "yes", "on"}:
         QdrantClient = None  # type: ignore
@@ -44,8 +46,8 @@ def _require_qdrant():
 
 
 # lightweight in-process metrics buffer
-_VS_LAT_MS: "deque[float]" = deque(maxlen=50)
-_LAST_ERR_TS: Optional[float] = None
+_VS_LAT_MS: deque[float] = deque(maxlen=50)
+_LAST_ERR_TS: float | None = None
 
 
 def _rec_latency_ms(start: float) -> None:
@@ -55,7 +57,7 @@ def _rec_latency_ms(start: float) -> None:
         pass
 
 
-def get_stats() -> Dict[str, object]:
+def get_stats() -> dict[str, object]:
     lat = list(_VS_LAT_MS)
     avg = sum(lat) / len(lat) if lat else 0.0
     return {
@@ -66,11 +68,11 @@ def get_stats() -> Dict[str, object]:
 
 
 class _QACollection(SupportsQACache):
-    def __init__(self, client: "QdrantClient", name: str):  # type: ignore[name-defined]
+    def __init__(self, client: QdrantClient, name: str):  # type: ignore[name-defined]
         self.client = client
         self.name = name
 
-    def get_items(self, ids: List[str] | None = None, include: List[str] | None = None) -> Dict[str, List]:
+    def get_items(self, ids: list[str] | None = None, include: list[str] | None = None) -> dict[str, list]:
         include = include or ["metadatas", "documents"]
         want_payload = ("metadatas" in include) or ("documents" in include)
         if ids:
@@ -88,35 +90,35 @@ class _QACollection(SupportsQACache):
                 with_vectors=False,
                 limit=1000,
             )[0]
-        out_ids: List[str] = []
-        metadatas: List[Dict] = []
-        documents: List[str] = []
+        out_ids: list[str] = []
+        metadatas: list[dict] = []
+        documents: list[str] = []
         for pt in res:
             out_ids.append(str(pt.id))
             payload = pt.payload or {}
             metadatas.append({k: payload.get(k) for k in ("answer", "timestamp", "feedback")})
             documents.append(payload.get("doc") if "documents" in include else None)
-        out: Dict[str, List] = {"ids": out_ids}
+        out: dict[str, list] = {"ids": out_ids}
         if "metadatas" in include:
             out["metadatas"] = metadatas
         if "documents" in include:
             out["documents"] = documents
         return out
 
-    def upsert(self, *, ids: List[str], documents: List[str], metadatas: List[Dict]) -> None:
+    def upsert(self, *, ids: list[str], documents: list[str], metadatas: list[dict]) -> None:
         points = []
-        for i, doc, meta in zip(ids, documents, metadatas):
+        for i, doc, meta in zip(ids, documents, metadatas, strict=False):
             payload = dict(meta or {})
             payload["doc"] = doc
             points.append(PointStruct(id=i, vector=None, payload=payload))
         self.client.upsert(collection_name=self.name, points=points)
 
-    def delete(self, *, ids: List[str] | None = None) -> None:  # type: ignore[override]
+    def delete(self, *, ids: list[str] | None = None) -> None:  # type: ignore[override]
         if not ids:
             return
         self.client.delete(collection_name=self.name, points_selector=ids)
 
-    def update(self, *, ids: List[str], metadatas: List[Dict]) -> None:  # type: ignore[override]
+    def update(self, *, ids: list[str], metadatas: list[dict]) -> None:  # type: ignore[override]
         # Apply per-id payload updates to avoid accidental metadata cross-application
         if not ids or not metadatas:
             return
@@ -124,14 +126,14 @@ class _QACollection(SupportsQACache):
             # Single metadata for multiple ids: apply same payload to all ids
             self.client.set_payload(collection_name=self.name, points=ids, payload=metadatas[0])
             return
-        for i, meta in zip(ids, metadatas):
+        for i, meta in zip(ids, metadatas, strict=False):
             try:
                 self.client.set_payload(collection_name=self.name, points=[i], payload=meta)
             except Exception:
                 # best-effort; continue
                 pass
 
-    def keys(self) -> List[str]:
+    def keys(self) -> list[str]:
         res = self.client.scroll(
             collection_name=self.name, with_payload=False, limit=1000
         )[0]
@@ -275,7 +277,7 @@ class QdrantVectorStore:
         finally:
             _rec_latency_ms(t0)
 
-    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
+    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> list[str]:
         from app.embeddings import embed_sync
 
         t0 = time.perf_counter()
@@ -302,10 +304,10 @@ class QdrantVectorStore:
                 VECTOR_OP_LATENCY_SECONDS.labels("search").observe(time.perf_counter() - t1)
             except Exception:
                 pass
-            docs: List[Tuple[float, float, str]] = []
+            docs: list[tuple[float, float, str]] = []
             # Lock policy: cosine similarity must be >= 0.75 → distance <= 0.25
             cutoff = 0.25
-            raw_scores: List[float] = []
+            raw_scores: list[float] = []
             kept = dropped = 0
             for pt in res:
                 payload = pt.payload or {}
@@ -338,7 +340,7 @@ class QdrantVectorStore:
         finally:
             _rec_latency_ms(t0)
 
-    def list_user_memories(self, user_id: str) -> List[Dict]:
+    def list_user_memories(self, user_id: str) -> list[dict]:
         col = self._user_collection(user_id)
         dim = int(os.getenv("EMBED_DIM", "1536"))
         self._ensure_collection(col, dim)
@@ -357,7 +359,7 @@ class QdrantVectorStore:
             raise
         finally:
             _rec_latency_ms(t0)
-        out: List[Dict] = []
+        out: list[dict] = []
         for pt in res:
             out.append({"id": str(pt.id), "text": (pt.payload or {}).get("text"), "meta": pt.payload or {}})
         return out
@@ -393,7 +395,7 @@ class QdrantVectorStore:
             return
         self._qa.upsert(ids=[cache_id], documents=[prompt], metadatas=[{"answer": answer, "timestamp": time.time(), "feedback": None}])
 
-    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> Optional[str]:
+    def lookup_cached_answer(self, prompt: str, ttl_seconds: int = 86400) -> str | None:
         if os.getenv("DISABLE_QA_CACHE", "").lower() in {"1", "true", "yes", "on"}:
             return None
         # Lightweight exact-id path: treat prompts like hashes via env usage in app.memory.api
@@ -401,12 +403,13 @@ class QdrantVectorStore:
         ids = res.get("ids", [])
         docs = res.get("documents", [])
         metas = res.get("metadatas", [])
-        best: tuple[float, Optional[str]] = (1e9, None)
+        best: tuple[float, str | None] = (1e9, None)
         try:
-            from app.embeddings import embed_sync
             import numpy as _np
+
+            from app.embeddings import embed_sync
             q = embed_sync(prompt)
-            for _id, d, m in zip(ids, docs, metas):
+            for _id, d, m in zip(ids, docs, metas, strict=False):
                 if not isinstance(d, str):
                     continue
                 v = embed_sync(d)
@@ -428,7 +431,7 @@ class QdrantVectorStore:
         res = self._qa.get_items(ids=None, include=["metadatas", "documents"])  # type: ignore[arg-type]
         ids = res.get("ids", [])
         docs = res.get("documents", [])
-        for _id, d in zip(ids, docs):
+        for _id, d in zip(ids, docs, strict=False):
             if d == prompt:
                 try:
                     self._qa.update(ids=[_id], metadatas=[{"feedback": feedback}])

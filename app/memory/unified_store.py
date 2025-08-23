@@ -5,10 +5,9 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import Dict, List, Optional, Tuple
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
-from .memory_store import VectorStore, MemoryVectorStore
+from .memory_store import MemoryVectorStore, VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ class VectorStoreConfig:
         self.path = ""
         self.username = ""
         self.password = ""
-        self.params: Dict[str, str] = {}
+        self.params: dict[str, str] = {}
         
         if dsn:
             self._parse_dsn(dsn)
@@ -242,7 +241,7 @@ def create_vector_store() -> VectorStore:
         return MemoryVectorStore()
 
 
-def get_vector_store_info() -> Dict[str, str]:
+def get_vector_store_info() -> dict[str, str]:
     """Get information about the current vector store configuration."""
     dsn = os.getenv("VECTOR_DSN", "").strip()
     if not dsn:

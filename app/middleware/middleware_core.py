@@ -1,12 +1,17 @@
-import uuid
 import asyncio
-import time
+import logging
 import os
+import time
+import uuid
 from hashlib import sha256
 
+import jwt
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-import jwt
+
+from ..env_utils import load_env
+from ..security import _jwt_decode
+
 try:  # Optional dependency; provide a tiny fallback to avoid hard dep in tests
     from cachetools import TTLCache  # type: ignore
 except Exception:  # pragma: no cover - fallback implementation
@@ -17,7 +22,7 @@ except Exception:  # pragma: no cover - fallback implementation
             self.maxsize = int(maxsize)
             self.ttl = float(ttl)
             self._data: dict[str, float] = {}
-            self._order: "OrderedDict[str, float]" = OrderedDict()
+            self._order: OrderedDict[str, float] = OrderedDict()
 
         def _prune(self, now: float) -> None:
             # Remove expired entries
@@ -56,19 +61,16 @@ except Exception:  # pragma: no cover - fallback implementation
         def __len__(self) -> int:  # pragma: no cover - convenience
             return len(self._data)
 
-import logging
-from .logging_config import req_id_var
+from ..logging_config import req_id_var
 
 logger = logging.getLogger(__name__)
-from .telemetry import LogRecord, log_record_var, utc_now
-from .decisions import add_decision, add_trace_event
-from .history import append_history
-from .analytics import record_latency, latency_p95
-from .otel_utils import get_trace_id_hex, observe_with_exemplar, start_span
-from .user_store import user_store
-from .env_utils import load_env
-from . import metrics
-from .security import get_rate_limit_snapshot
+from .. import metrics
+from ..analytics import latency_p95, record_latency
+from ..history import append_history
+from ..otel_utils import get_trace_id_hex, observe_with_exemplar, start_span
+from ..security import get_rate_limit_snapshot
+from ..telemetry import LogRecord, log_record_var, utc_now
+from ..user_store import user_store
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -446,7 +448,8 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                     pass
                 else:
                     # log via std logging for live dashboards then persist in history
-                    import logging, random as _rand
+                    import logging
+                    import random as _rand
                     env = os.getenv("ENV", "").strip().lower()
                     status_family = (status_code // 100) if status_code else 0
                     # Sample successes in prod; log all non-2xx
@@ -485,12 +488,41 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                 metrics.REQUEST_COUNT.labels(route_path, request.method, engine).inc()
             except Exception:
                 pass
-                
+
             # Emit canonical counters/histograms too
             try:
                 metrics.GESAHNI_REQUESTS_TOTAL.labels(route_path, request.method, str(status_code or 0)).inc()
             except Exception:
                 pass
+
+            # PHASE 6: Enhanced scope-based metrics and SLO tracking
+            try:
+                # Track per-scope metrics if user has scopes
+                user_scopes = getattr(request.state, "scopes", None)
+                if user_scopes:
+                    for scope in user_scopes:
+                        metrics.SCOPE_REQUESTS_TOTAL.labels(scope, route_path, request.method, str(status_code or 0)).inc()
+                        metrics.SCOPE_LATENCY_SECONDS.labels(scope, route_path, request.method).observe(rec.latency_ms / 1000)
+
+                # Track auth failures
+                if status_code in (401, 403, 429):
+                    failure_type = str(status_code)
+                    reason = getattr(request.state, "auth_failure_reason", "unknown")
+                    metrics.AUTH_FAILURES_TOTAL.labels(failure_type, route_path, reason).inc()
+
+                # Track scope usage for authorization decisions
+                if hasattr(request.state, "scope_check_results"):
+                    for scope, result in request.state.scope_check_results.items():
+                        metrics.SCOPE_USAGE_TOTAL.labels(scope, route_path, result).inc()
+
+                # PHASE 6: Record SLO measurements
+                from app.slos import record_api_request
+                auth_success = status_code not in (401, 403, 429)
+                record_api_request(status_code, rec.latency_ms, auth_success,
+                                 route=route_path, method=request.method)
+
+            except Exception:
+                pass  # Continue even if enhanced metrics/SLO tracking fails
                 
             # Observe with exemplar when possible to jump from Grafana to trace
             try:
@@ -577,7 +609,7 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                         except Exception:
                             pass
                         # Use centralized cookie functions for local mode indicator
-                        from .cookies import set_named_cookie
+                        from ..cookies import set_named_cookie
                         set_named_cookie(
                             resp=response,
                             name="X-Local-Mode",
@@ -591,7 +623,7 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                 except Exception:
                     pass
                     
-        except asyncio.TimeoutError:
+        except TimeoutError:
             rec.status = "ERR_TIMEOUT"
             raise
         except Exception:
@@ -656,7 +688,7 @@ async def silent_refresh_middleware(request: Request, call_next):
             return response
         # Decode without hard-failing on expiry/format
         try:
-            payload = jwt.decode(token, secret, algorithms=["HS256"])
+            payload = _jwt_decode(token, secret, algorithms=["HS256"])
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
             payload = None
         except Exception:
@@ -671,8 +703,8 @@ async def silent_refresh_middleware(request: Request, call_next):
             logger.debug("SILENT_REFRESH: Token needs refresh, proceeding...")
             # Small jitter to avoid stampede when many tabs refresh concurrently
             try:
-                import random as _rand
                 import asyncio as _asyncio
+                import random as _rand
                 await _asyncio.sleep(_rand.uniform(0.01, 0.05))
             except Exception:
                 pass
@@ -681,21 +713,21 @@ async def silent_refresh_middleware(request: Request, call_next):
             if not user_id:
                 return response
             # Use centralized TTL from tokens.py
-            from .tokens import get_default_access_ttl
+            from ..tokens import get_default_access_ttl
             lifetime = get_default_access_ttl()
             base_claims = {k: v for k, v in payload.items() if k not in {"iat", "exp", "nbf", "jti"}}
             base_claims["user_id"] = user_id
             # Use tokens.py facade instead of direct JWT encoding
-            from .tokens import make_access
+            from ..tokens import make_access
             new_token = make_access({"user_id": user_id}, ttl_s=lifetime)
             # Use centralized cookie configuration
-            from .cookie_config import get_cookie_config, get_token_ttls
+            from ..cookie_config import get_cookie_config, get_token_ttls
             
             cookie_config = get_cookie_config(request)
             access_ttl, _ = get_token_ttls()
             
             # Use centralized cookie functions for access token
-            from .cookies import set_auth_cookies
+            from ..cookies import set_auth_cookies
             # For silent refresh, we only update the access token, keep existing refresh token
             # and don't set session cookie (it should already exist)
             set_auth_cookies(response, access=new_token, refresh="", session_id=None, access_ttl=access_ttl, refresh_ttl=0, request=request)
@@ -703,7 +735,7 @@ async def silent_refresh_middleware(request: Request, call_next):
             try:
                 rtok = request.cookies.get("refresh_token")
                 if rtok:
-                    rp = jwt.decode(rtok, secret, algorithms=["HS256"])  # may raise
+                    rp = _jwt_decode(rtok, secret, algorithms=["HS256"])  # may raise
                     r_exp = int(rp.get("exp", now))
                     import random as _rand
                     # Jitter extension by 50–250ms only; do not reduce lifespan substantially
@@ -717,7 +749,7 @@ async def silent_refresh_middleware(request: Request, call_next):
                         # For refresh token extension, we need to set it individually
                         # since set_auth_cookies expects both access and refresh tokens
                         try:
-                            from .cookies import set_named_cookie
+                            from ..cookies import set_named_cookie
                             set_named_cookie(
                                 resp=response,
                                 name="refresh_token",
@@ -728,7 +760,7 @@ async def silent_refresh_middleware(request: Request, call_next):
                             )
                         except Exception:
                             # Fallback to centralized cookie functions
-                            from .cookies import set_auth_cookies
+                            from ..cookies import set_auth_cookies
                             # For refresh token extension, we need to set it individually
                             # since set_auth_cookies expects both access and refresh tokens
                             set_auth_cookies(

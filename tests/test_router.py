@@ -1,14 +1,13 @@
 import asyncio
+import builtins
 import os
 import sys
 import types
-import builtins
 from typing import Any
 
 import httpx
-
-from fastapi import HTTPException
 import pytest  # noqa: E402
+from fastapi import HTTPException
 
 # Setup sys.modules mocks for import isolation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -106,7 +105,7 @@ def test_router_fallback_metrics_updated(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    from app import router, analytics, llama_integration
+    from app import analytics, llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
 
@@ -143,7 +142,7 @@ def test_gpt_override(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
 
@@ -173,7 +172,7 @@ def test_gpt_override_http_error_falls_back(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
 
@@ -196,7 +195,7 @@ def test_gpt_override_runtime_error_detail(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
 
@@ -217,7 +216,7 @@ def test_complexity_checks(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
 
@@ -243,7 +242,7 @@ def test_skill_metrics(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    from app import router, analytics
+    from app import analytics, router
 
     class DummySkill:
         name = "dummy"
@@ -315,7 +314,7 @@ def test_llama_circuit_open(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(router, "llama_circuit_open", False)
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from app.prompt_builder import PromptBuilder
 
 

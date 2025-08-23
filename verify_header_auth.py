@@ -10,9 +10,9 @@ This script verifies:
 5. ✅ /v1/state returns 200 when properly authenticated (with valid token)
 """
 
-import requests
-import json
 import time
+
+import requests
 
 BASE_URL = "http://localhost:8000"
 

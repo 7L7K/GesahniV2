@@ -1,6 +1,7 @@
 def test_get_redaction_map_invalid_json(tmp_path, monkeypatch):
-    from app import redaction
     import importlib
+
+    from app import redaction
 
     monkeypatch.setenv("REDACTIONS_DIR", str(tmp_path))
     importlib.reload(redaction)

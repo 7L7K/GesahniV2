@@ -3,21 +3,20 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import cache
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
-from .token_utils import count_tokens
+from .config_runtime import get_config
 from .memory import memgpt
 from .memory.env_utils import _normalized_hash
 from .memory.vector_store import safe_query_user_memories
 from .retrieval import run_retrieval, why_logs
-from .config_runtime import get_config
 from .telemetry import log_record_var
-from .memory.profile_store import profile_store, CANONICAL_KEYS
-import os
+from .token_utils import count_tokens
 
 # ---------------------------------------------------------------------------
 # Constants & globals
@@ -131,7 +130,7 @@ class PromptBuilder:
         # ------------------------------------------------------------------
         # Context collection
         # ------------------------------------------------------------------
-        date_time = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
+        date_time = datetime.utcnow().replace(tzinfo=UTC).isoformat()
         # Conversation recap: enabled by default in tests for snapshot stability; otherwise opt-in via env
         _default_flag = "1" if os.getenv("PYTEST_CURRENT_TEST") else "0"
         include_recap = os.getenv("INCLUDE_CONVO_SUMMARY", _default_flag).lower() in {"1", "true", "yes"}
@@ -160,7 +159,7 @@ class PromptBuilder:
                 summary = raw[:200]
         k = _coerce_k(top_k)
 
-        rag_docs: List[dict] = []
+        rag_docs: list[dict] = []
         sources_text = ""
         if rag_client:
             try:
@@ -170,7 +169,7 @@ class PromptBuilder:
             except Exception as e:  # pragma: no cover - network failures
                 logger.warning("RAG query failed in PromptBuilder: %s", e)
             if rag_docs:
-                blocks: List[str] = []
+                blocks: list[str] = []
                 for doc in rag_docs:
                     header = doc.get("source", "")
                     loc = doc.get("loc") or ""

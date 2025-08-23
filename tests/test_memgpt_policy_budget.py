@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from app.memory.memgpt.policy import should_store
 from app.memory.memgpt.contracts import MemoryClaim
+from app.memory.memgpt.policy import should_store
 
 
 def test_policy_blocks_low_confidence():

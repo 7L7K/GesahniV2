@@ -1,11 +1,14 @@
 from __future__ import annotations
-import os
-import logging
-from uuid import uuid4
-from fastapi import Request, WebSocket, HTTPException
-import jwt
 
-from ..telemetry import LogRecord, log_record_var, hash_user_id
+import logging
+import os
+from uuid import uuid4
+
+import jwt
+from fastapi import HTTPException, Request, WebSocket
+
+from ..security import _jwt_decode
+from ..telemetry import LogRecord, hash_user_id, log_record_var
 
 JWT_SECRET: str | None = None  # overridden in tests; env used when None
 
@@ -181,7 +184,7 @@ def get_current_user_id(
             if access_token and secret:
                 try:
                     # Decode the access token to get user_id (allow small skew)
-                    payload = jwt.decode(access_token, secret, algorithms=["HS256"], leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60))
+                    payload = _jwt_decode(access_token, secret, algorithms=["HS256"], leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60))
                     user_id_from_token = payload.get("user_id") or payload.get("sub")
                     
                     if user_id_from_token:
@@ -232,11 +235,11 @@ def get_current_user_id(
                 opts["audience"] = aud
             
             if opts:
-                payload = jwt.decode(token, secret, algorithms=["HS256"], **opts)
+                payload = _jwt_decode(token, secret, algorithms=["HS256"], **opts)
             else:
-                payload = jwt.decode(token, secret, algorithms=["HS256"])
+                payload = _jwt_decode(token, secret, algorithms=["HS256"])
             
-            user_id = payload.get("user_id") or user_id
+            user_id = payload.get("user_id") or payload.get("sub") or user_id
             
             # Store JWT payload in request state for scope enforcement
             if target and isinstance(payload, dict):
@@ -249,6 +252,15 @@ def get_current_user_id(
                     logger.warning("auth.invalid_token", extra={"meta": {"reason": "invalid_auth_token"}})
                 except Exception:
                     pass
+
+                # Record auth failure metrics
+                try:
+                    from app.security import AUTH_FAIL
+                    if AUTH_FAIL:
+                        AUTH_FAIL.labels(reason="invalid").inc()
+                except Exception:
+                    pass
+
                 raise HTTPException(status_code=401, detail="Invalid authentication token")
     elif token and not secret and require_jwt:
         # Token provided but no secret configured while required → fail-closed
@@ -291,6 +303,15 @@ def get_current_user_id(
 
     if not user_id:
         user_id = "anon"
+
+        # Record metrics for missing/invalid tokens if we had a token but couldn't authenticate
+        if token and websocket is None:  # Only for HTTP requests, not WebSocket handshakes
+            try:
+                from app.security import AUTH_FAIL
+                if AUTH_FAIL:
+                    AUTH_FAIL.labels(reason="missing").inc()
+            except Exception:
+                pass
 
     # Attach hashed ID to telemetry; keep raw on state when authenticated
     rec.user_id = hash_user_id(user_id) if user_id != "anon" else "anon"

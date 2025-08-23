@@ -1,10 +1,7 @@
 """Integration tests for WebSocket functionality with origin validation."""
 
 import pytest
-import asyncio
-import websockets
 from fastapi.testclient import TestClient
-from unittest.mock import patch
 
 from app.main import app
 
@@ -132,19 +129,19 @@ class TestWebSocketIntegration:
         # Verify that the WebSocket requirements are documented in the code
         
         # Check main.py for CORS origin restrictions
-        with open('app/main.py', 'r') as f:
+        with open('app/main.py') as f:
             main_content = f.read()
             assert "WebSocket requirement" in main_content
             assert "http://localhost:3000" in main_content
         
         # Check security.py for origin validation
-        with open('app/security.py', 'r') as f:
+        with open('app/security.py') as f:
             security_content = f.read()
             assert "WebSocket requirement" in security_content
             assert "validate_websocket_origin" in security_content
         
         # Check urls.ts for canonical origin
-        with open('frontend/src/lib/urls.ts', 'r') as f:
+        with open('frontend/src/lib/urls.ts') as f:
             urls_content = f.read()
             assert "getCanonicalFrontendOrigin" in urls_content
             assert "buildCanonicalWebSocketUrl" in urls_content

@@ -1,6 +1,7 @@
 import sys
 import types
 
+
 # Stub chromadb for PromptBuilder imports
 class _DummyCollection:
     def add(self, *a, **k):

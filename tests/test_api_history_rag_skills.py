@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -7,8 +6,8 @@ from fastapi.testclient import TestClient
 
 def test_history_recent_reads_jsonl(monkeypatch, tmp_path: Path):
     # point history file to temp jsonl
-    from app.api import history as api_history
     import app.history as hist
+    from app.api import history as api_history
 
     p = tmp_path / "history.jsonl"
     monkeypatch.setattr(hist, "HISTORY_FILE", p)
@@ -32,7 +31,6 @@ def test_history_recent_reads_jsonl(monkeypatch, tmp_path: Path):
 
 def test_rag_search_works_without_store(monkeypatch):
     # Force import path where _safe_query is None
-    from importlib import reload
     import app.api.rag as api_rag
 
     app = FastAPI()

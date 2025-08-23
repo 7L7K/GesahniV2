@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import os
-from unittest.mock import patch, Mock
-from fastapi.testclient import TestClient
-from fastapi import FastAPI, Request
-from starlette.middleware.cors import CORSMiddleware
-import pytest
-import asyncio
+from unittest.mock import Mock, patch
 
-from app.csrf import CSRFMiddleware, get_csrf_token, _extract_csrf_header
+import pytest
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
+from starlette.middleware.cors import CORSMiddleware
+
+from app.csrf import CSRFMiddleware, _extract_csrf_header, get_csrf_token
 
 
 def _app():
@@ -302,7 +302,6 @@ def test_extract_csrf_header_legacy_disabled():
 def test_csrf_concurrent_requests():
     """Test CSRF middleware handles concurrent requests properly."""
     import threading
-    import time
 
     c = TestClient(_app())
     results = []

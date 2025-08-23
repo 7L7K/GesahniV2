@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Request, Header
-from fastapi.responses import JSONResponse
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
-from app.deps.user import get_current_user_id
-from app.security import require_nonce, verify_token
+from app import home_assistant as ha  # capture original callable for monkeypatch detection
 from app.deps.scopes import require_any_scope
+from app.deps.user import get_current_user_id
 from app.home_assistant import (
+    HomeAssistantAPIError,
     get_states,
     resolve_entity,
-    HomeAssistantAPIError,
 )
-from app import home_assistant as ha  # capture original callable for monkeypatch detection
+from app.security import require_nonce, verify_token
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ router = APIRouter(
 
 # Capture original function reference at import time for monkeypatch detection
 try:  # pragma: no cover - best effort
-    ORIG_CALL_SERVICE = getattr(ha, "call_service")
+    ORIG_CALL_SERVICE = ha.call_service
 except Exception:  # pragma: no cover
     ORIG_CALL_SERVICE = None  # type: ignore
 

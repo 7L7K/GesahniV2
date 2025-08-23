@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import asyncio
+
 import httpx
-import json
+
 
 async def test_cors():
     async with httpx.AsyncClient() as client:

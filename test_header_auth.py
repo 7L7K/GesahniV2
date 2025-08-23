@@ -10,9 +10,10 @@ This script tests:
 5. /v1/state returns 200 when properly authenticated
 """
 
-import requests
 import json
 import time
+
+import requests
 
 BASE_URL = "http://localhost:8000"
 

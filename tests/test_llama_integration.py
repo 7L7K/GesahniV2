@@ -1,16 +1,18 @@
-import os
 import asyncio
-import logging
-import time
 import json
-from typing import Any, AsyncIterator, Dict, Optional, Union
+import logging
+import os
+import time
+from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 from tenacity import AsyncRetrying, stop_after_attempt, wait_random_exponential
 
-from app.deps.scheduler import scheduler, start as scheduler_start
-from app.logging_config import req_id_var
+from app.deps.scheduler import scheduler
+from app.deps.scheduler import start as scheduler_start
 from app.http_utils import json_request, log_exceptions
+from app.logging_config import req_id_var
 from app.metrics import LLAMA_LATENCY, LLAMA_TOKENS
 
 # Default to local Ollama if not provided
@@ -97,7 +99,7 @@ async def startup_check() -> None:
     scheduler_start()
 
 
-async def get_status() -> Dict[str, Any]:
+async def get_status() -> dict[str, Any]:
     """
     On-demand health endpoint. Re-checks Ollama before responding.
     Returns healthy status & latency_ms, or raises if still down.
@@ -112,10 +114,10 @@ async def get_status() -> Dict[str, Any]:
 
 async def ask_llama(
     prompt: str,
-    model: Optional[str] = None,
+    model: str | None = None,
     timeout: float = 30.0,
-    gen_opts: Optional[Dict[str, Any]] = None,
-) -> Union[AsyncIterator[str], Dict[str, str]]:
+    gen_opts: dict[str, Any] | None = None,
+) -> AsyncIterator[str] | dict[str, str]:
     """
     Stream tokens from Ollama. Returns an async generator you can iterate over,
     or a dict with an "error" key on failure.
@@ -156,7 +158,7 @@ async def ask_llama(
 
     # -- Streaming generator ----------------------------------------------
     url = f"{OLLAMA_URL}/api/generate"
-    options: Dict[str, Any] = {"num_ctx": 2048}
+    options: dict[str, Any] = {"num_ctx": 2048}
     if gen_opts:
         options.update(gen_opts)
     payload = {"model": model, "prompt": prompt, "stream": True, "options": options}

@@ -4,8 +4,8 @@ Avoids hardcoding URLs and ensures consistent URL derivation.
 """
 
 import os
-from typing import Optional
 from urllib.parse import urljoin, urlparse
+
 from fastapi import Request
 
 
@@ -51,7 +51,7 @@ def get_frontend_url() -> str:
     return cors_origins.strip()
 
 
-def build_ws_url(path: str, base_url: Optional[str] = None) -> str:
+def build_ws_url(path: str, base_url: str | None = None) -> str:
     """
     Build a WebSocket URL from the base URL.
     
@@ -73,7 +73,7 @@ def build_ws_url(path: str, base_url: Optional[str] = None) -> str:
     return urljoin(ws_base, path)
 
 
-def build_api_url(path: str, base_url: Optional[str] = None) -> str:
+def build_api_url(path: str, base_url: str | None = None) -> str:
     """
     Build an API URL from the base URL.
     

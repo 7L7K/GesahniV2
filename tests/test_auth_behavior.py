@@ -26,18 +26,15 @@ CSP/service worker sanity:
 - whoami responses are never cached; no SW intercepts; headers show no-store.
 """
 
-import pytest
 import asyncio
 import time
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import patch
+
+import pytest
 from fastapi.testclient import TestClient
-from fastapi import FastAPI
-import jwt
-import json
 
 from app.main import app
 from app.tokens import create_access_token, create_refresh_token
-from app.deps.user import get_current_user_id
 
 
 class MockNetworkPanel:

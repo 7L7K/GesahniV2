@@ -1,11 +1,11 @@
 import types
+
 import pytest
 
 
 @pytest.mark.asyncio
 async def test_json_request_uses_llama_httpx(monkeypatch):
-    from app import http_utils
-    from app import llama_integration
+    from app import http_utils, llama_integration
 
     calls = {"used": False}
 

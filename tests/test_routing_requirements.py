@@ -1,15 +1,13 @@
 import asyncio
+import builtins
+import logging
 import os
 import sys
 import types
-import builtins
-import logging
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
-
 from fastapi import HTTPException
 
 # Setup sys.modules mocks for import isolation
@@ -78,7 +76,7 @@ os.environ["HOME_ASSISTANT_TOKEN"] = "token"
 @pytest.fixture(autouse=True)
 def patch_dependencies(monkeypatch):
     """Global test setup to patch dependencies"""
-    from app import router, analytics, llama_integration
+    from app import analytics, llama_integration, router
 
     # Patch MemGPT and memory routines to pure no-op for tests
     monkeypatch.setattr(
@@ -119,7 +117,7 @@ class TestOverridePathRespectsAllowlistAndHealth:
 
     def test_override_with_allowed_model_passes(self, monkeypatch):
         """Test that override with allowed model works when vendor is healthy."""
-        from app import router, llama_integration
+        from app import llama_integration, router
 
         # Setup healthy state
         monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
@@ -164,7 +162,7 @@ class TestOverridePathRespectsAllowlistAndHealth:
 
     def test_override_with_unhealthy_vendor_fails(self, monkeypatch):
         """Test that override fails when vendor is unhealthy and fallback disabled."""
-        from app import router, llama_integration
+        from app import llama_integration, router
 
         # Setup unhealthy state
         monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
@@ -187,7 +185,7 @@ class TestOverridePathRespectsAllowlistAndHealth:
 
     def test_override_fallback_when_vendor_unhealthy(self, monkeypatch):
         """Test that override falls back to healthy vendor when primary is unhealthy."""
-        from app import router, llama_integration
+        from app import llama_integration, router
 
         # Setup unhealthy LLaMA, healthy OpenAI
         monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
@@ -237,7 +235,7 @@ class TestDefaultPickerPathPicksExpectedVendorModel:
 
     def test_heavy_word_count_routes_to_gpt(self, monkeypatch):
         """Test that prompts with heavy word count route to GPT."""
-        from app import router, model_picker
+        from app import model_picker, router
         from app.model_config import GPT_HEAVY_MODEL
 
         # Create long prompt that exceeds HEAVY_WORD_COUNT
@@ -260,7 +258,7 @@ class TestDefaultPickerPathPicksExpectedVendorModel:
 
     def test_heavy_tokens_routes_to_gpt(self, monkeypatch):
         """Test that prompts with heavy token count route to GPT."""
-        from app import router, model_picker
+        from app import model_picker, router
         from app.model_config import GPT_HEAVY_MODEL
 
         # Create prompt with high token count by making it very long
@@ -285,7 +283,7 @@ class TestDefaultPickerPathPicksExpectedVendorModel:
 
     def test_keyword_routing_routes_to_gpt(self, monkeypatch):
         """Test that prompts with keywords route to GPT."""
-        from app import router, model_picker
+        from app import model_picker, router
         from app.model_config import GPT_HEAVY_MODEL
 
         # Create prompt with keyword
@@ -309,7 +307,7 @@ class TestDefaultPickerPathPicksExpectedVendorModel:
 
     def test_heavy_intent_routes_to_gpt(self, monkeypatch):
         """Test that prompts with heavy intents route to GPT."""
-        from app import router, model_picker
+        from app import model_picker, router
         from app.model_config import GPT_HEAVY_MODEL
 
         prompt = "Please summarize this simple research topic briefly"
@@ -331,7 +329,7 @@ class TestDefaultPickerPathPicksExpectedVendorModel:
 
     def test_light_task_routes_to_llama(self, monkeypatch):
         """Test that light tasks route to LLaMA."""
-        from app import router, model_picker, llama_integration
+        from app import llama_integration, model_picker, router
 
         light_prompt = "Hello, how are you?"
 
@@ -356,7 +354,7 @@ class TestDefaultPickerPathPicksExpectedVendorModel:
 
     def test_unhealthy_llama_routes_to_gpt(self, monkeypatch):
         """Test that when LLaMA is unhealthy, tasks route to GPT."""
-        from app import router, model_picker, llama_integration
+        from app import llama_integration, model_picker, router
         from app.model_config import GPT_HEAVY_MODEL
 
         prompt = "Hello"
@@ -385,7 +383,7 @@ class TestLlamaFailureGptFallbackPath:
 
     def test_llama_failure_triggers_gpt_fallback_once(self, monkeypatch, caplog):
         """Test that LLaMA failure triggers GPT fallback exactly once."""
-        from app import router, llama_integration
+        from app import llama_integration, router
 
         caplog.set_level(logging.INFO)
 
@@ -429,7 +427,7 @@ class TestLlamaFailureGptFallbackPath:
 
     def test_llama_5xx_error_triggers_fallback(self, monkeypatch):
         """Test that LLaMA 5xx errors trigger fallback to GPT."""
-        from app import router, llama_integration
+        from app import llama_integration, router
 
         # Setup healthy OpenAI for fallback and mock health check
         monkeypatch.setattr(router, "_check_vendor_health", lambda vendor: True)
@@ -469,7 +467,7 @@ class TestLlamaFailureGptFallbackPath:
 
     def test_llama_4xx_error_no_fallback(self, monkeypatch):
         """Test that LLaMA 4xx errors do NOT trigger fallback."""
-        from app import router, llama_integration
+        from app import llama_integration, router
 
         # Setup healthy OpenAI (should not be called) and mock health check
         monkeypatch.setattr(router, "_check_vendor_health", lambda vendor: True)
@@ -512,7 +510,7 @@ class TestGoldenTraceEmitsExactlyOnce:
 
     def test_golden_trace_emits_once_per_request(self, monkeypatch, caplog):
         """Test that golden trace emits exactly once per request."""
-        from app import router, llama_integration
+        from app import llama_integration, router
 
         caplog.set_level(logging.INFO)
 
@@ -541,7 +539,7 @@ class TestGoldenTraceEmitsExactlyOnce:
 
     def test_golden_trace_emits_once_with_fallback(self, monkeypatch, caplog):
         """Test that golden trace emits exactly once even with fallback."""
-        from app import router, llama_integration
+        from app import llama_integration, router
 
         caplog.set_level(logging.INFO)
 
@@ -582,7 +580,7 @@ class TestGoldenTraceEmitsExactlyOnce:
 
     def test_golden_trace_emits_once_with_override(self, monkeypatch, caplog):
         """Test that golden trace emits exactly once with model override."""
-        from app import router, llama_integration
+        from app import llama_integration, router
 
         caplog.set_level(logging.INFO)
 
@@ -616,8 +614,9 @@ class TestGoldenTraceEmitsExactlyOnce:
 
     def test_golden_trace_contains_required_fields(self, monkeypatch, caplog):
         """Test that golden trace contains all required fields."""
-        from app import router, llama_integration
         import json
+
+        from app import llama_integration, router
 
         caplog.set_level(logging.INFO)
 
@@ -668,7 +667,7 @@ class TestCircuitBreakerOpensAfterThreshold:
 
     def test_user_cb_opens_after_threshold_failures(self, monkeypatch):
         """Test that user circuit breaker opens after reaching failure threshold."""
-        from app import router, llama_integration
+        from app import llama_integration, router
 
         # Setup healthy vendors
         monkeypatch.setattr(router, "OPENAI_HEALTHY", True)
@@ -712,8 +711,9 @@ class TestCircuitBreakerOpensAfterThreshold:
 
     def test_user_cb_cools_down_after_timeout(self, monkeypatch):
         """Test that user circuit breaker cools down after cooldown period."""
-        from app import router, llama_integration
         import time
+
+        from app import llama_integration, router
 
         # Setup healthy vendors
         monkeypatch.setattr(router, "OPENAI_HEALTHY", True)
@@ -751,7 +751,7 @@ class TestCircuitBreakerOpensAfterThreshold:
 
     def test_global_cb_opens_after_threshold_failures(self, monkeypatch):
         """Test that global circuit breaker opens after reaching failure threshold."""
-        from app import router, llama_integration
+        from app import llama_integration, router
 
         # Setup LLaMA to fail
         monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
@@ -789,7 +789,7 @@ class TestCircuitBreakerOpensAfterThreshold:
 
     def test_cb_reset_after_success(self, monkeypatch):
         """Test that circuit breaker resets after successful call."""
-        from app import router, llama_integration
+        from app import llama_integration, router
 
         # Setup LLaMA to succeed
         monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)

@@ -1,9 +1,10 @@
 import os
 import sys
-from fastapi.testclient import TestClient
-from importlib import reload
 import time
+from importlib import reload
 from pathlib import Path
+
+from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -22,8 +23,8 @@ def setup_app(monkeypatch):
     os.environ["ENV_RELOAD_ON_REQUEST"] = "1"
     import app.home_assistant as home_assistant
     import app.llama_integration as llama_integration
-    import app.status as status
     import app.main as main
+    import app.status as status
 
     reload(home_assistant)
     reload(llama_integration)

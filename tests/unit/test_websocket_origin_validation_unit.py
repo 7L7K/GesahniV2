@@ -1,12 +1,12 @@
 """Test WebSocket origin validation and URL building functionality."""
 
-import pytest
-from fastapi import FastAPI, WebSocket
-from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
 
-from app.security import validate_websocket_origin, verify_ws
+import pytest
+from fastapi.testclient import TestClient
+
 from app.main import app
+from app.security import validate_websocket_origin, verify_ws
 
 
 def test_validate_websocket_origin_valid():
@@ -20,17 +20,16 @@ def test_validate_websocket_origin_valid():
 def test_validate_websocket_origin_invalid():
     """Test that invalid origins are rejected."""
     websocket = Mock()
-    
-    # Test various invalid origins
+
+    # Test various invalid origins (excluding localhost:3000 which should be valid)
     invalid_origins = [
-        "http://localhost:3000",
-        "https://localhost:3000", 
-        "http://localhost:3001",
-        "http://example.com",
-        "ws://localhost:3000",
-        "wss://localhost:3000"
+        "https://localhost:3000",  # Different scheme
+        "http://localhost:3001",   # Different port
+        "http://example.com",      # Different host
+        "ws://localhost:3000",     # Different scheme
+        "wss://localhost:3000"     # Different scheme
     ]
-    
+
     for origin in invalid_origins:
         websocket.headers = {"Origin": origin}
         assert validate_websocket_origin(websocket) is False, f"Origin {origin} should be rejected"
@@ -56,20 +55,20 @@ def test_validate_websocket_origin_none():
 async def test_verify_ws_origin_validation():
     """Test that verify_ws rejects invalid origins with proper error codes."""
     websocket = Mock()
-    websocket.headers = {"Origin": "http://localhost:3000"}
+    websocket.headers = {"Origin": "http://example.com"}  # Use invalid origin
     # Create async mock for close method
     async def async_close(*args, **kwargs):
         return None
     websocket.close = Mock(side_effect=async_close)
-    
+
     # Mock JWT secret to avoid token validation
     with patch.dict('os.environ', {'JWT_SECRET': ''}):
         await verify_ws(websocket)
-    
+
     # Should close with policy violation code and reason
     websocket.close.assert_called_once_with(
-        code=1008,  # Policy violation
-        reason="Origin not allowed: only http://localhost:3000 accepted"
+        code=4403,  # Forbidden - origin not allowed
+        reason="origin_not_allowed"
     )
 
 

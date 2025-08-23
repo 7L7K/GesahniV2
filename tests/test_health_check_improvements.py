@@ -1,20 +1,15 @@
-import asyncio
 import time
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
+import app.llama_integration
 from app.llama_integration import (
     _check_and_set_flag,
     _schedule_next_health_check,
-    startup_check,
     llama_health_check_state,
-    OLLAMA_MODEL,
-    OLLAMA_URL,
+    startup_check,
 )
-import app.llama_integration
-from app.deps.scheduler import scheduler
-
 
 pytestmark = pytest.mark.asyncio
 

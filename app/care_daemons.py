@@ -3,11 +3,10 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from typing import Optional
 
 from .care_store import list_devices, set_device_flags
-from .metrics import ALERT_SEND_FAILURES
 from .integrations.twilio_sms import send_sms
+from .metrics import ALERT_SEND_FAILURES
 
 
 async def heartbeat_monitor_loop(poll_seconds: int = 30) -> None:

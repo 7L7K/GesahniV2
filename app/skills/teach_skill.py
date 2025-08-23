@@ -1,9 +1,10 @@
 # app/skills/teach_skill.py
 import re
-from .base import Skill
-from .. import home_assistant as ha
+
 from .. import alias_store
+from .. import home_assistant as ha
 from ..telemetry import log_record_var
+from .base import Skill
 
 
 class TeachSkill(Skill):

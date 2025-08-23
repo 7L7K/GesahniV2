@@ -1,14 +1,15 @@
 import os
+
 import jwt
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from app.deps.scopes import (
+    OAUTH2_SCOPES,
     docs_security_with,
-    require_any_scope,
     optional_require_any_scope,
     optional_require_scope,
-    OAUTH2_SCOPES,
+    require_any_scope,
 )
 
 

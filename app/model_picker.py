@@ -1,7 +1,6 @@
+import logging
 import os
 import re
-import logging
-from typing import Tuple
 
 from . import llama_integration
 from .model_config import GPT_HEAVY_MODEL
@@ -17,7 +16,7 @@ KEYWORDS = set(os.getenv("MODEL_ROUTER_KEYWORDS", DEFAULT_KEYWORDS).split(","))
 HEAVY_INTENTS = {"analysis", "research"}
 
 
-def pick_model(prompt: str, intent: str, tokens: int) -> Tuple[str, str, str, str | None]:
+def pick_model(prompt: str, intent: str, tokens: int) -> tuple[str, str, str, str | None]:
     """Route prompt to the best engine/model for the task."""
     prompt_lc = prompt.lower()
     words = re.findall(r"\w+", prompt_lc)

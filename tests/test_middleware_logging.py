@@ -16,7 +16,9 @@ def test_logrecord_has_observability_fields():
 
 def test_request_headers_set(monkeypatch):
     import os
+
     from fastapi.testclient import TestClient
+
     from app import main
 
     monkeypatch.setattr(main, "ha_startup", lambda: None)

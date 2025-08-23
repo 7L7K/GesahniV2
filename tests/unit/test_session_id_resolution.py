@@ -2,12 +2,11 @@
 Tests for centralized session ID resolution to ensure consistency across the codebase.
 """
 
-import pytest
 from unittest.mock import Mock
-from fastapi import Request
-from fastapi.testclient import TestClient
 
-from app.deps.user import resolve_session_id, get_current_session_device
+from fastapi import Request
+
+from app.deps.user import get_current_session_device, resolve_session_id
 
 
 class TestResolveSessionId:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from app.voice.input.vad import has_speech
 
 

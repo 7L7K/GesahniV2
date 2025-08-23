@@ -4,15 +4,13 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import List
 
 from .base import Skill
-
 
 _LIST_PATH = Path(os.getenv("SHOPPING_LIST_FILE", "data/shopping_list.json"))
 
 
-def _load_list() -> List[str]:
+def _load_list() -> list[str]:
     try:
         if _LIST_PATH.exists():
             data = json.loads(_LIST_PATH.read_text(encoding="utf-8") or "[]")
@@ -23,7 +21,7 @@ def _load_list() -> List[str]:
     return []
 
 
-def _save_list(items: List[str]) -> None:
+def _save_list(items: list[str]) -> None:
     try:
         _LIST_PATH.parent.mkdir(parents=True, exist_ok=True)
         _LIST_PATH.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -1,6 +1,6 @@
-import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 
@@ -103,8 +103,9 @@ def test_get_current_user_id_with_clerk(mock_clerk_verify, monkeypatch):
     monkeypatch.setenv("CLERK_JWKS_URL", "https://test.clerk.accounts.dev/.well-known/jwks.json")
     monkeypatch.setenv("JWT_SECRET", "")  # No JWT secret so it won't try traditional JWT first
     
-    from app.deps.user import get_current_user_id
     from fastapi import Request
+
+    from app.deps.user import get_current_user_id
     
     # Create a mock request with Clerk cookie - use a properly formatted JWT token
     mock_request = MagicMock(spec=Request)

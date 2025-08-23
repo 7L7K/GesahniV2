@@ -1,16 +1,21 @@
 from __future__ import annotations
-import json, time, base64, hmac, hashlib
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Tuple, List, Any
+
+import base64
+import hashlib
+import hmac
+import json
 import logging
+import time
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import HTTPException
 
 # Optional Google libraries ----------------------------------------------------
 try:  # pragma: no cover - import varies by environment
-    from google_auth_oauthlib.flow import Flow as _Flow  # type: ignore
-    from google.oauth2.credentials import Credentials as _Credentials  # type: ignore
     from google.auth.transport.requests import Request as _Request  # type: ignore
+    from google.oauth2.credentials import Credentials as _Credentials  # type: ignore
+    from google_auth_oauthlib.flow import Flow as _Flow  # type: ignore
     _GOOGLE_AVAILABLE = True
 except Exception:  # pragma: no cover - optional dependency
     _Flow = None
@@ -18,7 +23,6 @@ except Exception:  # pragma: no cover - optional dependency
     _Request = None
     _GOOGLE_AVAILABLE = False
 
-from urllib.parse import urlencode
 
 from .config import (
     GOOGLE_CLIENT_ID,
@@ -52,7 +56,7 @@ def _b64u_decode(data: str) -> bytes:
     return base64.urlsafe_b64decode((data + pad).encode())
 
 
-def _sign_state(payload: Dict, ttl_sec: int = 600) -> str:
+def _sign_state(payload: dict, ttl_sec: int = 600) -> str:
     body = dict(payload)
     body["exp"] = int(time.time()) + ttl_sec
     raw = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
@@ -60,7 +64,7 @@ def _sign_state(payload: Dict, ttl_sec: int = 600) -> str:
     # Encode body and signature separately to avoid delimiter collisions
     return f"{_b64u_encode(raw)}.{_b64u_encode(sig)}"
 
-def _verify_state(state: str) -> Dict:
+def _verify_state(state: str) -> dict:
     # Primary path: split into base64url(body).base64url(sig)
     try:
         if "." in state:
@@ -97,7 +101,7 @@ def _verify_state(state: str) -> Dict:
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid state")
 
-def create_flow(scopes: Optional[List[str]] = None):
+def create_flow(scopes: list[str] | None = None):
     """Return a google-auth ``Flow`` when libraries are available.
 
     Raises HTTPException when unavailable so callers can degrade gracefully.
@@ -106,7 +110,7 @@ def create_flow(scopes: Optional[List[str]] = None):
         raise HTTPException(status_code=503, detail="Google OAuth libraries unavailable")
     return _Flow.from_client_config(CLIENT_CONFIG, scopes=scopes or get_google_scopes())
 
-def build_auth_url(user_id: str, state_payload: Optional[Dict] = None) -> Tuple[str, str]:
+def build_auth_url(user_id: str, state_payload: dict | None = None) -> tuple[str, str]:
     """Build a Google OAuth URL with optional state payload.
 
     Returns:
@@ -197,8 +201,9 @@ def exchange_code(code: str, state: str, verify_state: bool = True) -> Any:
         try:
             # Prefer requests if available for simplicity
             try:
+                from datetime import datetime, timedelta
+
                 import requests
-                from datetime import datetime, timezone, timedelta
 
                 logger.info(
                     "Starting manual HTTP token exchange",
@@ -259,8 +264,10 @@ def exchange_code(code: str, state: str, verify_state: bool = True) -> Any:
                 
             except ModuleNotFoundError:
                 # Fall back to stdlib when requests isn't installed
-                import urllib.request, urllib.parse, json as _json
-                from datetime import datetime, timezone, timedelta
+                import json as _json
+                import urllib.parse
+                import urllib.request
+                from datetime import datetime, timedelta
 
                 logger.info(
                     "Starting manual HTTP token exchange (stdlib)",
@@ -312,7 +319,7 @@ def exchange_code(code: str, state: str, verify_state: bool = True) -> Any:
                     scope_raw = d.get("scope") or " ".join(get_google_scopes())
                     self.scopes = scope_raw.split()
                     expires_in = int(d.get("expires_in") or 3600)
-                    self.expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+                    self.expiry = datetime.now(UTC) + timedelta(seconds=expires_in)
                     self.token_uri = CLIENT_CONFIG["web"]["token_uri"]
                     self.client_id = CLIENT_CONFIG["web"]["client_id"]
                     self.client_secret = CLIENT_CONFIG["web"]["client_secret"]
@@ -351,15 +358,15 @@ def creds_to_record(creds: Any) -> dict:
             scopes = scopes.split()
         expiry = getattr(creds, "expiry", None)
         if expiry is None:
-            expiry_dt = datetime.now(timezone.utc) + timedelta(hours=1)
+            expiry_dt = datetime.now(UTC) + timedelta(hours=1)
         elif isinstance(expiry, datetime):
-            expiry_dt = expiry if expiry.tzinfo else expiry.replace(tzinfo=timezone.utc)
+            expiry_dt = expiry if expiry.tzinfo else expiry.replace(tzinfo=UTC)
         else:
             # objects with .timestamp()
             try:
-                expiry_dt = datetime.fromtimestamp(expiry.timestamp(), tz=timezone.utc)  # type: ignore[arg-type]
+                expiry_dt = datetime.fromtimestamp(expiry.timestamp(), tz=UTC)  # type: ignore[arg-type]
             except Exception:
-                expiry_dt = datetime.now(timezone.utc) + timedelta(hours=1)
+                expiry_dt = datetime.now(UTC) + timedelta(hours=1)
         return {
             "access_token": getattr(creds, "token", None),
             "refresh_token": getattr(creds, "refresh_token", None),

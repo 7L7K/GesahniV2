@@ -3,14 +3,14 @@ Unit tests for secret verification functionality.
 """
 
 import os
-import pytest
 from unittest.mock import patch
+
 from app.secret_verification import (
-    verify_secrets_on_boot,
-    get_missing_required_secrets,
+    CRITICAL_SECRETS,
     get_insecure_secrets,
+    get_missing_required_secrets,
     log_secret_summary,
-    CRITICAL_SECRETS
+    verify_secrets_on_boot,
 )
 
 

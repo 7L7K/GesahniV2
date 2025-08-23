@@ -1,4 +1,3 @@
-import os
 from app.model_params import for_openai, merge_params
 
 

@@ -3,9 +3,8 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Dict, Tuple, List, Iterable
-
 
 # Base directory for redaction maps; stored out-of-band from primary data
 REDACTIONS_DIR = Path(
@@ -37,7 +36,7 @@ def _normalize_phone(s: str) -> str:
     return digits
 
 
-def _load_phone_whitelist() -> List[str]:
+def _load_phone_whitelist() -> list[str]:
     """Load phone numbers from contacts list for whitelist matching.
 
     Numbers are normalized to digits-only for comparison.
@@ -49,7 +48,7 @@ def _load_phone_whitelist() -> List[str]:
     try:
         if CONTACTS_FILE.exists():
             data = json.loads(CONTACTS_FILE.read_text(encoding="utf-8") or "[]")
-            nums: List[str] = []
+            nums: list[str] = []
             if isinstance(data, list):
                 for item in data:
                     val = (item or {}).get("phone") or (item or {}).get("number")
@@ -61,13 +60,13 @@ def _load_phone_whitelist() -> List[str]:
     return []
 
 
-def redact_pii(text: str, *, whitelist_numbers: Iterable[str] | None = None) -> Tuple[str, Dict[str, str]]:
+def redact_pii(text: str, *, whitelist_numbers: Iterable[str] | None = None) -> tuple[str, dict[str, str]]:
     """Return (redacted_text, mapping) for common PII.
 
     Mapping keys are placeholder tokens and values are the original strings.
     """
 
-    redactions: Dict[str, str] = {}
+    redactions: dict[str, str] = {}
     counters = {"EMAIL": 0, "PHONE": 0, "SSN": 0}
 
     wl: set[str] = set(_normalize_phone(n) for n in (whitelist_numbers or []))
@@ -94,7 +93,7 @@ def redact_pii(text: str, *, whitelist_numbers: Iterable[str] | None = None) -> 
     return t, redactions
 
 
-def store_redaction_map(kind: str, item_id: str, mapping: Dict[str, str]) -> None:
+def store_redaction_map(kind: str, item_id: str, mapping: dict[str, str]) -> None:
     """Persist mapping at a separate, access-controlled path.
 
     Merges with an existing map if present.
@@ -122,7 +121,7 @@ def store_redaction_map(kind: str, item_id: str, mapping: Dict[str, str]) -> Non
         return
 
 
-def get_redaction_map(kind: str, item_id: str) -> Dict[str, str]:
+def get_redaction_map(kind: str, item_id: str) -> dict[str, str]:
     path = _map_path(kind, item_id)
     try:
         if not path.exists():

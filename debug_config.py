@@ -4,10 +4,11 @@ Debug script to test configuration and CORS setup.
 Run this to check if the backend is properly configured.
 """
 
-import os
-import requests
 import json
-import sys
+import os
+
+import requests
+
 
 def test_configuration():
     """Test the current configuration."""
@@ -84,7 +85,7 @@ def test_configuration():
     frontend_env = "frontend/.env.local"
     if os.path.exists(frontend_env):
         print(f"Frontend environment file: {frontend_env}")
-        with open(frontend_env, 'r') as f:
+        with open(frontend_env) as f:
             content = f.read()
             for line in content.split('\n'):
                 if 'NEXT_PUBLIC_API_ORIGIN' in line:

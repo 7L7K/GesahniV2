@@ -1,10 +1,10 @@
 from fastapi import Depends
 from fastapi.testclient import TestClient
 
-from app.deps.user import get_current_user_id
-from app.security import rate_limit
-from app.main import app
 import app.security as security
+from app.deps.user import get_current_user_id
+from app.main import app
+from app.security import rate_limit
 
 
 @app.get("/whoami")

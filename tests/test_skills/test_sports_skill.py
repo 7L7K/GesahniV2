@@ -1,9 +1,9 @@
 import asyncio
-import os
-import sys
 import importlib.util
+import sys
 import types
 from pathlib import Path
+
 import pytest
 
 repo_root = Path(__file__).resolve().parents[2]

@@ -4,12 +4,11 @@ import datetime as _dt
 import json
 import os
 from pathlib import Path
-from typing import List
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
-from app.security import verify_token
 
+from app.security import verify_token
 
 # Public-by-default in tests; gate auth via CALENDAR_PUBLIC
 CAL_PUBLIC = os.getenv("CALENDAR_PUBLIC", "1").strip().lower() in {"1", "true", "yes", "on"}
@@ -22,7 +21,7 @@ router = APIRouter(tags=["Calendar"], dependencies=_DEPS)
 CALENDAR_FILE = Path(os.getenv("CALENDAR_FILE", "data/calendar.json"))
 
 
-def _read() -> List[dict]:
+def _read() -> list[dict]:
     try:
         path = Path(os.getenv("CALENDAR_FILE", str(CALENDAR_FILE)))
         if path.exists():
@@ -54,7 +53,7 @@ class Event(BaseModel):
 
 
 class EventsResponse(BaseModel):
-    items: List[Event]
+    items: list[Event]
 
     model_config = ConfigDict(
         json_schema_extra={

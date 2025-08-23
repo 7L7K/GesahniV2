@@ -3,6 +3,7 @@
 
 import os
 import sys
+
 sys.path.insert(0, '.')
 
 def test_allowlist_validation():
@@ -44,7 +45,7 @@ def test_fallback_logic():
     print("FALLBACK LOGIC TEST")
     print("=" * 60)
     
-    from app.router import _get_fallback_vendor, _get_fallback_model
+    from app.router import _get_fallback_model, _get_fallback_vendor
     
     # Test fallback vendor selection
     print("✅ Testing fallback vendor selection...")
@@ -216,7 +217,8 @@ def test_user_circuit_breaker_thread_safety():
     print("=" * 60)
     
     import asyncio
-    from app.router import _user_circuit_open, _user_cb_record_failure, _user_cb_reset
+
+    from app.router import _user_cb_record_failure, _user_cb_reset, _user_circuit_open
     
     async def test_concurrent_access():
         """Test concurrent access to user circuit breaker functions."""

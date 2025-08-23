@@ -1,6 +1,6 @@
 import os
-import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -22,8 +22,9 @@ class TestTokenStoreAdminEndpoint:
     
     def test_admin_token_store_stats_function_direct(self):
         """Test the get_storage_stats function directly."""
-        from app.token_store import get_storage_stats
         import asyncio
+
+        from app.token_store import get_storage_stats
         
         # Test the function directly without the API layer
         result = asyncio.run(get_storage_stats())
@@ -34,8 +35,9 @@ class TestTokenStoreAdminEndpoint:
     
     def test_admin_token_store_stats_function_with_mock(self):
         """Test the get_storage_stats function with mocked Redis."""
-        from app.token_store import get_storage_stats
         import asyncio
+
+        from app.token_store import get_storage_stats
         
         with patch('app.token_store.has_redis') as mock_has_redis:
             mock_has_redis.return_value = False

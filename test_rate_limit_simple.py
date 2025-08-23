@@ -6,7 +6,6 @@ This script tests the rate limiting logic directly.
 
 import os
 import sys
-import time
 from unittest.mock import Mock
 
 # Add the app directory to the path so we can import security module
@@ -71,7 +70,7 @@ def test_auth_orchestrator_improvements():
     auth_orchestrator_path = "frontend/src/services/authOrchestrator.ts"
     
     if os.path.exists(auth_orchestrator_path):
-        with open(auth_orchestrator_path, 'r') as f:
+        with open(auth_orchestrator_path) as f:
             content = f.read()
         
         improvements = [
@@ -105,7 +104,7 @@ def test_environment_configuration():
     env_file = "env.consolidated"
     
     if os.path.exists(env_file):
-        with open(env_file, 'r') as f:
+        with open(env_file) as f:
             content = f.read()
         
         required_settings = [

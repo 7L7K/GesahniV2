@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from typing import Iterable, Set
+from collections.abc import Iterable
 
 from fastapi import HTTPException, Request
 
+from app.security import _get_request_payload as _get_req_payload  # type: ignore
+from app.security import _payload_scopes as _payload_scopes
+
 from .user import get_current_user_id
-from app.security import _get_request_payload as _get_req_payload, _payload_scopes as _payload_scopes  # type: ignore
 
 
-def _normalize_roles(obj) -> Set[str]:
+def _normalize_roles(obj) -> set[str]:
     if obj is None:
         return set()
     if isinstance(obj, str):
@@ -18,7 +20,7 @@ def _normalize_roles(obj) -> Set[str]:
     return set()
 
 
-def _extract_roles(request: Request) -> Set[str]:
+def _extract_roles(request: Request) -> set[str]:
     # 1) Prefer roles set by upstream auth dependencies (e.g., Clerk JWT)
     try:
         state_roles = getattr(request.state, "roles", None)

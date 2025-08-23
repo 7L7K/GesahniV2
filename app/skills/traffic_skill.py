@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
-import logging
-from typing import Tuple
 
 import httpx
 
@@ -24,7 +23,7 @@ class TrafficSkill(Skill):
 
     async def _geocode(
         self, client: httpx.AsyncClient, place: str
-    ) -> Tuple[float, float] | None:
+    ) -> tuple[float, float] | None:
         resp = await client.get(
             GEOCODE_URL,
             params={"q": place, "format": "json", "limit": 1},

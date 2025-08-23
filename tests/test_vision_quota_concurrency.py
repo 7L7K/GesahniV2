@@ -1,5 +1,5 @@
-import os
 import asyncio
+import os
 
 
 def test_vision_quota_concurrency(monkeypatch):

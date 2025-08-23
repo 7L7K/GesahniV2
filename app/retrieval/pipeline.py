@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import os
-from typing import Any, Dict, List, Tuple
 import logging
+import os
 import time
+from typing import Any
 
 from ..embeddings import embed_sync
+from ..otel_utils import start_span
+from ..telemetry import hash_user_id
 from ..token_budgeter import _table as _intent_table
 from .qdrant_hybrid import dense_search, sparse_search
 from .reranker import hosted_rerank_passthrough, local_rerank
@@ -13,26 +15,24 @@ from .utils import (
     RetrievedItem,
     compose_final_score,
     mmr_diversify,
+    quality_boost,
     reciprocal_rank_fusion,
     time_decay_boost,
-    quality_boost,
     truncate_to_token_budget,
 )
-from ..otel_utils import start_span
-from ..telemetry import hash_user_id
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Lightweight in-process cache for repeated queries within a short TTL
 # ---------------------------------------------------------------------------
-_CACHE: Dict[Tuple[str, str, str | None, str], Tuple[List[str], List[Dict[str, Any]], float]] = {}
+_CACHE: dict[tuple[str, str, str | None, str], tuple[list[str], list[dict[str, Any]], float]] = {}
 
 def _normalize_query(q: str) -> str:
     return (q or "").strip().lower()
 
 
-def _budgets_for_intent(intent: str | None) -> Tuple[int, int, int]:
+def _budgets_for_intent(intent: str | None) -> tuple[int, int, int]:
     """Return (k_dense, k_sparse, token_budget) based on task class/intent."""
     max_in, _max_out = _intent_table(intent or "chat")
     # Keep conservative slices per intent; allow overrides via env
@@ -50,14 +50,14 @@ def run_pipeline(
     intent: str | None,
     collection: str,
     explain: bool = False,
-    extra_filter: Dict[str, Any] | None = None,
-) -> Tuple[List[str], List[Dict[str, Any]]]:
+    extra_filter: dict[str, Any] | None = None,
+) -> tuple[list[str], list[dict[str, Any]]]:
     """Execute the end-to-end retrieval pipeline and return (texts, trace).
 
     Trace contains compact events with reasons and intermediate sizes/scores.
     """
 
-    trace: List[Dict[str, Any]] = []
+    trace: list[dict[str, Any]] = []
     try:
         user_hash = hash_user_id(str(user_id)) if user_id else "anon"
         logger.info(
@@ -160,8 +160,8 @@ def run_pipeline(
     with start_span("retrieval.pipeline", {"topk_pre": len(dense) + len(sparse)}):
         fused = reciprocal_rank_fusion([dense, sparse]) if (dense or sparse) else []
     t_rrf = (time.perf_counter() - t3) * 1000.0
-    def _rrf_features(fused_items: List[RetrievedItem]) -> List[Dict[str, float]]:
-        rows: List[Dict[str, float]] = []
+    def _rrf_features(fused_items: list[RetrievedItem]) -> list[dict[str, float]]:
+        rows: list[dict[str, float]] = []
         for it in fused_items[:5]:
             md = it.metadata or {}
             rows.append({
@@ -190,7 +190,7 @@ def run_pipeline(
         diversified = mmr_diversify(query, pool, k=min(mmr_k, len(pool)), lambda_=mmr_lambda)
     t_mmr = (time.perf_counter() - t4) * 1000.0
     # diversity proxy: average pairwise Jaccard distance over tokens for selection
-    def _diversity_score(items: List[str]) -> float:
+    def _diversity_score(items: list[str]) -> float:
         toks = [set(x.lower().split()) for x in items]
         if len(toks) < 2:
             return 0.0
@@ -260,7 +260,7 @@ def run_pipeline(
 
     # Temporal & quality boost, compose final scores
     half_life_days = float(os.getenv("RETRIEVE_HALF_LIFE_DAYS", "14"))
-    finalized: List[Tuple[float, RetrievedItem, Dict[str, Any]]] = []
+    finalized: list[tuple[float, RetrievedItem, dict[str, Any]]] = []
     for it in after_hosted:
         ts = None
         tier = None
@@ -337,7 +337,7 @@ def run_pipeline(
             top_items = filtered_items
             top_meta = [m for _f, _it, m in finalized if _it in top_items]
     expl_count = min(5, len(top_items))
-    explain_rows: List[Dict[str, Any]] = []
+    explain_rows: list[dict[str, Any]] = []
     for i in range(expl_count):
         it = top_items[i]
         em = top_meta[i]

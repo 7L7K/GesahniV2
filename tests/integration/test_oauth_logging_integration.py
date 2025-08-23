@@ -2,10 +2,9 @@
 Integration tests for OAuth structured logging.
 """
 
-import pytest
 import logging
-import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 from app.main import app

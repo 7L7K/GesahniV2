@@ -12,20 +12,18 @@ This module contains 10-12 comprehensive tests for the FastAPI endpoints:
 8. Additional tests for edge cases and error conditions
 """
 
-import json
+from datetime import datetime
+from unittest.mock import AsyncMock, patch
+
 import jwt
 import pytest
-from datetime import datetime, timedelta
-from typing import Dict, Any
-from unittest.mock import AsyncMock, patch, MagicMock
-
 from fastapi.testclient import TestClient
 
 from tests.test_minimal_fastapi_app import (
-    create_test_client,
     create_auth_cookies,
     create_auth_headers,
-    mock_jwt_secret
+    create_test_client,
+    mock_jwt_secret,
 )
 
 
@@ -415,7 +413,6 @@ class TestAPIEndpointsComprehensive:
 
     def test_concurrent_request_handling(self, client: TestClient):
         """Test that the API can handle concurrent requests properly."""
-        import asyncio
         import threading
 
         cookies = create_auth_cookies("testuser")

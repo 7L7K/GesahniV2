@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-import time
 import re
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any
 
 try:  # pragma: no cover - optional
     from qdrant_client import QdrantClient
@@ -12,8 +12,8 @@ except Exception:  # pragma: no cover
     QdrantClient = None  # type: ignore
     PointStruct = object  # type: ignore
 
-from .qdrant_hybrid import _client as _q_client  # reuse URL/key loader
 from ..embeddings import embed_sync
+from .qdrant_hybrid import _client as _q_client  # reuse URL/key loader
 
 
 def _default_horizon_days(kind: str) -> float:
@@ -41,15 +41,15 @@ def upsert_claim(
     doc_id: str,
     text: str,
     claim_type: str,
-    entities: List[str] | None = None,
-    topic: Optional[str] = None,
+    entities: list[str] | None = None,
+    topic: str | None = None,
     confidence: float = 0.6,
     quality: float = 1.0,
     pinned: bool = False,
     source_tier: float = 0.0,
-    decay_at: Optional[float] = None,
-    created_at: Optional[float] = None,
-    collection: Optional[str] = None,
+    decay_at: float | None = None,
+    created_at: float | None = None,
+    collection: str | None = None,
 ) -> bool:
     """Upsert a sanitized claim into Qdrant.
 
@@ -78,7 +78,7 @@ def upsert_claim(
     ent = [str(e) for e in (entities or [])][:10]
     top = topic or (ent[0] if ent else claim_type)
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "doc_id": doc_id,
         "user_id": user_id,
         "type": claim_type,

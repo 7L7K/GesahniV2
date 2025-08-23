@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
 import os
 
+from fastapi import APIRouter, Depends, Query, Request
+
+from app.deps.scopes import docs_security_with
 from app.deps.user import get_current_user_id
 from app.memory import api as memory_api
 from app.obs.ab import snapshot as ab_snapshot
 from app.retrieval import run_pipeline
 from app.retrieval.diagnostics import why_logs
-
-
-from app.deps.scopes import docs_security_with
-
 
 router = APIRouter(tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))]) 
 

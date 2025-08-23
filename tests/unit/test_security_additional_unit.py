@@ -1,10 +1,9 @@
 import os
-import time
 from pathlib import Path
 
 import jwt
 import pytest
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
@@ -92,8 +91,9 @@ async def test_require_nonce_disabled_passes(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_verify_webhook_missing_secret(monkeypatch):
-    import app.security as sec
     from fastapi import HTTPException
+
+    import app.security as sec
 
     monkeypatch.delenv("HA_WEBHOOK_SECRETS", raising=False)
     monkeypatch.delenv("HA_WEBHOOK_SECRET", raising=False)

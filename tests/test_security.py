@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import os
+
 import jwt
-import pytest
-from fastapi import FastAPI, Depends, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.security import get_rate_limit_snapshot
 
 
 def _make_jwt(payload: dict) -> str:
@@ -27,6 +26,7 @@ def test_rate_limit_key_scope_route_isolates(monkeypatch):
     os.environ["RATE_LIMIT_KEY_SCOPE"] = "route"
     os.environ["RATE_LIMIT_PER_MIN"] = "2"
     from importlib import reload
+
     import app.security as sec
 
     reload(sec)
@@ -87,8 +87,9 @@ def test_webhook_sign_verify_roundtrip(tmp_path, monkeypatch):
     from app.security import sign_webhook
     sig = sign_webhook(body, "abc123")
     # Call underlying function via FastAPI dependency path is complex; directly exercise
-    from app.security import verify_webhook
     from starlette.requests import Request
+
+    from app.security import verify_webhook
 
     async def _run():
         scope = {

@@ -1,27 +1,28 @@
-import pytest
 import asyncio
 import time
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from app.token_store import (
     LocalStorage,
-    LocalEntry,
-    start_cleanup_task,
-    stop_cleanup_task,
-    get_storage_stats,
-    clear_local_storage,
-    has_redis,
     allow_refresh,
-    is_refresh_allowed,
     claim_refresh_jti,
     claim_refresh_jti_with_retry,
-    set_last_used_jti,
+    clear_local_storage,
     get_last_used_jti,
-    revoke_refresh_family,
-    is_refresh_family_revoked,
-    revoke_access,
-    is_access_revoked,
+    get_storage_stats,
+    has_redis,
     incr_login_counter,
+    is_access_revoked,
+    is_refresh_allowed,
+    is_refresh_family_revoked,
     record_pat_last_used,
+    revoke_access,
+    revoke_refresh_family,
+    set_last_used_jti,
+    start_cleanup_task,
+    stop_cleanup_task,
 )
 
 

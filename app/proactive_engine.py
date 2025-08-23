@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import os
-import json
 import asyncio
+import json
 import logging
-from datetime import datetime, timedelta, timezone
+import os
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from .deps import scheduler as sched_mod
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Live state snapshot ----------------------------------------------------------
 
-STATE: Dict[str, Any] = {
+STATE: dict[str, Any] = {
     "ha": {"entities": {}, "last_update": None},
     "weather": {"last": None, "last_update": None},
     "calendar": {"events": [], "last_update": None},
@@ -25,7 +25,7 @@ _SELF_REVIEW_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def set_presence(kind: str, value: Any) -> None:
@@ -117,7 +117,7 @@ async def _update_calendar() -> None:
 
 async def _check_doors_unlocked() -> None:
     try:
-        ents: Dict[str, Any] = STATE.get("ha", {}).get("entities", {}) or {}
+        ents: dict[str, Any] = STATE.get("ha", {}).get("entities", {}) or {}
         unlocked: list[str] = []
         for eid, data in ents.items():
             if eid.startswith("lock.") and str(data.get("state")) == "unlocked":
@@ -148,7 +148,7 @@ def _write_self_review() -> None:
         logger.debug("self_review write failed", exc_info=True)
 
 
-def get_self_review() -> Dict[str, Any] | None:
+def get_self_review() -> dict[str, Any] | None:
     try:
         if _SELF_REVIEW_PATH.exists():
             return json.loads(_SELF_REVIEW_PATH.read_text(encoding="utf-8"))
@@ -218,7 +218,7 @@ def startup() -> None:
         logger.debug("proactive scheduling failed", exc_info=True)
 
 
-def on_ha_event(event: Dict[str, Any]) -> None:
+def on_ha_event(event: dict[str, Any]) -> None:
     # Best-effort in-memory update for specific entity change events
     try:
         eid = event.get("entity_id")
@@ -232,20 +232,14 @@ def on_ha_event(event: Dict[str, Any]) -> None:
 
 __all__ = ["startup", "STATE", "set_presence", "on_ha_event", "get_self_review"]
 
-import asyncio
-import json
 import os
 import time
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
 
-from .deps import scheduler as sched_mod
-from .memory.profile_store import profile_store
-from .memory.vector_store import add_user_memory
-from .telemetry import log_record_var
 from .budget import get_budget_state
 from .home_assistant import call_service, get_states
+from .memory.profile_store import profile_store
+from .memory.vector_store import add_user_memory
 
 
 @dataclass
@@ -253,11 +247,11 @@ class Snapshot:
     user_id: str
     created_at: float
     presence_ok: bool | None = None
-    weather: Dict[str, Any] | None = None
-    calendar: Dict[str, Any] | None = None
+    weather: dict[str, Any] | None = None
+    calendar: dict[str, Any] | None = None
 
 
-_SNAP: Dict[str, Tuple[Snapshot, float]] = {}
+_SNAP: dict[str, tuple[Snapshot, float]] = {}
 _TTL = float(os.getenv("PROACTIVE_SNAPSHOT_TTL", "600"))
 
 
@@ -269,11 +263,11 @@ async def _fetch_presence(user_id: str) -> bool | None:  # stubs; to be extended
     return True
 
 
-async def _fetch_weather(user_id: str) -> Dict[str, Any] | None:
+async def _fetch_weather(user_id: str) -> dict[str, Any] | None:
     return {"temp": None}
 
 
-async def _fetch_calendar(user_id: str) -> Dict[str, Any] | None:
+async def _fetch_calendar(user_id: str) -> dict[str, Any] | None:
     return {}
 
 
@@ -304,7 +298,7 @@ def _is_anomalous(snap: Snapshot) -> bool:
     return False
 
 
-def _missing_profile_key(user_id: str) -> Optional[str]:
+def _missing_profile_key(user_id: str) -> str | None:
     prof = profile_store.get(user_id)
     for key in ("night_temp", "wake_time"):
         if key not in prof:
@@ -312,7 +306,7 @@ def _missing_profile_key(user_id: str) -> Optional[str]:
     return None
 
 
-async def maybe_curiosity_prompt(user_id: str, last_confidence: float | None) -> Optional[str]:
+async def maybe_curiosity_prompt(user_id: str, last_confidence: float | None) -> str | None:
     tau = _dynamic_tau(user_id)
     need = _missing_profile_key(user_id)
     snap = await refresh_snapshot(user_id)
@@ -402,7 +396,7 @@ def startup() -> None:
     _start_scheduler()
 
 
-def on_ha_event(event: Dict[str, Any]) -> None:
+def on_ha_event(event: dict[str, Any]) -> None:
     """Lightweight HA event handler for proactive self-tasks.
 
     Expects events with keys: "entity_id", "new_state", "old_state".

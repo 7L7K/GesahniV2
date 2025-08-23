@@ -5,12 +5,12 @@ This module provides a clean interface for creating JWT tokens,
 with centralized TTL management and normalized claims handling.
 """
 
-import os
-import time
 import logging
+import os
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Any
 from uuid import uuid4
+
 import jwt
 
 # JWT configuration constants
@@ -34,7 +34,7 @@ def _ensure_jwt_secret_present() -> None:
         raise ValueError("JWT_SECRET cannot use insecure default values")
 
 
-def _create_access_token_internal(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def _create_access_token_internal(data: dict, expires_delta: timedelta | None = None) -> str:
     """Internal function to create a JWT access token with the given data.
     
     Args:
@@ -78,7 +78,7 @@ def _create_access_token_internal(data: dict, expires_delta: Optional[timedelta]
     return jwt.encode(to_encode, secret, algorithm=ALGORITHM)
 
 
-def _create_refresh_token_internal(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def _create_refresh_token_internal(data: dict, expires_delta: timedelta | None = None) -> str:
     """Internal function to create a JWT refresh token with the given data.
     
     Args:
@@ -143,7 +143,7 @@ def _get_refresh_ttl_seconds() -> int:
     return minutes * 60
 
 
-def _normalize_access_claims(claims: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_access_claims(claims: dict[str, Any]) -> dict[str, Any]:
     """Normalize and complete access token claims."""
     normalized = claims.copy()
     
@@ -163,7 +163,7 @@ def _normalize_access_claims(claims: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
-def _normalize_refresh_claims(claims: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_refresh_claims(claims: dict[str, Any]) -> dict[str, Any]:
     """Normalize and complete refresh token claims."""
     normalized = claims.copy()
     
@@ -185,12 +185,12 @@ def _normalize_refresh_claims(claims: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def make_access(
-    claims: Dict[str, Any], 
+    claims: dict[str, Any], 
     *, 
-    ttl_s: Optional[int] = None, 
-    alg: Optional[str] = None, 
-    key: Optional[str] = None, 
-    kid: Optional[str] = None
+    ttl_s: int | None = None, 
+    alg: str | None = None, 
+    key: str | None = None, 
+    kid: str | None = None
 ) -> str:
     """
     Create an access token with normalized claims and centralized TTL handling.
@@ -219,12 +219,12 @@ def make_access(
 
 
 def make_refresh(
-    claims: Dict[str, Any], 
+    claims: dict[str, Any], 
     *, 
-    ttl_s: Optional[int] = None, 
-    alg: Optional[str] = None, 
-    key: Optional[str] = None, 
-    kid: Optional[str] = None
+    ttl_s: int | None = None, 
+    alg: str | None = None, 
+    key: str | None = None, 
+    kid: str | None = None
 ) -> str:
     """
     Create a refresh token with normalized claims and centralized TTL handling.
@@ -266,7 +266,8 @@ def get_default_refresh_ttl() -> int:
 # DEPRECATED: Use make_access() and make_refresh() instead for better TTL management and claim normalization
 import warnings
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token with the given data.
     
     DEPRECATED: Use make_access() instead for better TTL management and claim normalization.
@@ -286,7 +287,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return _create_access_token_internal(data, expires_delta=expires_delta)
 
 
-def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Create a JWT refresh token with the given data.
     
     DEPRECATED: Use make_refresh() instead for better TTL management and claim normalization.

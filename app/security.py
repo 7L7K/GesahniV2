@@ -9,19 +9,20 @@ with it directly.
 from __future__ import annotations
 
 import asyncio
+import datetime as _dt
+import hashlib
+import hmac
 import logging
 import os
 import time
-import datetime as _dt
-from typing import Dict, List, Optional, Tuple
-import hmac
-import hashlib
+
 from fastapi import Header
 
 logger = logging.getLogger(__name__)
 
 import jwt
-from fastapi import HTTPException, Request, WebSocket, WebSocketException, Depends
+from fastapi import Depends, HTTPException, Request, WebSocket, WebSocketException
+
 try:
     # Optional Clerk JWT verification for RS256 tokens
     from app.deps.clerk_auth import verify_clerk_token as _verify_clerk
@@ -29,10 +30,16 @@ except Exception:  # pragma: no cover - optional
     _verify_clerk = None  # type: ignore
 
 try:
-    from .auth_monitoring import record_privileged_call_blocked, record_auth_lock_event
+    from .auth_monitoring import record_auth_lock_event, record_privileged_call_blocked
 except Exception:  # pragma: no cover - optional
     record_privileged_call_blocked = lambda *a, **k: None
     record_auth_lock_event = lambda *a, **k: None
+
+# Phase 6.1: Clean auth metrics
+try:
+    from .metrics import AUTH_FAIL
+except Exception:  # pragma: no cover - optional
+    AUTH_FAIL = None  # type: ignore
 
 def _safe_request_path(request: Request | None) -> str:
     """Safely extract request path without getattr tricks."""
@@ -51,7 +58,7 @@ def register_problem_handler(app) -> None:
     
     This replaces the import-time monkey-patching with explicit app-scoped registration.
     """
-    if not os.getenv("ENABLE_PROBLEM_HANDLER", "0").strip().lower() in {"1", "true", "yes", "on"}:
+    if os.getenv("ENABLE_PROBLEM_HANDLER", "0").strip().lower() not in {"1", "true", "yes", "on"}:
         return
     
     try:
@@ -176,7 +183,7 @@ _RL_PREFIX = os.getenv("RATE_LIMIT_REDIS_PREFIX", "rl").strip(":")
 
 # Lazy-initialized async Redis client (if available). Keep it optional so that
 # test environments without the dependency continue to work unchanged.
-_redis_client: Optional[object] = None
+_redis_client: object | None = None
 
 def _should_use_redis() -> bool:
     # Under pytest, prefer in-memory to ensure deterministic behavior
@@ -211,13 +218,43 @@ async def _get_redis():
         return None
 
 
+# Centralized JWT decode helper to enforce a default clock skew across callers
+# Default JWT clock skew (leeway) in seconds. In test runs we prefer strict
+# validation (no leeway) so expired-token tests reliably fail. If the env var
+# is explicitly set it takes precedence; otherwise when running under pytest
+# default to 0 seconds of leeway.
+_env_jwt_skew = os.getenv("JWT_CLOCK_SKEW_S", None)
+if _env_jwt_skew is None and (os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING")):
+    JWT_CLOCK_SKEW_S = 0
+else:
+    JWT_CLOCK_SKEW_S = int(_env_jwt_skew or "60")
+
+def _jwt_decode(token: str, key: str | None = None, algorithms: list[str] | None = None, **kwargs) -> dict:
+    """Decode a JWT using a consistent leeway and sensible default options.
+
+    Prefer callers to pass `leeway`/`options` explicitly; otherwise we default to
+    requiring `exp` and `iat` and apply `JWT_CLOCK_SKEW_S` seconds of leeway.
+    """
+    if "leeway" not in kwargs:
+        # Allow dynamic overrides via env var so test suites can set
+        # JWT_CLOCK_SKEW_S at runtime (fixtures) and have decode honour it.
+        try:
+            kwargs["leeway"] = int(os.getenv("JWT_CLOCK_SKEW_S", str(JWT_CLOCK_SKEW_S)))
+        except Exception:
+            kwargs["leeway"] = JWT_CLOCK_SKEW_S
+    if algorithms is None:
+        algorithms = ["HS256"]
+    opts = kwargs.pop("options", {"require": ["exp", "iat"]})
+    return jwt.decode(token, key, algorithms=algorithms, options=opts, **kwargs)  # type: ignore[arg-type]
+
+
 def _rl_key(kind: str, user_key: str, window: str) -> str:
     # Example: rl:http:<user>:long
     return f"{_RL_PREFIX}:{kind}:{user_key}:{window}"
 
 
 def _seconds_until_utc_midnight() -> int:
-    now = _dt.datetime.now(tz=_dt.timezone.utc)
+    now = _dt.datetime.now(tz=_dt.UTC)
     tomorrow = (now + _dt.timedelta(days=1)).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
@@ -225,7 +262,7 @@ def _seconds_until_utc_midnight() -> int:
     return max(0, int(delta + 0.999))
 
 
-async def _redis_incr_with_ttl(redis_client, key: str, period_seconds: float) -> Tuple[int, int]:
+async def _redis_incr_with_ttl(redis_client, key: str, period_seconds: float) -> tuple[int, int]:
     """Atomically increment a counter and ensure TTL is set on first increment.
 
     Returns (count, ttl_seconds).
@@ -248,13 +285,13 @@ async def _redis_incr_with_ttl(redis_client, key: str, period_seconds: float) ->
 
 
 # Local daily counters fallback (per UTC day)
-_daily_counts: Dict[str, int] = {}
+_daily_counts: dict[str, int] = {}
 _daily_date: str | None = None
 
 
 def _local_daily_incr(key: str) -> tuple[int, int]:
     global _daily_counts, _daily_date
-    today = _dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y%m%d")
+    today = _dt.datetime.now(tz=_dt.UTC).strftime("%Y%m%d")
     if _daily_date != today:
         _daily_counts = {}
         _daily_date = today
@@ -265,7 +302,7 @@ def _local_daily_incr(key: str) -> tuple[int, int]:
 
 async def _daily_incr(r, key: str) -> tuple[int, int]:
     """Increment daily counter for ``key`` returning (count, ttl_seconds)."""
-    date_str = _dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y%m%d")
+    date_str = _dt.datetime.now(tz=_dt.UTC).strftime("%Y%m%d")
     if r is None:
         return _local_daily_incr(f"{key}:{date_str}")
     k = _rl_key("daily", key, date_str)
@@ -359,9 +396,9 @@ def _get_request_payload(request: Request | None) -> dict | None:
                     opts["audience"] = aud
                 
                 if opts:
-                    return jwt.decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
+                    return _jwt_decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
                 else:
-                    return jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+                    return _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
             except Exception:
                 # Traditional JWT failed, try Clerk if enabled and appropriate
                 pass
@@ -371,7 +408,7 @@ def _get_request_payload(request: Request | None) -> dict | None:
             test_mode = os.getenv("ENV", "").strip().lower() == "test" or os.getenv("PYTEST_RUNNING")
             if dev_mode or test_mode:
                 try:
-                    return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
+                    return _jwt_decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
                 except Exception:
                     pass
     
@@ -473,9 +510,9 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
                     opts["audience"] = aud
                 
                 if opts:
-                    return jwt.decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
+                    return _jwt_decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
                 else:
-                    return jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+                    return _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
             except Exception:
                 # Traditional JWT failed, try Clerk if enabled and appropriate
                 pass
@@ -485,7 +522,7 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
             test_mode = os.getenv("ENV", "").strip().lower() == "test" or os.getenv("PYTEST_RUNNING")
             if dev_mode or test_mode:
                 try:
-                    return jwt.decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
+                    return _jwt_decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
                 except Exception:
                     pass
     
@@ -514,10 +551,11 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
 
 
 def validate_websocket_origin(websocket: WebSocket) -> bool:
-    """Validate WebSocket origin to ensure only http://localhost:3000 is accepted.
-    
-    WebSocket requirement: Origin checks should accept only http://localhost:3000.
-    
+    """Validate WebSocket origin using the single source of truth from app.state.
+
+    WebSocket requirement: Origin checks should use the same list as CORS configuration.
+    Falls back to hardcoded localhost:3000 if app.state not available (for tests).
+
     Returns:
         bool: True if origin is valid, False otherwise
     """
@@ -525,19 +563,30 @@ def validate_websocket_origin(websocket: WebSocket) -> bool:
     if not origin:
         # Allow connections without origin header (e.g., non-browser clients)
         return True
+
+    # Use single source of truth from app.state (same as CORS)
+    try:
+        allowed_origins = getattr(websocket.app.state, "allowed_origins", None)
+        if allowed_origins is not None and hasattr(allowed_origins, '__iter__'):
+            return origin in allowed_origins
+    except (AttributeError, TypeError):
+        # Fallback for tests or contexts where app.state is not available
+        pass
+
+    # Fallback: only allow localhost:3000 (original behavior)
     return origin == "http://localhost:3000"
 
 
 # Per-user counters used by the HTTP and WS middleware -----------------------
-http_requests: Dict[str, int] = {}
-ws_requests: Dict[str, int] = {}
+http_requests: dict[str, int] = {}
+ws_requests: dict[str, int] = {}
 # Additional short-window buckets for burst allowances
-http_burst: Dict[str, int] = {}
-ws_burst: Dict[str, int] = {}
+http_burst: dict[str, int] = {}
+ws_burst: dict[str, int] = {}
 # Scope-based rate limiting buckets
-scope_rate_limits: Dict[str, int] = {}
+scope_rate_limits: dict[str, int] = {}
 # Legacy compatibility for _apply_rate_limit
-_requests: Dict[str, List[float]] = {}
+_requests: dict[str, list[float]] = {}
 # Backwards-compatible aliases expected by some tests
 _http_requests = http_requests
 _ws_requests = ws_requests
@@ -602,7 +651,7 @@ def _should_bypass_rate_limit(request: Request) -> bool:
     
     return False
 
-def _bucket_rate_limit(key: str, bucket: Dict[str, int], limit: int, period: float) -> bool:
+def _bucket_rate_limit(key: str, bucket: dict[str, int], limit: int, period: float) -> bool:
     """Apply rate limiting to a bucket.
     
     Returns True if the request is allowed, False if rate limited.
@@ -616,7 +665,7 @@ def _bucket_rate_limit(key: str, bucket: Dict[str, int], limit: int, period: flo
     bucket[key] = count
     return count <= limit
 
-def _bucket_retry_after(bucket: Dict[str, int], period: float) -> int:
+def _bucket_retry_after(bucket: dict[str, int], period: float) -> int:
     """Calculate retry after time for a bucket."""
     now = time.time()
     reset = bucket.get("_reset", now)
@@ -733,6 +782,8 @@ async def verify_token(request: Request) -> None:
                 )
             except Exception:
                 pass
+            if AUTH_FAIL:
+                AUTH_FAIL.labels(reason="missing_token").inc()
             logger.warning("deny: missing_token")
             raise HTTPException(status_code=401, detail="Unauthorized")
         # Otherwise allow anonymous when tests indicate JWT is optional OR when scopes enforcement is disabled.
@@ -762,9 +813,9 @@ async def verify_token(request: Request) -> None:
             if aud:
                 opts["audience"] = aud
             if opts:
-                payload = jwt.decode(token, jwt_secret, algorithms=["HS256"], leeway=skew, **opts)
+                payload = _jwt_decode(token, jwt_secret, algorithms=["HS256"], leeway=skew, **opts)
             else:
-                payload = jwt.decode(token, jwt_secret, algorithms=["HS256"], leeway=skew)
+                payload = _jwt_decode(token, jwt_secret, algorithms=["HS256"], leeway=skew)
             request.state.jwt_payload = payload
             return  # Success with traditional JWT
         except jwt.ExpiredSignatureError:
@@ -777,6 +828,8 @@ async def verify_token(request: Request) -> None:
                 )
             except Exception:
                 pass
+            if AUTH_FAIL:
+                AUTH_FAIL.labels(reason="expired").inc()
             logger.warning("deny: token_expired")
             raise HTTPException(status_code=401, detail="token_expired")
         except jwt.PyJWTError:
@@ -816,6 +869,8 @@ async def verify_token(request: Request) -> None:
         )
     except Exception:
         pass
+    if AUTH_FAIL:
+        AUTH_FAIL.labels(reason="invalid").inc()
     logger.warning("deny: invalid_token")
     # Emit structured reason code for unauthorized access
     exc = HTTPException(status_code=401, detail="Unauthorized")
@@ -846,7 +901,7 @@ async def verify_token_strict(request: Request) -> None:
         logger.error("deny: missing_jwt_secret")
         raise HTTPException(status_code=500, detail="missing_jwt_secret")
     auth = request.headers.get("Authorization")
-    token: Optional[str] = None
+    token: str | None = None
     if auth and auth.startswith("Bearer "):
         token = auth.split(" ", 1)[1]
     if not token:
@@ -861,7 +916,7 @@ async def verify_token_strict(request: Request) -> None:
         logger.warning("deny: missing_token_strict")
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        payload = jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+        payload = _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
         request.state.jwt_payload = payload
     except jwt.PyJWTError:
         try:
@@ -981,8 +1036,8 @@ async def verify_ws(websocket: WebSocket) -> None:
         logger.warning("deny: origin_not_allowed origin=<%s>", origin)
         # WebSocket requirement: Close with crisp code/reason for origin mismatch
         await websocket.close(
-            code=1008,  # Policy violation
-            reason="Origin not allowed: only http://localhost:3000 accepted"
+            code=4403,  # Forbidden - origin not allowed
+            reason="origin_not_allowed"
         )
         return
 
@@ -1015,7 +1070,12 @@ async def verify_ws(websocket: WebSocket) -> None:
             token = None
 
     if not token:
-        # Allow unauthenticated WS when no token is provided; downstream can treat as anon
+        # Close connection for missing token - require authentication
+        logger.warning("deny: missing_token")
+        await websocket.close(
+            code=4401,  # Unauthorized - missing token
+            reason="missing_token"
+        )
         return
 
     try:
@@ -1028,15 +1088,20 @@ async def verify_ws(websocket: WebSocket) -> None:
         if aud:
             opts["audience"] = aud
         if opts:
-            payload = jwt.decode(token, jwt_secret, algorithms=["HS256"], **opts)
+            payload = _jwt_decode(token, jwt_secret, algorithms=["HS256"], **opts)
         else:
-            payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
+            payload = _jwt_decode(token, jwt_secret, algorithms=["HS256"])
         websocket.state.jwt_payload = payload
         uid = payload.get("user_id") or payload.get("sub")
         if uid:
             websocket.state.user_id = uid
-    except jwt.PyJWTError:
-        # Be lenient for browser clients; proceed as anonymous on decode failure
+    except jwt.PyJWTError as e:
+        # Close connection for invalid token
+        logger.warning("deny: invalid_token error=<%s>", str(e))
+        await websocket.close(
+            code=4401,  # Unauthorized - invalid token
+            reason="invalid_token"
+        )
         return
 
 
@@ -1184,7 +1249,7 @@ async def get_rate_limit_backend_status() -> dict:
 # ---------------------------------------------------------------------------
 
 _nonce_ttl = int(os.getenv("NONCE_TTL_SECONDS", "120"))
-_nonce_store: Dict[str, float] = {}
+_nonce_store: dict[str, float] = {}
 
 
 async def _nonce_user_dep(request: Request) -> str:
@@ -1236,9 +1301,9 @@ async def require_nonce(request: Request, user_id: str = Depends(_nonce_user_dep
 # Webhook signing/verification (e.g., HA callbacks)
 # ---------------------------------------------------------------------------
 
-def _load_webhook_secrets() -> List[str]:
+def _load_webhook_secrets() -> list[str]:
     # Allow multiple secrets for rotation via env or file
-    secrets: List[str] = []
+    secrets: list[str] = []
     env_val = os.getenv("HA_WEBHOOK_SECRETS", "")
     if env_val:
         secrets.extend([s.strip() for s in env_val.split(",") if s.strip()])
@@ -1258,8 +1323,8 @@ def _load_webhook_secrets() -> List[str]:
     if single:
         secrets.append(single)
     # dedupe while preserving order
-    seen: Dict[str, None] = {}
-    out: List[str] = []
+    seen: dict[str, None] = {}
+    out: list[str] = []
     for s in secrets:
         if s not in seen:
             seen[s] = None
@@ -1277,7 +1342,7 @@ def sign_webhook(body: bytes, secret: str, timestamp: str | None = None) -> str:
     return hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
 
 
-_webhook_seen: Dict[str, float] = {}
+_webhook_seen: dict[str, float] = {}
 
 
 async def verify_webhook(

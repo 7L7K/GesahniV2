@@ -5,7 +5,6 @@ This shows the raw Set-Cookie headers for manual verification.
 """
 
 import requests
-import json
 
 # Configuration
 API_URL = "http://localhost:8000"

@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import os
 import random
 import re
 import string
 import uuid
 
 from .base import Skill
-
 
 _ALPHABET = string.ascii_letters + string.digits + "-_"
 

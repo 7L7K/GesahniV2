@@ -18,16 +18,14 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable, List, Optional
 
 from .gpt_client import ask_gpt
 from .memory.vector_store import add_user_memory
 from .redaction import redact_and_store
-from .token_utils import count_tokens
 from .router import OPENAI_TIMEOUT_MS
-
+from .token_utils import count_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +36,11 @@ STORIES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def _story_path(session_id: str, *, when: Optional[datetime] = None) -> Path:
-    d = (when or datetime.now(timezone.utc)).strftime("%Y-%m-%d")
+def _story_path(session_id: str, *, when: datetime | None = None) -> Path:
+    d = (when or datetime.now(UTC)).strftime("%Y-%m-%d")
     return STORIES_DIR / f"{d}-{session_id}.jsonl"
 
 
@@ -50,9 +48,9 @@ def append_transcript_line(
     *,
     session_id: str,
     text: str,
-    user_id: Optional[str] = None,
+    user_id: str | None = None,
     speaker: str = "user",
-    confidence: Optional[float] = None,
+    confidence: float | None = None,
 ) -> None:
     """Append a single JSON line to the story file for ``session_id``.
 
@@ -84,10 +82,10 @@ class _Chunk:
     text: str
 
 
-def _load_lines(path: Path) -> List[dict]:
-    lines: List[dict] = []
+def _load_lines(path: Path) -> list[dict]:
+    lines: list[dict] = []
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             for raw in fh:
                 try:
                     lines.append(json.loads(raw))
@@ -98,11 +96,11 @@ def _load_lines(path: Path) -> List[dict]:
     return lines
 
 
-def _chunk_story_lines(lines: List[dict], target_tokens: int = 800) -> List[_Chunk]:
+def _chunk_story_lines(lines: list[dict], target_tokens: int = 800) -> list[_Chunk]:
     """Group consecutive lines into chunks around ``target_tokens``."""
 
-    chunks: List[_Chunk] = []
-    buf: List[str] = []
+    chunks: list[_Chunk] = []
+    buf: list[str] = []
     session_id = (lines[0].get("session_id") if lines else "unknown") or "unknown"
     user_id = (lines[0].get("user_id") if lines else "anon") or "anon"
     for line in lines:

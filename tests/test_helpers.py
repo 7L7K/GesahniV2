@@ -7,15 +7,15 @@ and invariants, ensuring consistent test patterns across the test suite.
 
 import os
 import time
-from typing import Optional, Dict, Any
-from fastapi import Response, Request
+
+from fastapi import Request, Response
 from fastapi.testclient import TestClient
 
-from app.cookies import set_auth_cookies, clear_auth_cookies
+from app.cookies import clear_auth_cookies, set_auth_cookies
 from app.tokens import create_access_token, create_refresh_token
 
 
-def create_test_tokens(user_id: str, **kwargs) -> Dict[str, str]:
+def create_test_tokens(user_id: str, **kwargs) -> dict[str, str]:
     """
     Create test access and refresh tokens for a user.
     
@@ -37,7 +37,7 @@ def set_test_auth_cookies(
     client: TestClient,
     response: Response,
     user_id: str,
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
     **token_kwargs
 ) -> None:
     """

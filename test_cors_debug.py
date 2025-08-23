@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+
 from app.env_utils import load_env
 
 # Load environment

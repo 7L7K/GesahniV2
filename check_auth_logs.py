@@ -5,10 +5,10 @@ Script to analyze authentication logs and help identify issues.
 
 import re
 import sys
-from datetime import datetime
-from typing import List, Dict, Any
+from typing import Any
 
-def parse_log_line(line: str) -> Dict[str, Any]:
+
+def parse_log_line(line: str) -> dict[str, Any]:
     """Parse a log line and extract relevant information."""
     # Common patterns for different log formats
     patterns = [
@@ -40,7 +40,7 @@ def parse_log_line(line: str) -> Dict[str, Any]:
         "raw": line.strip()
     }
 
-def analyze_auth_logs(log_lines: List[str]) -> Dict[str, Any]:
+def analyze_auth_logs(log_lines: list[str]) -> dict[str, Any]:
     """Analyze authentication-related logs."""
     auth_events = []
     errors = []
@@ -79,7 +79,7 @@ def analyze_auth_logs(log_lines: List[str]) -> Dict[str, Any]:
         "auth_events": auth_events
     }
 
-def print_analysis(analysis: Dict[str, Any]):
+def print_analysis(analysis: dict[str, Any]):
     """Print the analysis results in a readable format."""
     print("=" * 60)
     print("AUTHENTICATION LOG ANALYSIS")
@@ -116,7 +116,7 @@ def main():
         # Read from file
         filename = sys.argv[1]
         try:
-            with open(filename, 'r') as f:
+            with open(filename) as f:
                 log_lines = f.readlines()
         except FileNotFoundError:
             print(f"Error: File '{filename}' not found.")

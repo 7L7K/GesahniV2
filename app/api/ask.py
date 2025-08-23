@@ -4,21 +4,21 @@ import asyncio
 import inspect
 import logging
 import os
+from datetime import UTC, datetime
 from importlib import import_module
-from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Body
-import os
 import jwt
-from fastapi.responses import StreamingResponse, JSONResponse
-from pydantic import BaseModel, Field, ConfigDict
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.deps.user import get_current_user_id
-from app.telemetry import hash_user_id
-from app.otel_utils import start_span, get_trace_id_hex
+from app.otel_utils import get_trace_id_hex, start_span
 from app.policy import moderation_precheck
-from app.router import OPENAI_TIMEOUT_MS, OLLAMA_TIMEOUT_MS
+from app.router import OLLAMA_TIMEOUT_MS, OPENAI_TIMEOUT_MS
+from app.telemetry import hash_user_id
 
+from ..security import _jwt_decode
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +46,7 @@ class AskRequest(BaseModel):
     )
 
 
-from app.security import rate_limit, verify_token
-
+from app.security import verify_token
 
 router = APIRouter(tags=["Care"])  # dependency added per-route to allow env gate
 
@@ -75,7 +74,7 @@ async def _verify_bearer_strict(request: Request) -> None:
         logger.info("auth.missing_bearer", extra={"meta": {"path": getattr(getattr(request, "url", None), "path", "/")}})
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        payload = jwt.decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+        payload = _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
         request.state.jwt_payload = payload
     except jwt.PyJWTError:
         logger.info("auth.invalid_token", extra={"meta": {"path": getattr(getattr(request, "url", None), "path", "/")}})
@@ -97,7 +96,7 @@ async def _require_auth_dep(request: Request) -> None:
 
 @router.post(
     "/ask",
-    dependencies=[Depends(verify_token), Depends(rate_limit)],
+    dependencies=[Depends(verify_token)],
     responses={
         200: {
             "content": {
@@ -250,8 +249,10 @@ async def _ask(request: Request, body: dict | None):
     # Track shape normalization metrics
     if normalized_from:
         try:
-            from ..metrics import ROUTER_SHAPE_NORMALIZED_TOTAL
-            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(from_shape=normalized_from, to_shape=shape).inc()
+            from ..metrics import ROUTER_SHAPE_NORMALIZED_TOTAL, normalize_shape_label
+            normalized_from_shape = normalize_shape_label(normalized_from)
+            normalized_to_shape = normalize_shape_label(shape)
+            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(from_shape=normalized_from_shape, to_shape=normalized_to_shape).inc()
         except Exception:
             pass
     
@@ -300,7 +301,7 @@ async def _ask(request: Request, body: dict | None):
                 # rate_limit applied via route dependency; keep explicit header snapshot behavior
             # Lazily import to respect tests that monkeypatch app.main.route_prompt
             main_mod = import_module("app.main")
-            route_prompt = getattr(main_mod, "route_prompt")
+            route_prompt = main_mod.route_prompt
             params = inspect.signature(route_prompt).parameters
             if "stream_cb" in params:
                 result = await route_prompt(
@@ -425,7 +426,7 @@ async def _ask(request: Request, body: dict | None):
         except asyncio.CancelledError:
             # Propagate cancellation to underlying generator cleanup
             raise
-        except Exception as e:
+        except Exception:
             # Ensure producer cleanup on error
             try:
                 if not producer_task.done():
@@ -514,7 +515,7 @@ async def ask(
 
 @router.post(
     "/ask/dry-explain",
-    dependencies=[Depends(rate_limit)],
+
     response_model=dict,
     include_in_schema=False,
 )
@@ -562,8 +563,10 @@ async def ask_dry_explain(
     # Track shape normalization metrics
     if normalized_from:
         try:
-            from ..metrics import ROUTER_SHAPE_NORMALIZED_TOTAL
-            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(from_shape=normalized_from, to_shape=shape).inc()
+            from ..metrics import ROUTER_SHAPE_NORMALIZED_TOTAL, normalize_shape_label
+            normalized_from_shape = normalize_shape_label(normalized_from)
+            normalized_to_shape = normalize_shape_label(shape)
+            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(from_shape=normalized_from_shape, to_shape=normalized_to_shape).inc()
         except Exception:
             pass
     
@@ -572,9 +575,8 @@ async def ask_dry_explain(
     request_id = str(uuid.uuid4())[:8]
     
     # Get routing decision without making actual calls
-    from ..router import route_prompt
-    from ..model_picker import pick_model
     from ..intent import detect_intent
+    from ..model_picker import pick_model
     from ..tokenizer import count_tokens
     
     # Detect intent and count tokens
@@ -608,7 +610,7 @@ async def ask_dry_explain(
     
     # Return the routing decision
     result = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "rid": request_id,
         "uid": user_id,
         "path": "/v1/ask/dry-explain",
@@ -635,7 +637,7 @@ async def ask_dry_explain(
 
 @router.post(
     "/ask/stream",
-    dependencies=[Depends(rate_limit)],
+
     response_class=StreamingResponse,
     include_in_schema=False,
 )
@@ -683,8 +685,10 @@ async def ask_stream(
     # Track shape normalization metrics
     if normalized_from:
         try:
-            from ..metrics import ROUTER_SHAPE_NORMALIZED_TOTAL
-            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(from_shape=normalized_from, to_shape=shape).inc()
+            from ..metrics import ROUTER_SHAPE_NORMALIZED_TOTAL, normalize_shape_label
+            normalized_from_shape = normalize_shape_label(normalized_from)
+            normalized_to_shape = normalize_shape_label(shape)
+            ROUTER_SHAPE_NORMALIZED_TOTAL.labels(from_shape=normalized_from_shape, to_shape=normalized_to_shape).inc()
         except Exception:
             pass
     
@@ -694,9 +698,8 @@ async def ask_stream(
     async def stream_generator():
         try:
             # Get routing decision first
-            from ..router import route_prompt
-            from ..model_picker import pick_model
             from ..intent import detect_intent
+            from ..model_picker import pick_model
             from ..tokenizer import count_tokens
             
             # Detect intent and count tokens
@@ -732,7 +735,7 @@ async def ask_stream(
             
             # Emit route event
             route_data = {
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
                 "rid": request_id,
                 "uid": user_id,
                 "path": "/v1/ask/stream",

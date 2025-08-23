@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+
 import pytest
 
 
@@ -17,7 +18,7 @@ class DummyWS:
     async def receive(self):
         try:
             return await asyncio.wait_for(self._in.get(), timeout=0.2)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise RuntimeError("timeout")
 
     async def send_json(self, obj: dict):

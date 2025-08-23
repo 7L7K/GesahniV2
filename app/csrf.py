@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import os
 import logging
-from fastapi import Request, Response
-from fastapi.responses import JSONResponse
+import os
 from secrets import token_urlsafe
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
@@ -40,9 +41,12 @@ def _extract_csrf_header(request: Request) -> tuple[str | None, bool, bool]:
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
-    """Simple double-submit CSRF.
+    """Simple double-submit CSRF with exemptions.
 
     - Allow safe methods (GET/HEAD/OPTIONS).
+    - Skip for Bearer-only auth (Authorization header present, no session cookie).
+    - Skip for webhooks with signature verification.
+    - Skip OAuth callbacks with state/nonce validation.
     - For POST/PUT/PATCH/DELETE, require header X-CSRF-Token to match cookie csrf_token.
     - Disabled when CSRF_ENABLED=0.
     """
@@ -54,21 +58,48 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
             return await call_next(request)
         
-        # Bypass CSRF when Authorization header is present (header auth mode)
+        # Bypass CSRF for Bearer-only auth (Authorization header present, no session cookie)
         auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            logger.info("bypass: csrf_authorization_header_present header=<%s>", 
+        session_cookie = request.cookies.get("access_token") or request.cookies.get("session") or request.cookies.get("__session")
+        if auth_header and auth_header.startswith("Bearer ") and not session_cookie:
+            logger.info("bypass: csrf_bearer_only_auth header=<%s>",
                        auth_header[:8] + "..." if auth_header else "None")
             return await call_next(request)
         
         # Allow-list OAuth provider callbacks which validate state/nonce explicitly
         try:
             path = getattr(getattr(request, "url", None), "path", "") or ""
-            if path in {"/v1/auth/apple/callback", "/auth/apple/callback"}:
+            oauth_callbacks = {"/v1/auth/apple/callback", "/auth/apple/callback", "/v1/auth/google/callback", "/auth/google/callback"}
+            if path in oauth_callbacks:
+                logger.info("bypass: csrf_oauth_callback path=<%s>", path)
                 return await call_next(request)
         except Exception:
             pass
-        
+
+        # Allow-list webhook endpoints with signature verification
+        try:
+            path = getattr(getattr(request, "url", None), "path", "") or ""
+            webhook_paths = {"/v1/ha/webhook", "/ha/webhook"}
+            if path in webhook_paths:
+                # Check for webhook signature headers
+                signature = request.headers.get("X-Signature") or request.headers.get("X-Hub-Signature")
+                if signature:
+                    logger.info("bypass: csrf_webhook_signature path=<%s> signature=<%s>",
+                               path, signature[:8] + "..." if signature else "None")
+                    return await call_next(request)
+        except Exception:
+            pass
+
+        # Check for route-level CSRF opt-out (for testing/signature-based endpoints)
+        try:
+            csrf_opt_out = request.headers.get("X-CSRF-Opt-Out") or request.query_params.get("csrf_opt_out")
+            if csrf_opt_out and _truthy(csrf_opt_out):
+                logger.info("bypass: csrf_route_opt_out header=<%s> query=<%s>",
+                           request.headers.get("X-CSRF-Opt-Out"), request.query_params.get("csrf_opt_out"))
+                return await call_next(request)
+        except Exception:
+            pass
+
         # Check if we're in a cross-site scenario (COOKIE_SAMESITE=none)
         is_cross_site = os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"
         

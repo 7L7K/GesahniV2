@@ -1,4 +1,3 @@
-import json
 
 
 def _get(client, path: str):

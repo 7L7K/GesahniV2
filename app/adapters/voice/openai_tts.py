@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import asyncio
-import io
 import os
 import time
-from typing import Optional, Tuple
 
 try:  # pragma: no cover - optional heavy dep in CI
     from openai import AsyncOpenAI
@@ -15,8 +12,7 @@ except Exception:  # pragma: no cover
             raise RuntimeError("openai package not installed")
 
 
-from ...metrics import TTS_REQUEST_COUNT, TTS_LATENCY_SECONDS, TTS_COST_USD
-
+from ...metrics import TTS_COST_USD, TTS_LATENCY_SECONDS, TTS_REQUEST_COUNT, normalize_model_label
 
 OPENAI_TTS_PRICING_PER_1K_CHARS = {
     "tts-1": 0.015,
@@ -27,7 +23,7 @@ OPENAI_TTS_PRICING_PER_1K_CHARS = {
 OPENAI_TTS_MINI_PER_MINUTE = 0.015
 
 
-def _pick_model(tier: str) -> Tuple[str, str]:
+def _pick_model(tier: str) -> tuple[str, str]:
     # Map tier to model and a label
     tier_l = (tier or "").strip().lower()
     if tier_l in {"tts1", "tts-1", "standard"}:
@@ -42,9 +38,9 @@ async def synthesize_openai_tts(
     *,
     text: str,
     tier: str,
-    voice: Optional[str] = None,
+    voice: str | None = None,
     format: str = "wav",
-) -> Tuple[bytes, float, str]:
+) -> tuple[bytes, float, str]:
     """Return (audio_bytes, cost_usd_estimate, tier_label).
 
     Uses OpenAI TTS endpoints; picks model by tier.
@@ -55,7 +51,9 @@ async def synthesize_openai_tts(
         raise RuntimeError("OPENAI_API_KEY not set")
     client = AsyncOpenAI(api_key=api_key)
 
-    TTS_REQUEST_COUNT.labels("openai", tier_label, os.getenv("VOICE_MODE", "auto"), "auto", model).inc()
+    # Use normalized model and reduced dimensions to prevent cardinality explosion
+    normalized_model = normalize_model_label(model)
+    TTS_REQUEST_COUNT.labels("openai", tier_label, os.getenv("VOICE_MODE", "auto"), "auto", normalized_model).inc()
     start = time.perf_counter()
     # Note: official API surface is audio.speech.create with model=tts-1/hd and voice
     # For gpt-4o-mini-tts the surface differs in preview SDKs; here we normalize
@@ -78,7 +76,7 @@ async def synthesize_openai_tts(
 
                 audio_bytes = base64.b64decode(audio_bytes)
             except Exception:
-                audio_bytes = bytes()
+                audio_bytes = b""
     except Exception as e:  # pragma: no cover - guarded path
         # Attempt a generic completions-then-ssml path is out-of-scope; bubble up
         raise RuntimeError(f"openai_tts_failed: {e}") from e

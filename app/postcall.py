@@ -9,13 +9,12 @@ This module handles all post-call processing including:
 - Response caching
 """
 
-import asyncio
 import logging
-from typing import Any, Dict, Optional, List
 from dataclasses import dataclass
+from typing import Any
 
-from .history import append_history
 from .analytics import record
+from .history import append_history
 from .memory import memgpt
 from .memory.vector_store import add_user_memory, cache_answer
 from .memory.write_policy import memory_write_policy
@@ -37,10 +36,10 @@ class PostCallData:
     prompt_tokens: int
     completion_tokens: int
     cost_usd: float
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
-    request_id: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    session_id: str | None = None
+    user_id: str | None = None
+    request_id: str | None = None
+    metadata: dict[str, Any] | None = None
 
 @dataclass
 class PostCallResult:
@@ -50,7 +49,7 @@ class PostCallResult:
     memory_stored: bool = False
     claims_written: bool = False
     response_cached: bool = False
-    errors: List[str] = None
+    errors: list[str] = None
     
     def __post_init__(self):
         if self.errors is None:
@@ -222,7 +221,7 @@ async def write_claims(data: PostCallData) -> bool:
 # Response Caching
 # ---------------------------------------------------------------------------
 
-async def cache_response(data: PostCallData, cache_id: Optional[str] = None) -> bool:
+async def cache_response(data: PostCallData, cache_id: str | None = None) -> bool:
     """
     Cache the response for future use.
     
@@ -314,9 +313,9 @@ async def process_openai_response(
     prompt_tokens: int,
     completion_tokens: int,
     cost_usd: float,
-    session_id: Optional[str] = None,
-    user_id: Optional[str] = None,
-    request_id: Optional[str] = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
+    request_id: str | None = None,
     **kwargs: Any
 ) -> PostCallResult:
     """
@@ -360,9 +359,9 @@ async def process_ollama_response(
     prompt_tokens: int,
     completion_tokens: int,
     cost_usd: float = 0.0,
-    session_id: Optional[str] = None,
-    user_id: Optional[str] = None,
-    request_id: Optional[str] = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
+    request_id: str | None = None,
     **kwargs: Any
 ) -> PostCallResult:
     """

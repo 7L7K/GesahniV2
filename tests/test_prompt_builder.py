@@ -47,7 +47,7 @@ sys.modules.setdefault(
 )
 
 from app import prompt_builder  # noqa: E402
-from app.prompt_builder import PromptBuilder, MAX_PROMPT_TOKENS  # noqa: E402
+from app.prompt_builder import MAX_PROMPT_TOKENS, PromptBuilder  # noqa: E402
 
 
 def test_prompt_builder_respects_token_limit(monkeypatch):

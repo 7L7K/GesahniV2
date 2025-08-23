@@ -1,23 +1,20 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
-from app.deps.user import get_current_user_id
-from app.security import rate_limit, verify_token
 from app.deps.scopes import require_scope
-from app.security import require_nonce
-
+from app.deps.user import get_current_user_id
+from app.security import require_nonce, verify_token
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
     tags=["Admin"],
     # Auth -> scopes -> limiter ordering
-    dependencies=[Depends(verify_token), Depends(require_scope("admin:write")), Depends(rate_limit)],
+    dependencies=[Depends(verify_token), Depends(require_scope("admin:write"))],
 )
 
 
@@ -44,15 +41,15 @@ async def ingest_memory(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ingest_unavailable: {e}")
 
-    path: Optional[str] = None
-    tmp_path: Optional[str] = None
+    path: str | None = None
+    tmp_path: str | None = None
     try:
         if file is None and not url:
             raise HTTPException(status_code=400, detail="file_or_url_required")
         if file is not None:
             contents = await file.read()
-            import tempfile
             import os
+            import tempfile
             fd, tmp_path = tempfile.mkstemp(prefix="ing_", suffix="_upload")
             try:
                 with os.fdopen(fd, "wb") as f:

@@ -6,7 +6,7 @@ def test_no_basicConfig():
     for root, dirs, files in os.walk("app"):
         for name in files:
             if name.endswith(".py"):
-                with open(os.path.join(root, name), "r", encoding="utf-8") as f:
+                with open(os.path.join(root, name), encoding="utf-8") as f:
                     code = f.read()
                     assert (
                         "logging.basicConfig(" not in code

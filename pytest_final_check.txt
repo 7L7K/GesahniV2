@@ -1,0 +1,182 @@
+.....................F......F......                                      [100%]
+=================================== FAILURES ===================================
+__________________ test_audit_append_includes_request_details __________________
+
+client = <starlette.testclient.TestClient object at 0x13544a210>
+tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-18/test_audit_append_includes_req0/audit')
+
+    def test_audit_append_includes_request_details(client, tmp_audit_dir):
+        """Test that audit events include detailed request information"""
+        # Make a request with specific characteristics
+        response = client.get("/v1/admin/metrics?param=test")
+>       assert response.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_audit_trail.py:180: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T14:40:45Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T14:40:45Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stdout call -----------------------------
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 14, 40, 45, 224510) user_id='anon' route='admin_metrics' method='GET' status=401 ip='testclient' req_id='-' scopes=[] action='http_request' meta={'path': '/v1/admin/metrics'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T14:40:45.224510","user_id":"anon","route":"admin_metrics","method":"GET","status":401,"ip":"testclient","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/v1/admin/metrics"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T14:40:45Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T14:40:45Z", "req_id": "a3937d31-0546-410f-a1f6-086a1c738ded", "level": "WARNING", "component": "app.deps.scopes", "msg": "deny: missing_scope scope=<admin:read> reason=no_payload", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T14:40:45Z", "req_id": "a3937d31-0546-410f-a1f6-086a1c738ded", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "a3937d31-0546-410f-a1f6-086a1c738ded", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 5, "long_remaining": 5, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 5, "enforced_scope": null, "user_id": "anon", "route": "/v1/admin/metrics", "error_code": null}}
+{"timestamp": "2025-08-22T14:40:45Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/metrics -> 401 (0.014s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 401, "duration_ms": 14.301061630249023, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:135 auth.no_token
+WARNING  app.deps.scopes:scopes.py:415 deny: missing_scope scope=<admin:read> reason=no_payload
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/metrics -> 401 (0.014s)
+_____________________ test_metrics_expose_auth_fail_total ______________________
+
+client = <starlette.testclient.TestClient object at 0x1354ef650>
+
+    def test_metrics_expose_auth_fail_total(client):
+        """Test that auth_fail_total metric is exposed"""
+        # Make a request with invalid token to trigger auth failure
+        response = client.get("/v1/admin/config", headers={"Authorization": "Bearer invalid_token"})
+        assert response.status_code == 401
+    
+        # Check metrics endpoint
+        metrics_response = client.get("/metrics")
+        body = metrics_response.text
+    
+        assert "auth_fail_total" in body
+>       assert 'reason="invalid"' in body
+E       assert 'reason="invalid"' in '# HELP python_gc_objects_collected_total Objects collected during gc\n# TYPE python_gc_objects_collected_total counte...i_llama_queue_depth Current LLaMA queue depth\n# TYPE gesahni_llama_queue_depth gauge\ngesahni_llama_queue_depth 0.0\n'
+
+tests/test_metrics_exposed.py:53: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T14:40:47Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T14:40:47Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stdout call -----------------------------
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 14, 40, 47, 369529) user_id=None route='admin_config' method='GET' status=401 ip='testclient' req_id='-' scopes=[] action='http_request' meta={'path': '/v1/admin/config'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T14:40:47.369529","user_id":null,"route":"admin_config","method":"GET","status":401,"ip":"testclient","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/v1/admin/config"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 14, 40, 47, 403331) user_id='anon' route='_metrics_route' method='GET' status=200 ip='testclient' req_id='-' scopes=[] action='http_request' meta={'path': '/metrics'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T14:40:47.403331","user_id":"anon","route":"_metrics_route","method":"GET","status":200,"ip":"testclient","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/metrics"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T14:40:47Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T14:40:47Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_auth_token"}}
+{"timestamp": "2025-08-22T14:40:47Z", "req_id": "53f451a4-c29e-4402-b189-44616c772ea8", "level": "WARNING", "component": "app.deps.scopes", "msg": "deny: missing_scope scope=<admin:read> reason=no_payload", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T14:40:47Z", "req_id": "53f451a4-c29e-4402-b189-44616c772ea8", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "53f451a4-c29e-4402-b189-44616c772ea8", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 5, "long_remaining": 5, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 5, "enforced_scope": null, "user_id": "540d100acea08a627b52c04cfe880acc", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T14:40:47Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/config -> 401 (0.014s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "f948e0eb747dbc4bb16dbcb2f2a5fae0", "status_code": 401, "duration_ms": 13.793706893920898, "error_code": "CLIENT_UNAUTHORIZED"}}
+{"timestamp": "2025-08-22T14:40:47Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T14:40:47Z", "req_id": "b7cbb51e-6cff-4ab6-b479-d70cbca64511", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "b7cbb51e-6cff-4ab6-b479-d70cbca64511", "status_code": 200, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 5, "long_remaining": 5, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 5, "enforced_scope": null, "user_id": "anon", "route": "/metrics", "error_code": null}}
+{"timestamp": "2025-08-22T14:40:47Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /metrics -> 200 (0.030s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 30.037879943847656}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:250 auth.invalid_token
+WARNING  app.deps.scopes:scopes.py:415 deny: missing_scope scope=<admin:read> reason=no_payload
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/config -> 401 (0.014s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /metrics -> 200 (0.030s)
+=============================== warnings summary ===============================
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/chromadb/api/collection_configuration.py:347
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/chromadb/api/collection_configuration.py:347
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/chromadb/api/collection_configuration.py:347: DeprecationWarning: legacy embedding function config: '_LengthEmbedder' object has no attribute 'is_legacy'
+    return json.dumps(create_collection_configuration_to_json(config))
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:298
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:298: PydanticDeprecatedSince20: `json_encoders` is deprecated. See https://docs.pydantic.dev/2.11/concepts/serialization/#custom-serializers for alternatives. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/passlib/utils/__init__.py:854
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+app/transcribe.py:7
+  /Users/kingal/2025/GesahniV2/app/transcribe.py:7: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
+    import audioop  # type: ignore
+
+app/main.py:1210
+  /Users/kingal/2025/GesahniV2/app/main.py:1210: DeprecationWarning: `example` has been deprecated, please use `examples` instead
+    from .api.care import router as care_router
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/testclient.py:454
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/testclient.py:454: DeprecationWarning: The `allow_redirects` argument is deprecated. Use `follow_redirects` instead.
+    warnings.warn(message, DeprecationWarning)
+
+tests/integration/test_refresh_concurrent.py:8
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_concurrent.py:8: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:26
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:26: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:52
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:52: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:77
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:77: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:103
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:103: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:132
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:132: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:158
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:158: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:192
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:192: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:220
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:220: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_replay.py:13
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_replay.py:13: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/test_admin_scope_granular.py::test_admin_vector_store_bootstrap_scope
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/qdrant_client/qdrant_remote.py:130: UserWarning: Api key is used with an insecure connection.
+    warnings.warn("Api key is used with an insecure connection.")
+
+tests/test_admin_scope_granular.py::test_admin_vector_store_bootstrap_scope
+tests/test_admin_scope_granular.py::test_admin_vector_store_bootstrap_scope
+  /Users/kingal/2025/GesahniV2/app/jobs/qdrant_lifecycle.py:28: DeprecationWarning: `recreate_collection` method is deprecated and will be removed in the future. Use `collection_exists` to check collection existence and `create_collection` instead.
+    c.recreate_collection(collection_name=name, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_audit_trail.py::test_audit_append_includes_request_details
+FAILED tests/test_metrics_exposed.py::test_metrics_expose_auth_fail_total - a...

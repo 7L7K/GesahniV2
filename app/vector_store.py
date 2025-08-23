@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 from app.memory.vector_store import *  # noqa: F401,F403
 
 if __name__ == "__main__":
     import argparse
-    from app.memory.api import invalidate_cache
+
     from app.jobs.migrate_chroma_to_qdrant import main as migrate_main  # noqa: F401
+    from app.memory.api import invalidate_cache
 
     parser = argparse.ArgumentParser("vector_store")
     sub = parser.add_subparsers(dest="cmd")

@@ -1,8 +1,7 @@
 import asyncio
 import logging
 import tempfile
-from collections.abc import AsyncIterator
-from typing import Awaitable, Callable, Optional
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 
 from ... import router
@@ -25,7 +24,7 @@ class PipecatSession:
         stt: str = "whisper",
         tts: str = "piper",
         llm: str = "gpt-4o-mini",
-        event_cb: Optional[Callable[[str, dict], Awaitable[None]]] = None,
+        event_cb: Callable[[str, dict], Awaitable[None]] | None = None,
     ):
         self.stt = stt
         self.tts = tts

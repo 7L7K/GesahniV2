@@ -11,8 +11,8 @@ def inc_error(name: str) -> None:
 from __future__ import annotations
 
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 from app import metrics as m
 from app.telemetry import log_record_var

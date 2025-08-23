@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Dict, Any, List
+from typing import Any
 
-import pytest
 from starlette.testclient import TestClient
 
 
-def _mk_client(env: Dict[str, str] | None = None) -> TestClient:
+def _mk_client(env: dict[str, str] | None = None) -> TestClient:
     base_env = {
         "ENV": "test",
         "PYTEST_RUNNING": "1",
@@ -32,7 +31,7 @@ def _mk_client(env: Dict[str, str] | None = None) -> TestClient:
     return TestClient(app)
 
 
-def _register_and_login(client: TestClient, username: str = "user1", password: str = "secret123") -> Dict[str, Any]:
+def _register_and_login(client: TestClient, username: str = "user1", password: str = "secret123") -> dict[str, Any]:
     # Register
     r1 = client.post("/v1/register", json={"username": username, "password": password})
     assert r1.status_code in (200, 400)  # 400 when user already exists
@@ -42,13 +41,13 @@ def _register_and_login(client: TestClient, username: str = "user1", password: s
     return r2.json()
 
 
-def _whoami(client: TestClient) -> Dict[str, Any]:
+def _whoami(client: TestClient) -> dict[str, Any]:
     r = client.get("/v1/whoami")
     assert r.status_code == 200
     return r.json()
 
 
-def _list_sessions(client: TestClient) -> List[Dict[str, Any]]:
+def _list_sessions(client: TestClient) -> list[dict[str, Any]]:
     r = client.get("/v1/sessions")
     assert r.status_code == 200
     data = r.json()
@@ -114,8 +113,9 @@ def test_phase2_sessions_listing_and_revoke_cross_device(monkeypatch):
     _ssm.sessions_store._path = tmp.name  # type: ignore[attr-defined]
 
     # Seed two device sessions for u2 directly via store (mirrors existing tests)
-    from app.sessions_store import sessions_store
     import asyncio
+
+    from app.sessions_store import sessions_store
     rec1 = asyncio.get_event_loop().run_until_complete(sessions_store.create_session("user2", did="dev_a", device_name="A"))
     rec2 = asyncio.get_event_loop().run_until_complete(sessions_store.create_session("user2", did="dev_b", device_name="B"))
     # Sanity: verify store sees both records directly
@@ -128,8 +128,9 @@ def test_phase2_sessions_listing_and_revoke_cross_device(monkeypatch):
     # Revoke one session and verify listing reflects it (best-effort via store)
     _revoke_session(client, rec1["sid"])  # HTTP path should route to device sessions revoke handler
     # Confirm family is marked revoked in store
-    from app.sessions_store import sessions_store as _store
     import asyncio as _asyncio
+
+    from app.sessions_store import sessions_store as _store
     assert _asyncio.get_event_loop().run_until_complete(_store.is_family_revoked(rec1["sid"])) is True
 
     # Cross-device: logout family for sid=rec2 and ensure strict refresh denies if enforced
@@ -171,8 +172,9 @@ def test_phase2_missing_and_expired_tokens_and_rate_limits(monkeypatch):
     # Allow either behavior when Redis not configured or unavailable; require 429 only when Redis is usable
     redis_ok = False
     try:
-        from app.token_store import _get_redis  # type: ignore
         import asyncio as _asyncio
+
+        from app.token_store import _get_redis  # type: ignore
         r = _asyncio.get_event_loop().run_until_complete(_get_redis())
         if r is not None:
             try:

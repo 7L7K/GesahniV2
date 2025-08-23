@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Optional
-
 from pydantic import BaseModel, Field
 
 
@@ -10,10 +8,10 @@ class UserMemory(BaseModel):
 
     id: str
     content: str
-    embedding: List[float]
-    tags: List[str] = Field(default_factory=list)
-    timestamp: Optional[str] = None
-    session_id: Optional[str] = None
+    embedding: list[float]
+    tags: list[str] = Field(default_factory=list)
+    timestamp: str | None = None
+    session_id: str | None = None
 
 
 class QACacheEntry(BaseModel):
@@ -23,6 +21,6 @@ class QACacheEntry(BaseModel):
     prompt_hash: str
     prompt: str
     answer: str
-    embedding: List[float]
-    timestamp: Optional[str] = None
-    feedback: Optional[str] = None
+    embedding: list[float]
+    timestamp: str | None = None
+    feedback: str | None = None

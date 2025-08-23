@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import httpx
 
@@ -55,7 +55,7 @@ class RAGClient:
 
     def query(
         self, question: str, *, collection: str, k: int = 6
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Return up to ``k`` docs from ``collection`` relevant to ``question``.
 
         Each result is normalized into ``{"text", "source", "loc"}``.
@@ -71,7 +71,7 @@ class RAGClient:
             logger.warning("RAGFlow query failed: %s", e)
             return []
 
-        docs: List[Dict[str, Any]] = []
+        docs: list[dict[str, Any]] = []
         for item in data.get("documents") or data.get("matches") or []:
             meta = item.get("metadata", {})
             text = item.get("text") or item.get("page_content") or ""

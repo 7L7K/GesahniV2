@@ -1,13 +1,12 @@
-import jwt
-import pytest
 from datetime import datetime, timedelta
-from fastapi import FastAPI, Depends, Request
+
+import jwt
+from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 from starlette.middleware.cors import CORSMiddleware
 
-from app.deps.user import get_current_user_id
 from app.csrf import CSRFMiddleware
-from app.security import verify_token
+from app.deps.user import get_current_user_id
 
 
 def create_test_app():

@@ -7,13 +7,13 @@ This test file verifies that:
 3. Logout properly revokes tokens and clears cookies
 """
 
-import tempfile
 import os
 import sys
+import tempfile
 from importlib import import_module
-from fastapi.testclient import TestClient
+
 from fastapi import FastAPI, Request
-from jose import jwt
+from fastapi.testclient import TestClient
 
 from app.deps.user import get_current_user_id
 

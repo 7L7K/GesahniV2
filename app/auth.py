@@ -1,23 +1,22 @@
+import asyncio
+import hashlib
+import logging
 import os
+import random
 import re
 import time
-import asyncio
-import random
-import hashlib
 from datetime import datetime, timedelta
+from pathlib import Path
 from uuid import uuid4
-from typing import Dict, Set, Tuple, Optional
-import logging
 
 import aiosqlite
-from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-import jwt
 from passlib.context import CryptContext
 from passlib.exc import UnknownHashError
 from pydantic import BaseModel
 
 from .deps.user import get_current_user_id
+from .security import _jwt_decode
 from .user_store import user_store
 
 # Configuration
@@ -45,10 +44,10 @@ EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
 REFRESH_EXPIRE_MINUTES = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
 
 # Revocation store
-revoked_tokens: Set[str] = set()
+revoked_tokens: set[str] = set()
 
 # Rate limiting configuration
-_attempts: Dict[str, Tuple[int, float]] = {}
+_attempts: dict[str, tuple[int, float]] = {}
 _ATTEMPT_WINDOW = int(os.getenv("LOGIN_ATTEMPT_WINDOW_SECONDS", "300"))
 _ATTEMPT_MAX = int(os.getenv("LOGIN_ATTEMPT_MAX", "5"))
 _LOCKOUT_SECONDS = int(os.getenv("LOGIN_LOCKOUT_SECONDS", "60"))
@@ -325,7 +324,7 @@ def _record_attempt(key: str, *, success: bool) -> None:
         _attempts[key] = (count + 1, ts)
 
 
-def _throttled(key: str) -> Optional[int]:
+def _throttled(key: str) -> int | None:
     """Return seconds to wait if throttled; None if allowed.
     
     Args:
@@ -363,7 +362,7 @@ def _throttled(key: str) -> Optional[int]:
     return None
 
 
-def _get_throttle_status(user_key: str, ip_key: str) -> Tuple[Optional[int], Optional[int]]:
+def _get_throttle_status(user_key: str, ip_key: str) -> tuple[int | None, int | None]:
     """Get throttling status for both user and IP keys.
     
     Args:
@@ -416,7 +415,7 @@ def _clear_rate_limit_data(key: str = None) -> None:
         _attempts.clear()
 
 
-def _get_rate_limit_stats(key: str) -> Optional[Dict[str, any]]:
+def _get_rate_limit_stats(key: str) -> dict[str, any] | None:
     """Get rate limiting statistics for a key.
     
     Args:
@@ -780,7 +779,7 @@ async def login(
             # Use dynamic JWT secret function to handle test environment changes
             from .api.auth import _jwt_secret
             secret = _jwt_secret()
-            payload = jwt.decode(access_token, secret, algorithms=[ALGORITHM])
+            payload = _jwt_decode(access_token, secret, algorithms=[ALGORITHM])
             jti = payload.get("jti")
             expires_at = payload.get("exp", time.time() + access_ttl)
             
@@ -844,7 +843,7 @@ async def login(
                 # Use dynamic JWT secret function to handle test environment changes
                 from .api.auth import _jwt_secret
                 secret = _jwt_secret()
-                payload = jwt.decode(access_token, secret, algorithms=[ALGORITHM])
+                payload = _jwt_decode(access_token, secret, algorithms=[ALGORITHM])
                 jti = payload.get("jti")
                 expires_at = payload.get("exp", time.time() + access_ttl)
                 
@@ -952,7 +951,7 @@ async def logout(request: Request, response: Response):
 
 
 # Forgot/reset password endpoints (opt-in flow for local accounts)
-_RESET_TOKENS: Dict[str, Tuple[str, float]] = {}
+_RESET_TOKENS: dict[str, tuple[str, float]] = {}
 _RESET_TTL = int(os.getenv("PASSWORD_RESET_TTL_SECONDS", "900"))
 
 

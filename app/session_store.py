@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import random
 import time
-from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-import random
 from time import time_ns
-from typing import Any, List, Optional
-import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +98,7 @@ class SessionCookieStore:
         logger.debug(f"Created opaque session {session_id} for JTI {jti}")
         return session_id
     
-    def get_session(self, session_id: str) -> Optional[str]:
+    def get_session(self, session_id: str) -> str | None:
         """Get the JTI for an opaque session ID.
         
         Args:
@@ -242,7 +241,7 @@ def get_session(session_id: str) -> dict[str, Any]:
     return load_meta(session_id)
 
 
-def list_sessions(status: SessionStatus | None = None) -> List[dict[str, Any]]:
+def list_sessions(status: SessionStatus | None = None) -> list[dict[str, Any]]:
     sessions = []
     for session_dir in SESSIONS_DIR.iterdir():
         if session_dir.is_dir():

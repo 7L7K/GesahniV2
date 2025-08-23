@@ -1,0 +1,59 @@
+groups:
+- name: gesahni_alerts
+  interval: 30s
+  rules:
+  - alert: HighErrorRate5xx
+    expr: job:http_requests_error_ratio:rate5m > 0.05
+    for: 10m
+    labels: { severity: page }
+    annotations:
+      summary: "High 5xx error ratio (>5% for 10m)"
+      description: "Investigate recent deploys, DB, upstreams."
+
+  - alert: LatencyP95High
+    expr: job:request_latency_ms:p95 > 2000
+    for: 10m
+    labels: { severity: ticket }
+    annotations:
+      summary: "P95 latency > 2s for 10m"
+      description: "Check recent routes with high p95."
+
+  - alert: AuthFailuresSpike
+    expr: sum(rate(auth_fail_total[5m])) > 5
+    for: 5m
+    labels: { severity: ticket }
+    annotations:
+      summary: "Auth failures spiking"
+      description: "Possible misconfiguration or abuse."
+
+  - alert: RbacDeniesSpike
+    expr: sum(rate(rbac_deny_total[5m])) > 3
+    for: 10m
+    labels: { severity: info }
+    annotations:
+      summary: "RBAC denies elevated"
+      description: "Expected after permission changes — validate."
+
+  - alert: RateLimitedSpike
+    expr: rate(rate_limited_total[5m]) > 2
+    for: 5m
+    labels: { severity: info }
+    annotations:
+      summary: "Users are hitting rate limits"
+      description: "Tune limits or investigate abuse."
+
+  - alert: SLOFastBurn
+    expr: (1 - job:http_success_ratio:rate5m) > (1 - 0.995) * 14.4
+    for: 5m
+    labels: { severity: page }
+    annotations:
+      summary: "Fast burn against 99.5% SLO"
+      description: "Error budget spending too fast (short window). Immediate action required."
+
+  - alert: SLOSlowBurn
+    expr: (1 - job:http_success_ratio:rate5m) > (1 - 0.995) * 1.2
+    for: 1h
+    labels: { severity: ticket }
+    annotations:
+      summary: "Slow burn against 99.5% SLO"
+      description: "Sustained error rate threatens SLO (long window). Monitor closely."

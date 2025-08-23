@@ -6,9 +6,9 @@ cookie facade in app/cookies.py, preventing inconsistent cookie configuration.
 """
 
 import subprocess
-import pytest
-import os
 from pathlib import Path
+
+import pytest
 
 
 def test_no_raw_set_cookie_outside_cookies_module():
@@ -143,7 +143,7 @@ def test_cookies_module_exists():
     This ensures the cookie facade is available for tests to use.
     """
     try:
-        from app.cookies import set_auth_cookies, clear_auth_cookies
+        from app.cookies import clear_auth_cookies, set_auth_cookies
         # If we can import these functions, the test passes
         assert callable(set_auth_cookies)
         assert callable(clear_auth_cookies)
@@ -159,11 +159,11 @@ def test_test_helpers_exist():
     """
     try:
         from tests.test_helpers import (
-            set_test_auth_cookies,
-            clear_test_auth_cookies,
-            assert_cookies_present,
             assert_cookies_cleared,
-            assert_session_opaque
+            assert_cookies_present,
+            assert_session_opaque,
+            clear_test_auth_cookies,
+            set_test_auth_cookies,
         )
         # If we can import these functions, the test passes
         assert callable(set_test_auth_cookies)

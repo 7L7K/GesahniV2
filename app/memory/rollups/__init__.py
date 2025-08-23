@@ -1,6 +1,6 @@
 """Weekly rollup condensing crumbs (lean summaries)."""
 
-from typing import Iterable
+from collections.abc import Iterable
 
 
 def weekly_rollup(chunks: Iterable[str]) -> str:

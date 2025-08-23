@@ -1,17 +1,17 @@
 """Tests for URL helper functions."""
 
 import os
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import patch, Mock
-from fastapi import Request
 
 from app.url_helpers import (
+    build_api_url,
+    build_origin_aware_url,
+    build_ws_url,
     get_app_url,
     get_frontend_url,
-    build_ws_url,
-    build_api_url,
     is_dev_environment,
-    build_origin_aware_url,
     sanitize_redirect_path,
 )
 

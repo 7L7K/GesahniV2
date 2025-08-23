@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 def test_healthz(monkeypatch):
     os.environ["OLLAMA_URL"] = "http://x"
     os.environ["OLLAMA_MODEL"] = "llama3"
-    from app import status, llama_integration, home_assistant
+    from app import home_assistant, llama_integration, status
 
     async def fake_status():
         return {"status": "healthy", "latency_ms": 1}

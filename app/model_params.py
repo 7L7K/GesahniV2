@@ -13,7 +13,8 @@ Supported params (common):
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Iterable, List, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 
 def _env_float(name: str, default: float) -> float:
@@ -30,7 +31,7 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _env_list(name: str) -> List[str] | None:
+def _env_list(name: str) -> list[str] | None:
     raw = os.getenv(name, "").strip()
     if not raw:
         return None
@@ -39,7 +40,7 @@ def _env_list(name: str) -> List[str] | None:
     return [p for p in parts if p]
 
 
-def base_defaults() -> Dict[str, Any]:
+def base_defaults() -> dict[str, Any]:
     """Return project-wide default generation parameters from env.
 
     GEN_TEMPERATURE, GEN_TOP_P, GEN_MAX_TOKENS, GEN_STOP
@@ -64,7 +65,7 @@ def base_defaults() -> Dict[str, Any]:
     }
 
 
-def merge_params(overrides: Mapping[str, Any] | None) -> Dict[str, Any]:
+def merge_params(overrides: Mapping[str, Any] | None) -> dict[str, Any]:
     """Return defaults merged with optional overrides (None values ignored)."""
 
     base = base_defaults()
@@ -90,14 +91,14 @@ def merge_params(overrides: Mapping[str, Any] | None) -> Dict[str, Any]:
     return base
 
 
-def for_openai(overrides: Mapping[str, Any] | None = None) -> Dict[str, Any]:
+def for_openai(overrides: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Map merged params to OpenAI Chat Completions arguments.
 
     Only includes parameters supported by the Chat Completions API.
     """
 
     mp = merge_params(overrides)
-    out: Dict[str, Any] = {
+    out: dict[str, Any] = {
         "temperature": mp.get("temperature"),
         "top_p": mp.get("top_p"),
     }
@@ -115,7 +116,7 @@ def for_openai(overrides: Mapping[str, Any] | None = None) -> Dict[str, Any]:
     return {k: v for k, v in out.items() if v is not None}
 
 
-def for_ollama(overrides: Mapping[str, Any] | None = None) -> Dict[str, Any]:
+def for_ollama(overrides: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Map merged params to Ollama 'options' payload.
 
     - temperature -> temperature
@@ -125,7 +126,7 @@ def for_ollama(overrides: Mapping[str, Any] | None = None) -> Dict[str, Any]:
     """
 
     mp = merge_params(overrides)
-    out: Dict[str, Any] = {
+    out: dict[str, Any] = {
         "temperature": mp.get("temperature"),
         "top_p": mp.get("top_p"),
         "num_predict": mp.get("max_tokens"),

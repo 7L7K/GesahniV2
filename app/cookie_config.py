@@ -19,11 +19,12 @@ Environment Variables:
 """
 
 import os
-from typing import Tuple, Dict, Any
+from typing import Any
+
 from fastapi import Request
 
 
-def get_cookie_config(request: Request) -> Dict[str, Any]:
+def get_cookie_config(request: Request) -> dict[str, Any]:
     """
     Get consistent cookie configuration for the current request.
     
@@ -55,9 +56,9 @@ def get_cookie_config(request: Request) -> Dict[str, Any]:
         if cookie_samesite == "none":
             cookie_samesite = "lax"
     
-    # SameSite=None requires Secure=True in production; enforce if configured
-    if cookie_samesite == "none" and cookie_secure:
-        # keep cookie_secure True when SameSite=None is explicitly requested and we're secure
+    # SameSite=None requires Secure=True. If SameSite=None is requested but secure is not
+    # set, force secure=True to avoid creating invalid cookie combinations.
+    if cookie_samesite == "none":
         cookie_secure = True
     
     # Always use host-only cookies (no Domain) for better security and Safari compatibility
@@ -101,12 +102,19 @@ def _is_dev_environment(request: Request) -> bool:
 def _get_scheme(request: Request) -> str:
     """Get the request scheme, with fallback to http."""
     try:
+        # Honor X-Forwarded-Proto when present (common behind TLS-terminating proxies)
+        try:
+            xfp = request.headers.get("x-forwarded-proto")
+            if xfp:
+                return xfp.split(",")[0].strip().lower()
+        except Exception:
+            pass
         return getattr(request.url, "scheme", "http")
     except Exception:
         return "http"
 
 
-def get_token_ttls() -> Tuple[int, int]:
+def get_token_ttls() -> tuple[int, int]:
     """
     Get consistent TTLs for access and refresh tokens.
     

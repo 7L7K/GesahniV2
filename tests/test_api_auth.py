@@ -8,19 +8,15 @@ Target coverage: 35-45% selective
 - End-to-end cookie behavior
 """
 
-import os
 import time
-import jwt
-import json
 from unittest.mock import patch
 
-import pytest
-from fastapi.testclient import TestClient
+import jwt
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from app.api.auth import router as auth_router
 from app.deps.user import get_current_user_id
-from app.api.auth import whoami_impl
 
 
 # Test helpers

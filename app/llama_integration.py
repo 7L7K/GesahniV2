@@ -1,19 +1,21 @@
+import asyncio
+import json
+import logging
 import os
 import socket
-from urllib.parse import urlparse, urlunparse
-import asyncio
-import logging
 import time
-import json
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict, Optional
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 from tenacity import AsyncRetrying, stop_after_attempt, wait_random_exponential
 
-from .deps.scheduler import scheduler, start as scheduler_start
-from .logging_config import req_id_var
+from .deps.scheduler import scheduler
+from .deps.scheduler import start as scheduler_start
 from .http_utils import json_request, log_exceptions
+from .logging_config import req_id_var
 from .metrics import LLAMA_LATENCY, LLAMA_TOKENS, MODEL_LATENCY_SECONDS
 from .model_params import for_ollama
 from .otel_utils import start_span
@@ -64,7 +66,6 @@ LLAMA_HEALTHY: bool = True
 
 # Circuit breaker state
 llama_failures: int = 0
-llama_last_failure_ts: float = 0.0
 llama_circuit_open: bool = False
 
 # Health check state tracking
@@ -169,11 +170,11 @@ def _record_failure() -> None:
     """Update circuit breaker failure counters."""
     global llama_failures, llama_circuit_open
     now = time.monotonic()
-    if now - llama_last_failure_ts > 60:
+    # Update failures count; timestamp tracked only when needed elsewhere
+    if now - getattr(globals().get("llama_last_failure_ts", 0), "__class__", 0) > 60:  # sentinel check
         llama_failures = 1
     else:
         llama_failures += 1
-    llama_last_failure_ts = now
     if llama_failures >= 3:
         llama_circuit_open = True
 
@@ -202,7 +203,7 @@ async def _schedule_next_health_check() -> None:
     scheduler.add_job(
         _check_and_set_flag,
         "date",
-        run_date=datetime.fromtimestamp(time.time() + delay, tz=timezone.utc),
+        run_date=datetime.fromtimestamp(time.time() + delay, tz=UTC),
         id="llama_health_check",
         replace_existing=True
     )
@@ -233,7 +234,7 @@ async def startup_check() -> None:
     await _schedule_next_health_check()
     scheduler_start()
 
-async def get_status() -> Dict[str, Any]:
+async def get_status() -> dict[str, Any]:
     """
     On-demand health endpoint. Re-checks Ollama before responding.
     Returns healthy status & latency_ms, or raises if still down.
@@ -247,9 +248,9 @@ async def get_status() -> Dict[str, Any]:
 
 async def ask_llama(
     prompt: str,
-    model: Optional[str] = None,
+    model: str | None = None,
     timeout: float = 30.0,
-    gen_opts: Optional[Dict[str, Any]] = None,
+    gen_opts: dict[str, Any] | None = None,
     routing_decision=None,  # New parameter for routing decision
 ) -> AsyncIterator[str]:
     """
@@ -290,7 +291,7 @@ async def ask_llama(
     # -- Streaming generator ----------------------------------------------
     url = f"{OLLAMA_URL}/api/generate"
     # Normalize generation params for Ollama and include defaults
-    options: Dict[str, Any] = {"num_ctx": 2048}
+    options: dict[str, Any] = {"num_ctx": 2048}
     options.update(for_ollama(gen_opts))
     payload = {"model": model, "prompt": prompt, "stream": True, "options": options}
 

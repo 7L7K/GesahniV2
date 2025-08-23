@@ -41,10 +41,11 @@ except Exception:  # pragma: no cover - optional dependency
             return len(self.jobs) - 1
 
 
-from .base import Skill
-from pathlib import Path
 import json
 import os
+from pathlib import Path
+
+from .base import Skill
 
 scheduler = AsyncIOScheduler()
 

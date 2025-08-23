@@ -117,7 +117,6 @@ def test_refresh_issuer_mismatch(monkeypatch):
 
     login = client.post("/login", json={"username": "erin", "password": "abcd1234"}).json()
     # Craft a refresh token with wrong issuer
-    from jose import jwt
     payload = jwt.get_unverified_claims(login["refresh_token"])
     payload["iss"] = "bad"
     # Use jwt.encode directly for this test since we need to preserve the modified issuer

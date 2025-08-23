@@ -8,11 +8,12 @@ with consistent error handling and response normalization.
 import asyncio
 import logging
 import time
-from typing import Any, Callable, Awaitable, Optional, Dict, Union, Tuple
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
-from .otel_utils import start_span
 from .metrics import MODEL_LATENCY_SECONDS
+from .otel_utils import start_span
 
 logger = logging.getLogger(__name__)
 
@@ -29,18 +30,18 @@ class LLMResponse:
     cost_usd: float
     model: str
     vendor: str
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 @dataclass
 class LLMRequest:
     """Standardized request to any LLM provider."""
     prompt: str
     model: str
-    system_prompt: Optional[str] = None
+    system_prompt: str | None = None
     stream: bool = False
-    on_token: Optional[Callable[[str], Awaitable[None]]] = None
-    timeout: Optional[float] = None
-    kwargs: Dict[str, Any] = None
+    on_token: Callable[[str], Awaitable[None]] | None = None
+    timeout: float | None = None
+    kwargs: dict[str, Any] = None
     
     def __post_init__(self):
         if self.kwargs is None:
@@ -48,7 +49,7 @@ class LLMRequest:
 
 class LLMError(Exception):
     """Base exception for LLM-related errors."""
-    def __init__(self, message: str, vendor: str, model: str, original_error: Optional[Exception] = None):
+    def __init__(self, message: str, vendor: str, model: str, original_error: Exception | None = None):
         super().__init__(message)
         self.vendor = vendor
         self.model = model
@@ -257,7 +258,7 @@ async def call_openai(request: LLMRequest) -> LLMResponse:
         logger.error(f"OpenAI call failed: {normalized_error}")
         raise normalized_error
 
-async def _call_openai_stream(request: LLMRequest, kwargs: Dict[str, Any]) -> Tuple[str, int, int, float]:
+async def _call_openai_stream(request: LLMRequest, kwargs: dict[str, Any]) -> tuple[str, int, int, float]:
     """
     Handle streaming OpenAI calls.
     
@@ -365,7 +366,7 @@ async def call_ollama(request: LLMRequest) -> LLMResponse:
         logger.error(f"Ollama call failed: {normalized_error}")
         raise normalized_error
 
-async def _call_ollama_stream(request: LLMRequest, gen_opts: Dict[str, Any]) -> Tuple[str, int, int, float]:
+async def _call_ollama_stream(request: LLMRequest, gen_opts: dict[str, Any]) -> tuple[str, int, int, float]:
     """
     Handle streaming Ollama calls.
     
@@ -429,8 +430,8 @@ async def call_llm(request: LLMRequest) -> LLMResponse:
 async def call_openai_simple(
     prompt: str,
     model: str,
-    system_prompt: Optional[str] = None,
-    timeout: Optional[float] = None,
+    system_prompt: str | None = None,
+    timeout: float | None = None,
     **kwargs: Any
 ) -> LLMResponse:
     """
@@ -458,7 +459,7 @@ async def call_openai_simple(
 async def call_ollama_simple(
     prompt: str,
     model: str,
-    timeout: Optional[float] = None,
+    timeout: float | None = None,
     **kwargs: Any
 ) -> LLMResponse:
     """

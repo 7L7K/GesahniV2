@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Sequence
+from collections.abc import Sequence
+from typing import List
 
-from ..base import RerankScore, Reranker
+from ..base import Reranker, RerankScore
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)  # noqa: F401 (reserved for future debug)
 
 
 class MiniLMCrossEncoder(Reranker):
@@ -15,9 +16,9 @@ class MiniLMCrossEncoder(Reranker):
     Replace with sentence-transformers CrossEncoder if GPU/CPU model is desired.
     """
 
-    def rerank(self, query: str, docs: Sequence[str], top_k: int | None = None) -> List[RerankScore]:
+    def rerank(self, query: str, docs: Sequence[str], top_k: int | None = None) -> list[RerankScore]:
         q = set(query.lower().split())
-        scores: List[RerankScore] = []
+        scores: list[RerankScore] = []
         for idx, d in enumerate(docs):
             toks = set((d or "").lower().split())
             overlap = len(q & toks) / max(1, len(q))

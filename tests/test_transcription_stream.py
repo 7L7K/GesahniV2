@@ -1,13 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import os
 
 import pytest
-from fastapi.testclient import TestClient
-
-from app.main import app
 
 
 @pytest.fixture(autouse=True)
@@ -30,7 +25,7 @@ class DummyWS:
     async def receive(self):
         try:
             return await asyncio.wait_for(self._in.get(), timeout=0.2)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise RuntimeError("timeout")
 
     async def send_json(self, obj: dict):

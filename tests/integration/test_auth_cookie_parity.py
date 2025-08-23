@@ -1,9 +1,9 @@
 import re
 from http import HTTPStatus
+
 from fastapi.testclient import TestClient
 
 from app.main import app
-
 
 COOKIE_RE = re.compile(r"(access_token|refresh_token)=[^;]+; .*")
 

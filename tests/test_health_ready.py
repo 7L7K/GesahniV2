@@ -1,9 +1,10 @@
 import asyncio
 import time
+
 from fastapi.testclient import TestClient
 
-from app.main import app
 import app.health_utils as hu
+from app.main import app
 
 
 def test_health_ready_ok(monkeypatch):

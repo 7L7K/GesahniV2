@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 try:  # pragma: no cover - optional dependency
     from qdrant_client import QdrantClient
-    from qdrant_client.http.models import Filter, FieldCondition, MatchValue
+    from qdrant_client.http.models import FieldCondition, Filter, MatchValue
 except Exception:  # pragma: no cover
     QdrantClient = None  # type: ignore
     Filter = FieldCondition = MatchValue = object  # type: ignore
@@ -13,15 +13,15 @@ except Exception:  # pragma: no cover
 from .utils import RetrievedItem
 
 
-def _client() -> "QdrantClient":  # type: ignore[name-defined]
+def _client() -> QdrantClient:  # type: ignore[name-defined]
     if QdrantClient is None:
         raise RuntimeError("qdrant-client not installed")
     return QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"), api_key=os.getenv("QDRANT_API_KEY", ""))
 
 
-def _payload_filter(user_id: str, extra: Dict[str, Any] | None = None) -> Any:
+def _payload_filter(user_id: str, extra: dict[str, Any] | None = None) -> Any:
     # Minimal filter by user; allow extra key=value constraints
-    conditions: List[Any] = [
+    conditions: list[Any] = [
         FieldCondition(key="user_id", match=MatchValue(value=user_id))  # type: ignore[arg-type]
     ]
     for k, v in (extra or {}).items():
@@ -29,8 +29,8 @@ def _payload_filter(user_id: str, extra: Dict[str, Any] | None = None) -> Any:
     return Filter(must=conditions)  # type: ignore[call-arg]
 
 
-def _to_items(points: List[Any]) -> List[RetrievedItem]:
-    items: List[RetrievedItem] = []
+def _to_items(points: list[Any]) -> list[RetrievedItem]:
+    items: list[RetrievedItem] = []
     for p in points or []:
         pid = getattr(p, "id", None)
         payload = getattr(p, "payload", {}) or {}
@@ -60,10 +60,10 @@ def dense_search(
     *,
     collection: str,
     user_id: str,
-    query_vector: List[float],
+    query_vector: list[float],
     limit: int,
-    extra_filter: Dict[str, Any] | None = None,
-) -> List[RetrievedItem]:
+    extra_filter: dict[str, Any] | None = None,
+) -> list[RetrievedItem]:
     c = _client()
     f = _payload_filter(user_id, extra_filter)
     res = c.search(collection_name=collection, query_vector=query_vector, limit=limit, query_filter=f)
@@ -84,8 +84,8 @@ def sparse_search(
     user_id: str,
     query: str,
     limit: int,
-    extra_filter: Dict[str, Any] | None = None,
-) -> List[RetrievedItem]:
+    extra_filter: dict[str, Any] | None = None,
+) -> list[RetrievedItem]:
     """Sparse search using Qdrant's full-text/BM25-like payload index via recommend/search points.
 
     We implement a simple text-match using query_text with fulltext index; if unavailable,

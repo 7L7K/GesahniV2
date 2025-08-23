@@ -4,10 +4,8 @@ import hashlib
 import logging
 import os
 import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
 import uuid
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +21,14 @@ def _lazy_markitdown():  # pragma: no cover - optional heavy dep
 def _lazy_qdrant():  # pragma: no cover - optional heavy dep
     try:
         from qdrant_client import QdrantClient  # type: ignore
-        from qdrant_client.http.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+        from qdrant_client.http.models import (
+            Distance,
+            FieldCondition,
+            Filter,
+            MatchValue,
+            PointStruct,
+            VectorParams,
+        )
         return QdrantClient, Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
     except Exception as e:  # pragma: no cover
         raise RuntimeError("qdrant-client not installed") from e
@@ -69,7 +74,7 @@ def _ensure_collection(c, name: str, dim: int) -> None:
                 pass
 
 
-def _split_markdown(text: str, max_tokens: int = 800) -> Tuple[List[str], List[str]]:
+def _split_markdown(text: str, max_tokens: int = 800) -> tuple[list[str], list[str]]:
     """Split Markdown by headers and lightly enforce a token budget.
 
     Returns (chunks, top_headings).
@@ -77,9 +82,9 @@ def _split_markdown(text: str, max_tokens: int = 800) -> Tuple[List[str], List[s
     from app.token_utils import count_tokens
 
     lines = text.splitlines()
-    chunks: List[str] = []
-    buf: List[str] = []
-    headings: List[str] = []
+    chunks: list[str] = []
+    buf: list[str] = []
+    headings: list[str] = []
     for line in lines:
         if line.startswith("#"):
             if buf:
@@ -91,13 +96,13 @@ def _split_markdown(text: str, max_tokens: int = 800) -> Tuple[List[str], List[s
         chunks.append("\n".join(buf).strip())
 
     # Enforce token budget by splitting large chunks on blank lines
-    final: List[str] = []
+    final: list[str] = []
     for ch in chunks:
         if count_tokens(ch) <= max_tokens:
             final.append(ch)
             continue
         paras = ch.split("\n\n")
-        acc: List[str] = []
+        acc: list[str] = []
         for p in paras:
             acc.append(p)
             if count_tokens("\n\n".join(acc)) >= max_tokens:
@@ -110,7 +115,7 @@ def _split_markdown(text: str, max_tokens: int = 800) -> Tuple[List[str], List[s
     return [f for f in final if f], heads
 
 
-def _embed_many(texts: List[str]) -> List[List[float]]:
+def _embed_many(texts: list[str]) -> list[list[float]]:
     from app.embeddings import embed_sync
 
     return [embed_sync(t) for t in texts]
@@ -158,7 +163,7 @@ def ingest_markdown_text(
     text: str,
     source: str,
     collection: str = "mem_documents",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Ingest a Markdown string into Qdrant as semantic chunks.
 
     Returns details: {doc_hash, chunk_count, ids, headings}.
@@ -194,9 +199,9 @@ def ingest_markdown_text(
         PointStruct = None  # type: ignore
 
     created = _now()
-    ids: List[str] = []
-    points: List[Any] = []
-    for i, (chunk, vec) in enumerate(zip(chunks, vecs)):
+    ids: list[str] = []
+    points: list[Any] = []
+    for i, (chunk, vec) in enumerate(zip(chunks, vecs, strict=False)):
         # Qdrant requires point ids to be unsigned integers or UUID strings.
         # Use a deterministic UUIDv5 derived from the doc_hash and chunk index.
         pid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{doc_hash}:{i}"))
@@ -242,10 +247,10 @@ def ingest_path_or_url(
     *,
     user_id: str,
     source: str,
-    path: Optional[str] = None,
-    url: Optional[str] = None,
+    path: str | None = None,
+    url: str | None = None,
     collection: str = "mem_documents",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Convert a file or URL to Markdown using MarkItDown, then ingest."""
     MarkItDown = _lazy_markitdown()
     md = MarkItDown()

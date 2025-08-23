@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import os
-import hashlib
 import asyncio
+import hashlib
+import os
 
-from app.auth_store import ensure_tables, create_pat, create_user
 from app.api import auth as auth_api
+from app.auth_store import create_pat, create_user, ensure_tables
 
 
 def test_pat_verify_scope_and_revoked(tmp_path, monkeypatch):

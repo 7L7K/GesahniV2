@@ -7,7 +7,6 @@ based on response characteristics like length, confidence, and content quality.
 import logging
 import os
 import re
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +52,7 @@ class MemoryWritePolicy:
             }
         )
     
-    def should_write_memory(self, response_text: str, confidence: Optional[float] = None) -> bool:
+    def should_write_memory(self, response_text: str, confidence: float | None = None) -> bool:
         """Determine if a memory write should be allowed based on response characteristics."""
         if not self.enable_memory_policy:
             return True
@@ -86,7 +85,7 @@ class MemoryWritePolicy:
         logger.debug("Memory write allowed")
         return True
     
-    def should_write_profile(self, response_text: str, profile_key: str, confidence: Optional[float] = None) -> bool:
+    def should_write_profile(self, response_text: str, profile_key: str, confidence: float | None = None) -> bool:
         """Determine if a profile write should be allowed based on response characteristics."""
         if not self.enable_profile_policy:
             return True

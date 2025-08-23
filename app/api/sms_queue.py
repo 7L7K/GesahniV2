@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import os
-import time
-from typing import Any, Dict
 
 from fastapi import APIRouter
 
-from ..queue import get_queue
 from ..integrations.twilio_sms import send_sms
-from ..metrics import CARE_SMS_RETRIES, CARE_SMS_DLQ
-
+from ..metrics import CARE_SMS_DLQ, CARE_SMS_RETRIES
+from ..queue import get_queue
 
 router = APIRouter(tags=["Care"])
 

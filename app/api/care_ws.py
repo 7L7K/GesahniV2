@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Dict, Set
 import logging
 import os
 import time
@@ -9,20 +8,17 @@ import time
 from fastapi import APIRouter, Depends, WebSocket
 from pydantic import BaseModel, ConfigDict
 
+from ..api._deps import dep_verify_ws
 from ..deps.user import get_current_user_id
-from ..security import verify_ws
-from ..deps.clerk_auth import require_user_ws
-from ..deps.roles import require_roles
-
 
 router = APIRouter(tags=["Care"], dependencies=[])
 logger = logging.getLogger(__name__)
 
 
-_topics: Dict[str, Set[WebSocket]] = {}
+_topics: dict[str, set[WebSocket]] = {}
 _lock = asyncio.Lock()
 _hs_lock = asyncio.Lock()
-_hs_counts: Dict[str, int] = {}
+_hs_counts: dict[str, int] = {}
 _hs_reset: float = 0.0
 _HS_WINDOW_S: float = float(os.getenv("CARE_WS_HANDSHAKE_WINDOW_S", "10") or 10)
 _HS_LIMIT: int = int(os.getenv("CARE_WS_HANDSHAKE_LIMIT", "6") or 6)
@@ -109,57 +105,44 @@ async def ws_care_docs(_user_id: str = Depends(get_current_user_id)):
 
 
 @router.websocket("/ws/care")
-async def ws_care(ws: WebSocket, _user_id: str = Depends(get_current_user_id), _roles=Depends(require_roles(["caregiver", "resident"]))):
-    # Validate WebSocket Origin explicitly
-    origin = ws.headers.get("Origin")
-    allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
-    # Use single origin for WebSocket CORS
-    if "," in allowed_origins:
-        allowed_origins = allowed_origins.split(",")[0].strip()
-    
-    if origin and origin not in origins:
-        try:
-            await ws.close(code=1008, reason="origin_not_allowed")
-        except Exception:
-            pass
-        return
-    
-    # Prefer Clerk JWT when configured; otherwise fall back to legacy verify_ws
-    try:
-        if os.getenv("CLERK_ISSUER") or os.getenv("CLERK_JWKS_URL") or os.getenv("CLERK_DOMAIN"):
-            await require_user_ws(ws)
-        else:
-            await verify_ws(ws)
-    except Exception:
-        # If dependency raised, close handled inside; ensure early return
-        return
+async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
+    # verify_ws already handled authentication and origin validation
+    # Get user_id from WebSocket state (set by verify_ws)
     try:
         uid = getattr(ws.state, "user_id", None)
     except Exception:
         uid = None
+
     if not uid:
-        # Close with policy violation when unauthenticated only when JWT is enforced
+        # This shouldn't happen if verify_ws worked, but handle gracefully
         try:
-            jwt_secret = os.getenv("JWT_SECRET")
-            require_jwt = os.getenv("REQUIRE_JWT", "1").strip().lower() in {"1", "true", "yes", "on"}
+            await ws.close(code=1008, reason="unauthorized")
         except Exception:
-            jwt_secret = None
-            require_jwt = False
-        if jwt_secret and require_jwt:
-            try:
-                await ws.close(code=1008, reason="unauthorized")
-            except Exception:
-                pass
-            try:
-                logger.info("ws.close policy", extra={"meta": {"endpoint": "/v1/ws/care", "reason": "unauthorized", "code": 1008}})
-            except Exception:
-                pass
-            return
+            pass
+        try:
+            logger.info("ws.close policy", extra={"meta": {"endpoint": "/v1/ws/care", "reason": "unauthorized", "code": 1008}})
+        except Exception:
+            pass
+        return
     # Prefer agreed subprotocol; fall back gracefully
     try:
         await ws.accept(subprotocol="json.realtime.v1")
     except Exception:
         await ws.accept()
+
+    # Phase 6.2: Audit WebSocket connect
+    try:
+        from app.audit import append_audit
+        append_audit(
+            action="ws_connect",
+            user_id_hashed=uid,
+            data={"path": "/v1/ws/care", "endpoint": "/v1/ws/care"},
+            ip_address=_client_ip(ws),
+        )
+    except Exception:
+        # Never fail WebSocket connection due to audit issues
+        pass
+
     # Post-accept handshake burst control (per-IP). Close immediately with 1013 when exceeded.
     try:
         ip = _client_ip(ws)
@@ -223,11 +206,8 @@ async def ws_care(ws: WebSocket, _user_id: str = Depends(get_current_user_id), _
                 # Enforce resident topic ACL: only self topic or admin
                 allow = False
                 try:
-                    payload = getattr(ws.state, "jwt_payload", None)
-                    scopes = []
-                    if isinstance(payload, dict):
-                        raw = payload.get("scope") or payload.get("scopes") or []
-                        scopes = [s.strip() for s in (raw.split() if isinstance(raw, str) else raw) if str(s).strip()]
+                    # Get scopes from WebSocket state (set by verify_ws)
+                    scopes = getattr(ws.state, "scopes", [])
                     if topic == f"resident:{uid}" or ("admin" in scopes or "admin:write" in scopes):
                         allow = True
                 except Exception:
@@ -246,6 +226,19 @@ async def ws_care(ws: WebSocket, _user_id: str = Depends(get_current_user_id), _
     except Exception:
         pass
     finally:
+        # Phase 6.2: Audit WebSocket disconnect
+        try:
+            from app.audit import append_audit
+            append_audit(
+                action="ws_disconnect",
+                user_id_hashed=uid,
+                data={"path": "/v1/ws/care", "endpoint": "/v1/ws/care"},
+                ip_address=_client_ip(ws),
+            )
+        except Exception:
+            # Never fail cleanup due to audit issues
+            pass
+
         async with _lock:
             for t in list(_topics.keys()):
                 _topics[t].discard(ws)

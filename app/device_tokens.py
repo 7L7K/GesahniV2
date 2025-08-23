@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 import os
 import time
-from typing import Optional, Tuple
 
-
-_redis_client: Optional[object] = None
+_redis_client: object | None = None
 
 
 async def _get_redis():
@@ -50,7 +47,7 @@ async def store_pair_code(code: str, owner_id: str, device_label: str, ttl_secon
         pass
 
 
-async def consume_pair_code(code: str) -> Optional[Tuple[str, str]]:
+async def consume_pair_code(code: str) -> tuple[str, str] | None:
     r = await _get_redis()
     if r is None:
         return None
@@ -81,7 +78,7 @@ async def upsert_device_token(token_id: str, owner_id: str, device_id: str, ttl_
         pass
 
 
-async def get_device_token_info(token_id: str) -> Optional[dict]:
+async def get_device_token_info(token_id: str) -> dict | None:
     r = await _get_redis()
     if r is None:
         return None

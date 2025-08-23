@@ -1,6 +1,6 @@
+import asyncio
 import os
 import sys
-import asyncio
 from datetime import datetime
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -10,8 +10,8 @@ os.environ.setdefault("OLLAMA_URL", "http://x")
 os.environ.setdefault("OLLAMA_MODEL", "llama3")
 os.environ.setdefault("SMALLTALK_PERSONA_RATE", "0")
 
-from app.skills.smalltalk_skill import GREETINGS, SmalltalkSkill, is_greeting
 from app import router, skills  # noqa: F401
+from app.skills.smalltalk_skill import GREETINGS, SmalltalkSkill, is_greeting
 
 
 def test_is_greeting():

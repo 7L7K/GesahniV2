@@ -1,8 +1,10 @@
-from http import HTTPStatus
-from fastapi.testclient import TestClient
-import pytest
-from app.main import app
 import concurrent.futures as cf
+from http import HTTPStatus
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.main import app
 
 
 @pytest.mark.contract

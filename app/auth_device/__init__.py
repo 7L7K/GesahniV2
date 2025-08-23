@@ -6,8 +6,11 @@ device sessions without interactive login on the TV.
 
 import os
 import time
+
 import jwt
-from fastapi import APIRouter, Response, Request
+from fastapi import APIRouter, Request, Response
+
+from ..security import _jwt_decode
 
 router = APIRouter(prefix="/device", tags=["Auth"])
 
@@ -42,7 +45,7 @@ async def trust_device(request: Request, response: Response) -> dict:
         store = get_session_store()
         # Extract JTI from the token for session mapping
         try:
-            payload = jwt.decode(token, secret, algorithms=["HS256"])
+            payload = _jwt_decode(token, secret, algorithms=["HS256"])
             jti = payload.get("jti")
             expires_at = payload.get("exp")
             if jti and expires_at:

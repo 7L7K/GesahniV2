@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 
 @dataclass
@@ -17,8 +17,8 @@ class Flag:
         return f"FLAG_{self.key.upper()}"
 
 
-_REGISTRY: Dict[str, Flag] = {}
-_overrides: Dict[str, str] = {}
+_REGISTRY: dict[str, Flag] = {}
+_overrides: dict[str, str] = {}
 
 
 def register(key: str, description: str, default: str, type: str = "str") -> None:
@@ -60,8 +60,8 @@ def clear_value(key: str) -> None:
     _overrides.pop(key, None)
 
 
-def list_flags() -> Dict[str, Dict[str, Any]]:
-    out: Dict[str, Dict[str, Any]] = {}
+def list_flags() -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
     keys = sorted(_REGISTRY.keys())
     for k in keys:
         f = _REGISTRY[k]

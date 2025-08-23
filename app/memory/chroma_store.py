@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import time
 import uuid
-from typing import Dict, List, Optional, Tuple
-import sys
 
 from app import metrics
 from app.telemetry import hash_user_id
@@ -23,9 +22,9 @@ except ImportError:  # pragma: no cover - optional dependency
     chromadb = None
     chroma_ef = None  # type: ignore
 
-from .env_utils import _clean_meta, _env_flag, _get_sim_threshold as _env_get_sim_threshold, _normalize
+from .env_utils import _clean_meta, _normalize
+from .env_utils import _get_sim_threshold as _env_get_sim_threshold
 from .memory_store import VectorStore
-
 
 logger = logging.getLogger(__name__)
 
@@ -81,15 +80,15 @@ def _length_similarity(a: str, b: str) -> float:
 class _NoopCache:
     """No-op collection used when QA cache is disabled via env flag."""
 
-    def get_items(self, *args, include: List[str] | None = None, **kwargs) -> Dict[str, List]:
-        out: Dict[str, List] = {"ids": []}
+    def get_items(self, *args, include: list[str] | None = None, **kwargs) -> dict[str, list]:
+        out: dict[str, list] = {"ids": []}
         if include is None or "metadatas" in include:
             out["metadatas"] = []
         if include is None or "documents" in include:
             out["documents"] = []
         return out
 
-    def keys(self) -> List[str]:
+    def keys(self) -> list[str]:
         return []
 
     def upsert(self, *args, **kwargs) -> None:  # pragma: no cover - noop
@@ -105,7 +104,7 @@ class _NoopCache:
 class _LengthEmbedder:
     _type = "LengthEmbedder"
 
-    def __call__(self, input: List[str]) -> List[List[float]]:
+    def __call__(self, input: list[str]) -> list[list[float]]:
         import numpy as np
 
         return [
@@ -124,7 +123,7 @@ class _OpenAIEmbedder:
 
     _type = "OpenAIEmbedder"
 
-    def __call__(self, input: List[str]) -> List[List[float]]:  # type: ignore[override]
+    def __call__(self, input: list[str]) -> list[list[float]]:  # type: ignore[override]
         from app.embeddings import embed_sync
 
         return [embed_sync(t) for t in input]
@@ -141,10 +140,10 @@ class _ChromaCacheWrapper:
 
     def get_items(
         self,
-        ids: List[str] | None = None,
-        include: List[str] | None = None,
+        ids: list[str] | None = None,
+        include: list[str] | None = None,
         **kwargs,
-    ) -> Dict[str, List]:
+    ) -> dict[str, list]:
         """Delegate to the underlying collection's ``get`` method and normalize metadata."""
 
         res = self._col.get(ids=ids, include=include, **kwargs)
@@ -156,7 +155,7 @@ class _ChromaCacheWrapper:
             ]
         return res
 
-    def keys(self) -> List[str]:
+    def keys(self) -> list[str]:
         """Return all document identifiers from the collection."""
 
         return self._col.get(include=[]).get("ids", [])
@@ -171,7 +170,7 @@ class ChromaVectorStore(VectorStore):
 
         use_cloud = os.getenv("VECTOR_STORE", "local").lower() == "cloud"
         self._is_local = not use_cloud
-        self._path: Optional[str] = None
+        self._path: str | None = None
 
         if use_cloud:
             from chromadb import CloudClient
@@ -308,7 +307,7 @@ class ChromaVectorStore(VectorStore):
         logger.debug("Added user memory %s for %s", mem_id, hashed)
         return mem_id
 
-    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> List[str]:
+    def query_user_memories(self, user_id: str, prompt: str, k: int = 5) -> list[str]:
         logger.info(
             "query_user_memories start user_id=%s prompt=%s k=%s",
             user_id,
@@ -381,7 +380,7 @@ class ChromaVectorStore(VectorStore):
         docs = (res.get("documents") or [[" "]])[0]
         metas = (res.get("metadatas") or [[{}]])[0]
         dvals = (res.get("distances") or [[None]])[0]
-        items: List[Tuple[float, float, str]] = []
+        items: list[tuple[float, float, str]] = []
         for idx in range(min(len(docs), len(metas))):
             doc = docs[idx]
             meta = metas[idx] or {}
@@ -421,7 +420,7 @@ class ChromaVectorStore(VectorStore):
     # -----------------------------
     # Admin helpers
     # -----------------------------
-    def list_user_memories(self, user_id: str) -> List[dict]:  # type: ignore[override]
+    def list_user_memories(self, user_id: str) -> list[dict]:  # type: ignore[override]
         try:
             res = self._user_memories.get(
                 where={"user_id": user_id}, include=["ids", "documents", "metadatas"]
@@ -434,8 +433,8 @@ class ChromaVectorStore(VectorStore):
         ids = (res.get("ids") or [[]])[0]
         docs = (res.get("documents") or [[]])[0]
         metas = (res.get("metadatas") or [[{}]])[0]
-        out: List[dict] = []
-        for i, d, m in zip(ids, docs, metas):
+        out: list[dict] = []
+        for i, d, m in zip(ids, docs, metas, strict=False):
             out.append({"id": i, "text": d, "meta": m or {}})
         return out
 
@@ -468,7 +467,7 @@ class ChromaVectorStore(VectorStore):
 
     def lookup_cached_answer(
         self, prompt: str, ttl_seconds: int = 86400
-    ) -> Optional[str]:
+    ) -> str | None:
         self._dist_cutoff = 1.0 - _get_sim_threshold()
         hash_, norm = _normalize(prompt)
         if (

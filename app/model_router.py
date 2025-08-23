@@ -7,24 +7,25 @@ be tweaked at runtime without code changes.
 
 from __future__ import annotations
 
-import os
-import time
-import threading
 import logging
+import os
+import threading
+import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, List, Optional, Tuple
+from typing import Any
 
 try:  # pragma: no cover - optional
     import yaml  # type: ignore
 except Exception:  # pragma: no cover - fallback parser
     yaml = None  # type: ignore
 
-from .token_utils import count_tokens
-from .metrics import ROUTER_DECISION
 from .memory.vector_store import _normalized_hash as normalized_hash
-from .model_picker import KEYWORDS, HEAVY_INTENTS
-from .model_config import GPT_BASELINE_MODEL, GPT_MID_MODEL, GPT_HEAVY_MODEL
+from .metrics import ROUTER_DECISION
+from .model_config import GPT_BASELINE_MODEL, GPT_HEAVY_MODEL, GPT_MID_MODEL
+from .model_picker import HEAVY_INTENTS, KEYWORDS
+from .token_utils import count_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +310,7 @@ async def run_with_self_check(
     on_token=None,
     stream: bool = False,
     allow_test: bool = False,
-) -> Tuple[str, str, str, float, int, int, float, bool]:
+) -> tuple[str, str, str, float, int, int, float, bool]:
     """Execute a model call with self-check escalation logic.
 
     Returns: (text, final_model, reason, self_check, prompt_tokens, completion_tokens, cost, escalated)
@@ -327,7 +328,7 @@ async def run_with_self_check(
     reason = "initial"
     escalated = False
 
-    async def _call(m: str) -> Tuple[str, int, int, float]:
+    async def _call(m: str) -> tuple[str, int, int, float]:
         try:
             text, pt, ct, cost = await ask_func(
                 user_prompt,
@@ -419,10 +420,10 @@ def _vision_daily_cap(max_per_day: int) -> bool:
 async def route_vision(
     *,
     ask_func,
-    images: List[Any],
+    images: list[Any],
     text_hint: str | None = None,
     allow_test: bool = False,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     """Vision pipeline: local triage → gpt-4o-mini → optional gpt-4o safety retry.
 
     Returns (model_used, reason).
@@ -462,7 +463,7 @@ async def route_vision(
 # System prompts
 # ---------------------------------------------------------------------------
 
-def load_system_prompt(mode: str | None) -> Optional[str]:
+def load_system_prompt(mode: str | None) -> str | None:
     """Return system prompt text for Granny Mode or Computer Mode.
 
     Falls back to None when mode is unrecognized.

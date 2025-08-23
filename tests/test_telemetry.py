@@ -1,4 +1,8 @@
-import os, sys, json, asyncio
+import asyncio
+import json
+import os
+import sys
+
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -33,7 +37,7 @@ def setup_app(monkeypatch, hist_path):
 def test_telemetry_logged(monkeypatch, tmp_path):
     hist = tmp_path / "hist.jsonl"
     client = setup_app(monkeypatch, str(hist))
-    from app import prompt_builder, analytics
+    from app import analytics, prompt_builder
 
     analytics._latency_samples = []
     monkeypatch.setattr(

@@ -2,21 +2,20 @@ from __future__ import annotations
 
 import threading
 from collections import deque
-from datetime import datetime, timezone
-from typing import Any, Deque, Dict, List, Optional
-
+from datetime import UTC, datetime
+from typing import Any
 
 _LOCK = threading.RLock()
 _MAX = 1000
-_BUF: Deque[Dict[str, Any]] = deque(maxlen=_MAX)
-_IDX: Dict[str, Dict[str, Any]] = {}
+_BUF: deque[dict[str, Any]] = deque(maxlen=_MAX)
+_IDX: dict[str, dict[str, Any]] = {}
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
-def add_decision(record: Dict[str, Any]) -> None:
+def add_decision(record: dict[str, Any]) -> None:
     """Insert or update a routing decision entry.
 
     Expects a dict with at least ``req_id`` and relevant routing fields (engine,
@@ -50,12 +49,12 @@ def add_decision(record: Dict[str, Any]) -> None:
         _BUF.append(item)
 
 
-def get_recent(limit: int = 500) -> List[Dict[str, Any]]:
+def get_recent(limit: int = 500) -> list[dict[str, Any]]:
     with _LOCK:
         return list(_BUF)[-limit:][::-1]
 
 
-def get_explain(req_id: str) -> Optional[Dict[str, Any]]:
+def get_explain(req_id: str) -> dict[str, Any] | None:
     with _LOCK:
         return _IDX.get(req_id)
 

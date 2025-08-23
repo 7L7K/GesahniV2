@@ -14,7 +14,7 @@ def _setup_env():
 
 def test_llama_override(monkeypatch):
     _setup_env()
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
 
@@ -30,7 +30,7 @@ def test_llama_override(monkeypatch):
 
 def test_cache_hit(monkeypatch):
     _setup_env()
-    from app import router, llama_integration
+    from app import llama_integration, router
     from app.memory import vector_store
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
@@ -62,7 +62,7 @@ def test_cache_hit(monkeypatch):
 
 def test_low_conf_rejection(monkeypatch):
     _setup_env()
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
 
@@ -82,7 +82,7 @@ def test_low_conf_rejection(monkeypatch):
 
 def test_ha_command(monkeypatch):
     _setup_env()
-    from app import router, home_assistant
+    from app import home_assistant, router
 
     async def fake_handle(prompt):
         return home_assistant.CommandResult(True, "done")

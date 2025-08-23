@@ -10,6 +10,7 @@ os.environ.setdefault("HOME_ASSISTANT_TOKEN", "token")
 os.environ.setdefault("CITY_NAME", "Detroit,US")
 
 import httpx
+
 from app.skills.traffic_skill import TrafficSkill
 
 

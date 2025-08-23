@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import os
-from typing import Dict
 
 import aiosqlite
 from fastapi import APIRouter, HTTPException
 from passlib.context import CryptContext
-
 
 router = APIRouter(tags=["auth"], include_in_schema=False)
 
@@ -32,7 +30,7 @@ async def _ensure():
 
 
 @router.post("/auth/register_pw")
-async def register_pw(body: Dict[str, str]):
+async def register_pw(body: dict[str, str]):
     await _ensure()
     u = (body.get("username") or "").strip().lower()
     p = body.get("password") or ""
@@ -49,7 +47,7 @@ async def register_pw(body: Dict[str, str]):
 
 
 @router.post("/auth/login_pw")
-async def login_pw(body: Dict[str, str]):
+async def login_pw(body: dict[str, str]):
     await _ensure()
     u = (body.get("username") or "").strip().lower()
     p = body.get("password") or ""

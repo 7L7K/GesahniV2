@@ -1,5 +1,5 @@
-import os
 import asyncio
+import os
 
 import pytest
 from fastapi import HTTPException
@@ -14,7 +14,7 @@ def _setup_env():
 
 def test_llama_circuit_open_routes_to_gpt(monkeypatch):
     _setup_env()
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     router.llama_circuit_open = True
@@ -47,7 +47,7 @@ def test_llama_circuit_open_routes_to_gpt(monkeypatch):
 
 def test_gpt_failure_falls_back_to_llama(monkeypatch):
     _setup_env()
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(router, "LLAMA_HEALTHY", True)
@@ -71,7 +71,7 @@ def test_gpt_failure_falls_back_to_llama(monkeypatch):
 
 def test_gpt_failure_raises_when_llama_unhealthy(monkeypatch):
     _setup_env()
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", False)
     monkeypatch.setattr(router, "LLAMA_HEALTHY", False)
@@ -91,7 +91,7 @@ def test_gpt_failure_raises_when_llama_unhealthy(monkeypatch):
 
 def test_gpt_override_failure_falls_back_to_llama(monkeypatch):
     _setup_env()
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(router, "LLAMA_HEALTHY", True)
@@ -112,7 +112,7 @@ def test_gpt_override_failure_falls_back_to_llama(monkeypatch):
 
 def test_empty_llama_response_falls_back_to_gpt(monkeypatch):
     _setup_env()
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(router, "LLAMA_HEALTHY", True)
@@ -137,7 +137,7 @@ def test_empty_llama_response_falls_back_to_gpt(monkeypatch):
 
 def test_low_conf_llama_response_falls_back_to_gpt(monkeypatch):
     _setup_env()
-    from app import router, llama_integration
+    from app import llama_integration, router
 
     monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
     monkeypatch.setattr(router, "LLAMA_HEALTHY", True)

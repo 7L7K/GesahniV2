@@ -1,6 +1,7 @@
 def test_latency_samples_trim():
-    from app import analytics as metrics
     import asyncio
+
+    from app import analytics as metrics
     async def _run():
         for i in range(300):
             await metrics.record_latency(i)

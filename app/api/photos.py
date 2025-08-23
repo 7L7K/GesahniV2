@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import List
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict
-from app.models.common import OkResponse as CommonOkResponse
+from pydantic import ConfigDict
 
 from app.deps.user import get_current_user_id
-
+from app.models.common import OkResponse as CommonOkResponse
 
 router = APIRouter(tags=["TV"])
 
@@ -19,10 +17,10 @@ PUBLIC_PREFIX = "/static/photos"
 FAVS_FILE = Path(os.getenv("FAVORITES_FILE", "data/favorites.json"))
 
 
-def _list_images() -> List[str]:
+def _list_images() -> list[str]:
     if not PHOTOS_DIR.exists():
         return []
-    out: List[str] = []
+    out: list[str] = []
     for p in sorted(PHOTOS_DIR.iterdir()):
         if p.suffix.lower() in {".jpg", ".jpeg", ".png"} and p.is_file():
             out.append(p.name)

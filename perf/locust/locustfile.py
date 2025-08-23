@@ -1,6 +1,6 @@
 import os
-from locust import HttpUser, task, between, events
 
+from locust import HttpUser, between, events, task
 
 SLO_P95_MS = int(os.getenv("LOCUST_SLO_P95_MS", "500"))
 

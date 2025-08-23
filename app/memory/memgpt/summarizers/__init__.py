@@ -10,8 +10,8 @@ def event_to_fact(prompt: str, answer: str) -> str:
     return text
 
 
-def nightly_rollup(interactions: List[Dict[str, str]]) -> List[str]:
-    facts: List[str] = []
+def nightly_rollup(interactions: list[dict[str, str]]) -> list[str]:
+    facts: list[str] = []
     for item in interactions:
         p = item.get("prompt", "")
         a = item.get("answer", "")

@@ -1,22 +1,21 @@
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 import os
 import random
 import secrets
 import time
-from datetime import datetime, timezone
-import json
-import asyncio
-import logging
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Response, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
-from fastapi.security import OAuth2PasswordRequestForm
 
-from ..deps.user import get_current_user_id, resolve_session_id, require_user
-import os
+from ..deps.user import get_current_user_id, require_user, resolve_session_id
+from ..security import _jwt_decode
 
 # Guard Clerk helpers behind CLERK_ENABLED to avoid accidental Clerk cookie handling
 if os.getenv("CLERK_ENABLED", "0") == "1":
@@ -26,35 +25,32 @@ if os.getenv("CLERK_ENABLED", "0") == "1":
         require_user_clerk = None
 else:
     require_user_clerk = None
-from ..user_store import user_store
-from ..token_store import (
-    is_refresh_family_revoked,
-    revoke_refresh_family,
-    is_refresh_allowed,
-    allow_refresh,
-    claim_refresh_jti,
-    claim_refresh_jti_with_retry,
-    has_redis,
-    set_last_used_jti,
-    get_last_used_jti,
+from fastapi.responses import JSONResponse
+
+from ..auth_monitoring import (
+    record_finish_call,
+    record_whoami_call,
+    track_auth_event,
 )
-from ..sessions_store import sessions_store
+from ..auth_store import (
+    create_pat as _create_pat,
+)
 from ..auth_store import (
     ensure_tables as _ensure_auth,
-    create_pat as _create_pat,
+)
+from ..auth_store import (
     get_pat_by_hash as _get_pat_by_hash,
 )
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
-from ..security import rate_limit
-from ..auth_monitoring import (
-    track_auth_event,
-    record_whoami_call,
-    record_finish_call,
-    record_privileged_call_blocked,
-)
 from ..logging_config import req_id_var
-
+from ..token_store import (
+    allow_refresh,
+    claim_refresh_jti_with_retry,
+    get_last_used_jti,
+    has_redis,
+    is_refresh_family_revoked,
+    set_last_used_jti,
+)
+from ..user_store import user_store
 
 router = APIRouter(tags=["Auth"])  # expose in OpenAPI for docs/tests
 logger = logging.getLogger(__name__)
@@ -95,7 +91,7 @@ def _append_cookie_with_priority(response: Response, *, key: str, value: str, ma
     # For example: set_named_cookie(), set_auth_cookies(), etc.
     raise DeprecationWarning("_append_cookie_with_priority is deprecated. Use centralized cookie functions from app/cookies.py")
 @router.get("/auth/clerk/protected")
-async def clerk_protected(user_id: str = Depends(require_user)) -> Dict[str, Any]:
+async def clerk_protected(user_id: str = Depends(require_user)) -> dict[str, Any]:
     return {"ok": True, "user_id": user_id}
 
 
@@ -103,7 +99,7 @@ async def clerk_protected(user_id: str = Depends(require_user)) -> Dict[str, Any
 def _iso(dt: float | None) -> str | None:
     if dt is None:
         return None
-    return datetime.fromtimestamp(float(dt), tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.fromtimestamp(float(dt), tz=UTC).isoformat().replace("+00:00", "Z")
 
 
 def _in_test_mode() -> bool:
@@ -158,7 +154,7 @@ async def _require_user_or_dev(request: Request) -> str:
         raise _HTTPException(status_code=401, detail="Unauthorized")
 
 
-def verify_pat(token: str, required_scopes: List[str] | None = None) -> Dict[str, Any] | None:
+def verify_pat(token: str, required_scopes: list[str] | None = None) -> dict[str, Any] | None:
     try:
         import hashlib
 
@@ -185,7 +181,7 @@ def verify_pat(token: str, required_scopes: List[str] | None = None) -> Dict[str
         return None
 
 
-async def whoami_impl(request: Request) -> Dict[str, Any]:
+async def whoami_impl(request: Request) -> dict[str, Any]:
     """Canonical whoami implementation: single source of truth for session readiness.
 
     Response shape (versioned):
@@ -203,9 +199,9 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
     with track_auth_event("whoami", user_id="unknown"):
         t0 = time.time()
         src: str = "missing"
-        token_cookie: Optional[str] = None
-        token_header: Optional[str] = None
-        clerk_token: Optional[str] = None
+        token_cookie: str | None = None
+        token_header: str | None = None
+        clerk_token: str | None = None
 
         logger.info("whoami.start", extra={
             "meta": {
@@ -296,7 +292,7 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
 
     # Prefer cookie when valid; otherwise fall back to header; then try Clerk
     session_ready = False
-    effective_uid: Optional[str] = None
+    effective_uid: str | None = None
     jwt_status = "missing"
     
     # Set source to "header" if we have a token header, even if invalid
@@ -312,7 +308,7 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
                 }
             })
             # Allow a small clock skew when decoding cookies (iat/nbf)
-            claims = jwt.decode(token_cookie, _jwt_secret(), algorithms=["HS256"], leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60))  # type: ignore[arg-type]
+            claims = _jwt_decode(token_cookie, _jwt_secret(), algorithms=["HS256"], leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60))  # type: ignore[arg-type]
             session_ready = True
             src = "cookie"
             effective_uid = str(claims.get("user_id") or claims.get("sub") or "") or None
@@ -354,7 +350,7 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
             access_token = request.cookies.get(REFRESH_TOKEN) or request.cookies.get(REFRESH_TOKEN_LEGACY)
             if access_token:
                 # Decode the access token to get user_id and timestamp
-                access_claims = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
+                access_claims = _jwt_decode(access_token, _jwt_secret(), algorithms=["HS256"])
                 user_id_from_token = access_claims.get("user_id") or access_claims.get("sub")
                 iat = access_claims.get("iat", 0)  # Issued at timestamp
                 
@@ -398,7 +394,7 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
                     "timestamp": time.time(),
                 }
             })
-            claims = jwt.decode(token_header, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
+            claims = _jwt_decode(token_header, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
             session_ready = True
             src = "header"
             effective_uid = str(claims.get("user_id") or claims.get("sub") or "") or None
@@ -560,7 +556,6 @@ async def whoami_impl(request: Request) -> Dict[str, Any]:
     }
 
 
-from fastapi.responses import JSONResponse
 
 @router.get("/whoami")
 async def whoami(request: Request) -> JSONResponse:
@@ -587,7 +582,7 @@ async def whoami(request: Request) -> JSONResponse:
 
     # Otherwise, attempt silent rotation if refresh cookie present and no access cookie
     try:
-        from ..cookie_names import ACCESS_TOKEN, REFRESH_TOKEN, SESSION
+        from ..cookie_names import ACCESS_TOKEN, REFRESH_TOKEN
         access_cookie = request.cookies.get(ACCESS_TOKEN)
         has_refresh = bool(request.cookies.get(REFRESH_TOKEN))
         if not access_cookie and has_refresh:
@@ -616,8 +611,7 @@ async def whoami(request: Request) -> JSONResponse:
                     session_id = None
                     try:
                         from ..auth import _create_session_id
-                        import jwt as pyjwt
-                        payload = pyjwt.decode(tokens.get("access_token"), _jwt_secret(), algorithms=["HS256"])
+                        payload = _jwt_decode(tokens.get("access_token"), _jwt_secret(), algorithms=["HS256"])
                         jti = payload.get("jti")
                         expires_at = payload.get("exp", time.time() + access_ttl)
                         if jti:
@@ -656,7 +650,7 @@ async def whoami(request: Request) -> JSONResponse:
 async def auth_whoami(
     request: Request,
     user_id: str = Depends(require_user),
-    _: None = Depends(rate_limit) if os.getenv("DEV_MODE", "0") != "1" else None
+
 ) -> JSONResponse:
     """Auth-specific whoami endpoint for tests."""
     start_time = time.time()
@@ -703,13 +697,13 @@ async def auth_whoami(
 
 
 @router.get("/pats")
-async def list_pats(user_id: str = Depends(get_current_user_id)) -> List[Dict[str, Any]]:
+async def list_pats(user_id: str = Depends(get_current_user_id)) -> list[dict[str, Any]]:
     # Placeholder: PAT listing not persisted yet in this router; return empty list until wired
     return []
 
 
 @router.post("/pats", openapi_extra={"requestBody": {"content": {"application/json": {"schema": {"example": {"name": "CI token", "scopes": ["admin:write"], "exp_at": None}}}}}})
-async def create_pat(body: Dict[str, Any], user_id: str = Depends(get_current_user_id)) -> Dict[str, Any]:
+async def create_pat(body: dict[str, Any], user_id: str = Depends(get_current_user_id)) -> dict[str, Any]:
     if user_id == "anon":
         raise HTTPException(status_code=401, detail="Unauthorized")
     await _ensure_auth()
@@ -798,7 +792,7 @@ def _decode_any(token: str, *, leeway: int = 0) -> dict:
     last_err: Exception | None = None
     for _, sec in keys:
         try:
-            return jwt.decode(token, sec, algorithms=["HS256"], leeway=leeway)
+            return _jwt_decode(token, sec, algorithms=["HS256"], leeway=leeway)
         except Exception as e:
             last_err = e
             continue
@@ -880,8 +874,9 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
     access_token = make_access({"user_id": user_id}, ttl_s=token_lifetime)
 
     # Issue refresh token scoped to session family
-    import jwt as pyjwt
     import os as _os
+
+    import jwt as pyjwt
     jti = pyjwt.api_jws.base64url_encode(_os.urandom(16)).decode()
     refresh_payload = {
         "user_id": user_id,
@@ -953,7 +948,7 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
             existing_access = request.cookies.get(ACCESS_TOKEN)
             if existing_access:
                 try:
-                    claims = jwt.decode(existing_access, _jwt_secret(), algorithms=["HS256"])
+                    claims = _jwt_decode(existing_access, _jwt_secret(), algorithms=["HS256"])
                     existing_user_id = str(claims.get("user_id") or claims.get("sub") or "")
                     if existing_user_id == user_id:
                         # Valid cookies already exist for this user, return 204
@@ -993,8 +988,7 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
         # Create opaque session ID instead of using JWT
         try:
             from ..auth import _create_session_id
-            import jwt
-            payload = jwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
+            payload = _jwt_decode(access_token, _jwt_secret(), algorithms=["HS256"])
             jti = payload.get("jti")
             expires_at = payload.get("exp", time.time() + access_ttl)
             if jti:
@@ -1038,9 +1032,10 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
     
     # Create opaque session ID instead of using JWT
     try:
-        from ..auth import _create_session_id
         import jwt as pyjwt
-        payload = pyjwt.decode(access_token, _jwt_secret(), algorithms=["HS256"])
+
+        from ..auth import _create_session_id
+        payload = py_jwt_decode(access_token, _jwt_secret(), algorithms=["HS256"])
         jti = payload.get("jti")
         expires_at = payload.get("exp", time.time() + access_ttl)
         if jti:
@@ -1082,7 +1077,7 @@ async def finish_clerk_login(request: Request, response: Response, user_id: str 
 # Minimal debug endpoint for Clerk callback path discovery (no auth dependency)
 @router.get("/auth/clerk/finish")
 @router.post("/auth/clerk/finish")
-async def clerk_finish(request: Request) -> Dict[str, Any]:
+async def clerk_finish(request: Request) -> dict[str, Any]:
     try:
         logger.info(">> Clerk callback hit: %s", request.url)
         try:
@@ -1099,7 +1094,7 @@ async def clerk_finish(request: Request) -> Dict[str, Any]:
         return {"status": "ok"}
 
 
-async def rotate_refresh_cookies(request: Request, response: Response, refresh_override: str | None = None) -> Dict[str, str] | None:
+async def rotate_refresh_cookies(request: Request, response: Response, refresh_override: str | None = None) -> dict[str, str] | None:
     """Rotate access/refresh cookies strictly.
 
     - If family revoked or jti reuse detected, revoke family, clear cookies, raise 401.
@@ -1198,8 +1193,9 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
             
             access_ttl, refresh_ttl = get_token_ttls()
             # Use tokens.py facade instead of direct JWT encoding
-            from ..tokens import make_access, make_refresh
             import os
+
+            from ..tokens import make_access, make_refresh
             
             access_token = make_access({"user_id": user_id}, ttl_s=access_ttl)
             
@@ -1213,10 +1209,9 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
             session_id = None  # Initialize session_id before try block
             try:
                 # Decode the access token to get the JTI
-                import jwt
                 # Use dynamic JWT secret function to handle test environment changes
                 secret = _jwt_secret()
-                payload = jwt.decode(access_token, secret, algorithms=["HS256"])
+                payload = _jwt_decode(access_token, secret, algorithms=["HS256"])
                 jti = payload.get("jti")
                 expires_at = payload.get("exp", time.time() + access_ttl)
                 
@@ -1250,7 +1245,7 @@ async def rotate_refresh_cookies(request: Request, response: Response, refresh_o
         except HTTPException:
             # Don't retry on HTTP exceptions
             raise
-        except Exception as e:
+        except Exception:
             # Retry on other exceptions
             if attempt < max_retries - 1:
                 await asyncio.sleep(retry_delay * (attempt + 1))
@@ -1278,7 +1273,7 @@ async def login(request: Request, response: Response, username: str = Query(...,
     # In a real app, validate password/OTP/etc. Here we mint a session for the username
     # Rate-limit login attempts: IP 5/min & 30/hour; username 10/hour
     try:
-        from ..token_store import incr_login_counter, _key_login_ip, _key_login_user
+        from ..token_store import _key_login_ip, _key_login_user, incr_login_counter
 
         ip = request.client.host if request and request.client else "unknown"
         if await incr_login_counter(_key_login_ip(f"{ip}:m"), 60) > 5:
@@ -1332,8 +1327,7 @@ async def login(request: Request, response: Response, username: str = Query(...,
         # Create opaque session ID instead of using JWT
         try:
             from ..auth import _create_session_id
-            import jwt as pyjwt
-            payload = pyjwt.decode(jwt_token, _jwt_secret(), algorithms=["HS256"])
+            payload = _jwt_decode(jwt_token, _jwt_secret(), algorithms=["HS256"])
             jti = payload.get("jti")
             expires_at = payload.get("exp", time.time() + access_ttl)
             if jti:
@@ -1371,7 +1365,6 @@ async def logout(request: Request, response: Response):
     # Revoke refresh family bound to session id (did/sid) when possible
     try:
         from ..token_store import revoke_refresh_family
-        from .auth import _decode_any
         
         # Use centralized session ID resolution to ensure consistency
         sid = resolve_session_id(request=request)
@@ -1557,7 +1550,7 @@ async def refresh(request: Request, response: Response):
         )
     except Exception:
         pass
-    body: Dict[str, Any] = {"status": "ok", "user_id": tokens.get("user_id", "anon")}
+    body: dict[str, Any] = {"status": "ok", "user_id": tokens.get("user_id", "anon")}
     # Expose tokens to header-mode clients; cookies were already set
     if isinstance(tokens, dict):
         body["access_token"] = tokens.get("access_token")  # type: ignore[assignment]
@@ -1655,8 +1648,7 @@ async def mock_set_access_cookie(request: Request, max_age: int = 1) -> Response
     # Create opaque session ID instead of using JWT
     try:
         from ..auth import _create_session_id
-        import jwt
-        payload = jwt.decode(tok, _jwt_secret(), algorithms=["HS256"])
+        payload = _jwt_decode(tok, _jwt_secret(), algorithms=["HS256"])
         jti = payload.get("jti")
         expires_at = payload.get("exp", time.time() + max_age)
         if jti:

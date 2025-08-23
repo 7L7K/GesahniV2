@@ -13,9 +13,9 @@ os.environ["OLLAMA_URL"] = "http://x"
 os.environ["OLLAMA_MODEL"] = "llama3"
 os.environ["HOME_ASSISTANT_URL"] = "http://ha"
 os.environ["HOME_ASSISTANT_TOKEN"] = "token"
+import app.http_utils as http_utils
 from app import main
 from app.logging_config import configure_logging  # noqa: F401
-import app.http_utils as http_utils
 
 
 def test_request_id_header(monkeypatch):

@@ -1,12 +1,8 @@
 """Test the new environment configuration system."""
 
 import os
-import tempfile
 import shutil
-from pathlib import Path
-from unittest.mock import patch
-
-import pytest
+import tempfile
 
 from app.env_utils import load_env
 

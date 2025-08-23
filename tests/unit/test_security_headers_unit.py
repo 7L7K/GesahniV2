@@ -2,8 +2,8 @@ from fastapi.testclient import TestClient
 
 
 def test_healthz_includes_retry_after_when_limited(monkeypatch):
-    from app.main import app
     import app.security as sec
+    from app.main import app
 
     # Force burst limit to 1 to trigger block
     monkeypatch.setattr(sec, "RATE_LIMIT_BURST", 1)

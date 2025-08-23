@@ -12,10 +12,12 @@ import logging
 import re
 from typing import List, Union
 
+from app.embeddings import embed_sync as _embed_sync
+
 from ..api import (
-    VectorStore,
     ChromaVectorStore,
     MemoryVectorStore,
+    VectorStore,
     cache_answer,
     cache_answer_legacy,
     close_store,
@@ -24,12 +26,19 @@ from ..api import (
     qa_cache,
     record_feedback,
 )
-from app.embeddings import embed_sync as _embed_sync
+from ..env_utils import (
+    _cosine_similarity as _cosine_similarity,
+)
 from ..env_utils import (
     _get_mem_top_k as _get_mem_top_k,
+)
+from ..env_utils import (
     _get_sim_threshold as _get_sim_threshold,
-    _cosine_similarity as _cosine_similarity,
+)
+from ..env_utils import (
     _normalize as _normalize,
+)
+from ..env_utils import (
     _normalized_hash as _normalized_hash,
 )
 
@@ -40,7 +49,7 @@ embed_sync = _embed_sync  # noqa: N816
 
 # ------------------------- internal helpers -------------------------
 
-def _coerce_k(k: Union[int, str, None]) -> int:
+def _coerce_k(k: int | str | None) -> int:
     raw = k
     if k is None:
         result = _get_mem_top_k()
@@ -81,15 +90,15 @@ def query_user_memories(
     user_id: str,
     prompt: str,
     *,
-    k: Union[int, str, None] = None,
+    k: int | str | None = None,
     filters: dict | None = None,
-) -> List[str]:
+) -> list[str]:
     # Lazy import keeps this module light
     from app.adapters.memory import mem
     k_int = _coerce_k(int(k) if isinstance(k, str) and k.isdigit() else k)
     docs = mem.search(user_id, prompt, k=k_int, filters=filters)
     sim_threshold = _get_sim_threshold()
-    filtered: List[tuple[float, str]] = []
+    filtered: list[tuple[float, str]] = []
     total = 0
     for d in docs:
         text = d.get("text") if isinstance(d, dict) else str(d)
@@ -118,8 +127,8 @@ def safe_query_user_memories(
     user_id: str,
     prompt: str,
     *,
-    k: Union[int, str, None] = None,
-) -> List[str]:
+    k: int | str | None = None,
+) -> list[str]:
     logger.debug("safe_query_user_memories(user_id=%s, prompt=%r, k=%r)", user_id, prompt, k)
     coerced = None
     if isinstance(k, str):

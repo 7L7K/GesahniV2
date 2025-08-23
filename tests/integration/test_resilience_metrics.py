@@ -1,8 +1,9 @@
 import re
 from http import HTTPStatus
-from fastapi.testclient import TestClient
-from app.main import app
 
+from fastapi.testclient import TestClient
+
+from app.main import app
 
 METRICS_ENDPOINT = "/metrics"
 

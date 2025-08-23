@@ -1,29 +1,36 @@
-import os
-import json
 import hashlib
-import tarfile
-import shutil
+import json
 import logging
-from datetime import datetime, timedelta, timezone
+import os
+import shutil
+import tarfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
-from fastapi import UploadFile, HTTPException
+from fastapi import HTTPException, UploadFile
 
+from .analytics import record_session as analytics_record_session
 from .history import append_history
 from .redaction import redact_and_store
-from .telemetry import LogRecord
-from .analytics import record_session as analytics_record_session
 from .session_store import (
     SESSIONS_DIR,
     SessionStatus,
-    session_path as _session_path,
-    load_meta as _load_meta,
-    save_meta as _save_meta,
     create_session,
-    update_status,
+)
+from .session_store import (
     get_session as get_session_meta,
 )
+from .session_store import (
+    load_meta as _load_meta,
+)
+from .session_store import (
+    save_meta as _save_meta,
+)
+from .session_store import (
+    session_path as _session_path,
+)
+from .telemetry import LogRecord
 
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", "10485760"))  # 10MB
 
@@ -83,7 +90,7 @@ async def save_session(
     audio: UploadFile | None = None,
     video: UploadFile | None = None,
     transcript: str | None = None,
-    tags: List[str] | None = None,
+    tags: list[str] | None = None,
 ) -> None:
     """Persist provided media and queue jobs."""
     session_dir = _session_path(session_id)
@@ -166,9 +173,9 @@ async def generate_tags(session_id: str) -> None:
 
 async def search_sessions(
     query: str, sort: str = "recent", page: int = 1, limit: int = 10
-) -> List[dict[str, Any]]:
+) -> list[dict[str, Any]]:
     q = query.lower()
-    results: List[dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     for sess_dir in SESSIONS_DIR.iterdir():
         if not sess_dir.is_dir():
             continue
@@ -212,9 +219,9 @@ async def search_sessions(
     return results[start:end]
 
 
-def archive_old_sessions(days: int = 90) -> List[str]:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    archived: List[str] = []
+def archive_old_sessions(days: int = 90) -> list[str]:
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    archived: list[str] = []
     archive_dir = SESSIONS_DIR / "archive"
     archive_dir.mkdir(parents=True, exist_ok=True)
     for sess_dir in SESSIONS_DIR.iterdir():
@@ -240,7 +247,7 @@ def archive_old_sessions(days: int = 90) -> List[str]:
 # helper for tag extraction -----------------------------------------------------
 
 
-def extract_tags_from_text(text: str) -> List[str]:
+def extract_tags_from_text(text: str) -> list[str]:
     """Return a simple list of tags from text using spaCy if available."""
     try:  # spaCy is optional
         import spacy

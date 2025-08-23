@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, asdict
-from typing import Any, Dict, Set
+from dataclasses import asdict, dataclass
+from typing import Any
 
 
 def _as_bool(val: str | None, default: bool = False) -> bool:
@@ -25,7 +25,7 @@ def _as_int(val: str | None, default: int) -> int:
         return int(default)
 
 
-def _as_set_csv(val: str | None) -> Set[str]:
+def _as_set_csv(val: str | None) -> set[str]:
     if not val:
         return set()
     return {p.strip().lower() for p in val.split(",") if p.strip()}
@@ -71,7 +71,7 @@ class MemGPTCfg:
 class ObsCfg:
     trace_sample_rate: float
     latency_budget_ms: int
-    ablation_flags: Set[str]
+    ablation_flags: set[str]
 
 
 @dataclass(frozen=True)
@@ -82,7 +82,7 @@ class RuntimeConfig:
     memgpt: MemGPTCfg
     obs: ObsCfg
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["obs"]["ablation_flags"] = sorted(self.obs.ablation_flags)
         return d

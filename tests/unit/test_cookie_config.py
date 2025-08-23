@@ -11,16 +11,14 @@ These tests ensure that cookies are set with sharp and consistent attributes:
 """
 
 import os
-import pytest
 from unittest.mock import Mock, patch
-from fastapi import Request
 
 from app.cookie_config import (
+    _get_scheme,
+    _is_dev_environment,
+    format_cookie_header,
     get_cookie_config,
     get_token_ttls,
-    format_cookie_header,
-    _is_dev_environment,
-    _get_scheme,
 )
 
 
@@ -504,7 +502,7 @@ class TestCookieConfigIntegration:
             assert "HttpOnly" in header
             assert f"Max-Age={case['max_age']}" in header
             assert "Path=/" in header
-            assert f"SameSite=Lax" in header
+            assert "SameSite=Lax" in header
             
             # Check conditional attributes
             if case["secure"]:

@@ -14,7 +14,6 @@ import argparse
 import os
 import sys
 import time
-from typing import Dict, List, Tuple
 
 
 def _require_chroma():
@@ -46,7 +45,6 @@ def _open_qdrant():
 
     url = os.getenv("QDRANT_URL") or "http://localhost:6333"
     api_key = os.getenv("QDRANT_API_KEY") or None
-    dim = int(os.getenv("EMBED_DIM", "1536"))
     c = QdrantClient(url=url, api_key=api_key)
     # Ensure collections we'll write to exist; we migrate to per-user mem collections on demand
     cache_col = os.getenv("QDRANT_QA_COLLECTION", "cache:qa")
@@ -57,9 +55,9 @@ def _open_qdrant():
     return c
 
 
-def _inventory_chroma() -> Dict[str, Dict[str, int]]:
+def _inventory_chroma() -> dict[str, dict[str, int]]:
     cli = _open_chroma()
-    cols: Dict[str, Dict[str, int]] = {}
+    cols: dict[str, dict[str, int]] = {}
     try:
         for name in ["qa_cache", "user_memories"]:
             try:
@@ -76,13 +74,13 @@ def _inventory_chroma() -> Dict[str, Dict[str, int]]:
     return cols
 
 
-def _embed_many(texts: List[str]) -> List[List[float]]:
+def _embed_many(texts: list[str]) -> list[list[float]]:
     from app.embeddings import embed_sync
 
     return [embed_sync(t) for t in texts]
 
 
-def _export_qa(chroma_client) -> List[Tuple[str, str, Dict]]:
+def _export_qa(chroma_client) -> list[tuple[str, str, dict]]:
     col = chroma_client.get_or_create_collection("qa_cache")
     try:
         res = col.get(include=["ids", "documents", "metadatas"]).copy()
@@ -97,15 +95,15 @@ def _export_qa(chroma_client) -> List[Tuple[str, str, Dict]]:
     ids = res.get("ids", [])
     docs = res.get("documents", [])
     metas = res.get("metadatas", [])
-    out: List[Tuple[str, str, Dict]] = []
-    for i, d, m in zip(ids, docs, metas):
+    out: list[tuple[str, str, dict]] = []
+    for i, d, m in zip(ids, docs, metas, strict=False):
         if not i:
             continue
         out.append((str(i), d or "", dict(m or {})))
     return out
 
 
-def _export_user_memories(chroma_client) -> List[Tuple[str, str, Dict]]:
+def _export_user_memories(chroma_client) -> list[tuple[str, str, dict]]:
     col = chroma_client.get_or_create_collection("user_memories")
     # Chroma stores only text + user_id in metadata for our impl
     try:
@@ -120,8 +118,8 @@ def _export_user_memories(chroma_client) -> List[Tuple[str, str, Dict]]:
     ids = res.get("ids", [])
     docs = res.get("documents", [])
     metas = res.get("metadatas", [])
-    out: List[Tuple[str, str, Dict]] = []
-    for i, d, m in zip(ids, docs, metas):
+    out: list[tuple[str, str, dict]] = []
+    for i, d, m in zip(ids, docs, metas, strict=False):
         if not i:
             continue
         out.append((str(i), d or "", dict(m or {})))
@@ -137,13 +135,13 @@ def _ensure_qdrant_indexes(client, name: str) -> None:
         client.recreate_collection(collection_name=name, vectors_config=VectorParams(size=1, distance=Distance.COSINE))
 
 
-def _upsert_qa(qc, items: List[Tuple[str, str, Dict]], dry_run: bool = False) -> int:
+def _upsert_qa(qc, items: list[tuple[str, str, dict]], dry_run: bool = False) -> int:
     from qdrant_client.http.models import PointStruct
 
     cache_col = os.getenv("QDRANT_QA_COLLECTION", "cache:qa")
     _ensure_qdrant_indexes(qc, cache_col)
     n = 0
-    batch: List[PointStruct] = []
+    batch: list[PointStruct] = []
     for cid, doc, meta in items:
         payload = {"doc": doc, **{k: meta.get(k) for k in ("answer", "timestamp", "feedback")}}
         batch.append(PointStruct(id=cid, vector=None, payload=payload))
@@ -180,8 +178,8 @@ def _ensure_user_collection(qc, name: str, dim: int) -> None:
             pass
 
 
-def _upsert_user_memories(qc, items: List[Tuple[str, str, Dict]], dry_run: bool = False) -> int:
-    from qdrant_client.http.models import PointStruct, Distance, VectorParams
+def _upsert_user_memories(qc, items: list[tuple[str, str, dict]], dry_run: bool = False) -> int:
+    from qdrant_client.http.models import PointStruct
     # target dim from env
     dim = int(os.getenv("EMBED_DIM", "1536"))
     n = 0
@@ -224,15 +222,16 @@ def _upsert_user_memories(qc, items: List[Tuple[str, str, Dict]], dry_run: bool 
     return n
 
 
-def _write_jsonl(path: str, rows: List[Dict]) -> None:
-    import json, os
+def _write_jsonl(path: str, rows: list[dict]) -> None:
+    import json
+    import os
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
-def main(argv: List[str] | None = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser("migrate_chroma_to_qdrant")
     p.add_argument("command", choices=["inventory", "export", "migrate"], help="What to run")
     p.add_argument("--dry-run", action="store_true")

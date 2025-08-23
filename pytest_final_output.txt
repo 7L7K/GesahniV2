@@ -1,0 +1,489 @@
+.F....FFF..FF........F......F......                                      [100%]
+=================================== FAILURES ===================================
+________________ test_admin_write_requires_write_or_admin_scope ________________
+
+client = <starlette.testclient.TestClient object at 0x12ec18650>
+
+    def test_admin_write_requires_write_or_admin_scope(client):
+        """Test that admin write endpoints require admin:write or admin scope"""
+        test_data = {"test": "data"}
+    
+        # Test with admin:write scope - should succeed
+        token_write = _tok(["admin:write"])
+        response = client.post("/v1/admin/config", json=test_data, headers={"Authorization": f"Bearer {token_write}"})
+>       assert response.status_code == 200
+E       assert 405 == 200
+E        +  where 405 = <Response [405 Method Not Allowed]>.status_code
+
+tests/test_admin_scope_granular.py:69: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:51:45Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:45Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stdout call -----------------------------
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 45, 928203) user_id='test-user-123' route='v1_options_handler' method='POST' status=405 ip='testclient' req_id='-' scopes=['admin:write'] action='http_request' meta={'path': '/v1/admin/config'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:45.928203","user_id":"test-user-123","route":"v1_options_handler","method":"POST","status":405,"ip":"testclient","req_id":"-","scopes":["admin:write"],"action":"http_request","meta":{"path":"/v1/admin/config"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:51:45Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:45Z", "req_id": "aabd6929-485e-43ce-8515-cb2ff3cb2019", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "aabd6929-485e-43ce-8515-cb2ff3cb2019", "status_code": 405, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:write", "user_id": "test-user-123", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:45Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: POST /v1/admin/config -> 405 (0.017s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "f7410be7330daa2bd78e093299d2ca93", "status_code": 405, "duration_ms": 17.12203025817871, "error_code": "CLIENT_METHOD_NOT_ALLOWED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: POST /v1/admin/config -> 405 (0.017s)
+________________________ test_admin_tv_config_put_scope ________________________
+
+client = <starlette.testclient.TestClient object at 0x12ec27fd0>
+
+    def test_admin_tv_config_put_scope(client):
+        """Test that TV config PUT endpoint requires admin:write or admin scope"""
+        test_data = {"config": {"theme": "dark"}}
+    
+        # Test with admin:write scope - should succeed
+        token_write = _tok(["admin:write"])
+        response = client.put("/v1/admin/tv/config", json=test_data, headers={"Authorization": f"Bearer {token_write}"})
+>       assert response.status_code == 200
+E       assert 405 == 200
+E        +  where 405 = <Response [405 Method Not Allowed]>.status_code
+
+tests/test_admin_scope_granular.py:165: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stdout call -----------------------------
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 46, 479705) user_id='test-user-123' route='v1_options_handler' method='PUT' status=405 ip='testclient' req_id='-' scopes=['admin:write'] action='http_request' meta={'path': '/v1/admin/tv/config'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:46.479705","user_id":"test-user-123","route":"v1_options_handler","method":"PUT","status":405,"ip":"testclient","req_id":"-","scopes":["admin:write"],"action":"http_request","meta":{"path":"/v1/admin/tv/config"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "f61093fe-f1f2-4d55-a972-0231d4df89fb", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "f61093fe-f1f2-4d55-a972-0231d4df89fb", "status_code": 405, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:write", "user_id": "test-user-123", "route": "/v1/admin/tv/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: PUT /v1/admin/tv/config -> 405 (0.015s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "c8a7e24b5d18fc5f34407c9ad898b5c5", "status_code": 405, "duration_ms": 15.131235122680664, "error_code": "CLIENT_METHOD_NOT_ALLOWED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: PUT /v1/admin/tv/config -> 405 (0.015s)
+___________________ test_admin_vector_store_bootstrap_scope ____________________
+
+client = <starlette.testclient.TestClient object at 0x12b3b83d0>
+
+    def test_admin_vector_store_bootstrap_scope(client):
+        """Test that vector store bootstrap requires admin:write or admin scope"""
+        # Test with admin:write scope - should succeed
+        token_write = _tok(["admin:write"])
+        response = client.post("/v1/admin/vector_store/bootstrap", headers={"Authorization": f"Bearer {token_write}"})
+>       assert response.status_code == 200
+E       assert 500 == 200
+E        +  where 500 = <Response [500 Internal Server Error]>.status_code
+
+tests/test_admin_scope_granular.py:183: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stdout call -----------------------------
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 46, 659506) user_id='test-user-123' route='admin_vs_bootstrap' method='POST' status=500 ip='testclient' req_id='-' scopes=['admin:write'] action='http_request' meta={'path': '/v1/admin/vector_store/bootstrap'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:46.659506","user_id":"test-user-123","route":"admin_vs_bootstrap","method":"POST","status":500,"ip":"testclient","req_id":"-","scopes":["admin:write"],"action":"http_request","meta":{"path":"/v1/admin/vector_store/bootstrap"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "b095ccab-b263-431a-b148-ac0c501ac2fd", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "b095ccab-b263-431a-b148-ac0c501ac2fd", "level": "INFO", "component": "app.api.admin", "msg": "admin.vector_bootstrap", "env": "", "build_sha": "", "version": "", "meta": {"user": "test-user-123", "collection": "gesahni_memories"}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "b095ccab-b263-431a-b148-ac0c501ac2fd", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "b095ccab-b263-431a-b148-ac0c501ac2fd", "status_code": 500, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:write", "user_id": "test-user-123", "route": "/v1/admin/vector_store/bootstrap", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: POST /v1/admin/vector_store/bootstrap -> 500 (0.161s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "c8a7e24b5d18fc5f34407c9ad898b5c5", "status_code": 500, "duration_ms": 160.58874130249023, "error_code": "SERVER_INTERNAL_ERROR"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.api.admin:admin.py:523 admin.vector_bootstrap
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: POST /v1/admin/vector_store/bootstrap -> 500 (0.161s)
+_______________________ test_user_profile_endpoint_scope _______________________
+
+client = <starlette.testclient.TestClient object at 0x135014810>
+
+    def test_user_profile_endpoint_scope(client):
+        """Test that user profile endpoint requires user:profile scope"""
+        # Test with user:profile scope - should succeed
+        token_profile = _tok(["user:profile"])
+        response = client.get("/v1/admin/users/me", headers={"Authorization": f"Bearer {token_profile}"})
+        assert response.status_code == 200
+    
+        # Test with admin scope - should succeed (admin can access user profile)
+        token_admin = _tok(["admin"])
+        response = client.get("/v1/admin/users/me", headers={"Authorization": f"Bearer {token_admin}"})
+>       assert response.status_code == 200
+E       assert 403 == 200
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_admin_scope_granular.py:206: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stdout call -----------------------------
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 46, 693049) user_id='test-user-123' route='admin_user_profile' method='GET' status=200 ip='testclient' req_id='-' scopes=['user:profile'] action='http_request' meta={'path': '/v1/admin/users/me'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:46.693049","user_id":"test-user-123","route":"admin_user_profile","method":"GET","status":200,"ip":"testclient","req_id":"-","scopes":["user:profile"],"action":"http_request","meta":{"path":"/v1/admin/users/me"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 46, 710635) user_id='test-user-123' route='admin_user_profile' method='GET' status=403 ip='testclient' req_id='-' scopes=['admin'] action='http_request' meta={'path': '/v1/admin/users/me'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:46.710635","user_id":"test-user-123","route":"admin_user_profile","method":"GET","status":403,"ip":"testclient","req_id":"-","scopes":["admin"],"action":"http_request","meta":{"path":"/v1/admin/users/me"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "ae9c1b91-e210-43cb-bd91-868499d56be9", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "ae9c1b91-e210-43cb-bd91-868499d56be9", "status_code": 200, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "user:profile", "user_id": "test-user-123", "route": "/v1/admin/users/me", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/users/me -> 200 (0.014s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "53fbceb3c82a9d59680a90af8d88e9e9", "status_code": 200, "duration_ms": 13.543844223022461}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "7c93fb5b-a614-46a6-b564-0c1d1a723668", "level": "WARNING", "component": "app.deps.scopes", "msg": "deny: missing_scope scope=<user:profile> available=<admin>", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "7c93fb5b-a614-46a6-b564-0c1d1a723668", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "7c93fb5b-a614-46a6-b564-0c1d1a723668", "status_code": 403, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin", "user_id": "test-user-123", "route": "/v1/admin/users/me", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/users/me -> 403 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "112b31a75cb17a31984987a945559510", "status_code": 403, "duration_ms": 12.553930282592773, "error_code": "CLIENT_FORBIDDEN"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/users/me -> 200 (0.014s)
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.scopes:scopes.py:425 deny: missing_scope scope=<user:profile> available=<admin>
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/users/me -> 403 (0.013s)
+_____________________ test_scope_separation_read_vs_write ______________________
+
+client = <starlette.testclient.TestClient object at 0x12ef54550>
+
+    def test_scope_separation_read_vs_write(client):
+        """Test that read and write scopes are properly separated"""
+        # Test that admin:read allows reads but not writes
+        token_read = _tok(["admin:read"])
+    
+        # Read operations should work
+        read_endpoints = [
+            "/v1/admin/config",
+            "/v1/admin/metrics",
+            "/v1/admin/system/status"
+        ]
+    
+        for endpoint in read_endpoints:
+            response = client.get(endpoint, headers={"Authorization": f"Bearer {token_read}"})
+            assert response.status_code == 200, f"admin:read should allow GET {endpoint}"
+    
+        # Write operations should fail
+        write_endpoints = [
+            ("/v1/admin/config", "POST"),
+            ("/v1/admin/tv/config", "PUT"),
+            ("/v1/admin/vector_store/bootstrap", "POST")
+        ]
+    
+        for endpoint, method in write_endpoints:
+            if method == "POST":
+                response = client.post(endpoint, headers={"Authorization": f"Bearer {token_read}"})
+            elif method == "PUT":
+                response = client.put(endpoint, json={}, headers={"Authorization": f"Bearer {token_read}"})
+>           assert response.status_code == 403, f"admin:read should not allow {method} {endpoint}"
+E           AssertionError: admin:read should not allow POST /v1/admin/config
+E           assert 405 == 403
+E            +  where 405 = <Response [405 Method Not Allowed]>.status_code
+
+tests/test_admin_scope_granular.py:278: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stdout call -----------------------------
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 46, 894042) user_id='test-user-123' route='admin_config' method='GET' status=200 ip='testclient' req_id='-' scopes=['admin:read'] action='http_request' meta={'path': '/v1/admin/config'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:46.894042","user_id":"test-user-123","route":"admin_config","method":"GET","status":200,"ip":"testclient","req_id":"-","scopes":["admin:read"],"action":"http_request","meta":{"path":"/v1/admin/config"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 46, 911445) user_id='test-user-123' route='admin_metrics' method='GET' status=200 ip='testclient' req_id='-' scopes=['admin:read'] action='http_request' meta={'path': '/v1/admin/metrics'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:46.911445","user_id":"test-user-123","route":"admin_metrics","method":"GET","status":200,"ip":"testclient","req_id":"-","scopes":["admin:read"],"action":"http_request","meta":{"path":"/v1/admin/metrics"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 46, 929823) user_id='test-user-123' route='admin_system_status' method='GET' status=200 ip='testclient' req_id='-' scopes=['admin:read'] action='http_request' meta={'path': '/v1/admin/system/status'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:46.929823","user_id":"test-user-123","route":"admin_system_status","method":"GET","status":200,"ip":"testclient","req_id":"-","scopes":["admin:read"],"action":"http_request","meta":{"path":"/v1/admin/system/status"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 46, 947576) user_id='test-user-123' route='v1_options_handler' method='POST' status=405 ip='testclient' req_id='-' scopes=['admin:read'] action='http_request' meta={'path': '/v1/admin/config'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:46.947576","user_id":"test-user-123","route":"v1_options_handler","method":"POST","status":405,"ip":"testclient","req_id":"-","scopes":["admin:read"],"action":"http_request","meta":{"path":"/v1/admin/config"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "f553b4c1-e396-4372-9b58-a2f7f344e0df", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "f553b4c1-e396-4372-9b58-a2f7f344e0df", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "f553b4c1-e396-4372-9b58-a2f7f344e0df", "status_code": 200, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:read", "user_id": "test-user-123", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/config -> 200 (0.015s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "5752a7601fe9bd2102edaac0e5ae5c0a", "status_code": 200, "duration_ms": 15.130043029785156}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "90d67ce4-5b26-4fd6-b14c-f5068b6d58c7", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "90d67ce4-5b26-4fd6-b14c-f5068b6d58c7", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "90d67ce4-5b26-4fd6-b14c-f5068b6d58c7", "status_code": 200, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:read", "user_id": "test-user-123", "route": "/v1/admin/metrics", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/metrics -> 200 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "5752a7601fe9bd2102edaac0e5ae5c0a", "status_code": 200, "duration_ms": 12.964963912963867}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "6ee6020e-23a5-41c3-9ea0-15f09e701b2d", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "6ee6020e-23a5-41c3-9ea0-15f09e701b2d", "status_code": 200, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:read", "user_id": "test-user-123", "route": "/v1/admin/system/status", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/system/status -> 200 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "5752a7601fe9bd2102edaac0e5ae5c0a", "status_code": 200, "duration_ms": 13.282060623168945}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "e9332533-df45-4c9b-b2d6-fa76e5e01628", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "e9332533-df45-4c9b-b2d6-fa76e5e01628", "status_code": 405, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin:read", "user_id": "test-user-123", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: POST /v1/admin/config -> 405 (0.014s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "5752a7601fe9bd2102edaac0e5ae5c0a", "status_code": 405, "duration_ms": 13.709068298339844, "error_code": "CLIENT_METHOD_NOT_ALLOWED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/config -> 200 (0.015s)
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/metrics -> 200 (0.013s)
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/system/status -> 200 (0.013s)
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: POST /v1/admin/config -> 405 (0.014s)
+_________________________ test_expired_token_handling __________________________
+
+client = <starlette.testclient.TestClient object at 0x12ede5d50>
+
+    def test_expired_token_handling(client):
+        """Test that expired tokens are properly rejected"""
+        # Create expired token
+        key = os.environ.get("JWT_SECRET", "x" * 64)
+        expired_time = int(time.time()) - 60  # 1 minute ago
+        payload = {
+            "sub": "test-user",
+            "iat": expired_time,
+            "exp": expired_time + 30,  # Already expired
+            "scopes": ["admin"]
+        }
+        expired_token = jwt.encode(payload, key, algorithm="HS256")
+    
+        response = client.get("/v1/admin/config", headers={"Authorization": f"Bearer {expired_token}"})
+>       assert response.status_code == 401
+E       assert 200 == 401
+E        +  where 200 = <Response [200 OK]>.status_code
+
+tests/test_admin_scope_granular.py:295: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stdout call -----------------------------
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 46, 981502) user_id='test-user' route='admin_config' method='GET' status=200 ip='testclient' req_id='-' scopes=['admin'] action='http_request' meta={'path': '/v1/admin/config'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:46.981502","user_id":"test-user","route":"admin_config","method":"GET","status":200,"ip":"testclient","req_id":"-","scopes":["admin"],"action":"http_request","meta":{"path":"/v1/admin/config"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "2f797910-efb2-4877-81c0-83e51bac435a", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "2f797910-efb2-4877-81c0-83e51bac435a", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "2f797910-efb2-4877-81c0-83e51bac435a", "status_code": 200, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": "admin", "user_id": "test-user", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:46Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/config -> 200 (0.016s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "d9633fa0a79bafbbcb3831cd28958fa5", "status_code": 200, "duration_ms": 15.857219696044922}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.deps.user:user.py:128 auth.token_source
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/config -> 200 (0.016s)
+__________________ test_audit_append_includes_request_details __________________
+
+client = <starlette.testclient.TestClient object at 0x135036e90>
+tmp_audit_dir = PosixPath('/private/var/folders/9b/yw1q_r5s4r7bqgy0lnm__9q80000gn/T/pytest-of-kingal/pytest-16/test_audit_append_includes_req0/audit')
+
+    def test_audit_append_includes_request_details(client, tmp_audit_dir):
+        """Test that audit events include detailed request information"""
+        # Make a request with specific characteristics
+        response = client.get("/v1/admin/metrics?param=test")
+>       assert response.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_audit_trail.py:180: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:51:50Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:50Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stdout call -----------------------------
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 50, 361448) user_id='anon' route='admin_metrics' method='GET' status=401 ip='testclient' req_id='-' scopes=[] action='http_request' meta={'path': '/v1/admin/metrics'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:50.361448","user_id":"anon","route":"admin_metrics","method":"GET","status":401,"ip":"testclient","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/v1/admin/metrics"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:51:50Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:50Z", "req_id": "6756cb0e-7d90-427e-a3f2-770167bb0ff6", "level": "WARNING", "component": "app.deps.scopes", "msg": "deny: missing_scope scope=<admin:read> reason=no_payload", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:50Z", "req_id": "6756cb0e-7d90-427e-a3f2-770167bb0ff6", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "6756cb0e-7d90-427e-a3f2-770167bb0ff6", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "anon", "route": "/v1/admin/metrics", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:50Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/metrics -> 401 (0.013s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 401, "duration_ms": 12.684106826782227, "error_code": "CLIENT_UNAUTHORIZED"}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:135 auth.no_token
+WARNING  app.deps.scopes:scopes.py:411 deny: missing_scope scope=<admin:read> reason=no_payload
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/metrics -> 401 (0.013s)
+_____________________ test_metrics_expose_auth_fail_total ______________________
+
+client = <starlette.testclient.TestClient object at 0x1350aec50>
+
+    def test_metrics_expose_auth_fail_total(client):
+        """Test that auth_fail_total metric is exposed"""
+        # Make a request with invalid token to trigger auth failure
+        response = client.get("/v1/admin/config", headers={"Authorization": "Bearer invalid_token"})
+        assert response.status_code == 401
+    
+        # Check metrics endpoint
+        metrics_response = client.get("/metrics")
+        body = metrics_response.text
+    
+        assert "auth_fail_total" in body
+>       assert 'reason="invalid"' in body
+E       assert 'reason="invalid"' in '# HELP python_gc_objects_collected_total Objects collected during gc\n# TYPE python_gc_objects_collected_total counte...i_llama_queue_depth Current LLaMA queue depth\n# TYPE gesahni_llama_queue_depth gauge\ngesahni_llama_queue_depth 0.0\n'
+
+tests/test_metrics_exposed.py:53: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+{"timestamp": "2025-08-22T08:51:52Z", "req_id": "-", "level": "WARNING", "component": "app.memory.unified_store", "msg": "VECTOR_STORE is deprecated, use VECTOR_DSN instead", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:52Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using MemoryVectorStore", "env": "", "build_sha": "", "version": ""}
+------------------------------ Captured log setup ------------------------------
+WARNING  app.memory.unified_store:unified_store.py:89 VECTOR_STORE is deprecated, use VECTOR_DSN instead
+INFO     app.memory.unified_store:unified_store.py:131 Using MemoryVectorStore
+----------------------------- Captured stdout call -----------------------------
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 52, 60994) user_id=None route='admin_config' method='GET' status=401 ip='testclient' req_id='-' scopes=[] action='http_request' meta={'path': '/v1/admin/config'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:52.060994","user_id":null,"route":"admin_config","method":"GET","status":401,"ip":"testclient","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/v1/admin/config"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 22, 8, 51, 52, 88996) user_id='anon' route='_metrics_route' method='GET' status=200 ip='testclient' req_id='-' scopes=[] action='http_request' meta={'path': '/metrics'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-22T08:51:52.088996","user_id":"anon","route":"_metrics_route","method":"GET","status":200,"ip":"testclient","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/metrics"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2025-08-22T08:51:52Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.token_source", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:52Z", "req_id": "-", "level": "WARNING", "component": "app.deps.user", "msg": "auth.invalid_token", "env": "", "build_sha": "", "version": "", "meta": {"reason": "invalid_auth_token"}}
+{"timestamp": "2025-08-22T08:51:52Z", "req_id": "1fbd54de-28ef-49a5-b7df-85b152abc70e", "level": "WARNING", "component": "app.deps.scopes", "msg": "deny: missing_scope scope=<admin:read> reason=no_payload", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:52Z", "req_id": "1fbd54de-28ef-49a5-b7df-85b152abc70e", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "1fbd54de-28ef-49a5-b7df-85b152abc70e", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "540d100acea08a627b52c04cfe880acc", "route": "/v1/admin/config", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:52Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/admin/config -> 401 (0.012s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "f948e0eb747dbc4bb16dbcb2f2a5fae0", "status_code": 401, "duration_ms": 12.378692626953125, "error_code": "CLIENT_UNAUTHORIZED"}}
+{"timestamp": "2025-08-22T08:51:52Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-22T08:51:52Z", "req_id": "35cef037-ff4d-444e-8d80-7d4984288881", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "35cef037-ff4d-444e-8d80-7d4984288881", "status_code": 200, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "anon", "route": "/metrics", "error_code": null}}
+{"timestamp": "2025-08-22T08:51:52Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /metrics -> 200 (0.024s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 23.840904235839844}}
+------------------------------ Captured log call -------------------------------
+INFO     app.deps.user:user.py:128 auth.token_source
+WARNING  app.deps.user:user.py:250 auth.invalid_token
+WARNING  app.deps.scopes:scopes.py:411 deny: missing_scope scope=<admin:read> reason=no_payload
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /v1/admin/config -> 401 (0.012s)
+INFO     app.deps.user:user.py:135 auth.no_token
+INFO     app.middleware.middleware_core:middleware_core.py:463 request_summary
+INFO     app.middleware.custom:custom.py:131 Request completed: GET /metrics -> 200 (0.024s)
+=============================== warnings summary ===============================
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/chromadb/api/collection_configuration.py:347
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/chromadb/api/collection_configuration.py:347
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/chromadb/api/collection_configuration.py:347: DeprecationWarning: legacy embedding function config: '_LengthEmbedder' object has no attribute 'is_legacy'
+    return json.dumps(create_collection_configuration_to_json(config))
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_config.py:323: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:298
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/pydantic/_internal/_generate_schema.py:298: PydanticDeprecatedSince20: `json_encoders` is deprecated. See https://docs.pydantic.dev/2.11/concepts/serialization/#custom-serializers for alternatives. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/passlib/utils/__init__.py:854
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+app/transcribe.py:7
+  /Users/kingal/2025/GesahniV2/app/transcribe.py:7: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
+    import audioop  # type: ignore
+
+app/main.py:1206
+  /Users/kingal/2025/GesahniV2/app/main.py:1206: DeprecationWarning: `example` has been deprecated, please use `examples` instead
+    from .api.care import router as care_router
+
+../../.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/testclient.py:454
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/starlette/testclient.py:454: DeprecationWarning: The `allow_redirects` argument is deprecated. Use `follow_redirects` instead.
+    warnings.warn(message, DeprecationWarning)
+
+tests/integration/test_refresh_concurrent.py:8
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_concurrent.py:8: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:26
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:26: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:52
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:52: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:77
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:77: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:103
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:103: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:132
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:132: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:158
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:158: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:192
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:192: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_race_condition_fix.py:220
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_race_condition_fix.py:220: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/integration/test_refresh_replay.py:13
+  /Users/kingal/2025/GesahniV2/tests/integration/test_refresh_replay.py:13: PytestUnknownMarkWarning: Unknown pytest.mark.contract - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.contract
+
+tests/test_admin_scope_granular.py::test_admin_vector_store_bootstrap_scope
+  /Users/kingal/.pyenv/versions/3.11.9/lib/python3.11/site-packages/qdrant_client/qdrant_remote.py:130: UserWarning: Api key is used with an insecure connection.
+    warnings.warn("Api key is used with an insecure connection.")
+
+tests/test_admin_scope_granular.py::test_admin_vector_store_bootstrap_scope
+  /Users/kingal/2025/GesahniV2/app/jobs/qdrant_lifecycle.py:28: DeprecationWarning: `recreate_collection` method is deprecated and will be removed in the future. Use `collection_exists` to check collection existence and `create_collection` instead.
+    c.recreate_collection(collection_name=name, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_admin_scope_granular.py::test_admin_write_requires_write_or_admin_scope
+FAILED tests/test_admin_scope_granular.py::test_admin_tv_config_put_scope - a...
+FAILED tests/test_admin_scope_granular.py::test_admin_vector_store_bootstrap_scope
+FAILED tests/test_admin_scope_granular.py::test_user_profile_endpoint_scope
+FAILED tests/test_admin_scope_granular.py::test_scope_separation_read_vs_write
+FAILED tests/test_admin_scope_granular.py::test_expired_token_handling - asse...
+FAILED tests/test_audit_trail.py::test_audit_append_includes_request_details
+FAILED tests/test_metrics_exposed.py::test_metrics_expose_auth_fail_total - a...

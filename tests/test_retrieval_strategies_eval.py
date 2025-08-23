@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import math
-
-from app.retrieval.strategies import reciprocal_rank_fusion, time_decay, temporal_boost_order
+from app.retrieval.strategies import reciprocal_rank_fusion, temporal_boost_order, time_decay
 
 
 def test_rrf_merges_lists_reasonably():

@@ -1,4 +1,3 @@
-import os
 import jwt
 from starlette.requests import Request
 

@@ -9,10 +9,10 @@ This test suite verifies that:
 6. OAuth callbacks bypass CSRF protection
 """
 
-import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import patch
 import os
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
 
 
 class TestCORSConfiguration:
@@ -188,7 +188,7 @@ class TestEnvironmentConfiguration:
         ]
         
         # Read env.example to verify variables are documented
-        with open("env.example", "r") as f:
+        with open("env.example") as f:
             env_content = f.read()
             
         for var in expected_vars:
@@ -201,7 +201,7 @@ class TestEnvironmentConfiguration:
         ]
         
         # Read env.example to verify variables are documented
-        with open("env.example", "r") as f:
+        with open("env.example") as f:
             env_content = f.read()
             
         for var in expected_vars:

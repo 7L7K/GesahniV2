@@ -1,0 +1,29 @@
+groups:
+- name: gesahni_recordings
+  interval: 30s
+  rules:
+  - record: job:http_requests:rate5m
+    expr: sum by (route, method) (rate(http_requests_total[5m]))
+  - record: job:http_requests_error_ratio:rate5m
+    expr: |
+      sum(rate(http_requests_total{status=~"5.."}[5m]))
+      /
+      clamp_min(sum(rate(http_requests_total[5m])), 1)
+  - record: job:auth_fail:rate5m
+    expr: sum by (reason) (rate(auth_fail_total[5m]))
+  - record: job:rbac_deny:rate5m
+    expr: sum by (scope) (rate(rbac_deny_total[5m]))
+  - record: job:rate_limited:rate5m
+    expr: rate(rate_limited_total[5m])
+  - record: job:request_latency_ms:p50
+    expr: histogram_quantile(0.50, sum by (le) (rate(request_latency_seconds_bucket[5m])) ) * 1000
+  - record: job:request_latency_ms:p95
+    expr: histogram_quantile(0.95, sum by (le) (rate(request_latency_seconds_bucket[5m])) ) * 1000
+  - record: job:request_latency_ms:p99
+    expr: histogram_quantile(0.99, sum by (le) (rate(request_latency_seconds_bucket[5m])) ) * 1000
+  - record: job:http_success_ratio:rate5m
+    expr: 1 - (
+      sum(rate(http_requests_total{status=~"5.."}[5m]))
+      /
+      clamp_min(sum(rate(http_requests_total[5m])), 1)
+    )

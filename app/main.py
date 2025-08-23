@@ -2,45 +2,29 @@ from app.env_utils import load_env
 
 load_env()
 import asyncio
-import json
+import hashlib
 import logging
 import os
-import uuid
-import hashlib
-import inspect
-from contextlib import asynccontextmanager
-from pathlib import Path
 import time
 import traceback
+from contextlib import asynccontextmanager
 from datetime import datetime
-
+from pathlib import Path
 
 from fastapi import (
-    APIRouter,
-    BackgroundTasks,
     Depends,
     FastAPI,
-    File,
-    Form,
-    HTTPException,
-    Query,
     Request,
-    UploadFile,
-    WebSocket,
 )
-from starlette.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import StreamingResponse, HTMLResponse, Response, JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+from starlette.middleware.cors import CORSMiddleware
 
-from .deps.scheduler import shutdown as scheduler_shutdown
-from .deps.user import get_current_user_id
-from .gpt_client import close_client
-from .user_store import user_store
 from . import router
-from .memory.profile_store import profile_store
-from .csrf import get_csrf_token as _get_csrf_token  # for /v1/csrf helper
+from .deps.scheduler import shutdown as scheduler_shutdown
+from .gpt_client import close_client
 
 
 async def route_prompt(*args, **kwargs):
@@ -54,18 +38,15 @@ async def route_prompt(*args, **kwargs):
         raise
 
 
+import jwt as _pyjwt
+
 import app.skills  # populate SKILLS
+
 from .home_assistant import (
-    call_service,
-    get_states,
-    resolve_entity,
     startup_check as ha_startup,
 )
-from .alias_store import get_all as alias_all, set as alias_set, delete as alias_delete
-from .history import get_record_by_req_id
 from .llama_integration import startup_check as llama_startup
-from .logging_config import configure_logging, req_id_var, get_errors
-import jwt as _pyjwt
+from .logging_config import configure_logging, req_id_var
 
 # Patch PyJWT decode to apply a sane default clock skew across the app
 _PYJWT_DECODE_ORIG = getattr(_pyjwt, "decode", None)
@@ -81,21 +62,32 @@ def _pyjwt_decode_with_leeway(token, key=None, *args, **kwargs):
     return _PYJWT_DECODE_ORIG(token, key, *args, **kwargs)
 
 _pyjwt.decode = _pyjwt_decode_with_leeway
-from .csrf import CSRFMiddleware
-from .otel_utils import init_tracing, shutdown_tracing
-from .status import router as status_router
 from .api.health import router as health_router
 from .auth import router as auth_router
+from .csrf import CSRFMiddleware
+from .otel_utils import shutdown_tracing
+from .status import router as status_router
+
 try:
     from .api.preflight import router as preflight_router
 except Exception:
     preflight_router = None  # type: ignore
-from .api.oauth_google import router as oauth_google_router
 from .api.google_oauth import router as google_oauth_router
+from .api.oauth_google import router as oauth_google_router
+
 try:
-    from .api.oauth_apple import router as oauth_apple_router
+    from .api.oauth_apple import router as _oauth_apple_router
 except Exception:
-    oauth_apple_router = None  # type: ignore
+    _oauth_apple_router = None  # type: ignore
+
+try:
+    from app.auth_providers import apple_enabled
+    if apple_enabled():
+        from app.api.oauth_apple_stub import router as apple_stub_router
+        app.include_router(apple_stub_router)                 # unversioned include for dev convenience
+        app.include_router(apple_stub_router, prefix="/v1")   # versioned include for tests
+except Exception:
+    pass
 try:
     from .api.auth_password import router as auth_password_router
 except Exception:
@@ -108,21 +100,17 @@ try:
     from .auth_device import router as device_auth_router
 except Exception:
     device_auth_router = None  # type: ignore
-from .session_store import SessionStatus, list_sessions as list_session_store
 from .integrations.google.routes import router as google_router
-from .decisions import get_recent as decisions_recent, get_explain as decisions_get
 
 try:
     from .auth_monitoring import record_ws_reconnect_attempt
 except Exception:  # pragma: no cover - optional
     record_ws_reconnect_attempt = lambda *a, **k: None
-from .transcription import (
-    TranscriptionStream,
-    close_whisper_client,
-    transcribe_file,
-)
-from .storytime import schedule_nightly_jobs, append_transcript_line
 from .session_manager import SESSIONS_DIR as SESSIONS_DIR  # re-export for tests
+from .storytime import schedule_nightly_jobs
+from .transcription import (
+    close_whisper_client,
+)
 
 try:
     from .proactive_engine import get_self_review as _get_self_review  # type: ignore
@@ -152,12 +140,12 @@ def _on_ha_event(*args, **kwargs):  # type: ignore
 
 try:
     from .deps.scopes import (
-        require_scope,
-        optional_require_scope,
-        optional_require_any_scope,
-        require_scopes,
-        require_any_scopes,
         docs_security_with,
+        optional_require_any_scope,
+        optional_require_scope,
+        require_any_scopes,
+        require_scope,
+        require_scopes,
     )
 except Exception:  # pragma: no cover - optional
 
@@ -179,26 +167,29 @@ except Exception:  # pragma: no cover - optional
         return _noop2
 
 
-from .middleware import (
-    RequestIDMiddleware,
+from app.middleware import (
     DedupMiddleware,
-    TraceRequestMiddleware,
+    EnhancedErrorHandlingMiddleware,
     HealthCheckFilterMiddleware,
+    RateLimitMiddleware,
     RedactHashMiddleware,
-    reload_env_middleware,
-    silent_refresh_middleware,
+    ReloadEnvMiddleware,
+    RequestIDMiddleware,
+    SessionAttachMiddleware,
+    SilentRefreshMiddleware,
+    TraceRequestMiddleware,
+    add_mw,
 )
+from app.middleware.audit_mw import AuditMiddleware
+from app.middleware.metrics_mw import MetricsMiddleware
+
 from .security import (
-    rate_limit,
     verify_token,
-    verify_ws,
-    verify_webhook,
-    require_nonce,
 )
 
 # ensure optional import does not crash in test environment
 try:
-    from .proactive_engine import set_presence, on_ha_event
+    from .proactive_engine import on_ha_event, set_presence
 except Exception:  # pragma: no cover - optional
 
     def set_presence(*args, **kwargs):  # type: ignore
@@ -229,12 +220,22 @@ def _enforce_jwt_strength() -> None:
     """
     sec = os.getenv("JWT_SECRET", "") or ""
     env = os.getenv("ENV", "").strip().lower()
-    dev_mode = os.getenv("DEV_MODE", "0").strip() == "1"
-    if len(sec) < 32:
-        if env in {"prod", "production"} or not dev_mode:
-            raise RuntimeError(f"JWT secret too weak for production: length={len(sec)}")
-        else:
-            logger.warning("WEAK JWT_SECRET detected (dev/test): length=%d", len(sec))
+    dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _is_dev() -> bool:
+        return env == "dev" or dev_mode
+
+    if len(sec) >= 32:
+        logger.info("JWT secret: OK (len=%d)", len(sec))
+        return
+
+    # Weak secret handling
+    if _is_dev():
+        logger.warning("JWT secret: WEAK (len=%d) — allowed in dev/tests only", len(sec))
+        return
+
+    # Production (or non-dev): fail startup
+    raise RuntimeError("JWT_SECRET too weak (need >= 32 characters)")
 
 # Global error tracking
 _startup_errors = []
@@ -310,13 +311,19 @@ async def _init_database():
         raise
 
 async def _init_vector_store():
-    """Initialize vector store with enhanced error handling."""
+    """Initialize vector store with read-only health check."""
     try:
         from .memory.api import _get_store
         store = _get_store()
-        # Test vector store connectivity
-        await store.add_memory("test", "test memory", "test-user", metadata={"test": True})
-        await store.search_memories("test", "test-user", limit=1)
+        # Read-only connectivity test - no side effects
+        if hasattr(store, 'ping'):
+            await store.ping()
+        elif hasattr(store, 'search_memories'):
+            # Search with limit=0 for minimal overhead
+            await store.search_memories("", "", limit=0)
+        else:
+            # Fallback: just get the store instance
+            pass
         logger.debug("Vector store initialization successful")
     except Exception as e:
         logger.error(f"Vector store initialization failed: {e}")
@@ -350,7 +357,7 @@ async def _init_memory_store():
     """Initialize memory store."""
     try:
         from .memory.api import _get_store
-        store = _get_store()
+        _ = _get_store()
         logger.debug("Memory store initialization successful")
     except Exception as e:
         logger.error(f"Memory store initialization failed: {e}")
@@ -529,11 +536,18 @@ _DEV_SERVERS_SNAPSHOT = os.getenv("OPENAPI_DEV_SERVERS")
 async def lifespan(app: FastAPI):
     try:
         # Verify secret usage on boot
-        from .secret_verification import log_secret_summary
+        from .secret_verification import audit_prod_env, log_secret_summary
         log_secret_summary()
         # Enforce JWT strength at startup (moved from import-time)
         try:
             _enforce_jwt_strength()
+        except Exception:
+            # Let higher-level startup logic capture and surface this error
+            raise
+
+        # Production environment audit (strict checks for prod)
+        try:
+            audit_prod_env()
         except Exception:
             # Let higher-level startup logic capture and surface this error
             raise
@@ -590,7 +604,6 @@ async def lifespan(app: FastAPI):
     finally:
         # Log health flip to offline on shutdown
         try:
-            from typing import cast as _cast
             if _HEALTH_LAST.get("online", True):
                 logger.info("healthz status=offline")
             _HEALTH_LAST["online"] = False
@@ -680,8 +693,8 @@ origins = [o for o in origins if o and o.lower() != "null"]
 # Strict sanitization: prefer the single canonical localhost origin when
 # any localhost-style origin is present; otherwise, strip obvious
 # unwanted entries (raw IPs and common non-frontend ports like 8080).
-from urllib.parse import urlparse
 import re
+from urllib.parse import urlparse
 
 sanitized = []
 found_localhost = False
@@ -740,63 +753,23 @@ if not is_same_address_family(origins):
 # Allow credentials: yes (cookies/tokens) — enforce true for local dev to support cookies with exact origin
 allow_credentials = True
 
-# Log CORS configuration only in DEBUG mode
-if os.getenv("LOG_LEVEL", "INFO").upper() == "DEBUG":
-    logging.debug(f"CORS configuration: origins={origins}, allow_credentials={allow_credentials}")
+# Store as single source of truth for HTTP+WS origin validation
+app.state.allowed_origins = origins
 
-# Custom handler for HTTP requests to WebSocket endpoints
-@app.get("/v1/ws/{path:path}")
-@app.post("/v1/ws/{path:path}")
-@app.put("/v1/ws/{path:path}")
-@app.patch("/v1/ws/{path:path}")
-@app.delete("/v1/ws/{path:path}")
-async def websocket_http_handler(request: Request, path: str):
-    """Handle HTTP requests to WebSocket endpoints with crisp error codes and reasons."""
-    try:
-        record_ws_reconnect_attempt(
-            endpoint=f"/v1/ws/{path}",
-            reason="http_request_to_ws_endpoint",
-            user_id="unknown"
-        )
-    except Exception:
-        pass
-    
-    # WebSocket requirement: Provide crisp error codes and reasons (no 404 masking)
-    response = Response(
-        content="WebSocket endpoint requires WebSocket protocol",
-        status_code=400,
-        media_type="text/plain",
-        headers={
-            "X-WebSocket-Error": "protocol_required",
-            "X-WebSocket-Reason": "HTTP requests not supported on WebSocket endpoints"
-        }
-    )
-    return response
+# Log CORS configuration - clear INFO log for debugging origin issues
+logging.info(
+    "CORS resolved origins=%s | allow_credentials=%s | allow_methods=%s | allow_headers=%s | expose_headers=%s",
+    origins,
+    allow_credentials,
+    ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    ["*", "Authorization"],
+    ["X-Request-ID"],
+)
 
-# Debug endpoint to check current configuration
-@app.get("/debug/config", include_in_schema=False)
-async def debug_config():
-    """Debug endpoint to check current configuration values."""
-    return {
-        "environment": {
-            "CORS_ALLOW_ORIGINS": os.getenv("CORS_ALLOW_ORIGINS"),
-            "APP_URL": os.getenv("APP_URL"),
-            "API_URL": os.getenv("API_URL"),
-            "HOST": os.getenv("HOST"),
-            "PORT": os.getenv("PORT"),
-            "CORS_ALLOW_CREDENTIALS": os.getenv("CORS_ALLOW_CREDENTIALS"),
-        },
-        "runtime": {
-            "cors_origins": origins,
-            "allow_credentials": allow_credentials,
-            "server_host": os.getenv("HOST", "0.0.0.0"),
-            "server_port": os.getenv("PORT", "8000"),
-        },
-        "frontend": {
-            "expected_origin": "http://localhost:3000",
-            "next_public_api_origin": os.getenv("NEXT_PUBLIC_API_ORIGIN"),
-        }
-    }
+# The HTTP->WS guard and debug endpoints have been moved to modular routers:
+# - HTTP->WS guard is implemented in `app/api/ws_endpoints.py` as an APIRouter
+# - Debug endpoints are implemented in `app/api/debug.py` (dev-only)
+# These were removed from the main module to keep `app/main.py` minimal.
 
 # Removed legacy unversioned /whoami to ensure a single canonical /v1/whoami
 
@@ -817,300 +790,18 @@ except Exception:
     except Exception:
         pass
 
-if os.getenv("PROMETHEUS_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}:
-    # Prefer a simple GET route to avoid mount-related edge cases/hangs
-    try:  # pragma: no cover - optional dependency
-        from fastapi import Response as _Resp  # type: ignore
-        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest, Gauge
-
-        # Basic gauges for health visibility
-        try:
-            LLAMA_QUEUE_DEPTH = Gauge("gesahni_llama_queue_depth", "Current LLaMA queue depth")  # noqa: N806
-        except Exception:
-            class _G:
-                def set(self, *_a, **_k):
-                    return None
-            LLAMA_QUEUE_DEPTH = _G()  # type: ignore
-
-        @app.get("/metrics", include_in_schema=False)
-        async def _metrics_route() -> _Resp:  # type: ignore[valid-type]
-            # Best-effort snapshot of queue depth (0 if N/A)
-            try:
-                from .llama_integration import QUEUE_DEPTH as _QD  # type: ignore[attr-defined]
-                try:
-                    LLAMA_QUEUE_DEPTH.set(int(_QD))  # type: ignore[arg-type]
-                except Exception:
-                    LLAMA_QUEUE_DEPTH.set(0)  # type: ignore[attr-defined]
-            except Exception:
-                try:
-                    LLAMA_QUEUE_DEPTH.set(0)  # type: ignore[attr-defined]
-                except Exception:
-                    pass
-            data = generate_latest()
-            return _Resp(content=data, media_type=CONTENT_TYPE_LATEST)
-    except Exception:  # pragma: no cover - executed when dependency missing
-        from fastapi import Response as _Resp  # type: ignore
-
-        @app.get("/metrics", include_in_schema=False)
-        async def _metrics_route_fallback() -> _Resp:  # type: ignore[valid-type]
-            try:
-                from . import metrics as _m  # type: ignore
-
-                parts = [
-                    f"{_m.REQUEST_COUNT.name} {_m.REQUEST_COUNT.value}",
-                    f"{_m.REQUEST_LATENCY.name} {_m.REQUEST_LATENCY.value}",
-                ]
-                body = ("\n".join(parts) + "\n").encode()
-            except Exception:
-                body = b""
-            return _Resp(content=body, media_type="text/plain; version=0.0.4")
+# Metrics endpoint moved to `app/api/metrics_root.py` and is included from there.
+# The local /metrics handlers were removed to avoid duplicate definitions.
 
 
 _HEALTH_LAST: dict[str, bool] = {"online": True}
 
-# Root endpoint
-@app.get("/", include_in_schema=False)
-async def root() -> dict:
-    """Root endpoint for basic connectivity check."""
-    return {
-        "status": "ok", 
-        "message": "Gesahni API is running",
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": "1.0.0"
-    }
-
-# Health endpoint is handled by status.py router
-@app.get("/health", include_in_schema=False)
-async def _health_main() -> dict:
-    """Main health endpoint with basic status."""
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
-
-# K8s-friendly health group (no auth)
-@app.get("/health/live", include_in_schema=False)
-async def _health_live() -> dict:
-    # If ever used to signal offline, mirror flip logging
-    if not _HEALTH_LAST.get("online", False):
-        try:
-            logger.info("healthz status=online")
-        except Exception:
-            pass
-    _HEALTH_LAST["online"] = True
-    return {"status": "ok"}
-
-@app.get("/health/ready", include_in_schema=False)
-async def _health_ready() -> dict:
-    """Enhanced health check with detailed system status."""
-    health_start = time.time()
-    
-    try:
-        # Basic system checks
-        checks = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "uptime": time.time() - getattr(app.state, "_start_time", 0),
-            "version": "1.0.0",
-        }
-        
-        # Component health checks
-        component_health = {}
-        
-        # Database health
-        try:
-            from .auth import _ensure_table
-            await _ensure_table()
-            component_health["database"] = {"status": "healthy"}
-        except Exception as e:
-            component_health["database"] = {"status": "unhealthy", "error": str(e)}
-        
-        # Vector store health
-        try:
-            from .memory.api import _get_store
-            store = _get_store()
-            component_health["vector_store"] = {"status": "healthy", "type": type(store).__name__}
-        except Exception as e:
-            component_health["vector_store"] = {"status": "unhealthy", "error": str(e)}
-        
-        # LLaMA health
-        try:
-            from .llama_integration import LLAMA_HEALTHY
-            component_health["llama"] = {"status": "healthy" if LLAMA_HEALTHY else "unhealthy"}
-        except Exception as e:
-            component_health["llama"] = {"status": "unhealthy", "error": str(e)}
-        
-        checks["components"] = component_health
-        
-        # Error statistics
-        checks["errors"] = {
-            "startup_errors": len(_startup_errors),
-            "runtime_errors": len(_runtime_errors),
-            "recent_errors": len(get_last_errors(10)),
-        }
-        
-        # Performance metrics
-        health_duration = time.time() - health_start
-        checks["performance"] = {
-            "health_check_duration_ms": health_duration * 1000,
-        }
-        
-        # Determine overall health
-        unhealthy_components = [c for c in component_health.values() if c.get("status") == "unhealthy"]
-        overall_status = "healthy" if not unhealthy_components else "degraded"
-        
-        logger.info(f"Health check completed: {overall_status} ({health_duration:.3f}s)", extra={
-            "meta": {
-                "health_status": overall_status,
-                "unhealthy_components": len(unhealthy_components),
-                "duration_ms": health_duration * 1000,
-            }
-        })
-        
-        return {
-            "status": overall_status,
-            **checks
-        }
-        
-    except Exception as e:
-        logger.error(f"Health check failed: {e}", exc_info=True)
-        _record_error(e, "health_check")
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-
-@app.get("/health/startup", include_in_schema=False)
-async def _health_startup() -> dict:
-    return {"status": "ok"}
+# Root and health endpoints are provided by `status_router` and `health_router`.
+# To keep the main module focused on bootstrapping and router includes, local
+# implementations were removed in favor of the imported routers.
 
 
-# Dev-only helper page for testing WebSocket connections (hidden in prod)
-if os.getenv("ENV", "").strip().lower() not in {"prod", "production"}:
-    from .url_helpers import build_ws_url
-    
-    @app.get("/docs/ws", include_in_schema=False)
-    async def _ws_helper_page() -> HTMLResponse:  # pragma: no cover - covered by unit tests
-        # Build WebSocket URL dynamically
-        ws_url = build_ws_url("/v1/ws/care")
-        
-        html = f"""
-<!doctype html>
-<html lang=\"en\">
-  <head>
-    <meta charset=\"utf-8\" />
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
-    <title>WS Helper • Granny Mode API</title>
-    <style>
-      body {{ font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; color: #111; }}
-      input, button, textarea {{ font-size: 14px; }}
-      .row {{ display: flex; gap: 8px; margin: 6px 0; align-items: center; flex-wrap: wrap; }}
-      label {{ min-width: 120px; font-weight: 600; }}
-      #events {{ border: 1px solid #ddd; padding: 8px; height: 320px; overflow: auto; background: #fafafa; }}
-      code, pre {{ background: #f3f3f3; padding: 2px 4px; border-radius: 4px; }}
-      .small {{ color: #666; font-size: 12px; }}
-    </style>
-  </head>
-  <body>
-    <h1>WebSocket helper</h1>
-    <p class=\"small\">Connect to <code>/v1/ws/care</code>, subscribe to a topic like <code>resident:{{id}}</code>, and view incoming events.</p>
-
-    <div class=\"row\">
-      <label for=\"url\">WS URL</label>
-      <input id=\"url\" size=\"60\" placeholder=\"{ws_url}\" />
-      <button id=\"btnConnect\">Connect</button>
-      <button id=\"btnDisconnect\">Disconnect</button>
-    </div>
-
-    <div class=\"row\">
-      <label for=\"token\">JWT token</label>
-      <input id=\"token\" size=\"60\" placeholder=\"Optional: appended as ?token=...\" />
-      <span class=\"small\">Token is appended as <code>?token=</code> for browser WS</span>
-    </div>
-
-    <div class=\"row\">
-      <label for=\"resident\">Resident ID</label>
-      <input id=\"resident\" size=\"16\" placeholder=\"r1\" />
-      <label for=\"topic\">Topic</label>
-      <input id=\"topic\" size=\"24\" placeholder=\"resident:{{id}}\" />
-      <button id=\"btnSubscribe\">Subscribe</button>
-      <button id=\"btnPing\">Ping</button>
-    </div>
-
-    <div class=\"row\"> 
-      <label>Subscribe payload</label>
-      <code>{{"action":"subscribe","topic":"resident:{id}"}}</code>
-    </div>
-
-    <h3>Events</h3>
-    <div id=\"events\"></div>
-
-    <script>
-      let ws = null;
-      const urlInput = document.getElementById('url');
-      const tokenInput = document.getElementById('token');
-      const topicInput = document.getElementById('topic');
-      const residentInput = document.getElementById('resident');
-      const eventsDiv = document.getElementById('events');
-
-      function defaultUrl() {{
-        try {{
-          const proto = (location.protocol === 'https:') ? 'wss:' : 'ws:';
-          return proto + '//' + location.host + '/v1/ws/care';
-        }} catch (e) {{ return '{ws_url}'; }}
-      }}
-
-      urlInput.value = defaultUrl();
-
-      function log(kind, data) {{
-        const line = document.createElement('div');
-        const ts = new Date().toISOString();
-        line.textContent = '[' + ts + '] ' + kind + ': ' + data;
-        eventsDiv.appendChild(line);
-        eventsDiv.scrollTop = eventsDiv.scrollHeight;
-      }}
-
-      function connect() {{
-        let u = urlInput.value.trim() || defaultUrl();
-        const t = tokenInput.value.trim();
-        if (t) {{
-          const sep = u.includes('?') ? '&' : '?';
-          u = u + sep + 'token=' + encodeURIComponent(t);
-        }}
-        ws = new WebSocket(u);
-        ws.addEventListener('open', () => log('open', u));
-        ws.addEventListener('close', () => log('close', '')); 
-        ws.addEventListener('error', (e) => log('error', JSON.stringify(e))); 
-        ws.addEventListener('message', (e) => log('message', e.data));
-      }}
-
-      function disconnect() {{
-        try {{ ws && ws.close(); }} catch (e) {{}}
-      }}
-
-      function subscribe() {{
-        if (!ws || ws.readyState !== 1) {{ log('warn', 'not connected'); return; }}
-        let topic = topicInput.value.trim();
-        const rid = residentInput.value.trim();
-        if (!topic && rid) {{ topic = 'resident:' + rid; }}
-        if (!topic) {{ log('warn', 'topic required'); return; }}
-        const payload = {{ action: 'subscribe', topic }};
-        ws.send(JSON.stringify(payload));
-        log('send', JSON.stringify(payload));
-      }}
-
-      function ping() {{
-        if (!ws || ws.readyState !== 1) {{ log('warn', 'not connected'); return; }}
-        ws.send('ping');
-        log('send', 'ping');
-      }}
-
-      document.getElementById('btnConnect').addEventListener('click', connect);
-      document.getElementById('btnDisconnect').addEventListener('click', disconnect);
-      document.getElementById('btnSubscribe').addEventListener('click', subscribe);
-      document.getElementById('btnPing').addEventListener('click', ping);
-    </script>
-  </body>
- </html>
-        """
-        return HTMLResponse(content=html, media_type="text/html")
+# Dev-only WS helper moved to `app/api/debug.py`
 
 
 class AskRequest(BaseModel):
@@ -1146,536 +837,109 @@ class ServiceRequest(BaseModel):
     )
 
 
-class DeleteMemoryRequest(BaseModel):
-    id: str
-
-
-core_router = APIRouter(tags=["Care"])
-protected_router = APIRouter(dependencies=[Depends(verify_token), Depends(rate_limit)])
-# Scoped routers
-admin_router = APIRouter(
-    dependencies=[
-        Depends(verify_token),
-        Depends(require_any_scopes(["admin", "admin:write"])),
-        # Docs-only dependency to render lock icon and OAuth2 scopes in Swagger
-        Depends(docs_security_with(["admin:write"])),
-        Depends(rate_limit),
-    ],
-    tags=["Admin"],
-)
-ha_router = APIRouter(
-    dependencies=[
-        Depends(verify_token),
-        Depends(require_any_scopes(["ha", "care:resident", "care:caregiver"])),
-        Depends(docs_security_with(["care:resident"])),
-        Depends(rate_limit),
-    ],
-    tags=["Care"],
-)
-ws_router = APIRouter(
-    dependencies=[Depends(verify_ws)], tags=["Care"]
-)
-
-
-from .models.common import OkResponse as CommonOkResponse
-
-
-class OkResponse(CommonOkResponse):
-    model_config = ConfigDict(title="OkResponse")
-
-
-@core_router.post(
-    "/presence",
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok"}}}}}},
-)
-async def presence(present: bool = True, user_id: str = Depends(get_current_user_id)):
-    _set_presence(user_id, bool(present))
-    return {"status": "ok"}
-
-
-# Duplicate of ha_router webhook removed; single source in HA router
-
-
-# Memory export/delete --------------------------------------------------------
-
-
-@core_router.get("/memories/export")
-async def export_memories(user_id: str = Depends(get_current_user_id)):
-    out = {"profile": [], "episodic": []}
-    try:
-        # Episodic via vector store listing when available
-        from .memory.api import get_store as _get_vs  # type: ignore
-
-        _vs = _get_vs()
-        if hasattr(_vs, "list_user_memories"):
-            out["episodic"] = _vs.list_user_memories(user_id)  # type: ignore[attr-defined]
-    except Exception:
-        pass
-    # Profile via pinned memgpt store (best-effort)
-    try:
-        from .memory.memgpt import memgpt
-
-        out["profile"] = memgpt.list_pins()  # type: ignore
-    except Exception:
-        pass
-    return out
-
-
-@core_router.delete("/memories/{mem_id}")
-async def delete_memory(mem_id: str, user_id: str = Depends(get_current_user_id)):
-    try:
-        from .memory.api import get_store as _get_vs  # type: ignore
-        _vs = _get_vs()
-        if hasattr(_vs, "delete_user_memory"):
-            ok = _vs.delete_user_memory(user_id, mem_id)  # type: ignore[attr-defined]
-            if ok:
-                return {"status": "deleted"}
-    except Exception:
-        pass
-    raise HTTPException(status_code=404, detail="memory_not_found")
-
-
-# /v1/me and /v1/whoami are served from app.api.me and app.api.auth respectively; keep no duplicates here
-
-
-async def _require_auth_dep_for_core(request: Request) -> None:
-    # Skip CORS preflight requests
-    if request.method == "OPTIONS":
-        return
-    if os.getenv("REQUIRE_JWT", "0").strip().lower() in {"1", "true", "yes", "on"}:
-        from .security import verify_token as _vt  # lazy; supports cookies or bearer
-        await _vt(request)
-
-
-
-
-
-@protected_router.post(
-    "/upload",
-    tags=["Care"],
-    responses={200: {"content": {"application/json": {"schema": {"example": {"session_id": "s_123"}}}}}},
-)
-async def upload(
-    request: Request,
-    file: UploadFile = File(...),
-    user_id: str = Depends(get_current_user_id),
-):
-    # Write to this module's SESSIONS_DIR so tests that monkey‑patch it see files
-    session_id = uuid.uuid4().hex
-    session_dir = Path(SESSIONS_DIR) / session_id
-    session_dir.mkdir(parents=True, exist_ok=True)
-    dest = session_dir / "source.wav"
-    content = await file.read()
-    # Offload blocking disk write to threadpool to avoid blocking the event loop
-    await asyncio.to_thread(dest.write_bytes, content)
-    logger.info("sessions.upload", extra={"meta": {"dest": str(dest), "user_id": user_id}})
-    return {"session_id": session_id}
-
-
-@protected_router.post(
-    "/capture/start",
-    tags=["Care"],
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok"}}}}}},
-)
-async def capture_start(
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    # Inline call to avoid re-import issues and keep tests isolated
-    from .session_manager import start_session as _start_capture_session
-    return await _start_capture_session()
-
-
-@protected_router.post(
-    "/capture/save",
-    tags=["Care"],
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok"}}}}}},
-)
-async def capture_save(
-    request: Request,
-    session_id: str = Form(...),
-    audio: UploadFile | None = File(None),
-    video: UploadFile | None = File(None),
-    transcript: str | None = Form(None),
-    tags: str | None = Form(None),
-    user_id: str = Depends(get_current_user_id),
-):
-    from .session_manager import save_session as _save
-    tags_list = None
-    if tags:
-        try:
-            import json as _json
-            tags_list = _json.loads(tags)
-        except Exception:
-            tags_list = None
-    await _save(session_id, audio, video, transcript, tags_list)
-    from .session_manager import get_session_meta as _get_meta
-    return _get_meta(session_id)
-
-
-@protected_router.post(
-    "/capture/tags",
-    tags=["Care"],
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "accepted"}}}}}},
-)
-async def capture_tags(
-    request: Request,
-    session_id: str = Form(...),
-    user_id: str = Depends(get_current_user_id),
-):
-    from .session_manager import generate_tags as _gen
-    await _gen(session_id)
-    return {"status": "accepted"}
-
-
-@protected_router.get("/capture/status/{session_id}", tags=["Care"])
-async def capture_status(
-    session_id: str,
-    user_id: str = Depends(get_current_user_id),
-):
-    from .api.sessions import capture_status as _status
-
-    return await _status(session_id, user_id)  # type: ignore[arg-type]
-
-
-@protected_router.get("/search/sessions", tags=["Care"])
-async def search_sessions(
-    q: str,
-    sort: str = "recent",
-    page: int = 1,
-    limit: int = 10,
-    user_id: str = Depends(get_current_user_id),
-):
-    from .api.sessions import search_session_store as _search
-
-    return await _search(q, sort=sort, page=page, limit=limit)  # type: ignore[arg-type]
-
-
-@protected_router.get("/capture/sessions", tags=["Care"])
-async def list_sessions_capture(
-    status: str | None = None,
-    user_id: str = Depends(get_current_user_id),
-):
-    # Mirror app.api.sessions mapping to avoid pydantic TypedAdapter error in tests
-    enum_val = None
-    if status:
-        try:
-            enum_val = SessionStatus(status)
-        except Exception:
-            enum_val = None
-    return list_session_store(enum_val)
-
-
-@protected_router.post(
-    "/sessions/{session_id}/transcribe",
-    tags=["Care"],
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok"}}}}}},
-)
-async def trigger_transcription_endpoint(
-    session_id: str,
-    user_id: str = Depends(get_current_user_id),
-):
-    from .api.sessions import trigger_transcription_endpoint as _tt
-
-    return await _tt(session_id, user_id)  # type: ignore[arg-type]
-
-
-@protected_router.post(
-    "/sessions/{session_id}/summarize",
-    tags=["Care"],
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok"}}}}}},
-)
-async def trigger_summary_endpoint(
-    session_id: str,
-    user_id: str = Depends(get_current_user_id),
-):
-    from .api.sessions import trigger_summary_endpoint as _ts
-
-    return await _ts(session_id, user_id)  # type: ignore[arg-type]
-
-
-@ws_router.websocket("/transcribe")
-async def websocket_transcribe(
-    ws: WebSocket,
-    user_id: str = Depends(get_current_user_id),
-):
-    from .api.sessions import websocket_transcribe as _wt
-
-    return await _wt(ws, user_id)  # type: ignore[arg-type]
-
-
-@ws_router.websocket("/storytime")
-async def websocket_storytime(
-    ws: WebSocket, user_id: str = Depends(get_current_user_id)
-):
-    from .api.sessions import websocket_storytime as _ws
-
-    return await _ws(ws, user_id)  # type: ignore[arg-type]
-
-
-@ws_router.websocket("/health")
-async def websocket_health(ws: WebSocket):
-    """Simple health check WebSocket endpoint for testing."""
-    await ws.accept()
-    await ws.send_text("healthy")
-    await ws.close()
-
-
-@core_router.post(
-    "/intent-test",
-    responses={200: {"content": {"application/json": {"schema": {"example": {"intent": "test", "prompt": "hello"}}}}}},
-)
-async def intent_test(req: AskRequest, user_id: str = Depends(get_current_user_id)):
-    logger.info("intent.test", extra={"meta": {"prompt": req.prompt}})
-    return {"intent": "test", "prompt": req.prompt}
-
-
-# Public helpers for tests/docs ------------------------------------------------
-
-
-@core_router.get("/csrf")
-async def get_csrf(request: Request) -> dict:
-    # Expose a tiny helper to fetch the CSRF token value and set the cookie
-    try:
-        tok = await _get_csrf_token()
-        # Set cookie for double-submit; not HttpOnly so client can echo back
-        from fastapi.responses import JSONResponse
-        from .cookie_config import get_cookie_config
-        
-        resp = JSONResponse({"csrf_token": tok})
-        cookie_config = get_cookie_config(request)
-        
-        # Set CSRF cookie using centralized cookie surface
-        from .cookies import set_csrf_cookie
-        set_csrf_cookie(
-            resp=resp,
-            token=tok,
-            ttl=600,  # 10 minutes
-            request=request
-        )
-        return resp
-    except Exception:
-        from fastapi.responses import JSONResponse
-        return JSONResponse({"csrf_token": ""})
-
-
-@core_router.get("/client-crypto-policy")
-async def client_crypto_policy() -> dict:
-    return {
-        "cipher": "AES-GCM-256",
-        "key_wrap_methods": ["webauthn", "pbkdf2"],
-        "storage": "indexeddb",
-        "deks": "per-user-per-device",
-    }
-
-
-# Admin endpoints are served from app.api.admin. Avoid duplicating here.
-
-
-# Nickname table CRUD (aliases)
-@core_router.get("/ha/aliases")
-async def list_aliases(user_id: str = Depends(get_current_user_id)):
-    return await alias_all()
-
-
-class AliasBody(BaseModel):
-    name: str
-    entity_id: str
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {"name": "kitchen light", "entity_id": "light.kitchen"}
-        }
-    )
-
-
-@core_router.post(
-    "/ha/aliases",
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok"}}}}}},
-    openapi_extra={
-        "requestBody": {
-            "content": {
-                "application/json": {
-                    "schema": {"$ref": "#/components/schemas/AliasBody"},
-                    "example": {"name": "kitchen light", "entity_id": "light.kitchen"},
-                }
-            }
-        }
-    },
-)
-async def create_alias(body: AliasBody, user_id: str = Depends(get_current_user_id)):
-    await alias_set(body.name, body.entity_id)
-    return {"status": "ok"}
-
-
-@core_router.delete("/ha/aliases")
-async def delete_alias(name: str, user_id: str = Depends(get_current_user_id)):
-    await alias_delete(name)
-    return {"status": "ok"}
-
 
 # Profile and onboarding endpoints have moved to app.api.profile
 
 
-@ha_router.get("/ha/entities")
-async def ha_entities(user_id: str = Depends(get_current_user_id)):
-    try:
-        return await get_states()
-    except Exception as e:
-        logger.exception("HA states error: %s", e)
-        raise HTTPException(status_code=500, detail="Home Assistant error")
+# HA endpoints have been moved to `app/api/ha_local.py` and/or `app/api/ha.py`.
+# Local ha_router definitions and handlers removed from main to keep imports modular.
 
 
-@ha_router.post(
-    "/ha/service",
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "ok"}}}}}},
-)
-async def ha_service(
-    req: ServiceRequest,
-    user_id: str = Depends(get_current_user_id),
-    _nonce: None = Depends(require_nonce),
-):
-    try:
-        # Import dynamically so tests patching app.home_assistant.call_service take effect
-        from . import home_assistant as _ha
-
-        resp = await _ha.call_service(req.domain, req.service, req.data or {})
-        return resp or {"status": "ok"}
-    except Exception as e:
-        logger.exception("HA service error: %s", e)
-        # In test smoke (example hits), avoid 5xx to satisfy contract
-        if os.getenv("PYTEST_RUNNING", "").lower() in {"1", "true", "yes"}:
-            return {"status": "ok"}
-        raise HTTPException(status_code=400, detail="Home Assistant error")
-
-
-# Signed HA webhook -----------------------------------------------------------
-
-
-class WebhookAck(BaseModel):
-    status: str = "ok"
-
-
-@ha_router.post("/ha/webhook", response_model=WebhookAck)
-async def ha_webhook(request: Request):
-    _ = await verify_webhook(request)
-    return WebhookAck()
-
-
-# Admin dashboard routes moved to app.api.admin
-
-
-@ha_router.get("/ha/resolve")
-async def ha_resolve(name: str, user_id: str = Depends(get_current_user_id)):
-    try:
-        entity = await resolve_entity(name)
-        if entity:
-            return {"entity_id": entity}
-        raise HTTPException(status_code=404, detail="Entity not found")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("HA resolve error: %s", e)
-        raise HTTPException(status_code=500, detail="Home Assistant error")
-
-
-@core_router.get("/explain_route")
-async def explain_route(req_id: str, user_id: str = Depends(get_current_user_id)):
-    """Return a compact breadcrumb trail describing how a request was handled."""
-    record = await get_record_by_req_id(req_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="request_not_found")
-
-    parts: list[str] = []
-    # Skill
-    skill = record.get("matched_skill") or None
-    if skill:
-        parts.append(f"skill={skill}")
-    # HA call
-    ha_call = record.get("ha_service_called")
-    if ha_call:
-        ents = record.get("entity_ids") or []
-        parts.append(f"ha={ha_call}{(' ' + ','.join(ents)) if ents else ''}")
-    # Cache
-    if record.get("cache_hit"):
-        parts.append("cache=hit")
-    # Router / model
-    reason = record.get("route_reason") or None
-    model = record.get("model_name") or None
-    engine = record.get("engine_used") or None
-    if reason:
-        parts.append(f"route={reason}")
-    if engine:
-        parts.append(f"engine={engine}")
-    if model:
-        parts.append(f"model={model}")
-    # Self-check
-    sc = record.get("self_check_score")
-    if sc is not None:
-        try:
-            parts.append(f"self_check={float(sc):.2f}")
-        except Exception:
-            parts.append(f"self_check={sc}")
-    if record.get("escalated"):
-        parts.append("escalated=true")
-    # Latency
-    lat = record.get("latency_ms")
-    if isinstance(lat, int):
-        parts.append(f"latency={lat}ms")
-
-    return {
-        "req_id": req_id,
-        "breadcrumb": " | ".join(parts),
-        "meta": record.get("meta"),
-    }
-
-
-async def _background_transcribe(session_id: str) -> None:
-    base = Path(SESSIONS_DIR)
-    audio_path = base / session_id / "audio.wav"
-    transcript_path = base / session_id / "transcript.txt"
-    try:
-        text = await transcribe_file(str(audio_path))
-        transcript_path.parent.mkdir(parents=True, exist_ok=True)
-        transcript_path.write_text(text, encoding="utf-8")
-    except Exception as e:  # pragma: no cover - best effort
-        logger.exception("Transcription failed: %s", e)
-
-
-@core_router.post(
-    "/transcribe/{session_id}",
-    responses={200: {"content": {"application/json": {"schema": {"example": {"status": "accepted"}}}}}},
-)
-async def start_transcription(
-    session_id: str,
-    background_tasks: BackgroundTasks,
-    user_id: str = Depends(get_current_user_id),
-):
-    background_tasks.add_task(_background_transcribe, session_id)
-    return {"status": "accepted"}
-
-
-@core_router.get("/transcribe/{session_id}")
-async def get_transcription(
-    session_id: str, user_id: str = Depends(get_current_user_id)
-):
-    transcript_path = Path(SESSIONS_DIR) / session_id / "transcript.txt"
-    if transcript_path.exists():
-        return {"text": transcript_path.read_text(encoding="utf-8")}
-    raise HTTPException(status_code=404, detail="Transcript not found")
+# The following core handlers were moved to modular routers:
+# - explain_route -> app/api/core_misc.py
+# - transcribe endpoints -> app/api/transcribe.py
+# The business handlers were removed from main.py to keep it focused on bootstrap and router includes.
 
 
 
 
-# Include routers with versioned and unversioned paths
-app.include_router(core_router, prefix="/v1")
-app.include_router(core_router, include_in_schema=False)
-app.include_router(protected_router, prefix="/v1")
-app.include_router(protected_router, include_in_schema=False)
-app.include_router(admin_router, prefix="/v1")
-app.include_router(admin_router, include_in_schema=False)
-app.include_router(ws_router, prefix="/v1")
-app.include_router(ws_router, include_in_schema=False)
+# =============================================================================
+# NEW MODULAR ROUTERS - Extracted from local handlers
+# =============================================================================
+try:
+    from .api.sessions import router as sessions_router
+    app.include_router(sessions_router, prefix="/v1/sessions")
+    app.include_router(sessions_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.capture import router as capture_router
+    app.include_router(capture_router, prefix="/v1")
+    app.include_router(capture_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.transcribe import router as transcribe_router
+    app.include_router(transcribe_router, prefix="/v1")
+    app.include_router(transcribe_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.ha_local import router as ha_local_router
+    app.include_router(ha_local_router, prefix="/v1")
+    app.include_router(ha_local_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.memories import router as memories_router
+    app.include_router(memories_router, prefix="/v1")
+    app.include_router(memories_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.util import router as util_router
+    app.include_router(util_router, prefix="/v1")
+    # Ensure the router isn't also mounted at root with include_in_schema=False
+    # which would register method-only matches for all root paths and cause
+    # unexpected 405s. Mount the docs-suppressed registration under the same
+    # `/v1` prefix instead.
+    app.include_router(util_router, prefix="/v1", include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.ws_endpoints import router as ws_local_router
+    app.include_router(ws_local_router, prefix="/v1")
+    app.include_router(ws_local_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.debug import router as debug_router
+    app.include_router(debug_router, prefix="/v1")
+    app.include_router(debug_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.core_misc import router as core_misc_router
+    app.include_router(core_misc_router, prefix="/v1")
+    app.include_router(core_misc_router, include_in_schema=False)
+except Exception:
+    pass
+
+try:
+    from .api.metrics_root import router as metrics_root_router
+    app.include_router(metrics_root_router)  # keep /metrics at root
+except Exception:
+    pass
+
+try:
+    # Vector-store health diagnostics (e.g., /v1/health/chroma)
+    from .health import router as health_diag_router
+    app.include_router(health_diag_router, prefix="/v1")
+    app.include_router(health_diag_router, include_in_schema=False)
+except Exception:
+    pass
+
+# =============================================================================
+# EXISTING EXTERNAL ROUTERS - Keep in modern-first order
+# =============================================================================
 app.include_router(status_router, prefix="/v1")
 app.include_router(status_router, include_in_schema=False)
 # Tiered health (unauthenticated): /healthz/* endpoints
@@ -1690,8 +954,15 @@ except Exception:
     pass
 
 # Legacy auth router (mounted after new API router to avoid shadowing)
-app.include_router(auth_router, prefix="/v1")
-app.include_router(auth_router, include_in_schema=False)
+# Conditionally mount auth router (contains admin rate limit endpoints)
+from .auth_providers import admin_enabled
+
+if admin_enabled():
+    app.include_router(auth_router, prefix="/v1")
+    app.include_router(auth_router, include_in_schema=False)
+    print("INFO: Auth router mounted (admin_enabled=True)")
+else:
+    print("INFO: Auth router disabled (admin_enabled=False)")
 if preflight_router is not None:
     app.include_router(preflight_router, prefix="/v1")
     app.include_router(preflight_router, include_in_schema=False)
@@ -1703,9 +974,9 @@ app.include_router(oauth_google_router, prefix="/v1")
 app.include_router(oauth_google_router, include_in_schema=False)
 app.include_router(google_oauth_router, prefix="/v1")
 app.include_router(google_oauth_router, include_in_schema=False)
-if oauth_apple_router is not None:
-    app.include_router(oauth_apple_router, prefix="/v1")
-    app.include_router(oauth_apple_router, include_in_schema=False)
+if _oauth_apple_router is not None:
+    app.include_router(_oauth_apple_router, prefix="/v1")
+    app.include_router(_oauth_apple_router, include_in_schema=False)
 if auth_password_router is not None:
     app.include_router(auth_password_router, prefix="/v1")
     app.include_router(auth_password_router, include_in_schema=False)
@@ -1725,7 +996,6 @@ try:
             Depends(verify_token),
             Depends(require_any_scopes(["care:resident", "care:caregiver"])),
             Depends(docs_security_with(["care:resident"])),
-            Depends(rate_limit),
         ],
     )
     app.include_router(ha_api_router, include_in_schema=False)
@@ -1748,42 +1018,50 @@ try:
 except Exception:
     pass
 
+# Conditionally mount admin router based on environment
 try:
-    from .api.admin import router as admin_api_router
-    app.include_router(
-        admin_api_router,
-        prefix="/v1",
-        dependencies=[
-            # Bind OAuth2 scopes for docs; runtime auth enforced inside router AND here for belt & suspenders
-            Depends(docs_security_with(["admin:write"])),
-            Depends(verify_token),
-        ],
-    )
-    app.include_router(admin_api_router, include_in_schema=False)
-except Exception:
-    pass
+    if admin_enabled():
+        from .api.admin import router as admin_api_router
+        # Mount the new RBAC-powered admin router
+        # The router already has prefix="/admin" so final paths will be /v1/admin/*
+        app.include_router(
+            admin_api_router,
+            prefix="/v1",
+            # No global dependencies - each endpoint uses its own RBAC rules
+        )
+        # Mount without schema for internal routes (no prefix duplication)
+        app.include_router(admin_api_router, include_in_schema=False)
+        print("INFO: Admin routes mounted (admin_enabled=True)")
+    else:
+        print("INFO: Admin routes disabled (admin_enabled=False)")
+except Exception as e:
+    print(f"WARNING: Failed to mount admin router: {e}")
 
 # Admin-inspect routes are included via app.api.admin router if available
 
-try:
-    from .api.admin_ui import router as admin_ui_router
-    app.include_router(admin_ui_router, prefix="/v1")
-    app.include_router(admin_ui_router, include_in_schema=False)
-    # Also include experimental admin diagnostics (retrieval trace) router
+# Conditionally mount all admin-related routers
+if admin_enabled():
     try:
-        from .admin.routes import router as admin_extras_router
-        app.include_router(admin_extras_router, prefix="/v1")
-        app.include_router(admin_extras_router, include_in_schema=False)
+        from .api.admin_ui import router as admin_ui_router
+        app.include_router(admin_ui_router, prefix="/v1")
+        app.include_router(admin_ui_router, include_in_schema=False)
+        # Also include experimental admin diagnostics (retrieval trace) router
+        try:
+            from .admin.routes import router as admin_extras_router
+            app.include_router(admin_extras_router, prefix="/v1")
+            app.include_router(admin_extras_router, include_in_schema=False)
+        except Exception:
+            pass
     except Exception:
-        pass
-except Exception:
-    # Even if admin UI unavailable, still try to include admin extras
-    try:
-        from .admin.routes import router as admin_extras_router
-        app.include_router(admin_extras_router, prefix="/v1")
-        app.include_router(admin_extras_router, include_in_schema=False)
-    except Exception:
-        pass
+        # Even if admin UI unavailable, still try to include admin extras
+        try:
+            from .admin.routes import router as admin_extras_router
+            app.include_router(admin_extras_router, prefix="/v1")
+            app.include_router(admin_extras_router, include_in_schema=False)
+        except Exception:
+            pass
+else:
+    print("INFO: Admin UI and extras routers disabled (admin_enabled=False)")
 
 try:
     from .api.me import router as me_router
@@ -1815,13 +1093,17 @@ except Exception:
     pass
 
 try:
-    from .api.status_plus import router as status_plus_router
-    app.include_router(
-        status_plus_router,
-        prefix="/v1",
-        dependencies=[Depends(docs_security_with(["admin:write"]))],
-    )
-    app.include_router(status_plus_router, include_in_schema=False)
+    if admin_enabled():
+        from .api.status_plus import router as status_plus_router
+        app.include_router(
+            status_plus_router,
+            prefix="/v1",
+            dependencies=[Depends(docs_security_with(["admin:write"]))],
+        )
+        app.include_router(status_plus_router, include_in_schema=False)
+        print("INFO: Status plus router mounted (admin_enabled=True)")
+    else:
+        print("INFO: Status plus router disabled (admin_enabled=False)")
 except Exception:
     pass
 
@@ -1925,13 +1207,9 @@ try:
 except Exception:
     pass
 
-try:
-    # Vector-store health diagnostics (e.g., /v1/health/chroma)
-    from .health import router as health_diag_router
-    app.include_router(health_diag_router, prefix="/v1")
-    app.include_router(health_diag_router, include_in_schema=False)
-except Exception:
-    pass
+# Router includes moved to organized section above - removing duplicates
+
+# health_diag_router moved to organized section above
 
 try:
     # Caregiver portal scaffold (e.g., /v1/caregiver/*)
@@ -1941,7 +1219,6 @@ try:
         prefix="/v1",
         dependencies=[
             Depends(verify_token),
-            Depends(rate_limit),
             Depends(optional_require_any_scope(["care:caregiver"])),
             Depends(docs_security_with(["care:caregiver"])),
         ],
@@ -1952,19 +1229,17 @@ except Exception:
 
 # Music API router: attach HTTP dependencies to HTTP paths only
 if music_router is not None:
-    from fastapi import APIRouter
-    music_http = APIRouter(
-        dependencies=[
-            Depends(verify_token),
-            Depends(optional_require_any_scope(["music:control"])),
-            # Docs-only dependency to render lock icon and OAuth2 scopes in Swagger
-            Depends(docs_security_with(["music:control"])),
-            Depends(rate_limit),
-        ]
-    )
-    # mount HTTP subrouter for HTTP routes
-    music_http.include_router(music_router)
-    app.include_router(music_http, prefix="/v1")
+    try:
+        from .api.music_http import music_http
+        app.include_router(music_http, prefix="/v1")
+    except Exception:
+        # Fallback: include the music router directly without building a local APIRouter
+        # This avoids creating APIRouter instances inside main.py
+        try:
+            app.include_router(music_router, prefix="/v1")
+        except Exception:
+            pass
+    # Keep non-prefixed inclusion for schema compatibility
     app.include_router(music_router, include_in_schema=False)
     # Mount WS endpoints without HTTP dependencies
     try:
@@ -1992,11 +1267,16 @@ if music_router is not None:
 # 2) Core middlewares (inner → outer as you go DOWN)
 #    These WILL be skipped for OPTIONS by your own checks.
 #    Order: [ RequestID ] → [ Trace ] → [ CSRF ] → [ CORS ] → [ RateLimit / Router / Handlers ]
-app.add_middleware(RequestIDMiddleware)      # innermost - sets request ID
-app.add_middleware(DedupMiddleware)          # deduplicates requests
-app.add_middleware(HealthCheckFilterMiddleware)  # filters health check logs
-app.add_middleware(TraceRequestMiddleware)   # traces/logs requests (skips OPTIONS)
-app.add_middleware(RedactHashMiddleware)     # redact + hashing for secrets
+    # Core middlewares (inner → outer)
+    add_mw(app, RequestIDMiddleware,          name="RequestIDMiddleware")          # innermost - sets request ID
+    add_mw(app, DedupMiddleware,               name="DedupMiddleware")               # deduplicates requests
+    add_mw(app, HealthCheckFilterMiddleware,   name="HealthCheckFilterMiddleware")   # filters health check logs
+    add_mw(app, TraceRequestMiddleware,        name="TraceRequestMiddleware")        # traces/logs requests (skips OPTIONS)
+    add_mw(app, AuditMiddleware,               name="AuditMiddleware")               # append-only audit trail (Phase 6.2)
+    add_mw(app, RedactHashMiddleware,          name="RedactHashMiddleware")          # redact + hashing for secrets
+    add_mw(app, MetricsMiddleware,             name="MetricsMiddleware")             # clean prometheus metrics (Phase 6.1)
+    add_mw(app, RateLimitMiddleware,           name="RateLimitMiddleware")           # rate limiting (needs user_id/scopes from SessionAttachMiddleware)
+    add_mw(app, SessionAttachMiddleware,       name="SessionAttachMiddleware")       # attach user_id/scopes for downstream use (AFTER RateLimitMiddleware for metrics)
 
 
 
@@ -2008,32 +1288,149 @@ app.add_middleware(RedactHashMiddleware)     # redact + hashing for secrets
 
 # 4) CSRF protection BEFORE CORS (inner)
 #    CSRF middleware handles non-OPTIONS requests before CORS processes them
-app.add_middleware(CSRFMiddleware)           # CSRF protection (skips OPTIONS)
+# CSRF protection BEFORE CORS (inner)
+add_mw(app, CSRFMiddleware, name="CSRFMiddleware")  # CSRF protection (skips OPTIONS)
 logging.info("=== CSRF MIDDLEWARE REGISTERED ===")
 
-# Note: reload_env_middleware is a simple function, not a class, so we use the decorator
-app.middleware("http")(reload_env_middleware)
-app.middleware("http")(silent_refresh_middleware)  # Re-enabled to prevent 401s during app boot
-app.middleware("http")(enhanced_error_handling)  # Enhanced error handling and logging
+# Dev-only self-check: ensure CSRF cookie attributes look sane at boot
+try:
+    if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}:
+        from fastapi import Response
+
+        from app.cookies import set_csrf_cookie
+
+        r = Response()
+        # Mint a sample token and apply cookie helper (best-effort)
+        try:
+            tok = "dev-check-token"
+            # TTL 600s matches typical default
+            set_csrf_cookie(r, tok, request=None, ttl=600)  # request can be None for dev check
+        except Exception:
+            r = None
+
+        if r is not None:
+            # Parse generated Set-Cookie header(s) for csrf_token
+            headers = [h for h in getattr(r, "headers", [])]
+            for k, v in getattr(r, "headers", {}).items():
+                if k.lower() == "set-cookie" and "csrf_token" in v:
+                    # crude parse for dev-readable attributes
+                    attrs = v.split("; ")
+                    path = next((p.split("=")[1] for p in attrs if p.startswith("Path=")), "/")
+                    samesite = next((s.split("=")[1] for s in attrs if s.startswith("SameSite=")), "Lax")
+                    secure = any(a == "Secure" for a in attrs)
+                    httponly = any(a == "HttpOnly" for a in attrs)
+                    domain = next((d.split("=")[1] for d in attrs if d.startswith("Domain=")), "∅")
+                    logging.info(
+                        "CSRF cookie check: Path=%s, Domain=%s, SameSite=%s, Secure=%s, HttpOnly=%s",
+                        path,
+                        domain,
+                        samesite,
+                        str(secure).lower(),
+                        str(httponly).lower(),
+                    )
+except Exception:
+    pass
+
+# Dev/feature helpers (still inside CORS)
+if os.getenv("DEV_MODE", "0").lower() in {"1","true","yes","on"}:
+    add_mw(app, ReloadEnvMiddleware, name="ReloadEnvMiddleware")  # dev-only
+
+# Silent token refresh for authenticated flows
+if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1","true","yes","on"}:
+    add_mw(app, SilentRefreshMiddleware, name="SilentRefreshMiddleware")
+
+# Error boundary (keep inside CORS so errors still get ACAO)
+add_mw(app, EnhancedErrorHandlingMiddleware, name="EnhancedErrorHandlingMiddleware")
 
 # 5) CORS AS OUTERMOST MIDDLEWARE — HANDLES ALL RESPONSES
 #    CORS middleware must be the outermost to ensure all responses (including errors) get ACAO headers
+# Note: CORS has special configuration parameters, so we use direct add_middleware here
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=allow_credentials,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*", "Authorization"],
-    # Expose headers: only what you need (e.g., X-Request-ID), not wildcards
     expose_headers=["X-Request-ID"],
     max_age=600,
 )
 
+# DEV-only middleware order assertion
+def _current_mw_names() -> list[str]:
+    try:
+        return [m.cls.__name__ for m in getattr(app, "user_middleware", [])]
+    except Exception:
+        return []
+
+def _assert_middleware_order_dev(app):
+    """
+    Assert middleware order is correct in development.
+
+    This ensures middleware is registered in the proper order and no middleware
+    has been accidentally added out of order or removed.
+    """
+    # Temporarily always run this assertion for debugging
+    # if os.getenv("ENV", "dev").lower() != "dev":
+    #     return  # only assert in dev environment
+
+    # Starlette lists middleware in outer→inner order (opposite of registration order)
+    # So the actual order we see is the reverse of what we registered
+    want_outer_to_inner = [
+        # outer → inner (as reported by Starlette)
+        "CORSMiddleware",
+        "EnhancedErrorHandlingMiddleware",
+        # Optional dev middleware (in reverse order since they're added later)
+        *(["SilentRefreshMiddleware"] if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1", "true", "yes"} else []),
+        *(["ReloadEnvMiddleware"] if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes"} else []),
+        "CSRFMiddleware",
+        "SessionAttachMiddleware",  # SessionAttachMiddleware runs after RateLimitMiddleware for metrics
+        "RateLimitMiddleware",  # RateLimitMiddleware runs first to collect metrics
+        "MetricsMiddleware",     # Clean prometheus metrics
+        "RedactHashMiddleware",
+        "AuditMiddleware",       # Append-only audit trail
+        "TraceRequestMiddleware",
+        "HealthCheckFilterMiddleware",
+        "DedupMiddleware",
+        "RequestIDMiddleware",  # innermost
+    ]
+
+    got = [m.cls.__name__ for m in app.user_middleware]
+
+    # Compare the middleware order (excluding any unexpected middleware)
+    if got != want_outer_to_inner:
+        error_msg = f"""Middleware order mismatch.
+
+Expected (outer→inner): {want_outer_to_inner}
+Actual   (outer→inner): {got}
+
+Expected registration order (inner→outer):
+- RequestIDMiddleware (innermost)
+- DedupMiddleware
+- HealthCheckFilterMiddleware
+- TraceRequestMiddleware
+- RedactHashMiddleware
+- RateLimitMiddleware (for metrics collection)
+- SessionAttachMiddleware (after RateLimitMiddleware)
+- CSRFMiddleware
+- ReloadEnvMiddleware (optional, DEV_MODE={os.getenv('DEV_MODE', '0')})
+- SilentRefreshMiddleware (optional, SILENT_REFRESH_ENABLED={os.getenv('SILENT_REFRESH_ENABLED', '1')})
+- EnhancedErrorHandlingMiddleware
+- CORSMiddleware (outermost)
+
+This error indicates middleware registration order is incorrect.
+Check that add_mw() calls are in the correct sequence in main.py.
+"""
+        raise RuntimeError(error_msg)
+
+# Call right after last add_middleware(...)
+if os.getenv("ENV", "dev").lower() == "dev":
+    _assert_middleware_order_dev(app)
+
 # Debug middleware order dump
 def _dump_mw_stack(app):
     try:
-        stack = getattr(app, "user_middleware", [])
-        logging.warning("MW-ORDER (inner→outer): %s", [m.cls.__name__ for m in stack])
+        # Log once at INFO using our current name helper
+        logging.info("MW-ORDER (inner→outer): %s", _current_mw_names())
     except Exception as e:
         logging.warning("MW-ORDER dump failed: %r", e)
 

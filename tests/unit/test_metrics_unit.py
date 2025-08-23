@@ -1,4 +1,5 @@
 import asyncio
+
 import pytest
 
 
@@ -32,6 +33,7 @@ async def test_record_and_snapshot():
 
 def test_latency_stats_and_top_skills():
     import importlib
+
     from app import analytics as metrics
 
     # reload to isolate samples for this test
@@ -47,7 +49,6 @@ def test_latency_stats_and_top_skills():
         await metrics.record_skill("a")
         await metrics.record_skill("b")
 
-    import asyncio
     asyncio.run(_run())
 
     p95 = metrics.latency_p95()
