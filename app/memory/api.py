@@ -297,6 +297,50 @@ def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> str | None:
     return _store.lookup_cached_answer(prompt, ttl_seconds)
 
 
+def _compose_cache_cid(
+    user_id: str | None, norm_prompt: str, system_prompt: str | None, model_family: str | None
+) -> str:
+    """Compose a namespaced cache id to avoid cross-user and cross-system reuse.
+
+    Format: v1|<user_hash>|<prompt_hash>|<system_hash>|<model_family>
+    """
+    # Hash user id for privacy while preventing cross-user reuse
+    try:
+        user_hash = hash_user_id(user_id) if user_id else "anon"
+    except Exception:
+        user_hash = "anon"
+    p_hash = _normalized_hash(norm_prompt)
+    s_hash = _normalized_hash(system_prompt or "")
+    mf = (model_family or "")
+    cid = f"v1|{user_hash}|{p_hash}|{s_hash}|{mf}"
+    return cid
+
+
+def lookup_cached_answer_context(
+    user_id: str | None,
+    norm_prompt: str,
+    system_prompt: str | None,
+    model_family: str | None,
+    ttl_seconds: int = 86400,
+) -> str | None:
+    """Lookup a cached answer scoped to user, normalized prompt, system prompt, and model family."""
+    cid = _compose_cache_cid(user_id, norm_prompt, system_prompt, model_family)
+    return lookup_cached_answer(cid, ttl_seconds)
+
+
+def cache_answer_context(
+    user_id: str | None,
+    norm_prompt: str,
+    system_prompt: str | None,
+    model_family: str | None,
+    answer: str,
+    ttl_seconds: int | None = None,
+) -> None:
+    """Store an answer under the composed, namespaced cache id."""
+    cid = _compose_cache_cid(user_id, norm_prompt, system_prompt, model_family)
+    cache_answer(prompt=norm_prompt, answer=answer, cache_id=cid)
+
+
 def record_feedback(prompt: str, feedback: str) -> None:
     """Record human feedback for *prompt*."""
     return _store.record_feedback(prompt, feedback)

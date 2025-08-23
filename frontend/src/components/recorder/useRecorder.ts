@@ -152,7 +152,7 @@ export function useRecorder(): RecorderExports {
         const authOrchestrator = getAuthOrchestrator();
         const authState = authOrchestrator.getState();
 
-        if (!authState.isAuthenticated) {
+        if (!authState.is_authenticated) {
             setState({ status: "error", message: "Not authenticated. Please sign in to use recording features." });
             return;
         }

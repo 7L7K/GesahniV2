@@ -10,6 +10,8 @@ This module handles all post-call processing including:
 """
 
 import logging
+import time
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -249,7 +251,10 @@ async def cache_response(data: PostCallData, cache_id: str | None = None) -> boo
     """
     try:
         # Use provided cache_id or generate from prompt
-        cache_answer(prompt=data.prompt, answer=data.response, cache_id=cache_id)
+        if cache_id:
+            cache_answer(prompt=data.prompt, answer=data.response, cache_id=cache_id)
+        else:
+            cache_answer(prompt=data.prompt, answer=data.response, cache_id=None)
 
         logger.debug("Response cached successfully")
         return True
@@ -275,6 +280,7 @@ async def process_postcall(data: PostCallData) -> PostCallResult:
         PostCallResult with processing status
     """
     result = PostCallResult()
+    start_ts = time.time()
 
     # Process all tasks concurrently
     tasks = [
@@ -312,6 +318,27 @@ async def process_postcall(data: PostCallData) -> PostCallResult:
         logger.warning(f"Post-call processing completed with errors: {result.errors}")
     else:
         logger.debug("Post-call processing completed successfully")
+
+    # Emit a single POSTCALL JSON per provider result for observability
+    try:
+        elapsed_ms = int((time.time() - start_ts) * 1000)
+        summary = {
+            "rid": data.request_id,
+            "uid": data.user_id,
+            "session_id": data.session_id,
+            "intent": (data.metadata or {}).get("intent") if data.metadata else None,
+            "provider": data.vendor,
+            "model": data.model,
+            "tokens_est_method": (data.metadata or {}).get("tokens_est_method", "approx"),
+            "cache_hit": (data.metadata or {}).get("cache_hit", False),
+            "fallback_from": (data.metadata or {}).get("fallback_from"),
+            "error_type": result.errors[0] if result.errors else None,
+            "elapsed_ms": elapsed_ms,
+            "budget_ms_remaining": (data.metadata or {}).get("budget_ms_remaining"),
+        }
+        logger.info("POSTCALL", extra={"json_fields": summary})
+    except Exception:
+        logger.exception("Failed to emit POSTCALL summary")
 
     return result
 

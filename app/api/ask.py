@@ -23,6 +23,62 @@ from ..security import _jwt_decode
 logger = logging.getLogger(__name__)
 
 
+# Telemetry and logging utilities
+def _get_or_generate_request_id(request: Request) -> str:
+    """Get X-Request-ID from headers or generate a new one."""
+    try:
+        rid = request.headers.get("X-Request-ID")
+        if rid and rid.strip():
+            return rid.strip()
+    except Exception:
+        pass
+
+    # Generate a new request ID
+    return str(uuid.uuid4())[:8]
+
+
+def _get_trace_id() -> str | None:
+    """Get current trace ID for correlation."""
+    try:
+        return get_trace_id_hex()
+    except Exception:
+        return None
+
+
+def _should_log_verbose() -> bool:
+    """Check if verbose payload logging is enabled for local dev."""
+    return os.getenv("DEBUG_VERBOSE_PAYLOADS", "0").strip() in {"1", "true", "yes", "on"}
+
+
+def _redact_sensitive_data(data: dict) -> dict:
+    """Redact sensitive data from logs unless verbose mode is enabled."""
+    if _should_log_verbose():
+        return data
+
+    # Create a copy to avoid modifying the original
+    redacted = data.copy()
+
+    # Redact sensitive fields
+    sensitive_fields = {"prompt", "text", "message", "query", "q"}
+    for field in sensitive_fields:
+        if field in redacted:
+            redacted[field] = f"<redacted-{field}>"
+
+    # Redact messages content if present
+    if "messages" in redacted and isinstance(redacted["messages"], list):
+        for msg in redacted["messages"]:
+            if isinstance(msg, dict) and "content" in msg:
+                msg["content"] = "<redacted-content>"
+
+    # Redact original_messages if present
+    if "original_messages" in redacted and isinstance(redacted["original_messages"], list):
+        for msg in redacted["original_messages"]:
+            if isinstance(msg, dict) and "content" in msg:
+                msg["content"] = "<redacted-content>"
+
+    return redacted
+
+
 class Message(BaseModel):
     role: str = Field(..., description="Message role: system|user|assistant")
     content: str = Field(..., description="Message text content")
@@ -47,7 +103,40 @@ class AskRequest(BaseModel):
     model_config = ConfigDict(
         title="AskRequest",
         json_schema_extra={
-            "example": {"prompt": "ping", "model": "llama3", "stream": False}
+            "examples": {
+                "text_prompt": {
+                    "summary": "Simple text prompt",
+                    "description": "Basic text input for simple queries",
+                    "value": {
+                        "prompt": "What is the capital of France?",
+                        "model": "gpt-4o",
+                        "stream": False
+                    }
+                },
+                "chat_messages": {
+                    "summary": "Chat format with messages",
+                    "description": "Structured chat format preserving role information",
+                    "value": {
+                        "prompt": [
+                            {"role": "system", "content": "You are a helpful geography tutor."},
+                            {"role": "user", "content": "What is the capital of France?"},
+                            {"role": "assistant", "content": "The capital of France is Paris."},
+                            {"role": "user", "content": "What about Italy?"}
+                        ],
+                        "model": "llama3",
+                        "stream": True
+                    }
+                },
+                "streaming_text": {
+                    "summary": "Streaming text response",
+                    "description": "Text prompt with streaming response",
+                    "value": {
+                        "prompt": "Write a short poem about mountains",
+                        "model": "gpt-4o",
+                        "stream": True
+                    }
+                }
+            }
         },
     )
 
@@ -55,6 +144,236 @@ class AskRequest(BaseModel):
 from app.security import verify_token
 
 router = APIRouter(tags=["Care"])  # dependency added per-route to allow env gate
+
+
+# Telemetry and logging utilities
+def _get_or_generate_request_id(request: Request) -> str:
+    """Get X-Request-ID from headers or generate a new one."""
+    try:
+        rid = request.headers.get("X-Request-ID")
+        if rid and rid.strip():
+            return rid.strip()
+    except Exception:
+        pass
+
+    # Generate a new request ID
+    return str(uuid.uuid4())[:8]
+
+
+def _get_trace_id() -> str | None:
+    """Get current trace ID for correlation."""
+    try:
+        return get_trace_id_hex()
+    except Exception:
+        return None
+
+
+def _should_log_verbose() -> bool:
+    """Check if verbose payload logging is enabled for local dev."""
+    return os.getenv("DEBUG_VERBOSE_PAYLOADS", "0").strip() in {"1", "true", "yes", "on"}
+
+
+def _redact_sensitive_data(data: dict) -> dict:
+    """Redact sensitive data from logs unless verbose mode is enabled."""
+    if _should_log_verbose():
+        return data
+
+    # Create a copy to avoid modifying the original
+    redacted = data.copy()
+
+    # Redact sensitive fields
+    sensitive_fields = {"prompt", "text", "message", "query", "q"}
+    for field in sensitive_fields:
+        if field in redacted:
+            redacted[field] = f"<redacted-{field}>"
+
+    # Redact messages content if present
+    if "messages" in redacted and isinstance(redacted["messages"], list):
+        for msg in redacted["messages"]:
+            if isinstance(msg, dict) and "content" in msg:
+                msg["content"] = "<redacted-content>"
+
+    # Redact original_messages if present
+    if "original_messages" in redacted and isinstance(redacted["original_messages"], list):
+        for msg in redacted["original_messages"]:
+            if isinstance(msg, dict) and "content" in msg:
+                msg["content"] = "<redacted-content>"
+
+    return redacted
+
+
+# Standardized response envelope utilities
+def _create_json_response(
+    ok: bool,
+    rid: str | None = None,
+    trace_id: str | None = None,
+    data: dict | None = None,
+    error: dict | None = None
+) -> dict:
+    """Create a standardized JSON response envelope."""
+    response = {"ok": ok}
+
+    if rid:
+        response["rid"] = rid
+    if trace_id:
+        response["trace_id"] = trace_id
+    if data:
+        response["data"] = data
+    if error:
+        response["error"] = error
+
+    return response
+
+
+def _create_error_response(
+    machine_code: str,
+    human_message: str,
+    status_code: int | None = None,
+    details: dict | None = None
+) -> dict:
+    """Create a standardized error response."""
+    error = {
+        "code": machine_code,
+        "message": human_message,
+        "type": _map_http_status_to_error_type(status_code) if status_code else "client_error"
+    }
+
+    if details:
+        error["details"] = details
+
+    return error
+
+
+def _create_sse_event(event_type: str, data: dict) -> str:
+    """Create a standardized SSE event."""
+    import json
+    return f"data: {json.dumps({'event': event_type, 'data': data})}\n\n"
+
+
+def _heartbeat_generator(interval: int = 30):
+    """Generate periodic heartbeat events for SSE connections."""
+    import asyncio
+    from datetime import datetime, UTC
+
+    async def stream_heartbeats():
+        while True:
+            await asyncio.sleep(interval)
+            yield _create_sse_event("heartbeat", {"ts": datetime.now(UTC).isoformat()})
+
+    return stream_heartbeats()
+
+
+def _map_http_status_to_error_type(status_code: int) -> str:
+    """Map HTTP status codes to standardized error types."""
+    if status_code == 401 or status_code == 403:
+        return "auth_error"
+    elif status_code == 429:
+        return "rate_limited"
+    elif 400 <= status_code < 500:
+        return "client_error"
+    elif 500 <= status_code < 600:
+        return "downstream_error"
+    else:
+        return "unknown_error"
+
+
+# Auth gate dependency
+async def auth_gate(request: Request) -> str:
+    """
+    Consolidated authentication gate for all /ask endpoints.
+
+    This dependency:
+    - Honors REQUIRE_AUTH_FOR_ASK environment variable
+    - Honors ASK_STRICT_BEARER environment variable
+    - Sets request.state.user_id
+    - Returns 401 when missing/invalid
+
+    Returns the user_id for authenticated requests, "anon" for unauthenticated.
+    """
+    # Skip CORS preflight requests
+    if request.method == "OPTIONS":
+        request.state.user_id = "anon"
+        return "anon"
+
+    # Check if authentication is required
+    require_auth = os.getenv("REQUIRE_AUTH_FOR_ASK", "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+    if not require_auth:
+        # Auth not required, set anon user
+        request.state.user_id = "anon"
+        return "anon"
+
+    # Authentication is required
+    use_strict_bearer = os.getenv("ASK_STRICT_BEARER", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+    if use_strict_bearer:
+        # Strict bearer token validation
+        secret = os.getenv("JWT_SECRET")
+        if not secret:
+            raise HTTPException(status_code=500, detail="missing_jwt_secret")
+
+        auth = request.headers.get("Authorization")
+        token = None
+        if auth and auth.startswith("Bearer "):
+            token = auth.split(" ", 1)[1]
+
+        if not token:
+            logger.info(
+                "auth.missing_bearer",
+                extra={
+                    "meta": {"path": getattr(getattr(request, "url", None), "path", "/")}
+                },
+            )
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        try:
+            payload = _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+            request.state.jwt_payload = payload
+
+            # Extract user_id from JWT payload
+            user_id = payload.get("sub") or payload.get("user_id") or "anon"
+            request.state.user_id = user_id
+            return user_id
+
+        except jwt.PyJWTError:
+            logger.info(
+                "auth.invalid_token",
+                extra={
+                    "meta": {"path": getattr(getattr(request, "url", None), "path", "/")}
+                },
+            )
+            raise HTTPException(status_code=401, detail="Unauthorized")
+    else:
+        # Use the standard verify_token which handles cookie/header hybrid auth
+        try:
+            await verify_token(request)
+            # Get the user_id that was set by verify_token
+            user_id = getattr(request.state, "user_id", None)
+            if user_id is None:
+                user_id = get_current_user_id(request)
+            request.state.user_id = user_id
+            return user_id
+        except Exception as e:
+            logger.info(
+                "auth.verify_token_failed",
+                extra={
+                    "meta": {
+                        "path": getattr(getattr(request, "url", None), "path", "/"),
+                        "error": str(e)
+                    }
+                },
+            )
+            raise HTTPException(status_code=401, detail="Unauthorized")
 
 # Log auth dependency configuration at startup
 logger.info("🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id")
@@ -122,7 +441,7 @@ async def _require_auth_dep(request: Request) -> None:
 
 @router.post(
     "/ask",
-    dependencies=[Depends(verify_token)],
+    dependencies=[Depends(auth_gate)],
     responses={
         200: {
             "content": {
@@ -177,7 +496,7 @@ async def _ask(request: Request, body: dict | None):
         raise HTTPException(status_code=415, detail="unsupported_media_type")
 
     # Use canonical user_id from resolved parameter
-    _user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
+    __user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
 
     # Enforce authentication - return 401 if no valid user
     if user_id == "anon":
@@ -322,7 +641,7 @@ async def _ask(request: Request, body: dict | None):
         "ask.entry",
         extra={
             "meta": {
-                "user_hash": user_hash,
+                "user_hash": _user_hash,
                 "model_override": model_override,
                 "prompt_len": len(prompt_text or ""),
                 "req_id": rid,
@@ -378,12 +697,12 @@ async def _ask(request: Request, body: dict | None):
             if streamed_any:
                 logger.info(
                     "ask.success",
-                    extra={"meta": {"user_hash": user_hash, "streamed": True}},
+                    extra={"meta": {"user_hash": _user_hash, "streamed": True}},
                 )
             else:
                 logger.info(
                     "ask.success",
-                    extra={"meta": {"user_hash": user_hash, "streamed": False}},
+                    extra={"meta": {"user_hash": _user_hash, "streamed": False}},
                 )
                 # If the backend didn't stream any tokens, emit the final result once
                 if isinstance(result, str) and result:
@@ -630,7 +949,7 @@ async def ask_dry_explain(
         raise HTTPException(status_code=415, detail="unsupported_media_type")
 
     # Use canonical user_id from get_current_user_id dependency
-    user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
+    _user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
 
     # Enforce authentication - return 401 if no valid user
     if user_id == "anon":
@@ -779,7 +1098,7 @@ async def ask_stream(
         raise HTTPException(status_code=415, detail="unsupported_media_type")
 
     # Use canonical user_id from get_current_user_id dependency
-    user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
+    _user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
 
     # Enforce authentication - return 401 if no valid user
     if user_id == "anon":

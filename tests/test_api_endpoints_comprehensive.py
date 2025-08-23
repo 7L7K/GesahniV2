@@ -5,7 +5,7 @@ This module contains 10-12 comprehensive tests for the FastAPI endpoints:
 1. GET /healthz/ready returns 200 and expected JSON keys
 2. POST /v1/auth/login dev path returns cookies and redirect
 3. POST /v1/auth/logout returns 204 and clears cookies
-4. GET /v1/auth/whoami unauth=401; with cookies=200 and basic user payload
+4. GET /v1/whoami unauth=200 (with unauthenticated response); with cookies=200 and user payload
 5. POST /v1/auth/refresh rotates access token, keeps refresh, asserts TTL changes
 6. GET /v1/models lists whitelisted models
 7. POST /v1/ask with mock model router returns stubbed answer; asserts analytics called
@@ -112,18 +112,25 @@ class TestAPIEndpointsComprehensive:
         cookies_header = response.headers.get("set-cookie", "")
         assert "access_token=;" in cookies_header or "expires=" in cookies_header
 
-    def test_auth_whoami_unauthenticated(self, client: TestClient):
-        """Test GET /v1/auth/whoami without auth returns 401."""
-        response = client.get("/v1/auth/whoami")
+    def test_whoami_unauthenticated(self, client: TestClient):
+        """Test GET /v1/whoami without auth returns 200 with unauthenticated response."""
+        response = client.get("/v1/whoami")
 
-        assert response.status_code == 401
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_authenticated"] is False
+        assert data["session_ready"] is False
+        assert data["user_id"] is None
+        assert data["user"]["id"] is None
+        assert data["source"] == "missing"
+        assert data["version"] == 1
 
-    def test_auth_whoami_with_cookies(self, client: TestClient):
-        """Test GET /v1/auth/whoami with valid cookies returns 200 and user payload."""
+    def test_whoami_with_cookies(self, client: TestClient):
+        """Test GET /v1/whoami with valid cookies returns 200 and user payload."""
         cookies = create_auth_cookies("testuser")
         client.cookies.set("access_token", cookies["access_token"])
 
-        response = client.get("/v1/auth/whoami")
+        response = client.get("/v1/whoami")
 
         assert response.status_code == 200
         data = response.json()
@@ -142,11 +149,11 @@ class TestAPIEndpointsComprehensive:
         assert data["source"] == "cookie"
         assert data["version"] == 1
 
-    def test_auth_whoami_with_bearer_token(self, client: TestClient):
-        """Test GET /v1/auth/whoami with Bearer token returns 200."""
+    def test_whoami_with_bearer_token(self, client: TestClient):
+        """Test GET /v1/whoami with Bearer token returns 200."""
         headers = create_auth_headers("testuser")
 
-        response = client.get("/v1/auth/whoami", headers=headers)
+        response = client.get("/v1/whoami", headers=headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -335,7 +342,7 @@ class TestAPIEndpointsComprehensive:
 
         # Make multiple requests to potentially trigger rate limiting
         for _ in range(3):
-            response = client.get("/v1/auth/whoami")
+            response = client.get("/v1/whoami")
             if response.status_code == 429:
                 # Rate limited - check for appropriate headers
                 assert "retry-after" in response.headers
@@ -557,7 +564,7 @@ class TestAPIEndpointsComprehensive:
 
         # Make many requests
         for _ in range(50):
-            response = client.get("/v1/auth/whoami")
+            response = client.get("/v1/whoami")
             assert response.status_code in [200, 401]
 
         # Should still be able to make requests after many iterations

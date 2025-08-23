@@ -11,8 +11,9 @@ import { apiFetch, getToken } from '@/lib/api';
 import { getBootstrapManager } from './bootstrapManager';
 
 export interface AuthState {
-    isAuthenticated: boolean;
-    sessionReady: boolean;
+    is_authenticated: boolean;
+    session_ready: boolean;
+    user_id: string | null;
     user: {
         id: string | null;
         email: string | null;
@@ -41,8 +42,9 @@ export interface AuthOrchestrator {
 
 class AuthOrchestratorImpl implements AuthOrchestrator {
     private state: AuthState = {
-        isAuthenticated: false,
-        sessionReady: false,
+        is_authenticated: false,
+        session_ready: false,
+        user_id: null,
         user: null,
         source: 'missing',
         version: 1,
@@ -151,7 +153,7 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
                 console.error('AUTH Orchestrator: Max oscillation count reached, applying extended backoff');
                 this.applyOscillationBackoff();
             }
-        } else if (this.state.error === null && this.state.isAuthenticated) {
+        } else if (this.state.error === null && this.state.is_authenticated) {
             // Reset oscillation count on successful authentication
             this.oscillationDetectionCount = 0;
         }
@@ -186,8 +188,8 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
         }
 
         // Check for rapid authentication state changes
-        if (prevState.isAuthenticated !== newState.isAuthenticated ||
-            prevState.sessionReady !== newState.sessionReady) {
+        if (prevState.is_authenticated !== newState.is_authenticated ||
+            prevState.session_ready !== newState.session_ready) {
             const timeSinceLastChange = Date.now() - this.lastWhoamiCall;
             return timeSinceLastChange < 5000; // Increased from 3000 to 5000ms threshold
         }
@@ -418,8 +420,9 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
 
                         // Flip to unauthenticated state after retry fails
                         const unauthenticatedState: AuthState = {
-                            isAuthenticated: false,
-                            sessionReady: false,
+                            is_authenticated: false,
+                            session_ready: false,
+                            user_id: null,
                             user: null,
                             source: 'missing',
                             version: this.state.version + 1,
@@ -440,8 +443,9 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
                 this.authGateRetryAttempted = false; // Reset retry flag on successful auth
 
                 const newState: AuthState = {
-                    isAuthenticated: shouldBeAuthenticated,
-                    sessionReady: shouldBeAuthenticated,
+                    is_authenticated: shouldBeAuthenticated,
+                    session_ready: shouldBeAuthenticated,
+                    user_id: data.user_id,
                     user: shouldBeAuthenticated ? {
                         id: data.user_id,
                         email: data.email || null,
@@ -500,8 +504,9 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
                 }
 
                 const newState: AuthState = {
-                    isAuthenticated: false,
-                    sessionReady: false,
+                    is_authenticated: false,
+                    session_ready: false,
+                    user_id: null,
                     user: null,
                     source: 'missing',
                     version: this.state.version + 1,
@@ -532,8 +537,9 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
             this.applyOscillationBackoff();
 
             const newState: AuthState = {
-                isAuthenticated: false,
-                sessionReady: false,
+                is_authenticated: false,
+                session_ready: false,
+                user_id: null,
                 user: null,
                 source: 'missing',
                 version: this.state.version + 1,

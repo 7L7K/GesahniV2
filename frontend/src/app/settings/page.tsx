@@ -36,10 +36,10 @@ function SettingsPageInner() {
 
     useEffect(() => {
         // Only fetch budget if authenticated
-        if (!authState.isAuthenticated) return;
+        if (!authState.is_authenticated) return;
 
         getBudget().then((b) => setBudget(b as any)).catch(() => setBudget(null));
-    }, [authState.isAuthenticated]);
+    }, [authState.is_authenticated]);
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -79,7 +79,7 @@ function SettingsPageInner() {
     }
 
     // Redirect if not authenticated
-    if (!authState.isAuthenticated) {
+    if (!authState.is_authenticated) {
         router.replace('/login?next=%2Fsettings');
         return null;
     }

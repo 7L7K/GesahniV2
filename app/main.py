@@ -666,6 +666,13 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.debug("sms_worker not started", exc_info=True)
 
+        # Start OpenAI health background probe
+        try:
+            from .router import start_openai_health_background_loop
+            start_openai_health_background_loop()
+        except Exception:
+            logger.debug("OpenAI health background loop not started", exc_info=True)
+
         yield
     finally:
         # Log health flip to offline on shutdown
@@ -986,20 +993,39 @@ app.include_router(status_router, include_in_schema=False)
 app.include_router(health_router)
 
 # Include modern auth API router first to avoid route shadowing
-if _safe_import_router("from .api.auth import router as auth_api_router", "auth_api", required_in_prod=True):
-    app.include_router(auth_api_router, prefix="/v1")
-    app.include_router(auth_api_router, include_in_schema=False)
+# TEMPORARILY DISABLED: Testing modular auth routers
+# if _safe_import_router("from .api.auth import router as auth_api_router", "auth_api", required_in_prod=True):
+#     app.include_router(auth_api_router, prefix="/v1")
+#     app.include_router(auth_api_router, include_in_schema=False)
 
-# Legacy auth router (mounted after new API router to avoid shadowing)
-# Conditionally mount auth router (contains admin rate limit endpoints)
+# Legacy auth router split into focused modules. Mount conditionally based on env.
 from .auth_providers import admin_enabled
 
+# Mount whoami + finish endpoints (always available when auth router enabled)
 if admin_enabled():
-    app.include_router(auth_router, prefix="/v1")
-    app.include_router(auth_router, include_in_schema=False)
-    print("INFO: Auth router mounted (admin_enabled=True)")
-else:
-    print("INFO: Auth router disabled (admin_enabled=False)")
+    if _safe_import_router("from .api.auth_router_whoami import router as auth_whoami_router", "auth_whoami"):
+        app.include_router(auth_whoami_router, prefix="/v1")
+        app.include_router(auth_whoami_router, include_in_schema=False)
+
+    # Mount refresh router (kept separate)
+    # TEMPORARILY DISABLED: Testing original auth router
+    # if _safe_import_router("from .api.auth_router_refresh import router as auth_refresh_router", "auth_refresh"):
+    #     app.include_router(auth_refresh_router, prefix="/v1")
+    #     app.include_router(auth_refresh_router, include_in_schema=False)
+
+    # Mount PATs router
+    # TEMPORARILY DISABLED: Testing original auth router
+    # if _safe_import_router("from .api.auth_router_pats import router as auth_pats_router", "auth_pats"):
+    #     app.include_router(auth_pats_router, prefix="/v1")
+    #     app.include_router(auth_pats_router, include_in_schema=False)
+
+    # Dev-only auth helpers
+    # TEMPORARILY DISABLED: Testing original auth router
+    # if os.getenv("ENV", "dev").strip().lower() in {"dev", "development"}:
+    #     if _safe_import_router("from .api.auth_router_dev import router as auth_dev_router", "auth_dev"):
+    #         app.include_router(auth_dev_router, prefix="/v1")
+
+print("INFO: Auth routers mounted (admin_enabled=True)")
 if preflight_router is not None:
     app.include_router(preflight_router, prefix="/v1")
     app.include_router(preflight_router, include_in_schema=False)

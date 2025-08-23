@@ -42,7 +42,7 @@ export default function Header() {
     const { isSignedIn, isLoaded, clerkEnabled } = useClerkAuth();
 
     // Use centralized auth state instead of making direct whoami calls
-    const authed = authState.isAuthenticated;
+    const authed = authState.is_authenticated;
 
     // For Clerk mode, we need to check both Clerk's state and backend state
     // Only show auth buttons if Clerk is loaded and user is not signed in

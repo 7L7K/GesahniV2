@@ -23,7 +23,7 @@ export default function FooterRibbon() {
         // DISABLED: Status polling should be controlled by orchestrator
         // Only start status polling if authenticated
         // const checkAuthAndPoll = () => {
-        //     if (!authState.isAuthenticated) return null;
+        //     if (!authState.is_authenticated) return null;
 
         //     const i = setInterval(async () => {
         //         try {
@@ -43,7 +43,7 @@ export default function FooterRibbon() {
             window.removeEventListener('conversation:update', onToken as EventListener);
             // if (intervalId) clearInterval(intervalId);
         };
-    }, [authState.isAuthenticated]); // Re-run when auth state changes
+    }, [authState.is_authenticated]); // Re-run when auth state changes
 
     const trunc = (s: string) => (s.length > 80 ? s.slice(0, 77) + '…' : s);
 

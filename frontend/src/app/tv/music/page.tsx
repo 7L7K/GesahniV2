@@ -10,7 +10,7 @@ export default function Music() {
     const play = async (p: string) => {
         // Only make music API calls when authenticated
         const authState = getAuthOrchestrator().getState();
-        if (!authState.isAuthenticated) {
+        if (!authState.is_authenticated) {
             setStatus("Not authenticated. Please log in.");
             return;
         }

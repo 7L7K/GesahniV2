@@ -52,7 +52,7 @@ export default function Page() {
   const { isSignedIn, isLoaded, clerkEnabled } = useClerkAuth();
 
   // Use centralized auth state
-  const authed = authState.isAuthenticated;
+  const authed = authState.is_authenticated;
 
   // For Clerk mode, we need to check both Clerk's state and backend state
   // Only show auth buttons if Clerk is loaded and user is not signed in
@@ -84,8 +84,8 @@ export default function Page() {
 
   // Update session ready based on centralized auth state
   useEffect(() => {
-    setSessionReady(authState.sessionReady);
-  }, [authState.sessionReady]);
+    setSessionReady(authState.session_ready);
+  }, [authState.session_ready]);
 
   // Initialize bootstrap and auth state on mount
   useEffect(() => {
@@ -327,7 +327,7 @@ export default function Page() {
     const authOrchestrator = getAuthOrchestrator();
     const authState = authOrchestrator.getState();
 
-    if (authState.isAuthenticated && authState.sessionReady) {
+    if (authState.is_authenticated && authState.session_ready) {
       try {
         wsHub.start({ music: true, care: true });
       } catch (error) {

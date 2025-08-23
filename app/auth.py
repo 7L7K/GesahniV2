@@ -583,22 +583,31 @@ async def login(
 
     CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
     """
-    logger.info(
-        "auth.login_start",
-        extra={
-            "meta": {
-                "username": req.username,
-                "ip": _client_ip(request),
-                "user_agent": request.headers.get("User-Agent", "unknown"),
-                "content_type": request.headers.get("Content-Type", "unknown"),
-                "has_csrf": bool(request.headers.get("X-CSRF-Token")),
-                "has_cookie": bool(request.cookies.get("csrf_token")),
-            }
-        },
-    )
+    try:
+        logger.info(
+            "auth.login_start",
+            extra={
+                "meta": {
+                    "username": req.username,
+                    "ip": _client_ip(request),
+                    "user_agent": request.headers.get("User-Agent", "unknown"),
+                    "content_type": request.headers.get("Content-Type", "unknown"),
+                    "has_csrf": bool(request.headers.get("X-CSRF-Token")),
+                    "has_cookie": bool(request.cookies.get("csrf_token")),
+                }
+            },
+        )
+    except Exception as e:
+        # Best-effort logging should not block authentication flow
+        try:
+            logger.exception("auth.login_start_log_error", extra={"meta": {"error": str(e)}})
+        except Exception:
+            pass
 
+    # Ensure DB table exists and normalize username regardless of logging outcome
     await _ensure_table()
     norm_user = _sanitize_username(req.username)
+
     logger.info(
         "auth.login_username_normalized",
         extra={
@@ -793,7 +802,12 @@ async def login(
     # Create access token using centralized tokens module
     from .tokens import make_access, make_refresh
 
+    # Create access token (centralized)
     access_token = make_access({"user_id": req.username})
+    # Ensure jti is defined for logging below; actual JTI will be extracted
+    # later when creating the session ID. This prevents UnboundLocalError
+    # in environments where make_access doesn't expose the jti synchronously.
+    jti = None
 
     # Create refresh token
     refresh_jti = uuid4().hex
@@ -992,23 +1006,26 @@ async def login(
             logger.error("login.set_cookie fallback error: %s", fallback_error)
             pass
 
-    logger.info(
-        "auth.login_complete",
-        extra={
-            "meta": {
-                "username": norm_user,
-                "ip": _client_ip(request),
-                "response_status": 200,
-            }
-        },
-    )
+        logger.info(
+            "auth.login_complete",
+            extra={
+                "meta": {
+                    "username": norm_user,
+                    "ip": _client_ip(request),
+                    "response_status": 200,
+                }
+            },
+        )
 
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token=access_token,
-        stats=stats,
-    )
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token=access_token,
+            stats=stats,
+        )
+    except Exception:
+        logger.exception("auth.login_exception")
+        raise
 
 
 _DEPRECATE_REFRESH_LOGGED = False

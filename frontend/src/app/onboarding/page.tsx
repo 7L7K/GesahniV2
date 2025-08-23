@@ -14,7 +14,7 @@ function OnboardingPageInner() {
 
     useEffect(() => {
         // Only check onboarding status if authenticated
-        if (!authState.isAuthenticated) {
+        if (!authState.is_authenticated) {
             router.replace('/login?next=%2Fonboarding');
             return;
         }
@@ -41,7 +41,7 @@ function OnboardingPageInner() {
         };
 
         checkOnboardingStatus();
-    }, [router, authState.isAuthenticated]);
+    }, [router, authState.is_authenticated]);
 
     // Show loading while checking auth
     if (authState.isLoading) {

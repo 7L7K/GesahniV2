@@ -66,6 +66,7 @@ def _create_access_token_internal(
     to_encode.update(
         {
             "exp": expire,
+            "iat": datetime.utcnow(),
             "jti": uuid4().hex,
             "type": "access",
             "scopes": data.get("scopes", ["care:resident", "music:control"]),
@@ -89,7 +90,19 @@ def _create_access_token_internal(
         },
     )
 
-    return jwt.encode(to_encode, secret, algorithm=ALGORITHM)
+    # If a key pool is configured, include the primary kid in header when available
+    try:
+        from .api.auth import _primary_kid_secret
+
+        try:
+            kid, _ = _primary_kid_secret()
+        except Exception:
+            kid = None
+    except Exception:
+        kid = None
+
+    headers = {"kid": kid} if kid else None
+    return jwt.encode(to_encode, secret, algorithm=ALGORITHM, headers=headers)
 
 
 def _create_refresh_token_internal(
@@ -118,6 +131,7 @@ def _create_refresh_token_internal(
     to_encode.update(
         {
             "exp": expire,
+            "iat": datetime.utcnow(),
             "jti": uuid4().hex,
             "type": "refresh",
             "scopes": data.get("scopes", ["care:resident", "music:control"]),
@@ -141,7 +155,19 @@ def _create_refresh_token_internal(
         },
     )
 
-    return jwt.encode(to_encode, secret, algorithm=ALGORITHM)
+    # If a key pool is configured, include the primary kid in header when available
+    try:
+        from .api.auth import _primary_kid_secret
+
+        try:
+            kid, _ = _primary_kid_secret()
+        except Exception:
+            kid = None
+    except Exception:
+        kid = None
+
+    headers = {"kid": kid} if kid else None
+    return jwt.encode(to_encode, secret, algorithm=ALGORITHM, headers=headers)
 
 
 # Centralized TTL defaults (read once and convert to seconds)

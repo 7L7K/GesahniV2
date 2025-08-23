@@ -401,6 +401,28 @@ async def get_pat_by_hash(token_hash: str) -> dict[str, Any] | None:
     }
 
 
+async def list_pats_for_user(user_id: str) -> list[dict[str, Any]]:
+    """List all PATs for a user, returning safe fields only (no token hash)."""
+    await ensure_tables()
+    async with aiosqlite.connect(str(DB_PATH)) as db:
+        await db.execute("PRAGMA foreign_keys=ON")
+        async with db.execute(
+            "SELECT id,name,scopes,created_at,revoked_at FROM pat_tokens WHERE user_id=? ORDER BY created_at DESC",
+            (user_id,),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [
+        {
+            "id": row[0],
+            "name": row[1],
+            "scopes": json.loads(row[2] or "[]"),
+            "created_at": row[3],
+            "revoked_at": row[4],
+        }
+        for row in rows
+    ]
+
+
 # ---------------------------- audit log --------------------------------------
 async def record_audit(
     *,
@@ -440,6 +462,7 @@ __all__ = [
     "revoke_pat",
     "get_pat_by_hash",
     "get_pat_by_id",
+    "list_pats_for_user",
     # audit
     "record_audit",
 ]

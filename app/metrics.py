@@ -119,6 +119,30 @@ AUTH_FAIL = Counter(
     labelnames=("reason",),  # e.g., "missing_token", "expired", "invalid"
 )
 
+# Auth refresh operations
+AUTH_REFRESH_OK = Counter(
+    "auth_refresh_ok_total",
+    "Successful auth refresh operations",
+)
+
+AUTH_REFRESH_FAIL = Counter(
+    "auth_refresh_fail_total",
+    "Failed auth refresh operations",
+    labelnames=("reason",),  # e.g., "replay", "concurrent", "expired", "invalid"
+)
+
+# Whoami operations
+WHOAMI_OK = Counter(
+    "whoami_ok_total",
+    "Successful whoami operations",
+)
+
+WHOAMI_FAIL = Counter(
+    "whoami_fail_total",
+    "Failed whoami operations",
+    labelnames=("reason",),  # e.g., "missing_token", "expired", "invalid"
+)
+
 RBAC_DENY = Counter(
     "rbac_deny_total",
     "Authorization (scope) denials",
@@ -601,3 +625,46 @@ API_RETRY_TOTAL = Counter("api_retry_total", "Number of HTTP API retries", ["rou
 API_RETRY_SUCCESS_RATIO = Histogram(
     "api_retry_success_ratio", "Success ratio of API retries"
 )
+
+# Telemetry and request metrics for Phase 4
+try:
+    ASK_STREAM_REQUESTS_TOTAL = Counter(
+        "gesahni_ask_stream_requests_total",
+        "Count of streaming vs non-streaming requests",
+        ["stream", "endpoint"]
+    )
+except Exception:  # pragma: no cover
+    class _CStream:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    ASK_STREAM_REQUESTS_TOTAL = _CStream()  # type: ignore
+
+try:
+    ASK_TOKENS_EST_TOTAL = Counter(
+        "gesahni_ask_tokens_est_total",
+        "Count of requests by token estimation ranges",
+        ["range", "endpoint"]
+    )
+except Exception:  # pragma: no cover
+    class _CTokens:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    ASK_TOKENS_EST_TOTAL = _CTokens()  # type: ignore
+
+try:
+    ASK_ERROR_CODES_TOTAL = Counter(
+        "gesahni_ask_error_codes_total",
+        "Count of requests by error codes",
+        ["error_code", "error_type", "endpoint"]
+    )
+except Exception:  # pragma: no cover
+    class _CError:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    ASK_ERROR_CODES_TOTAL = _CError()  # type: ignore

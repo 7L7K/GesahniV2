@@ -140,7 +140,7 @@ class WsHub {
     const authOrchestrator = getAuthOrchestrator();
     const authState = authOrchestrator.getState();
 
-    if (!authState.isAuthenticated) {
+    if (!authState.is_authenticated) {
       console.info('WS resumeAll: Skipping reconnects - not authenticated');
       return;
     }
@@ -179,7 +179,7 @@ class WsHub {
     const authOrchestrator = getAuthOrchestrator();
     const authState = authOrchestrator.getState();
 
-    if (!authState.isAuthenticated) {
+    if (!authState.is_authenticated) {
       console.info('WS refreshAuth: Skipping reconnects - not authenticated');
       return;
     }
@@ -239,7 +239,7 @@ class WsHub {
     const authOrchestrator = getAuthOrchestrator();
     const authState = authOrchestrator.getState();
 
-    if (!authState.isAuthenticated) {
+    if (!authState.is_authenticated) {
       console.info(`WS ${name}: Skipping connection - not authenticated`);
       this.surfaceConnectionFailure(name, "Not authenticated");
       return;
@@ -292,13 +292,13 @@ class WsHub {
 
         // Check if we should attempt reconnection
         const authState = authOrchestrator.getState();
-        if (authState.isAuthenticated && this.connections[name].reconnectAttempts < this.connections[name].maxReconnectAttempts) {
+        if (authState.is_authenticated && this.connections[name].reconnectAttempts < this.connections[name].maxReconnectAttempts) {
           this.connections[name].reconnectAttempts += 1;
           const delay = this.jitteredDelayFor(retry++);
           this.connections[name].timer = setTimeout(() => this.connect(name, path, onOpenExtra, onMessage, retry), delay);
         } else {
           // Max attempts reached or not authenticated - surface failure
-          if (!authState.isAuthenticated) {
+          if (!authState.is_authenticated) {
             this.surfaceConnectionFailure(name, "Connection lost - not authenticated");
           } else {
             this.surfaceConnectionFailure(name, "Connection lost - max reconnection attempts reached");

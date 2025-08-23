@@ -293,7 +293,23 @@ class PromptBuilder:
         for key, val in base_replacements.items():
             base_prompt = base_prompt.replace(f"{{{{{key}}}}}", val)
 
-        base_tokens = count_tokens(base_prompt)
+        # Prefer tiktoken for accurate token counts when available; fall back to approx counter
+        def _count_tokens_precise(text: str) -> tuple[int, str]:
+            try:  # pragma: no cover - optional dependency
+                import tiktoken
+
+                # Try to use the runtime OPENAI_MODEL if available for encoding selection
+                model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
+                try:
+                    enc = tiktoken.encoding_for_model(model_name)
+                except Exception:
+                    enc = tiktoken.get_encoding("cl100k_base")
+                return len(enc.encode(text)), "tiktoken"
+            except Exception:
+                # Fall back to the project's approximate token counter
+                return count_tokens(text), "approx"
+
+        base_tokens, tokens_est_method = _count_tokens_precise(base_prompt)
         mem_list = memories.copy()
 
         # ------------------------------------------------------------------
@@ -315,7 +331,10 @@ class PromptBuilder:
             for key, val in replacements.items():
                 prompt = prompt.replace(f"{{{{{key}}}}}", val)
 
-            prompt_tokens = count_tokens(prompt)
+            prompt_tokens, method = _count_tokens_precise(prompt)
+            # Prefer tiktoken if available for the overall prompt
+            if method == "tiktoken":
+                tokens_est_method = "tiktoken"
 
             fits_budget = (
                 prompt_tokens <= MAX_PROMPT_TOKENS and prompt_tokens - base_tokens <= 75
@@ -341,19 +360,22 @@ class PromptBuilder:
             break
 
         # ------------------------------------------------------------------
-        # Final telemetry
+        # Final telemetry (recount after adding sources)
         # ------------------------------------------------------------------
         if sources_text:
             prompt = f"{prompt}\n\nSOURCES\n{sources_text}"
-            prompt_tokens = count_tokens(prompt)
+            prompt_tokens, method = _count_tokens_precise(prompt)
+            if method == "tiktoken":
+                tokens_est_method = "tiktoken"
 
         if rec:
             rec.retrieval_count = len(mem_list)
 
         logger.info(
-            "PromptBuilder.build exit tokens=%d memories=%d",
+            "PromptBuilder.build exit tokens=%d memories=%d method=%s",
             prompt_tokens,
             len(mem_list),
+            tokens_est_method,
         )
         # Optional prompt logging for debugging/dev only
         if os.getenv("LOG_BUILT_PROMPTS", "").lower() in {"1", "true", "yes"}:
@@ -361,6 +383,14 @@ class PromptBuilder:
                 logger.debug("BUILT_PROMPT:: %s", prompt)
             except Exception:
                 pass
+        # Attach tokens_est_method to telemetry record when available
+        rec2 = log_record_var.get()
+        if rec2:
+            try:
+                rec2.tokens_est_method = tokens_est_method
+            except Exception:
+                pass
+
         return prompt, prompt_tokens
 
 

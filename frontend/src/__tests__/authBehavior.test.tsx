@@ -271,7 +271,7 @@ function TestAuthComponent() {
     return (
         <div>
             <div data-testid="auth-status">
-                {authState.isAuthenticated ? 'authenticated' : 'unauthenticated'}
+                {authState.is_authenticated ? 'authenticated' : 'unauthenticated'}
             </div>
             <button
                 data-testid="login-btn"
@@ -321,6 +321,7 @@ describe('Authentication Behavior', () => {
                         session_ready: mockAuthOrchestrator.getState().sessionReady,
                         user: mockAuthOrchestrator.getState().user,
                         source: mockAuthOrchestrator.getState().source,
+                        version: mockAuthOrchestrator.getState().version,
                     }),
                     headers: {
                         get: (name: string) => {

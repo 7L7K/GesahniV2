@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import random
 import secrets
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
@@ -31,6 +32,9 @@ from ..auth_monitoring import record_finish_call, record_whoami_call, track_auth
 from ..auth_store import create_pat as _create_pat
 from ..auth_store import ensure_tables as _ensure_auth
 from ..auth_store import get_pat_by_hash as _get_pat_by_hash
+from ..auth_store import list_pats_for_user as _list_pats_for_user
+from ..auth_store import revoke_pat as _revoke_pat
+from ..metrics import AUTH_REFRESH_OK, AUTH_REFRESH_FAIL, WHOAMI_OK, WHOAMI_FAIL
 from ..logging_config import req_id_var
 from ..token_store import (
     allow_refresh,
@@ -44,30 +48,7 @@ from ..user_store import user_store
 
 router = APIRouter(tags=["Auth"])  # expose in OpenAPI for docs/tests
 logger = logging.getLogger(__name__)
-# Minimal metrics counters (dumped every ~60s)
-_MET: dict[str, int] = {
-    "auth_refresh_ok": 0,
-    "auth_refresh_replay": 0,
-    "auth_refresh_concurrent_401": 0,
-    "whoami_jwt_ok": 0,
-    "whoami_jwt_fail": 0,
-}
-_MET_LAST: float = time.time()
-
-
-def _met_inc(key: str) -> None:
-    try:
-        _MET[key] = int(_MET.get(key, 0)) + 1
-        global _MET_LAST
-        now = time.time()
-        if now - _MET_LAST >= 60:
-            _MET_LAST = now
-            print(
-                f"metrics auth.refresh.ok={_MET.get('auth_refresh_ok',0)} replay={_MET.get('auth_refresh_replay',0)} concurrent_401={_MET.get('auth_refresh_concurrent_401',0)} whoami.jwt_ok={_MET.get('whoami_jwt_ok',0)} jwt_fail={_MET.get('whoami_jwt_fail',0)}"
-            )
-            # do not reset, cumulative during process lifetime
-    except Exception:
-        pass
+# Auth metrics are now handled by Prometheus counters in app.metrics
 
 
 def _append_cookie_with_priority(
@@ -99,10 +80,7 @@ async def clerk_protected(user_id: str = Depends(require_user)) -> dict[str, Any
     return {"ok": True, "user_id": user_id}
 
 
-def _iso(dt: float | None) -> str | None:
-    if dt is None:
-        return None
-    return datetime.fromtimestamp(float(dt), tz=UTC).isoformat().replace("+00:00", "Z")
+
 
 
 def _in_test_mode() -> bool:
@@ -164,9 +142,31 @@ async def _require_user_or_dev(request: Request) -> str:
         raise _HTTPException(status_code=401, detail="Unauthorized")
 
 
+async def verify_pat_async(
+    token: str, required_scopes: list[str] | None = None
+) -> dict[str, Any] | None:
+    """Async version of verify_pat for use in API handlers."""
+    try:
+        import hashlib
+
+        h = hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+        rec = await _get_pat_by_hash(h)
+        if not rec:
+            return None
+        if rec.get("revoked_at"):
+            return None
+        scopes = set(rec.get("scopes") or [])
+        if required_scopes and not set(required_scopes).issubset(scopes):
+            return None
+        return rec
+    except Exception:
+        return None
+
+
 def verify_pat(
     token: str, required_scopes: list[str] | None = None
 ) -> dict[str, Any] | None:
+    """Synchronous version of verify_pat for backward compatibility."""
     try:
         import hashlib
 
@@ -191,7 +191,6 @@ def verify_pat(
         return rec
     except Exception:
         return None
-
 
 async def whoami_impl(request: Request) -> dict[str, Any]:
     """Canonical whoami implementation: single source of truth for session readiness.
@@ -220,6 +219,8 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             "whoami.start",
             extra={
                 "meta": {
+                    "req_id": req_id_var.get(),
+                    "req_id": req_id_var.get(),
                     "ip": request.client.host if request.client else "unknown",
                     "user_agent": request.headers.get("User-Agent", "unknown"),
                     "timestamp": time.time(),
@@ -238,9 +239,11 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             "whoami.cookie_check",
             extra={
                 "meta": {
+                    "req_id": req_id_var.get(),
+                    "req_id": req_id_var.get(),
                     "has_access_token_cookie": bool(token_cookie),
                     "cookie_length": len(token_cookie) if token_cookie else 0,
-                    "all_cookies": list(request.cookies.keys()),
+                    "cookie_count": len(request.cookies),
                     "timestamp": time.time(),
                 }
             },
@@ -250,6 +253,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             "whoami.cookie_error",
             extra={
                 "meta": {
+                    "req_id": req_id_var.get(),
                     "error": str(e),
                     "error_type": type(e).__name__,
                     "timestamp": time.time(),
@@ -266,6 +270,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             "whoami.header_check",
             extra={
                 "meta": {
+                    "req_id": req_id_var.get(),
                     "has_authorization_header": bool(ah),
                     "starts_with_bearer": ah.startswith("Bearer ") if ah else False,
                     "has_token_header": bool(token_header),
@@ -279,6 +284,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             "whoami.header_error",
             extra={
                 "meta": {
+                    "req_id": req_id_var.get(),
                     "error": str(e),
                     "error_type": type(e).__name__,
                     "timestamp": time.time(),
@@ -287,29 +293,27 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         )
         token_header = None
 
-    # Check for Clerk authentication tokens
+    # Check for Clerk authentication tokens only if Clerk is enabled
     try:
-        # Check for Clerk session cookies only if Clerk explicitly enabled
         clerk_token = None
         if os.getenv("CLERK_ENABLED", "0") == "1":
+            # Check for Clerk session cookies
             clerk_token = request.cookies.get("__session") or request.cookies.get(
                 "session"
             )
-        if not clerk_token:
-            # Check for Clerk token in Authorization header
-            ah = request.headers.get("Authorization")
-            if ah and ah.startswith("Bearer "):
-                potential_clerk_token = ah.split(" ", 1)[1]
-                # Basic check if it looks like a Clerk JWT (has 3 parts separated by dots)
-                # We'll try to decode it as a traditional JWT first, and if that fails,
-                # we'll treat it as a Clerk token
-                if potential_clerk_token.count(".") == 2:
-                    # Don't set clerk_token yet - we'll check it after trying traditional JWT
-                    pass
+            if not clerk_token:
+                # Check for Clerk token in Authorization header
+                ah = request.headers.get("Authorization")
+                if ah and ah.startswith("Bearer "):
+                    potential_clerk_token = ah.split(" ", 1)[1]
+                    # Basic check if it looks like a JWT (has 3 parts separated by dots)
+                    if potential_clerk_token.count(".") == 2:
+                        clerk_token = potential_clerk_token
         logger.info(
             "whoami.clerk_check",
             extra={
                 "meta": {
+                    "req_id": req_id_var.get(),
                     "has_clerk_cookie": bool(clerk_token),
                     "clerk_cookie_length": len(clerk_token) if clerk_token else 0,
                     "timestamp": time.time(),
@@ -321,6 +325,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             "whoami.clerk_error",
             extra={
                 "meta": {
+                    "req_id": req_id_var.get(),
                     "error": str(e),
                     "error_type": type(e).__name__,
                     "timestamp": time.time(),
@@ -345,6 +350,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 "whoami.cookie_jwt_decode.start",
                 extra={
                     "meta": {
+                    "req_id": req_id_var.get(),
                         "timestamp": time.time(),
                     }
                 },
@@ -361,6 +367,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 "whoami.cookie_jwt_decode.success",
                 extra={
                     "meta": {
+                    "req_id": req_id_var.get(),
                         "user_id": effective_uid,
                         "claims_keys": list(claims.keys()),
                         "timestamp": time.time(),
@@ -375,6 +382,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 "whoami.cookie_jwt_decode.failed",
                 extra={
                     "meta": {
+                    "req_id": req_id_var.get(),
                         "error": str(e),
                         "error_type": type(e).__name__,
                         "timestamp": time.time(),
@@ -382,77 +390,77 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 },
             )
 
-    # Priority 2: Try session fingerprint verification if access_token cookie failed
-    if not session_ready and clerk_token:
+    # Priority 2: Try Clerk verification if access_token cookie failed and Clerk is enabled
+    if not session_ready and clerk_token and os.getenv("CLERK_ENABLED", "0") == "1":
         try:
             logger.info(
-                "whoami.session_fingerprint.start",
+                "whoami.clerk_verification.start",
                 extra={
                     "meta": {
+                    "req_id": req_id_var.get(),
                         "timestamp": time.time(),
                     }
                 },
             )
 
-            # Import session fingerprint verification
-            from ..auth import _verify_session_fingerprint
-
-            # Get the access token from the same request
-            # Accept canonical or legacy refresh cookie during migration
-            from ..cookie_names import REFRESH_TOKEN, REFRESH_TOKEN_LEGACY
-
-            access_token = request.cookies.get(REFRESH_TOKEN) or request.cookies.get(
-                REFRESH_TOKEN_LEGACY
-            )
-            if access_token:
-                # Decode the access token to get user_id and timestamp
-                access_claims = _jwt_decode(
-                    access_token, _jwt_secret(), algorithms=["HS256"]
-                )
-                user_id_from_token = access_claims.get("user_id") or access_claims.get(
-                    "sub"
-                )
-                iat = access_claims.get("iat", 0)  # Issued at timestamp
-
-                if user_id_from_token and _verify_session_fingerprint(
-                    clerk_token, user_id_from_token, access_token, iat
-                ):
-                    session_ready = True
-                    src = "cookie"  # Still cookie-based
-                    effective_uid = user_id_from_token
-                    jwt_status = "ok"
-                    logger.info(
-                        "whoami.session_fingerprint.success",
-                        extra={
-                            "meta": {
-                                "user_id": effective_uid,
+            # Try to verify Clerk token using the proper Clerk verification
+            try:
+                from ..deps.clerk_auth import verify_clerk_token as _verify_clerk
+                if _verify_clerk:
+                    clerk_claims = _verify_clerk(clerk_token)
+                    effective_uid = clerk_claims.get("user_id") or clerk_claims.get("sub")
+                    if effective_uid:
+                        session_ready = True
+                        src = "clerk"
+                        jwt_status = "ok"
+                        logger.info(
+                            "whoami.clerk_verification.success",
+                            extra={
+                                "meta": {
+                    "req_id": req_id_var.get(),
+                                    "user_id": effective_uid,
                                 "timestamp": time.time(),
                             }
                         },
                     )
                 else:
                     logger.warning(
-                        "whoami.session_fingerprint.invalid",
+                        "whoami.clerk_verification.no_verifier",
                         extra={
                             "meta": {
+                    "req_id": req_id_var.get(),
                                 "timestamp": time.time(),
                             }
                         },
                     )
-            else:
+            except ImportError:
                 logger.warning(
-                    "whoami.session_fingerprint.no_access_token",
+                    "whoami.clerk_verification.not_available",
                     extra={
                         "meta": {
+                    "req_id": req_id_var.get(),
+                            "timestamp": time.time(),
+                        }
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "whoami.clerk_verification.invalid",
+                    extra={
+                        "meta": {
+                    "req_id": req_id_var.get(),
+                            "error": str(e),
+                            "error_type": type(e).__name__,
                             "timestamp": time.time(),
                         }
                     },
                 )
         except Exception as e:
             logger.error(
-                "whoami.session_fingerprint.failed",
+                "whoami.clerk_verification.failed",
                 extra={
                     "meta": {
+                    "req_id": req_id_var.get(),
                         "error": str(e),
                         "error_type": type(e).__name__,
                         "timestamp": time.time(),
@@ -467,6 +475,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 "whoami.header_jwt_decode.start",
                 extra={
                     "meta": {
+                    "req_id": req_id_var.get(),
                         "timestamp": time.time(),
                     }
                 },
@@ -482,6 +491,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 "whoami.header_jwt_decode.success",
                 extra={
                     "meta": {
+                    "req_id": req_id_var.get(),
                         "user_id": effective_uid,
                         "claims_keys": list(claims.keys()),
                         "timestamp": time.time(),
@@ -496,6 +506,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 "whoami.header_jwt_decode.failed",
                 extra={
                     "meta": {
+                    "req_id": req_id_var.get(),
                         "error": str(e),
                         "error_type": type(e).__name__,
                         "timestamp": time.time(),
@@ -510,6 +521,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 "whoami.clerk_verify.start",
                 extra={
                     "meta": {
+                    "req_id": req_id_var.get(),
                         "timestamp": time.time(),
                     }
                 },
@@ -533,6 +545,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                     "whoami.cookie_jwt_decode.failed",
                     extra={
                         "meta": {
+                    "req_id": req_id_var.get(),
                             "error": str(e),
                             "error_type": type(e).__name__,
                             "timestamp": time.time(),
@@ -543,6 +556,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 "whoami.clerk_verify.success",
                 extra={
                     "meta": {
+                    "req_id": req_id_var.get(),
                         "user_id": effective_uid,
                         "claims_keys": list(claims.keys()),
                         "timestamp": time.time(),
@@ -557,6 +571,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 "whoami.clerk_verify.failed",
                 extra={
                     "meta": {
+                    "req_id": req_id_var.get(),
                         "error": str(e),
                         "error_type": type(e).__name__,
                         "timestamp": time.time(),
@@ -564,13 +579,14 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 },
             )
 
-        # If still not ready, check for Clerk token in Authorization header
-        if not session_ready and token_header:
+        # If still not ready and Clerk is enabled, check for Clerk token in Authorization header
+        if not session_ready and token_header and os.getenv("CLERK_ENABLED", "0") == "1":
             try:
                 logger.info(
                     "whoami.clerk_header_verify.start",
                     extra={
                         "meta": {
+                    "req_id": req_id_var.get(),
                             "timestamp": time.time(),
                         }
                     },
@@ -595,6 +611,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                     "whoami.clerk_header_verify.success",
                     extra={
                         "meta": {
+                    "req_id": req_id_var.get(),
                             "user_id": effective_uid,
                             "claims_keys": list(claims.keys()),
                             "timestamp": time.time(),
@@ -609,6 +626,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                     "whoami.clerk_header_verify.failed",
                     extra={
                         "meta": {
+                    "req_id": req_id_var.get(),
                             "error": str(e),
                             "error_type": type(e).__name__,
                             "timestamp": time.time(),
@@ -623,6 +641,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         "whoami.result",
         extra={
             "meta": {
+                    "req_id": req_id_var.get(),
                 "is_authenticated": is_authenticated,
                 "session_ready": session_ready,
                 "source": src,
@@ -643,6 +662,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             src,
             extra={
                 "meta": {
+                    "req_id": req_id_var.get(),
                     "duration_ms": dt,
                     "jwt_status": jwt_status,
                     "source": src,
@@ -650,7 +670,10 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             },
         )
         try:
-            _met_inc("whoami_jwt_ok" if session_ready else "whoami_jwt_fail")
+            if session_ready:
+                WHOAMI_OK.inc()
+            else:
+                WHOAMI_FAIL.labels(reason="jwt_invalid").inc()
         except Exception:
             pass
     except Exception:
@@ -684,8 +707,25 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
 
 @router.get("/whoami")
 async def whoami(request: Request) -> JSONResponse:
-    """Public whoami endpoint that returns canonical whoami_impl result and
-    performs a server-side silent refresh when only a refresh cookie exists.
+    """CANONICAL: Public whoami endpoint - the single source of truth for user identity.
+
+    This is the canonical whoami endpoint that should be used by all clients.
+    Returns comprehensive authentication and session information including:
+
+    - Authentication status and session readiness
+    - User information (ID and email)
+    - Authentication source (cookie, header, clerk, or missing)
+    - API version for future compatibility
+
+    Response schema:
+    {
+      "is_authenticated": bool,
+      "session_ready": bool,
+      "user_id": str | null,
+      "user": {"id": str | null, "email": str | null},
+      "source": "cookie" | "header" | "clerk" | "missing",
+      "version": 1
+    }
     """
     start_time = time.time()
     req_id = req_id_var.get()
@@ -711,6 +751,7 @@ async def whoami(request: Request) -> JSONResponse:
                 "auth.whoami",
                 extra={
                     "meta": {
+                    "req_id": req_id_var.get(),
                         "req_id": req_id,
                         "is_authenticated": out.get("is_authenticated"),
                         "duration_ms": duration,
@@ -813,6 +854,7 @@ async def whoami(request: Request) -> JSONResponse:
                             "auth.whoami",
                             extra={
                                 "meta": {
+                    "req_id": req_id_var.get(),
                                     "req_id": req_id,
                                     "is_authenticated": True,
                                     "duration_ms": duration,
@@ -827,7 +869,8 @@ async def whoami(request: Request) -> JSONResponse:
     except Exception as e:
         logger.error(
             "whoami.refresh_exception",
-            extra={"meta": {"error": str(e), "timestamp": time.time()}},
+            extra={"meta": {
+                    "req_id": req_id_var.get(),"error": str(e), "timestamp": time.time()}},
         )
 
     try:
@@ -836,6 +879,7 @@ async def whoami(request: Request) -> JSONResponse:
             "auth.whoami",
             extra={
                 "meta": {
+                    "req_id": req_id_var.get(),
                     "req_id": req_id,
                     "is_authenticated": out.get("is_authenticated", False),
                     "duration_ms": duration,
@@ -857,43 +901,30 @@ async def whoami(request: Request) -> JSONResponse:
 @router.get("/auth/whoami")
 async def auth_whoami(
     request: Request,
-    user_id: str = Depends(require_user),
 ) -> JSONResponse:
-    """Auth-specific whoami endpoint for tests."""
-    start_time = time.time()
-    req_id = req_id_var.get()
+    """DEPRECATED: Use /whoami endpoint instead.
 
-    # Get user information from request state
-    email = getattr(request.state, "email", None)
-
-    response = JSONResponse(
-        content={"user_id": user_id, "email": email, "authenticated": True},
+    This endpoint is deprecated and will be removed in a future version.
+    Please migrate to the canonical /whoami endpoint which provides a
+    more comprehensive and consistent response schema.
+    """
+    # Return 410 Gone to indicate this endpoint is permanently deprecated
+    return JSONResponse(
+        status_code=410,
+        content={
+            "error": "endpoint_deprecated",
+            "message": "This endpoint has been deprecated. Use /whoami instead.",
+            "deprecated_endpoint": "/auth/whoami",
+            "canonical_endpoint": "/whoami",
+            "migration_guide": "The /whoami endpoint returns a superset of this data with additional fields like session_ready, source, and version for better API consistency."
+        },
         headers={
+            "Deprecation": "true",
+            "X-Alternative-Endpoint": "/whoami",
             "Vary": "Origin",
             "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
         },
     )
-
-    duration = (time.time() - start_time) * 1000
-
-    # Log whoami call with required fields
-    logger.info(
-        "auth.whoami",
-        extra={
-            "meta": {
-                "req_id": req_id,
-                "component": "auth",
-                "msg": "auth.whoami",
-                "status": 200,
-                "user_id": user_id if user_id != "anon" else None,
-                "duration_ms": duration,
-            }
-        },
-    )
-
-    return response
 
 
 # Device sessions endpoints were moved to app.api.me for canonical shapes.
@@ -903,8 +934,15 @@ async def auth_whoami(
 async def list_pats(
     user_id: str = Depends(get_current_user_id),
 ) -> list[dict[str, Any]]:
-    # Placeholder: PAT listing not persisted yet in this router; return empty list until wired
-    return []
+    """List all PATs for the authenticated user.
+
+    Returns:
+        list[dict]: List of PATs with id, name, scopes, created_at, revoked_at (no tokens)
+    """
+    if user_id == "anon":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    await _ensure_auth()
+    return await _list_pats_for_user(user_id)
 
 
 @router.post(
@@ -938,7 +976,7 @@ async def create_pat(
         raise HTTPException(status_code=400, detail="invalid_request")
     pat_id = f"pat_{secrets.token_hex(4)}"
     token = f"pat_live_{secrets.token_urlsafe(24)}"
-    token_hash = secrets.token_hex(16)  # placeholder for hash of token if desired
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     await _create_pat(
         id=pat_id,
         user_id=user_id,
@@ -950,13 +988,55 @@ async def create_pat(
     return {"id": pat_id, "token": token, "scopes": scopes, "exp_at": exp_at}
 
 
+@router.delete("/pats/{pat_id}")
+async def revoke_pat(
+    pat_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> dict[str, str]:
+    """Revoke a PAT by setting revoked_at timestamp.
+
+    Args:
+        pat_id: The PAT ID to revoke
+
+    Returns:
+        dict: Success confirmation
+    """
+    if user_id == "anon":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    await _ensure_auth()
+
+    # Check if PAT exists and belongs to user
+    pat = await _get_pat_by_id(pat_id)
+    if not pat:
+        raise HTTPException(status_code=404, detail="PAT not found")
+    if pat["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Revoke the PAT
+    await _revoke_pat(pat_id)
+
+    return {"status": "revoked", "id": pat_id}
+
+
 def _jwt_secret() -> str:
     sec = os.getenv("JWT_SECRET")
     if not sec or sec.strip() == "":
         raise HTTPException(status_code=500, detail="missing_jwt_secret")
-    # In test mode, allow weaker secrets to simplify test setup
+    # Do not automatically allow weaker secrets for test mode here; only
+    # allow an explicit DEV_MODE bypass below. This avoids silently relaxing
+    # checks during unit tests and keeps security checks strict by default.
+    # Allow DEV_MODE to relax strength checks (explicit opt-in)
     try:
-        if _in_test_mode():
+        dev_mode = str(os.getenv("DEV_MODE", "0")).strip().lower() in {"1", "true", "yes", "on"}
+        # Only allow DEV_MODE bypass when NOT running tests. Tests should still
+        # exercise the strict secret validation unless they explicitly opt-in.
+        if dev_mode and not _in_test_mode():
+            try:
+                logging.getLogger(__name__).warning(
+                    "Using weak JWT_SECRET because DEV_MODE=1 is set. Do NOT use in production."
+                )
+            except Exception:
+                pass
             return sec
     except Exception:
         pass
@@ -1055,16 +1135,7 @@ def _get_refresh_ttl_seconds() -> int:
     return 7 * 24 * 60 * 60
 
 
-def _cookie_flags_for(request: Request) -> tuple[bool, str]:
-    """Return (secure, samesite) flags considering dev HTTP.
 
-    - Secure only when SameSite=None or running behind https
-    - In dev over http, prefer not Secure for local testing
-    """
-    from ..cookie_config import get_cookie_config
-
-    cookie_config = get_cookie_config(request)
-    return cookie_config["secure"], cookie_config["samesite"]
 
 
 @router.get("/auth/finish")
@@ -1096,20 +1167,6 @@ async def finish_clerk_login(
     token_lifetime = get_default_access_ttl()
     refresh_life = _get_refresh_ttl_seconds()
 
-    now = int(time.time())
-    access_payload = {
-        "user_id": user_id,
-        "sub": user_id,
-        "iat": now,
-        "exp": now + token_lifetime,
-        "scopes": ["care:resident", "music:control"],
-    }
-    iss = os.getenv("JWT_ISSUER")
-    aud = os.getenv("JWT_AUDIENCE")
-    if iss:
-        access_payload["iss"] = iss
-    if aud:
-        access_payload["aud"] = aud
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_access
 
@@ -1120,13 +1177,18 @@ async def finish_clerk_login(
 
     import jwt as pyjwt
 
+    # Get current time and JWT configuration
+    now = datetime.utcnow()
+    iss = os.getenv("JWT_ISS")
+    aud = os.getenv("JWT_AUD")
+
     jti = pyjwt.api_jws.base64url_encode(_os.urandom(16)).decode()
     refresh_payload = {
         "user_id": user_id,
         "sub": user_id,
         "type": "refresh",
         "iat": now,
-        "exp": now + refresh_life,
+        "exp": now + timedelta(seconds=refresh_life),
         "jti": jti,
         "scopes": ["care:resident", "music:control"],
     }
@@ -1217,6 +1279,7 @@ async def finish_clerk_login(
                                 dt,
                                 extra={
                                     "meta": {
+                    "req_id": req_id_var.get(),
                                         "duration_ms": dt,
                                         "reason": "idempotent_skip",
                                     }
@@ -1283,7 +1346,8 @@ async def finish_clerk_login(
                 "auth.finish t_total=%dms set_cookie=true reason=%s cookies=3",
                 dt,
                 reason,
-                extra={"meta": {"duration_ms": dt, "reason": reason}},
+                extra={"meta": {
+                    "req_id": req_id_var.get(),"duration_ms": dt, "reason": reason}},
             )
         except Exception:
             pass
@@ -1307,11 +1371,9 @@ async def finish_clerk_login(
 
     # Create opaque session ID instead of using JWT
     try:
-        import jwt as pyjwt
-
         from ..auth import _create_session_id
 
-        payload = py_jwt_decode(access_token, _jwt_secret(), algorithms=["HS256"])
+        payload = _jwt_decode(access_token, _jwt_secret(), algorithms=["HS256"])
         jti = payload.get("jti")
         expires_at = payload.get("exp", time.time() + access_ttl)
         if jti:
@@ -1340,7 +1402,8 @@ async def finish_clerk_login(
             "auth.finish t_total=%dms set_cookie=true reason=%s cookies=3",
             dt,
             reason,
-            extra={"meta": {"duration_ms": dt, "reason": reason}},
+            extra={"meta": {
+                    "req_id": req_id_var.get(),"duration_ms": dt, "reason": reason}},
         )
     except Exception:
         pass
@@ -1398,9 +1461,16 @@ async def rotate_refresh_cookies(
             rtok = refresh_override or request.cookies.get("refresh_token")
             if not rtok:
                 try:
+                    # Log only safe headers to avoid leaking sensitive information
+                    safe_headers = {
+                        "user-agent": request.headers.get("user-agent", ""),
+                        "origin": request.headers.get("origin", ""),
+                        "referer": request.headers.get("referer", ""),
+                        "host": request.headers.get("host", ""),
+                    }
                     logger.debug(
-                        "auth.refresh debug no_refresh_cookie headers=%s",
-                        dict(request.headers),
+                        "auth.refresh debug no_refresh_cookie safe_headers=%s",
+                        safe_headers,
                     )
                     try:
                         logger.debug(
@@ -1470,6 +1540,7 @@ async def rotate_refresh_cookies(
                             jti,
                             extra={
                                 "meta": {
+                    "req_id": req_id_var.get(),
                                     "sid": sid,
                                     "jti": jti,
                                     "reason": "concurrent_request",
@@ -1494,13 +1565,14 @@ async def rotate_refresh_cookies(
                         error_reason,
                         extra={
                             "meta": {
+                    "req_id": req_id_var.get(),
                                 "sid": sid,
                                 "replay_of": last,
                                 "reason": error_reason,
                             }
                         },
                     )
-                    _met_inc("auth_refresh_replay")
+                    AUTH_REFRESH_FAIL.labels(reason="replay").inc()
                 except Exception:
                     pass
                 raise HTTPException(status_code=401, detail="refresh_reused")
@@ -1563,11 +1635,12 @@ async def rotate_refresh_cookies(
             await allow_refresh(sid, str(new_jti), ttl_seconds=refresh_ttl)
             try:
                 await set_last_used_jti(sid, jti, ttl_seconds=ttl)
-                _met_inc("auth_refresh_ok")
+                AUTH_REFRESH_OK.inc()
                 logger.info(
                     "auth.refresh t=0ms result=ok sid=%s cookies=3",
                     sid,
-                    extra={"meta": {"sid": sid}},
+                    extra={"meta": {
+                    "req_id": req_id_var.get(),"sid": sid}},
                 )
             except Exception:
                 pass
@@ -1898,9 +1971,7 @@ async def refresh(request: Request, response: Response):
     if not tokens:
         # Metric for spikes on refresh failures
         try:
-            from ..metrics import AUTH_4XX_TOTAL  # type: ignore
-
-            AUTH_4XX_TOTAL.labels("/v1/auth/refresh", "401").inc()
+            AUTH_REFRESH_FAIL.labels(reason="4xx").inc()
         except Exception:
             pass
         # Fallback: if a valid access_token cookie exists, treat as session-ready and return 200
@@ -1918,7 +1989,8 @@ async def refresh(request: Request, response: Response):
                         "auth.refresh t=%dms result=ok sid=%s",
                         dt,
                         sid,
-                        extra={"meta": {"duration_ms": dt, "sid": sid}},
+                        extra={"meta": {
+                    "req_id": req_id_var.get(),"duration_ms": dt, "sid": sid}},
                     )
                 except Exception:
                     pass
@@ -1937,7 +2009,8 @@ async def refresh(request: Request, response: Response):
             "auth.refresh t=%dms result=ok sid=%s",
             dt,
             sid,
-            extra={"meta": {"duration_ms": dt, "sid": sid}},
+            extra={"meta": {
+                    "req_id": req_id_var.get(),"duration_ms": dt, "sid": sid}},
         )
     except Exception:
         pass

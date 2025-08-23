@@ -7,21 +7,21 @@ export function attachUiEffects() {
     const onDuck = async () => {
         // Only make music API calls when authenticated
         const authState = getAuthOrchestrator().getState();
-        if (!authState.isAuthenticated) return;
+        if (!authState.is_authenticated) return;
 
         try { await apiFetch("/v1/music", { method: "POST", body: JSON.stringify({ command: "volume", volume: 10, temporary: true }) }); } catch { }
     };
     const onRestore = async () => {
         // Only make music API calls when authenticated
         const authState = getAuthOrchestrator().getState();
-        if (!authState.isAuthenticated) return;
+        if (!authState.is_authenticated) return;
 
         try { await apiFetch("/v1/music/restore", { method: "POST" }); } catch { }
     };
     const onVibe = async (e: Event) => {
         // Only make music API calls when authenticated
         const authState = getAuthOrchestrator().getState();
-        if (!authState.isAuthenticated) return;
+        if (!authState.is_authenticated) return;
 
         const detail = (e as CustomEvent).detail || {};
         const name = String(detail.vibe || "");
@@ -31,7 +31,7 @@ export function attachUiEffects() {
     const onRemoteOk = async () => {
         // Only make music API calls when authenticated
         const authState = getAuthOrchestrator().getState();
-        if (!authState.isAuthenticated) return;
+        if (!authState.is_authenticated) return;
 
         try {
             const st = (window as any).__musicState || {};
