@@ -23,6 +23,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from .base import Skill
+from .ledger import record_action
 
 # Core phrases and tags -----------------------------------------------------
 GREETINGS = [
@@ -192,6 +193,15 @@ class SmalltalkSkill(Skill):
 
             self._recent_responses.append(resp)
             self._cache[key] = (resp, now)
+            # record as non-reversible smalltalk for telemetry/idempotency
+            idemp = f"smalltalk:{hash(resp)}:{int(time.time()//10)}"
+            try:
+                # best-effort ledger record
+                import asyncio
+
+                asyncio.create_task(record_action("smalltalk.respond", idempotency_key=idemp, reversible=False))
+            except Exception:
+                pass
             log.debug("Recorded smalltalk response", extra={"resp": resp})
             return resp
 

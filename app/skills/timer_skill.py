@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .. import home_assistant as ha
 from .base import Skill
+from .ledger import record_action
 
 TIMERS: dict[str, float] = {}
 _TIMERS_STORE = Path(os.getenv("TIMERS_STORE", "data/timers.json"))
@@ -49,14 +50,18 @@ class TimerSkill(Skill):
             action = match.group(0).split()[0].lower()
             if action == "pause":
                 await ha.call_service("timer", "pause", {"entity_id": f"timer.{name}"})
+                # record ledger entry
+                await record_action("timer.pause", idempotency_key=f"timer:{name}:pause")
                 return f"{name} timer paused."
             if action == "resume":
                 await ha.call_service("timer", "start", {"entity_id": f"timer.{name}"})
+                await record_action("timer.resume", idempotency_key=f"timer:{name}:resume")
                 return f"{name} timer resumed."
             if action == "stop":
                 await ha.call_service("timer", "cancel", {"entity_id": f"timer.{name}"})
                 TIMERS.pop(name, None)
                 _persist_timers()
+                await record_action("timer.cancel", idempotency_key=f"timer:{name}:cancel")
                 return f"{name} timer cancelled."
             await ha.call_service("timer", "cancel", {"entity_id": f"timer.{name}"})
             TIMERS.pop(name, None)
@@ -84,4 +89,9 @@ class TimerSkill(Skill):
         )
         TIMERS[name] = time.monotonic() + total_seconds
         _persist_timers()
+        # idempotency key buckets by rounding to nearest 10s to avoid
+        # duplicate rapid re-requests
+        bucket = int(time.time() // 10)
+        idemp = f"timer:{name}:start:{bucket}"
+        await record_action("timer.start", idempotency_key=idemp, metadata={"duration_s": total_seconds, "label": name})
         return f"Timer '{name}' started for {amount} {unit}."

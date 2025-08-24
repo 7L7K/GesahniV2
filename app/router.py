@@ -997,6 +997,44 @@ async def route_prompt(
     intent, priority = detect_intent(prompt)
     tokens = count_tokens(prompt)
 
+    # Check builtin skills first before falling back to AI models
+    # Builtin Skills Gate: use selector to pick best-fit skill (backwards
+    # compatible wrapper). For now the selector preserves current behavior
+    # (first match wins) while returning top candidates for telemetry.
+    from .skills.selector import select as skill_select
+    from .telemetry import log_record_var
+
+    chosen, candidates = await skill_select(prompt, top_n=3)
+    # Attach candidate list and choice to telemetry
+    rec = log_record_var.get()
+    if rec is not None:
+        rec.route_reason = (rec.route_reason or "") + "|builtin_selector"
+        rec.latency_ms = int((time.monotonic() - start_time) * 1000)
+        rec.matched_skill = chosen.get("skill_name") if chosen else None
+        rec.skill_why = chosen.get("why") if chosen else None
+        # Attach top candidate scores/names for observability
+        rec.rag_doc_ids = [c.get("skill_name") for c in candidates]  # repurpose field for top-N
+
+    if chosen is not None:
+        logger.info(
+            "🛠️ SKILL SELECTOR: chosen=%s top_candidates=%s",
+            chosen.get("skill_name"),
+            [c.get("skill_name") for c in candidates],
+            extra={"meta": {"request_id": request_id, "prompt_len": len(prompt)}},
+        )
+
+        # Write history record
+        try:
+            if rec is not None:
+                await append_history(rec)
+            else:
+                await append_history({"prompt": prompt, "engine_used": "skill", "response": chosen.get("text") if chosen else None})
+        except Exception:
+            logger.exception("Failed to write skill history")
+
+        # Return chosen skill's text (preserve existing behavior)
+        return chosen.get("text")
+
     # Build prompt once, always (ensure system/context preserved)
     built_prompt, ptoks = PromptBuilder.build(
         prompt, session_id=gen_opts.get("session_id"), user_id=user_id, rag_client=None

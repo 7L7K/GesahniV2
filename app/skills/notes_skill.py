@@ -8,6 +8,7 @@ from pathlib import Path
 import aiosqlite
 
 from .base import Skill
+from .ledger import record_action
 
 DB_PATH = Path(os.getenv("NOTES_DB", "notes.db"))
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -78,8 +79,10 @@ class NotesSkill(Skill):
             arg = match.group(1)
             if arg.isdigit():
                 await dao.delete_id(int(arg))
+                await record_action("notes.delete", idempotency_key=f"notes:delete:{arg}")
             else:
                 await dao.delete_text(arg)
+                await record_action("notes.delete", idempotency_key=f"notes:delete_text:{arg}")
             return "Deleted."
 
         if pat.startswith("show note"):
@@ -95,7 +98,10 @@ class NotesSkill(Skill):
 
         if pat.startswith("note"):
             text = match.group(1)
+            # idempotency: dedupe within 10s window
+            idemp = f"notes:add:{hash(text)}:{int(time.time()//10)}"
             await dao.add(text)
+            await record_action("notes.add", idempotency_key=idemp, metadata={"text_len": len(text)})
             return "Noted."
 
         rows = await dao.all_texts()

@@ -62,6 +62,14 @@ except Exception:
 
 # Preserve class order but avoid duplicates when this module reloads
 SKILL_CLASSES: list[type] = [
+    # Order matters: earlier skills get first chance to match. Keep this list
+    # intentionally deterministic to avoid surprises during upgrades.
+    # Rationale:
+    #  - SmalltalkSkill is first to quickly handle greetings and avoid heavy
+    #    routing for trivial interactions.
+    #  - Time/date/weather related skills run early as they are common.
+    #  - Reminder/timer/notes are placed before device control so users can
+    #    set things without accidental device toggles.
     SmalltalkSkill,
     ClockSkill,
     WorldClockSkill,

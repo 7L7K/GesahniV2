@@ -1,0 +1,36 @@
+# Metrics (Prometheus-style) for appliance-grade observability
+
+Counters (monotonic counters; use labels where noted):
+
+- **skill_hits_total**: number of times a skill returned a response
+  - labels: skill, outcome (handled|no_match|error), user_id?
+
+- **skill_conf_bucket_total**: histogram-like counters for confidence bands
+  - labels: skill, bucket (e.g., "0-0.5","0.5-0.8","0.8-1.0")
+
+- **selector_latency_ms**: histogram or summary of selector latency in ms
+  - labels: stage (matching|scoring|run)
+
+- **llm_fallback_count_total**: number of times router invoked LLM fallback
+  - labels: reason (ambiguous|low_confidence|override)
+
+- **undo_invocations_total**: number of undo requests executed
+  - labels: result (success|no_op|failed), user_id?
+
+Gauges (instant values):
+
+- **alias_coverage_percent**: percent of resolved entities that had an alias
+  - labels: none or by domain
+
+- **routine_enable_rate**: fraction of suggested routines that were accepted
+  - labels: period (daily|weekly)
+
+- **suggestion_accept_rate**: fraction of suggestions accepted vs presented
+  - labels: type (alias|schedule|routine)
+
+Implementation notes:
+- Use low-cardinality labels only. Avoid per-prompt values.
+- Record metrics at the boundaries (before/after selector, before/after LLM)
+- Emit health counters (llm_fallback_count_total) to monitor fallback volume/cost.
+
+

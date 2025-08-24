@@ -77,6 +77,8 @@ class LogRecord(BaseModel):
     route_reason: str | None = None
     retrieved_tokens: int | None = None
     self_check_score: float | None = None
+    # Optional short human-readable reason set by a matched skill (for logs)
+    skill_why: str | None = None
     escalated: bool | None = None
 
     # authentication events

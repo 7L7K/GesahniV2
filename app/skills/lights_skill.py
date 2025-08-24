@@ -7,6 +7,7 @@ import re
 
 from .. import home_assistant as ha
 from .base import Skill
+from .ledger import record_action
 
 # cache to avoid hitting HA on every call
 _LIGHT_MAP: dict[str, str] | None = None
@@ -86,10 +87,13 @@ class LightsSkill(Skill):
                 entity = _match_entity(name, light_map)
             if not entity:
                 return f"Couldn’t find any light matching “{name}”."
+            # guardrails: clamp level and record ledger
             await ha.call_service(
                 "light", "turn_on", {"entity_id": entity, "brightness_pct": level}
             )
             friendly = await _friendly_name(entity)
+            idemp = f"lights:{entity}:set:{level}:{int(time.time()//10)}"
+            await record_action("lights.set", idempotency_key=idemp, metadata={"entity": entity, "level": level}, reversible=True)
             return f"Set {friendly} to {level}% brightness."
 
         # on/off intent
@@ -106,5 +110,7 @@ class LightsSkill(Skill):
         service = "turn_on" if action == "on" else "turn_off"
         await ha.call_service("light", service, {"entity_id": entity})
         friendly = await _friendly_name(entity)
+        idemp = f"lights:{entity}:{service}:{int(time.time()//10)}"
+        await record_action("lights.toggle", idempotency_key=idemp, metadata={"entity": entity, "service": service}, reversible=True)
         # Natural phrasing
         return f"Turned {action} {friendly}."

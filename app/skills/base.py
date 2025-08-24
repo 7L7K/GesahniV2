@@ -14,6 +14,12 @@ class Skill(ABC):
 
     PATTERNS: list[Pattern[str]] = []
 
+    # Optional short human-readable "why" string a skill can set when it runs.
+    # This should be a brief explanation (string) for observability only and
+    # must not contain sensitive data. It is written to the current
+    # telemetry LogRecord via `log_record_var` when available.
+    skill_why: str | None = None
+
     def match(self, prompt: str) -> re.Match | None:
         for pat in self.PATTERNS:
             m = pat.search(prompt)
@@ -31,7 +37,10 @@ class Skill(ABC):
         m = self.match(prompt)
         if not m:
             raise ValueError("no pattern matched")
-        return await self.run(prompt, m)
+        # run() returns a text response. Skills may set `self.skill_why` as a
+        # short explanation which the router will log; don't alter return type.
+        resp = await self.run(prompt, m)
+        return resp
 
 
 SKILLS: list[Skill] = []
