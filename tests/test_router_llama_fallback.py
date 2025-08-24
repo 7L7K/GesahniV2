@@ -106,7 +106,7 @@ def test_gpt_override_failure_falls_back_to_llama(monkeypatch):
     monkeypatch.setattr(router, "_call_llama", fake_llama)
     monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
 
-    result = asyncio.run(router.route_prompt("hi", "gpt-4", user_id="u"))
+    result = asyncio.run(router.route_prompt("hi", user_id="u", model_override="gpt-4"))
     assert result == "llama-ok"
 
 

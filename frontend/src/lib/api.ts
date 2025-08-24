@@ -187,6 +187,31 @@ export function clearTokens(): void {
   }
 }
 
+export async function getCsrfToken(): Promise<string | null> {
+  try {
+    const response = await fetch(`${API_URL}/v1/csrf`, {
+      method: 'GET',
+      credentials: 'include', // Include cookies to get the csrf_token cookie
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      console.info('CSRF token fetched successfully:', {
+        hasToken: !!data.csrf_token,
+        tokenLength: data.csrf_token?.length || 0,
+        timestamp: new Date().toISOString(),
+      });
+      return data.csrf_token;
+    }
+
+    console.warn('CSRF token fetch failed:', response.status, response.statusText);
+    return null;
+  } catch (error) {
+    console.error('CSRF token fetch failed:', error);
+    return null;
+  }
+}
+
 // Utility function to handle authentication errors
 export async function handleAuthError(error: Error, context: string = 'unknown'): Promise<void> {
   const errorMessage = error.message;
@@ -305,7 +330,7 @@ export async function apiFetch(
   const url = isAbsolute ? path : `${base}${path}`;
 
   // Enhanced logging for auth-related requests
-  const isAuthRequest = path.includes('/login') || path.includes('/register') || path.includes('/whoami') || path.includes('/refresh');
+  const isAuthRequest = path.includes('/login') || path.includes('/register') || path.includes('/whoami') || path.includes('/refresh') || path.includes('/logout');
   if (isAuthRequest) {
     console.info('API_FETCH auth.request', {
       path,
@@ -343,11 +368,24 @@ export async function apiFetch(
   }
   if (auth) Object.assign(mergedHeaders as Record<string, string>, authHeaders());
 
+  // Handle CSRF token for mutating requests (POST/PUT/PATCH/DELETE)
+  if (hasMethodBody && auth) {
+    try {
+      const csrfToken = await getCsrfToken();
+      if (csrfToken) {
+        (mergedHeaders as Record<string, string>)["X-CSRF-Token"] = csrfToken;
+      }
+    } catch (error) {
+      console.warn('Failed to fetch CSRF token:', error);
+    }
+  }
+
   if (isAuthRequest) {
     console.info('API_FETCH auth.headers', {
       path,
       mergedHeaders: Object.fromEntries(Object.entries(mergedHeaders)),
       hasAuthHeader: !!mergedHeaders && typeof mergedHeaders === 'object' && 'Authorization' in mergedHeaders,
+      hasCsrfToken: !!mergedHeaders && typeof mergedHeaders === 'object' && 'X-CSRF-Token' in mergedHeaders,
       timestamp: new Date().toISOString(),
     });
   }
@@ -588,8 +626,13 @@ export async function sendPrompt(
     throw new Error(`Request failed: ${res.status} - ${message}`);
   }
   if (isJson) {
-    const body = await res.json();
-    return (body as { response: string }).response;
+    const body = await res.json().catch(() => null) as any;
+    // Be defensive: some backends may return null or a different shape
+    const candidate = body && (body.response ?? body.result ?? body.text);
+    if (typeof candidate === 'string') return candidate;
+    const rawDetail = body && (body.detail || body.error || body.message);
+    const msg = rawDetail ? String(rawDetail) : (res.statusText || `HTTP ${res.status}`);
+    throw new Error(`Invalid JSON response body: ${msg}`);
   }
   // Prefer streaming reader if available (works in browsers and jsdom)
   // Prefer streaming reader if available
@@ -608,6 +651,18 @@ export async function sendPrompt(
                 if (data.startsWith("[error")) {
                   const msg = data.replace(/\[error:?|\]$/g, "").trim() || "Unknown error";
                   throw new Error(msg);
+                }
+                // Handle JSON error objects from backend
+                if (data.trim().startsWith("{")) {
+                  try {
+                    const errorObj = JSON.parse(data.trim());
+                    if (errorObj.error) {
+                      throw new Error(errorObj.detail || errorObj.error || "Unknown error");
+                    }
+                  } catch (parseError) {
+                    // If JSON parsing fails, continue with original data
+                    console.warn("Failed to parse error JSON:", parseError);
+                  }
                 }
                 result += data;
                 onToken?.(data);
@@ -644,6 +699,18 @@ export async function sendPrompt(
                 const msg = data.replace(/\[error:?|\]$/g, "").trim() || "Unknown error";
                 throw new Error(msg);
               }
+              // Handle JSON error objects from backend
+              if (data.trim().startsWith("{")) {
+                try {
+                  const errorObj = JSON.parse(data.trim());
+                  if (errorObj.error) {
+                    throw new Error(errorObj.detail || errorObj.error || "Unknown error");
+                  }
+                } catch (parseError) {
+                  // If JSON parsing fails, continue with original data
+                  console.warn("Failed to parse error JSON:", parseError);
+                }
+              }
               result += data;
               onToken?.(data);
             }
@@ -654,6 +721,18 @@ export async function sendPrompt(
         if (chunk.startsWith("[error")) {
           const msg = chunk.replace(/\[error:?|\]$/g, "").trim() || "Unknown error";
           throw new Error(msg);
+        }
+        // Handle JSON error objects from backend
+        if (chunk.trim().startsWith("{")) {
+          try {
+            const errorObj = JSON.parse(chunk.trim());
+            if (errorObj.error) {
+              throw new Error(errorObj.detail || errorObj.error || "Unknown error");
+            }
+          } catch (parseError) {
+            // If JSON parsing fails, continue with original data
+            console.warn("Failed to parse error JSON:", parseError);
+          }
         }
         result += chunk;
         onToken?.(chunk);
@@ -675,6 +754,18 @@ export async function sendPrompt(
                 const msg = data.replace(/\[error:?|\]$/g, "").trim() || "Unknown error";
                 throw new Error(msg);
               }
+              // Handle JSON error objects from backend
+              if (data.trim().startsWith("{")) {
+                try {
+                  const errorObj = JSON.parse(data.trim());
+                  if (errorObj.error) {
+                    throw new Error(errorObj.detail || errorObj.error || "Unknown error");
+                  }
+                } catch (parseError) {
+                  // If JSON parsing fails, continue with original data
+                  console.warn("Failed to parse error JSON:", parseError);
+                }
+              }
               result += data;
               onToken?.(data);
             }
@@ -685,6 +776,18 @@ export async function sendPrompt(
         if (chunk.startsWith("[error")) {
           const msg = chunk.replace(/\[error:?|\]$/g, "").trim() || "Unknown error";
           throw new Error(msg);
+        }
+        // Handle JSON error objects from backend
+        if (chunk.trim().startsWith("{")) {
+          try {
+            const errorObj = JSON.parse(chunk.trim());
+            if (errorObj.error) {
+              throw new Error(errorObj.detail || errorObj.error || "Unknown error");
+            }
+          } catch (parseError) {
+            // If JSON parsing fails, continue with original data
+            console.warn("Failed to parse error JSON:", parseError);
+          }
         }
         result += chunk;
         onToken?.(chunk);

@@ -22,10 +22,10 @@ from . import router
 from .deps.scheduler import shutdown as scheduler_shutdown
 from .gpt_client import close_client
 
-async def route_prompt(*args, **kwargs):
-    logger.info("⬇️ main.route_prompt args=%s kwargs=%s", args, kwargs)
+async def route_prompt(prompt: str, user_id: str, **kwargs):
+    logger.info("⬇️ main.route_prompt prompt='%s...', user_id='%s', kwargs=%s", prompt[:50], user_id, kwargs)
     try:
-        res = await router.route_prompt(*args, **kwargs)
+        res = await router.route_prompt(prompt, user_id, **kwargs)
         logger.info("⬆️ main.route_prompt got res=%s", res)
         return res
     except Exception:  # pragma: no cover - defensive
@@ -348,6 +348,7 @@ async def _enhanced_startup():
         # Initialize core components with error tracking
         components = [
             ("Database", _init_database),
+            ("OpenAI Health Check", _init_openai_health_check),
             ("Vector Store", _init_vector_store),
             ("LLaMA Integration", _init_llama),
             ("Home Assistant", _init_home_assistant),
@@ -411,6 +412,90 @@ async def _init_database():
         raise
 
 
+async def _init_openai_health_check():
+    """Perform OpenAI startup health check with tiny ping."""
+    try:
+        logger.info("Performing OpenAI startup health check")
+
+        # Check if API key is configured
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("vendor_health vendor=openai ok=false reason=OPENAI_API_KEY_not_set")
+            raise RuntimeError("OPENAI_API_KEY not configured")
+
+        # Validate API key format (basic check)
+        if not api_key.startswith("sk-"):
+            logger.error("vendor_health vendor=openai ok=false reason=invalid_api_key_format")
+            raise RuntimeError("Invalid OpenAI API key format")
+
+        # Check base URL configuration
+        base_url = os.getenv("OPENAI_BASE_URL")
+        if base_url and not base_url.endswith("/v1"):
+            logger.warning("OPENAI_BASE_URL should end with /v1, got: %s", base_url)
+
+        # Perform tiny ping with 5-token prompt
+        try:
+            from .gpt_client import ask_gpt
+            from .router import RoutingDecision
+
+            model = os.getenv("OPENAI_MODEL", "gpt-4o")
+            routing_decision = RoutingDecision(
+                vendor="openai",
+                model=model,
+                reason="startup_health_check",
+                keyword_hit=None,
+                stream=False,
+                allow_fallback=False,
+                request_id="startup_check"
+            )
+
+            # Use a very small prompt to minimize costs
+            tiny_prompt = "ping"
+            system_prompt = "You are a helpful assistant."
+            timeout = 10  # Short timeout for startup
+
+            # This will test: network connectivity, API key validity, model accessibility
+            text, _, _, _ = await ask_gpt(
+                tiny_prompt,
+                model=model,
+                system=system_prompt,
+                timeout=timeout,
+                routing_decision=routing_decision
+            )
+
+            # Check if we got a reasonable response
+            if text and len(text.strip()) > 0:
+                logger.info("vendor_health vendor=openai ok=true reason=successful_ping model=%s", model)
+                logger.debug("OpenAI startup health check successful, response: %s", text.strip())
+            else:
+                logger.error("vendor_health vendor=openai ok=false reason=empty_response model=%s", model)
+                raise RuntimeError("Empty response from OpenAI")
+
+        except Exception as e:
+            error_type = type(e).__name__
+            error_msg = str(e)
+
+            # Classify common error types
+            if "timeout" in error_msg.lower() or "connect" in error_msg.lower():
+                reason = "network_connectivity_error"
+            elif "unauthorized" in error_msg.lower() or "invalid" in error_msg.lower():
+                reason = "api_key_invalid"
+            elif "not found" in error_msg.lower() or "model" in error_msg.lower():
+                reason = "model_access_error"
+            elif "rate limit" in error_msg.lower():
+                reason = "rate_limit_error"
+            else:
+                reason = f"{error_type}_{error_msg[:50].replace(' ', '_')}"
+
+            logger.error("vendor_health vendor=openai ok=false reason=%s error_type=%s error_msg=%s",
+                        reason, error_type, error_msg)
+            raise RuntimeError(f"OpenAI health check failed: {reason}")
+
+    except Exception as e:
+        logger.error("OpenAI startup health check failed: %s", e)
+        raise
+
+
 async def _init_vector_store():
     """Initialize vector store with read-only health check."""
     try:
@@ -435,6 +520,18 @@ async def _init_vector_store():
 async def _init_llama():
     """Initialize LLaMA integration with health check."""
     try:
+        # Check if LLaMA is explicitly disabled
+        llama_enabled = (os.getenv("LLAMA_ENABLED") or "").strip().lower()
+        if llama_enabled in {"0", "false", "no", "off"}:
+            logger.debug("LLaMA integration disabled via LLAMA_ENABLED environment variable")
+            return
+
+        # Check if Ollama URL is configured (fallback for when LLAMA_ENABLED is not set)
+        ollama_url = os.getenv("OLLAMA_URL") or os.getenv("LLAMA_URL")
+        if not ollama_url and llama_enabled not in {"1", "true", "yes", "on"}:
+            logger.debug("LLaMA integration not configured (no OLLAMA_URL), skipping initialization")
+            return
+
         from .llama_integration import _check_and_set_flag
 
         await _check_and_set_flag()
@@ -447,14 +544,23 @@ async def _init_llama():
 async def _init_home_assistant():
     """Initialize Home Assistant integration."""
     try:
+        # Check if Home Assistant is explicitly disabled
+        ha_enabled = (os.getenv("HOME_ASSISTANT_ENABLED") or "").strip().lower()
+        if ha_enabled in {"0", "false", "no", "off"}:
+            logger.debug("Home Assistant integration disabled via HOME_ASSISTANT_ENABLED environment variable")
+            return
+
+        # Check if Home Assistant URL is configured
+        ha_url = os.getenv("HOME_ASSISTANT_URL")
+        if not ha_url:
+            logger.debug("Home Assistant not configured (no HOME_ASSISTANT_URL), skipping initialization")
+            return
+
         from .home_assistant import get_states
 
-        # Test HA connectivity if configured
-        if os.getenv("HOME_ASSISTANT_URL"):
-            await get_states()
-            logger.debug("Home Assistant integration initialization successful")
-        else:
-            logger.debug("Home Assistant not configured, skipping initialization")
+        # Test HA connectivity if configured and enabled
+        await get_states()
+        logger.debug("Home Assistant integration initialization successful")
     except Exception as e:
         logger.error(f"Home Assistant initialization failed: {e}")
         raise
@@ -479,12 +585,29 @@ async def _init_scheduler():
 
         if scheduler.running:
             logger.debug("Scheduler already running")
+            return
+
+        # Check if scheduler.start() is awaitable
+        start_method = scheduler.start
+        if hasattr(start_method, '__call__'):
+            # Try to determine if it's async by checking the return type or signature
+            import inspect
+            if inspect.iscoroutinefunction(start_method):
+                # It's an async function, await it
+                await start_method()
+            else:
+                # It's a sync function, call it directly
+                start_method()
         else:
-            await scheduler.start()
-            logger.debug("Scheduler initialization successful")
+            # Fallback: call it directly
+            start_method()
+
+        logger.debug("Scheduler initialization successful")
+
     except Exception as e:
-        logger.error(f"Scheduler initialization failed: {e}")
-        raise
+        logger.warning(f"Scheduler initialization failed: {e}. Continuing without background jobs.")
+        # Don't raise - make scheduler optional
+        return
 
 
 # Enhanced error handling middleware
@@ -688,7 +811,12 @@ async def lifespan(app: FastAPI):
             except Exception as e:  # pragma: no cover - best effort
                 logger.debug("shutdown cleanup failed: %s", e)
         try:
-            scheduler_shutdown()
+            # Check if scheduler_shutdown is awaitable
+            import inspect
+            if inspect.iscoroutinefunction(scheduler_shutdown):
+                await scheduler_shutdown()
+            else:
+                scheduler_shutdown()
         except Exception as e:  # pragma: no cover - best effort
             logger.debug("scheduler shutdown failed: %s", e)
         # Ensure OpenTelemetry worker thread is stopped to avoid atexit noise
@@ -993,10 +1121,10 @@ app.include_router(status_router, include_in_schema=False)
 app.include_router(health_router)
 
 # Include modern auth API router first to avoid route shadowing
-# TEMPORARILY DISABLED: Testing modular auth routers
-# if _safe_import_router("from .api.auth import router as auth_api_router", "auth_api", required_in_prod=True):
-#     app.include_router(auth_api_router, prefix="/v1")
-#     app.include_router(auth_api_router, include_in_schema=False)
+# TEMPORARILY ENABLED: Re-enabling main auth router for testing
+if _safe_import_router("from .api.auth import router as auth_api_router", "auth_api", required_in_prod=True):
+    app.include_router(auth_api_router, prefix="/v1")
+    app.include_router(auth_api_router, include_in_schema=False)
 
 # Legacy auth router split into focused modules. Mount conditionally based on env.
 from .auth_providers import admin_enabled
@@ -1237,125 +1365,65 @@ if music_router is not None:
         app.include_router(tv_music_sim_router, prefix="/v1")
         app.include_router(tv_music_sim_router, include_in_schema=False)
 
-    # ============================================================================
-    # MIDDLEWARE REGISTRATION (AFTER ALL ROUTERS)
-    # ============================================================================
+# Route listing for debugging - print all routes at startup
+for r in app.router.routes:
+    try:
+        methods = ",".join(sorted(r.methods or []))
+        print(f"[ROUTE] {methods:15} {r.path}")
+    except Exception:
+        pass
 
-    # 1) Include routers FIRST (handlers + dependencies live here)
-    #    Routers are already included above with their dependencies
+# Idempotent middleware registration helper
+def register_middlewares_once(application):
+    try:
+        if getattr(application.state, "mw_registered", False):
+            logging.debug("Middlewares already registered; skipping")
+            return
+    except Exception:
+        pass
 
-    # 2) Core middlewares (inner → outer as you go DOWN)
-    #    These WILL be skipped for OPTIONS by your own checks.
-    #    Order: [ RequestID ] → [ Trace ] → [ CSRF ] → [ CORS ] → [ RateLimit / Router / Handlers ]
     # Core middlewares (inner → outer)
-    add_mw(
-        app, RequestIDMiddleware, name="RequestIDMiddleware"
-    )  # innermost - sets request ID
-    add_mw(app, DedupMiddleware, name="DedupMiddleware")  # deduplicates requests
-    add_mw(
-        app, HealthCheckFilterMiddleware, name="HealthCheckFilterMiddleware"
-    )  # filters health check logs
-    add_mw(
-        app, TraceRequestMiddleware, name="TraceRequestMiddleware"
-    )  # traces/logs requests (skips OPTIONS)
-    add_mw(
-        app, AuditMiddleware, name="AuditMiddleware"
-    )  # append-only audit trail (Phase 6.2)
-    add_mw(
-        app, RedactHashMiddleware, name="RedactHashMiddleware"
-    )  # redact + hashing for secrets
-    add_mw(
-        app, MetricsMiddleware, name="MetricsMiddleware"
-    )  # clean prometheus metrics (Phase 6.1)
-    add_mw(
-        app, RateLimitMiddleware, name="RateLimitMiddleware"
-    )  # rate limiting (needs user_id/scopes from SessionAttachMiddleware)
-    add_mw(
-        app, SessionAttachMiddleware, name="SessionAttachMiddleware"
-    )  # attach user_id/scopes for downstream use (AFTER RateLimitMiddleware for metrics)
+    add_mw(application, RequestIDMiddleware, name="RequestIDMiddleware")
+    add_mw(application, DedupMiddleware, name="DedupMiddleware")
+    add_mw(application, HealthCheckFilterMiddleware, name="HealthCheckFilterMiddleware")
+    add_mw(application, TraceRequestMiddleware, name="TraceRequestMiddleware")
+    add_mw(application, AuditMiddleware, name="AuditMiddleware")
+    add_mw(application, RedactHashMiddleware, name="RedactHashMiddleware")
+    add_mw(application, MetricsMiddleware, name="MetricsMiddleware")
+    add_mw(application, RateLimitMiddleware, name="RateLimitMiddleware")
+    add_mw(application, SessionAttachMiddleware, name="SessionAttachMiddleware")
 
+    # CSRF before CORS
+    add_mw(application, CSRFMiddleware, name="CSRFMiddleware")
+    logging.info("=== CSRF MIDDLEWARE REGISTERED ===")
 
-# 3) Third-party middlewares (still INSIDE CORS)
-#    Configure them to skip OPTIONS if they can.
-#    Note: Currently no third-party middlewares like GZipMiddleware are used
-
-# 4) CSRF protection BEFORE CORS (inner)
-#    CSRF middleware handles non-OPTIONS requests before CORS processes them
-# CSRF protection BEFORE CORS (inner)
-add_mw(app, CSRFMiddleware, name="CSRFMiddleware")  # CSRF protection (skips OPTIONS)
-logging.info("=== CSRF MIDDLEWARE REGISTERED ===")
-
-# Dev-only self-check: ensure CSRF cookie attributes look sane at boot
-try:
+    # Dev / optional middlewares
     if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}:
-        from fastapi import Response
+        add_mw(application, ReloadEnvMiddleware, name="ReloadEnvMiddleware")
+    if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1", "true", "yes", "on"}:
+        add_mw(application, SilentRefreshMiddleware, name="SilentRefreshMiddleware")
 
-        from app.cookies import set_csrf_cookie
+    # Error boundary
+    add_mw(application, EnhancedErrorHandlingMiddleware, name="EnhancedErrorHandlingMiddleware")
 
-        r = Response()
-        # Mint a sample token and apply cookie helper (best-effort)
-        try:
-            tok = "dev-check-token"
-            # TTL 600s matches typical default
-            set_csrf_cookie(
-                r, tok, request=None, ttl=600
-            )  # request can be None for dev check
-        except Exception:
-            r = None
+    # CORS outermost
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=allow_credentials,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["*", "Authorization"],
+        expose_headers=["X-Request-ID"],
+        max_age=600,
+    )
 
-        if r is not None:
-            # Parse generated Set-Cookie header(s) for csrf_token
-            headers = [h for h in getattr(r, "headers", [])]
-            for k, v in getattr(r, "headers", {}).items():
-                if k.lower() == "set-cookie" and "csrf_token" in v:
-                    # crude parse for dev-readable attributes
-                    attrs = v.split("; ")
-                    path = next(
-                        (p.split("=")[1] for p in attrs if p.startswith("Path=")), "/"
-                    )
-                    samesite = next(
-                        (s.split("=")[1] for s in attrs if s.startswith("SameSite=")),
-                        "Lax",
-                    )
-                    secure = any(a == "Secure" for a in attrs)
-                    httponly = any(a == "HttpOnly" for a in attrs)
-                    domain = next(
-                        (d.split("=")[1] for d in attrs if d.startswith("Domain=")), "∅"
-                    )
-                    logging.info(
-                        "CSRF cookie check: Path=%s, Domain=%s, SameSite=%s, Secure=%s, HttpOnly=%s",
-                        path,
-                        domain,
-                        samesite,
-                        str(secure).lower(),
-                        str(httponly).lower(),
-                    )
-except Exception:
-    pass
+    try:
+        application.state.mw_registered = True
+    except Exception:
+        logging.debug("Failed to set application.state.mw_registered flag")
 
-# Dev/feature helpers (still inside CORS)
-if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}:
-    add_mw(app, ReloadEnvMiddleware, name="ReloadEnvMiddleware")  # dev-only
-
-# Silent token refresh for authenticated flows
-if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1", "true", "yes", "on"}:
-    add_mw(app, SilentRefreshMiddleware, name="SilentRefreshMiddleware")
-
-# Error boundary (keep inside CORS so errors still get ACAO)
-add_mw(app, EnhancedErrorHandlingMiddleware, name="EnhancedErrorHandlingMiddleware")
-
-# 5) CORS AS OUTERMOST MIDDLEWARE — HANDLES ALL RESPONSES
-#    CORS middleware must be the outermost to ensure all responses (including errors) get ACAO headers
-# Note: CORS has special configuration parameters, so we use direct add_middleware here
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=allow_credentials,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*", "Authorization"],
-    expose_headers=["X-Request-ID"],
-    max_age=600,
-)
+# Register middlewares once (idempotent)
+register_middlewares_once(app)
 
 
 # DEV-only middleware order assertion

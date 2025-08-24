@@ -24,7 +24,7 @@ def test_llama_override(monkeypatch):
 
     monkeypatch.setattr(router, "ask_llama", fake_llama)
     monkeypatch.setattr(router, "ALLOWED_LLAMA_MODELS", {"llama3"})
-    result = asyncio.run(router.route_prompt("hello", "llama3", user_id="u"))
+    result = asyncio.run(router.route_prompt("hello", user_id="u", model_override="llama3"))
     assert result == "ok"
 
 

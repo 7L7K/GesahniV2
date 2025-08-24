@@ -822,9 +822,9 @@ async def verify_token(request: Request) -> None:
     # Fallback to access_token cookie (accept canonical or legacy during migration)
     if not token:
         try:
-            from .cookie_names import ACCESS_TOKEN, ACCESS_TOKEN_LEGACY
+            from .cookie_names import GSNH_AT, ACCESS_TOKEN, ACCESS_TOKEN_LEGACY
 
-            token = request.cookies.get(ACCESS_TOKEN) or request.cookies.get(
+            token = request.cookies.get(GSNH_AT) or request.cookies.get(ACCESS_TOKEN) or request.cookies.get(
                 ACCESS_TOKEN_LEGACY
             )
             if token:
@@ -835,10 +835,11 @@ async def verify_token(request: Request) -> None:
     # 2) Try __session cookie if access_token failed (accept canonical/legacy)
     if not token:
         try:
-            from .cookie_names import SESSION, SESSION_LEGACY
+            from .cookie_names import GSNH_SESS, SESSION, SESSION_LEGACY
 
             token = (
-                request.cookies.get(SESSION)
+                request.cookies.get(GSNH_SESS)
+                or request.cookies.get(SESSION)
                 or request.cookies.get(SESSION_LEGACY)
                 or request.cookies.get("session")
             )
@@ -847,9 +848,9 @@ async def verify_token(request: Request) -> None:
         except Exception:
             token = request.cookies.get("__session") or request.cookies.get("session")
 
-    # Log which cookie/token source authenticated the request
+    # Log which cookie/token source authenticated the request (debug level to reduce spam)
     if token:
-        logger.info(
+        logger.debug(
             "auth.token_source",
             extra={
                 "token_source": token_source,
@@ -858,6 +859,9 @@ async def verify_token(request: Request) -> None:
                 "request_path": _safe_request_path(request),
             },
         )
+        logger.info("verify_token: cookie=%s, found=%s", token_source, bool(token))
+    else:
+        logger.info("verify_token: cookie=missing, expired=false, reason=no_token_found")
 
     if not token:
         # If JWT is required, enforce 401 even under tests
@@ -921,6 +925,7 @@ async def verify_token(request: Request) -> None:
             if AUTH_FAIL:
                 AUTH_FAIL.labels(reason="expired").inc()
             logger.warning("deny: token_expired")
+            logger.debug("verify_token: cookie=%s, expired=true, reason=token_expired", token_source)
             raise HTTPException(status_code=401, detail="token_expired")
         except jwt.PyJWTError:
             # Traditional JWT failed, try Clerk if enabled and appropriate
@@ -962,6 +967,7 @@ async def verify_token(request: Request) -> None:
     if AUTH_FAIL:
         AUTH_FAIL.labels(reason="invalid").inc()
     logger.warning("deny: invalid_token")
+    logger.debug("verify_token: cookie=%s, expired=false, reason=invalid_token", token_source)
     # Emit structured reason code for unauthorized access
     exc = HTTPException(status_code=401, detail="Unauthorized")
     try:

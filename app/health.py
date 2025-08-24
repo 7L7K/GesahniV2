@@ -13,7 +13,12 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
+from fastapi import APIRouter
+
 logger = logging.getLogger(__name__)
+
+# Create router for health diagnostics endpoints
+router = APIRouter(tags=["Health Diagnostics"])
 
 # ---------------------------------------------------------------------------
 # Health Check Data Structures
@@ -469,6 +474,29 @@ async def check_ollama_health(cache_result: bool = True) -> HealthCheckResult:
     start_time = time.perf_counter()
 
     try:
+        # Check if LLaMA is explicitly disabled
+        import os
+        llama_enabled = (os.getenv("LLAMA_ENABLED") or "").strip().lower()
+        if llama_enabled in {"0", "false", "no", "off"}:
+            return HealthCheckResult(
+                healthy=True,
+                status="disabled",
+                latency_ms=0.0,
+                metadata={"reason": "disabled_via_LLAMA_ENABLED"},
+                timestamp=time.time(),
+            )
+
+        # Check if Ollama URL is configured
+        ollama_url = os.getenv("OLLAMA_URL") or os.getenv("LLAMA_URL")
+        if not ollama_url and llama_enabled not in {"1", "true", "yes", "on"}:
+            return HealthCheckResult(
+                healthy=True,
+                status="not_configured",
+                latency_ms=0.0,
+                metadata={"reason": "no_ollama_url"},
+                timestamp=time.time(),
+            )
+
         # Import here to avoid circular imports
         from .llama_integration import get_status
 
@@ -604,6 +632,29 @@ async def check_home_assistant_health(cache_result: bool = True) -> HealthCheckR
     start_time = time.perf_counter()
 
     try:
+        # Check if Home Assistant is explicitly disabled
+        import os
+        ha_enabled = (os.getenv("HOME_ASSISTANT_ENABLED") or "").strip().lower()
+        if ha_enabled in {"0", "false", "no", "off"}:
+            return HealthCheckResult(
+                healthy=True,
+                status="disabled",
+                latency_ms=0.0,
+                metadata={"reason": "disabled_via_HOME_ASSISTANT_ENABLED"},
+                timestamp=time.time(),
+            )
+
+        # Check if Home Assistant URL is configured
+        ha_url = os.getenv("HOME_ASSISTANT_URL")
+        if not ha_url:
+            return HealthCheckResult(
+                healthy=True,
+                status="not_configured",
+                latency_ms=0.0,
+                metadata={"reason": "no_home_assistant_url"},
+                timestamp=time.time(),
+            )
+
         # Import here to avoid circular imports
         from .home_assistant import _request
 
@@ -760,6 +811,306 @@ async def check_system_health(
             )
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# Health Diagnostics Router Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/health/openai")
+async def get_openai_health() -> dict[str, Any]:
+    """
+    Get detailed OpenAI health status with caching information.
+
+    Returns:
+        Dictionary with OpenAI health status and metadata
+    """
+    try:
+        result = await check_openai_health(cache_result=False)  # Fresh check
+
+        return {
+            "vendor": "openai",
+            "healthy": result.healthy,
+            "status": result.status,
+            "latency_ms": result.latency_ms,
+            "error": result.error,
+            "timestamp": result.timestamp,
+            "cached": False,
+        }
+    except Exception as e:
+        return {
+            "vendor": "openai",
+            "healthy": False,
+            "status": "error",
+            "error": str(e),
+            "timestamp": time.time(),
+            "cached": False,
+        }
+
+
+@router.get("/health/ollama")
+async def get_ollama_health() -> dict[str, Any]:
+    """
+    Get detailed Ollama health status with caching information.
+
+    Returns:
+        Dictionary with Ollama health status and metadata
+    """
+    try:
+        result = await check_ollama_health(cache_result=False)  # Fresh check
+
+        return {
+            "vendor": "ollama",
+            "healthy": result.healthy,
+            "status": result.status,
+            "latency_ms": result.latency_ms,
+            "error": result.error,
+            "metadata": result.metadata,
+            "timestamp": result.timestamp,
+            "cached": False,
+        }
+    except Exception as e:
+        return {
+            "vendor": "ollama",
+            "healthy": False,
+            "status": "error",
+            "error": str(e),
+            "timestamp": time.time(),
+            "cached": False,
+        }
+
+
+@router.get("/health/vector_store")
+async def get_vector_store_health() -> dict[str, Any]:
+    """
+    Get detailed vector store health status.
+
+    Returns:
+        Dictionary with vector store health status and metadata
+    """
+    try:
+        result = await check_vector_store_health(cache_result=False)  # Fresh check
+
+        return {
+            "component": "vector_store",
+            "healthy": result.healthy,
+            "status": result.status,
+            "latency_ms": result.latency_ms,
+            "error": result.error,
+            "timestamp": result.timestamp,
+            "cached": False,
+        }
+    except Exception as e:
+        return {
+            "component": "vector_store",
+            "healthy": False,
+            "status": "error",
+            "error": str(e),
+            "timestamp": time.time(),
+            "cached": False,
+        }
+
+
+@router.get("/health/home_assistant")
+async def get_home_assistant_health() -> dict[str, Any]:
+    """
+    Get detailed Home Assistant health status.
+
+    Returns:
+        Dictionary with Home Assistant health status and metadata
+    """
+    try:
+        result = await check_home_assistant_health(cache_result=False)  # Fresh check
+
+        return {
+            "component": "home_assistant",
+            "healthy": result.healthy,
+            "status": result.status,
+            "latency_ms": result.latency_ms,
+            "error": result.error,
+            "timestamp": result.timestamp,
+            "cached": False,
+        }
+    except Exception as e:
+        return {
+            "component": "home_assistant",
+            "healthy": False,
+            "status": "error",
+            "error": str(e),
+            "timestamp": time.time(),
+            "cached": False,
+        }
+
+
+@router.get("/health/database")
+async def get_database_health() -> dict[str, Any]:
+    """
+    Get detailed database health status.
+
+    Returns:
+        Dictionary with database health status and metadata
+    """
+    try:
+        result = await check_database_health(cache_result=False)  # Fresh check
+
+        return {
+            "component": "database",
+            "healthy": result.healthy,
+            "status": result.status,
+            "latency_ms": result.latency_ms,
+            "error": result.error,
+            "timestamp": result.timestamp,
+            "cached": False,
+        }
+    except Exception as e:
+        return {
+            "component": "database",
+            "healthy": False,
+            "status": "error",
+            "error": str(e),
+            "timestamp": time.time(),
+            "cached": False,
+        }
+
+
+@router.get("/health/all")
+async def get_all_health_status() -> dict[str, Any]:
+    """
+    Get comprehensive health status for all components.
+
+    Returns:
+        Dictionary with health status for all components
+    """
+    try:
+        results = await check_system_health(
+            include_openai=True,
+            include_ollama=True,
+            include_vector_store=True,
+            include_home_assistant=True,
+            include_database=True,
+            cache_results=False,  # Fresh checks
+        )
+
+        # Convert results to API-friendly format
+        formatted_results = {}
+        for component, result in results.items():
+            formatted_results[component] = {
+                "healthy": result.healthy,
+                "status": result.status,
+                "latency_ms": result.latency_ms,
+                "error": result.error,
+                "timestamp": result.timestamp,
+            }
+
+        overall_healthy = is_system_healthy(results)
+
+        return {
+            "overall_healthy": overall_healthy,
+            "timestamp": time.time(),
+            "components": formatted_results,
+            "cache_status": "fresh",
+        }
+
+    except Exception as e:
+        return {
+            "overall_healthy": False,
+            "error": str(e),
+            "timestamp": time.time(),
+            "components": {},
+            "cache_status": "error",
+        }
+
+
+@router.get("/health/cache")
+async def get_health_cache_info() -> dict[str, Any]:
+    """
+    Get information about the health check cache.
+
+    Returns:
+        Dictionary with cache statistics and contents
+    """
+    try:
+        cache_size = len(health_cache._cache)
+        cache_entries = {}
+
+        # Get cache entry info without exposing sensitive data
+        for key, cached in health_cache._cache.items():
+            cache_entries[key] = {
+                "expires_at": cached.expires_at,
+                "age_seconds": time.time() - (cached.expires_at - health_cache.default_ttl),
+                "check_duration_ms": cached.check_duration_ms,
+            }
+
+        return {
+            "cache_size": cache_size,
+            "default_ttl_seconds": health_cache.default_ttl,
+            "entries": cache_entries,
+            "timestamp": time.time(),
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e),
+            "cache_size": 0,
+            "entries": {},
+            "timestamp": time.time(),
+        }
+
+
+@router.post("/health/refresh")
+async def refresh_health_cache() -> dict[str, Any]:
+    """
+    Force refresh all cached health checks.
+
+    Returns:
+        Dictionary with refresh status
+    """
+    try:
+        await force_refresh_health_checks()
+
+        return {
+            "status": "success",
+            "message": "Health check cache refreshed",
+            "timestamp": time.time(),
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": time.time(),
+        }
+
+
+@router.get("/health/vendors")
+async def get_vendor_health_status() -> dict[str, Any]:
+    """
+    Get health status for all vendors being tracked by the eager health gating system.
+
+    Returns:
+        Dictionary with health information for all tracked vendors
+    """
+    try:
+        all_health_info = VendorHealthTracker.get_all_vendor_health_info()
+
+        return {
+            "status": "ok",
+            "vendors": all_health_info,
+            "total_vendors": len(all_health_info),
+            "unhealthy_vendors": sum(
+                1 for info in all_health_info.values() if not info["is_healthy"]
+            ),
+            "timestamp": time.time(),
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": f"Error getting vendor health status: {e}",
+            "timestamp": time.time(),
+        }
 
 
 # ---------------------------------------------------------------------------

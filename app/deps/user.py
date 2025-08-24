@@ -129,32 +129,46 @@ def get_current_user_id(
         except Exception:
             token = None
 
-    # Log which cookie/token source authenticated the request
-    if token:
-        logger.info(
-            "auth.token_source",
-            extra={
-                "token_source": token_source,
-                "has_token": bool(token),
-                "token_length": len(token) if token else 0,
-                "request_path": (
-                    getattr(request, "url", {}).path
-                    if hasattr(getattr(request, "url", {}), "path")
-                    else "unknown" if request else "websocket"
-                ),
-            },
-        )
-    else:
-        logger.info(
-            "auth.no_token",
-            extra={
-                "request_path": (
-                    getattr(request, "url", {}).path
-                    if hasattr(getattr(request, "url", {}), "path")
-                    else "unknown" if request else "websocket"
-                ),
-            },
-        )
+    # Log token source exactly once per request to reduce noise
+    try:
+        logged_flag = None
+        if target is not None:
+            logged_flag = getattr(target.state, "auth_token_source_logged", None)
+        if not logged_flag:
+            if token:
+                logger.debug(
+                    "auth.token_source",
+                    extra={
+                        "token_source": token_source,
+                        "has_token": bool(token),
+                        "token_length": len(token) if token else 0,
+                        "request_path": (
+                            getattr(request, "url", {}).path
+                            if hasattr(getattr(request, "url", {}), "path")
+                            else "unknown" if request else "websocket"
+                        ),
+                    },
+                )
+            else:
+                logger.info(
+                    "auth.no_token",
+                    extra={
+                        "request_path": (
+                            getattr(request, "url", {}).path
+                            if hasattr(getattr(request, "url", {}), "path")
+                            else "unknown" if request else "websocket"
+                        ),
+                    },
+                )
+            # mark as logged for this request to avoid duplicate logs
+            if target is not None:
+                try:
+                    setattr(target.state, "auth_token_source_logged", True)
+                except Exception:
+                    pass
+    except Exception:
+        # Best-effort logging only; don't let telemetry logging break auth flow
+        pass
 
     secret = JWT_SECRET or os.getenv("JWT_SECRET")
     # Default to not requiring JWT in dev unless explicitly enabled

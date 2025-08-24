@@ -1897,6 +1897,7 @@ async def refresh(request: Request, response: Response):
                     "X-Auth-Intent"
                 )
                 if str(intent or "").strip().lower() != "refresh":
+                    logger.info("refresh_flow: csrf_failed=true, reason=missing_intent_header_cross_site")
                     raise HTTPException(
                         status_code=400, detail="missing_intent_header_cross_site"
                     )
@@ -1904,6 +1905,7 @@ async def refresh(request: Request, response: Response):
                 # For cross-site, we'll accept the CSRF token from header only
                 # This is less secure than double-submit, but necessary for cross-site functionality
                 if not tok or len(tok) < 16:  # Basic validation
+                    logger.info("refresh_flow: csrf_failed=true, reason=invalid_csrf_format")
                     raise HTTPException(status_code=403, detail="invalid_csrf_format")
 
                 # TODO: Consider implementing server-side CSRF token validation for cross-site requests
@@ -1912,9 +1914,11 @@ async def refresh(request: Request, response: Response):
             else:
                 # Standard same-origin CSRF validation (double-submit pattern)
                 if used_legacy and not allowed:
+                    logger.info("refresh_flow: csrf_failed=true, reason=missing_csrf")
                     raise HTTPException(status_code=400, detail="missing_csrf")
                 cookie = request.cookies.get("csrf_token")
                 if not tok or not cookie or tok != cookie:
+                    logger.info("refresh_flow: csrf_failed=true, reason=invalid_csrf")
                     raise HTTPException(status_code=403, detail="invalid_csrf")
         else:
             # When CSRF is disabled, still require intent header for cross-site requests
@@ -1928,6 +1932,10 @@ async def refresh(request: Request, response: Response):
         raise
     except Exception:
         pass
+
+    # CSRF validation passed
+    logger.info("refresh_flow: csrf_passed=true")
+
     # Rate-limit refresh per session id (sid) 60/min
     try:
         from ..token_store import incr_login_counter
@@ -1966,8 +1974,18 @@ async def refresh(request: Request, response: Response):
                 refresh_override = val
     except Exception:
         refresh_override = None
+
+    # Log incoming refresh token status
+    rt_source = "cookie" if not refresh_override else "body"
+    from ..cookie_names import GSNH_RT
+    rt_value = refresh_override or request.cookies.get(GSNH_RT) or "missing"
+    logger.info("refresh_flow: incoming_rt=%s, source=%s", rt_value[:20] + "..." if rt_value != "missing" else "missing", rt_source)
+
     t0 = time.time()
     tokens = await rotate_refresh_cookies(request, response, refresh_override)
+    rotated = bool(tokens)
+    logger.info("refresh_flow: incoming_rt=%s, rotated=%s", rt_value[:20] + "..." if rt_value != "missing" else "missing", rotated)
+
     if not tokens:
         # Metric for spikes on refresh failures
         try:
@@ -1976,9 +1994,9 @@ async def refresh(request: Request, response: Response):
             pass
         # Fallback: if a valid access_token cookie exists, treat as session-ready and return 200
         try:
-            from ..cookie_names import ACCESS_TOKEN
+            from ..cookie_names import GSNH_AT
 
-            atok = request.cookies.get(ACCESS_TOKEN)
+            atok = request.cookies.get(GSNH_AT)
             if atok:
                 claims = _decode_any(atok)
                 uid_fb = str(claims.get("user_id") or claims.get("sub") or "anon")
@@ -1994,9 +2012,11 @@ async def refresh(request: Request, response: Response):
                     )
                 except Exception:
                     pass
+                logger.info("refresh_flow: fallback_used=true, reason=valid_access_token_exists")
                 return {"status": "ok", "user_id": uid_fb}
         except Exception:
             pass
+        logger.info("refresh_flow: fallback_used=false, reason=no_valid_tokens")
         raise HTTPException(status_code=401, detail="invalid_refresh")
     # Prefer user_id from rotation outcome; include tokens for header-auth clients
     try:

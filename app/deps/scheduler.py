@@ -12,6 +12,11 @@ except Exception:  # pragma: no cover - optional dependency
 
         def start(self):
             self.running = True
+            return None  # Explicitly return None to avoid confusion
+
+        async def astart(self):
+            """Async version of start for compatibility."""
+            return self.start()
 
         def add_job(
             self,

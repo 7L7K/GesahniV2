@@ -39,6 +39,9 @@ from .cookie_config import format_cookie_header, get_cookie_config
 from .cookie_names import (
     ACCESS_TOKEN,
     ACCESS_TOKEN_LEGACY,
+    GSNH_AT,
+    GSNH_RT,
+    GSNH_SESS,
     REFRESH_TOKEN,
     REFRESH_TOKEN_LEGACY,
     SESSION,
@@ -80,9 +83,9 @@ def set_auth_cookies(
     cookie_config = cookie_cfg.get_cookie_config(request)
 
     # Set access token cookie (write canonical name)
-    # Use the external-facing canonical name so clients see `access_token`.
+    # Use the GSNH_* canonical name as required by cookie_names.py
     access_header = format_cookie_header(
-        key=ACCESS_TOKEN,
+        key=GSNH_AT,
         value=access,
         max_age=access_ttl,
         secure=cookie_config["secure"],
@@ -96,7 +99,7 @@ def set_auth_cookies(
     # Set refresh token cookie only if provided
     if refresh:
         refresh_header = format_cookie_header(
-            key=REFRESH_TOKEN,
+            key=GSNH_RT,
             value=refresh,
             max_age=refresh_ttl,
             secure=cookie_config["secure"],
@@ -113,7 +116,7 @@ def set_auth_cookies(
     if session_id:
         # Use external-facing session cookie name (`__session`) for integrations
         session_header = format_cookie_header(
-            key=SESSION,
+            key=GSNH_SESS,
             value=session_id,
             max_age=access_ttl,  # Always use access_ttl for session alignment
             secure=cookie_config["secure"],
@@ -141,9 +144,12 @@ def clear_auth_cookies(resp: Response, request: Request) -> None:
     # Get cookie configuration from request context
     cookie_config = cookie_cfg.get_cookie_config(request)
 
-    # Clear both canonical external names and internal GSNH_* legacy names to
+    # Clear both canonical GSNH_* names and legacy names to
     # ensure interoperability during migrations and for clients using either.
     cookies_to_clear = [
+        GSNH_AT,
+        GSNH_RT,
+        GSNH_SESS,
         ACCESS_TOKEN,
         REFRESH_TOKEN,
         SESSION,

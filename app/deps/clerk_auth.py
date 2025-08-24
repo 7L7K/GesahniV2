@@ -85,9 +85,9 @@ def _extract_bearer_from_request(request: Request) -> str | None:
         if token:
             token_source = "__session_cookie"
 
-    # Log which cookie/token source authenticated the request
+    # Log which cookie/token source authenticated the request (debug level to reduce spam)
     if token:
-        logger.info(
+        logger.debug(
             "auth.token_source",
             extra={
                 "token_source": token_source,
@@ -153,7 +153,7 @@ def _extract_bearer_from_ws(ws: WebSocket) -> str | None:
 
     # Log which cookie/token source authenticated the request
     if token:
-        logger.info(
+        logger.debug(
             "auth.token_source",
             extra={
                 "token_source": token_source,

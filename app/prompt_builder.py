@@ -29,6 +29,9 @@ _CORE_PATH = Path(__file__).parent / "prompts" / "prompt_core.txt"
 
 logger = logging.getLogger(__name__)
 
+# Track if we've already logged the approximate counting warning
+_approx_counting_warned = False
+
 
 @cache
 def _prompt_core() -> str:
@@ -310,11 +313,19 @@ class PromptBuilder:
                 return count_tokens(text), "approx"
 
         base_tokens, tokens_est_method = _count_tokens_precise(base_prompt)
+
+        # Log once if falling back to approximate counting
+        global _approx_counting_warned
+        if tokens_est_method == "approx" and not _approx_counting_warned:
+            logger.info("PromptBuilder using approximate token counting (tiktoken not available)")
+            _approx_counting_warned = True
         mem_list = memories.copy()
 
         # ------------------------------------------------------------------
         # Token-budget loop
         # ------------------------------------------------------------------
+        trimmed_summary = False
+        trimmed_memories = 0
         while True:
             prompt = core_template
             # Render retrieved memories as raw lines to preserve tests' expectations
@@ -345,15 +356,17 @@ class PromptBuilder:
             # Budget overflow: drop summary first, then memories
             if summary:
                 summary = ""
+                trimmed_summary = True
                 base_replacements["conversation_summary"] = ""
                 base_prompt = core_template
                 for key, val in base_replacements.items():
                     base_prompt = base_prompt.replace(f"{{{{{key}}}}}", val)
-                base_tokens = count_tokens(base_prompt)
+                base_tokens, _ = _count_tokens_precise(base_prompt)
                 continue
 
             if mem_list:
                 mem_list.pop()
+                trimmed_memories += 1
                 continue
 
             # Nothing left to trim
@@ -377,6 +390,15 @@ class PromptBuilder:
             len(mem_list),
             tokens_est_method,
         )
+
+        # Log trimming operations for debugging context loss
+        if trimmed_summary or trimmed_memories > 0:
+            logger.info(
+                "PromptBuilder.clamp result trimmed_summary=%s trimmed_memories=%d final_tokens=%d",
+                trimmed_summary,
+                trimmed_memories,
+                prompt_tokens,
+            )
         # Optional prompt logging for debugging/dev only
         if os.getenv("LOG_BUILT_PROMPTS", "").lower() in {"1", "true", "yes"}:
             try:

@@ -29,13 +29,18 @@ def _table(intent: str | None) -> tuple[int, int]:
     return max_in, max_out
 
 
-def clamp_prompt(prompt: str, intent: str | None) -> str:
+def clamp_prompt(prompt: str, intent: str | None, max_tokens: int | None = None) -> str:
     """Truncate the user prompt when it exceeds the per-intent cap.
 
     A simple heuristic based on token count with a conservative character fallback.
     """
 
-    max_in, _ = _table(intent)
+    # Use provided max_tokens if given, otherwise get from intent table
+    if max_tokens is not None:
+        max_in = max_tokens
+    else:
+        max_in, _ = _table(intent)
+
     if max_in <= 0:
         return prompt
     t = count_tokens(prompt)

@@ -496,7 +496,7 @@ async def _ask(request: Request, body: dict | None):
         raise HTTPException(status_code=415, detail="unsupported_media_type")
 
     # Use canonical user_id from resolved parameter
-    __user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
+    _user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
 
     # Enforce authentication - return 401 if no valid user
     if user_id == "anon":
@@ -683,8 +683,8 @@ async def _ask(request: Request, body: dict | None):
             if "stream_cb" in params:
                 result = await route_prompt(
                     prompt_text,
-                    model_override,
                     user_id,
+                    model_override=model_override,
                     stream_cb=_stream_cb,
                     shape=shape,
                     normalized_from=normalized_from,
@@ -692,7 +692,7 @@ async def _ask(request: Request, body: dict | None):
                 )
             else:  # Compatibility with tests that monkeypatch route_prompt
                 result = await route_prompt(
-                    prompt_text, model_override, user_id, **gen_opts
+                    prompt_text, user_id, model_override=model_override, **gen_opts
                 )
             if streamed_any:
                 logger.info(
@@ -855,9 +855,9 @@ async def _ask(request: Request, body: dict | None):
         if status_code and status_code >= 400:
             # Error path: propagate detail with proper status
             detail_payload = (
-                error_detail
-                if (isinstance(error_detail, dict) or isinstance(error_detail, list))
-                else {"detail": str(error_detail or error_category or "error")}
+                _error_detail
+                if (isinstance(_error_detail, dict) or isinstance(_error_detail, list))
+                else {"detail": str(_error_detail or _error_category or "error")}
             )
             resp = JSONResponse(detail_payload, status_code=int(status_code))
         else:
