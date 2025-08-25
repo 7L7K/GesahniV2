@@ -199,6 +199,112 @@ class QdrantVectorStore:
 
         self._qa = _QACollection(self.client, self.cache_collection)
 
+    # -------------------- Lightweight helpers --------------------
+    def ping(self) -> bool:
+        """Lightweight ping: call /collections to verify Qdrant is reachable.
+
+        Returns True on success, False on any error.
+        """
+        try:
+            # get_collections is intentionally lightweight
+            self.client.get_collections()
+            return True
+        except Exception:
+            return False
+
+    def batch_upsert(self, collection_name: str, points: list) -> dict | None:
+        """Batch upsert raw PointStructs into a collection.
+
+        Returns a dict with operation_id and counts when available, or None on failure.
+        """
+        try:
+            before = None
+            try:
+                info = self.client.get_collection(collection_name)
+                before = getattr(info, "points_count", None)
+            except Exception:
+                before = None
+
+            resp = self.client.upsert(collection_name=collection_name, points=points)
+
+            after = None
+            try:
+                info = self.client.get_collection(collection_name)
+                after = getattr(info, "points_count", None)
+            except Exception:
+                after = None
+
+            # Try to extract operation id if the SDK returned one
+            op_id = None
+            try:
+                if hasattr(resp, "operation_id"):
+                    op_id = getattr(resp, "operation_id")
+                elif isinstance(resp, dict):
+                    op_id = resp.get("operation_id")
+            except Exception:
+                op_id = None
+
+            try:
+                logger.info(
+                    "qdrant.upsert.batch",
+                    extra={
+                        "meta": {
+                            "collection": collection_name,
+                            "op_id": op_id,
+                            "before": before,
+                            "after": after,
+                            "points_upserted": len(points),
+                        }
+                    },
+                )
+            except Exception:
+                pass
+
+            return {"operation_id": op_id, "before": before, "after": after}
+
+        except Exception:
+            global _LAST_ERR_TS
+            _LAST_ERR_TS = time.time()
+            logger.exception("qdrant.batch_upsert failed for %s", collection_name)
+            return None
+
+    def batch_upsert_user_memories(self, user_id: str, texts: list[str]) -> list[str]:
+        """Convenience: embed a list of texts and upsert them into the user's collection.
+
+        Returns list of inserted ids (may be shorter if some items were dropped).
+        """
+        from app.embeddings import embed_sync
+
+        dim = int(os.getenv("EMBED_DIM", "1536"))
+        col = self._user_collection(user_id)
+        self._ensure_collection(col, dim)
+
+        points = []
+        ids: list[str] = []
+        for text in texts:
+            try:
+                vec = embed_sync(text)
+                if len(vec) != dim:
+                    logger.warning(
+                        "qdrant.batch_upsert_user_memories: dropping due to embed dim mismatch user=%s expected=%s got=%s",
+                        user_id,
+                        dim,
+                        len(vec),
+                    )
+                    continue
+                mem_id = str(uuid.uuid4())
+                payload = {"user_id": user_id, "text": text, "created_at": time.time()}
+                points.append(PointStruct(id=mem_id, vector=vec, payload=payload))
+                ids.append(mem_id)
+            except Exception:
+                logger.exception("qdrant.batch_upsert_user_memories failed to embed/text=%s", text)
+                continue
+
+        if points:
+            self.batch_upsert(col, points)
+
+        return ids
+
     # -------------------- Bootstrap helpers --------------------
     def _ensure_collection(self, name: str, dim: int) -> None:
         t0 = time.perf_counter()
@@ -261,7 +367,17 @@ class QdrantVectorStore:
                     pass
 
     def _user_collection(self, user_id: str) -> str:
-        return f"mem:user:{user_id}"
+        # Sanitize user_id for use as a Qdrant collection name. Qdrant collection
+        # names must not include characters like ':' which can cause 4xx errors.
+        # Replace any non-alphanumeric or underscore/dash characters with '_'.
+        try:
+            import re
+
+            safe = re.sub(r"[^A-Za-z0-9_\-]", "_", str(user_id))
+            # Prefix with mem:user: to keep backward semantics but ensure valid name
+            return f"mem_user_{safe}"
+        except Exception:
+            return f"mem_user_{user_id}"
 
     # -------------------- User memory API --------------------
     def add_user_memory(self, user_id: str, memory: str) -> str:
@@ -303,10 +419,46 @@ class QdrantVectorStore:
                 "text": memory,
             }
             t1 = time.perf_counter()
-            self.client.upsert(
+            # Dimension enforcement: guard against mismatched embedding sizes
+            dim = int(os.getenv("EMBED_DIM", "1536"))
+            if len(vec) != dim:
+                logger.warning(
+                    "qdrant.add_user_memory: dropping vector due to dim mismatch user=%s expected=%s got=%s",
+                    user_id,
+                    dim,
+                    len(vec),
+                )
+                return mem_id
+
+            resp = self.client.upsert(
                 collection_name=col,
                 points=[PointStruct(id=mem_id, vector=vec, payload=payload)],
             )
+            # Try to log operation id and point counts (best-effort)
+            try:
+                op_id = getattr(resp, "operation_id", None) if resp is not None else None
+            except Exception:
+                op_id = None
+            try:
+                info = self.client.get_collection(col)
+                after = getattr(info, "points_count", None)
+            except Exception:
+                after = None
+            try:
+                logger.info(
+                    "qdrant.upsert",
+                    extra={
+                        "meta": {
+                            "collection": col,
+                            "user_id": user_id,
+                            "op_id": op_id,
+                            "points_upserted": 1,
+                            "after": after,
+                        }
+                    },
+                )
+            except Exception:
+                pass
             try:
                 DEPENDENCY_LATENCY_SECONDS.labels("qdrant", "upsert").observe(
                     time.perf_counter() - t1
@@ -459,6 +611,54 @@ class QdrantVectorStore:
             return False
         finally:
             _rec_latency_ms(t0)
+
+    def drop_user_collection(self, user_id: str) -> bool:
+        """Delete entire per-user collection. Returns True on success."""
+        col = self._user_collection(user_id)
+        try:
+            self.client.delete_collection(collection_name=col)
+            try:
+                logger.info("qdrant.drop_collection", extra={"meta": {"collection": col, "user_id": user_id}})
+            except Exception:
+                pass
+            return True
+        except Exception:
+            try:
+                logger.exception("qdrant.drop_collection failed for %s", col)
+            except Exception:
+                pass
+            return False
+
+    def update_user_memory(self, user_id: str, mem_id: str, new_text: str) -> bool:
+        """Re-embed and upsert an existing memory by id. Returns True on success."""
+        from app.embeddings import embed_sync
+
+        try:
+            dim = int(os.getenv("EMBED_DIM", "1536"))
+            col = self._user_collection(user_id)
+            self._ensure_collection(col, dim)
+            vec = embed_sync(new_text)
+            if len(vec) != dim:
+                logger.warning(
+                    "qdrant.update_user_memory: embed dim mismatch for %s expected=%s got=%s",
+                    mem_id,
+                    dim,
+                    len(vec),
+                )
+                return False
+            payload = {"user_id": user_id, "text": new_text, "updated_at": time.time()}
+            self.client.upsert(collection_name=col, points=[PointStruct(id=mem_id, vector=vec, payload=payload)])
+            try:
+                logger.info(
+                    "qdrant.update_user_memory",
+                    extra={"meta": {"collection": col, "user_id": user_id, "mem_id": mem_id}},
+                )
+            except Exception:
+                pass
+            return True
+        except Exception:
+            logger.exception("qdrant.update_user_memory failed for %s", mem_id)
+            return False
 
     # -------------------- QA cache API -----------------------
     @property

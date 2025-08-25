@@ -1,0 +1,2221 @@
+INFO:     Will watch for changes in these directories: ['/Users/kingal/2025/GesahniV2']
+INFO:     Uvicorn running on http://localhost:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [74142] using WatchFiles
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Logging disabled: level=INFO, stdout=False, debug_mode=False, verbose=False, banners=False", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "CORS resolved origins=['http://localhost:3000'] | allow_credentials=True | allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] | allow_headers=['*', 'Authorization'] | expose_headers=['X-Request-ID']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "WARNING", "component": "app.main", "msg": "Feature voices disabled (import failed: No module named 'app.api.voices')", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.api.ask", "msg": "🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id", "env": "", "build_sha": "", "version": ""}
+INFO: Auth routers mounted (admin_enabled=True)
+INFO: Admin routes mounted (admin_enabled=True)
+INFO: Admin UI and extras routers processed (admin_enabled=True)
+INFO: Status plus router mounted (admin_enabled=True)
+[ROUTE] GET,HEAD        /openapi.json
+[ROUTE] GET,HEAD        /docs
+[ROUTE] GET,HEAD        /docs/oauth2-redirect
+[ROUTE] GET,HEAD        /redoc
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/capture/sessions
+[ROUTE] GET             /v1/search/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/upload
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/ha/aliases
+[ROUTE] POST            /v1/ha/aliases
+[ROUTE] DELETE          /v1/ha/aliases
+[ROUTE] GET             /v1/memories/export
+[ROUTE] DELETE          /v1/memories/{mem_id}
+[ROUTE] OPTIONS         /v1/csrf
+[ROUTE] GET             /v1/csrf
+[ROUTE] OPTIONS         /v1/health
+[ROUTE] OPTIONS         /v1/metrics
+[ROUTE] OPTIONS         /v1/auth/token
+[ROUTE] OPTIONS         /v1/auth/apple/start
+[ROUTE] OPTIONS         /v1/auth/apple/callback
+[ROUTE] OPTIONS         /v1/v1/{path:path}
+[ROUTE] GET             /v1/ping
+[ROUTE] DELETE          /v1/ws/{path:path}
+[ROUTE] PATCH           /v1/ws/{path:path}
+[ROUTE] PUT             /v1/ws/{path:path}
+[ROUTE] POST            /v1/ws/{path:path}
+[ROUTE] GET             /v1/ws/{path:path}
+[ROUTE] GET             /v1/debug/config
+[ROUTE] GET             /v1/docs/ws
+[ROUTE] POST            /v1/intent-test
+[ROUTE] GET             /v1/client-crypto-policy
+[ROUTE] GET             /v1/explain_route
+[ROUTE] GET             /metrics
+[ROUTE] GET             /metrics
+[ROUTE] GET             /v1/health/openai
+[ROUTE] GET             /v1/health/ollama
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /v1/health/home_assistant
+[ROUTE] GET             /v1/health/database
+[ROUTE] GET             /v1/health/all
+[ROUTE] GET             /v1/health/cache
+[ROUTE] POST            /v1/health/refresh
+[ROUTE] GET             /v1/health/vendors
+[ROUTE] GET             /v1/health
+[ROUTE] GET             /v1/healthz
+[ROUTE] GET             /v1/rate_limit_status
+[ROUTE] GET             /v1/config
+[ROUTE] GET             /v1/budget
+[ROUTE] GET             /v1/status/budget
+[ROUTE] GET             /v1/ha_status
+[ROUTE] GET             /v1/llama_status
+[ROUTE] GET             /v1/status
+[ROUTE] GET             /healthz/live
+[ROUTE] GET             /healthz/ready
+[ROUTE] GET             /v1/ping
+[ROUTE] GET             /v1/vendor-health
+[ROUTE] GET             /healthz/deps
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /health/vector_store
+[ROUTE] GET             /v1/auth/clerk/protected
+[ROUTE] GET             /v1/whoami
+[ROUTE] GET             /v1/auth/whoami
+[ROUTE] GET             /v1/pats
+[ROUTE] POST            /v1/pats
+[ROUTE] DELETE          /v1/pats/{pat_id}
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] POST            /v1/auth/clerk/finish
+[ROUTE] GET             /v1/auth/clerk/finish
+[ROUTE] POST            /v1/auth/login
+[ROUTE] POST            /v1/auth/logout
+[ROUTE] POST            /v1/auth/refresh
+[ROUTE] POST            /v1/auth/token
+[ROUTE] GET             /v1/auth/examples
+[ROUTE] GET             /v1/mock/set_access_cookie
+[ROUTE] GET             /v1/whoami
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] GET             /v1/status/preflight
+[ROUTE] GET             /v1/device/session
+[ROUTE] POST            /v1/device/trust
+[ROUTE] GET             /v1/google/auth/login_url
+[ROUTE] GET             /v1/google/auth/callback
+[ROUTE] GET             /v1/auth/apple/start
+[ROUTE] POST            /v1/auth/apple/callback
+[ROUTE] POST            /v1/auth/register_pw
+[ROUTE] POST            /v1/auth/login_pw
+[ROUTE] GET             /v1/google/auth/url
+[ROUTE] GET             /v1/google/test
+[ROUTE] POST            /v1/google/gmail/send
+[ROUTE] POST            /v1/google/calendar/create
+[ROUTE] GET             /v1/google/status
+[ROUTE] GET             /google/auth/url
+[ROUTE] GET             /google/test
+[ROUTE] POST            /google/gmail/send
+[ROUTE] POST            /google/calendar/create
+[ROUTE] GET             /google/status
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] GET             /v1/ha/health
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/reminders
+[ROUTE] POST            /v1/reminders
+[ROUTE] DELETE          /v1/reminders
+[ROUTE] GET             /v1/profile
+[ROUTE] POST            /v1/profile
+[ROUTE] GET             /v1/onboarding/status
+[ROUTE] POST            /v1/onboarding/complete
+[ROUTE] GET             /v1/admin/ping
+[ROUTE] GET             /v1/admin/rbac/info
+[ROUTE] GET             /v1/admin/users/me
+[ROUTE] GET             /v1/admin/system/status
+[ROUTE] GET             /v1/admin/surface/index
+[ROUTE] GET             /v1/admin/metrics
+[ROUTE] GET             /v1/admin/router/decisions
+[ROUTE] GET             /v1/admin/router/decisions.ndjson
+[ROUTE] GET             /v1/admin/retrieval/last
+[ROUTE] GET             /v1/admin/diagnostics/requests
+[ROUTE] GET             /v1/admin/decisions/explain
+[ROUTE] GET             /v1/admin/config
+[ROUTE] POST            /v1/admin/config
+[ROUTE] POST            /v1/admin/config/test
+[ROUTE] POST            /v1/admin/admin/reload_env
+[ROUTE] GET             /v1/admin/errors
+[ROUTE] GET             /v1/admin/self_review
+[ROUTE] POST            /v1/admin/vector_store/bootstrap
+[ROUTE] POST            /v1/admin/vector_store/migrate
+[ROUTE] GET             /v1/admin/vector_store/bootstrap/stream
+[ROUTE] GET             /v1/admin/vector_store/migrate/stream
+[ROUTE] GET             /v1/admin/vector_store/stats
+[ROUTE] GET             /v1/admin/token_store/stats
+[ROUTE] GET             /v1/admin/qdrant/collections
+[ROUTE] POST            /v1/admin/admin/flags
+[ROUTE] GET             /v1/admin/health/router_retrieval
+[ROUTE] GET             /v1/admin/flags
+[ROUTE] GET             /v1/admin/admin/collections
+[ROUTE] GET             /v1/admin/admin/feature_flags
+[ROUTE] GET             /v1/admin/admin/retrieval/trace
+[ROUTE] GET             /v1/admin/tv/config
+[ROUTE] PUT             /v1/admin/tv/config
+[ROUTE] GET             /v1/admin/ui
+[ROUTE] GET             /v1/admin/ui/retrieval
+[ROUTE] GET             /v1/admin/ui/config
+[ROUTE] GET             /v1/admin/collections
+[ROUTE] GET             /v1/admin/feature_flags
+[ROUTE] GET             /v1/admin/retrieval/trace
+[ROUTE] GET             /v1/me
+[ROUTE] GET             /v1/sessions
+[ROUTE] GET             /v1/sessions/paginated
+[ROUTE] POST            /v1/sessions/{sid}/revoke
+[ROUTE] POST            /v1/devices/pair/start
+[ROUTE] POST            /v1/devices/pair/complete
+[ROUTE] POST            /v1/devices/{device_id}/revoke
+[ROUTE] GET             /v1/spotify/token-for-sdk
+[ROUTE] GET             /v1/models
+[ROUTE] GET             /v1/history/recent
+[ROUTE] POST            /v1/history/pin
+[ROUTE] GET             /v1/status/features
+[ROUTE] GET             /v1/status/vector_store
+[ROUTE] POST            /v1/admin/backup
+[ROUTE] GET             /v1/rag/search
+[ROUTE] GET             /v1/skills/list
+[ROUTE] GET             /v1/tv/photos{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "=== CSRF MIDDLEWARE REGISTERED ===", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "MW-ORDER (inner→outer): ['CORSMiddleware', 'EnhancedErrorHandlingMiddleware', 'SilentRefreshMiddleware', 'ReloadEnvMiddleware', 'CSRFMiddleware', 'SessionAttachMiddleware', 'RateLimitMiddleware', 'MetricsMiddleware', 'RedactHashMiddleware', 'AuditMiddleware', 'TraceRequestMiddleware', 'HealthCheckFilterMiddleware', 'DedupMiddleware', 'RequestIDMiddleware']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Server starting on localhost:8000", "env": "", "build_sha": "", "version": ""}
+INFO:     Started server process [74155]
+INFO:     Waiting for application startup.
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Starting enhanced application startup", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "JWT secret: OK (len=64)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Database", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Database initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing OpenAI Health Check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:20Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Performing OpenAI startup health check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:22Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "vendor_health vendor=openai ok=true reason=successful_ping model=gpt-4o", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:22Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "OpenAI Health Check initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:22Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Vector Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:22Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:22Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:22Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:43:22Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:22Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Vector Store initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:22Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing LLaMA Integration", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:22Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:43:23Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:43:25Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:43:25Z", "req_id": "-", "level": "WARNING", "component": "app.llama_integration", "msg": "Ollama health check failed (attempt 1, next check in 10.0s): network_error", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:25Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "LLaMA Integration initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:25Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Home Assistant", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:25Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_request", "env": "", "build_sha": "", "version": "", "meta": {"method": "GET", "path": "/states", "json": null}}
+{"timestamp": "2025-08-25T10:43:25Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:43:27Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_response", "env": "", "build_sha": "", "version": "", "meta": {"status": "err", "body": "network_error"}}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "home_assistant error: timeout", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "WARNING", "component": "app.home_assistant", "msg": "Failed to fetch states: timeout (last cache exp: 0.00, now: 25743.26)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Home Assistant initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Memory Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Memory Store initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Scheduler", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Scheduler initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.storytime", "msg": "storytime.schedule", "env": "", "build_sha": "", "version": "", "meta": {"cron": "2:00", "job": "storytime_summarize_nightly"}}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Started local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:29Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Application startup completed in 8.58s", "env": "", "build_sha": "", "version": ""}
+INFO:     Application startup complete.
+{"timestamp": "2025-08-25T10:43:31Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:31Z", "req_id": "03492f69-6141-463f-ae6c-6ed7cb5983be", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:31Z", "req_id": "03492f69-6141-463f-ae6c-6ed7cb5983be", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:31Z", "req_id": "03492f69-6141-463f-ae6c-6ed7cb5983be", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:43:31Z", "req_id": "03492f69-6141-463f-ae6c-6ed7cb5983be", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:31Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz/ready -> 200 (0.378s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 378.27014923095703}}
+
+[ROUTE] POST            /v1/tv/photos/favorite
+[ROUTE] GET             /v1/tv/weather
+[ROUTE] POST            /v1/tv/alert
+[ROUTE] GET             /v1/tv/tips
+[ROUTE] POST            /v1/tv/music/play
+[ROUTE] GET             /v1/tv/prefs
+[ROUTE] POST            /v1/tv/prefs
+[ROUTE] POST            /v1/tv/stage2
+[ROUTE] GET             /v1/tv/config
+[ROUTE] PUT             /v1/tv/config
+[ROUTE] POST            /v1/tts/speak
+[ROUTE] POST            /v1/care/contacts
+[ROUTE] GET             /v1/care/contacts
+[ROUTE] PATCH           /v1/care/contacts/{contact_id}
+[ROUTE] DELETE          /v1/care/contacts/{contact_id}
+[ROUTE] GET             /v1/tv/contacts
+[ROUTE] POST            /v1/tv/contacts/call
+[ROUTE] GET             /v1/care/ack_token
+[ROUTE] POST            /v1/care/alerts/ack_via_link
+[ROUTE] GET             /v1/tv/photos
+[ROUTE] POST            /v1/tv/photos/favorite
+[ROUTE] POST            /v1/tv/photos/favorite
+[ROUTE] GET             /v1/calendar/today
+[ROUTE] GET             /v1/calendar/next
+[ROUTE] GET             /v1/tv/calendar/next
+[ROUTE] GET             /v1/calendar/list
+[ROUTE] POST            /v1/memory/ingest
+[ROUTE] POST            /v1/ask
+[ROUTE] POST            /v1/ask/dry-explain
+[ROUTE] POST            /v1/ask/stream
+[ROUTE] GET             /v1/ask/replay/{rid}
+[ROUTE] POST            /v1/care/alerts
+[ROUTE] POST            /v1/care/alerts/{alert_id}/ack
+[ROUTE] POST            /v1/care/alerts/{alert_id}/resolve
+[ROUTE] POST            /v1/care/devices/{device_id}/heartbeat
+[ROUTE] GET             /v1/care/device_status
+[ROUTE] GET             /v1/care/alerts
+[ROUTE] POST            /v1/care/sessions
+[ROUTE] PATCH           /v1/care/sessions/{session_id}
+[ROUTE] GET             /v1/care/sessions
+[ROUTE] GET             /v1/ws/care
+[ROUTE] GET             /v1/caregiver/sessions
+[ROUTE] GET             /v1/caregiver/device_status
+[ROUTE] POST            /v1/caregiver/alert
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 25, 10, 43, 31, 566918) user_id='anon' route='health_ready' method='GET' status=200 ip='127.0.0.1' req_id='-' scopes=[] action='http_request' meta={'path': '/healthz/ready'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-25T10:43:31.566918","user_id":"anon","route":"health_ready","method":"GET","status":200,"ip":"127.0.0.1","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/healthz/ready"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+INFO:     127.0.0.1:55031 - "GET /healthz/ready HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'app/memory/unified_store.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+{"timestamp": "2025-08-25T10:43:43Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "healthz status=offline", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:43Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Stopped local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+INFO:     Application shutdown complete.
+INFO:     Finished server process [74155]
+{"timestamp": "2025-08-25T10:43:48Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Logging disabled: level=INFO, stdout=False, debug_mode=False, verbose=False, banners=False", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:48Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "CORS resolved origins=['http://localhost:3000'] | allow_credentials=True | allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] | allow_headers=['*', 'Authorization'] | expose_headers=['X-Request-ID']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "WARNING", "component": "app.main", "msg": "Feature voices disabled (import failed: No module named 'app.api.voices')", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.api.ask", "msg": "🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id", "env": "", "build_sha": "", "version": ""}
+INFO: Auth routers mounted (admin_enabled=True)
+INFO: Admin routes mounted (admin_enabled=True)
+INFO: Admin UI and extras routers processed (admin_enabled=True)
+INFO: Status plus router mounted (admin_enabled=True)
+[ROUTE] GET,HEAD        /openapi.json
+[ROUTE] GET,HEAD        /docs
+[ROUTE] GET,HEAD        /docs/oauth2-redirect
+[ROUTE] GET,HEAD        /redoc
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/capture/sessions
+[ROUTE] GET             /v1/search/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/upload
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/ha/aliases
+[ROUTE] POST            /v1/ha/aliases
+[ROUTE] DELETE          /v1/ha/aliases
+[ROUTE] GET             /v1/memories/export
+[ROUTE] DELETE          /v1/memories/{mem_id}
+[ROUTE] OPTIONS         /v1/csrf
+[ROUTE] GET             /v1/csrf
+[ROUTE] OPTIONS         /v1/health
+[ROUTE] OPTIONS         /v1/metrics
+[ROUTE] OPTIONS         /v1/auth/token
+[ROUTE] OPTIONS         /v1/auth/apple/start
+[ROUTE] OPTIONS         /v1/auth/apple/callback
+[ROUTE] OPTIONS         /v1/v1/{path:path}
+[ROUTE] GET             /v1/ping
+[ROUTE] DELETE          /v1/ws/{path:path}
+[ROUTE] PATCH           /v1/ws/{path:path}
+[ROUTE] PUT             /v1/ws/{path:path}
+[ROUTE] POST            /v1/ws/{path:path}
+[ROUTE] GET             /v1/ws/{path:path}
+[ROUTE] GET             /v1/debug/config
+[ROUTE] GET             /v1/docs/ws
+[ROUTE] POST            /v1/intent-test
+[ROUTE] GET             /v1/client-crypto-policy
+[ROUTE] GET             /v1/explain_route
+[ROUTE] GET             /metrics
+[ROUTE] GET             /metrics
+[ROUTE] GET             /v1/health/openai
+[ROUTE] GET             /v1/health/ollama
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /v1/health/home_assistant
+[ROUTE] GET             /v1/health/database
+[ROUTE] GET             /v1/health/all
+[ROUTE] GET             /v1/health/cache
+[ROUTE] POST            /v1/health/refresh
+[ROUTE] GET             /v1/health/vendors
+[ROUTE] GET             /v1/health
+[ROUTE] GET             /v1/healthz
+[ROUTE] GET             /v1/rate_limit_status
+[ROUTE] GET             /v1/config
+[ROUTE] GET             /v1/budget
+[ROUTE] GET             /v1/status/budget
+[ROUTE] GET             /v1/ha_status
+[ROUTE] GET             /v1/llama_status
+[ROUTE] GET             /v1/status
+[ROUTE] GET             /healthz/live
+[ROUTE] GET             /healthz/ready
+[ROUTE] GET             /v1/ping
+[ROUTE] GET             /v1/vendor-health
+[ROUTE] GET             /healthz/deps
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /health/vector_store
+[ROUTE] GET             /v1/auth/clerk/protected
+[ROUTE] GET             /v1/whoami
+[ROUTE] GET             /v1/auth/whoami
+[ROUTE] GET             /v1/pats
+[ROUTE] POST            /v1/pats
+[ROUTE] DELETE          /v1/pats/{pat_id}
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] POST            /v1/auth/clerk/finish
+[ROUTE] GET             /v1/auth/clerk/finish
+[ROUTE] POST            /v1/auth/login
+[ROUTE] POST            /v1/auth/logout
+[ROUTE] POST            /v1/auth/refresh
+[ROUTE] POST            /v1/auth/token
+[ROUTE] GET             /v1/auth/examples
+[ROUTE] GET             /v1/mock/set_access_cookie
+[ROUTE] GET             /v1/whoami
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] GET             /v1/status/preflight
+[ROUTE] GET             /v1/device/session
+[ROUTE] POST            /v1/device/trust
+[ROUTE] GET             /v1/google/auth/login_url
+[ROUTE] GET             /v1/google/auth/callback
+[ROUTE] GET             /v1/auth/apple/start
+[ROUTE] POST            /v1/auth/apple/callback
+[ROUTE] POST            /v1/auth/register_pw
+[ROUTE] POST            /v1/auth/login_pw
+[ROUTE] GET             /v1/google/auth/url
+[ROUTE] GET             /v1/google/test
+[ROUTE] POST            /v1/google/gmail/send
+[ROUTE] POST            /v1/google/calendar/create
+[ROUTE] GET             /v1/google/status
+[ROUTE] GET             /google/auth/url
+[ROUTE] GET             /google/test
+[ROUTE] POST            /google/gmail/send
+[ROUTE] POST            /google/calendar/create
+[ROUTE] GET             /google/status
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] GET             /v1/ha/health
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/reminders
+[ROUTE] POST            /v1/reminders
+[ROUTE] DELETE          /v1/reminders
+[ROUTE] GET             /v1/profile
+[ROUTE] POST            /v1/profile
+[ROUTE] GET             /v1/onboarding/status
+[ROUTE] POST            /v1/onboarding/complete
+[ROUTE] GET             /v1/admin/ping
+[ROUTE] GET             /v1/admin/rbac/info
+[ROUTE] GET             /v1/admin/users/me
+[ROUTE] GET             /v1/admin/system/status
+[ROUTE] GET             /v1/admin/surface/index
+[ROUTE] GET             /v1/admin/metrics
+[ROUTE] GET             /v1/admin/router/decisions
+[ROUTE] GET             /v1/admin/router/decisions.ndjson
+[ROUTE] GET             /v1/admin/retrieval/last
+[ROUTE] GET             /v1/admin/diagnostics/requests
+[ROUTE] GET             /v1/admin/decisions/explain
+[ROUTE] GET             /v1/admin/config
+[ROUTE] POST            /v1/admin/config
+[ROUTE] POST            /v1/admin/config/test
+[ROUTE] POST            /v1/admin/admin/reload_env
+[ROUTE] GET             /v1/admin/errors
+[ROUTE] GET             /v1/admin/self_review
+[ROUTE] POST            /v1/admin/vector_store/bootstrap
+[ROUTE] POST            /v1/admin/vector_store/migrate
+[ROUTE] GET             /v1/admin/vector_store/bootstrap/stream
+[ROUTE] GET             /v1/admin/vector_store/migrate/stream
+[ROUTE] GET             /v1/admin/vector_store/stats
+[ROUTE] GET             /v1/admin/token_store/stats
+[ROUTE] GET             /v1/admin/qdrant/collections
+[ROUTE] POST            /v1/admin/admin/flags
+[ROUTE] GET             /v1/admin/health/router_retrieval
+[ROUTE] GET             /v1/admin/flags
+[ROUTE] GET             /v1/admin/admin/collections
+[ROUTE] GET             /v1/admin/admin/feature_flags
+[ROUTE] GET             /v1/admin/admin/retrieval/trace
+[ROUTE] GET             /v1/admin/tv/config
+[ROUTE] PUT             /v1/admin/tv/config
+[ROUTE] GET             /v1/admin/ui
+[ROUTE] GET             /v1/admin/ui/retrieval
+[ROUTE] GET             /v1/admin/ui/config
+[ROUTE] GET             /v1/admin/collections
+[ROUTE] GET             /v1/admin/feature_flags
+[ROUTE] GET             /v1/admin/retrieval/trace
+[ROUTE] GET             /v1/me
+[ROUTE] GET             /v1/sessions
+[ROUTE] GET             /v1/sessions/paginated
+[ROUTE] POST            /v1/sessions/{sid}/revoke
+[ROUTE] POST            /v1/devices/pair/start
+[ROUTE] POST            /v1/devices/pair/complete
+[ROUTE] POST            /v1/devices/{device_id}/revoke
+[ROUTE] GET             /v1/spotify/token-for-sdk
+[ROUTE] GET             /v1/models
+[ROUTE] GET             /v1/history/recent
+[ROUTE] POST            /v1/history/pin
+[ROUTE] GET             /v1/status/features
+[ROUTE] GET             /v1/status/vector_store
+[ROUTE] POST            /v1/admin/backup
+[ROUTE] GET             /v1/rag/search
+[ROUTE] GET             /v1/skills/list
+[ROUTE] GET             /v1/tv/photos{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "=== CSRF MIDDLEWARE REGISTERED ===", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "MW-ORDER (inner→outer): ['CORSMiddleware', 'EnhancedErrorHandlingMiddleware', 'SilentRefreshMiddleware', 'ReloadEnvMiddleware', 'CSRFMiddleware', 'SessionAttachMiddleware', 'RateLimitMiddleware', 'MetricsMiddleware', 'RedactHashMiddleware', 'AuditMiddleware', 'TraceRequestMiddleware', 'HealthCheckFilterMiddleware', 'DedupMiddleware', 'RequestIDMiddleware']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Server starting on localhost:8000", "env": "", "build_sha": "", "version": ""}
+INFO:     Started server process [74463]
+INFO:     Waiting for application startup.
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Starting enhanced application startup", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "JWT secret: OK (len=64)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Database", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Database initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing OpenAI Health Check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:49Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Performing OpenAI startup health check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:50Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "vendor_health vendor=openai ok=true reason=successful_ping model=gpt-4o", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:50Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "OpenAI Health Check initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:50Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Vector Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:50Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:50Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:51Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:43:51Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:51Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Vector Store initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:51Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing LLaMA Integration", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:51Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:43:52Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:43:54Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:43:54Z", "req_id": "-", "level": "WARNING", "component": "app.llama_integration", "msg": "Ollama health check failed (attempt 1, next check in 10.0s): network_error", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:54Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "LLaMA Integration initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:54Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Home Assistant", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:54Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_request", "env": "", "build_sha": "", "version": "", "meta": {"method": "GET", "path": "/states", "json": null}}
+{"timestamp": "2025-08-25T10:43:54Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:43:55Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_response", "env": "", "build_sha": "", "version": "", "meta": {"status": "err", "body": "network_error"}}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "home_assistant error: timeout", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "WARNING", "component": "app.home_assistant", "msg": "Failed to fetch states: timeout (last cache exp: 0.00, now: 25771.62)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Home Assistant initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Memory Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Memory Store initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Scheduler", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Scheduler initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.storytime", "msg": "storytime.schedule", "env": "", "build_sha": "", "version": "", "meta": {"cron": "2:00", "job": "storytime_summarize_nightly"}}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Started local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:43:57Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Application startup completed in 8.63s", "env": "", "build_sha": "", "version": ""}
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app/memory/vector_store/qdrant/__init__.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+{"timestamp": "2025-08-25T10:45:43Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "healthz status=offline", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:43Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Stopped local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+INFO:     Application shutdown complete.
+INFO:     Finished server process [74463]
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Logging disabled: level=INFO, stdout=False, debug_mode=False, verbose=False, banners=False", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "CORS resolved origins=['http://localhost:3000'] | allow_credentials=True | allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] | allow_headers=['*', 'Authorization'] | expose_headers=['X-Request-ID']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "WARNING", "component": "app.main", "msg": "Feature voices disabled (import failed: No module named 'app.api.voices')", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.api.ask", "msg": "🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id", "env": "", "build_sha": "", "version": ""}
+INFO: Auth routers mounted (admin_enabled=True)
+INFO: Admin routes mounted (admin_enabled=True)
+INFO: Admin UI and extras routers processed (admin_enabled=True)
+INFO: Status plus router mounted (admin_enabled=True)
+[ROUTE] GET,HEAD        /openapi.json
+[ROUTE] GET,HEAD        /docs
+[ROUTE] GET,HEAD        /docs/oauth2-redirect
+[ROUTE] GET,HEAD        /redoc
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/capture/sessions
+[ROUTE] GET             /v1/search/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/upload
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/ha/aliases
+[ROUTE] POST            /v1/ha/aliases
+[ROUTE] DELETE          /v1/ha/aliases
+[ROUTE] GET             /v1/memories/export
+[ROUTE] DELETE          /v1/memories/{mem_id}
+[ROUTE] OPTIONS         /v1/csrf
+[ROUTE] GET             /v1/csrf
+[ROUTE] OPTIONS         /v1/health
+[ROUTE] OPTIONS         /v1/metrics
+[ROUTE] OPTIONS         /v1/auth/token
+[ROUTE] OPTIONS         /v1/auth/apple/start
+[ROUTE] OPTIONS         /v1/auth/apple/callback
+[ROUTE] OPTIONS         /v1/v1/{path:path}
+[ROUTE] GET             /v1/ping
+[ROUTE] DELETE          /v1/ws/{path:path}
+[ROUTE] PATCH           /v1/ws/{path:path}
+[ROUTE] PUT             /v1/ws/{path:path}
+[ROUTE] POST            /v1/ws/{path:path}
+[ROUTE] GET             /v1/ws/{path:path}
+[ROUTE] GET             /v1/debug/config
+[ROUTE] GET             /v1/docs/ws
+[ROUTE] POST            /v1/intent-test
+[ROUTE] GET             /v1/client-crypto-policy
+[ROUTE] GET             /v1/explain_route
+[ROUTE] GET             /metrics
+[ROUTE] GET             /metrics
+[ROUTE] GET             /v1/health/openai
+[ROUTE] GET             /v1/health/ollama
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /v1/health/home_assistant
+[ROUTE] GET             /v1/health/database
+[ROUTE] GET             /v1/health/all
+[ROUTE] GET             /v1/health/cache
+[ROUTE] POST            /v1/health/refresh
+[ROUTE] GET             /v1/health/vendors
+[ROUTE] GET             /v1/health
+[ROUTE] GET             /v1/healthz
+[ROUTE] GET             /v1/rate_limit_status
+[ROUTE] GET             /v1/config
+[ROUTE] GET             /v1/budget
+[ROUTE] GET             /v1/status/budget
+[ROUTE] GET             /v1/ha_status
+[ROUTE] GET             /v1/llama_status
+[ROUTE] GET             /v1/status
+[ROUTE] GET             /healthz/live
+[ROUTE] GET             /healthz/ready
+[ROUTE] GET             /v1/ping
+[ROUTE] GET             /v1/vendor-health
+[ROUTE] GET             /healthz/deps
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /health/vector_store
+[ROUTE] GET             /v1/auth/clerk/protected
+[ROUTE] GET             /v1/whoami
+[ROUTE] GET             /v1/auth/whoami
+[ROUTE] GET             /v1/pats
+[ROUTE] POST            /v1/pats
+[ROUTE] DELETE          /v1/pats/{pat_id}
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] POST            /v1/auth/clerk/finish
+[ROUTE] GET             /v1/auth/clerk/finish
+[ROUTE] POST            /v1/auth/login
+[ROUTE] POST            /v1/auth/logout
+[ROUTE] POST            /v1/auth/refresh
+[ROUTE] POST            /v1/auth/token
+[ROUTE] GET             /v1/auth/examples
+[ROUTE] GET             /v1/mock/set_access_cookie
+[ROUTE] GET             /v1/whoami
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] GET             /v1/status/preflight
+[ROUTE] GET             /v1/device/session
+[ROUTE] POST            /v1/device/trust
+[ROUTE] GET             /v1/google/auth/login_url
+[ROUTE] GET             /v1/google/auth/callback
+[ROUTE] GET             /v1/auth/apple/start
+[ROUTE] POST            /v1/auth/apple/callback
+[ROUTE] POST            /v1/auth/register_pw
+[ROUTE] POST            /v1/auth/login_pw
+[ROUTE] GET             /v1/google/auth/url
+[ROUTE] GET             /v1/google/test
+[ROUTE] POST            /v1/google/gmail/send
+[ROUTE] POST            /v1/google/calendar/create
+[ROUTE] GET             /v1/google/status
+[ROUTE] GET             /google/auth/url
+[ROUTE] GET             /google/test
+[ROUTE] POST            /google/gmail/send
+[ROUTE] POST            /google/calendar/create
+[ROUTE] GET             /google/status
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] GET             /v1/ha/health
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/reminders
+[ROUTE] POST            /v1/reminders
+[ROUTE] DELETE          /v1/reminders
+[ROUTE] GET             /v1/profile
+[ROUTE] POST            /v1/profile
+[ROUTE] GET             /v1/onboarding/status
+[ROUTE] POST            /v1/onboarding/complete
+[ROUTE] GET             /v1/admin/ping
+[ROUTE] GET             /v1/admin/rbac/info
+[ROUTE] GET             /v1/admin/users/me
+[ROUTE] GET             /v1/admin/system/status
+[ROUTE] GET             /v1/admin/surface/index
+[ROUTE] GET             /v1/admin/metrics
+[ROUTE] GET             /v1/admin/router/decisions
+[ROUTE] GET             /v1/admin/router/decisions.ndjson
+[ROUTE] GET             /v1/admin/retrieval/last
+[ROUTE] GET             /v1/admin/diagnostics/requests
+[ROUTE] GET             /v1/admin/decisions/explain
+[ROUTE] GET             /v1/admin/config
+[ROUTE] POST            /v1/admin/config
+[ROUTE] POST            /v1/admin/config/test
+[ROUTE] POST            /v1/admin/admin/reload_env
+[ROUTE] GET             /v1/admin/errors
+[ROUTE] GET             /v1/admin/self_review
+[ROUTE] POST            /v1/admin/vector_store/bootstrap
+[ROUTE] POST            /v1/admin/vector_store/migrate
+[ROUTE] GET             /v1/admin/vector_store/bootstrap/stream
+[ROUTE] GET             /v1/admin/vector_store/migrate/stream
+[ROUTE] GET             /v1/admin/vector_store/stats
+[ROUTE] GET             /v1/admin/token_store/stats
+[ROUTE] GET             /v1/admin/qdrant/collections
+[ROUTE] POST            /v1/admin/admin/flags
+[ROUTE] GET             /v1/admin/health/router_retrieval
+[ROUTE] GET             /v1/admin/flags
+[ROUTE] GET             /v1/admin/admin/collections
+[ROUTE] GET             /v1/admin/admin/feature_flags
+[ROUTE] GET             /v1/admin/admin/retrieval/trace
+[ROUTE] GET             /v1/admin/tv/config
+[ROUTE] PUT             /v1/admin/tv/config
+[ROUTE] GET             /v1/admin/ui
+[ROUTE] GET             /v1/admin/ui/retrieval
+[ROUTE] GET             /v1/admin/ui/config
+[ROUTE] GET             /v1/admin/collections
+[ROUTE] GET             /v1/admin/feature_flags
+[ROUTE] GET             /v1/admin/retrieval/trace
+[ROUTE] GET             /v1/me
+[ROUTE] GET             /v1/sessions
+[ROUTE] GET             /v1/sessions/paginated
+[ROUTE] POST            /v1/sessions/{sid}/revoke
+[ROUTE] POST            /v1/devices/pair/start
+[ROUTE] POST            /v1/devices/pair/complete
+[ROUTE] POST            /v1/devices/{device_id}/revoke
+[ROUTE] GET             /v1/spotify/token-for-sdk
+[ROUTE] GET             /v1/models
+[ROUTE] GET             /v1/history/recent
+[ROUTE] POST            /v1/history/pin
+[ROUTE] GET             /v1/status/features
+[ROUTE] GET             /v1/status/vector_store
+[ROUTE] POST            /v1/admin/backup
+[ROUTE] GET             /v1/rag/search
+[ROUTE] GET             /v1/skills/list
+[ROUTE] GET             /v1/tv/photos{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "=== CSRF MIDDLEWARE REGISTERED ===", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "MW-ORDER (inner→outer): ['CORSMiddleware', 'EnhancedErrorHandlingMiddleware', 'SilentRefreshMiddleware', 'ReloadEnvMiddleware', 'CSRFMiddleware', 'SessionAttachMiddleware', 'RateLimitMiddleware', 'MetricsMiddleware', 'RedactHashMiddleware', 'AuditMiddleware', 'TraceRequestMiddleware', 'HealthCheckFilterMiddleware', 'DedupMiddleware', 'RequestIDMiddleware']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Server starting on localhost:8000", "env": "", "build_sha": "", "version": ""}
+INFO:     Started server process [77925]
+INFO:     Waiting for application startup.
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Starting enhanced application startup", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "JWT secret: OK (len=64)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Database", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Database initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing OpenAI Health Check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:47Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Performing OpenAI startup health check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:48Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "vendor_health vendor=openai ok=true reason=successful_ping model=gpt-4o", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:48Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "OpenAI Health Check initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:48Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Vector Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:48Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:48Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:49Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:45:49Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:49Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Vector Store initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:49Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing LLaMA Integration", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:49Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:45:50Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:45:52Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:45:52Z", "req_id": "-", "level": "WARNING", "component": "app.llama_integration", "msg": "Ollama health check failed (attempt 1, next check in 10.0s): network_error", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:52Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "LLaMA Integration initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:52Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Home Assistant", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:52Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_request", "env": "", "build_sha": "", "version": "", "meta": {"method": "GET", "path": "/states", "json": null}}
+{"timestamp": "2025-08-25T10:45:52Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:45:53Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_response", "env": "", "build_sha": "", "version": "", "meta": {"status": "err", "body": "network_error"}}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "home_assistant error: timeout", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "WARNING", "component": "app.home_assistant", "msg": "Failed to fetch states: timeout (last cache exp: 0.00, now: 25889.60)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Home Assistant initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Memory Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Memory Store initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Scheduler", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Scheduler initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.storytime", "msg": "storytime.schedule", "env": "", "build_sha": "", "version": "", "meta": {"cron": "2:00", "job": "storytime_summarize_nightly"}}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Started local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:45:55Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Application startup completed in 8.13s", "env": "", "build_sha": "", "version": ""}
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app/memory/vector_store/qdrant/__init__.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+{"timestamp": "2025-08-25T10:46:03Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "healthz status=offline", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:03Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Stopped local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+INFO:     Application shutdown complete.
+INFO:     Finished server process [77925]
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Logging disabled: level=INFO, stdout=False, debug_mode=False, verbose=False, banners=False", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "CORS resolved origins=['http://localhost:3000'] | allow_credentials=True | allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] | allow_headers=['*', 'Authorization'] | expose_headers=['X-Request-ID']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "WARNING", "component": "app.main", "msg": "Feature voices disabled (import failed: No module named 'app.api.voices')", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.api.ask", "msg": "🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id", "env": "", "build_sha": "", "version": ""}
+INFO: Auth routers mounted (admin_enabled=True)
+INFO: Admin routes mounted (admin_enabled=True)
+INFO: Admin UI and extras routers processed (admin_enabled=True)
+INFO: Status plus router mounted (admin_enabled=True)
+[ROUTE] GET,HEAD        /openapi.json
+[ROUTE] GET,HEAD        /docs
+[ROUTE] GET,HEAD        /docs/oauth2-redirect
+[ROUTE] GET,HEAD        /redoc
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/capture/sessions
+[ROUTE] GET             /v1/search/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/upload
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/ha/aliases
+[ROUTE] POST            /v1/ha/aliases
+[ROUTE] DELETE          /v1/ha/aliases
+[ROUTE] GET             /v1/memories/export
+[ROUTE] DELETE          /v1/memories/{mem_id}
+[ROUTE] OPTIONS         /v1/csrf
+[ROUTE] GET             /v1/csrf
+[ROUTE] OPTIONS         /v1/health
+[ROUTE] OPTIONS         /v1/metrics
+[ROUTE] OPTIONS         /v1/auth/token
+[ROUTE] OPTIONS         /v1/auth/apple/start
+[ROUTE] OPTIONS         /v1/auth/apple/callback
+[ROUTE] OPTIONS         /v1/v1/{path:path}
+[ROUTE] GET             /v1/ping
+[ROUTE] DELETE          /v1/ws/{path:path}
+[ROUTE] PATCH           /v1/ws/{path:path}
+[ROUTE] PUT             /v1/ws/{path:path}
+[ROUTE] POST            /v1/ws/{path:path}
+[ROUTE] GET             /v1/ws/{path:path}
+[ROUTE] GET             /v1/debug/config
+[ROUTE] GET             /v1/docs/ws
+[ROUTE] POST            /v1/intent-test
+[ROUTE] GET             /v1/client-crypto-policy
+[ROUTE] GET             /v1/explain_route
+[ROUTE] GET             /metrics
+[ROUTE] GET             /metrics
+[ROUTE] GET             /v1/health/openai
+[ROUTE] GET             /v1/health/ollama
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /v1/health/home_assistant
+[ROUTE] GET             /v1/health/database
+[ROUTE] GET             /v1/health/all
+[ROUTE] GET             /v1/health/cache
+[ROUTE] POST            /v1/health/refresh
+[ROUTE] GET             /v1/health/vendors
+[ROUTE] GET             /v1/health
+[ROUTE] GET             /v1/healthz
+[ROUTE] GET             /v1/rate_limit_status
+[ROUTE] GET             /v1/config
+[ROUTE] GET             /v1/budget
+[ROUTE] GET             /v1/status/budget
+[ROUTE] GET             /v1/ha_status
+[ROUTE] GET             /v1/llama_status
+[ROUTE] GET             /v1/status
+[ROUTE] GET             /healthz/live
+[ROUTE] GET             /healthz/ready
+[ROUTE] GET             /v1/ping
+[ROUTE] GET             /v1/vendor-health
+[ROUTE] GET             /healthz/deps
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /health/vector_store
+[ROUTE] GET             /v1/auth/clerk/protected
+[ROUTE] GET             /v1/whoami
+[ROUTE] GET             /v1/auth/whoami
+[ROUTE] GET             /v1/pats
+[ROUTE] POST            /v1/pats
+[ROUTE] DELETE          /v1/pats/{pat_id}
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] POST            /v1/auth/clerk/finish
+[ROUTE] GET             /v1/auth/clerk/finish
+[ROUTE] POST            /v1/auth/login
+[ROUTE] POST            /v1/auth/logout
+[ROUTE] POST            /v1/auth/refresh
+[ROUTE] POST            /v1/auth/token
+[ROUTE] GET             /v1/auth/examples
+[ROUTE] GET             /v1/mock/set_access_cookie
+[ROUTE] GET             /v1/whoami
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] GET             /v1/status/preflight
+[ROUTE] GET             /v1/device/session
+[ROUTE] POST            /v1/device/trust
+[ROUTE] GET             /v1/google/auth/login_url
+[ROUTE] GET             /v1/google/auth/callback
+[ROUTE] GET             /v1/auth/apple/start
+[ROUTE] POST            /v1/auth/apple/callback
+[ROUTE] POST            /v1/auth/register_pw
+[ROUTE] POST            /v1/auth/login_pw
+[ROUTE] GET             /v1/google/auth/url
+[ROUTE] GET             /v1/google/test
+[ROUTE] POST            /v1/google/gmail/send
+[ROUTE] POST            /v1/google/calendar/create
+[ROUTE] GET             /v1/google/status
+[ROUTE] GET             /google/auth/url
+[ROUTE] GET             /google/test
+[ROUTE] POST            /google/gmail/send
+[ROUTE] POST            /google/calendar/create
+[ROUTE] GET             /google/status
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] GET             /v1/ha/health
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/reminders
+[ROUTE] POST            /v1/reminders
+[ROUTE] DELETE          /v1/reminders
+[ROUTE] GET             /v1/profile
+[ROUTE] POST            /v1/profile
+[ROUTE] GET             /v1/onboarding/status
+[ROUTE] POST            /v1/onboarding/complete
+[ROUTE] GET             /v1/admin/ping
+[ROUTE] GET             /v1/admin/rbac/info
+[ROUTE] GET             /v1/admin/users/me
+[ROUTE] GET             /v1/admin/system/status
+[ROUTE] GET             /v1/admin/surface/index
+[ROUTE] GET             /v1/admin/metrics
+[ROUTE] GET             /v1/admin/router/decisions
+[ROUTE] GET             /v1/admin/router/decisions.ndjson
+[ROUTE] GET             /v1/admin/retrieval/last
+[ROUTE] GET             /v1/admin/diagnostics/requests
+[ROUTE] GET             /v1/admin/decisions/explain
+[ROUTE] GET             /v1/admin/config
+[ROUTE] POST            /v1/admin/config
+[ROUTE] POST            /v1/admin/config/test
+[ROUTE] POST            /v1/admin/admin/reload_env
+[ROUTE] GET             /v1/admin/errors
+[ROUTE] GET             /v1/admin/self_review
+[ROUTE] POST            /v1/admin/vector_store/bootstrap
+[ROUTE] POST            /v1/admin/vector_store/migrate
+[ROUTE] GET             /v1/admin/vector_store/bootstrap/stream
+[ROUTE] GET             /v1/admin/vector_store/migrate/stream
+[ROUTE] GET             /v1/admin/vector_store/stats
+[ROUTE] GET             /v1/admin/token_store/stats
+[ROUTE] GET             /v1/admin/qdrant/collections
+[ROUTE] POST            /v1/admin/admin/flags
+[ROUTE] GET             /v1/admin/health/router_retrieval
+[ROUTE] GET             /v1/admin/flags
+[ROUTE] GET             /v1/admin/admin/collections
+[ROUTE] GET             /v1/admin/admin/feature_flags
+[ROUTE] GET             /v1/admin/admin/retrieval/trace
+[ROUTE] GET             /v1/admin/tv/config
+[ROUTE] PUT             /v1/admin/tv/config
+[ROUTE] GET             /v1/admin/ui
+[ROUTE] GET             /v1/admin/ui/retrieval
+[ROUTE] GET             /v1/admin/ui/config
+[ROUTE] GET             /v1/admin/collections
+[ROUTE] GET             /v1/admin/feature_flags
+[ROUTE] GET             /v1/admin/retrieval/trace
+[ROUTE] GET             /v1/me
+[ROUTE] GET             /v1/sessions
+[ROUTE] GET             /v1/sessions/paginated
+[ROUTE] POST            /v1/sessions/{sid}/revoke
+[ROUTE] POST            /v1/devices/pair/start
+[ROUTE] POST            /v1/devices/pair/complete
+[ROUTE] POST            /v1/devices/{device_id}/revoke
+[ROUTE] GET             /v1/spotify/token-for-sdk
+[ROUTE] GET             /v1/models
+[ROUTE] GET             /v1/history/recent
+[ROUTE] POST            /v1/history/pin
+[ROUTE] GET             /v1/status/features
+[ROUTE] GET             /v1/status/vector_store
+[ROUTE] POST            /v1/admin/backup
+[ROUTE] GET             /v1/rag/search
+[ROUTE] GET             /v1/skills/list
+[ROUTE] GET             /v1/tv/photos{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "=== CSRF MIDDLEWARE REGISTERED ===", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "MW-ORDER (inner→outer): ['CORSMiddleware', 'EnhancedErrorHandlingMiddleware', 'SilentRefreshMiddleware', 'ReloadEnvMiddleware', 'CSRFMiddleware', 'SessionAttachMiddleware', 'RateLimitMiddleware', 'MetricsMiddleware', 'RedactHashMiddleware', 'AuditMiddleware', 'TraceRequestMiddleware', 'HealthCheckFilterMiddleware', 'DedupMiddleware', 'RequestIDMiddleware']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Server starting on localhost:8000", "env": "", "build_sha": "", "version": ""}
+INFO:     Started server process [78408]
+INFO:     Waiting for application startup.
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Starting enhanced application startup", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "JWT secret: OK (len=64)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Database", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Database initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing OpenAI Health Check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:07Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Performing OpenAI startup health check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:10Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "vendor_health vendor=openai ok=true reason=successful_ping model=gpt-4o", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:10Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "OpenAI Health Check initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:10Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Vector Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:10Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:10Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:10Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:46:10Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:10Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Vector Store initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:10Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing LLaMA Integration", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:10Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:46:11Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:46:14Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:46:14Z", "req_id": "-", "level": "WARNING", "component": "app.llama_integration", "msg": "Ollama health check failed (attempt 1, next check in 10.0s): network_error", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:14Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "LLaMA Integration initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:14Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Home Assistant", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:14Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_request", "env": "", "build_sha": "", "version": "", "meta": {"method": "GET", "path": "/states", "json": null}}
+{"timestamp": "2025-08-25T10:46:14Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:46:15Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_response", "env": "", "build_sha": "", "version": "", "meta": {"status": "err", "body": "network_error"}}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "home_assistant error: timeout", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "WARNING", "component": "app.home_assistant", "msg": "Failed to fetch states: timeout (last cache exp: 0.00, now: 25911.39)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Home Assistant initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Memory Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Memory Store initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Scheduler", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Scheduler initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.storytime", "msg": "storytime.schedule", "env": "", "build_sha": "", "version": "", "meta": {"cron": "2:00", "job": "storytime_summarize_nightly"}}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Started local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:46:17Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Application startup completed in 9.84s", "env": "", "build_sha": "", "version": ""}
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app/memory/vector_store/qdrant/__init__.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+{"timestamp": "2025-08-25T10:58:32Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "healthz status=offline", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:32Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Stopped local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+INFO:     Application shutdown complete.
+INFO:     Finished server process [78408]
+{"timestamp": "2025-08-25T10:58:36Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Logging disabled: level=INFO, stdout=False, debug_mode=False, verbose=False, banners=False", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:36Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "CORS resolved origins=['http://localhost:3000'] | allow_credentials=True | allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] | allow_headers=['*', 'Authorization'] | expose_headers=['X-Request-ID']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "WARNING", "component": "app.main", "msg": "Feature voices disabled (import failed: No module named 'app.api.voices')", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.api.ask", "msg": "🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id", "env": "", "build_sha": "", "version": ""}
+INFO: Auth routers mounted (admin_enabled=True)
+INFO: Admin routes mounted (admin_enabled=True)
+INFO: Admin UI and extras routers processed (admin_enabled=True)
+INFO: Status plus router mounted (admin_enabled=True)
+[ROUTE] GET,HEAD        /openapi.json
+[ROUTE] GET,HEAD        /docs
+[ROUTE] GET,HEAD        /docs/oauth2-redirect
+[ROUTE] GET,HEAD        /redoc
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/capture/sessions
+[ROUTE] GET             /v1/search/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/upload
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/ha/aliases
+[ROUTE] POST            /v1/ha/aliases
+[ROUTE] DELETE          /v1/ha/aliases
+[ROUTE] GET             /v1/memories/export
+[ROUTE] DELETE          /v1/memories/{mem_id}
+[ROUTE] OPTIONS         /v1/csrf
+[ROUTE] GET             /v1/csrf
+[ROUTE] OPTIONS         /v1/health
+[ROUTE] OPTIONS         /v1/metrics
+[ROUTE] OPTIONS         /v1/auth/token
+[ROUTE] OPTIONS         /v1/auth/apple/start
+[ROUTE] OPTIONS         /v1/auth/apple/callback
+[ROUTE] OPTIONS         /v1/v1/{path:path}
+[ROUTE] GET             /v1/ping
+[ROUTE] DELETE          /v1/ws/{path:path}
+[ROUTE] PATCH           /v1/ws/{path:path}
+[ROUTE] PUT             /v1/ws/{path:path}
+[ROUTE] POST            /v1/ws/{path:path}
+[ROUTE] GET             /v1/ws/{path:path}
+[ROUTE] GET             /v1/debug/config
+[ROUTE] GET             /v1/docs/ws
+[ROUTE] POST            /v1/intent-test
+[ROUTE] GET             /v1/client-crypto-policy
+[ROUTE] GET             /v1/explain_route
+[ROUTE] GET             /metrics
+[ROUTE] GET             /metrics
+[ROUTE] GET             /v1/health/openai
+[ROUTE] GET             /v1/health/ollama
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /v1/health/home_assistant
+[ROUTE] GET             /v1/health/database
+[ROUTE] GET             /v1/health/all
+[ROUTE] GET             /v1/health/cache
+[ROUTE] POST            /v1/health/refresh
+[ROUTE] GET             /v1/health/vendors
+[ROUTE] GET             /v1/health
+[ROUTE] GET             /v1/healthz
+[ROUTE] GET             /v1/rate_limit_status
+[ROUTE] GET             /v1/config
+[ROUTE] GET             /v1/budget
+[ROUTE] GET             /v1/status/budget
+[ROUTE] GET             /v1/ha_status
+[ROUTE] GET             /v1/llama_status
+[ROUTE] GET             /v1/status
+[ROUTE] GET             /healthz/live
+[ROUTE] GET             /healthz/ready
+[ROUTE] GET             /v1/ping
+[ROUTE] GET             /v1/vendor-health
+[ROUTE] GET             /healthz/deps
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /health/vector_store
+[ROUTE] GET             /v1/auth/clerk/protected
+[ROUTE] GET             /v1/whoami
+[ROUTE] GET             /v1/auth/whoami
+[ROUTE] GET             /v1/pats
+[ROUTE] POST            /v1/pats
+[ROUTE] DELETE          /v1/pats/{pat_id}
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] POST            /v1/auth/clerk/finish
+[ROUTE] GET             /v1/auth/clerk/finish
+[ROUTE] POST            /v1/auth/login
+[ROUTE] POST            /v1/auth/logout
+[ROUTE] POST            /v1/auth/refresh
+[ROUTE] POST            /v1/auth/token
+[ROUTE] GET             /v1/auth/examples
+[ROUTE] GET             /v1/mock/set_access_cookie
+[ROUTE] GET             /v1/whoami
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] GET             /v1/status/preflight
+[ROUTE] GET             /v1/device/session
+[ROUTE] POST            /v1/device/trust
+[ROUTE] GET             /v1/google/auth/login_url
+[ROUTE] GET             /v1/google/auth/callback
+[ROUTE] GET             /v1/auth/apple/start
+[ROUTE] POST            /v1/auth/apple/callback
+[ROUTE] POST            /v1/auth/register_pw
+[ROUTE] POST            /v1/auth/login_pw
+[ROUTE] GET             /v1/google/auth/url
+[ROUTE] GET             /v1/google/test
+[ROUTE] POST            /v1/google/gmail/send
+[ROUTE] POST            /v1/google/calendar/create
+[ROUTE] GET             /v1/google/status
+[ROUTE] GET             /google/auth/url
+[ROUTE] GET             /google/test
+[ROUTE] POST            /google/gmail/send
+[ROUTE] POST            /google/calendar/create
+[ROUTE] GET             /google/status
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] GET             /v1/ha/health
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/reminders
+[ROUTE] POST            /v1/reminders
+[ROUTE] DELETE          /v1/reminders
+[ROUTE] GET             /v1/profile
+[ROUTE] POST            /v1/profile
+[ROUTE] GET             /v1/onboarding/status
+[ROUTE] POST            /v1/onboarding/complete
+[ROUTE] GET             /v1/admin/ping
+[ROUTE] GET             /v1/admin/rbac/info
+[ROUTE] GET             /v1/admin/users/me
+[ROUTE] GET             /v1/admin/system/status
+[ROUTE] GET             /v1/admin/surface/index
+[ROUTE] GET             /v1/admin/metrics
+[ROUTE] GET             /v1/admin/router/decisions
+[ROUTE] GET             /v1/admin/router/decisions.ndjson
+[ROUTE] GET             /v1/admin/retrieval/last
+[ROUTE] GET             /v1/admin/diagnostics/requests
+[ROUTE] GET             /v1/admin/decisions/explain
+[ROUTE] GET             /v1/admin/config
+[ROUTE] POST            /v1/admin/config
+[ROUTE] POST            /v1/admin/config/test
+[ROUTE] POST            /v1/admin/admin/reload_env
+[ROUTE] GET             /v1/admin/errors
+[ROUTE] GET             /v1/admin/self_review
+[ROUTE] POST            /v1/admin/vector_store/bootstrap
+[ROUTE] POST            /v1/admin/vector_store/migrate
+[ROUTE] GET             /v1/admin/vector_store/bootstrap/stream
+[ROUTE] GET             /v1/admin/vector_store/migrate/stream
+[ROUTE] GET             /v1/admin/vector_store/stats
+[ROUTE] GET             /v1/admin/token_store/stats
+[ROUTE] GET             /v1/admin/qdrant/collections
+[ROUTE] POST            /v1/admin/admin/flags
+[ROUTE] GET             /v1/admin/health/router_retrieval
+[ROUTE] GET             /v1/admin/flags
+[ROUTE] GET             /v1/admin/admin/collections
+[ROUTE] GET             /v1/admin/admin/feature_flags
+[ROUTE] GET             /v1/admin/admin/retrieval/trace
+[ROUTE] GET             /v1/admin/tv/config
+[ROUTE] PUT             /v1/admin/tv/config
+[ROUTE] GET             /v1/admin/ui
+[ROUTE] GET             /v1/admin/ui/retrieval
+[ROUTE] GET             /v1/admin/ui/config
+[ROUTE] GET             /v1/admin/collections
+[ROUTE] GET             /v1/admin/feature_flags
+[ROUTE] GET             /v1/admin/retrieval/trace
+[ROUTE] GET             /v1/me
+[ROUTE] GET             /v1/sessions
+[ROUTE] GET             /v1/sessions/paginated
+[ROUTE] POST            /v1/sessions/{sid}/revoke
+[ROUTE] POST            /v1/devices/pair/start
+[ROUTE] POST            /v1/devices/pair/complete
+[ROUTE] POST            /v1/devices/{device_id}/revoke
+[ROUTE] GET             /v1/spotify/token-for-sdk
+[ROUTE] GET             /v1/models
+[ROUTE] GET             /v1/history/recent
+[ROUTE] POST            /v1/history/pin
+[ROUTE] GET             /v1/status/features
+[ROUTE] GET             /v1/status/vector_store
+[ROUTE] POST            /v1/admin/backup
+[ROUTE] GET             /v1/rag/search
+[ROUTE] GET             /v1/skills/list
+[ROUTE] GET             /v1/tv/photos{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "=== CSRF MIDDLEWARE REGISTERED ===", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "MW-ORDER (inner→outer): ['CORSMiddleware', 'EnhancedErrorHandlingMiddleware', 'SilentRefreshMiddleware', 'ReloadEnvMiddleware', 'CSRFMiddleware', 'SessionAttachMiddleware', 'RateLimitMiddleware', 'MetricsMiddleware', 'RedactHashMiddleware', 'AuditMiddleware', 'TraceRequestMiddleware', 'HealthCheckFilterMiddleware', 'DedupMiddleware', 'RequestIDMiddleware']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Server starting on localhost:8000", "env": "", "build_sha": "", "version": ""}
+INFO:     Started server process [87043]
+INFO:     Waiting for application startup.
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Starting enhanced application startup", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "JWT secret: OK (len=64)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Database", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Database initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing OpenAI Health Check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:37Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Performing OpenAI startup health check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:38Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "vendor_health vendor=openai ok=true reason=successful_ping model=gpt-4o", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:38Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "OpenAI Health Check initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:38Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Vector Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:38Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:38Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:39Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:58:39Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:39Z", "req_id": "-", "level": "ERROR", "component": "app.main", "msg": "Vector store initialization failed: object bool can't be used in 'await' expression", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:39Z", "req_id": "-", "level": "ERROR", "component": "app.main", "msg": "Failed to initialize Vector Store: object bool can't be used in 'await' expression", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:39Z", "req_id": "-", "level": "ERROR", "component": "app.main", "msg": "Error in startup.vector_store: object bool can't be used in 'await' expression", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:39Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing LLaMA Integration", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:39Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:58:40Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:58:42Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:58:42Z", "req_id": "-", "level": "WARNING", "component": "app.llama_integration", "msg": "Ollama health check failed (attempt 1, next check in 10.0s): network_error", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:42Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "LLaMA Integration initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:42Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Home Assistant", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:42Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_request", "env": "", "build_sha": "", "version": "", "meta": {"method": "GET", "path": "/states", "json": null}}
+{"timestamp": "2025-08-25T10:58:42Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:58:43Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_response", "env": "", "build_sha": "", "version": "", "meta": {"status": "err", "body": "network_error"}}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "home_assistant error: timeout", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "WARNING", "component": "app.home_assistant", "msg": "Failed to fetch states: timeout (last cache exp: 0.00, now: 26659.69)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Home Assistant initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Memory Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Memory Store initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Scheduler", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Scheduler initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.storytime", "msg": "storytime.schedule", "env": "", "build_sha": "", "version": "", "meta": {"cron": "2:00", "job": "storytime_summarize_nightly"}}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Started local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:45Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Application startup completed in 8.56s", "env": "", "build_sha": "", "version": ""}
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app/memory/vector_store/qdrant/__init__.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+{"timestamp": "2025-08-25T10:58:47Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "healthz status=offline", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:47Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Stopped local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+INFO:     Application shutdown complete.
+INFO:     Finished server process [87043]
+{"timestamp": "2025-08-25T10:58:49Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Logging disabled: level=INFO, stdout=False, debug_mode=False, verbose=False, banners=False", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:49Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "CORS resolved origins=['http://localhost:3000'] | allow_credentials=True | allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] | allow_headers=['*', 'Authorization'] | expose_headers=['X-Request-ID']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "WARNING", "component": "app.main", "msg": "Feature voices disabled (import failed: No module named 'app.api.voices')", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.api.ask", "msg": "🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id", "env": "", "build_sha": "", "version": ""}
+INFO: Auth routers mounted (admin_enabled=True)
+INFO: Admin routes mounted (admin_enabled=True)
+INFO: Admin UI and extras routers processed (admin_enabled=True)
+INFO: Status plus router mounted (admin_enabled=True)
+[ROUTE] GET,HEAD        /openapi.json
+[ROUTE] GET,HEAD        /docs
+[ROUTE] GET,HEAD        /docs/oauth2-redirect
+[ROUTE] GET,HEAD        /redoc
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/capture/sessions
+[ROUTE] GET             /v1/search/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/upload
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/ha/aliases
+[ROUTE] POST            /v1/ha/aliases
+[ROUTE] DELETE          /v1/ha/aliases
+[ROUTE] GET             /v1/memories/export
+[ROUTE] DELETE          /v1/memories/{mem_id}
+[ROUTE] OPTIONS         /v1/csrf
+[ROUTE] GET             /v1/csrf
+[ROUTE] OPTIONS         /v1/health
+[ROUTE] OPTIONS         /v1/metrics
+[ROUTE] OPTIONS         /v1/auth/token
+[ROUTE] OPTIONS         /v1/auth/apple/start
+[ROUTE] OPTIONS         /v1/auth/apple/callback
+[ROUTE] OPTIONS         /v1/v1/{path:path}
+[ROUTE] GET             /v1/ping
+[ROUTE] DELETE          /v1/ws/{path:path}
+[ROUTE] PATCH           /v1/ws/{path:path}
+[ROUTE] PUT             /v1/ws/{path:path}
+[ROUTE] POST            /v1/ws/{path:path}
+[ROUTE] GET             /v1/ws/{path:path}
+[ROUTE] GET             /v1/debug/config
+[ROUTE] GET             /v1/docs/ws
+[ROUTE] POST            /v1/intent-test
+[ROUTE] GET             /v1/client-crypto-policy
+[ROUTE] GET             /v1/explain_route
+[ROUTE] GET             /metrics
+[ROUTE] GET             /metrics
+[ROUTE] GET             /v1/health/openai
+[ROUTE] GET             /v1/health/ollama
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /v1/health/home_assistant
+[ROUTE] GET             /v1/health/database
+[ROUTE] GET             /v1/health/all
+[ROUTE] GET             /v1/health/cache
+[ROUTE] POST            /v1/health/refresh
+[ROUTE] GET             /v1/health/vendors
+[ROUTE] GET             /v1/health
+[ROUTE] GET             /v1/healthz
+[ROUTE] GET             /v1/rate_limit_status
+[ROUTE] GET             /v1/config
+[ROUTE] GET             /v1/budget
+[ROUTE] GET             /v1/status/budget
+[ROUTE] GET             /v1/ha_status
+[ROUTE] GET             /v1/llama_status
+[ROUTE] GET             /v1/status
+[ROUTE] GET             /healthz/live
+[ROUTE] GET             /healthz/ready
+[ROUTE] GET             /v1/ping
+[ROUTE] GET             /v1/vendor-health
+[ROUTE] GET             /healthz/deps
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /health/vector_store
+[ROUTE] GET             /v1/auth/clerk/protected
+[ROUTE] GET             /v1/whoami
+[ROUTE] GET             /v1/auth/whoami
+[ROUTE] GET             /v1/pats
+[ROUTE] POST            /v1/pats
+[ROUTE] DELETE          /v1/pats/{pat_id}
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] POST            /v1/auth/clerk/finish
+[ROUTE] GET             /v1/auth/clerk/finish
+[ROUTE] POST            /v1/auth/login
+[ROUTE] POST            /v1/auth/logout
+[ROUTE] POST            /v1/auth/refresh
+[ROUTE] POST            /v1/auth/token
+[ROUTE] GET             /v1/auth/examples
+[ROUTE] GET             /v1/mock/set_access_cookie
+[ROUTE] GET             /v1/whoami
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] GET             /v1/status/preflight
+[ROUTE] GET             /v1/device/session
+[ROUTE] POST            /v1/device/trust
+[ROUTE] GET             /v1/google/auth/login_url
+[ROUTE] GET             /v1/google/auth/callback
+[ROUTE] GET             /v1/auth/apple/start
+[ROUTE] POST            /v1/auth/apple/callback
+[ROUTE] POST            /v1/auth/register_pw
+[ROUTE] POST            /v1/auth/login_pw
+[ROUTE] GET             /v1/google/auth/url
+[ROUTE] GET             /v1/google/test
+[ROUTE] POST            /v1/google/gmail/send
+[ROUTE] POST            /v1/google/calendar/create
+[ROUTE] GET             /v1/google/status
+[ROUTE] GET             /google/auth/url
+[ROUTE] GET             /google/test
+[ROUTE] POST            /google/gmail/send
+[ROUTE] POST            /google/calendar/create
+[ROUTE] GET             /google/status
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] GET             /v1/ha/health
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/reminders
+[ROUTE] POST            /v1/reminders
+[ROUTE] DELETE          /v1/reminders
+[ROUTE] GET             /v1/profile
+[ROUTE] POST            /v1/profile
+[ROUTE] GET             /v1/onboarding/status
+[ROUTE] POST            /v1/onboarding/complete
+[ROUTE] GET             /v1/admin/ping
+[ROUTE] GET             /v1/admin/rbac/info
+[ROUTE] GET             /v1/admin/users/me
+[ROUTE] GET             /v1/admin/system/status
+[ROUTE] GET             /v1/admin/surface/index
+[ROUTE] GET             /v1/admin/metrics
+[ROUTE] GET             /v1/admin/router/decisions
+[ROUTE] GET             /v1/admin/router/decisions.ndjson
+[ROUTE] GET             /v1/admin/retrieval/last
+[ROUTE] GET             /v1/admin/diagnostics/requests
+[ROUTE] GET             /v1/admin/decisions/explain
+[ROUTE] GET             /v1/admin/config
+[ROUTE] POST            /v1/admin/config
+[ROUTE] POST            /v1/admin/config/test
+[ROUTE] POST            /v1/admin/admin/reload_env
+[ROUTE] GET             /v1/admin/errors
+[ROUTE] GET             /v1/admin/self_review
+[ROUTE] POST            /v1/admin/vector_store/bootstrap
+[ROUTE] POST            /v1/admin/vector_store/migrate
+[ROUTE] GET             /v1/admin/vector_store/bootstrap/stream
+[ROUTE] GET             /v1/admin/vector_store/migrate/stream
+[ROUTE] GET             /v1/admin/vector_store/stats
+[ROUTE] GET             /v1/admin/token_store/stats
+[ROUTE] GET             /v1/admin/qdrant/collections
+[ROUTE] POST            /v1/admin/admin/flags
+[ROUTE] GET             /v1/admin/health/router_retrieval
+[ROUTE] GET             /v1/admin/flags
+[ROUTE] GET             /v1/admin/admin/collections
+[ROUTE] GET             /v1/admin/admin/feature_flags
+[ROUTE] GET             /v1/admin/admin/retrieval/trace
+[ROUTE] GET             /v1/admin/tv/config
+[ROUTE] PUT             /v1/admin/tv/config
+[ROUTE] GET             /v1/admin/ui
+[ROUTE] GET             /v1/admin/ui/retrieval
+[ROUTE] GET             /v1/admin/ui/config
+[ROUTE] GET             /v1/admin/collections
+[ROUTE] GET             /v1/admin/feature_flags
+[ROUTE] GET             /v1/admin/retrieval/trace
+[ROUTE] GET             /v1/me
+[ROUTE] GET             /v1/sessions
+[ROUTE] GET             /v1/sessions/paginated
+[ROUTE] POST            /v1/sessions/{sid}/revoke
+[ROUTE] POST            /v1/devices/pair/start
+[ROUTE] POST            /v1/devices/pair/complete
+[ROUTE] POST            /v1/devices/{device_id}/revoke
+[ROUTE] GET             /v1/spotify/token-for-sdk
+[ROUTE] GET             /v1/models
+[ROUTE] GET             /v1/history/recent
+[ROUTE] POST            /v1/history/pin
+[ROUTE] GET             /v1/status/features
+[ROUTE] GET             /v1/status/vector_store
+[ROUTE] POST            /v1/admin/backup
+[ROUTE] GET             /v1/rag/search
+[ROUTE] GET             /v1/skills/list
+[ROUTE] GET             /v1/tv/photos{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "=== CSRF MIDDLEWARE REGISTERED ===", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "MW-ORDER (inner→outer): ['CORSMiddleware', 'EnhancedErrorHandlingMiddleware', 'SilentRefreshMiddleware', 'ReloadEnvMiddleware', 'CSRFMiddleware', 'SessionAttachMiddleware', 'RateLimitMiddleware', 'MetricsMiddleware', 'RedactHashMiddleware', 'AuditMiddleware', 'TraceRequestMiddleware', 'HealthCheckFilterMiddleware', 'DedupMiddleware', 'RequestIDMiddleware']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Server starting on localhost:8000", "env": "", "build_sha": "", "version": ""}
+INFO:     Started server process [87154]
+INFO:     Waiting for application startup.
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Starting enhanced application startup", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "JWT secret: OK (len=64)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Database", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Database initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing OpenAI Health Check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:50Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Performing OpenAI startup health check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:51Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "vendor_health vendor=openai ok=true reason=successful_ping model=gpt-4o", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:51Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "OpenAI Health Check initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:51Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Vector Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:51Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:51Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:51Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:58:51Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:51Z", "req_id": "-", "level": "ERROR", "component": "app.main", "msg": "Vector store initialization failed: object bool can't be used in 'await' expression", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:51Z", "req_id": "-", "level": "ERROR", "component": "app.main", "msg": "Failed to initialize Vector Store: object bool can't be used in 'await' expression", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:51Z", "req_id": "-", "level": "ERROR", "component": "app.main", "msg": "Error in startup.vector_store: object bool can't be used in 'await' expression", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:51Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing LLaMA Integration", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:51Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:58:52Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:58:54Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:58:54Z", "req_id": "-", "level": "WARNING", "component": "app.llama_integration", "msg": "Ollama health check failed (attempt 1, next check in 10.0s): network_error", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:54Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "LLaMA Integration initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:54Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Home Assistant", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:54Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_request", "env": "", "build_sha": "", "version": "", "meta": {"method": "GET", "path": "/states", "json": null}}
+{"timestamp": "2025-08-25T10:58:54Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:58:55Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_response", "env": "", "build_sha": "", "version": "", "meta": {"status": "err", "body": "network_error"}}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "home_assistant error: timeout", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "WARNING", "component": "app.home_assistant", "msg": "Failed to fetch states: timeout (last cache exp: 0.00, now: 26672.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Home Assistant initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Memory Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Memory Store initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Scheduler", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Scheduler initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.storytime", "msg": "storytime.schedule", "env": "", "build_sha": "", "version": "", "meta": {"cron": "2:00", "job": "storytime_summarize_nightly"}}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Started local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:58:58Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Application startup completed in 8.21s", "env": "", "build_sha": "", "version": ""}
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app/memory/vector_store/qdrant/__init__.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+{"timestamp": "2025-08-25T10:59:06Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "healthz status=offline", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:06Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Stopped local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+INFO:     Application shutdown complete.
+INFO:     Finished server process [87154]
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Logging disabled: level=INFO, stdout=False, debug_mode=False, verbose=False, banners=False", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "CORS resolved origins=['http://localhost:3000'] | allow_credentials=True | allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] | allow_headers=['*', 'Authorization'] | expose_headers=['X-Request-ID']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "WARNING", "component": "app.main", "msg": "Feature voices disabled (import failed: No module named 'app.api.voices')", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.api.ask", "msg": "🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id", "env": "", "build_sha": "", "version": ""}
+INFO: Auth routers mounted (admin_enabled=True)
+INFO: Admin routes mounted (admin_enabled=True)
+INFO: Admin UI and extras routers processed (admin_enabled=True)
+INFO: Status plus router mounted (admin_enabled=True)
+[ROUTE] GET,HEAD        /openapi.json
+[ROUTE] GET,HEAD        /docs
+[ROUTE] GET,HEAD        /docs/oauth2-redirect
+[ROUTE] GET,HEAD        /redoc
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/capture/sessions
+[ROUTE] GET             /v1/search/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/upload
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/ha/aliases
+[ROUTE] POST            /v1/ha/aliases
+[ROUTE] DELETE          /v1/ha/aliases
+[ROUTE] GET             /v1/memories/export
+[ROUTE] DELETE          /v1/memories/{mem_id}
+[ROUTE] OPTIONS         /v1/csrf
+[ROUTE] GET             /v1/csrf
+[ROUTE] OPTIONS         /v1/health
+[ROUTE] OPTIONS         /v1/metrics
+[ROUTE] OPTIONS         /v1/auth/token
+[ROUTE] OPTIONS         /v1/auth/apple/start
+[ROUTE] OPTIONS         /v1/auth/apple/callback
+[ROUTE] OPTIONS         /v1/v1/{path:path}
+[ROUTE] GET             /v1/ping
+[ROUTE] DELETE          /v1/ws/{path:path}
+[ROUTE] PATCH           /v1/ws/{path:path}
+[ROUTE] PUT             /v1/ws/{path:path}
+[ROUTE] POST            /v1/ws/{path:path}
+[ROUTE] GET             /v1/ws/{path:path}
+[ROUTE] GET             /v1/debug/config
+[ROUTE] GET             /v1/docs/ws
+[ROUTE] POST            /v1/intent-test
+[ROUTE] GET             /v1/client-crypto-policy
+[ROUTE] GET             /v1/explain_route
+[ROUTE] GET             /metrics
+[ROUTE] GET             /metrics
+[ROUTE] GET             /v1/health/openai
+[ROUTE] GET             /v1/health/ollama
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /v1/health/home_assistant
+[ROUTE] GET             /v1/health/database
+[ROUTE] GET             /v1/health/all
+[ROUTE] GET             /v1/health/cache
+[ROUTE] POST            /v1/health/refresh
+[ROUTE] GET             /v1/health/vendors
+[ROUTE] GET             /v1/health
+[ROUTE] GET             /v1/healthz
+[ROUTE] GET             /v1/rate_limit_status
+[ROUTE] GET             /v1/config
+[ROUTE] GET             /v1/budget
+[ROUTE] GET             /v1/status/budget
+[ROUTE] GET             /v1/ha_status
+[ROUTE] GET             /v1/llama_status
+[ROUTE] GET             /v1/status
+[ROUTE] GET             /healthz/live
+[ROUTE] GET             /healthz/ready
+[ROUTE] GET             /v1/ping
+[ROUTE] GET             /v1/vendor-health
+[ROUTE] GET             /healthz/deps
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /health/vector_store
+[ROUTE] GET             /v1/auth/clerk/protected
+[ROUTE] GET             /v1/whoami
+[ROUTE] GET             /v1/auth/whoami
+[ROUTE] GET             /v1/pats
+[ROUTE] POST            /v1/pats
+[ROUTE] DELETE          /v1/pats/{pat_id}
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] POST            /v1/auth/clerk/finish
+[ROUTE] GET             /v1/auth/clerk/finish
+[ROUTE] POST            /v1/auth/login
+[ROUTE] POST            /v1/auth/logout
+[ROUTE] POST            /v1/auth/refresh
+[ROUTE] POST            /v1/auth/token
+[ROUTE] GET             /v1/auth/examples
+[ROUTE] GET             /v1/mock/set_access_cookie
+[ROUTE] GET             /v1/whoami
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] GET             /v1/status/preflight
+[ROUTE] GET             /v1/device/session
+[ROUTE] POST            /v1/device/trust
+[ROUTE] GET             /v1/google/auth/login_url
+[ROUTE] GET             /v1/google/auth/callback
+[ROUTE] GET             /v1/auth/apple/start
+[ROUTE] POST            /v1/auth/apple/callback
+[ROUTE] POST            /v1/auth/register_pw
+[ROUTE] POST            /v1/auth/login_pw
+[ROUTE] GET             /v1/google/auth/url
+[ROUTE] GET             /v1/google/test
+[ROUTE] POST            /v1/google/gmail/send
+[ROUTE] POST            /v1/google/calendar/create
+[ROUTE] GET             /v1/google/status
+[ROUTE] GET             /google/auth/url
+[ROUTE] GET             /google/test
+[ROUTE] POST            /google/gmail/send
+[ROUTE] POST            /google/calendar/create
+[ROUTE] GET             /google/status
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] GET             /v1/ha/health
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/reminders
+[ROUTE] POST            /v1/reminders
+[ROUTE] DELETE          /v1/reminders
+[ROUTE] GET             /v1/profile
+[ROUTE] POST            /v1/profile
+[ROUTE] GET             /v1/onboarding/status
+[ROUTE] POST            /v1/onboarding/complete
+[ROUTE] GET             /v1/admin/ping
+[ROUTE] GET             /v1/admin/rbac/info
+[ROUTE] GET             /v1/admin/users/me
+[ROUTE] GET             /v1/admin/system/status
+[ROUTE] GET             /v1/admin/surface/index
+[ROUTE] GET             /v1/admin/metrics
+[ROUTE] GET             /v1/admin/router/decisions
+[ROUTE] GET             /v1/admin/router/decisions.ndjson
+[ROUTE] GET             /v1/admin/retrieval/last
+[ROUTE] GET             /v1/admin/diagnostics/requests
+[ROUTE] GET             /v1/admin/decisions/explain
+[ROUTE] GET             /v1/admin/config
+[ROUTE] POST            /v1/admin/config
+[ROUTE] POST            /v1/admin/config/test
+[ROUTE] POST            /v1/admin/admin/reload_env
+[ROUTE] GET             /v1/admin/errors
+[ROUTE] GET             /v1/admin/self_review
+[ROUTE] POST            /v1/admin/vector_store/bootstrap
+[ROUTE] POST            /v1/admin/vector_store/migrate
+[ROUTE] GET             /v1/admin/vector_store/bootstrap/stream
+[ROUTE] GET             /v1/admin/vector_store/migrate/stream
+[ROUTE] GET             /v1/admin/vector_store/stats
+[ROUTE] GET             /v1/admin/token_store/stats
+[ROUTE] GET             /v1/admin/qdrant/collections
+[ROUTE] POST            /v1/admin/admin/flags
+[ROUTE] GET             /v1/admin/health/router_retrieval
+[ROUTE] GET             /v1/admin/flags
+[ROUTE] GET             /v1/admin/admin/collections
+[ROUTE] GET             /v1/admin/admin/feature_flags
+[ROUTE] GET             /v1/admin/admin/retrieval/trace
+[ROUTE] GET             /v1/admin/tv/config
+[ROUTE] PUT             /v1/admin/tv/config
+[ROUTE] GET             /v1/admin/ui
+[ROUTE] GET             /v1/admin/ui/retrieval
+[ROUTE] GET             /v1/admin/ui/config
+[ROUTE] GET             /v1/admin/collections
+[ROUTE] GET             /v1/admin/feature_flags
+[ROUTE] GET             /v1/admin/retrieval/trace
+[ROUTE] GET             /v1/me
+[ROUTE] GET             /v1/sessions
+[ROUTE] GET             /v1/sessions/paginated
+[ROUTE] POST            /v1/sessions/{sid}/revoke
+[ROUTE] POST            /v1/devices/pair/start
+[ROUTE] POST            /v1/devices/pair/complete
+[ROUTE] POST            /v1/devices/{device_id}/revoke
+[ROUTE] GET             /v1/spotify/token-for-sdk
+[ROUTE] GET             /v1/models
+[ROUTE] GET             /v1/history/recent
+[ROUTE] POST            /v1/history/pin
+[ROUTE] GET             /v1/status/features
+[ROUTE] GET             /v1/status/vector_store
+[ROUTE] POST            /v1/admin/backup
+[ROUTE] GET             /v1/rag/search
+[ROUTE] GET             /v1/skills/list
+[ROUTE] GET             /v1/tv/photos{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "=== CSRF MIDDLEWARE REGISTERED ===", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "MW-ORDER (inner→outer): ['CORSMiddleware', 'EnhancedErrorHandlingMiddleware', 'SilentRefreshMiddleware', 'ReloadEnvMiddleware', 'CSRFMiddleware', 'SessionAttachMiddleware', 'RateLimitMiddleware', 'MetricsMiddleware', 'RedactHashMiddleware', 'AuditMiddleware', 'TraceRequestMiddleware', 'HealthCheckFilterMiddleware', 'DedupMiddleware', 'RequestIDMiddleware']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Server starting on localhost:8000", "env": "", "build_sha": "", "version": ""}
+INFO:     Started server process [87284]
+INFO:     Waiting for application startup.
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Starting enhanced application startup", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "JWT secret: OK (len=64)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Database", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Database initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing OpenAI Health Check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:09Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Performing OpenAI startup health check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:10Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "vendor_health vendor=openai ok=true reason=successful_ping model=gpt-4o", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:10Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "OpenAI Health Check initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:10Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Vector Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:10Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:10Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:10Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:59:10Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:10Z", "req_id": "-", "level": "ERROR", "component": "app.main", "msg": "Vector store initialization failed: object bool can't be used in 'await' expression", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:10Z", "req_id": "-", "level": "ERROR", "component": "app.main", "msg": "Failed to initialize Vector Store: object bool can't be used in 'await' expression", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:10Z", "req_id": "-", "level": "ERROR", "component": "app.main", "msg": "Error in startup.vector_store: object bool can't be used in 'await' expression", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:10Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing LLaMA Integration", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:10Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:59:12Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:59:14Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:59:14Z", "req_id": "-", "level": "WARNING", "component": "app.llama_integration", "msg": "Ollama health check failed (attempt 1, next check in 10.0s): network_error", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:14Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "LLaMA Integration initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:14Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Home Assistant", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:14Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_request", "env": "", "build_sha": "", "version": "", "meta": {"method": "GET", "path": "/states", "json": null}}
+{"timestamp": "2025-08-25T10:59:14Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:59:15Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_response", "env": "", "build_sha": "", "version": "", "meta": {"status": "err", "body": "network_error"}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "home_assistant error: timeout", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "WARNING", "component": "app.home_assistant", "msg": "Failed to fetch states: timeout (last cache exp: 0.00, now: 26691.46)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Home Assistant initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Memory Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Memory Store initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Scheduler", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Scheduler initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.storytime", "msg": "storytime.schedule", "env": "", "build_sha": "", "version": "", "meta": {"cron": "2:00", "job": "storytime_summarize_nightly"}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Started local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Application startup completed in 8.14s", "env": "", "build_sha": "", "version": ""}
+INFO:     Application startup complete.
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "74bc8cef-4de4-4249-80b1-0a98da6edb1e", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "74bc8cef-4de4-4249-80b1-0a98da6edb1e", "status_code": 200, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "anon", "route": "/v1/csrf", "error_code": null}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/csrf -> 200 (0.016s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 16.10088348388672}}
+
+[ROUTE] POST            /v1/tv/photos/favorite
+[ROUTE] GET             /v1/tv/weather
+[ROUTE] POST            /v1/tv/alert
+[ROUTE] GET             /v1/tv/tips
+[ROUTE] POST            /v1/tv/music/play
+[ROUTE] GET             /v1/tv/prefs
+[ROUTE] POST            /v1/tv/prefs
+[ROUTE] POST            /v1/tv/stage2
+[ROUTE] GET             /v1/tv/config
+[ROUTE] PUT             /v1/tv/config
+[ROUTE] POST            /v1/tts/speak
+[ROUTE] POST            /v1/care/contacts
+[ROUTE] GET             /v1/care/contacts
+[ROUTE] PATCH           /v1/care/contacts/{contact_id}
+[ROUTE] DELETE          /v1/care/contacts/{contact_id}
+[ROUTE] GET             /v1/tv/contacts
+[ROUTE] POST            /v1/tv/contacts/call
+[ROUTE] GET             /v1/care/ack_token
+[ROUTE] POST            /v1/care/alerts/ack_via_link
+[ROUTE] GET             /v1/tv/photos
+[ROUTE] POST            /v1/tv/photos/favorite
+[ROUTE] POST            /v1/tv/photos/favorite
+[ROUTE] GET             /v1/calendar/today
+[ROUTE] GET             /v1/calendar/next
+[ROUTE] GET             /v1/tv/calendar/next
+[ROUTE] GET             /v1/calendar/list
+[ROUTE] POST            /v1/memory/ingest
+[ROUTE] POST            /v1/ask
+[ROUTE] POST            /v1/ask/dry-explain
+[ROUTE] POST            /v1/ask/stream
+[ROUTE] GET             /v1/ask/replay/{rid}
+[ROUTE] POST            /v1/care/alerts
+[ROUTE] POST            /v1/care/alerts/{alert_id}/ack
+[ROUTE] POST            /v1/care/alerts/{alert_id}/resolve
+[ROUTE] POST            /v1/care/devices/{device_id}/heartbeat
+[ROUTE] GET             /v1/care/device_status
+[ROUTE] GET             /v1/care/alerts
+[ROUTE] POST            /v1/care/sessions
+[ROUTE] PATCH           /v1/care/sessions/{session_id}
+[ROUTE] GET             /v1/care/sessions
+[ROUTE] GET             /v1/ws/care
+[ROUTE] GET             /v1/caregiver/sessions
+[ROUTE] GET             /v1/caregiver/device_status
+[ROUTE] POST            /v1/caregiver/alert
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 25, 10, 59, 17, 533882) user_id='anon' route='get_csrf' method='GET' status=200 ip='127.0.0.1' req_id='-' scopes=[] action='http_request' meta={'path': '/v1/csrf'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-25T10:59:17.533882","user_id":"anon","route":"get_csrf","method":"GET","status":200,"ip":"127.0.0.1","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/v1/csrf"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+INFO:     127.0.0.1:55700 - "GET /v1/csrf HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55700 - "OPTIONS /v1/ask HTTP/1.1" 200 OK
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "08faec52-ce76-4744-a4f1-2f01d3f3069b", "level": "INFO", "component": "app.security", "msg": "verify_token: cookie=missing, expired=false, reason=no_token_found", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "08faec52-ce76-4744-a4f1-2f01d3f3069b", "level": "INFO", "component": "app.api.ask", "msg": "🔍 ASK ENTRY: /v1/ask hit with payload={'prompt': 'hi'}", "env": "", "build_sha": "", "version": "", "meta": {"payload_keys": ["prompt"], "model_override": null}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "08faec52-ce76-4744-a4f1-2f01d3f3069b", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "08faec52-ce76-4744-a4f1-2f01d3f3069b", "status_code": 401, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "anon", "route": "/v1/ask", "error_code": null}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: POST /v1/ask -> 401 (0.009s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 401, "duration_ms": 8.782148361206055, "error_code": "CLIENT_UNAUTHORIZED"}}
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 25, 10, 59, 17, 549305) user_id='anon' route='_ask' method='POST' status=401 ip='127.0.0.1' req_id='-' scopes=[] action='http_request' meta={'path': '/v1/ask'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-25T10:59:17.549305","user_id":"anon","route":"_ask","method":"POST","status":401,"ip":"127.0.0.1","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/v1/ask"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+INFO:     127.0.0.1:55700 - "POST /v1/ask HTTP/1.1" 401 Unauthorized
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "level": "INFO", "component": "app.auth_monitoring", "msg": "Authentication event", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "level": "INFO", "component": "app.api.auth", "msg": "whoami.start", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "ip": "127.0.0.1", "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15", "timestamp": 1756119557.565073}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "level": "INFO", "component": "app.auth_monitoring", "msg": "Authentication event", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "level": "INFO", "component": "app.api.auth", "msg": "whoami.cookie_check", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "has_access_token_cookie": false, "cookie_length": 0, "cookie_count": 11, "timestamp": 1756119557.565383}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "level": "INFO", "component": "app.api.auth", "msg": "whoami.header_check", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "has_authorization_header": false, "starts_with_bearer": false, "has_token_header": false, "token_header_length": 0, "timestamp": 1756119557.5654888}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "level": "INFO", "component": "app.api.auth", "msg": "whoami.clerk_check", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "has_clerk_cookie": false, "clerk_cookie_length": 0, "timestamp": 1756119557.565575}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "level": "INFO", "component": "app.api.auth", "msg": "whoami.result", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "is_authenticated": false, "session_ready": false, "source": "missing", "user_id": null, "jwt_status": "missing", "timestamp": 1756119557.565653}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "level": "INFO", "component": "app.api.auth", "msg": "whoami t=0ms jwt=missing src=missing", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "duration_ms": 0, "jwt_status": "missing", "source": "missing"}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "level": "INFO", "component": "app.auth_monitoring", "msg": "Authentication event", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "level": "INFO", "component": "app.api.auth", "msg": "auth.whoami", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "is_authenticated": false, "duration_ms": 1}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "75819ab2-4542-4ab0-84ca-a7beb56d8376", "status_code": 200, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "anon", "route": "/v1/whoami", "error_code": null}}
+{"timestamp": "2025-08-25T10:59:17Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /v1/whoami -> 200 (0.009s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 8.58306884765625}}
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 25, 10, 59, 17, 567378) user_id='anon' route='whoami' method='GET' status=200 ip='127.0.0.1' req_id='-' scopes=[] action='http_request' meta={'path': '/v1/whoami'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-25T10:59:17.567378","user_id":"anon","route":"whoami","method":"GET","status":200,"ip":"127.0.0.1","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/v1/whoami"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+INFO:     127.0.0.1:55700 - "GET /v1/whoami HTTP/1.1" 200 OK
+{"timestamp": "2025-08-25T10:59:19Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:19Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:19Z", "req_id": "acbfefb8-6651-4fb4-a958-fe0290914133", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:19Z", "req_id": "acbfefb8-6651-4fb4-a958-fe0290914133", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:19Z", "req_id": "acbfefb8-6651-4fb4-a958-fe0290914133", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:59:19Z", "req_id": "acbfefb8-6651-4fb4-a958-fe0290914133", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:19Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz/ready -> 200 (0.475s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 475.0099182128906}}
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 25, 10, 59, 19, 520583) user_id='anon' route='health_ready' method='GET' status=200 ip='127.0.0.1' req_id='-' scopes=[] action='http_request' meta={'path': '/healthz/ready'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-25T10:59:19.520583","user_id":"anon","route":"health_ready","method":"GET","status":200,"ip":"127.0.0.1","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/healthz/ready"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+INFO:     127.0.0.1:55700 - "GET /healthz/ready HTTP/1.1" 200 OK
+{"timestamp": "2025-08-25T10:59:19Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: GET /healthz/deps -> 200 (0.895s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 200, "duration_ms": 894.7038650512695}}
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 25, 10, 59, 19, 983432) user_id='anon' route='health_deps' method='GET' status=200 ip='127.0.0.1' req_id='-' scopes=[] action='http_request' meta={'path': '/healthz/deps'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-25T10:59:19.983432","user_id":"anon","route":"health_deps","method":"GET","status":200,"ip":"127.0.0.1","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/healthz/deps"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+INFO:     127.0.0.1:55712 - "GET /healthz/deps HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'app/memory/vector_store/qdrant/__init__.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+{"timestamp": "2025-08-25T10:59:32Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "healthz status=offline", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:32Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Stopped local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+INFO:     Application shutdown complete.
+INFO:     Finished server process [87284]
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Logging disabled: level=INFO, stdout=False, debug_mode=False, verbose=False, banners=False", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "CORS resolved origins=['http://localhost:3000'] | allow_credentials=True | allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] | allow_headers=['*', 'Authorization'] | expose_headers=['X-Request-ID']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "WARNING", "component": "app.main", "msg": "Feature voices disabled (import failed: No module named 'app.api.voices')", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.api.ask", "msg": "🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id", "env": "", "build_sha": "", "version": ""}
+INFO: Auth routers mounted (admin_enabled=True)
+INFO: Admin routes mounted (admin_enabled=True)
+INFO: Admin UI and extras routers processed (admin_enabled=True)
+INFO: Status plus router mounted (admin_enabled=True)
+[ROUTE] GET,HEAD        /openapi.json
+[ROUTE] GET,HEAD        /docs
+[ROUTE] GET,HEAD        /docs/oauth2-redirect
+[ROUTE] GET,HEAD        /redoc
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/capture/sessions
+[ROUTE] GET             /v1/search/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/upload
+[ROUTE] POST            /v1/capture/start
+[ROUTE] POST            /v1/capture/save
+[ROUTE] POST            /v1/capture/tags
+[ROUTE] GET             /v1/capture/status/{session_id}
+[ROUTE] GET             /v1/sessions
+[ROUTE] POST            /v1/sessions/{session_id}/transcribe
+[ROUTE] POST            /v1/sessions/{session_id}/summarize
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] POST            /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/transcribe/{session_id}
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/ha/aliases
+[ROUTE] POST            /v1/ha/aliases
+[ROUTE] DELETE          /v1/ha/aliases
+[ROUTE] GET             /v1/memories/export
+[ROUTE] DELETE          /v1/memories/{mem_id}
+[ROUTE] OPTIONS         /v1/csrf
+[ROUTE] GET             /v1/csrf
+[ROUTE] OPTIONS         /v1/health
+[ROUTE] OPTIONS         /v1/metrics
+[ROUTE] OPTIONS         /v1/auth/token
+[ROUTE] OPTIONS         /v1/auth/apple/start
+[ROUTE] OPTIONS         /v1/auth/apple/callback
+[ROUTE] OPTIONS         /v1/v1/{path:path}
+[ROUTE] GET             /v1/ping
+[ROUTE] DELETE          /v1/ws/{path:path}
+[ROUTE] PATCH           /v1/ws/{path:path}
+[ROUTE] PUT             /v1/ws/{path:path}
+[ROUTE] POST            /v1/ws/{path:path}
+[ROUTE] GET             /v1/ws/{path:path}
+[ROUTE] GET             /v1/debug/config
+[ROUTE] GET             /v1/docs/ws
+[ROUTE] POST            /v1/intent-test
+[ROUTE] GET             /v1/client-crypto-policy
+[ROUTE] GET             /v1/explain_route
+[ROUTE] GET             /metrics
+[ROUTE] GET             /metrics
+[ROUTE] GET             /v1/health/openai
+[ROUTE] GET             /v1/health/ollama
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /v1/health/home_assistant
+[ROUTE] GET             /v1/health/database
+[ROUTE] GET             /v1/health/all
+[ROUTE] GET             /v1/health/cache
+[ROUTE] POST            /v1/health/refresh
+[ROUTE] GET             /v1/health/vendors
+[ROUTE] GET             /v1/health
+[ROUTE] GET             /v1/healthz
+[ROUTE] GET             /v1/rate_limit_status
+[ROUTE] GET             /v1/config
+[ROUTE] GET             /v1/budget
+[ROUTE] GET             /v1/status/budget
+[ROUTE] GET             /v1/ha_status
+[ROUTE] GET             /v1/llama_status
+[ROUTE] GET             /v1/status
+[ROUTE] GET             /healthz/live
+[ROUTE] GET             /healthz/ready
+[ROUTE] GET             /v1/ping
+[ROUTE] GET             /v1/vendor-health
+[ROUTE] GET             /healthz/deps
+[ROUTE] GET             /v1/health/vector_store
+[ROUTE] GET             /health/vector_store
+[ROUTE] GET             /v1/auth/clerk/protected
+[ROUTE] GET             /v1/whoami
+[ROUTE] GET             /v1/auth/whoami
+[ROUTE] GET             /v1/pats
+[ROUTE] POST            /v1/pats
+[ROUTE] DELETE          /v1/pats/{pat_id}
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] POST            /v1/auth/clerk/finish
+[ROUTE] GET             /v1/auth/clerk/finish
+[ROUTE] POST            /v1/auth/login
+[ROUTE] POST            /v1/auth/logout
+[ROUTE] POST            /v1/auth/refresh
+[ROUTE] POST            /v1/auth/token
+[ROUTE] GET             /v1/auth/examples
+[ROUTE] GET             /v1/mock/set_access_cookie
+[ROUTE] GET             /v1/whoami
+[ROUTE] POST            /v1/auth/finish
+[ROUTE] GET             /v1/auth/finish
+[ROUTE] GET             /v1/status/preflight
+[ROUTE] GET             /v1/device/session
+[ROUTE] POST            /v1/device/trust
+[ROUTE] GET             /v1/google/auth/login_url
+[ROUTE] GET             /v1/google/auth/callback
+[ROUTE] GET             /v1/auth/apple/start
+[ROUTE] POST            /v1/auth/apple/callback
+[ROUTE] POST            /v1/auth/register_pw
+[ROUTE] POST            /v1/auth/login_pw
+[ROUTE] GET             /v1/google/auth/url
+[ROUTE] GET             /v1/google/test
+[ROUTE] POST            /v1/google/gmail/send
+[ROUTE] POST            /v1/google/calendar/create
+[ROUTE] GET             /v1/google/status
+[ROUTE] GET             /google/auth/url
+[ROUTE] GET             /google/test
+[ROUTE] POST            /google/gmail/send
+[ROUTE] POST            /google/calendar/create
+[ROUTE] GET             /google/status
+[ROUTE] GET             /v1/ha/entities
+[ROUTE] GET             /v1/ha/health
+[ROUTE] POST            /v1/ha/service
+[ROUTE] POST            /v1/ha/webhook
+[ROUTE] GET             /v1/ha/resolve
+[ROUTE] GET             /v1/reminders
+[ROUTE] POST            /v1/reminders
+[ROUTE] DELETE          /v1/reminders
+[ROUTE] GET             /v1/profile
+[ROUTE] POST            /v1/profile
+[ROUTE] GET             /v1/onboarding/status
+[ROUTE] POST            /v1/onboarding/complete
+[ROUTE] GET             /v1/admin/ping
+[ROUTE] GET             /v1/admin/rbac/info
+[ROUTE] GET             /v1/admin/users/me
+[ROUTE] GET             /v1/admin/system/status
+[ROUTE] GET             /v1/admin/surface/index
+[ROUTE] GET             /v1/admin/metrics
+[ROUTE] GET             /v1/admin/router/decisions
+[ROUTE] GET             /v1/admin/router/decisions.ndjson
+[ROUTE] GET             /v1/admin/retrieval/last
+[ROUTE] GET             /v1/admin/diagnostics/requests
+[ROUTE] GET             /v1/admin/decisions/explain
+[ROUTE] GET             /v1/admin/config
+[ROUTE] POST            /v1/admin/config
+[ROUTE] POST            /v1/admin/config/test
+[ROUTE] POST            /v1/admin/admin/reload_env
+[ROUTE] GET             /v1/admin/errors
+[ROUTE] GET             /v1/admin/self_review
+[ROUTE] POST            /v1/admin/vector_store/bootstrap
+[ROUTE] POST            /v1/admin/vector_store/migrate
+[ROUTE] GET             /v1/admin/vector_store/bootstrap/stream
+[ROUTE] GET             /v1/admin/vector_store/migrate/stream
+[ROUTE] GET             /v1/admin/vector_store/stats
+[ROUTE] GET             /v1/admin/token_store/stats
+[ROUTE] GET             /v1/admin/qdrant/collections
+[ROUTE] POST            /v1/admin/admin/flags
+[ROUTE] GET             /v1/admin/health/router_retrieval
+[ROUTE] GET             /v1/admin/flags
+[ROUTE] GET             /v1/admin/admin/collections
+[ROUTE] GET             /v1/admin/admin/feature_flags
+[ROUTE] GET             /v1/admin/admin/retrieval/trace
+[ROUTE] GET             /v1/admin/tv/config
+[ROUTE] PUT             /v1/admin/tv/config
+[ROUTE] GET             /v1/admin/ui
+[ROUTE] GET             /v1/admin/ui/retrieval
+[ROUTE] GET             /v1/admin/ui/config
+[ROUTE] GET             /v1/admin/collections
+[ROUTE] GET             /v1/admin/feature_flags
+[ROUTE] GET             /v1/admin/retrieval/trace
+[ROUTE] GET             /v1/me
+[ROUTE] GET             /v1/sessions
+[ROUTE] GET             /v1/sessions/paginated
+[ROUTE] POST            /v1/sessions/{sid}/revoke
+[ROUTE] POST            /v1/devices/pair/start
+[ROUTE] POST            /v1/devices/pair/complete
+[ROUTE] POST            /v1/devices/{device_id}/revoke
+[ROUTE] GET             /v1/spotify/token-for-sdk
+[ROUTE] GET             /v1/models
+[ROUTE] GET             /v1/history/recent
+[ROUTE] POST            /v1/history/pin
+[ROUTE] GET             /v1/status/features
+[ROUTE] GET             /v1/status/vector_store
+[ROUTE] POST            /v1/admin/backup
+[ROUTE] GET             /v1/rag/search
+[ROUTE] GET             /v1/skills/list
+[ROUTE] GET             /v1/tv/photos{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "=== CSRF MIDDLEWARE REGISTERED ===", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "MW-ORDER (inner→outer): ['CORSMiddleware', 'EnhancedErrorHandlingMiddleware', 'SilentRefreshMiddleware', 'ReloadEnvMiddleware', 'CSRFMiddleware', 'SessionAttachMiddleware', 'RateLimitMiddleware', 'MetricsMiddleware', 'RedactHashMiddleware', 'AuditMiddleware', 'TraceRequestMiddleware', 'HealthCheckFilterMiddleware', 'DedupMiddleware', 'RequestIDMiddleware']", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "root", "msg": "Server starting on localhost:8000", "env": "", "build_sha": "", "version": ""}
+INFO:     Started server process [87987]
+INFO:     Waiting for application startup.
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Starting enhanced application startup", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "OPENAI_API_KEY: Production key format detected", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.secret_verification", "msg": "JWT_SECRET: Strong secret (64+ characters)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "JWT secret: OK (len=64)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Database", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Database initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing OpenAI Health Check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:36Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Performing OpenAI startup health check", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:38Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "vendor_health vendor=openai ok=true reason=successful_ping model=gpt-4o", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:38Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "OpenAI Health Check initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:38Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Vector Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:38Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:38Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:38Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:59:38Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:38Z", "req_id": "-", "level": "ERROR", "component": "app.main", "msg": "Vector store initialization failed: object bool can't be used in 'await' expression", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:38Z", "req_id": "-", "level": "ERROR", "component": "app.main", "msg": "Failed to initialize Vector Store: object bool can't be used in 'await' expression", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:38Z", "req_id": "-", "level": "ERROR", "component": "app.main", "msg": "Error in startup.vector_store: object bool can't be used in 'await' expression", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:38Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing LLaMA Integration", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:38Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:59:39Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:59:41Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://127.0.0.1:11434/api/generate", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:59:41Z", "req_id": "-", "level": "WARNING", "component": "app.llama_integration", "msg": "Ollama health check failed (attempt 1, next check in 10.0s): network_error", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:41Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "LLaMA Integration initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:41Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Home Assistant", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:41Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_request", "env": "", "build_sha": "", "version": "", "meta": {"method": "GET", "path": "/states", "json": null}}
+{"timestamp": "2025-08-25T10:59:41Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:59:42Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "http.network_error", "env": "", "build_sha": "", "version": "", "meta": {"url": "http://localhost:8123/api/states", "error": "All connection attempts failed"}}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.home_assistant", "msg": "ha_response", "env": "", "build_sha": "", "version": "", "meta": {"status": "err", "body": "network_error"}}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "WARNING", "component": "app.http_utils", "msg": "home_assistant error: timeout", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "WARNING", "component": "app.home_assistant", "msg": "Failed to fetch states: timeout (last cache exp: 0.00, now: 26719.28)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Home Assistant initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Memory Store", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.memory.unified_store", "msg": "Using QdrantVectorStore: https://4ef227f4-58cb-4d1d-adfd-58d928dc98e9.us-east4-0.gcp.cloud.qdrant.io", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "Vector metric: cosine (locked). Threshold policy: keep if sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.memory.vector_store.qdrant", "msg": "qdrant.bootstrap.cache_qa_collection", "env": "", "build_sha": "", "version": "", "meta": {"name": "cache_qa"}}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.memory.api", "msg": "VectorStore: Qdrant initialized with cosine metric; threshold sim>=0.75 (dist<=0.25)", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Memory Store initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Initializing Scheduler", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Scheduler initialized successfully", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.storytime", "msg": "storytime.schedule", "env": "", "build_sha": "", "version": "", "meta": {"cron": "2:00", "job": "storytime_summarize_nightly"}}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.token_store", "msg": "Started local storage cleanup task", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.main", "msg": "Application startup completed in 8.43s", "env": "", "build_sha": "", "version": ""}
+INFO:     Application startup complete.
+
+[ROUTE] POST            /v1/tv/photos/favorite
+[ROUTE] GET             /v1/tv/weather
+[ROUTE] POST            /v1/tv/alert
+[ROUTE] GET             /v1/tv/tips
+[ROUTE] POST            /v1/tv/music/play
+[ROUTE] GET             /v1/tv/prefs
+[ROUTE] POST            /v1/tv/prefs
+[ROUTE] POST            /v1/tv/stage2
+[ROUTE] GET             /v1/tv/config
+[ROUTE] PUT             /v1/tv/config
+[ROUTE] POST            /v1/tts/speak
+[ROUTE] POST            /v1/care/contacts
+[ROUTE] GET             /v1/care/contacts
+[ROUTE] PATCH           /v1/care/contacts/{contact_id}
+[ROUTE] DELETE          /v1/care/contacts/{contact_id}
+[ROUTE] GET             /v1/tv/contacts
+[ROUTE] POST            /v1/tv/contacts/call
+[ROUTE] GET             /v1/care/ack_token
+[ROUTE] POST            /v1/care/alerts/ack_via_link
+[ROUTE] GET             /v1/tv/photos
+[ROUTE] POST            /v1/tv/photos/favorite
+[ROUTE] POST            /v1/tv/photos/favorite
+[ROUTE] GET             /v1/calendar/today
+[ROUTE] GET             /v1/calendar/next
+[ROUTE] GET             /v1/tv/calendar/next
+[ROUTE] GET             /v1/calendar/list
+[ROUTE] POST            /v1/memory/ingest
+[ROUTE] POST            /v1/ask
+[ROUTE] POST            /v1/ask/dry-explain
+[ROUTE] POST            /v1/ask/stream
+[ROUTE] GET             /v1/ask/replay/{rid}
+[ROUTE] POST            /v1/care/alerts
+[ROUTE] POST            /v1/care/alerts/{alert_id}/ack
+[ROUTE] POST            /v1/care/alerts/{alert_id}/resolve
+[ROUTE] POST            /v1/care/devices/{device_id}/heartbeat
+[ROUTE] GET             /v1/care/device_status
+[ROUTE] GET             /v1/care/alerts
+[ROUTE] POST            /v1/care/sessions
+[ROUTE] PATCH           /v1/care/sessions/{session_id}
+[ROUTE] GET             /v1/care/sessions
+[ROUTE] GET             /v1/ws/care
+[ROUTE] GET             /v1/caregiver/sessions
+[ROUTE] GET             /v1/caregiver/device_status
+[ROUTE] POST            /v1/caregiver/alert
+INFO:     127.0.0.1:55741 - "OPTIONS /v1/register HTTP/1.1" 200 OK
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.deps.user", "msg": "auth.no_token", "env": "", "build_sha": "", "version": ""}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "e87e42ab-2ef6-4b98-ba2f-8c24c17c67c6", "level": "INFO", "component": "app.middleware.middleware_core", "msg": "request_summary", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "e87e42ab-2ef6-4b98-ba2f-8c24c17c67c6", "status_code": 404, "latency_ms": null, "router_decision": null, "model_used": null, "reason": null, "rule": null, "tokens_in": null, "tokens_out": null, "retrieved_tokens": null, "self_check": null, "escalated": null, "cache_hit": null, "limit_bucket": {"long_limit": 60, "long_remaining": 60, "burst_limit": 10, "burst_remaining": 10}, "requests_remaining": 60, "enforced_scope": null, "user_id": "anon", "route": "/v1/register", "error_code": null}}
+{"timestamp": "2025-08-25T10:59:45Z", "req_id": "-", "level": "INFO", "component": "app.middleware.custom", "msg": "Request completed: POST /v1/register -> 404 (0.028s)", "env": "", "build_sha": "", "version": "", "meta": {"req_id": "-", "route": null, "user_anon": "local", "status_code": 404, "duration_ms": 27.531147003173828, "error_code": "CLIENT_NOT_FOUND"}}
+AUDIT_MW: Using new audit system - models: <module 'app.audit_new.models' from '/Users/kingal/2025/GesahniV2/app/audit_new/models.py'>, store: <module 'app.audit_new.store' from '/Users/kingal/2025/GesahniV2/app/audit_new/store.py'>
+AUDIT_MW: Created event: ts=datetime.datetime(2025, 8, 25, 10, 59, 45, 410244) user_id='anon' route='/v1/register' method='POST' status=404 ip='127.0.0.1' req_id='-' scopes=[] action='http_request' meta={'path': '/v1/register'}
+AUDIT_MW: Event JSON: {"ts":"2025-08-25T10:59:45.410244","user_id":"anon","route":"/v1/register","method":"POST","status":404,"ip":"127.0.0.1","req_id":"-","scopes":[],"action":"http_request","meta":{"path":"/v1/register"}}
+AUDIT_MW: Calling store.append
+AUDIT_MW: store.append completed
+INFO:     127.0.0.1:55741 - "POST /v1/register HTTP/1.1" 404 Not Found

@@ -192,13 +192,22 @@ def create_vector_store() -> VectorStore:
                 raise RuntimeError(
                     "QdrantVectorStore unavailable (qdrant-client not installed)"
                 )
+            except Exception as e:
+                raise RuntimeError(
+                    f"QdrantVectorStore unavailable ({e})"
+                )
 
             # Parse host:port
             host = config.host or "localhost"
             port = config.port or (6334 if "grpc" in dsn else 6333)
             protocol = "http" if "grpc" not in dsn else "grpc"
 
-            url = f"{protocol}://{host}:{port}"
+            # Check for custom url parameter (for cloud services)
+            custom_url = config.get_param("url", "")
+            if custom_url:
+                url = custom_url
+            else:
+                url = f"{protocol}://{host}:{port}"
             api_key = config.get_param("api_key", "")
 
             # Set legacy env vars for QdrantVectorStore

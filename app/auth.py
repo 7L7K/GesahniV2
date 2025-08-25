@@ -497,7 +497,7 @@ async def register(req: RegisterRequest):
             (norm_user,),
         ) as cursor:
             if await cursor.fetchone():
-                raise HTTPException(status_code=400, detail="username_taken")
+                raise HTTPException(status_code=409, detail="username_taken")
         # Also check legacy 'users' projections to preserve duplicate semantics
         try:
             async with db.execute(
@@ -505,7 +505,7 @@ async def register(req: RegisterRequest):
                 (norm_user, norm_user),
             ) as cursor:
                 if await cursor.fetchone():
-                    raise HTTPException(status_code=400, detail="username_taken")
+                    raise HTTPException(status_code=409, detail="username_taken")
         except Exception:
             pass
     # Enforce password policy next. When PASSWORD_STRENGTH=1, require alnum mix and >= 8
@@ -518,6 +518,19 @@ async def register(req: RegisterRequest):
                 f"INSERT INTO {AUTH_TABLE} (username, password_hash) VALUES (?, ?)",
                 (norm_user, hashed),
             )
+            # Ensure write is committed and visible to subsequent connections
+            await db.commit()
+
+            # Fetch the newly created user's id for informative response
+            try:
+                async with db.execute(
+                    f"SELECT id FROM {AUTH_TABLE} WHERE username = ?",
+                    (norm_user,),
+                ) as cur:
+                    row = await cur.fetchone()
+                    user_id = int(row[0]) if row and row[0] is not None else None
+            except Exception:
+                user_id = None
             # Also mirror into 'users' table for compatibility
             try:
                 cols: list[str] = []
@@ -541,10 +554,16 @@ async def register(req: RegisterRequest):
                     )
             except Exception:
                 pass
-            await db.commit()
+            # commit already done above
     except aiosqlite.IntegrityError:
         raise HTTPException(status_code=400, detail="username_taken")
-    return {"status": "ok"}
+    # Be explicit about the created user for clients
+    out: dict = {"status": "ok"}
+    if user_id is not None:
+        out["user_id"] = user_id
+    else:
+        out["username"] = norm_user
+    return out
 
 
 # Admin endpoint to view rate limiting statistics
@@ -575,10 +594,8 @@ async def clear_rate_limit_data(
 
 
 # Login endpoint with backoff after failures
-@router.post("/login", response_model=TokenResponse)
-async def login(
-    req: LoginRequest, request: Request, response: Response
-) -> TokenResponse:
+@router.post("/login")
+async def login(req: LoginRequest, request: Request, response: Response):
     """Password login for local accounts.
 
     CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
@@ -1017,11 +1034,17 @@ async def login(
             },
         )
 
-        return TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token=access_token,
-            stats=stats,
+        # Return JSONResponse explicitly to avoid framework-level response validation
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token": access_token,
+                "stats": stats,
+            },
         )
     except Exception:
         logger.exception("auth.login_exception")

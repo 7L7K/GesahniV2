@@ -500,17 +500,38 @@ async def _init_vector_store():
     """Initialize vector store with read-only health check."""
     try:
         from .memory.api import _get_store
-
         store = _get_store()
-        # Read-only connectivity test - no side effects
-        if hasattr(store, "ping"):
-            await store.ping()
-        elif hasattr(store, "search_memories"):
-            # Search with limit=0 for minimal overhead
-            await store.search_memories("", "", limit=0)
-        else:
-            # Fallback: just get the store instance
-            pass
+
+        # Read-only connectivity test - be tolerant of sync vs async implementations
+        try:
+            import inspect
+
+            if hasattr(store, "ping"):
+                ping_fn = getattr(store, "ping")
+                # If ping is an async function, await it; otherwise call it and await result if awaitable
+                if inspect.iscoroutinefunction(ping_fn):
+                    await ping_fn()
+                else:
+                    res = ping_fn()
+                    if inspect.isawaitable(res):
+                        await res
+            elif hasattr(store, "search_memories"):
+                search_fn = getattr(store, "search_memories")
+                # Call search with minimal impact; handle sync and async
+                if inspect.iscoroutinefunction(search_fn):
+                    await search_fn("", "", limit=0)
+                else:
+                    res = search_fn("", "", limit=0)
+                    if inspect.isawaitable(res):
+                        await res
+            else:
+                # Fallback: just get the store instance
+                pass
+
+        except Exception:
+            # Bubble up to outer handler which will log and record the error
+            raise
+
         logger.debug("Vector store initialization successful")
     except Exception as e:
         logger.error(f"Vector store initialization failed: {e}")
@@ -1151,6 +1172,7 @@ if device_auth_router is not None:
 # Removed duplicate inclusion of app.api.auth router to avoid route shadowing
 app.include_router(oauth_google_router, prefix="/v1")
 app.include_router(google_oauth_router, prefix="/v1")
+app.include_router(auth_router, prefix="/v1")
 if _oauth_apple_router is not None:
     app.include_router(_oauth_apple_router, prefix="/v1")
 if auth_password_router is not None:
@@ -1319,13 +1341,7 @@ if music_router is not None:
     if _safe_import_router("from .api.tv_music_sim import router as tv_music_sim_router", "tv_music_sim"):
         app.include_router(tv_music_sim_router, prefix="/v1")
 
-# Route listing for debugging - print all routes at startup
-for r in app.router.routes:
-    try:
-        methods = ",".join(sorted(r.methods or []))
-        print(f"[ROUTE] {methods:15} {r.path}")
-    except Exception:
-        pass
+
 
 # Idempotent middleware registration helper
 def register_middlewares_once(application):
