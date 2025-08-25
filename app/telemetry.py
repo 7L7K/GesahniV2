@@ -80,6 +80,14 @@ class LogRecord(BaseModel):
     # Optional short human-readable reason set by a matched skill (for logs)
     skill_why: str | None = None
     escalated: bool | None = None
+    # standardized skill telemetry
+    normalized_prompt: str | None = None
+    chosen_skill: str | None = None
+    confidence: float | None = None
+    slots: dict | None = None
+    idempotency_key: str | None = None
+    deduped: bool | None = None
+    skipped_llm: bool | None = None
 
     # authentication events
     auth_event_type: str | None = (

@@ -14,6 +14,15 @@ LLM output.
   short window (e.g., 60 seconds). After the window, undo must be manual.
 
 - **Tool validation**: All LLM-suggested tool invocations must pass
+ - **Tool validation**: All LLM-suggested tool invocations must pass
   `validator.validate()` before execution.
+
+- **Skill-side validation**: All skills performing side effects (timers, reminders,
+  lights, locks, climate, media) MUST call the validator helpers in
+  `app/skills/tools/validator.py` to validate parsed slots (duration, when,
+  entity resolution, level/volume, temperature). Any missing or invalid slot must
+  result in no action and a crisp explanation to the user. Actions requiring
+  confirmation (e.g., large volume jumps, unlocking doors, large thermostat
+  deltas) should surface the need for confirmation instead of executing.
 
 

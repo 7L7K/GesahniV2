@@ -192,6 +192,15 @@ def exchange_code(code: str, state: str, verify_state: bool = True) -> Any:
             {"method": "google_client_lib", "pkce_used": pkce_used},
         ) as _span:
             flow = create_flow()
+            # Ensure redirect_uri is explicitly set on the Flow before exchanging
+            # Some environments require the redirect_uri parameter to be present
+            # on the token exchange request; set it from our client config to
+            # avoid "Missing parameter: redirect_uri" errors.
+            try:
+                flow.redirect_uri = CLIENT_CONFIG["web"]["redirect_uris"][0]
+            except Exception:
+                # Best-effort only; proceed and let the library raise if needed
+                pass
             flow.fetch_token(code=code)
             logger.info(
                 "Token exchange successful via Google client library",

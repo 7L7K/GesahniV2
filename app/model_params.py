@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Unified generation parameter handling for GPT and LLaMA backends.
 
 Provides a single place to define defaults (via env) and to translate
@@ -10,7 +11,6 @@ Supported params (common):
 - stop: list[str] | str | None
 """
 
-from __future__ import annotations
 
 import os
 from collections.abc import Iterable, Mapping

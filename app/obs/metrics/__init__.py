@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Metrics placeholders for Granny Mode."""
 
 
@@ -9,7 +10,6 @@ def inc_error(name: str) -> None:
     _ = name
 
 
-from __future__ import annotations
 
 import time
 from collections.abc import Iterator

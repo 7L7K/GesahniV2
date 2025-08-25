@@ -1,6 +1,6 @@
+from __future__ import annotations
 """Utilities for token counting."""
 
-from __future__ import annotations
 
 import math
 

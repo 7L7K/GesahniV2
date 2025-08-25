@@ -123,13 +123,18 @@ async def resolve_entity(name: str, kind: str = "light") -> Dict[str, Any]:
         eid = choices[name_norm]
         return {"entity_id": eid, "friendly_name": name_norm, "confidence": 1.0}
 
-    best = difflib.get_close_matches(name_norm, list(choices.keys()), n=2, cutoff=0.6)
+    # fuzzy match but require alias-first; only allow a single high-confidence
+    # fuzzy match; otherwise ask to disambiguate.
+    best = difflib.get_close_matches(name_norm, list(choices.keys()), n=2, cutoff=0.8)
     if not best:
+        # no close matches at high threshold -> disambiguate
         return {"action": "disambiguate", "candidates": []}
     if len(best) > 1:
+        # ambiguous -> ask to disambiguate
         return {"action": "disambiguate", "candidates": best}
     b = best[0]
-    return {"entity_id": choices[b], "friendly_name": b, "confidence": 0.8}
+    # return conservative confidence
+    return {"entity_id": choices[b], "friendly_name": b, "confidence": 0.85}
 
 """
 Shared parsers responsibilities (design doc)

@@ -1365,6 +1365,71 @@ async def route_prompt(
     )
 
     # Execute the chosen vendor
+    # Schema-first LLM fallback: model may propose a single validated tool invocation
+    if os.getenv("ENABLE_SCHEMA_FALLBACK", "1") == "1" and allow_fallback:
+        try:
+            from .router_policy import can_user_call_llm
+            from .skills.tools.catalog import validate_and_execute
+        except Exception:
+            can_user_call_llm = lambda uid: False  # type: ignore
+            validate_and_execute = None  # type: ignore
+
+        if can_user_call_llm(user_id):
+            try:
+                # Ask model to propose a single JSON tool invocation
+                system = "You are a tool-using assistant. Only respond with a JSON object like {\"tool\": \"tool.name\", \"slots\": {...}}. Do not include other text."
+                parsed = None
+                if chosen_vendor == "openai":
+                    try:
+                        from .gpt_client import ask_gpt
+
+                        text, _, _, _ = await ask_gpt(
+                            built_prompt,
+                            model=chosen_model,
+                            system=system,
+                            timeout=OPENAI_TIMEOUT_MS / 1000,
+                            routing_decision=routing_decision,
+                        )
+                    except Exception:
+                        text = None
+                else:
+                    try:
+                        from .llama_integration import ask_llama
+
+                        text = await ask_llama(
+                            built_prompt,
+                            model=chosen_model,
+                            timeout=OLLAMA_TIMEOUT_MS / 1000,
+                            routing_decision=routing_decision,
+                        )
+                    except Exception:
+                        text = None
+
+                if text:
+                    import json as _json
+
+                    try:
+                        parsed = _json.loads(text)
+                    except Exception:
+                        parsed = None
+
+                if parsed and isinstance(parsed, dict) and "tool" in parsed and "slots" in parsed and validate_and_execute:
+                    executed, msg, confirm = await validate_and_execute(parsed["tool"], parsed["slots"], user_id=user_id)
+                    if executed:
+                        # successful schema-first execution; record llm fallback metric
+                        try:
+                            from .metrics import LLM_FALLBACK_TOTAL
+
+                            LLM_FALLBACK_TOTAL.inc()
+                        except Exception:
+                            pass
+                        return msg
+                    else:
+                        if confirm:
+                            return "Action requires confirmation."
+                        # fallthrough to normal model path if validation failed
+            except Exception:
+                logger.debug("schema-first fallback attempt failed; continuing to normal model path")
     if debug_route:
         result = _dry(chosen_vendor, chosen_model)
         return result

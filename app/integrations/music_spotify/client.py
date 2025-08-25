@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from app.music.circuit import CircuitBreaker
 
 _TOKENS_DIR = Path(os.getenv("SPOTIFY_TOKENS_DIR", "data/spotify_tokens")).resolve()
 _TOKENS_DIR.mkdir(parents=True, exist_ok=True)
@@ -151,10 +152,13 @@ class SpotifyClient:
         headers = {"Authorization": f"Bearer {token}"}
         # Basic retry with jitter + simple circuit breaker on 5xx
         # cb_key = f"cb:{self.user_id}"  # intentionally unused; state key stored on instance
-        state = getattr(self, "_cb", {"fail": 0, "ts": 0.0})
-        self._cb = state
-        if state["fail"] >= 3 and time.time() - state["ts"] < 30:
-
+        cb = getattr(self, "_circuit", None)
+        if cb is None:
+            cb = CircuitBreaker(f"spotify:{self.user_id}")
+            self._circuit = cb
+        # probe if half-open
+        cb.probe()
+        if not cb.allow_request():
             class _Resp:
                 status_code = 503
 
@@ -176,11 +180,9 @@ class SpotifyClient:
                     continue
                 break
             if r.status_code >= 500:
-                state["fail"] += 1
-                state["ts"] = time.time()
+                cb.record_failure()
             else:
-                state["fail"] = 0
-                state["ts"] = time.time()
+                cb.record_success()
             if r.status_code == 401:
                 # Access token expired unexpectedly; force refresh once
                 stored = self._read_tokens()

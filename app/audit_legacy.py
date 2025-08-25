@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Phase 6.2: Legacy audit module preserved as audit_legacy for compatibility.
 
@@ -6,7 +7,6 @@ referenced by the new `app.audit` package when the repo needs to fall back to th
 legacy behavior.
 """
 
-from __future__ import annotations
 
 import json
 import os

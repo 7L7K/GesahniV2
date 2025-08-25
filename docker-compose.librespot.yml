@@ -1,0 +1,7 @@
+version: '3.8'
+services:
+  librespot:
+    image: ghcr.io/librespot-org/librespot:latest
+    command: [ "--name", "House Speaker", "--bitrate", "320", "--enable-volume-normalisation" ]
+    network_mode: host
+    restart: unless-stopped

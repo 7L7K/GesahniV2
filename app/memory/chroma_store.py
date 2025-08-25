@@ -1,6 +1,6 @@
+from __future__ import annotations
 """Chroma-backed vector store implementation."""
 
-from __future__ import annotations
 
 import logging
 import os

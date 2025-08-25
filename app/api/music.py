@@ -1,5 +1,42 @@
 from __future__ import annotations
 
+import logging
+from fastapi import APIRouter, HTTPException, Request, Depends
+from pydantic import BaseModel
+
+from ..deps.user import get_current_user_id
+from ..music.orchestrator import MusicOrchestrator
+from ..music.store import get_idempotent, set_idempotent
+from ..music.providers.spotify_provider import SpotifyProvider
+
+router = APIRouter(prefix="/api/music")
+logger = logging.getLogger(__name__)
+
+
+class PlayBody(BaseModel):
+    utterance: str | None = None
+    entity: dict | None = None
+    room: str | None = None
+    vibe: str | None = None
+    provider_hint: str | None = None
+
+
+@router.post("/play")
+async def play(body: PlayBody, request: Request, user_id: str = Depends(get_current_user_id)):
+    # idempotency
+    key = request.headers.get("X-Idempotency-Key")
+    if key:
+        prev = await get_idempotent(key, user_id)
+        if prev:
+            return prev
+    provider = SpotifyProvider()
+    orch = MusicOrchestrator(providers=[provider])
+    res = await orch.play(body.utterance, entity=body.entity, room=body.room, vibe=body.vibe, provider_hint=body.provider_hint)
+    out = {"status": "ok", "result": res}
+    if key:
+        await set_idempotent(key, user_id, out)
+    return out
+
 import asyncio
 import hashlib
 import inspect
@@ -182,6 +219,22 @@ def _maybe_304(request: Request, response: Response, etag: str) -> Response | No
     except Exception:
         return None
     return None
+
+
+_PAUSE_POLL_AFTER_NO_PLAY_S = int(os.getenv("MUSIC_POLL_PAUSE_AFTER_NO_PLAY_S", str(5 * 60)))
+_last_play_ts: dict[str, float] = {}
+
+
+def _record_play_activity(user_id: str, is_playing: bool) -> None:
+    if is_playing:
+        _last_play_ts[user_id] = time.time()
+
+
+def _should_pause_polling(user_id: str) -> bool:
+    ts = _last_play_ts.get(user_id)
+    if not ts:
+        return False
+    return (time.time() - ts) > float(_PAUSE_POLL_AFTER_NO_PLAY_S)
 
 
 async def _provider_state(user_id: str) -> dict | None:

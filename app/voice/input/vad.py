@@ -1,9 +1,9 @@
+from __future__ import annotations
 """Voice Activity Detection (VAD) with pluggable backends.
 
 Env: VAD_BACKEND = webrtc | silero | none (default: none)
 """
 
-from __future__ import annotations
 
 import os
 from collections.abc import Callable

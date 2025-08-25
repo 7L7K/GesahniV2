@@ -1,49 +1,94 @@
 from __future__ import annotations
 
-import re
-from typing import Any
+from typing import Optional
 
 from .base import Skill
 from .ledger import get_last_reversible_action, record_action
+from .. import home_assistant as ha
+from .. import storage
 
 
 class UndoSkill(Skill):
-    """Revert the last reversible action for the user.
+    PATTERNS = [
+        # "undo" or "undo last action"
+        __import__("re").compile(r"\bundo(?: last)?(?: action)?\b", __import__("re").I)
+    ]
 
-    This skill queries the ledger for the last reversible action and attempts
-    to perform the inverse operation. The actual inverse logic is delegated
-    to the respective skill executors (best-effort)."""
-
-    PATTERNS = [re.compile(r"undo( last)?( action)?( for)? (?P<what>\w+)?", re.I), re.compile(r"undo", re.I)]
-
-    async def run(self, prompt: str, match: re.Match) -> str:
-        user_id = None
-        # Query ledger for the last reversible action
-        last = await get_last_reversible_action(user_id=user_id)
-        if not last:
+    async def run(self, prompt: str, match) -> str:
+        # find last reversible action from ledger
+        rec = await get_last_reversible_action()
+        if not rec:
             return "Nothing to undo."
+        # determine inverse
+        typ = rec.get("type")
+        meta = rec.get("slots") or {}
+        if typ.startswith("lights.") or typ.startswith("lights"):
+            # expected meta: entity, prev:{state,brightness}
+            ent = meta.get("entity")
+            prev = meta.get("prev") or {}
+            if not ent:
+                return "Cannot undo lights action: missing entity info."
+            # restore previous brightness/state
+            if prev.get("state") == "off":
+                await ha.call_service("light", "turn_off", {"entity_id": ent})
+            else:
+                # if brightness present, use pct; brightness stored as pct
+                b = prev.get("brightness")
+                if b is not None:
+                    await ha.call_service("light", "turn_on", {"entity_id": ent, "brightness_pct": b})
+                else:
+                    await ha.call_service("light", "turn_on", {"entity_id": ent})
+            # record reverse action in ledger and link via reverse_id
+            # write reverse entry directly to storage so we can link reverse_id
+            _, rev_rowid = storage.record_ledger(
+                type="undo.lights",
+                skill="undo",
+                slots={"reverted": rec.get("id")},
+                reversible=False,
+                idempotency_key=None,
+            )
+            try:
+                storage.link_reverse(int(rec.get("id")), int(rev_rowid))
+            except Exception:
+                pass
+            return "Undid last light change."
 
-        action = last.get("action")
-        metadata = last.get("metadata") or {}
+        if typ.startswith("timer."):
+            # timers stored by label; reverse action is cancel
+            label = meta.get("label") or meta.get("name")
+            if not label:
+                return "Cannot undo timer: missing label."
+            await ha.call_service("timer", "cancel", {"entity_id": f"timer.{label}"})
+            _, rev_rowid = storage.record_ledger(
+                type="undo.timer",
+                skill="undo",
+                slots={"reverted": rec.get("id")},
+                reversible=False,
+                idempotency_key=None,
+            )
+            try:
+                storage.link_reverse(int(rec.get("id")), int(rev_rowid))
+            except Exception:
+                pass
+            return "Timer cancelled (undo)."
 
-        # Basic inverse mapping (expand as needed)
-        if action == "lights.toggle" or action == "lights.set":
-            # Attempt to toggle back or set previous level if present
-            prev = metadata.get("state_before")
-            # Here we would call HA to restore state; keep this a stub
-            success = True
-            detail = "lights restored"
-        elif action == "timer.start":
-            # Cancel the timer
-            success = True
-            detail = "timer cancelled"
-        else:
-            success = False
-            detail = f"cannot automatically undo {action}"
+        if typ.startswith("reminder."):
+            # best-effort: mark as removed from reminders file (no single source)
+            # TODO: make reminders have ids to remove precisely
+            _, rev_rowid = storage.record_ledger(
+                type="undo.reminder",
+                skill="undo",
+                slots={"reverted": rec.get("id")},
+                reversible=False,
+                idempotency_key=None,
+            )
+            try:
+                storage.link_reverse(int(rec.get("id")), int(rev_rowid))
+            except Exception:
+                pass
+            return "Undid last reminder (best-effort)."
 
-        # Record the undo attempt
-        await record_action("undo", idempotency_key=f"undo:{last.get('idempotency_key')}", metadata={"reverted": last})
-
-        return f"Undo: {detail}" if success else f"Undo failed: {detail}"
+        # fallback
+        return "Cannot undo that action automatically."
 
 

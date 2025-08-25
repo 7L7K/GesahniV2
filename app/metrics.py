@@ -1,3 +1,28 @@
+from prometheus_client import Counter, Histogram
+
+SPOTIFY_REQUESTS = Counter(
+    "integration_spotify_requests_total",
+    "Spotify requests",
+    ["method", "path", "status"],
+)
+
+SPOTIFY_429 = Counter(
+    "integration_spotify_rate_limited_total",
+    "Spotify 429s",
+    ["path"],
+)
+
+SPOTIFY_REFRESH = Counter(
+    "integration_spotify_auth_refresh_total",
+    "Spotify token refreshes",
+)
+
+SPOTIFY_LATENCY = Histogram(
+    "integration_spotify_latency_seconds",
+    "Spotify latency",
+    ["method", "path"],
+)
+
 # Phase 6.1: Clean Prometheus Metrics (no sampling)
 # Phase 7.6: Label Hygiene & Cardinality Management
 
@@ -103,6 +128,31 @@ REQUESTS = Counter(
     "Total HTTP requests",
     labelnames=("route", "method", "status"),
 )
+
+# Skill & selector metrics
+SKILL_HITS_TOTAL = Counter(
+    "skill_hits_total",
+    "Total skill activations",
+    ["skill"],
+)
+
+SELECTOR_LATENCY_MS = Histogram(
+    "selector_latency_ms",
+    "Latency of skill selector in milliseconds",
+    buckets=(1, 2, 5, 10, 20, 50, 100),
+)
+
+SKILL_CONF_BUCKET = Histogram(
+    "skill_conf_bucket",
+    "Skill confidence buckets",
+    buckets=(0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
+)
+
+LLM_FALLBACK_TOTAL = Counter("llm_fallback_total", "LLM fallback invocations")
+
+UNDO_INVOCATIONS_TOTAL = Counter("undo_invocations_total", "Undo actions invoked")
+
+ENTITY_DISAMBIGUATIONS_TOTAL = Counter("entity_disambiguations_total", "Entity disambiguation events")
 
 # Latency per route
 LATENCY = Histogram(
@@ -580,6 +630,47 @@ RATE_LIMIT_BLOCKS = Counter(
     "rate_limit_block_total",
     "Requests blocked by the rate limiter",
     ["channel", "bucket", "backend"],
+)
+
+# ----------------------------
+# Music observability
+# ----------------------------
+MUSIC_CMD_LATENCY = Histogram(
+    "music_cmd_latency_ms",
+    "Music command latency in milliseconds",
+    ["verb", "provider"],
+    buckets=(5, 10, 25, 50, 100, 200, 500, 1000, 2000),
+)
+
+MUSIC_TRANSFER_FAIL_TOTAL = Counter(
+    "music_transfer_fail_total",
+    "Failures when transferring playback to a device",
+    ["reason"],
+)
+
+MUSIC_RATE_LIMITED_TOTAL = Counter(
+    "music_rate_limited_total",
+    "Rate limited events from providers",
+    ["provider"],
+)
+
+MUSIC_FIRST_SOUND_MS = Histogram(
+    "music_first_sound_ms",
+    "Time to first audible sound in milliseconds",
+    ["route"],
+    buckets=(50, 100, 200, 500, 1000, 2000, 5000),
+)
+
+MUSIC_RECO_HIT = Counter(
+    "music_reco_hit_total",
+    "Recommendation cache hits",
+    ["vibe"],
+)
+
+MUSIC_RECO_MISS = Counter(
+    "music_reco_miss_total",
+    "Recommendation cache misses",
+    ["vibe"],
 )
 
 # ----------------------------

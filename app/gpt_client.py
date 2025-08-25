@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Thin wrapper around the OpenAI chat API.
 
 The original project depended on the official ``openai`` package.  The
@@ -12,7 +13,6 @@ when used.  Tests monkey‑patch ``ask_gpt`` so the stub is never exercised, but
 the import no longer fails when the dependency is missing.
 """
 
-from __future__ import annotations
 
 import asyncio
 import logging

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Storytime helpers: JSONL transcript logging and nightly summarization.
 
 This module provides lightweight primitives to:
@@ -11,7 +12,6 @@ All functionality degrades gracefully when optional dependencies (APScheduler)
 are missing. The design avoids introducing new runtime requirements for tests.
 """
 
-from __future__ import annotations
 
 import asyncio
 import json

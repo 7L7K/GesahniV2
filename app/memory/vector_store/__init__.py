@@ -1,3 +1,4 @@
+from __future__ import annotations
 # app/memory/vector_store/__init__.py
 """
 Compatibility wrapper re-exporting vector-store API.
@@ -6,7 +7,6 @@ One stable import path for tests & call sites: `app.memory.vector_store`.
 Keep this file SIDE-EFFECT FREE: no heavy imports or I/O at import time.
 """
 
-from __future__ import annotations
 
 import logging
 import re

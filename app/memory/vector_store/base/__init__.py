@@ -1,10 +1,10 @@
+from __future__ import annotations
 """Base interfaces and common errors for vector-store backends.
 
 This module purposely keeps only abstract protocols and light exceptions so
 it can be imported by any backend without causing heavy side‑effects.
 """
 
-from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Protocol, runtime_checkable

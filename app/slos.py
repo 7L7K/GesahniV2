@@ -1,10 +1,10 @@
+from __future__ import annotations
 """
 PHASE 6: Service Level Indicators and Objectives
 
 Concrete targets and alerting thresholds for monitoring and CI testing.
 """
 
-from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Deterministic model router with self-check escalation and cache keys.
 
 This module centralizes routing decisions for text, RAG, ops, and vision.
@@ -5,7 +6,6 @@ It is designed to be hot-reloadable via a YAML rules file so thresholds can
 be tweaked at runtime without code changes.
 """
 
-from __future__ import annotations
 
 import logging
 import os

@@ -1,6 +1,59 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
+from typing import List
+
+from .base import Skill
+from .ledger import record_action
+
+_SUG_PATH = Path("data/suggestions.json")
+
+
+def _load_suggestions() -> List[dict]:
+    try:
+        import json
+
+        return json.loads(_SUG_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def _save_suggestions(lst: List[dict]) -> None:
+    try:
+        import json
+
+        _SUG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _SUG_PATH.write_text(json.dumps(lst, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+class SuggestionsSkill(Skill):
+    PATTERNS = [re.compile(r"show suggestions", re.I), re.compile(r"dismiss suggestion (?P<idx>\d+)", re.I)]
+
+    async def run(self, prompt: str, match) -> str:
+        gd = match.groupdict()
+        if gd.get("idx"):
+            idx = int(gd["idx"]) - 1
+            s = _load_suggestions()
+            if 0 <= idx < len(s):
+                s.pop(idx)
+                _save_suggestions(s)
+                await record_action("suggestion.dismiss", idempotency_key=None, metadata={"idx": idx}, reversible=False)
+                return "Suggestion dismissed."
+            return "No such suggestion."
+        s = _load_suggestions()
+        if not s:
+            return "No suggestions right now."
+        # present as numbered queue with why
+        out = []
+        for i, it in enumerate(s, start=1):
+            out.append(f"{i}. {it.get('text')} — why: {it.get('why', 'no reason')}")
+        return "\n".join(out)
+
+
+import re
 from typing import Any, Dict, List
 
 from .base import Skill

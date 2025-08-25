@@ -1,6 +1,6 @@
+from __future__ import annotations
 """Audio capture utilities."""
 
-from __future__ import annotations
 
 import asyncio
 import logging

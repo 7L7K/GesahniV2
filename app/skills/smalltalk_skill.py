@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Smalltalk skill mini-prompt.
 
 Respond to simple greetings with a friendly opener while keeping the chat
@@ -9,7 +10,6 @@ fresh:
 - Avoid repeating the last couple of full responses.
 """
 
-from __future__ import annotations
 
 import logging
 import os

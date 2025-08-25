@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Minimal user model using ``sqlite3`` for tests.
 
 The original project relied on SQLAlchemy which pulls in a fairly heavy
@@ -6,7 +7,6 @@ functionality so this module provides a lightweight replacement implemented on
 top of Python's built-in :mod:`sqlite3` module.
 """
 
-from __future__ import annotations
 
 import os
 import sqlite3

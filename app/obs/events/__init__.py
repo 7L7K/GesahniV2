@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Event emitters for Granny Mode."""
 
 
@@ -9,7 +10,6 @@ def skill_latency(skill: str, ms: int) -> None:
     _ = (skill, ms)
 
 
-from __future__ import annotations
 
 from typing import Any, Dict
 

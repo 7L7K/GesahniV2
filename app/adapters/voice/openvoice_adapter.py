@@ -1,3 +1,4 @@
+from __future__ import annotations
 """OpenVoice/Piper text-to-speech adapter.
 
 This module defines the :class:`VoiceSynth` interface for cloning voices and
@@ -5,7 +6,6 @@ synthesizing speech. The actual model loading and synthesis are intentionally
 left unimplemented; this is only the API surface.
 """
 
-from __future__ import annotations
 
 import logging
 from pathlib import Path

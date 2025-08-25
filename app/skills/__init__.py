@@ -33,6 +33,12 @@ from .unit_conversion_skill import UnitConversionSkill
 from .vacuum_skill import VacuumSkill
 from .weather_skill import WeatherSkill
 from .world_clock_skill import WorldClockSkill
+from .undo_skill import UndoSkill
+from .medication_skill import MedicationSkill
+from .checkin_skill import CheckinSkill
+from .routine_skill import RoutineSkill
+from .day_summary_skill import DaySummarySkill
+from .suggestions_skill import SuggestionsSkill
 
 try:
     from .explain_route_skill import ExplainRouteSkill  # type: ignore

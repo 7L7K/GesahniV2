@@ -1,5 +1,61 @@
 from __future__ import annotations
 
+import re
+from typing import Dict, List
+
+from pathlib import Path
+from .base import Skill
+from .ledger import record_action
+
+_ROUTINES_PATH = Path("data/routines.json")
+
+
+def _load_routines() -> Dict[str, List[str]]:
+    try:
+        import json
+
+        return json.loads(_ROUTINES_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_routines(r: Dict[str, List[str]]) -> None:
+    try:
+        import json
+
+        _ROUTINES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _ROUTINES_PATH.write_text(json.dumps(r, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+class RoutineSkill(Skill):
+    PATTERNS = [
+        re.compile(r"create routine (?P<name>[\w\s]+): (?P<steps>.+)", re.I),
+        re.compile(r"run (?P<name>[\w\s]+) now", re.I),
+    ]
+
+    async def run(self, prompt: str, match) -> str:
+        gd = match.groupdict()
+        if gd.get("steps") and gd.get("name"):
+            name = gd["name"].strip()
+            steps = [s.strip() for s in gd["steps"].split(";") if s.strip()]
+            r = _load_routines()
+            r[name] = steps
+            _save_routines(r)
+            await record_action("routine.create", idempotency_key=f"routine:create:{name}", metadata={"name": name, "steps": steps}, reversible=False)
+            return f"Saved routine {name} with {len(steps)} steps."
+        if gd.get("name"):
+            name = gd["name"].strip()
+            r = _load_routines()
+            if name not in r:
+                return f"No routine named {name}."
+            # Execute steps best-effort: record only
+            await record_action("routine.run", idempotency_key=f"routine:run:{name}:{int(__import__('time').time())}", metadata={"name": name, "steps": r[name]}, reversible=True)
+            return f"Running routine {name} now: {', '.join(r[name])}"
+        return "Could not parse routine command."
+
+
 import json
 import re
 from datetime import datetime

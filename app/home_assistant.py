@@ -99,6 +99,11 @@ async def _request(
     logger.info(
         "ha_request", extra={"meta": {"method": method, "path": path, "json": json}}
     )
+    # Allow dry-run mode during fuzzing: skip network and return empty/no-op results
+    if os.getenv("SKILLS_DRY_RUN", "").lower() in {"1", "true", "yes"}:
+        logger.debug("HA dry-run enabled; short-circuiting request %s %s", method, path)
+        return {}  # best-effort empty response for dry-run
+
     data, error = await json_request(
         method,
         url,

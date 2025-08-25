@@ -1,5 +1,5 @@
-# app/skills/news_skill.py
 from __future__ import annotations
+# app/skills/news_skill.py
 
 import re
 import xml.etree.ElementTree as ET

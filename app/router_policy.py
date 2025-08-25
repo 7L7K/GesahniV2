@@ -332,6 +332,23 @@ def should_fallback(decision: RoutingDecision) -> bool:
     return False
 
 
+# Per-user LLM fallback rate limiter (rolling window)
+_LLM_FALLBACK_WINDOW_S = int(os.getenv("LLM_FALLBACK_WINDOW_S", "60"))
+_llm_last_call: dict[str, float] = {}
+
+
+def can_user_call_llm(user_id: str | None) -> bool:
+    if user_id is None:
+        # treat anonymous as more restricted
+        return False
+    now = time.time()
+    last = _llm_last_call.get(user_id)
+    if last and (now - last) < _LLM_FALLBACK_WINDOW_S:
+        return False
+    _llm_last_call[user_id] = now
+    return True
+
+
 def get_fallback_decision(decision: RoutingDecision) -> RoutingDecision:
     """
     Get the fallback routing decision.

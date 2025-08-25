@@ -1,5 +1,5 @@
-# app/skills/recipe_skill.py
 from __future__ import annotations
+# app/skills/recipe_skill.py
 
 import re
 

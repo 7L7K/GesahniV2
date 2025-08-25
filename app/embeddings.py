@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Embedding utilities supporting OpenAI and local LLaMA backends.
 
 This module exposes a single :func:`embed` coroutine which returns a vector of
@@ -14,7 +15,6 @@ Simple benchmarking helpers are included to measure latency and throughput of
 repeated embedding calls.
 """
 
-from __future__ import annotations
 
 import asyncio
 import hashlib
@@ -137,7 +137,32 @@ async def _embed_openai(text: str) -> list[float]:
     loop = asyncio.get_running_loop()
     t0 = time.perf_counter()
     try:
-        return await loop.run_in_executor(None, _embed_openai_sync, text, bucket)
+        vec = await loop.run_in_executor(None, _embed_openai_sync, text, bucket)
+        # Flatten any nested structure and ensure length matches EMBED_DIM if set
+        try:
+            from app.config_runtime import CONFIG
+            exp_dim = CONFIG.embed_dim
+        except Exception:
+            exp_dim = int(os.getenv("EMBED_DIM", "1536"))
+
+        # Flatten nested lists (some SDKs return nested arrays)
+        def _flatten(v):
+            out = []
+            for item in v:
+                if isinstance(item, (list, tuple)):
+                    out.extend(_flatten(item))
+                else:
+                    out.append(item)
+            return out
+
+        flat = _flatten(vec)
+        if exp_dim and len(flat) != exp_dim and exp_dim != 0:
+            logger.warning(
+                "embed_dim_mismatch: EMBED_DIM=%s but embedding length=%s",
+                exp_dim,
+                len(flat),
+            )
+        return flat
     finally:
         try:
             EMBEDDING_LATENCY_SECONDS.labels("openai").observe(time.perf_counter() - t0)

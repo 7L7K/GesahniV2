@@ -8,6 +8,7 @@ import re
 from .. import home_assistant as ha
 from .base import Skill
 from .ledger import record_action
+from .parsers import parse_level, resolve_entity
 
 # cache to avoid hitting HA on every call
 _LIGHT_MAP: dict[str, str] | None = None
@@ -76,41 +77,89 @@ class LightsSkill(Skill):
 
         if match and "bright" in match.groupdict():  # brightness intent
             name = match.group("name")
-            level = int(match.group("bright"))
+            level = parse_level(match.group("bright")) or 0
             level = max(0, min(100, level))
-            entity = _match_entity(name, light_map)
-            if not entity:
-                # Rebuild map once in case cache is stale between tests/sessions
-                # Reset the module-level cache safely via name lookup
-                globals()["_LIGHT_MAP"] = None
-                light_map = await _build_light_map()
-                entity = _match_entity(name, light_map)
-            if not entity:
-                return f"Couldn’t find any light matching “{name}”."
+            # resolve entity via shared resolver
+            res = await resolve_entity(name, kind="light")
+            if res.get("action") == "disambiguate":
+                return "disambiguate"
+            entity = res["entity_id"]
+            friendly = res["friendly_name"]
+            # validate parsed slots
+            from .tools.validator import validate_level, validate_entity_resolution
+
+            ok, expl, confirm = validate_entity_resolution(res)
+            if not ok:
+                return expl
+            ok, expl, confirm = validate_level(level)
+            if not ok:
+                return expl
+            # capture previous state for undo
+            prev_state = None
+            prev_brightness = None
+            try:
+                states = await ha.get_states()
+                for s in states:
+                    if s.get("entity_id") == entity:
+                        prev_state = s.get("state")
+                        prev_brightness = (s.get("attributes") or {}).get("brightness")
+                        # convert brightness (0-255) to pct if present
+                        if isinstance(prev_brightness, int):
+                            try:
+                                prev_brightness = int(prev_brightness * 100 / 255)
+                            except Exception:
+                                pass
+                        break
+            except Exception:
+                pass
+
             # guardrails: clamp level and record ledger
             await ha.call_service(
                 "light", "turn_on", {"entity_id": entity, "brightness_pct": level}
             )
-            friendly = await _friendly_name(entity)
             idemp = f"lights:{entity}:set:{level}:{int(time.time()//10)}"
-            await record_action("lights.set", idempotency_key=idemp, metadata={"entity": entity, "level": level}, reversible=True)
+            self.skill_why = f"light.set_brightness: {friendly}={level}%"
+            await record_action(
+                "lights.set",
+                idempotency_key=idemp,
+                metadata={"entity": entity, "level": level, "prev": {"state": prev_state, "brightness": prev_brightness}},
+                reversible=True,
+            )
             return f"Set {friendly} to {level}% brightness."
 
-        # on/off intent
+        # on/off intent - use resolver and validator
         action = match.group(1).lower()
         name = match.group("name")
-        entity = _match_entity(name, light_map)
-        if not entity:
-            globals()["_LIGHT_MAP"] = None
-            light_map = await _build_light_map()
-            entity = _match_entity(name, light_map)
-        if not entity:
-            return f"Couldn’t find any light matching “{name}”."
+        res = await resolve_entity(name, kind="light")
+        if res.get("action") == "disambiguate":
+            return "Which light did you mean? I found multiple matches."
+        entity = res["entity_id"]
+        friendly = res["friendly_name"]
+
+        from .tools.validator import validate_entity_resolution
+
+        ok, expl, confirm = validate_entity_resolution(res)
+        if not ok:
+            return expl
 
         service = "turn_on" if action == "on" else "turn_off"
+        # capture prev state for undo
+        prev_state = None
+        try:
+            states = await ha.get_states()
+            for s in states:
+                if s.get("entity_id") == entity:
+                    prev_state = s.get("state")
+                    break
+        except Exception:
+            pass
+
         await ha.call_service("light", service, {"entity_id": entity})
-        friendly = await _friendly_name(entity)
         idemp = f"lights:{entity}:{service}:{int(time.time()//10)}"
-        await record_action("lights.toggle", idempotency_key=idemp, metadata={"entity": entity, "service": service}, reversible=True)
-        # Natural phrasing
+        await record_action(
+            "lights.toggle",
+            idempotency_key=idemp,
+            metadata={"entity": entity, "service": service, "prev": {"state": prev_state}},
+            reversible=True,
+        )
         return f"Turned {action} {friendly}."

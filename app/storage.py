@@ -169,23 +169,41 @@ def record_ledger(
         )
         rowid = cur.lastrowid
 
-        # Optional debug JSONL export
-        try:
-            _append_debug_jsonl({
-                "id": rowid,
-                "type": type,
-                "skill": skill,
-                "slots": slots or {},
-                "reversible": reversible,
-                "reverse_id": reverse_id,
-                "ts": ts,
-                "idempotency_key": idempotency_key,
-                "user_id": user_id,
-            })
-        except Exception:
-            pass
-
+        # Do NOT write JSONL here. JSONL is export-only and must be generated
+        # from SQLite on demand to avoid dual-write drift.
         return True, int(rowid)
+
+
+def export_ledger_jsonl(target_path: Path) -> None:
+    """Export the entire ledger table to a newline-delimited JSON file.
+
+    This is an export-only helper; production writes must go to SQLite only.
+    """
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with _conn(LEDGER_DB) as c:
+            rows = c.execute("SELECT * FROM ledger ORDER BY ts ASC").fetchall()
+            with open(target_path, "w", encoding="utf-8") as f:
+                for r in rows:
+                    try:
+                        f.write(json.dumps({k: r[k] for k in r.keys()}, ensure_ascii=False) + "\n")
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+
+
+def link_reverse(forward_id: int, reverse_id: int) -> None:
+    """Link a forward ledger entry to its reverse by updating reverse_id.
+
+    Best-effort; used when an undo is recorded so forward.reverse_id points to
+    the undo row.
+    """
+    try:
+        with _conn(LEDGER_DB) as c:
+            c.execute("UPDATE ledger SET reverse_id = ? WHERE id = ?", (reverse_id, forward_id))
+    except Exception:
+        pass
 
 
 def add_note(text: str, tags: Optional[List[str]] = None, pinned: bool = False) -> int:

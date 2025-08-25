@@ -1,6 +1,6 @@
+from __future__ import annotations
 """Utility helpers for vector store modules."""
 
-from __future__ import annotations
 
 import hashlib
 import logging

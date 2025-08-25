@@ -1,6 +1,6 @@
+from __future__ import annotations
 """Unified vector store factory using VECTOR_DSN configuration."""
 
-from __future__ import annotations
 
 import logging
 import os

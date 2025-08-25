@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Harvest stable phrases for aliases and propose suggestions.
 
@@ -5,7 +6,6 @@ Heuristic: find repeated free-text mentions that map to the same entity via
 alias_store or HA resolution and propose an alias if repeated >= 3 times.
 """
 
-from __future__ import annotations
 
 from typing import Any, Dict, List
 

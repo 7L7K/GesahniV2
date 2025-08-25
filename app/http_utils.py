@@ -1,6 +1,7 @@
 import asyncio
 import importlib
 import logging
+import os
 from functools import wraps
 
 import httpx
@@ -62,22 +63,24 @@ async def json_request(
                 httpx_module = getattr(llama_module, "httpx", httpx_module)
             except Exception:  # pragma: no cover - fallback if import fails
                 pass
-            timeout = kwargs.pop("timeout", 10.0)
+            # Global default timeout; allow override via kwargs
+            timeout = kwargs.pop("timeout", float(os.getenv("HTTPX_TIMEOUT_S", "2.0")))
             factory = httpx_module.AsyncClient
             try:
                 cm = factory(timeout=timeout)
             except TypeError:
                 cm = factory()
+            # Wrap outbound calls with asyncio.wait_for to enforce global deadline
             async with cm as client:
                 # Create a client span around outbound call
                 with start_span(
                     "http.client", {"http.method": method, "http.url": url}
                 ):
                     if hasattr(client, "request"):
-                        resp = await client.request(method, url, **kwargs)
+                        resp = await asyncio.wait_for(client.request(method, url, **kwargs), timeout=timeout)
                     else:  # pragma: no cover - testing hooks
                         func = getattr(client, method.lower())
-                        resp = await func(url, **kwargs)
+                        resp = await asyncio.wait_for(func(url, **kwargs), timeout=timeout)
             resp.raise_for_status()
             try:
                 return resp.json(), None

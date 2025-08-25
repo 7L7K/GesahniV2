@@ -34,6 +34,9 @@ async def record_action(
         idempotency_key=idempotency_key,
         user_id=user_id,
     )
+    # Convert storage-layer rowid into usable reverse_id linkage: the storage
+    # API returns (inserted, rowid). We return True/False for backwards
+    # compatibility, but callers that need the rowid should use storage.record_ledger
     return bool(inserted)
 
 

@@ -6,6 +6,9 @@ import re
 
 from .. import home_assistant as ha
 from .base import Skill
+from .parsers import resolve_entity
+from ..music.orchestrator import MusicOrchestrator
+from ..music.providers.spotify_provider import SpotifyProvider
 
 _MAP_PATH = pathlib.Path(__file__).with_name("artist_map.json")
 try:
@@ -38,12 +41,23 @@ class MusicSkill(Skill):
             return f"Playing {artist}"
 
         action = match.group(1).lower() if match.groups() else "play"
-        service = (
-            "media_play"
-            if action == "play"
-            else ("media_pause" if action == "pause" else "media_stop")
-        )
-        await ha.call_service(
-            "media_player", service, {"entity_id": "media_player.house"}
-        )
-        return f"Music {action}ed"
+        # Use orchestrator for general play/pause if available; fall back to HA service
+        provider = SpotifyProvider()
+        orch = MusicOrchestrator(provider=provider)
+        try:
+            if action == "play":
+                await orch.play("media_player.house", {})
+            elif action == "pause":
+                await orch.pause("media_player.house")
+            else:
+                await ha.call_service("media_player", "media_stop", {"entity_id": "media_player.house"})
+            return f"Music {action}ed"
+        except Exception:
+            # best-effort fallback to HA
+            service = (
+                "media_play"
+                if action == "play"
+                else ("media_pause" if action == "pause" else "media_stop")
+            )
+            await ha.call_service("media_player", service, {"entity_id": "media_player.house"})
+            return f"Music {action}ed (via HA fallback)"

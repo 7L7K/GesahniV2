@@ -1,10 +1,10 @@
+from __future__ import annotations
 """Per-user budget guardrails: track usage and apply soft caps.
 
 - Tracks daily prompt+completion tokens and rough minutes.
 - When 80% of quota reached, lowers reply_len_target and disables escalations.
 """
 
-from __future__ import annotations
 
 import os
 import time

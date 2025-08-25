@@ -1,6 +1,6 @@
+from __future__ import annotations
 # app/skills/weather_skill.py
 
-from __future__ import annotations
 
 import logging
 import os

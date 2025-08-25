@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Authentication and rate limiting helpers.
 
 This module is intentionally lightweight so that tests can monkey‑patch the
@@ -6,7 +7,6 @@ compatible ``_apply_rate_limit`` helper is provided because older tests interact
 with it directly.
 """
 
-from __future__ import annotations
 
 import asyncio
 import datetime as _dt

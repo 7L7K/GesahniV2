@@ -15,6 +15,14 @@ class ClimateSkill(Skill):
     async def run(self, prompt: str, match: re.Match) -> str:
         if match.re.pattern.startswith("set"):
             temp = int(match.group(1))
+            # validate temperature change
+            from .tools.validator import validate_temperature
+
+            ok, expl, confirm = validate_temperature(temp)
+            if not ok:
+                if confirm:
+                    return "Action requires confirmation."
+                return expl
             await ha.call_service(
                 "climate",
                 "set_temperature",

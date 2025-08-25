@@ -1,5 +1,5 @@
-# app/skills/entities_skill.py
 from __future__ import annotations
+# app/skills/entities_skill.py
 
 import logging
 import re

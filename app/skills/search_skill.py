@@ -1,5 +1,5 @@
-# app/skills/search_skill.py
 from __future__ import annotations
+# app/skills/search_skill.py
 
 import re
 
