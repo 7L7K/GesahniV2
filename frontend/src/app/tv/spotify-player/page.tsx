@@ -23,7 +23,8 @@ export default function TVSpotifyPlayer() {
         window.onSpotifyWebPlaybackSDKReady = async () => {
             setStatus('Initializing…');
             // Get a short-lived access token for the SDK (from purpose-built endpoint)
-            const r = await fetch('/v1/spotify/token-for-sdk', { credentials: 'include' });
+            const { apiFetch } = await import('@/lib/api');
+            const r = await apiFetch('/v1/spotify/token-for-sdk', { credentials: 'include', auth: true });
             const j = await r.json();
             if (!j.ok || !j.access_token) {
                 setStatus('Not connected or token missing.');
@@ -40,11 +41,12 @@ export default function TVSpotifyPlayer() {
             player.addListener('ready', ({ device_id }: any) => {
                 setStatus(`Ready • Device ${device_id}`);
                 // Optionally: call /v1/spotify/play to target this device_id automatically
-                fetch('/v1/spotify/play', {
+                apiFetch('/v1/spotify/play', {
                     method: 'POST',
                     credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ device_id }),
+                    auth: true,
                 }).catch(() => { });
             });
 

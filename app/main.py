@@ -13,7 +13,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
@@ -37,9 +37,20 @@ import jwt as _pyjwt
 
 import app.skills  # populate SKILLS
 
-from .home_assistant import startup_check as ha_startup
-from .llama_integration import startup_check as llama_startup
 from .logging_config import configure_logging, req_id_var
+
+# Backward-compat shims: some tests expect these names on app.main
+try:  # optional import for tests/monkeypatching
+    from .home_assistant import startup_check as ha_startup  # type: ignore
+except Exception:  # pragma: no cover - optional
+    def ha_startup():  # type: ignore
+        return None
+
+try:
+    from .llama_integration import startup_check as llama_startup  # type: ignore
+except Exception:  # pragma: no cover - optional
+    def llama_startup():  # type: ignore
+        return None
 
 # Patch PyJWT decode to apply a sane default clock skew across the app
 _PYJWT_DECODE_ORIG = getattr(_pyjwt, "decode", None)
@@ -76,25 +87,28 @@ try:
 except Exception:
     _oauth_apple_router = None  # type: ignore
 
+"""Optional Apple auth stub import (router mounted later once app exists)."""
 try:
-    from app.auth_providers import apple_enabled
-
-    if apple_enabled():
-        from app.api.oauth_apple_stub import router as apple_stub_router
-
-        app.include_router(apple_stub_router)  # unversioned include for dev convenience
-        app.include_router(
-            apple_stub_router, prefix="/v1"
-        )  # versioned include for tests
+    from app.auth_providers import apple_enabled  # type: ignore
 except Exception:
-    pass
+    # In environments without auth providers, default to disabled
+    def apple_enabled() -> bool:  # type: ignore
+        return False
+
+# Try to import the stub router but do NOT mount it before `app` exists
+try:
+    from app.api.oauth_apple_stub import router as apple_stub_router  # type: ignore
+except Exception:
+    apple_stub_router = None  # type: ignore
 try:
     from .api.auth_password import router as auth_password_router
 except Exception:
     auth_password_router = None  # type: ignore
 try:
     from .api.music import router as music_router
-except Exception:
+    logging.debug("Music router imported successfully")
+except Exception as e:
+    logging.warning(f"Music router import failed: {e}")
     music_router = None  # type: ignore
 try:
     from .auth_device import router as device_auth_router
@@ -856,7 +870,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Granny Mode API",
+    title="GesahniV2 API",
     version=_get_version(),
     lifespan=lifespan,
     openapi_tags=tags_metadata,
@@ -1126,8 +1140,9 @@ if _safe_import_router("from .api.metrics import router as metrics_simple_router
     app.include_router(metrics_simple_router)
 
 if _safe_import_router("from .health import router as health_diag_router", "health_diag"):
-    # Vector-store health diagnostics (e.g., /v1/health/chroma)
-    app.include_router(health_diag_router, prefix="/v1")
+    # Mount diagnostics under a non-conflicting prefix to avoid shadowing /v1/health/*
+    # expected by tests (api.health).
+    app.include_router(health_diag_router, prefix="/v1/diag")
 
 # =============================================================================
 # EXISTING EXTERNAL ROUTERS - Keep in modern-first order
@@ -1175,6 +1190,15 @@ app.include_router(google_oauth_router, prefix="/v1")
 app.include_router(auth_router, prefix="/v1")
 if _oauth_apple_router is not None:
     app.include_router(_oauth_apple_router, prefix="/v1")
+# Mount Apple OAuth stub for local/dev when enabled, now that `app` exists
+try:
+    if apple_enabled() and apple_stub_router is not None:  # type: ignore[name-defined]
+        # Unversioned for convenience and versioned for tests/clients
+        app.include_router(apple_stub_router)  # type: ignore[arg-type]
+        app.include_router(apple_stub_router, prefix="/v1")  # type: ignore[arg-type]
+except Exception:
+    # Non-fatal if unavailable
+    pass
 if auth_password_router is not None:
     app.include_router(auth_password_router, prefix="/v1")
 
@@ -1240,6 +1264,25 @@ if _safe_import_router("from .api.devices import router as devices_router", "dev
 if _safe_import_router("from .api.spotify_sdk import router as spotify_sdk", "spotify_sdk"):
     # spotify_sdk router defines its own prefix (/v1/spotify)
     app.include_router(spotify_sdk)
+
+# Spotify OAuth router for login and callback
+if _safe_import_router("from .api.spotify import router as spotify_router", "spotify"):
+    app.include_router(spotify_router, prefix="/v1")
+if _safe_import_router("from .api.spotify_player import router as spotify_player_router", "spotify_player"):
+    # spotify_player router already includes /v1/spotify prefix
+    app.include_router(spotify_player_router)
+
+# Integrations status endpoint (aggregate third-party connection states)
+if _safe_import_router("from .api.integrations_status import router as integrations_status_router", "integrations_status"):
+    app.include_router(integrations_status_router, prefix="/v1")
+
+# Selftest router
+if _safe_import_router("from .api.selftest import router as selftest_router", "selftest"):
+    app.include_router(selftest_router, prefix="/v1")
+
+# Whoami (explicit auth probe)
+if _safe_import_router("from .api.whoami import router as whoami_router", "whoami"):
+    app.include_router(whoami_router, prefix="/v1")
 
 # app.api.auth already included once above; do not include again
 
@@ -1341,6 +1384,28 @@ if music_router is not None:
     if _safe_import_router("from .api.tv_music_sim import router as tv_music_sim_router", "tv_music_sim"):
         app.include_router(tv_music_sim_router, prefix="/v1")
 
+    # Add /v1/state endpoint directly to main app
+    # This fixes the 404 error when frontend tries to access /v1/state
+    try:
+        from .api.music import get_state as music_get_state
+        from .deps.user import get_current_user_id
+        from fastapi import Request, Response
+
+        @app.get("/v1/state")
+        async def get_music_state(
+            request: Request,
+            response: Response,
+            user_id: str = Depends(get_current_user_id)
+        ):
+            """Direct proxy to music state endpoint to fix frontend 404 errors."""
+            return await music_get_state(request, response, user_id)
+
+        logging.info("Successfully added /v1/state endpoint")
+    except Exception as e:
+        logging.warning(f"Could not add /v1/state endpoint: {e}")
+
+
+
 
 
 # Idempotent middleware registration helper
@@ -1424,12 +1489,12 @@ def _assert_middleware_order_dev(app):
         # Optional dev middleware (in reverse order since they're added later)
         *(
             ["SilentRefreshMiddleware"]
-            if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1", "true", "yes"}
+            if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1", "true", "yes", "on"}
             else []
         ),
         *(
             ["ReloadEnvMiddleware"]
-            if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes"}
+            if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
             else []
         ),
         "CSRFMiddleware",

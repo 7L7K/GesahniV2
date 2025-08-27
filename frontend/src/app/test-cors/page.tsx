@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { apiFetch } from '@/lib/api';
 
 interface TestResult {
     name: string;
@@ -21,11 +22,12 @@ export default function CorsTestPage() {
 
             // Test 1: Backend Health Check
             try {
-                const response = await fetch(`${process.env.NEXT_PUBLIC_API_ORIGIN || 'http://localhost:8000'}/healthz/ready`, {
+                const response = await apiFetch('/healthz/ready', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
-                    }
+                    },
+                    auth: false,
                 });
 
                 if (response.ok) {
@@ -79,11 +81,14 @@ export default function CorsTestPage() {
 
             // Test 3: API State Endpoint
             try {
-                const response = await fetch(`${process.env.NEXT_PUBLIC_API_ORIGIN || 'http://localhost:8000'}/v1/state`, {
+                const response = await apiFetch('/v1/state', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
-                    }
+                    },
+                    // Force unauthenticated request to validate 401 path
+                    auth: false,
+                    credentials: 'omit',
                 });
 
                 if (response.status === 401) {

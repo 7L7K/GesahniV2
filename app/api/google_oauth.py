@@ -293,7 +293,7 @@ async def google_login_url(request: Request) -> Response:
         oauth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
         # Create JSON response with state cookie
-        response_data = {"auth_url": oauth_url}
+        response_data = {"url": oauth_url}
 
         # Set OAuth state cookie using centralized cookie surface
         # Create a Response object to set the cookie
@@ -428,6 +428,23 @@ async def google_callback(request: Request) -> Response:
                 "has_state": bool(state),
                 "code_length": len(code) if code else 0,
                 "state_length": len(state) if state else 0,
+            }
+        },
+    )
+
+    # Sanity checks for cookie presence (cross-site-redirect friendly)
+    cookie_header = request.headers.get('cookie')
+    logger.info(
+        "OAuth callback cookie sanity check",
+        extra={
+            "meta": {
+                "req_id": req_id,
+                "component": "google_oauth",
+                "msg": "callback_cookie_check",
+                "hostname": getattr(request.url, 'hostname', None),
+                "cookie_header_is_none": cookie_header is None,
+                "cookie_header_length": len(cookie_header) if cookie_header else 0,
+                "cookie_header_present": bool(cookie_header and len(cookie_header) > 0),
             }
         },
     )

@@ -113,8 +113,15 @@ def test_401_handling():
         response = requests.get(f"{BASE_URL}/v1/state", timeout=5)
         print(f"GET /v1/state (no auth) - Status: {response.status_code}")
 
+        # The music endpoints require authentication, so they should return 401
         if response.status_code == 401:
             print_result("protected_endpoint_returns_401", True)
+        elif response.status_code == 404:
+            print_result("protected_endpoint_returns_401", False, f"404 suggests music router not mounted. Check main.py imports.")
+            return  # Don't continue if endpoint not found
+        else:
+            print_result("protected_endpoint_returns_401", False, f"Expected 401, got {response.status_code}")
+            return  # Don't continue if status is not 401
 
             # Check response headers for CORS
             cors_origin = response.headers.get("Access-Control-Allow-Origin")
@@ -142,13 +149,6 @@ def test_401_handling():
                 print_result("401_body_is_json", True)
             except:
                 print_result("401_body_is_json", False, "Could not parse as JSON")
-
-        else:
-            print_result(
-                "protected_endpoint_returns_401",
-                False,
-                f"Status: {response.status_code}",
-            )
 
     except Exception as e:
         print_result("protected_endpoint_test", False, str(e))
@@ -215,9 +215,9 @@ def test_login_flow():
 
     # Test login endpoint
     try:
-        login_data = {"username": "testuser", "password": "testpass"}
-        response = requests.post(f"{BASE_URL}/login", json=login_data, timeout=5)
-        print(f"POST /login - Status: {response.status_code}")
+        # Use the correct endpoint path
+        response = requests.post(f"{BASE_URL}/v1/auth/login?username=testuser", timeout=5)
+        print(f"POST /v1/auth/login - Status: {response.status_code}")
 
         if response.status_code == 200:
             data = response.json()
@@ -245,7 +245,7 @@ def test_login_flow():
 
         else:
             print_result(
-                "login_endpoint_works", False, f"Status: {response.status_code}"
+                "login_endpoint_works", False, f"Status: {response.status_code} - Expected 200"
             )
 
     except Exception as e:

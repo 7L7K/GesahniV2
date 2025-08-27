@@ -15,7 +15,16 @@ export default function IntegrationsPage() {
             <section className="space-y-2">
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold">Spotify</h2>
-                    <a href="/(settings)/spotify/connect" className="text-sm underline">
+                    <a
+                        href="/spotify/connect"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm underline"
+                        onClick={() => {
+                            console.log('🎵 INTEGRATIONS PAGE: Spotify connect link clicked');
+                            console.log('🎵 INTEGRATIONS PAGE: Opening URL:', '/spotify/connect');
+                        }}
+                    >
                         Connect / Reconnect
                     </a>
                 </div>

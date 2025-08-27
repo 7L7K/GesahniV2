@@ -49,6 +49,32 @@ from .cookie_names import (
 )
 
 
+def set_auth_cookie(resp: Response, name: str, value: str, max_age: int):
+    """
+    Set a single auth cookie with dev-friendly attributes for cross-site redirects.
+
+    Host-only cookie (no Domain=), Path=/, SameSite=Lax, Secure=False for dev,
+    HttpOnly=True. Lax is enough for top-level redirects like OAuth.
+
+    Args:
+        resp: FastAPI Response object
+        name: Cookie name
+        value: Cookie value
+        max_age: Max age in seconds
+    """
+    # Host-only cookie: omit Domain=
+    resp.set_cookie(
+        key=name,
+        value=value,
+        max_age=max_age,
+        expires=max_age,
+        path="/",
+        httponly=True,
+        secure=False,  # dev only; prod True
+        samesite="lax",  # allows top-level OAuth redirect to send cookie
+    )
+
+
 def set_auth_cookies(
     resp: Response,
     *,
@@ -500,65 +526,19 @@ def clear_named_cookie(
     resp.headers.append("Set-Cookie", header)
 
 
-def _set_cookie(
-    resp: Response,
-    name: str,
-    value: str,
-    *,
-    request: Request,
-    ttl: int | None,
-    http_only: bool,
-    same_site: str | None = None,
-) -> None:
-    """Base cookie setter with centralized configuration."""
-    cookie_config = get_cookie_config(request)
-    resp.set_cookie(
-        key=name,
-        value=value,
-        max_age=ttl,
-        secure=cookie_config["secure"],
-        samesite=same_site
-        or cookie_config[
-            "samesite"
-        ],  # 'Lax' or 'None'; prod https => None if cross-site
-        httponly=http_only,
-        path=cookie_config["path"],
-        domain=cookie_config["domain"],  # may be None in dev
-    )
 
 
-def set_session_cookie(
-    resp: Response, token: str, *, request: Request, ttl: int
-) -> None:
-    """Set HttpOnly session cookie."""
-    _set_cookie(resp, "session", token, request=request, ttl=ttl, http_only=True)
 
 
-def set_refresh_cookie(
-    resp: Response, token: str, *, request: Request, ttl: int
-) -> None:
-    """Set HttpOnly refresh token cookie."""
-    _set_cookie(resp, "refresh", token, request=request, ttl=ttl, http_only=True)
 
 
-def set_csrf_cookie(resp: Response, token: str, *, request: Request, ttl: int) -> None:
-    """Set CSRF cookie (intentionally NOT HttpOnly for double-submit pattern)."""
-    _set_cookie(resp, "csrf", token, request=request, ttl=ttl, http_only=False)
 
 
-def set_oauth_state_cookie(
-    resp: Response, token: str, *, request: Request, ttl: int = 600
-) -> None:
-    """Set OAuth state cookie with Lax SameSite for security."""
-    _set_cookie(
-        resp,
-        "oauth_state",
-        token,
-        request=request,
-        ttl=ttl,
-        http_only=True,
-        same_site="Lax",
-    )
+
+
+
+
+
 
 
 def get_cookie(request: Request, name: str) -> str | None:
@@ -572,6 +552,7 @@ def get_cookie(request: Request, name: str) -> str | None:
 
 # Export all cookie facade functions
 __all__ = [
+    "set_auth_cookie",
     "set_auth_cookies",
     "clear_auth_cookies",
     "set_oauth_state_cookies",
@@ -582,8 +563,4 @@ __all__ = [
     "clear_device_cookie",
     "set_named_cookie",
     "clear_named_cookie",
-    "_set_cookie",
-    "set_session_cookie",
-    "set_refresh_cookie",
-    "set_oauth_state_cookie",
 ]

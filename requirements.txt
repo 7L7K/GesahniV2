@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 httpx
+aiohttp
 jinja2
 PyJWT
 passlib[bcrypt]

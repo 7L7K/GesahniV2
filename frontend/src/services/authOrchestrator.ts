@@ -302,6 +302,14 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
             return;
         }
 
+        // Check if we have any tokens to work with
+        const hasToken = Boolean(getToken());
+        if (!hasToken) {
+            console.warn('AUTH Orchestrator: refreshAuth called but no token available');
+            // Don't clear tokens or redirect - let the auth flow handle it
+            return;
+        }
+
         // Clear any pending debounced calls
         if (this.debounceTimer) {
             clearTimeout(this.debounceTimer);

@@ -119,8 +119,11 @@ if (typeof console !== 'undefined') {
 
 // --- Auth token helpers ------------------------------------------------------
 export function getToken(): string | null {
-  // Cookie-mode only: do not use localStorage access tokens. Return null.
-  return null;
+  // Access token is stored in localStorage when present
+  try {
+    const t = getLocalStorage('auth:access');
+    return t && t.length > 0 ? t : null;
+  } catch { return null; }
 }
 
 export function getRefreshToken(): string | null {
@@ -265,8 +268,15 @@ export function useSessionState() {
 }
 
 function authHeaders() {
-  // Cookie-mode: do not send Authorization header; backend reads cookies
-  return {};
+  // Attach Authorization if access token is present (safe alongside cookies)
+  try {
+    const tok = getToken();
+    if (tok) {
+      return { Authorization: `Bearer ${tok}` } as Record<string, string>;
+    }
+  } catch { /* noop */ }
+  // Cookie mode or no token: rely on cookies
+  return {} as Record<string, string>;
 }
 
 // Header mode: no refresh endpoint calls - redirect to sign-in on 401
@@ -302,15 +312,22 @@ export async function apiFetch(
   const isHeaderMode = process.env.NEXT_PUBLIC_HEADER_AUTH_MODE === '1';
   const isOAuthEndpoint = path.includes('/google/auth/login_url') || path.includes('/google/auth/callback');
   const isWhoamiEndpoint = path.includes('/whoami');
+  const isAuthEndpoint = (
+    path.includes('/login') ||
+    path.includes('/register') ||
+    path.includes('/logout') ||
+    path.includes('/refresh') ||
+    isWhoamiEndpoint
+  );
 
   // For OAuth endpoints and whoami, always use credentials: 'include' for cookie mode
   // For header mode, use credentials: 'omit' by default, but allow override
   let defaultCredentials: RequestCredentials;
-  if (isOAuthEndpoint || isWhoamiEndpoint) {
-    // OAuth and whoami endpoints need credentials for cookie-based auth
+  if (isOAuthEndpoint || isAuthEndpoint) {
+    // Auth flows (login/register/logout/whoami/refresh) and OAuth should include cookies
     defaultCredentials = 'include';
   } else if (isHeaderMode) {
-    // Header mode defaults to omit credentials
+    // Header mode defaults to omit credentials for non-auth endpoints
     defaultCredentials = 'omit';
   } else {
     // Cookie mode defaults to include credentials
@@ -330,7 +347,26 @@ export async function apiFetch(
   const url = isAbsolute ? path : `${base}${path}`;
 
   // Enhanced logging for auth-related requests
-  const isAuthRequest = path.includes('/login') || path.includes('/register') || path.includes('/whoami') || path.includes('/refresh') || path.includes('/logout');
+  const isAuthRequest = isAuthEndpoint;
+  const isSpotifyRequest = path.includes('/spotify/');
+
+  if (isSpotifyRequest) {
+    console.log('🎵 API_FETCH spotify.request', {
+      path,
+      method: rest.method || 'GET',
+      auth,
+      isPublicEndpoint,
+      credentials,
+      dedupe,
+      isAbsolute,
+      base,
+      url,
+      hasBody: !!rest.body,
+      bodyLength: rest.body ? rest.body.length : 0,
+      timestamp: new Date().toISOString()
+    });
+  }
+
   if (isAuthRequest) {
     console.info('API_FETCH auth.request', {
       path,
@@ -369,7 +405,8 @@ export async function apiFetch(
   if (auth) Object.assign(mergedHeaders as Record<string, string>, authHeaders());
 
   // Handle CSRF token for mutating requests (POST/PUT/PATCH/DELETE)
-  if (hasMethodBody && auth) {
+  // Send CSRF for authenticated requests and for auth endpoints (login/register/logout)
+  if (hasMethodBody && (auth || isAuthRequest)) {
     try {
       const csrfToken = await getCsrfToken();
       if (csrfToken) {
@@ -420,6 +457,18 @@ export async function apiFetch(
     res = await fetch(url, { ...rest, headers: mergedHeaders, credentials });
   }
 
+  if (isSpotifyRequest) {
+    console.log('🎵 API_FETCH spotify.response', {
+      path,
+      status: res.status,
+      statusText: res.statusText,
+      ok: res.ok,
+      contentType: res.headers.get('content-type'),
+      contentLength: res.headers.get('content-length'),
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   if (isAuthRequest) {
     console.info('API_FETCH auth.response', {
       path,
@@ -454,14 +503,46 @@ export async function apiFetch(
       });
     }
 
-    // In header mode, 401 means access token is missing or expired
-    // Clear tokens and redirect to sign-in
-    clearTokens();
-    if (typeof document !== "undefined") {
+    // Only treat 401 as "user logged out" for authentication endpoints
+    // For other endpoints, it might be a scope/permission issue, not authentication
+    const isAuthCheckEndpoint = path.includes('/whoami') || path.includes('/me') || path.includes('/profile');
+
+    if (isAuthCheckEndpoint) {
+      console.warn('API_FETCH auth.401_auth_endpoint - clearing tokens and redirecting', {
+        path,
+        timestamp: new Date().toISOString(),
+      });
+
+      // In header mode, 401 on auth endpoints means access token is missing or expired
+      clearTokens();
+      if (typeof document !== "undefined") {
+        try {
+          // Redirect to sign-in page
+          window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+        } catch { /* ignore SSR errors */ }
+      }
+    } else {
+      console.warn('API_FETCH auth.401_non_auth_endpoint - not clearing tokens, likely scope/permission issue', {
+        path,
+        timestamp: new Date().toISOString(),
+      });
+
+      // For non-auth endpoints, trigger auth refresh instead of full logout
+      // This allows the user to stay logged in while fixing the issue
       try {
-        // Redirect to sign-in page
-        window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
-      } catch { /* ignore SSR errors */ }
+        const { getAuthOrchestrator } = await import('@/services/authOrchestrator');
+        const authOrchestrator = getAuthOrchestrator();
+        await authOrchestrator.refreshAuth();
+      } catch (authError) {
+        console.error('Failed to refresh authentication state:', authError);
+        // If refresh fails, then redirect to login
+        clearTokens();
+        if (typeof document !== "undefined") {
+          try {
+            window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+          } catch { /* ignore SSR errors */ }
+        }
+      }
     }
   }
   return res;
@@ -799,13 +880,24 @@ export async function sendPrompt(
 
 export async function login(username: string, password: string) {
   const res = await apiFetch("/v1/login", { method: "POST", body: JSON.stringify({ username, password }) });
-  const body = await res.json().catch(() => ({} as Record<string, unknown>));
+  const body = await res.json().catch(() => null);
   if (!res.ok) {
-    const detail = (body?.detail || body?.error || "Login failed");
+    const detail = (body && (body.detail || body.error)) || "Login failed";
     const message = typeof detail === "string" ? detail : JSON.stringify(detail);
     throw new Error(message || "Login failed");
   }
+
+  // Validate response structure
+  if (!body || typeof body !== 'object') {
+    throw new Error("Login failed: Invalid response format");
+  }
+
   const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string };
+  if (!access_token) {
+    console.error('Login response missing access_token:', { body, bodyType: typeof body });
+    throw new Error("Login failed: No access token received");
+  }
+
   if (access_token) setTokens(access_token, refresh_token);
   // Bump the auth epoch to invalidate short caches and switch namespace immediately.
   bumpAuthEpoch();

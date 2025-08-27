@@ -6,19 +6,25 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "")
 
-# space-separated
+# space-separated - basic scopes for sign-in + optional Google services
 _SCOPES_DEFAULT = (
     "openid https://www.googleapis.com/auth/userinfo.email "
     "https://www.googleapis.com/auth/userinfo.profile "
-    "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar.events"
+    "https://www.googleapis.com/auth/gmail.send "
+    "https://www.googleapis.com/auth/calendar.events"
 )
 
 
 def get_google_scopes() -> list[str]:
     """Return Google OAuth scopes from env or sensible defaults.
 
-    Uses userinfo.* scopes to align with Google's token response and avoid
-    oauthlib "scope_changed" warnings.
+    Includes:
+    - openid, email, profile: Basic sign-in and user identification
+    - gmail.send: For sending emails via Gmail API
+    - calendar.events: For creating calendar events via Google Calendar API
+
+    Override with GOOGLE_SCOPES env var to customize permissions.
+    Set to "openid email profile" for minimal scopes if Google services not needed.
     """
     return os.getenv("GOOGLE_SCOPES", _SCOPES_DEFAULT).split()
 

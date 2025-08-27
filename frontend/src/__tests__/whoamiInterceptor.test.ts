@@ -77,8 +77,9 @@ describe('Whoami Interceptor', () => {
     });
 
     it('should warn when direct fetch calls are made to whoami', async () => {
-        // Make a direct fetch call (this should trigger the warning)
-        fetch('/v1/whoami');
+        // Make a direct apiFetch call (this should trigger the warning)
+        const { apiFetch } = await import('@/lib/api');
+        apiFetch('/v1/whoami');
 
         // Verify that the warning was logged
         expect(consoleWarnSpy).toHaveBeenCalledWith(
@@ -91,8 +92,9 @@ describe('Whoami Interceptor', () => {
     });
 
     it('should allow other fetch calls to pass through without warning', () => {
-        // Make a fetch call to a different endpoint
-        fetch('/v1/state');
+        // Make a apiFetch call to a different endpoint
+        const { apiFetch } = await import('@/lib/api');
+        apiFetch('/v1/state');
 
         // Verify that no warning was logged
         expect(consoleWarnSpy).not.toHaveBeenCalledWith(

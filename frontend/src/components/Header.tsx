@@ -148,6 +148,27 @@ export default function Header() {
                         >
                             TV
                         </Link>
+                        <Link
+                            href="/settings"
+                            className={`transition-colors hover:text-foreground/80 ${pathname === "/settings" ? "text-foreground" : "text-foreground/60"
+                                }`}
+                        >
+                            Settings
+                        </Link>
+                        <Link
+                            href="/admin"
+                            className={`transition-colors hover:text-foreground/80 ${pathname === "/admin" ? "text-foreground" : "text-foreground/60"
+                                }`}
+                        >
+                            Admin
+                        </Link>
+                        <Link
+                            href="/debug"
+                            className={`transition-colors hover:text-foreground/80 ${pathname === "/debug" ? "text-foreground" : "text-foreground/60"
+                                }`}
+                        >
+                            Debug
+                        </Link>
                     </nav>
                 </div>
                 <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">

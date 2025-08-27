@@ -62,12 +62,12 @@ class TestAuthCookies:
 
         # Get all cookie headers that were set
         cookie_calls = [call.args[1] for call in response.headers.append.call_args_list]
-        access_cookie = next(c for c in cookie_calls if "access_token=" in c)
-        refresh_cookie = next(c for c in cookie_calls if "refresh_token=" in c)
-        session_cookie = next(c for c in cookie_calls if "__session=" in c)
+        access_cookie = next(c for c in cookie_calls if "GSNH_AT=" in c)
+        refresh_cookie = next(c for c in cookie_calls if "GSNH_RT=" in c)
+        session_cookie = next(c for c in cookie_calls if "GSNH_SESS=" in c)
 
         # Verify cookie contents
-        assert "access_token=access_token_123" in access_cookie
+        assert "GSNH_AT=access_token_123" in access_cookie
         assert "Max-Age=1800" in access_cookie
         assert "HttpOnly" in access_cookie
         assert "Path=/" in access_cookie
@@ -76,12 +76,12 @@ class TestAuthCookies:
         assert "Priority=High" in access_cookie
         assert "Domain=" not in access_cookie
 
-        assert "refresh_token=refresh_token_456" in refresh_cookie
+        assert "GSNH_RT=refresh_token_456" in refresh_cookie
         assert "Max-Age=86400" in refresh_cookie
         assert "Priority=High" in refresh_cookie
 
         # Session cookie uses access_ttl (not refresh_ttl)
-        assert "__session=session_789" in session_cookie
+        assert "GSNH_SESS=session_789" in session_cookie
         assert "Max-Age=1800" in session_cookie  # Same as access_ttl
 
     def test_set_auth_cookies_no_refresh(self):
@@ -115,9 +115,9 @@ class TestAuthCookies:
         assert response.headers.append.call_count == 2
         cookie_calls = [call.args[1] for call in response.headers.append.call_args_list]
         cookie_names = [c.split("=")[0] for c in cookie_calls]
-        assert "access_token" in cookie_names
-        assert "__session" in cookie_names
-        assert "refresh_token" not in cookie_names
+        assert "GSNH_AT" in cookie_names
+        assert "GSNH_SESS" in cookie_names
+        assert "GSNH_RT" not in cookie_names
 
     def test_set_auth_cookies_no_session(self):
         """Test setting auth cookies without session ID."""
@@ -150,9 +150,9 @@ class TestAuthCookies:
         assert response.headers.append.call_count == 2
         cookie_calls = [call.args[1] for call in response.headers.append.call_args_list]
         cookie_names = [c.split("=")[0] for c in cookie_calls]
-        assert "access_token" in cookie_names
-        assert "refresh_token" in cookie_names
-        assert "__session" not in cookie_names
+        assert "GSNH_AT" in cookie_names
+        assert "GSNH_RT" in cookie_names
+        assert "GSNH_SESS" not in cookie_names
 
     def test_clear_auth_cookies(self):
         """Test clearing authentication cookies with Max-Age=0."""
@@ -173,8 +173,8 @@ class TestAuthCookies:
 
             clear_auth_cookies(response, request)
 
-        # Verify all three cookies are cleared
-        assert response.headers.append.call_count == 3
+        # Verify all cookies are cleared (canonical + legacy names after deduplication)
+        assert response.headers.append.call_count == 6  # 3 canonical + 3 legacy
         cookie_calls = [call.args[1] for call in response.headers.append.call_args_list]
 
         # All cookies should have Max-Age=0 and empty values

@@ -7,6 +7,7 @@ import sqlite3
 from typing import Optional
 
 from .models.third_party_tokens import ThirdPartyToken, TokenQuery, TokenUpdate
+from .crypto_tokens import encrypt_token, decrypt_token
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,10 @@ class TokenDAO:
                         provider      TEXT NOT NULL,
                         access_token  TEXT NOT NULL,
                         refresh_token TEXT,
+                        refresh_token_enc BLOB,
+                        envelope_key_version INTEGER DEFAULT 1,
+                        last_refresh_at INTEGER DEFAULT 0,
+                        refresh_error_count INTEGER DEFAULT 0,
                         scope         TEXT,
                         expires_at    INTEGER NOT NULL,
                         created_at    INTEGER NOT NULL,
@@ -83,6 +88,20 @@ class TokenDAO:
         Returns:
             True if successful, False otherwise
         """
+        logger.info("🔐 TOKEN STORE: Upserting token", extra={
+            "meta": {
+                "token_id": token.id,
+                "user_id": token.user_id,
+                "provider": token.provider,
+                "has_access_token": bool(token.access_token),
+                "has_refresh_token": bool(token.refresh_token),
+                "access_token_length": len(token.access_token) if token.access_token else 0,
+                "refresh_token_length": len(token.refresh_token) if token.refresh_token else 0,
+                "expires_at": token.expires_at,
+                "scope": token.scope
+            }
+        })
+
         try:
             await self._ensure_table()
 
@@ -97,19 +116,67 @@ class TokenDAO:
                         WHERE user_id = ? AND provider = ? AND is_valid = 1
                     """, (token.updated_at, token.user_id, token.provider))
 
-                    # Insert the new token
+                    # If refresh_token present, encrypt and store into refresh_token_enc
+                    refresh_token_enc = None
+                    envelope_key_version = 1
+                    last_refresh_at = 0
+                    refresh_error_count = 0
+                    if token.refresh_token:
+                        try:
+                            refresh_token_enc = encrypt_token(token.refresh_token)
+                            last_refresh_at = int(__import__("time").time())
+                        except Exception:
+                            # If encryption fails, fall back to storing plaintext to avoid blocking
+                            refresh_token_enc = None
+                    # Build insertion tuple matching ThirdPartyToken.to_db_tuple()
+                    insert_tuple = (
+                        token.id,
+                        token.user_id,
+                        token.provider,
+                        token.access_token,
+                        None if refresh_token_enc else token.refresh_token,
+                        refresh_token_enc,
+                        envelope_key_version,
+                        last_refresh_at,
+                        refresh_error_count,
+                        token.scope,
+                        token.expires_at,
+                        token.created_at,
+                        token.updated_at,
+                        1 if token.is_valid else 0,
+                    )
+
                     cursor.execute("""
                         INSERT INTO third_party_tokens
-                        (id, user_id, provider, access_token, refresh_token,
+                        (id, user_id, provider, access_token, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count,
                          scope, expires_at, created_at, updated_at, is_valid)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, token.to_db_tuple())
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, insert_tuple)
 
                     conn.commit()
+
+                    logger.info("🔐 TOKEN STORE: Token upserted successfully", extra={
+                        "meta": {
+                            "token_id": token.id,
+                            "user_id": token.user_id,
+                            "provider": token.provider,
+                            "operation": "upsert_success"
+                        }
+                    })
+
                     return True
 
         except Exception as e:
-            logger.error(f"Failed to upsert token for {token.user_id}@{token.provider}: {e}")
+            logger.error("🔐 TOKEN STORE: Token upsert failed", extra={
+                "meta": {
+                    "token_id": token.id,
+                    "user_id": token.user_id,
+                    "provider": token.provider,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "operation": "upsert_failed"
+                }
+            })
             return False
 
     async def get_token(self, user_id: str, provider: str) -> Optional[ThirdPartyToken]:
@@ -130,7 +197,7 @@ class TokenDAO:
                 cursor = conn.cursor()
 
                 cursor.execute("""
-                    SELECT id, user_id, provider, access_token, refresh_token,
+                    SELECT id, user_id, provider, access_token, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count,
                            scope, expires_at, created_at, updated_at, is_valid
                     FROM third_party_tokens
                     WHERE user_id = ? AND provider = ? AND is_valid = 1
@@ -140,7 +207,17 @@ class TokenDAO:
 
                 row = cursor.fetchone()
                 if row:
-                    return ThirdPartyToken.from_db_row(row)
+                    t = ThirdPartyToken.from_db_row(row)
+                    # If encrypted refresh token present, attempt decryption
+                    try:
+                        if t.refresh_token_enc:
+                            from .crypto_tokens import decrypt_token
+
+                            t.refresh_token = decrypt_token(t.refresh_token_enc)
+                    except Exception:
+                        # Decryption failed: keep plaintext column if present (rollback mode)
+                        logger.warning("Failed to decrypt refresh_token_enc, falling back to plaintext column if available")
+                    return t
 
                 return None
 

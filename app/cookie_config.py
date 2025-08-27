@@ -49,17 +49,18 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
     dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
 
     # Development mode detection: on dev + non-HTTPS, ensure cookies are
-    # localhost-safe: Secure=False, SameSite != None, host-only (no Domain).
+    # localhost-safe: Secure=False, SameSite=Lax, host-only (no Domain).
     dev_env_detected = dev_mode or _is_dev_environment(request)
     is_tls = _get_scheme(request) == "https"
-    # Default secure: True for HTTPS and not in DEV_MODE, else False
-    cookie_secure = (is_tls and not dev_mode) or env_force_secure
+
+    # Default secure: True for HTTPS, else False. Allow env to force secure.
+    cookie_secure = (is_tls) or env_force_secure
+
+    # If in dev or on localhost over plain HTTP, ensure cookies are accepted by browsers
     if dev_env_detected and not is_tls:
-        # In dev over plain HTTP, ensure Secure=False so browsers accept cookies locally
         cookie_secure = False
-        # Prevent SameSite=None in dev HTTP (browsers require Secure for None). Use Lax as safe default.
-        if cookie_samesite == "none":
-            cookie_samesite = "lax"
+        # Force SameSite=Lax for localhost/http to maximize compatibility
+        cookie_samesite = "lax"
 
     # SameSite=None requires Secure=True. If SameSite=None is requested but secure is not
     # set, force secure=True to avoid creating invalid cookie combinations.
@@ -192,18 +193,21 @@ def format_cookie_header(
 
     # Add Priority=High for critical auth cookies (legacy + canonical names)
     try:
-        from .cookie_names import ACCESS_TOKEN, REFRESH_TOKEN, SESSION
+        from .cookie_names import ACCESS_TOKEN, REFRESH_TOKEN, SESSION, GSNH_AT, GSNH_RT, GSNH_SESS
 
         priority_names = {
             ACCESS_TOKEN,
             REFRESH_TOKEN,
             SESSION,
+            GSNH_AT,
+            GSNH_RT,
+            GSNH_SESS,
             "access_token",
             "refresh_token",
             "__session",
         }
     except Exception:
-        priority_names = {"access_token", "refresh_token", "__session"}
+        priority_names = {"access_token", "refresh_token", "__session", "GSNH_AT", "GSNH_RT", "GSNH_SESS"}
     if key in priority_names:
         parts.append("Priority=High")
 

@@ -17,10 +17,46 @@ SPOTIFY_REFRESH = Counter(
     "Spotify token refreshes",
 )
 
+# OAuth flow metrics
+OAUTH_START = Counter(
+    "oauth_start_total",
+    "OAuth flow starts",
+    ["provider"],
+)
+
+OAUTH_CALLBACK = Counter(
+    "oauth_callback_total",
+    "OAuth callback results",
+    ["result", "reason"],
+)
+
+OAUTH_IDEMPOTENT = Counter(
+    "oauth_idempotent_hit_total",
+    "OAuth idempotent hits",
+)
+
+SPOTIFY_REFRESH_ERROR = Counter(
+    "spotify_refresh_error_total",
+    "Spotify refresh errors",
+)
+
 SPOTIFY_LATENCY = Histogram(
     "integration_spotify_latency_seconds",
     "Spotify latency",
     ["method", "path"],
+)
+
+# Spotify-specific action counters
+SPOTIFY_PLAY_COUNT = Counter(
+    "spotify_play_count_total",
+    "Spotify play requests",
+    ["status"],
+)
+
+SPOTIFY_DEVICE_LIST_COUNT = Counter(
+    "spotify_device_list_count_total",
+    "Spotify device list requests",
+    ["status"],
 )
 
 # Phase 6.1: Clean Prometheus Metrics (no sampling)
@@ -273,6 +309,14 @@ except Exception:  # pragma: no cover
             return None
 
     FINISH_CALLS_TOTAL = _C3()  # type: ignore
+
+# Spotify-specific counters for Phase 6
+try:
+    SPOTIFY_OAUTH_START = Counter("spotify_oauth_start_total", "Spotify OAuth starts", ["provider"])
+    SPOTIFY_OAUTH_CALLBACK = Counter("spotify_oauth_callback_total", "Spotify OAuth callback results", ["result", "reason"])
+    SPOTIFY_OAUTH_IDEMPOTENT = Counter("spotify_oauth_idempotent_total", "Spotify OAuth idempotent hits")
+except Exception:
+    SPOTIFY_OAUTH_START = SPOTIFY_OAUTH_CALLBACK = SPOTIFY_OAUTH_IDEMPOTENT = Counter
 
 try:
     PRIVILEGED_CALLS_BLOCKED_TOTAL = Counter(

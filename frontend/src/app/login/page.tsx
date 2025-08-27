@@ -53,12 +53,17 @@ function LoginPageInner() {
         }
     }, [params, next, router]);
 
-    // Handle OAuth errors from URL params
+    // Handle OAuth errors from URL params (only global auth errors, not Spotify-specific)
     useEffect(() => {
+        if (!params) return;
+
         const error = params.get('error');
         const errorDescription = params.get('error_description');
+        const spotifyError = params.get('spotify_error');
 
-        if (error) {
+        // Only handle global auth errors, not Spotify-specific errors
+        // Spotify errors should be handled by the settings page with spotify_error param
+        if (error && error !== 'spotify_oauth' && !spotifyError) {
             console.error('LOGIN oauth.error', {
                 error,
                 errorDescription,
@@ -106,14 +111,28 @@ function LoginPageInner() {
             });
 
             if (response.ok) {
-                const data = await response.json();
+                const data = await response.json().catch(() => null);
                 console.info('LOGIN api.success', {
-                    hasAccessToken: !!data.access_token,
-                    hasRefreshToken: !!data.refresh_token,
-                    accessTokenLength: data.access_token?.length || 0,
-                    refreshTokenLength: data.refresh_token?.length || 0,
+                    dataType: typeof data,
+                    dataIsNull: data === null,
+                    dataIsUndefined: data === undefined,
+                    dataKeys: data ? Object.keys(data) : [],
+                    hasAccessToken: data && !!data.access_token,
+                    hasRefreshToken: data && !!data.refresh_token,
+                    accessTokenLength: data && data.access_token?.length || 0,
+                    refreshTokenLength: data && data.refresh_token?.length || 0,
                     timestamp: new Date().toISOString(),
                 });
+
+                if (!data || !data.access_token) {
+                    console.error('LOGIN api.error: Invalid response data', {
+                        data,
+                        dataType: typeof data,
+                        timestamp: new Date().toISOString(),
+                    });
+                    setError('Login failed: Invalid response from server');
+                    return;
+                }
 
                 setTokens(data.access_token, data.refresh_token);
                 bumpAuthEpoch();

@@ -1886,7 +1886,7 @@ async def _call_llama(
     if rec:
         rec.engine_used = "llama"
         rec.model_name = model
-        rec.prompt_tokens = ptoksoks
+        rec.prompt_tokens = ptoks
         rec.response = result_text
 
     # Consolidated post-call handling using existing postcall.py module

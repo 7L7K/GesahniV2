@@ -10,7 +10,8 @@ export default function SpotifyControls() {
     const [uri, setUri] = useState('spotify:track:4cOdK2wGLETKBW3PvgPWqT'); // test
 
     const refreshDevices = async () => {
-        const r = await fetch('/v1/spotify/devices', { credentials: 'include' });
+        const { apiFetch } = await import('@/lib/api');
+        const r = await apiFetch('/v1/spotify/devices', { credentials: 'include', auth: true });
         const j = await r.json();
         if (j.ok) setDevices(j.devices || []);
     };
@@ -20,11 +21,13 @@ export default function SpotifyControls() {
     const play = async (device_id?: string) => {
         setLoading(true);
         try {
-            const r = await fetch('/v1/spotify/play', {
+            const { apiFetch } = await import('@/lib/api');
+            const r = await apiFetch('/v1/spotify/play', {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ uris: [uri], device_id }),
+                auth: true,
             });
             if (r.status === 403) alert('Premium required for playback.');
             if (r.status === 429) alert('Rate limited—try again shortly.');

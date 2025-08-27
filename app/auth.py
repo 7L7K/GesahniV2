@@ -483,9 +483,9 @@ def _client_ip(request: Request) -> str:
     return "unknown"
 
 
-# Register endpoint
+# Register endpoint: create account and return tokens (plus set cookies)
 @router.post("/register", response_model=dict)
-async def register(req: RegisterRequest):
+async def register(req: RegisterRequest, request: Request, response: Response):
     await _ensure_table()
     # Normalize and validate
     norm_user = _sanitize_username(req.username)
@@ -557,8 +557,65 @@ async def register(req: RegisterRequest):
             # commit already done above
     except aiosqlite.IntegrityError:
         raise HTTPException(status_code=400, detail="username_taken")
-    # Be explicit about the created user for clients
-    out: dict = {"status": "ok"}
+    # After successful registration, mint tokens and set cookies similar to /login
+    from .tokens import make_access, make_refresh
+
+    access_token = make_access({"user_id": norm_user})
+    refresh_jti = uuid4().hex
+    refresh_token = make_refresh({"user_id": norm_user, "jti": refresh_jti})
+
+    # Set HttpOnly cookies for browser clients and create opaque session id
+    try:
+        from .cookie_config import get_cookie_config, get_token_ttls
+        from .cookies import set_auth_cookies
+        # Decode access token to extract JTI for session mapping
+        from .api.auth import _jwt_secret
+
+        cookie_config = get_cookie_config(request)
+        access_ttl, refresh_ttl = get_token_ttls()
+
+        try:
+            secret = _jwt_secret()
+            payload = _jwt_decode(access_token, secret, algorithms=[ALGORITHM])
+            jti = payload.get("jti")
+            expires_at = payload.get("exp", time.time() + access_ttl)
+            session_id = _create_session_id(jti, expires_at) if jti else f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        except Exception:
+            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+
+        set_auth_cookies(
+            response,
+            access=access_token,
+            refresh=refresh_token,
+            session_id=session_id,
+            access_ttl=access_ttl,
+            refresh_ttl=refresh_ttl,
+            request=request,
+        )
+        logger.info(
+            "auth.register_cookies_set",
+            extra={
+                "meta": {
+                    "username": norm_user,
+                    "secure": cookie_config["secure"],
+                    "samesite": cookie_config["samesite"],
+                    "cookies_set": ["access_token", "refresh_token", "__session"],
+                }
+            },
+        )
+    except Exception as e:
+        logger.error(
+            "auth.register_cookie_set_error",
+            extra={"meta": {"username": norm_user, "error": str(e), "error_type": type(e).__name__}},
+        )
+
+    # Return tokens in response body for header-mode frontends
+    out: dict = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
+    # Include user identifier for convenience (optional)
     if user_id is not None:
         out["user_id"] = user_id
     else:
@@ -859,6 +916,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
     )
 
     # Set HttpOnly cookies for browser clients (unified flow: header + cookie)
+    cookie_set_success = False
     try:
         from .cookie_config import get_cookie_config, get_token_ttls
 
@@ -913,6 +971,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
             refresh_ttl=refresh_ttl,
             request=request,
         )
+        cookie_set_success = True
 
         logger.info(
             "auth.login_cookies_set",
@@ -1023,32 +1082,71 @@ async def login(req: LoginRequest, request: Request, response: Response):
             logger.error("login.set_cookie fallback error: %s", fallback_error)
             pass
 
-        logger.info(
-            "auth.login_complete",
+        if cookie_set_success:
+            logger.info(
+                "auth.login_complete",
+                extra={
+                    "meta": {
+                        "username": norm_user,
+                        "ip": _client_ip(request),
+                        "response_status": 200,
+                    }
+                },
+            )
+        else:
+            logger.warning(
+                "auth.login_complete_without_cookies",
+                extra={
+                    "meta": {
+                        "username": norm_user,
+                        "ip": _client_ip(request),
+                        "response_status": 200,
+                        "cookies_set": False,
+                    }
+                },
+            )
+
+    except Exception as e:
+        logger.error(
+            "auth.login_cookie_set_error",
             extra={
                 "meta": {
                     "username": norm_user,
                     "ip": _client_ip(request),
-                    "response_status": 200,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
                 }
             },
         )
-
-        # Return JSONResponse explicitly to avoid framework-level response validation
-        from fastapi.responses import JSONResponse
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-                "token": access_token,
-                "stats": stats,
-            },
-        )
-    except Exception:
         logger.exception("auth.login_exception")
-        raise
+        # Continue to return response even if cookie setting fails
+
+    # Return JSONResponse explicitly to avoid framework-level response validation
+    # This ensures we always return the proper response even if cookie setting fails
+    from fastapi.responses import JSONResponse
+
+    logger.info(
+        "auth.login_response_sending",
+        extra={
+            "meta": {
+                "username": norm_user,
+                "ip": _client_ip(request),
+                "has_access_token": bool(access_token),
+                "has_refresh_token": bool(refresh_token),
+                "stats_keys": list(stats.keys()) if stats else [],
+            }
+        },
+    )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token": access_token,
+            "stats": stats,
+        },
+    )
 
 
 _DEPRECATE_REFRESH_LOGGED = False

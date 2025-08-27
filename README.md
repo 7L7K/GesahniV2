@@ -198,6 +198,34 @@ header. Revoked token IDs are stored in memory and cannot be reused.
 curl -X POST 127.0.0.1:8000/logout -H "Authorization: Bearer <refresh_token>"
 ```
 
+### Spotify OAuth Runbook
+
+Quick flow:
+
+1. User clicks Connect on the Settings page (authenticated) → frontend calls `GET /v1/spotify/connect`.
+2. Backend creates PKCE challenge and signed `state`, stores oauth_tx, and responds with `authorize_url`.
+3. Frontend redirects user to Spotify authorize URL; user consents.
+4. Spotify redirects to `/v1/spotify/callback?code=...&state=...`.
+5. Backend validates HMAC state, ensures oauth_tx is PENDING, exchanges code using stored code_verifier, upserts tokens, issues auth cookies, marks oauth_tx CONSUMMATED, and redirects to `/settings/integrations?spotify=connected`.
+
+Troubleshooting:
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Cookies not present after redirect | Running on `http://localhost` but cookies marked `Secure` | Ensure `COOKIE_SECURE=0` for dev or use HTTPS; cookie_samesite must be `Lax` for localhost HTTP |
+| Redirect mismatch error | `SPOTIFY_REDIRECT_URI` doesn't match Spotify app settings | Update Spotify app redirect URI to match `SPOTIFY_REDIRECT_URI` env |
+| State invalid | State signature expired or mismatched | Ensure `JWT_STATE_SECRET` is same across instances and clocks are synced; check oauth_tx store TTL |
+
+## Disconnecting Spotify
+
+Use the Disconnect endpoint to revoke stored Spotify tokens and remove Spotify from connected providers on next auth mint:
+
+```bash
+curl -X DELETE http://127.0.0.1:8000/v1/spotify/disconnect -H "Authorization: Bearer <access_token>"
+```
+
+This marks Spotify tokens as invalid in the DB and updates `last_refresh_at` to signal revocation.
+
 ### Clerk (JWT) backend verification
 
 Enable JWT verification against Clerk JWKS for HTTP + WS:

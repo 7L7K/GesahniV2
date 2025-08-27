@@ -304,15 +304,27 @@ class SpotifyClient:
                     SPOTIFY_REFRESH.inc()
                 except Exception:
                     pass
-                # Try one refresh then retry
-                try:
-                    await self._refresh_tokens()
-                    access_token = await self._get_valid_access_token()
-                    headers["Authorization"] = f"Bearer {access_token}"
-                    continue
-                except SpotifyAuthError:
-                    # No refresh possible
-                    raise SpotifyAuthError("needs_reauth")
+                # If token is expired according to DB, attempt a proactive refresh then retry once
+                from ...auth_store_tokens import get_token as _get_token
+                t = await _get_token(self.user_id, "spotify")
+                now = int(time.time())
+                if t and t.expires_at <= now:
+                    try:
+                        await self._refresh_tokens()
+                        access_token = await self._get_valid_access_token()
+                        headers["Authorization"] = f"Bearer {access_token}"
+                        continue
+                    except SpotifyAuthError:
+                        raise SpotifyAuthError("needs_reauth")
+                else:
+                    # Token not expired yet but 401 occurred - do one refresh attempt
+                    try:
+                        await self._refresh_tokens()
+                        access_token = await self._get_valid_access_token()
+                        headers["Authorization"] = f"Bearer {access_token}"
+                        continue
+                    except SpotifyAuthError:
+                        raise SpotifyAuthError("needs_reauth")
 
             if r.status_code == 403:
                 # Premium required or other forbidden reason

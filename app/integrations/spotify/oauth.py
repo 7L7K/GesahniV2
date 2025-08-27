@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 import os
 import secrets
 import time
@@ -12,6 +13,8 @@ from urllib.parse import urlencode
 import httpx
 
 from ...models.third_party_tokens import ThirdPartyToken
+
+logger = logging.getLogger(__name__)
 
 # telemetry span decorator fallback
 try:
@@ -50,8 +53,16 @@ class SpotifyOAuth:
 
     def generate_pkce(self) -> SpotifyPKCE:
         """Generate PKCE verifier, challenge, and state for OAuth flow."""
+        logger.info("🎵 SPOTIFY PKCE: Generating PKCE challenge...")
+
         # Generate cryptographically secure verifier (43-128 chars)
         verifier = secrets.token_urlsafe(64)
+        logger.debug("🎵 SPOTIFY PKCE: Generated verifier", extra={
+            "meta": {
+                "verifier_length": len(verifier),
+                "verifier_preview": verifier[:20] + "..."
+            }
+        })
 
         # Create SHA256 hash of verifier
         verifier_bytes = verifier.encode('utf-8')
@@ -60,15 +71,41 @@ class SpotifyOAuth:
         # Base64url encode the challenge
         challenge = base64.urlsafe_b64encode(challenge_bytes).decode('utf-8').rstrip('=')
 
+        logger.debug("🎵 SPOTIFY PKCE: Generated challenge", extra={
+            "meta": {
+                "challenge_length": len(challenge),
+                "challenge_preview": challenge[:20] + "...",
+                "hash_algorithm": "SHA256"
+            }
+        })
+
         # Generate state for CSRF protection
         state = secrets.token_urlsafe(32)
 
-        return SpotifyPKCE(
+        logger.debug("🎵 SPOTIFY PKCE: Generated state", extra={
+            "meta": {
+                "state_length": len(state),
+                "state_preview": state[:20] + "..."
+            }
+        })
+
+        pkce_data = SpotifyPKCE(
             verifier=verifier,
             challenge=challenge,
             state=state,
             created_at=time.time()
         )
+
+        logger.info("🎵 SPOTIFY PKCE: PKCE generation complete", extra={
+            "meta": {
+                "verifier_length": len(verifier),
+                "challenge_length": len(challenge),
+                "state_length": len(state),
+                "created_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(pkce_data.created_at))
+            }
+        })
+
+        return pkce_data
 
     def get_authorization_url(self, pkce: SpotifyPKCE) -> str:
         """Generate Spotify authorization URL with PKCE challenge."""
@@ -101,6 +138,17 @@ class SpotifyOAuth:
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
         }
+
+        # In test mode, mint deterministic tokens without calling Spotify
+        if os.getenv("SPOTIFY_TEST_MODE", "0") == "1" and code == "fake":
+            now = int(time.time())
+            return {
+                "access_token": f"fake_access_{secrets.token_hex(8)}",
+                "refresh_token": f"fake_refresh_{secrets.token_hex(8)}",
+                "scope": self.scopes,
+                "expires_in": 3600,
+                "expires_at": now + 3600,
+            }
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
             response = await client.post(token_url, data=data, headers=headers)
@@ -160,21 +208,49 @@ class SpotifyOAuthError(Exception):
 
 
 # Session storage for PKCE challenges (in production, use Redis or database)
-_pkce_store: dict[str, SpotifyPKCE] = {}
+# Now stores multiple challenges per session to handle multiple concurrent requests
+_pkce_store: dict[str, list[SpotifyPKCE]] = {}
 
 
 def store_pkce_challenge(session_id: str, pkce: SpotifyPKCE) -> None:
     """Store PKCE challenge in session storage."""
-    _pkce_store[session_id] = pkce
+    if session_id not in _pkce_store:
+        _pkce_store[session_id] = []
+    _pkce_store[session_id].append(pkce)
+
+
+def get_pkce_challenge_by_state(session_id: str, state: str) -> SpotifyPKCE | None:
+    """Retrieve PKCE challenge from session storage by state."""
+    if session_id not in _pkce_store:
+        return None
+
+    # Find challenge with matching state (most recent first)
+    challenges = _pkce_store[session_id]
+    for pkce in reversed(challenges):
+        if pkce.state == state:
+            return pkce
+    return None
 
 
 def get_pkce_challenge(session_id: str) -> SpotifyPKCE | None:
-    """Retrieve PKCE challenge from session storage."""
-    return _pkce_store.get(session_id)
+    """Retrieve most recent PKCE challenge from session storage."""
+    if session_id not in _pkce_store:
+        return None
+    return _pkce_store[session_id][-1] if _pkce_store[session_id] else None
+
+
+def clear_pkce_challenge_by_state(session_id: str, state: str) -> None:
+    """Remove specific PKCE challenge from session storage by state."""
+    if session_id in _pkce_store:
+        challenges = _pkce_store[session_id]
+        _pkce_store[session_id] = [pkce for pkce in challenges if pkce.state != state]
+        # Clean up empty lists
+        if not _pkce_store[session_id]:
+            del _pkce_store[session_id]
 
 
 def clear_pkce_challenge(session_id: str) -> None:
-    """Remove PKCE challenge from session storage."""
+    """Remove all PKCE challenges for a session."""
     _pkce_store.pop(session_id, None)
 
 
@@ -203,17 +279,27 @@ class _MakeAuthorizeUrl:
     """
 
     async def prepare_pkce(self) -> tuple[str, str, str]:
+        logger.info("🎵 SPOTIFY AUTH URL: Preparing PKCE for authorization URL...")
         pkce = SpotifyOAuth().generate_pkce()
+        logger.info("🎵 SPOTIFY AUTH URL: PKCE prepared", extra={
+            "meta": {
+                "state_length": len(pkce.state),
+                "challenge_length": len(pkce.challenge),
+                "verifier_length": len(pkce.verifier)
+            }
+        })
         # Return (state, challenge, verifier)
         return pkce.state, pkce.challenge, pkce.verifier
 
     def build(self, *, state: str, code_challenge: str) -> str:
+        logger.info("🎵 SPOTIFY AUTH URL: Building authorization URL...")
         client_id = os.getenv("SPOTIFY_CLIENT_ID", "")
         redirect = os.getenv("SPOTIFY_REDIRECT_URI", "")
         scopes = os.getenv(
             "SPOTIFY_SCOPES",
             "user-read-playback-state user-modify-playback-state streaming playlist-read-private playlist-modify-private",
         )
+
         params = {
             "client_id": client_id,
             "response_type": "code",
@@ -224,7 +310,23 @@ class _MakeAuthorizeUrl:
             "code_challenge_method": "S256",
             "show_dialog": "true",
         }
-        return f"https://accounts.spotify.com/authorize?{urlencode(params)}"
+
+        auth_url = f"https://accounts.spotify.com/authorize?{urlencode(params)}"
+
+        logger.info("🎵 SPOTIFY AUTH URL: Authorization URL built", extra={
+            "meta": {
+                "auth_url_length": len(auth_url),
+                "auth_url_preview": auth_url[:100] + "...",
+                "client_id_configured": bool(client_id),
+                "redirect_uri_configured": bool(redirect),
+                "scopes": scopes,
+                "state_provided": bool(state),
+                "code_challenge_provided": bool(code_challenge),
+                "pkce_method": "S256"
+            }
+        })
+
+        return auth_url
 
 
 make_authorize_url = _MakeAuthorizeUrl()
@@ -236,11 +338,36 @@ async def exchange_code(code: str, code_verifier: str) -> ThirdPartyToken:
 
     The returned dict contains at least: access_token, refresh_token (opt), scope, expires_at
     """
+    logger.info("🎵 SPOTIFY EXCHANGE: Starting code exchange...", extra={
+        "meta": {
+            "code_length": len(code) if code else 0,
+            "code_verifier_length": len(code_verifier) if code_verifier else 0,
+            "code_preview": code[:20] + "..." if code and len(code) > 20 else code or "None",
+            "code_verifier_preview": code_verifier[:20] + "..." if code_verifier and len(code_verifier) > 20 else code_verifier or "None"
+        }
+    })
+
     oauth = SpotifyOAuth()
-    td = await oauth.exchange_code_for_tokens(code, SpotifyPKCE(verifier=code_verifier, challenge="", state="", created_at=time.time()))
+    pkce_for_exchange = SpotifyPKCE(verifier=code_verifier, challenge="", state="", created_at=time.time())
+
+    logger.info("🎵 SPOTIFY EXCHANGE: Calling Spotify token endpoint...")
+    td = await oauth.exchange_code_for_tokens(code, pkce_for_exchange)
+
+    logger.info("🎵 SPOTIFY EXCHANGE: Token response received", extra={
+        "meta": {
+            "response_keys": list(td.keys()) if td else [],
+            "has_access_token": bool(td.get("access_token")),
+            "has_refresh_token": bool(td.get("refresh_token")),
+            "token_type": td.get("token_type", "unknown"),
+            "expires_in": td.get("expires_in", 0),
+            "scope": td.get("scope", "unknown")
+        }
+    })
+
     now = int(time.time())
     expires_at = int(td.get("expires_at", now + int(td.get("expires_in", 3600))))
-    return ThirdPartyToken(
+
+    token_data = ThirdPartyToken(
         id=f"spotify:{secrets.token_hex(8)}",
         user_id="<set by caller>",
         provider="spotify",
@@ -251,3 +378,17 @@ async def exchange_code(code: str, code_verifier: str) -> ThirdPartyToken:
         created_at=now,
         updated_at=now,
     )
+
+    logger.info("🎵 SPOTIFY EXCHANGE: Token data prepared", extra={
+        "meta": {
+            "token_id": token_data.id,
+            "access_token_length": len(token_data.access_token),
+            "has_refresh_token": bool(token_data.refresh_token),
+            "refresh_token_length": len(token_data.refresh_token) if token_data.refresh_token else 0,
+            "expires_at_timestamp": expires_at,
+            "expires_at_formatted": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(expires_at)),
+            "seconds_until_expiry": expires_at - now
+        }
+    })
+
+    return token_data

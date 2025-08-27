@@ -194,6 +194,9 @@ async def select(prompt: str, top_n: int = 3) -> Tuple[dict | None, List[dict]]:
                 matches.append((timer_skill, chosen_match))
 
     # Deterministic pick: first candidate (preserves existing behavior)
+    if not matches:
+        return None, []
+
     chosen_idx = 0
     chosen_skill, chosen_match = matches[chosen_idx]
     chosen_cand = candidates[chosen_idx]

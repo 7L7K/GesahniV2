@@ -242,14 +242,16 @@ def route_text(
             ROUTER_DECISION.labels("long-context").inc()
             return _decision("gpt-4.1-nano", "long-context")
 
-    # Keyword or intent-based escalation
+    # Keyword or intent-based escalation (use hot-reloaded rules when available)
     prompt_lc = (user_prompt or "").lower()
-    if intent and intent in HEAVY_INTENTS:
+    heavy_intents = set(rules.get("HEAVY_INTENTS", HEAVY_INTENTS))
+    keywords = set(rules.get("KEYWORDS", KEYWORDS))
+    if intent and intent in heavy_intents:
         ROUTER_DECISION.labels("heavy-intent").inc()
-        return RouteDecision(model="gpt-4.1-nano", reason="heavy-intent")
-    if any(k in prompt_lc for k in KEYWORDS):
+        return _decision("gpt-4.1-nano", "heavy-intent")
+    if any(k in prompt_lc for k in keywords):
         ROUTER_DECISION.labels("keyword").inc()
-        return RouteDecision(model="gpt-4.1-nano", reason="keyword")
+        return _decision("gpt-4.1-nano", "keyword")
 
     ROUTER_DECISION.labels("default").inc()
     return _decision("gpt-5-nano", "default")

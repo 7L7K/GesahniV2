@@ -10,6 +10,9 @@ from ..music.store import get_idempotent, set_idempotent
 from ..music.providers.spotify_provider import SpotifyProvider
 
 router = APIRouter(prefix="/api/music")
+
+# Also create a root-level router for endpoints that should be at /v1/state
+root_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
@@ -56,7 +59,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.common import OkResponse as CommonOkResponse
 
 from ..deps.user import get_current_user_id
-from ..integrations.music_spotify.client import SpotifyAuthError, SpotifyClient
+# Use unified Spotify client that reads/writes tokens via auth_store_tokens
+from ..integrations.spotify.client import SpotifyAuthError, SpotifyClient
 from ..models.music_state import MusicVibe, load_state, save_state
 from ..security import verify_ws
 from .ws_helpers import handle_reauth
@@ -242,7 +246,7 @@ async def _provider_state(user_id: str) -> dict | None:
         return None
     try:
         client = SpotifyClient(user_id)
-        st = await client.get_state()
+        st = await client.get_currently_playing()
         return st
     except SpotifyAuthError:
         # Treat as no provider state when not authenticated
@@ -292,7 +296,7 @@ async def _provider_next(user_id: str) -> bool:
         return False
     try:
         client = SpotifyClient(user_id)
-        return await client.next()
+        return await client.next_track()
     except SpotifyAuthError:
         return False
     except Exception:
@@ -304,7 +308,7 @@ async def _provider_previous(user_id: str) -> bool:
         return False
     try:
         client = SpotifyClient(user_id)
-        return await client.previous()
+        return await client.previous_track()
     except SpotifyAuthError:
         return False
     except Exception:
@@ -330,7 +334,7 @@ async def _provider_recommendations(
         return []
     try:
         client = SpotifyClient(user_id)
-        return await client.recommendations(
+        return await client.get_recommendations(
             seed_tracks=seed_tracks,
             target_energy=vibe.energy,
             target_tempo=vibe.tempo,
@@ -743,7 +747,7 @@ async def music_command(
         state.quiet_hours = quiet
         state.explicit_allowed = _explicit_allowed(state.vibe)
         save_state(user_id, state)
-        await _broadcast("music.state", await get_state(user_id))
+        await _broadcast("music.state", (await _build_state_payload(user_id)).model_dump())
     return {"status": "ok"}
 
 
@@ -832,7 +836,7 @@ async def restore_volume(user_id: str = Depends(get_current_user_id)):
         state.duck_from = None
         save_state(user_id, state)
         await _provider_set_volume(user_id, restored)
-        await _broadcast("music.state", await get_state(user_id))
+        await _broadcast("music.state", (await _build_state_payload(user_id)).model_dump())
     return {"status": "ok"}
 
 
@@ -840,6 +844,14 @@ async def restore_volume(user_id: str = Depends(get_current_user_id)):
 async def get_state(
     request: Request, response: Response, user_id: str = Depends(get_current_user_id)
 ):
+    """Get music state for frontend compatibility at /v1/api/music/state"""
+    return await _get_state_impl(request, response, user_id)
+
+
+async def _get_state_impl(
+    request: Request, response: Response, user_id: str
+):
+    """Actual implementation of get_state that can be called from multiple routes"""
     body = await _build_state_payload(user_id)
     try:
         stable = {
@@ -864,6 +876,15 @@ async def get_state(
     except Exception:
         pass
     return body
+
+
+# Add state endpoint to root router for frontend compatibility
+@root_router.get("/state", response_model=StateResponse)
+async def get_state_root(
+    request: Request, response: Response, user_id: str = Depends(get_current_user_id)
+):
+    """Get music state for frontend compatibility at /v1/state"""
+    return await _get_state_impl(request, response, user_id)
 
 
 @router.get("/queue")
@@ -1058,7 +1079,7 @@ async def list_devices(
         return body
     try:
         client = SpotifyClient(user_id)
-        devices = await client.devices()
+        devices = await client.get_devices()
     except SpotifyAuthError:
         devices = []
     except Exception:
@@ -1086,9 +1107,13 @@ async def set_device(body: DeviceBody, user_id: str = Depends(get_current_user_i
     if PROVIDER_SPOTIFY:
         try:
             client = SpotifyClient(user_id)
-            await client.transfer(body.device_id, play=True)
+            await client.transfer_playback(body.device_id, play=True)
         except Exception:
             # Non-fatal in tests or when auth not configured
             pass
     await _broadcast("music.state", (await _build_state_payload(user_id)).model_dump())
     return {"status": "ok"}
+
+
+# Export the routers for use in main.py
+__all__ = ["router", "root_router", "ws_router"]

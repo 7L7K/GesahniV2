@@ -193,8 +193,9 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
 
     describe('Direct whoami calls', () => {
         it('should warn when whoami is called directly via fetch', async () => {
-            // Simulate a direct fetch call to whoami
-            await fetch('/v1/whoami');
+            // Simulate a direct apiFetch call to whoami
+            const { apiFetch } = await import('@/lib/api');
+            await apiFetch('/v1/whoami');
 
             expect(mockConsoleWarn).toHaveBeenCalledWith(
                 '🚨 DIRECT WHOAMI CALL DETECTED!',
@@ -207,8 +208,9 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
         });
 
         it('should warn when whoami is called with full URL', async () => {
-            // Simulate a direct fetch call with full URL
-            await fetch('http://localhost:8000/v1/whoami');
+            // Simulate a direct apiFetch call with full URL
+            const { apiFetch } = await import('@/lib/api');
+            await apiFetch('http://localhost:8000/v1/whoami');
 
             expect(mockConsoleWarn).toHaveBeenCalledWith(
                 '🚨 DIRECT WHOAMI CALL DETECTED!',
@@ -220,8 +222,9 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
         });
 
         it('should warn when whoami is called with query parameters', async () => {
-            // Simulate a direct fetch call with query params
-            await fetch('/v1/whoami?test=1');
+            // Simulate a direct apiFetch call with query params
+            const { apiFetch } = await import('@/lib/api');
+            await apiFetch('/v1/whoami?test=1');
 
             expect(mockConsoleWarn).toHaveBeenCalledWith(
                 '🚨 DIRECT WHOAMI CALL DETECTED!',
@@ -259,14 +262,16 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
 
     describe('Edge cases', () => {
         it('should not warn for non-whoami fetch calls', async () => {
-            await fetch('/v1/other-endpoint');
+            const { apiFetch } = await import('@/lib/api');
+            await apiFetch('/v1/other-endpoint');
 
             expect(mockConsoleWarn).not.toHaveBeenCalled();
         });
 
         it('should not warn for whoami calls in different contexts', async () => {
             // Simulate a call that includes 'whoami' but is not the actual endpoint
-            await fetch('/v1/something-whoami-related');
+            const { apiFetch } = await import('@/lib/api');
+            await apiFetch('/v1/something-whoami-related');
 
             expect(mockConsoleWarn).not.toHaveBeenCalled();
         });

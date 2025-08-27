@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Spotify Connect Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .log {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .error {
+            color: red;
+        }
+
+        .info {
+            color: blue;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Spotify Connect Debug Test</h1>
+
+    <button onclick="testSpotifyConnect()">Test Spotify Connect</button>
+    <button onclick="clearLog()">Clear Log</button>
+
+    <div class="log" id="log"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div class="${type}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        async function testSpotifyConnect() {
+            log('Starting Spotify connect test...');
+
+            try {
+                // Step 1: Check if we can reach the backend
+                log('Step 1: Testing backend connectivity...');
+                const healthResponse = await fetch('http://localhost:8000/health');
+                if (healthResponse.ok) {
+                    log('✅ Backend is reachable', 'success');
+                } else {
+                    log('❌ Backend not reachable', 'error');
+                    return;
+                }
+
+                // Step 2: Test the Spotify login endpoint
+                log('Step 2: Testing Spotify login endpoint...');
+                const spotifyResponse = await fetch('http://localhost:8000/v1/spotify/login?user_id=demo', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                log(`Spotify endpoint response: ${spotifyResponse.status}`);
+
+                if (spotifyResponse.ok) {
+                    const data = await spotifyResponse.json();
+                    log(`✅ Spotify login response: ${JSON.stringify(data, null, 2)}`, 'success');
+
+                    if (data.ok && data.authorize_url) {
+                        log(`✅ Got authorization URL: ${data.authorize_url.substring(0, 100)}...`, 'success');
+
+                        // Step 3: Simulate what the frontend does
+                        log('Step 3: Simulating frontend redirect...');
+                        log(`Would redirect to: ${data.authorize_url}`, 'info');
+
+                        // Don't actually redirect, just show the URL
+                        log('✅ Frontend simulation complete', 'success');
+                    } else {
+                        log('❌ Invalid response from Spotify endpoint', 'error');
+                    }
+                } else {
+                    const errorText = await spotifyResponse.text();
+                    log(`❌ Spotify endpoint failed: ${errorText}`, 'error');
+                }
+
+            } catch (error) {
+                log(`❌ Test failed: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        // Auto-run test on page load
+        window.onload = function () {
+            log('Page loaded. Click "Test Spotify Connect" to begin testing.');
+        };
+    </script>
+</body>
+
+</html>

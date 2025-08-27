@@ -46,6 +46,34 @@ from ..token_store import (
 )
 from ..user_store import user_store
 
+# Debug dependency for auth endpoints
+async def log_request_meta(request: Request):
+    """Log detailed request metadata for debugging auth issues."""
+    cookies = list(request.cookies.keys())
+    origin = request.headers.get("origin", "none")
+    referer = request.headers.get("referer", "none")
+    user_agent = request.headers.get("user-agent", "none")
+    content_type = request.headers.get("content-type", "none")
+
+    logger.info("🔐 AUTH REQUEST DEBUG", extra={
+        "meta": {
+            "path": request.url.path,
+            "method": request.method,
+            "origin": origin,
+            "referer": referer,
+            "user_agent": user_agent[:100] + "..." if user_agent and len(user_agent) > 100 else user_agent,
+            "content_type": content_type,
+            "cookies_present": len(cookies) > 0,
+            "cookie_names": cookies,
+            "cookie_count": len(cookies),
+            "has_auth_header": "authorization" in [h.lower() for h in request.headers.keys()],
+            "query_params": dict(request.query_params),
+            "client_ip": getattr(request.client, 'host', 'unknown') if request.client else 'unknown'
+        }
+    })
+
+    return request
+
 router = APIRouter(tags=["Auth"])  # expose in OpenAPI for docs/tests
 logger = logging.getLogger(__name__)
 # Auth metrics are now handled by Prometheus counters in app.metrics
@@ -706,7 +734,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
 
 
 @router.get("/whoami")
-async def whoami(request: Request) -> JSONResponse:
+async def whoami(request: Request, _: Request = Depends(log_request_meta)) -> JSONResponse:
     """CANONICAL: Public whoami endpoint - the single source of truth for user identity.
 
     This is the canonical whoami endpoint that should be used by all clients.
@@ -901,6 +929,7 @@ async def whoami(request: Request) -> JSONResponse:
 @router.get("/auth/whoami")
 async def auth_whoami(
     request: Request,
+    _: Request = Depends(log_request_meta),
 ) -> JSONResponse:
     """DEPRECATED: Use /whoami endpoint instead.
 
@@ -1789,6 +1818,184 @@ async def login(
 
 
 @router.post(
+    "/login",
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "schema": {"example": {"access_token": "jwt_token", "refresh_token": "refresh_jwt"}}
+                }
+            }
+        }
+    },
+)
+async def login_v1(
+    request: Request,
+    response: Response,
+):
+    """Main login endpoint for frontend - accepts JSON payload with username/password.
+
+    Returns access_token and refresh_token for header-mode authentication.
+    """
+    # Debug logging for login endpoint
+    cookies = list(request.cookies.keys())
+    origin = request.headers.get("origin", "none")
+    referer = request.headers.get("referer", "none")
+    user_agent = request.headers.get("user-agent", "none")
+    content_type = request.headers.get("content-type", "none")
+
+    logger.info("🔐 AUTH REQUEST DEBUG", extra={
+        "meta": {
+            "path": request.url.path,
+            "method": request.method,
+            "origin": origin,
+            "referer": referer,
+            "user_agent": user_agent[:100] + "..." if user_agent and len(user_agent) > 100 else user_agent,
+            "content_type": content_type,
+            "cookies_present": len(cookies) > 0,
+            "cookie_names": cookies,
+            "cookie_count": len(cookies),
+            "has_auth_header": "authorization" in [h.lower() for h in request.headers.keys()],
+            "query_params": dict(request.query_params),
+            "client_ip": getattr(request.client, 'host', 'unknown') if request.client else 'unknown'
+        }
+    })
+
+    try:
+        body = await request.json()
+        username = (body.get("username") or "").strip()
+        password = body.get("password") or ""
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid_json_payload")
+
+    # Basic validation
+    if not username:
+        raise HTTPException(status_code=400, detail="missing_username")
+    if not password:
+        raise HTTPException(status_code=400, detail="missing_password")
+
+    # Validate credentials against users database
+    try:
+        from ..api.auth_password import _pwd, _db_path
+        import aiosqlite
+
+        async with aiosqlite.connect(_db_path()) as db:
+            async with db.execute(
+                "SELECT password_hash FROM auth_users WHERE username=?", (username.lower(),)
+            ) as cur:
+                row = await cur.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=401, detail="invalid_credentials")
+
+        if not _pwd.verify(password, row[0]):
+            raise HTTPException(status_code=401, detail="invalid_credentials")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error validating credentials: {e}")
+        raise HTTPException(status_code=500, detail="authentication_error")
+
+    # Rate-limit login attempts
+    try:
+        from ..token_store import _key_login_ip, _key_login_user, incr_login_counter
+
+        ip = request.client.host if request and request.client else "unknown"
+        if await incr_login_counter(_key_login_ip(f"{ip}:m"), 60) > 5:
+            raise HTTPException(status_code=429, detail="too_many_requests")
+        if await incr_login_counter(_key_login_ip(f"{ip}:h"), 3600) > 30:
+            raise HTTPException(status_code=429, detail="too_many_requests")
+        if await incr_login_counter(_key_login_user(username), 3600) > 10:
+            raise HTTPException(status_code=429, detail="too_many_requests")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    # Use centralized cookie configuration for sharp and consistent cookies
+    from ..cookie_config import get_cookie_config, get_token_ttls
+
+    cookie_config = get_cookie_config(request)
+    access_ttl, refresh_ttl = get_token_ttls()
+
+    # Use tokens.py facade instead of direct JWT encoding
+    from ..tokens import make_access
+
+    jwt_token = make_access({"user_id": username}, ttl_s=access_ttl)
+
+    # Also issue a refresh token and mark it allowed for this session
+    try:
+        import jwt
+
+        now = int(time.time())
+        # Longer refresh in prod: default 7 days (604800s), allow override via env
+        refresh_life = _get_refresh_ttl_seconds()
+        import os as _os
+
+        jti = jwt.api_jws.base64url_encode(_os.urandom(16)).decode()
+        refresh_payload = {
+            "user_id": username,
+            "sub": username,
+            "type": "refresh",
+            "iat": now,
+            "exp": now + refresh_life,
+            "jti": jti,
+        }
+        iss = os.getenv("JWT_ISSUER")
+        aud = os.getenv("JWT_AUDIENCE")
+        if iss:
+            refresh_payload["iss"] = iss
+        if aud:
+            refresh_payload["aud"] = aud
+        # Use tokens.py facade instead of direct JWT encoding
+        from ..tokens import make_refresh
+
+        refresh_token = make_refresh(
+            {"user_id": username, "jti": jti}, ttl_s=refresh_life
+        )
+
+        # Create opaque session ID instead of using JWT
+        try:
+            from ..auth import _create_session_id
+
+            payload = _jwt_decode(jwt_token, _jwt_secret(), algorithms=["HS256"])
+            jti = payload.get("jti")
+            expires_at = payload.get("exp", time.time() + access_ttl)
+            if jti:
+                session_id = _create_session_id(jti, expires_at)
+            else:
+                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        except Exception as e:
+            logger.warning(f"Failed to create session ID: {e}")
+            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+
+        # Use centralized cookie functions
+        from ..cookies import set_auth_cookies
+
+        set_auth_cookies(
+            response,
+            access=jwt_token,
+            refresh=refresh_token,
+            session_id=session_id,
+            access_ttl=access_ttl,
+            refresh_ttl=refresh_ttl,
+            request=request,
+        )
+        # Use centralized session ID resolution to ensure consistency
+        sid = resolve_session_id(request=request, user_id=username)
+        await allow_refresh(sid, jti, ttl_seconds=refresh_ttl)
+    except Exception as e:
+        # Best-effort; login still succeeds with access token alone
+        logger.error(f"Exception in login cookie setting: {e}")
+
+    await user_store.ensure_user(username)
+    await user_store.increment_login(username)
+
+    # Return tokens for header-mode authentication (what frontend expects)
+    return {"access_token": jwt_token, "refresh_token": refresh_token}
+
+
+@router.post(
     "/auth/logout",
     responses={204: {"description": "Logout successful"}},
 )
@@ -1864,7 +2071,7 @@ async def logout(request: Request, response: Response):
         }
     },
 )
-async def refresh(request: Request, response: Response):
+async def refresh(request: Request, response: Response, _: Request = Depends(log_request_meta)):
     """Rotate access/refresh cookies.
 
     Intent: When COOKIE_SAMESITE=none, require header X-Auth-Intent: refresh.

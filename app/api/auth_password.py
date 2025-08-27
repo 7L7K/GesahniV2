@@ -9,7 +9,7 @@ from passlib.context import CryptContext
 router = APIRouter(tags=["auth"], include_in_schema=False)
 
 
-_pwd = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+_pwd = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
 
 
 def _db_path() -> str:
