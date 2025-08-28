@@ -357,6 +357,27 @@ async def spotify_callback_test(request: Request):
     })
 
 
+@router.get("/health")
+async def spotify_health(request: Request):
+    """Lightweight health check to confirm router mount and env wiring.
+
+    Returns basic config flags without exposing secrets.
+    """
+    from fastapi.responses import JSONResponse
+    try:
+        client_id_set = bool(os.getenv("SPOTIFY_CLIENT_ID"))
+        redirect_set = bool(os.getenv("SPOTIFY_REDIRECT_URI"))
+        test_mode = os.getenv("SPOTIFY_TEST_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
+        return JSONResponse({
+            "ok": True,
+            "client_id_set": client_id_set,
+            "redirect_set": redirect_set,
+            "test_mode": test_mode,
+        }, status_code=200)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 @router.get("/debug-cookie")
 async def spotify_debug_cookie(request: Request) -> dict:
     """Dev-only helper (stubbed in production)."""
@@ -376,11 +397,48 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
     from ..api.auth import _jwt_secret
 
     logger.info("🎵 SPOTIFY CALLBACK: start has_code=%s has_state=%s", bool(code), bool(state))
+    # Pre-decode diagnostics for `state` integrity without leaking secrets
+    try:
+        raw = state or ""
+        state_diag = {
+            "state_len": len(raw),
+            "dot_count": raw.count("."),
+            "looks_like_jwt": raw.count(".") == 2,
+        }
+        # Environment parity hints (do not log secret values)
+        try:
+            iss = (os.getenv("JWT_ISS") or os.getenv("JWT_ISSUER") or "").strip()
+            aud = (os.getenv("JWT_AUD") or os.getenv("JWT_AUDIENCE") or "").strip()
+            try:
+                sec = _jwt_secret()
+                sec_len = len(sec or "")
+            except Exception:
+                sec_len = 0
+            state_diag.update({
+                "jwt_iss_set": bool(iss),
+                "jwt_aud_set": bool(aud),
+                "jwt_secret_len": sec_len,
+            })
+        except Exception:
+            pass
+        logger.info("🎵 SPOTIFY CALLBACK: state diagnostics", extra={"meta": state_diag})
+    except Exception:
+        pass
     # Compatibility log markers expected by tests
     logger.info("spotify.callback:start")
 
     # 1) Verify state JWT (no cookies needed)
     logger.info("🎵 SPOTIFY CALLBACK: Step 1 - Verifying JWT state...")
+    if not state:
+        logger.error("🎵 SPOTIFY CALLBACK: Missing state param")
+        from starlette.responses import RedirectResponse
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=bad_state", status_code=302)
+    if not code:
+        logger.error("🎵 SPOTIFY CALLBACK: Missing authorization code")
+        from starlette.responses import RedirectResponse
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=missing_code", status_code=302)
     try:
         secret = _jwt_secret()
         # Use centralized decode function to honour issuer/audience/leeway and
@@ -424,7 +482,8 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
     if tx_id:
         tx = pop_tx(tx_id)  # atomically fetch & delete
 
-    # Fallback: look up PKCE by session id + state (legacy flow)
+    # Fallback: look up PKCE by session id + state (legacy flow). If used, ensure
+    # we clear the PKCE entry to prevent replay.
     if not tx:
         session_id = payload.get("sid") or payload.get("session")
         if session_id and state:
@@ -435,6 +494,10 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                     "code_verifier": pkce.verifier,
                     "ts": getattr(pkce, "created_at", int(time.time()))
                 }
+                try:
+                    clear_pkce_challenge_by_state(session_id, state)
+                except Exception:
+                    pass
 
     if not tx:
         logger.error("🎵 SPOTIFY CALLBACK: No transaction found in store", extra={

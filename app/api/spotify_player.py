@@ -4,7 +4,11 @@ import logging
 from fastapi import APIRouter, Depends, Request, HTTPException
 
 from ..deps.user import get_current_user_id
-from ..integrations.spotify.client import SpotifyClient, SpotifyAuthError
+from ..integrations.spotify.client import (
+    SpotifyClient,
+    SpotifyAuthError,
+    SpotifyRateLimitedError,
+)
 from ..security import verify_token
 from ..metrics import SPOTIFY_PLAY_COUNT, SPOTIFY_DEVICE_LIST_COUNT
 import logging
@@ -22,6 +26,12 @@ async def devices(request: Request, user_id: str = Depends(get_current_user_id))
             SPOTIFY_DEVICE_LIST_COUNT.labels(status="ok").inc()
         except Exception:
             pass
+    except SpotifyRateLimitedError as e:
+        # Surface upstream rate limit with Retry-After when available
+        from fastapi.responses import Response
+        retry_after = str(e.retry_after) if getattr(e, "retry_after", None) else None
+        headers = {"Retry-After": retry_after} if retry_after else {}
+        return Response(status_code=429, headers=headers)
     except SpotifyAuthError:
         try:
             SPOTIFY_DEVICE_LIST_COUNT.labels(status="fail").inc()
@@ -60,6 +70,11 @@ async def play(request: Request, body: dict, user_id: str = Depends(get_current_
             except Exception:
                 pass
             raise HTTPException(status_code=502, detail="play_failed")
+    except SpotifyRateLimitedError as e:
+        from fastapi.responses import Response
+        retry_after = str(e.retry_after) if getattr(e, "retry_after", None) else None
+        headers = {"Retry-After": retry_after} if retry_after else {}
+        return Response(status_code=429, headers=headers)
     except SpotifyAuthError:
         try:
             SPOTIFY_PLAY_COUNT.labels(status="fail").inc()

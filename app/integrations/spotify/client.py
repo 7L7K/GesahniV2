@@ -396,66 +396,59 @@ class SpotifyClient:
     # ------------------------------------------------------------------
 
     async def get_currently_playing(self) -> dict[str, Any] | None:
-        """Get the user's currently playing track."""
-        response = await self._request("GET", "/me/player")
-        if response.status_code == 204:  # No active playback
+        """Get the user's currently playing track (raw proxy semantics)."""
+        r = await self._proxy_request("GET", "/me/player")
+        if r.status_code == 204:
             return None
-        if response.status_code != 200:
+        if r.status_code != 200:
             return None
-        return response.json()
+        return r.json()
 
     async def get_devices(self) -> list[dict[str, Any]]:
-        """Get available playback devices."""
-        response = await self._request("GET", "/me/player/devices")
-        if response.status_code != 200:
+        """Get available playback devices (raw proxy semantics)."""
+        r = await self._proxy_request("GET", "/me/player/devices")
+        if r.status_code != 200:
             return []
-        data = response.json()
+        data = r.json() or {}
         return data.get("devices", [])
 
     async def transfer_playback(self, device_id: str, play: bool = True) -> bool:
-        """Transfer playback to a specific device."""
-        response = await self._request(
-            "PUT",
-            "/me/player",
-            json_body={"device_ids": [device_id], "play": play}
+        """Transfer playback to a specific device (raw proxy)."""
+        r = await self._proxy_request(
+            "PUT", "/me/player", json_body={"device_ids": [device_id], "play": play}
         )
-        return response.status_code in (200, 202, 204)
+        return r.status_code in (200, 202, 204)
 
     async def play(self, uris: list[str] | None = None, context_uri: str | None = None) -> bool:
-        """Start or resume playback."""
+        """Start or resume playback (raw proxy)."""
         body = {}
         if uris:
             body["uris"] = uris
         if context_uri:
             body["context_uri"] = context_uri
-
-        response = await self._request("PUT", "/me/player/play", json_body=body if body else None)
-        return response.status_code in (200, 202, 204)
+        r = await self._proxy_request("PUT", "/me/player/play", json_body=body or None)
+        return r.status_code in (200, 202, 204)
 
     async def pause(self) -> bool:
-        """Pause playback."""
-        response = await self._request("PUT", "/me/player/pause")
-        return response.status_code in (200, 202, 204)
+        """Pause playback (raw proxy)."""
+        r = await self._proxy_request("PUT", "/me/player/pause")
+        return r.status_code in (200, 202, 204)
 
     async def next_track(self) -> bool:
-        """Skip to next track."""
-        response = await self._request("POST", "/me/player/next")
-        return response.status_code in (200, 202, 204)
+        """Skip to next track (raw proxy)."""
+        r = await self._proxy_request("POST", "/me/player/next")
+        return r.status_code in (200, 202, 204)
 
     async def previous_track(self) -> bool:
-        """Skip to previous track."""
-        response = await self._request("POST", "/me/player/previous")
-        return response.status_code in (200, 202, 204)
+        """Skip to previous track (raw proxy)."""
+        r = await self._proxy_request("POST", "/me/player/previous")
+        return r.status_code in (200, 202, 204)
 
     async def set_volume(self, volume_percent: int) -> bool:
-        """Set playback volume."""
+        """Set playback volume (raw proxy)."""
         volume = max(0, min(100, volume_percent))
-        response = await self._request(
-            "PUT",
-            "/me/player/volume",
-            params={"volume_percent": volume}
-        )
-        return response.status_code in (200, 202, 204)
+        r = await self._proxy_request("PUT", "/me/player/volume", params={"volume_percent": volume})
+        return r.status_code in (200, 202, 204)
 
     async def get_queue(self) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
         """Get current queue information."""

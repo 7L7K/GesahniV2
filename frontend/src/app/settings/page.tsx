@@ -13,6 +13,8 @@ import { toast } from '@/lib/toast';
 import { ToastManager } from '@/components/ui/ToastManager';
 import AuthHUD from '@/components/AuthHUD';
 import { disconnectSpotify, getIntegrationsStatus } from '@/lib/api/integrations';
+import GoogleCard from './Integrations/GoogleCard';
+import GoogleManageDrawer from './Integrations/GoogleManageDrawer';
 
 // Force dynamic rendering to prevent SSR issues
 noStore();
@@ -39,6 +41,7 @@ function SettingsPageInner() {
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [activeTab, setActiveTab] = useState('profile');
     const [expandedCard, setExpandedCard] = useState<string | null>(null);
+    const [googleDrawerOpen, setGoogleDrawerOpen] = useState(false);
     const router = useRouter();
     const authState = useAuthState();
     const deterministicAuth = useDeterministicAuth();
@@ -1028,46 +1031,8 @@ function SettingsPageInner() {
                                     )}
                                 </div>
 
-                                {/* Google Integration */}
-                                <div className="border rounded-lg p-6">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex items-start space-x-4">
-                                            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                                <span className="text-2xl">📧</span>
-                                            </div>
-                                            <div className="flex-1">
-                                                <div className="flex items-center space-x-2">
-                                                    <h3 className="text-lg font-medium text-gray-900">Google</h3>
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(integrations.google.status)}`}>
-                                                        {getStatusIcon(integrations.google.status)} {integrations.google.status}
-                                                    </span>
-                                                </div>
-                                                <p className="text-sm text-gray-600 mt-1">{integrations.google.description}</p>
-                                                {integrations.google.error && (
-                                                    <p className="text-sm text-red-600 mt-2">⚠️ {integrations.google.error}</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center space-x-3">
-                                            <Button variant="outline" size="sm" disabled>
-                                                🔗 Auto-connected
-                                            </Button>
-                                        </div>
-                                    </div>
-
-                                    {/* Features when connected */}
-                                    {integrations.google.status === 'connected' && (
-                                        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                                            <h4 className="text-sm font-medium text-blue-800 mb-2">📧 Available Features:</h4>
-                                            <div className="grid grid-cols-2 gap-2 text-sm text-blue-700">
-                                                <span>✓ Gmail Access</span>
-                                                <span>✓ Calendar Events</span>
-                                                <span>✓ Email Composition</span>
-                                                <span>✓ Meeting Scheduling</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
+                                <GoogleCard onManage={() => setGoogleDrawerOpen(true)} />
+                                <GoogleManageDrawer open={googleDrawerOpen} onClose={() => setGoogleDrawerOpen(false)} />
 
                                 {/* Home Assistant Integration */}
                                 <div className="border rounded-lg p-6">

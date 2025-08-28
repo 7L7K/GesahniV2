@@ -13,6 +13,8 @@ class ThirdPartyToken:
     user_id: str
     provider: str  # 'spotify', 'google', 'apple', etc.
     access_token: str
+    # Encrypted access token blob (bytes) stored in DB
+    access_token_enc: Optional[bytes] = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     refresh_token: Optional[str] = None
     # Encrypted refresh token blob (bytes) stored in DB
@@ -42,28 +44,31 @@ class ThirdPartyToken:
     @classmethod
     def from_db_row(cls, row: tuple) -> ThirdPartyToken:
         """Create instance from database row tuple."""
-        # Support variable row lengths for backward compat
+        # Expected column order (canonical):
+        # id, user_id, provider, access_token, access_token_enc, refresh_token, refresh_token_enc,
+        # envelope_key_version, last_refresh_at, refresh_error_count, scope, expires_at, created_at, updated_at, is_valid
         id = row[0]
         user_id = row[1]
         provider = row[2]
         access_token = row[3]
-        refresh_token = row[4] if len(row) > 4 else None
-        scope = row[5] if len(row) > 5 else None
-        expires_at = row[6] if len(row) > 6 else 0
-        created_at = row[7] if len(row) > 7 else 0
-        updated_at = row[8] if len(row) > 8 else 0
-        is_valid = bool(row[9]) if len(row) > 9 else True
-        # New columns may exist after index 9
-        refresh_token_enc = row[10] if len(row) > 10 else None
-        envelope_key_version = int(row[11]) if len(row) > 11 and row[11] is not None else 1
-        last_refresh_at = int(row[12]) if len(row) > 12 and row[12] is not None else 0
-        refresh_error_count = int(row[13]) if len(row) > 13 and row[13] is not None else 0
+        access_token_enc = row[4] if len(row) > 4 else None
+        refresh_token = row[5] if len(row) > 5 else None
+        refresh_token_enc = row[6] if len(row) > 6 else None
+        envelope_key_version = int(row[7]) if len(row) > 7 and row[7] is not None else 1
+        last_refresh_at = int(row[8]) if len(row) > 8 and row[8] is not None else 0
+        refresh_error_count = int(row[9]) if len(row) > 9 and row[9] is not None else 0
+        scope = row[10] if len(row) > 10 else None
+        expires_at = row[11] if len(row) > 11 else 0
+        created_at = row[12] if len(row) > 12 else 0
+        updated_at = row[13] if len(row) > 13 else 0
+        is_valid = bool(row[14]) if len(row) > 14 else True
 
         return cls(
             id=id,
             user_id=user_id,
             provider=provider,
             access_token=access_token,
+            access_token_enc=access_token_enc,
             refresh_token=refresh_token,
             refresh_token_enc=refresh_token_enc,
             envelope_key_version=envelope_key_version,
@@ -83,6 +88,7 @@ class ThirdPartyToken:
             self.user_id,
             self.provider,
             self.access_token,
+            self.access_token_enc,
             self.refresh_token,
             self.scope,
             self.expires_at,

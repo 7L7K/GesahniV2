@@ -35,7 +35,7 @@
   - API in `app/api/ha.py`; HA webhook signing/verification in `app/security.py` and `/v1/ha/webhook` mounting from `app/main.py`.
 
 - Integrations
-  - Google OAuth under `app/integrations/google/`; Spotify client under `app/integrations/music_spotify/client.py`; SMS helper `app/integrations/twilio_sms.py`.
+  - Google OAuth under `app/integrations/google/`; Spotify client under `app/integrations/spotify/client.py`; SMS helper `app/integrations/twilio_sms.py`.
 
 - Jobs
   - Admin‑triggered Qdrant lifecycle and Chroma→Qdrant migration via `app/jobs/qdrant_lifecycle.py` and `app/jobs/migrate_chroma_to_qdrant.py` (exposed in `app/api/admin.py`).

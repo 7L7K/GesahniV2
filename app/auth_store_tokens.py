@@ -35,25 +35,54 @@ class TokenDAO:
                 except Exception:
                     pass
 
-                # Create table if it doesn't exist
-                cursor.execute("""
+                # Create table if it doesn't exist (with the full modern schema)
+                cursor.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS third_party_tokens (
-                        id            TEXT PRIMARY KEY,
-                        user_id       TEXT NOT NULL,
-                        provider      TEXT NOT NULL,
-                        access_token  TEXT NOT NULL,
-                        refresh_token TEXT,
-                        refresh_token_enc BLOB,
-                        envelope_key_version INTEGER DEFAULT 1,
-                        last_refresh_at INTEGER DEFAULT 0,
-                        refresh_error_count INTEGER DEFAULT 0,
-                        scope         TEXT,
-                        expires_at    INTEGER NOT NULL,
-                        created_at    INTEGER NOT NULL,
-                        updated_at    INTEGER NOT NULL,
-                        is_valid      INTEGER DEFAULT 1
+                        id                     TEXT PRIMARY KEY,
+                        user_id                TEXT NOT NULL,
+                        provider               TEXT NOT NULL,
+                        access_token           TEXT NOT NULL,
+                        access_token_enc       BLOB,
+                        refresh_token          TEXT,
+                        refresh_token_enc      BLOB,
+                        envelope_key_version   INTEGER DEFAULT 1,
+                        last_refresh_at        INTEGER DEFAULT 0,
+                        refresh_error_count    INTEGER DEFAULT 0,
+                        scope                  TEXT,
+                        expires_at             INTEGER NOT NULL,
+                        created_at             INTEGER NOT NULL,
+                        updated_at             INTEGER NOT NULL,
+                        is_valid               INTEGER DEFAULT 1
                     )
-                """)
+                    """
+                )
+
+                # Backfill missing columns for older databases
+                try:
+                    cursor.execute("PRAGMA table_info(third_party_tokens)")
+                    cols = {row[1] for row in cursor.fetchall()}
+                except Exception:
+                    cols = set()
+
+                # Define required columns and their SQL definitions for ALTER
+                required_cols = {
+                    "access_token_enc": "BLOB",
+                    "refresh_token_enc": "BLOB",
+                    "envelope_key_version": "INTEGER DEFAULT 1",
+                    "last_refresh_at": "INTEGER DEFAULT 0",
+                    "refresh_error_count": "INTEGER DEFAULT 0",
+                }
+
+                for col, col_type in required_cols.items():
+                    if col not in cols:
+                        try:
+                            cursor.execute(
+                                f"ALTER TABLE third_party_tokens ADD COLUMN {col} {col_type}"
+                            )
+                        except Exception:
+                            # Ignore if concurrent migrations or SQLite limitations
+                            pass
 
                 # Create indexes
                 cursor.execute("""
@@ -128,19 +157,26 @@ class TokenDAO:
                     envelope_key_version = 1
                     last_refresh_at = 0
                     refresh_error_count = 0
+                    # Encrypt refresh_token and access_token when provided
+                    access_token_enc = None
                     if token.refresh_token:
                         try:
                             refresh_token_enc = encrypt_token(token.refresh_token)
                             last_refresh_at = int(__import__("time").time())
                         except Exception:
-                            # If encryption fails, fall back to storing plaintext to avoid blocking
                             refresh_token_enc = None
+                    if token.access_token:
+                        try:
+                            access_token_enc = encrypt_token(token.access_token)
+                        except Exception:
+                            access_token_enc = None
                     # Build insertion tuple matching ThirdPartyToken.to_db_tuple()
                     insert_tuple = (
                         token.id,
                         token.user_id,
                         token.provider,
                         token.access_token,
+                        access_token_enc,
                         None if refresh_token_enc else token.refresh_token,
                         refresh_token_enc,
                         envelope_key_version,
@@ -155,9 +191,9 @@ class TokenDAO:
 
                     cursor.execute("""
                         INSERT INTO third_party_tokens
-                        (id, user_id, provider, access_token, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count,
+                        (id, user_id, provider, access_token, access_token_enc, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count,
                          scope, expires_at, created_at, updated_at, is_valid)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, insert_tuple)
 
                     conn.commit()
@@ -209,21 +245,22 @@ class TokenDAO:
                 # Select columns in the canonical order expected by ThirdPartyToken.from_db_row
                 cursor.execute(
                     """
-                    SELECT 
+                    SELECT
                         id,
                         user_id,
                         provider,
                         access_token,
+                        access_token_enc,
                         refresh_token,
+                        refresh_token_enc,
+                        envelope_key_version,
+                        last_refresh_at,
+                        refresh_error_count,
                         scope,
                         expires_at,
                         created_at,
                         updated_at,
-                        is_valid,
-                        refresh_token_enc,
-                        envelope_key_version,
-                        last_refresh_at,
-                        refresh_error_count
+                        is_valid
                     FROM third_party_tokens
                     WHERE user_id = ? AND provider = ? AND is_valid = 1
                     ORDER BY created_at DESC
@@ -235,7 +272,7 @@ class TokenDAO:
                 row = cursor.fetchone()
                 if row:
                     t = ThirdPartyToken.from_db_row(row)
-                    # If encrypted refresh token present, attempt decryption
+                    # If encrypted access or refresh token present, attempt decryption
                     try:
                         if t.refresh_token_enc:
                             from .crypto_tokens import decrypt_token
@@ -244,6 +281,13 @@ class TokenDAO:
                     except Exception:
                         # Decryption failed: keep plaintext column if present (rollback mode)
                         logger.warning("Failed to decrypt refresh_token_enc, falling back to plaintext column if available")
+                    try:
+                        if t.access_token_enc:
+                            from .crypto_tokens import decrypt_token
+
+                            t.access_token = decrypt_token(t.access_token_enc)
+                    except Exception:
+                        logger.warning("Failed to decrypt access_token_enc, falling back to plaintext access_token if available")
                     try:
                         logger.info(
                             "🔐 TOKEN STORE: get_token fetched",
@@ -285,21 +329,22 @@ class TokenDAO:
 
                 cursor.execute(
                     """
-                    SELECT 
+                    SELECT
                         id,
                         user_id,
                         provider,
                         access_token,
+                        access_token_enc,
                         refresh_token,
+                        refresh_token_enc,
+                        envelope_key_version,
+                        last_refresh_at,
+                        refresh_error_count,
                         scope,
                         expires_at,
                         created_at,
                         updated_at,
-                        is_valid,
-                        refresh_token_enc,
-                        envelope_key_version,
-                        last_refresh_at,
-                        refresh_error_count
+                        is_valid
                     FROM third_party_tokens
                     WHERE user_id = ? AND is_valid = 1
                     ORDER BY provider, created_at DESC

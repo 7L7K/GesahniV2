@@ -40,6 +40,49 @@ SPOTIFY_REFRESH_ERROR = Counter(
     "Spotify refresh errors",
 )
 
+# Google OAuth specific metrics
+GOOGLE_CONNECT_STARTED = Counter(
+    "google_connect_started_total",
+    "Google connect flow started",
+    ["user_id", "scopes_hash"],
+)
+
+GOOGLE_CONNECT_AUTHORIZE_URL_ISSUED = Counter(
+    "google_connect_authorize_url_issued_total",
+    "Google authorize URL issued",
+    ["user_id", "scopes_hash"],
+)
+
+GOOGLE_CALLBACK_SUCCESS = Counter(
+    "google_callback_success_total",
+    "Google callback success",
+    ["user_id", "scopes_hash"],
+)
+
+GOOGLE_CALLBACK_FAILED = Counter(
+    "google_callback_failed_total",
+    "Google callback failed",
+    ["user_id", "reason"],
+)
+
+GOOGLE_REFRESH_SUCCESS = Counter(
+    "google_refresh_success_total",
+    "Google token refresh success",
+    ["user_id"],
+)
+
+GOOGLE_REFRESH_FAILED = Counter(
+    "google_refresh_failed_total",
+    "Google token refresh failed",
+    ["user_id", "reason"],
+)
+
+GOOGLE_DISCONNECT_SUCCESS = Counter(
+    "google_disconnect_success_total",
+    "Google disconnect success",
+    ["user_id"],
+)
+
 SPOTIFY_LATENCY = Histogram(
     "integration_spotify_latency_seconds",
     "Spotify latency",

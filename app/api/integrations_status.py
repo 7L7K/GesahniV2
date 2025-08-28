@@ -2,6 +2,9 @@ from fastapi import APIRouter, Request
 
 from ..deps.user import get_current_user_id, resolve_user_id
 from ..integrations.spotify.client import SpotifyClient
+from ..auth_store_tokens import get_token
+from ..metrics import HEALTH_CHECK_DURATION_SECONDS
+import time
 
 router = APIRouter()
 
@@ -22,9 +25,31 @@ async def integrations_status(request: Request):
     except Exception as e:
         spotify_result = {"connected": False, "reason": str(e)}
 
+    # Compute Google provider health by inspecting tokens
+    google_result = {"status": "not_connected"}
+    try:
+        current_user = resolve_user_id(request=request)
+        if current_user and current_user != "anon":
+            t = await get_token(current_user, "google")
+            if not t:
+                google_result = {"status": "not_connected"}
+            else:
+                # Simple truth: if is_valid false -> not_connected
+                if not t.is_valid:
+                    google_result = {"status": "not_connected", "reason": "invalid"}
+                else:
+                    # Degraded if expired and refresh would fail (we attempt probe)
+                    now = int(time.time())
+                    if (t.expires_at - now) < 300:
+                        google_result = {"status": "degraded", "reason": "refresh_failed"}
+                    else:
+                        google_result = {"status": "connected"}
+    except Exception as e:
+        google_result = {"status": "not_connected", "reason": str(e)}
+
     return {
         "spotify": spotify_result,
-        "google": {"connected": False},
+        "google": google_result,
         "home_assistant": {"connected": False},
     }
 

@@ -1,5 +1,157 @@
 from __future__ import annotations
 
+import os
+import time
+import secrets
+import logging
+from dataclasses import dataclass
+from typing import Any
+
+import httpx
+
+from ...models.third_party_tokens import ThirdPartyToken
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class GoogleTokenResponse:
+    access_token: str
+    refresh_token: str | None
+    scope: str | None
+    expires_at: int
+
+
+class GoogleOAuthError(Exception):
+    pass
+
+
+class GoogleOAuth:
+    def __init__(self) -> None:
+        self.client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+        self.client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+        self.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
+        self.scopes = os.getenv("GOOGLE_SCOPES", "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly").strip()
+
+        if not self.client_id or not self.client_secret:
+            raise ValueError("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required")
+
+    def get_authorization_url(self, state: str) -> str:
+        from urllib.parse import urlencode
+
+        params = {
+            "client_id": self.client_id,
+            "response_type": "code",
+            "redirect_uri": self.redirect_uri,
+            "scope": self.scopes,
+            "state": state,
+            "access_type": "offline",
+            "include_granted_scopes": "true",
+            "prompt": "consent",
+        }
+        return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+
+    async def exchange_code_for_tokens(self, code: str) -> dict[str, Any]:
+        token_url = "https://oauth2.googleapis.com/token"
+        data = {
+            "code": code,
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "redirect_uri": self.redirect_uri,
+            "grant_type": "authorization_code",
+        }
+
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(token_url, data=data, headers=headers)
+            if r.status_code != 200:
+                raise GoogleOAuthError(f"Token exchange failed: {r.status_code} {r.text}")
+            td = r.json()
+            now = int(time.time())
+            expires_in = int(td.get("expires_in", 3600))
+            td["expires_at"] = now + expires_in
+            return td
+
+    async def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
+        token_url = "https://oauth2.googleapis.com/token"
+        data = {
+            "refresh_token": refresh_token,
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "grant_type": "refresh_token",
+        }
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(token_url, data=data, headers=headers)
+            if r.status_code != 200:
+                raise GoogleOAuthError(f"Token refresh failed: {r.status_code} {r.text}")
+            td = r.json()
+            now = int(time.time())
+            expires_in = int(td.get("expires_in", 3600))
+            td["expires_at"] = now + expires_in
+            # Google may not return a refresh_token on refresh
+            if "refresh_token" not in td:
+                td["refresh_token"] = refresh_token
+            return td
+
+
+async def gmail_unread_count(access_token: str) -> int:
+    """Small probe: return unread Gmail message count for primary mailbox."""
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = "https://www.googleapis.com/gmail/v1/users/me/messages"
+    params = {"q": "is:unread", "maxResults": 0}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.get(url, headers=headers, params=params)
+        if r.status_code != 200:
+            raise GoogleOAuthError(f"Gmail probe failed: {r.status_code} {r.text}")
+        data = r.json()
+        return int(data.get("resultSizeEstimate", 0))
+
+
+async def calendar_next_event(access_token: str) -> dict | None:
+    """Small probe: return the next upcoming event for the primary calendar."""
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+    params = {"orderBy": "startTime", "singleEvents": True, "maxResults": 1, "timeMin": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.get(url, headers=headers, params=params)
+        if r.status_code != 200:
+            raise GoogleOAuthError(f"Calendar probe failed: {r.status_code} {r.text}")
+        data = r.json()
+        items = data.get("items", [])
+        return items[0] if items else None
+
+
+def make_authorize_url(state: str) -> str:
+    return GoogleOAuth().get_authorization_url(state)
+
+
+async def exchange_code(code: str) -> ThirdPartyToken:
+    oauth = GoogleOAuth()
+    td = await oauth.exchange_code_for_tokens(code)
+    now = int(time.time())
+    expires_at = int(td.get("expires_at", now + int(td.get("expires_in", 3600))))
+
+    token = ThirdPartyToken(
+        id=f"google:{secrets.token_hex(8)}",
+        user_id="<set by caller>",
+        provider="google",
+        access_token=td.get("access_token", ""),
+        refresh_token=td.get("refresh_token"),
+        scope=td.get("scope"),
+        expires_at=expires_at,
+        created_at=now,
+        updated_at=now,
+    )
+
+    return token
+
+
+async def refresh_token(refresh_token: str) -> dict[str, Any]:
+    oauth = GoogleOAuth()
+    return await oauth.refresh_access_token(refresh_token)
+
 import base64
 import hashlib
 import hmac
