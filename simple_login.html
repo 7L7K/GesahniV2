@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Simple Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .form-group {
+            margin: 20px 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Login to Gesahni</h1>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" value="qazwsxppo" required>
+            </div>
+            <div class="form-group">
+                <button type="submit">Login</button>
+            </div>
+        </form>
+        <div id="result"></div>
+        <div class="form-group">
+            <button onclick="checkAuth()">Check Auth Status</button>
+        </div>
+        <div id="authStatus"></div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const resultDiv = document.getElementById('result');
+
+            try {
+                const response = await fetch(`http://localhost:8000/v1/auth/login?username=${username}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    resultDiv.innerHTML = '<p class="success">✅ Login successful! Redirecting...</p>';
+                    setTimeout(() => {
+                        window.location.href = 'http://localhost:3000';
+                    }, 1000);
+                } else {
+                    resultDiv.innerHTML = '<p class="error">❌ Login failed</p>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<p class="error">❌ Error: ' + error.message + '</p>';
+            }
+        });
+
+        async function checkAuth() {
+            const statusDiv = document.getElementById('authStatus');
+            try {
+                const response = await fetch('http://localhost:8000/v1/whoami', {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    statusDiv.innerHTML = '<p class="success">✅ Authenticated as: ' + data.user_id + '</p>';
+                } else {
+                    statusDiv.innerHTML = '<p class="error">❌ Not authenticated</p>';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<p class="error">❌ Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+
+</html>

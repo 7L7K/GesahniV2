@@ -28,10 +28,7 @@ interface ChatMessage {
   loading?: boolean;
 }
 
-// Custom hook to safely use Clerk hooks only when Clerk is enabled
-function useClerkAuth() {
-  return { isSignedIn: false, isLoaded: true, clerkEnabled: false };
-}
+// Clerk completely removed - using cookie authentication only
 
 export default function Page() {
   const router = useRouter();
@@ -49,14 +46,13 @@ export default function Page() {
   const finishAbortRef = useRef<AbortController | null>(null);
   const prevReadyRef = useRef<boolean>(false);
   const prevBackendOnlineRef = useRef<boolean | null>(null);
-  const { isSignedIn, isLoaded, clerkEnabled } = useClerkAuth();
+  // Clerk removed - using only cookie auth
 
   // Use centralized auth state
   const authed = authState.is_authenticated;
 
-  // For Clerk mode, we need to check both Clerk's state and backend state
-  // Only show auth buttons if Clerk is loaded and user is not signed in
-  const shouldShowAuthButtons = clerkEnabled ? (isLoaded && !isSignedIn) : !authed;
+  // Cookie mode only - show auth UI based on backend auth state
+  const shouldShowAuthButtons = !authed;
 
   // Model state
   const [model, setModel] = useState<string>('auto');
@@ -161,66 +157,15 @@ export default function Page() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Compute readiness for Clerk: isSignedIn AND whoamiOk
+  // Cookie mode: session ready based on backend auth state only
   useEffect(() => {
-    if (!clerkEnabled) return;
-    const ready = Boolean(isSignedIn && whoamiOk);
+    const ready = Boolean(authed && whoamiOk);
     if (ready !== sessionReady) {
       setSessionReady(ready);
     }
-  }, [clerkEnabled, isSignedIn, whoamiOk, sessionReady]);
+  }, [authed, whoamiOk, sessionReady]);
 
-  // Auth finish handling for Clerk
-  useEffect(() => {
-    if (!clerkEnabled || !isLoaded) return;
-
-    const handleAuthFinish = async () => {
-      if (finishOnceRef.current || finishBusy) return;
-      finishOnceRef.current = true;
-      setFinishBusy(true);
-      setFinishError(null);
-
-      // Cancel any existing request
-      if (finishAbortRef.current) {
-        finishAbortRef.current.abort();
-      }
-      finishAbortRef.current = new AbortController();
-
-      try {
-        // Signal auth finish start via bootstrap manager
-        bootstrapManager.setAuthFinishInProgress(true);
-        window.dispatchEvent(new CustomEvent('auth:finish_start'));
-
-        console.info('AUTH finisher: POST /v1/auth/finish (SPA style)');
-        const res = await apiFetch('/v1/auth/finish', { method: 'POST', auth: false, signal: finishAbortRef.current.signal });
-
-        if (res.status === 204) {
-          console.info('AUTH finisher: success, navigating to home');
-          router.push('/');
-        } else {
-          throw new Error(`Unexpected status: ${res.status}`);
-        }
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          console.info('AUTH finisher: aborted');
-          return;
-        }
-        console.error('AUTH finisher: error', error);
-        setFinishError(error instanceof Error ? error.message : 'Unknown error');
-        finishOnceRef.current = false; // Allow retry
-      } finally {
-        setFinishBusy(false);
-        // Signal auth finish end via bootstrap manager
-        bootstrapManager.setAuthFinishInProgress(false);
-        window.dispatchEvent(new CustomEvent('auth:finish_end'));
-      }
-    };
-
-    // Check if we need to finish auth
-    if (isSignedIn && !authed && !authState.isLoading) {
-      handleAuthFinish();
-    }
-  }, [clerkEnabled, isLoaded, isSignedIn, authed, authState.isLoading, router, bootstrapManager]);
+  // Removed Clerk auth finish handling - using cookie auth only
 
   // Music state management
   useEffect(() => {
@@ -530,7 +475,7 @@ export default function Page() {
   };
 
   // Show loading state while auth is being determined
-  if (authState.isLoading || (clerkEnabled && !isLoaded)) {
+  if (authState.isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -564,29 +509,9 @@ export default function Page() {
           <p className="text-muted-foreground mb-6">
             Please sign in to start chatting with your AI assistant.
           </p>
-          {clerkEnabled ? (
-            <div className="space-y-3">
-              {shouldShowAuthButtons ? (
-                <>
-                  <SignInButton mode="modal">
-                    <Button className="w-full">Sign In</Button>
-                  </SignInButton>
-                  <SignUpButton mode="modal">
-                    <Button variant="outline" className="w-full">Sign Up</Button>
-                  </SignUpButton>
-                </>
-              ) : (
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                  <p className="text-muted-foreground">Checking authentication...</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <Link href="/login">
-              <Button className="w-full">Login</Button>
-            </Link>
-          )}
+          <Link href="/login">
+            <Button className="w-full">Login</Button>
+          </Link>
         </div>
       </div>
     );

@@ -1,62 +1,40 @@
 'use client';
 
+// AuthProvider: initialize the client-side Auth Orchestrator early so
+// that components reading `useAuthState()` receive the correct state
+// during client hydration. This replaces previous Clerk integration.
 import { useEffect } from 'react';
-// Clerk integration disabled for cookie-mode frontend; leave component as passthrough
+import { getAuthOrchestrator } from '@/services/authOrchestrator';
 
-// Custom hook to manage Clerk token integration
-function useClerkTokenIntegration() {
-    useEffect(() => {
-        const updateClerkToken = async () => {
-            try {
-                // Check if Clerk is available
-                if (typeof window !== 'undefined' && window.Clerk) {
-                    const token = await window.Clerk.session?.getToken();
-                    if (token) {
-                        // Set the token on window for the getToken function to access
-                        (window as any).__clerkToken = token;
-                        console.debug('CLERK_TOKEN_INTEGRATION: Token set', {
-                            hasToken: !!token,
-                            tokenLength: token?.length || 0,
-                            timestamp: new Date().toISOString(),
-                        });
-                    } else {
-                        // Clear the token if no session
-                        delete (window as any).__clerkToken;
-                        console.debug('CLERK_TOKEN_INTEGRATION: Token cleared', {
-                            timestamp: new Date().toISOString(),
-                        });
-                    }
-                }
-            } catch (error) {
-                console.debug('CLERK_TOKEN_INTEGRATION: Error updating token', {
-                    error: error instanceof Error ? error.message : String(error),
-                    timestamp: new Date().toISOString(),
-                });
-            }
-        };
-
-        // Update token immediately
-        updateClerkToken();
-
-        // Set up listener for Clerk session changes
-        if (typeof window !== 'undefined' && window.Clerk) {
-            window.Clerk.addListener(({ user, session }) => {
-                updateClerkToken();
-            });
+export default function AuthProvider({ children }: { children: React.ReactNode }) {
+    // Initialize auth orchestrator synchronously during render
+    if (typeof window !== 'undefined') {
+        try {
+            const orchestrator = getAuthOrchestrator();
+            // Expose for debugging
+            (window as any).__authOrchestrator = orchestrator;
+            // Initialize orchestrator synchronously (idempotent)
+            void orchestrator.initialize();
+        } catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('AuthProvider: error during init', e);
         }
+    }
 
-        // Cleanup
+    // Still use useEffect for cleanup
+    useEffect(() => {
         return () => {
-            if (typeof window !== 'undefined' && window.Clerk) {
-                window.Clerk.removeListener(({ user, session }) => {
-                    updateClerkToken();
-                });
+            if (typeof window !== 'undefined') {
+                try {
+                    const orchestrator = getAuthOrchestrator();
+                    orchestrator.cleanup();
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.error('AuthProvider: error during cleanup', e);
+                }
             }
         };
     }, []);
-}
 
-export default function AuthProvider({ children }: { children: React.ReactNode }) {
-    // No Clerk: simply render children
     return <>{children}</>;
 }

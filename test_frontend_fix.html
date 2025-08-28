@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Test Frontend Fix</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔧 Frontend Fix Test</h1>
+
+    <div class="section info">
+        <h3>Test 1: Cookie-based Login</h3>
+        <button onclick="testCookieLogin()">Test Cookie Login</button>
+        <div id="cookieLoginResult"></div>
+    </div>
+
+    <div class="section info">
+        <h3>Test 2: Whoami with Auth=true</h3>
+        <button onclick="testWhoamiWithAuth()">Test Whoami (auth=true)</button>
+        <div id="whoamiAuthResult"></div>
+    </div>
+
+    <div class="section info">
+        <h3>Test 3: Simulate Frontend Auth Flow</h3>
+        <button onclick="simulateFrontendFlow()">Simulate Frontend Flow</button>
+        <div id="frontendFlowResult"></div>
+    </div>
+
+    <div class="section info">
+        <h3>Debug Info</h3>
+        <button onclick="showDebugInfo()">Show Debug Info</button>
+        <div id="debugInfo"></div>
+    </div>
+
+    <div class="section info">
+        <h3>Logs</h3>
+        <button onclick="clearLogs()">Clear</button>
+        <pre id="logs"></pre>
+    </div>
+
+    <script>
+        let logDiv = document.getElementById('logs');
+
+        function log(message) {
+            const timestamp = new Date().toISOString();
+            logDiv.textContent += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLogs() {
+            logDiv.textContent = '';
+        }
+
+        async function testCookieLogin() {
+            const resultDiv = document.getElementById('cookieLoginResult');
+            log('=== COOKIE LOGIN TEST ===');
+
+            try {
+                // Login with cookie mode
+                const loginResponse = await fetch('http://localhost:8000/v1/auth/login?username=qazwsxppo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                log(`Cookie login: ${loginResponse.status} ${loginResponse.statusText}`);
+
+                if (loginResponse.ok) {
+                    const loginData = await loginResponse.json();
+                    log(`Login data: ${JSON.stringify(loginData)}`);
+                    resultDiv.innerHTML = '<p class="success">✅ Cookie login works</p>';
+                } else {
+                    resultDiv.innerHTML = '<p class="error">❌ Cookie login failed</p>';
+                }
+            } catch (error) {
+                log(`Cookie login error: ${error.message}`);
+                resultDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testWhoamiWithAuth() {
+            const resultDiv = document.getElementById('whoamiAuthResult');
+            log('=== WHOAMI WITH AUTH TEST ===');
+
+            try {
+                // First login to get cookies
+                await fetch('http://localhost:8000/v1/auth/login?username=qazwsxppo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                // Test whoami with cookies (simulating auth=true behavior)
+                const whoamiResponse = await fetch('http://localhost:8000/v1/whoami', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                log(`Whoami with cookies: ${whoamiResponse.status} ${whoamiResponse.statusText}`);
+
+                if (whoamiResponse.ok) {
+                    const whoamiData = await whoamiResponse.json();
+                    log(`Whoami data: ${JSON.stringify(whoamiData, null, 2)}`);
+
+                    if (whoamiData.is_authenticated) {
+                        resultDiv.innerHTML = '<p class="success">✅ Whoami works with cookies</p>';
+                    } else {
+                        resultDiv.innerHTML = '<p class="error">❌ Whoami returns not authenticated</p>';
+                    }
+                } else {
+                    resultDiv.innerHTML = '<p class="error">❌ Whoami failed</p>';
+                }
+            } catch (error) {
+                log(`Whoami test error: ${error.message}`);
+                resultDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function simulateFrontendFlow() {
+            const resultDiv = document.getElementById('frontendFlowResult');
+            log('=== FRONTEND FLOW SIMULATION ===');
+
+            try {
+                // Step 1: Login via backend (sets cookies)
+                log('Step 1: Backend login...');
+                const loginResponse = await fetch('http://localhost:8000/v1/auth/login?username=qazwsxppo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                if (!loginResponse.ok) {
+                    throw new Error('Backend login failed');
+                }
+
+                log('Step 2: Frontend whoami check...');
+                // Step 2: Frontend whoami check (with credentials: include)
+                const whoamiResponse = await fetch('http://localhost:8000/v1/whoami', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Origin': 'http://localhost:3000'
+                    }
+                });
+
+                log(`Frontend whoami: ${whoamiResponse.status} ${whoamiResponse.statusText}`);
+
+                if (whoamiResponse.ok) {
+                    const authData = await whoamiResponse.json();
+                    log(`Auth data: ${JSON.stringify(authData, null, 2)}`);
+
+                    if (authData.is_authenticated && authData.session_ready) {
+                        resultDiv.innerHTML = '<p class="success">✅ Frontend flow should work</p>';
+                    } else {
+                        resultDiv.innerHTML = '<p class="error">❌ Frontend flow incomplete</p>';
+                    }
+                } else {
+                    resultDiv.innerHTML = '<p class="error">❌ Frontend whoami failed</p>';
+                }
+            } catch (error) {
+                log(`Frontend flow error: ${error.message}`);
+                resultDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function showDebugInfo() {
+            const resultDiv = document.getElementById('debugInfo');
+            log('=== DEBUG INFO ===');
+
+            try {
+                // Check localStorage
+                const accessToken = localStorage.getItem('auth:access');
+                const refreshToken = localStorage.getItem('auth:refresh');
+
+                log(`LocalStorage tokens: access=${!!accessToken}, refresh=${!!refreshToken}`);
+
+                // Check cookies
+                log(`Document cookies: ${document.cookie}`);
+
+                // Check environment
+                const headerMode = '0'; // From our env.local
+                log(`Header mode: ${headerMode}`);
+
+                resultDiv.innerHTML = `
+                    <pre>
+LocalStorage Tokens:
+  access: ${!!accessToken}
+  refresh: ${!!refreshToken}
+
+Document Cookies: ${document.cookie}
+
+Config:
+  HEADER_AUTH_MODE: 0 (cookie mode)
+  API_URL: http://localhost:8000
+                    </pre>
+                `;
+            } catch (error) {
+                log(`Debug info error: ${error.message}`);
+                resultDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        // Auto-run tests
+        window.onload = function () {
+            log('=== AUTO-RUNNING TESTS ===');
+            setTimeout(testCookieLogin, 500);
+            setTimeout(testWhoamiWithAuth, 2000);
+            setTimeout(simulateFrontendFlow, 4000);
+            setTimeout(showDebugInfo, 6000);
+        };
+    </script>
+</body>
+
+</html>

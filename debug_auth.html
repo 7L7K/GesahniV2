@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Auth Debug Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔍 Authentication Debug Tool</h1>
+
+    <div class="section info">
+        <h3>Current Status</h3>
+        <div id="status">Loading...</div>
+    </div>
+
+    <div class="section">
+        <h3>🔐 Authentication</h3>
+        <button onclick="login()">Login (username: test)</button>
+        <button onclick="logout()">Logout</button>
+        <button onclick="checkAuth()">Check Auth Status</button>
+        <div id="auth-result"></div>
+    </div>
+
+    <div class="section">
+        <h3>🎵 Spotify OAuth</h3>
+        <button onclick="connectSpotify()">Connect Spotify</button>
+        <button onclick="checkSpotifyStatus()">Check Spotify Status</button>
+        <div id="spotify-result"></div>
+    </div>
+
+    <div class="section">
+        <h3>🍪 Cookie Debug</h3>
+        <button onclick="debugCookies()">Debug Cookies</button>
+        <div id="cookie-result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+
+        async function apiCall(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            const config = {
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                ...options
+            };
+
+            try {
+                const response = await fetch(url, config);
+                const data = await response.json();
+                return { ok: response.ok, status: response.status, data };
+            } catch (error) {
+                return { ok: false, error: error.message };
+            }
+        }
+
+        async function updateStatus() {
+            const result = await apiCall('/v1/spotify/debug-cookie');
+            const statusDiv = document.getElementById('status');
+
+            if (result.ok) {
+                const data = result.data;
+                statusDiv.innerHTML = `
+                    <strong>Auth Cookie:</strong> ${data.has_auth_cookie ? '✅ Present' : '❌ Missing'}<br>
+                    <strong>Cookies:</strong> ${data.cookies.all_cookies.join(', ') || 'None'}<br>
+                    <strong>Host:</strong> ${data.request_info.host}<br>
+                    <strong>Origin:</strong> ${data.request_info.origin || 'None'}
+                `;
+                statusDiv.className = data.has_auth_cookie ? 'success' : 'error';
+            } else {
+                statusDiv.innerHTML = `<strong>Error:</strong> ${result.error || 'Unknown error'}`;
+                statusDiv.className = 'error';
+            }
+        }
+
+        async function login() {
+            const result = await apiCall('/v1/auth/login?username=test', { method: 'POST' });
+            const div = document.getElementById('auth-result');
+
+            if (result.ok) {
+                div.innerHTML = `<pre class="success">✅ Login successful: ${JSON.stringify(result.data, null, 2)}</pre>`;
+            } else {
+                div.innerHTML = `<pre class="error">❌ Login failed: ${JSON.stringify(result, null, 2)}</pre>`;
+            }
+
+            updateStatus();
+        }
+
+        async function logout() {
+            const result = await apiCall('/v1/auth/logout', { method: 'POST' });
+            const div = document.getElementById('auth-result');
+
+            if (result.ok) {
+                div.innerHTML = `<pre class="success">✅ Logout successful</pre>`;
+            } else {
+                div.innerHTML = `<pre class="error">❌ Logout failed: ${JSON.stringify(result, null, 2)}</pre>`;
+            }
+
+            updateStatus();
+        }
+
+        async function checkAuth() {
+            const result = await apiCall('/v1/whoami');
+            const div = document.getElementById('auth-result');
+
+            if (result.ok) {
+                div.innerHTML = `<pre class="success">✅ Auth check: ${JSON.stringify(result.data, null, 2)}</pre>`;
+            } else {
+                div.innerHTML = `<pre class="error">❌ Auth check failed: ${JSON.stringify(result, null, 2)}</pre>`;
+            }
+        }
+
+        async function connectSpotify() {
+            const result = await apiCall('/v1/spotify/connect');
+            const div = document.getElementById('spotify-result');
+
+            if (result.ok && result.data.authorize_url) {
+                div.innerHTML = `
+                    <pre class="success">✅ Spotify connect successful!</pre>
+                    <p><strong>Next step:</strong> Click the link below to authorize with Spotify:</p>
+                    <a href="${result.data.authorize_url}" target="_blank" style="color: #007bff;">🔗 Authorize with Spotify</a>
+                `;
+            } else {
+                div.innerHTML = `<pre class="error">❌ Spotify connect failed: ${JSON.stringify(result, null, 2)}</pre>`;
+            }
+        }
+
+        async function checkSpotifyStatus() {
+            const result = await apiCall('/v1/spotify/status');
+            const div = document.getElementById('spotify-result');
+
+            if (result.ok) {
+                div.innerHTML = `<pre class="success">✅ Spotify status: ${JSON.stringify(result.data, null, 2)}</pre>`;
+            } else {
+                div.innerHTML = `<pre class="error">❌ Spotify status check failed: ${JSON.stringify(result, null, 2)}</pre>`;
+            }
+        }
+
+        async function debugCookies() {
+            const result = await apiCall('/v1/spotify/debug-cookie');
+            const div = document.getElementById('cookie-result');
+
+            if (result.ok) {
+                div.innerHTML = `<pre class="info">🍪 Cookie debug: ${JSON.stringify(result.data, null, 2)}</pre>`;
+            } else {
+                div.innerHTML = `<pre class="error">❌ Cookie debug failed: ${JSON.stringify(result, null, 2)}</pre>`;
+            }
+        }
+
+        // Initialize
+        updateStatus();
+    </script>
+</body>
+
+</html>

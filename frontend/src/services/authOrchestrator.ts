@@ -237,26 +237,45 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
     }
 
     async initialize(): Promise<void> {
+        // Return immediately if already initialized to prevent race conditions
         if (this.initialized) {
-            console.warn('AUTH Orchestrator: Already initialized');
+            console.info('AUTH Orchestrator: Already initialized');
             return;
         }
+
+        // Set initialized flag first to prevent concurrent initialization
+        this.initialized = true;
 
         console.info('AUTH Orchestrator: Initializing', {
             timestamp: new Date().toISOString(),
             hasToken: Boolean(getToken()),
         });
 
-        // Set loading state immediately when starting initialization
+        // Set initial state synchronously
         this.setState({
             isLoading: true,
             error: null,
+            is_authenticated: false,
+            session_ready: false,
+            user_id: null,
+            user: null,
+            source: 'missing',
+            version: 1,
+            lastChecked: Date.now(),
+            whoamiOk: false,
         });
 
-        this.initialized = true;
-
         // Initial auth check on mount - bypass rate limiting for initialization
-        await this._performWhoamiCheck();
+        try {
+            await this._performWhoamiCheck();
+        } catch (error) {
+            console.error('AUTH Orchestrator: Initialization error', error);
+            // Don't throw - let components handle auth state
+            this.setState({
+                isLoading: false,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
     }
 
     async checkAuth(): Promise<void> {
@@ -352,9 +371,33 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
         });
 
         try {
+            // Enhanced logging before the request
+            console.info(`AUTH Orchestrator: Making whoami request #${this.whoamiCallCount}`, {
+                timestamp: new Date().toISOString(),
+                requestConfig: {
+                    method: 'GET',
+                    auth: true,
+                    dedupe: false,
+                    url: '/v1/whoami'
+                },
+                environment: {
+                    headerMode: process.env.NEXT_PUBLIC_HEADER_AUTH_MODE,
+                    apiUrl: process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000"
+                },
+                localStorage: {
+                    hasAccessToken: !!localStorage.getItem('auth:access'),
+                    hasRefreshToken: !!localStorage.getItem('auth:refresh'),
+                    authEpoch: localStorage.getItem('auth:epoch')
+                },
+                cookies: {
+                    documentCookies: document.cookie,
+                    cookieCount: document.cookie ? document.cookie.split(';').length : 0
+                }
+            });
+
             const response = await apiFetch('/v1/whoami', {
                 method: 'GET',
-                auth: false, // Don't require authentication for whoami check
+                auth: true, // Include authentication for whoami check
                 dedupe: false, // Always make fresh request for auth checks
             });
 

@@ -5,33 +5,13 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import ThemeToggle from '@/components/ThemeToggle';
-import { SignedIn, SignInButton, SignUpButton, UserButton } from '@clerk/nextjs';
+// Clerk removed - using cookie authentication only
 import { useAuthState } from '@/hooks/useAuth';
 import { getToken, clearTokens, getBudget, bumpAuthEpoch, apiFetch } from '@/lib/api';
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
 import ClientOnly from './ClientOnly';
 
-// Custom hook to safely use Clerk hooks only when Clerk is enabled
-function useClerkAuth() {
-    const isClerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-
-    if (!isClerkEnabled) {
-        return { isSignedIn: false, isLoaded: true, clerkEnabled: false };
-    }
-
-    // Dynamically import Clerk hooks only when needed
-    try {
-        const { useAuth } = require('@clerk/nextjs');
-        const { isSignedIn, isLoaded } = useAuth();
-        return { isSignedIn, isLoaded, clerkEnabled: true };
-    } catch (error) {
-        // Suppress console warnings for expected Clerk errors
-        if (!error.message.includes('ClerkProvider')) {
-            console.warn('Clerk hooks not available:', error);
-        }
-        return { isSignedIn: false, isLoaded: true, clerkEnabled: false };
-    }
-}
+// Clerk completely removed - using cookie authentication only
 
 export default function Header() {
     const authState = useAuthState();
@@ -39,14 +19,13 @@ export default function Header() {
     const pathname = usePathname();
     // Note: useAuth() must only be used within ClerkProvider.
     // We render a small child component inside <SignedIn> to bump auth epoch on user changes.
-    const { isSignedIn, isLoaded, clerkEnabled } = useClerkAuth();
+    // Clerk removed - using only cookie auth state
 
     // Use centralized auth state instead of making direct whoami calls
     const authed = authState.is_authenticated;
 
-    // For Clerk mode, we need to check both Clerk's state and backend state
-    // Only show auth buttons if Clerk is loaded and user is not signed in
-    const shouldShowAuthButtons = clerkEnabled ? (isLoaded && !isSignedIn) : !authed;
+    // Cookie mode only - show auth buttons if not authenticated
+    const shouldShowAuthButtons = !authed;
 
     const doLogout = async () => {
         // Clear tokens and state immediately for better UX
@@ -175,41 +154,17 @@ export default function Header() {
                     <div className="w-full flex-1 md:w-auto md:flex-none">
                     </div>
                     <nav className="flex items-center space-x-2">
-                        {clerkEnabled && isLoaded ? (
-                            <>
-                                {shouldShowAuthButtons ? (
-                                    <>
-                                        <SignInButton mode="modal">
-                                            <Button variant="ghost" size="sm">
-                                                Sign In
-                                            </Button>
-                                        </SignInButton>
-                                        <SignUpButton mode="modal">
-                                            <Button size="sm">
-                                                Sign Up
-                                            </Button>
-                                        </SignUpButton>
-                                    </>
-                                ) : (
-                                    <SignedIn>
-                                        <UserButton afterSignOutUrl="/" />
-                                    </SignedIn>
-                                )}
-                            </>
+                        {/* Cookie authentication only */}
+                        {authed ? (
+                            <Button variant="ghost" size="sm" onClick={doLogout}>
+                                Logout
+                            </Button>
                         ) : (
-                            <>
-                                {authed ? (
-                                    <Button variant="ghost" size="sm" onClick={doLogout}>
-                                        Logout
-                                    </Button>
-                                ) : (
-                                    <Link href="/login">
-                                        <Button variant="ghost" size="sm">
-                                            Login
-                                        </Button>
-                                    </Link>
-                                )}
-                            </>
+                            <Link href="/login">
+                                <Button variant="ghost" size="sm">
+                                    Login
+                                </Button>
+                            </Link>
                         )}
                         <ThemeToggle />
                         <ClientOnly>

@@ -165,6 +165,20 @@ async def spotify_connect(request: Request, user_id: str = Depends(get_current_u
 
     Returns the authorization URL as JSON for frontend consumption.
     """
+    # Enhanced logging for debugging
+    logger.info("🎵 SPOTIFY CONNECT: Request started", extra={
+        "meta": {
+            "user_id": user_id,
+            "cookies_count": len(request.cookies),
+            "cookie_names": list(request.cookies.keys()),
+            "has_gsnh_at": bool(request.cookies.get(GSNH_AT)),
+            "has_auth_token": bool(request.cookies.get("auth_token")),
+            "authorization_header": bool(request.headers.get("Authorization")),
+            "host": request.headers.get("host"),
+            "origin": request.headers.get("origin"),
+            "user_agent": request.headers.get("user-agent", "")[:50] + "..." if len(request.headers.get("user-agent", "")) > 50 else request.headers.get("user-agent", "")
+        }
+    })
     import uuid
     import jwt
     import time
@@ -312,14 +326,42 @@ async def spotify_callback_test(request: Request):
 
 @router.get("/debug-cookie")
 async def spotify_debug_cookie(request: Request) -> dict:
-    """Dev-only helper: return whether an auth cookie is present."""
+    """Dev-only helper: return detailed auth and cookie information."""
     if os.getenv("DEV_MODE") or os.getenv("SPOTIFY_TEST_MODE") == "1":
-        has = bool(request.cookies.get(GSNH_AT) or request.cookies.get("auth_token"))
-        return {"has_auth_cookie": has}
+        # Check all possible auth cookies
+        gsnh_at = request.cookies.get(GSNH_AT)
+        auth_token = request.cookies.get("auth_token")
+        access_token = request.cookies.get("access_token")
+        
+        # Check Authorization header
+        auth_header = request.headers.get("Authorization", "")
+        has_bearer = auth_header.startswith("Bearer ")
+        
+        # Get all cookies for debugging
+        all_cookies = dict(request.cookies)
+        
+        return {
+            "has_auth_cookie": bool(gsnh_at or auth_token or access_token),
+            "cookies": {
+                "GSNH_AT": bool(gsnh_at),
+                "auth_token": bool(auth_token),
+                "access_token": bool(access_token),
+                "all_cookies": list(all_cookies.keys())
+            },
+            "headers": {
+                "has_authorization": has_bearer,
+                "authorization_preview": auth_header[:50] + "..." if len(auth_header) > 50 else auth_header
+            },
+            "request_info": {
+                "host": request.headers.get("host"),
+                "origin": request.headers.get("origin"),
+                "referer": request.headers.get("referer")
+            }
+        }
     raise HTTPException(status_code=404, detail="not_found")
 
 @router.get("/callback")
-async def spotify_callback(code: str | None = None, state: str | None = None) -> Response:
+async def spotify_callback(request: Request, code: str | None = None, state: str | None = None) -> Response:
     """Handle Spotify OAuth callback with stateless JWT state.
 
     Recovers user_id + PKCE code_verifier from JWT state + server store.
@@ -336,7 +378,16 @@ async def spotify_callback(code: str | None = None, state: str | None = None) ->
             "code_length": len(code) if code else 0,
             "state_length": len(state) if state else 0,
             "code_preview": code[:20] + "..." if code and len(code) > 20 else code or "None",
-            "state_preview": state[:50] + "..." if state and len(state) > 50 else state or "None"
+            "state_preview": state[:50] + "..." if state and len(state) > 50 else state or "None",
+            "cookies_count": len(request.cookies),
+            "cookie_names": list(request.cookies.keys()),
+            "has_gsnh_at": bool(request.cookies.get(GSNH_AT)),
+            "has_auth_token": bool(request.cookies.get("auth_token")),
+            "authorization_header": bool(request.headers.get("Authorization")),
+            "host": request.headers.get("host"),
+            "origin": request.headers.get("origin"),
+            "referer": request.headers.get("referer"),
+            "user_agent": request.headers.get("user-agent", "")[:50] + "..." if len(request.headers.get("user-agent", "")) > 50 else request.headers.get("user-agent", "")
         }
     })
 

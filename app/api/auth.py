@@ -734,7 +734,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
 
 
 @router.get("/whoami")
-async def whoami(request: Request, _: Request = Depends(log_request_meta)) -> JSONResponse:
+async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONResponse:
     """CANONICAL: Public whoami endpoint - the single source of truth for user identity.
 
     This is the canonical whoami endpoint that should be used by all clients.
@@ -929,7 +929,7 @@ async def whoami(request: Request, _: Request = Depends(log_request_meta)) -> JS
 @router.get("/auth/whoami")
 async def auth_whoami(
     request: Request,
-    _: Request = Depends(log_request_meta),
+    _: None = Depends(log_request_meta),
 ) -> JSONResponse:
     """DEPRECATED: Use /whoami endpoint instead.
 
@@ -2071,7 +2071,7 @@ async def logout(request: Request, response: Response):
         }
     },
 )
-async def refresh(request: Request, response: Response, _: Request = Depends(log_request_meta)):
+async def refresh(request: Request, response: Response, _: None = Depends(log_request_meta)):
     """Rotate access/refresh cookies.
 
     Intent: When COOKIE_SAMESITE=none, require header X-Auth-Intent: refresh.

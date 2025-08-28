@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Reproduce Auth Issue</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        .log {
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔍 Auth Issue Reproduction Tool</h1>
+
+    <div class="section info">
+        <h3>Step 1: Test Backend Auth</h3>
+        <button onclick="testBackendAuth()">Test Backend Auth</button>
+        <div id="backendResult"></div>
+    </div>
+
+    <div class="section info">
+        <h3>Step 2: Test Frontend Auth Simulation</h3>
+        <button onclick="testFrontendAuth()">Simulate Frontend Auth Check</button>
+        <div id="frontendResult"></div>
+    </div>
+
+    <div class="section info">
+        <h3>Step 3: Test Cross-Origin Requests</h3>
+        <button onclick="testCrossOrigin()">Test CORS with Credentials</button>
+        <div id="corsResult"></div>
+    </div>
+
+    <div class="section info">
+        <h3>Step 4: Debug Cookie Transmission</h3>
+        <button onclick="debugCookies()">Debug Cookie Behavior</button>
+        <div id="cookieResult"></div>
+    </div>
+
+    <div class="section info">
+        <h3>Live Logs</h3>
+        <button onclick="clearLogs()">Clear Logs</button>
+        <pre id="logs" class="log"></pre>
+    </div>
+
+    <script>
+        let logDiv = document.getElementById('logs');
+
+        function log(message) {
+            const timestamp = new Date().toISOString();
+            logDiv.textContent += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLogs() {
+            logDiv.textContent = '';
+        }
+
+        async function testBackendAuth() {
+            const resultDiv = document.getElementById('backendResult');
+            log('=== BACKEND AUTH TEST ===');
+
+            try {
+                // First, login
+                log('Step 1: Logging in as qazwsxppo...');
+                const loginResponse = await fetch('http://localhost:8000/v1/auth/login?username=qazwsxppo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                log(`Login response: ${loginResponse.status} ${loginResponse.statusText}`);
+
+                // Check response headers for cookies
+                const setCookieHeaders = loginResponse.headers.get('set-cookie');
+                log(`Set-Cookie headers: ${setCookieHeaders || 'None'}`);
+
+                if (loginResponse.ok) {
+                    const loginData = await loginResponse.json();
+                    log(`Login data: ${JSON.stringify(loginData)}`);
+
+                    // Now test whoami
+                    log('Step 2: Testing whoami...');
+                    const whoamiResponse = await fetch('http://localhost:8000/v1/whoami', {
+                        credentials: 'include'
+                    });
+
+                    log(`Whoami response: ${whoamiResponse.status} ${whoamiResponse.statusText}`);
+
+                    if (whoamiResponse.ok) {
+                        const whoamiData = await whoamiResponse.json();
+                        log(`Whoami data: ${JSON.stringify(whoamiData, null, 2)}`);
+                        resultDiv.innerHTML = '<p class="success">✅ Backend auth working</p>';
+                    } else {
+                        const errorText = await whoamiResponse.text();
+                        log(`Whoami error: ${errorText}`);
+                        resultDiv.innerHTML = '<p class="error">❌ Whoami failed</p>';
+                    }
+                } else {
+                    const errorText = await loginResponse.text();
+                    log(`Login error: ${errorText}`);
+                    resultDiv.innerHTML = '<p class="error">❌ Login failed</p>';
+                }
+            } catch (error) {
+                log(`Backend auth test error: ${error.message}`);
+                resultDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testFrontendAuth() {
+            const resultDiv = document.getElementById('frontendResult');
+            log('=== FRONTEND AUTH SIMULATION ===');
+
+            try {
+                // Simulate what the frontend auth orchestrator does
+                log('Step 1: Checking current auth state...');
+
+                const whoamiResponse = await fetch('http://localhost:8000/v1/whoami', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                log(`Frontend whoami response: ${whoamiResponse.status} ${whoamiResponse.statusText}`);
+                log(`Response headers: ${JSON.stringify([...whoamiResponse.headers.entries()])}`);
+
+                if (whoamiResponse.ok) {
+                    const authData = await whoamiResponse.json();
+                    log(`Frontend auth data: ${JSON.stringify(authData, null, 2)}`);
+
+                    if (authData.is_authenticated) {
+                        resultDiv.innerHTML = '<p class="success">✅ Frontend should show authenticated</p>';
+                    } else {
+                        resultDiv.innerHTML = '<p class="error">❌ Frontend would show not authenticated</p>';
+                    }
+                } else {
+                    const errorText = await whoamiResponse.text();
+                    log(`Frontend whoami error: ${errorText}`);
+                    resultDiv.innerHTML = '<p class="error">❌ Frontend auth check failed</p>';
+                }
+            } catch (error) {
+                log(`Frontend auth test error: ${error.message}`);
+                resultDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testCrossOrigin() {
+            const resultDiv = document.getElementById('corsResult');
+            log('=== CORS TEST ===');
+
+            try {
+                // Test CORS with credentials from different origins
+                log('Testing CORS with credentials...');
+
+                const response = await fetch('http://localhost:8000/v1/whoami', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Origin': 'http://localhost:3000',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                log(`CORS response: ${response.status} ${response.statusText}`);
+                log(`CORS headers: ${JSON.stringify([...response.headers.entries()])}`);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`CORS data: ${JSON.stringify(data, null, 2)}`);
+                    resultDiv.innerHTML = '<p class="success">✅ CORS working with credentials</p>';
+                } else {
+                    resultDiv.innerHTML = '<p class="error">❌ CORS failed</p>';
+                }
+            } catch (error) {
+                log(`CORS test error: ${error.message}`);
+                resultDiv.innerHTML = `<p class="error">❌ CORS Error: ${error.message}</p>`;
+            }
+        }
+
+        async function debugCookies() {
+            const resultDiv = document.getElementById('cookieResult');
+            log('=== COOKIE DEBUG ===');
+
+            try {
+                // Check what cookies the browser has
+                log(`Document cookies: ${document.cookie}`);
+
+                // Test the debug endpoint
+                log('Testing debug endpoint...');
+                const debugResponse = await fetch('http://localhost:8000/v1/spotify/debug-cookie', {
+                    credentials: 'include'
+                });
+
+                if (debugResponse.ok) {
+                    const debugData = await debugResponse.json();
+                    log(`Debug data: ${JSON.stringify(debugData, null, 2)}`);
+
+                    if (debugData.has_auth_cookie) {
+                        resultDiv.innerHTML = '<p class="success">✅ Backend sees auth cookies</p>';
+                    } else {
+                        resultDiv.innerHTML = '<p class="error">❌ Backend does not see auth cookies</p>';
+                    }
+                } else {
+                    log(`Debug endpoint failed: ${debugResponse.status}`);
+                    resultDiv.innerHTML = '<p class="error">❌ Debug endpoint failed</p>';
+                }
+            } catch (error) {
+                log(`Cookie debug error: ${error.message}`);
+                resultDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        // Auto-run all tests on load
+        window.onload = function () {
+            log('=== AUTO-RUNNING ALL TESTS ===');
+            setTimeout(() => testBackendAuth(), 500);
+            setTimeout(() => testFrontendAuth(), 2000);
+            setTimeout(() => testCrossOrigin(), 3500);
+            setTimeout(() => debugCookies(), 5000);
+        };
+    </script>
+</body>
+
+</html>

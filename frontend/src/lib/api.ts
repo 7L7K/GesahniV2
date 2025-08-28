@@ -420,9 +420,20 @@ export async function apiFetch(
   if (isAuthRequest) {
     console.info('API_FETCH auth.headers', {
       path,
+      auth,
+      isHeaderMode,
+      credentials,
       mergedHeaders: Object.fromEntries(Object.entries(mergedHeaders)),
       hasAuthHeader: !!mergedHeaders && typeof mergedHeaders === 'object' && 'Authorization' in mergedHeaders,
       hasCsrfToken: !!mergedHeaders && typeof mergedHeaders === 'object' && 'X-CSRF-Token' in mergedHeaders,
+      localStorage: {
+        hasAccessToken: !!getToken(),
+        accessTokenLength: getToken()?.length || 0
+      },
+      cookies: {
+        documentCookies: typeof document !== 'undefined' ? document.cookie : 'N/A',
+        cookieCount: typeof document !== 'undefined' && document.cookie ? document.cookie.split(';').length : 0
+      },
       timestamp: new Date().toISOString(),
     });
   }

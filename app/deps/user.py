@@ -129,35 +129,44 @@ def get_current_user_id(
         except Exception:
             token = None
 
-    # Log token source exactly once per request to reduce noise
+    # Enhanced logging for debugging auth issues
     try:
         logged_flag = None
         if target is not None:
             logged_flag = getattr(target.state, "auth_token_source_logged", None)
         if not logged_flag:
+            request_path = (
+                getattr(request, "url", {}).path
+                if hasattr(getattr(request, "url", {}), "path")
+                else "unknown" if request else "websocket"
+            )
+            
             if token:
-                logger.debug(
-                    "auth.token_source",
+                logger.info(
+                    "auth.token_found",
                     extra={
                         "token_source": token_source,
                         "has_token": bool(token),
                         "token_length": len(token) if token else 0,
-                        "request_path": (
-                            getattr(request, "url", {}).path
-                            if hasattr(getattr(request, "url", {}), "path")
-                            else "unknown" if request else "websocket"
-                        ),
+                        "token_preview": token[:20] + "..." if token and len(token) > 20 else token,
+                        "request_path": request_path,
+                        "all_cookies": list(request.cookies.keys()) if request else [],
+                        "cookie_count": len(request.cookies) if request else 0,
+                        "auth_header": bool(request.headers.get("Authorization")) if request else False,
+                        "origin": request.headers.get("origin") if request else None,
+                        "user_agent": request.headers.get("user-agent", "")[:50] if request else None
                     },
                 )
             else:
                 logger.info(
                     "auth.no_token",
                     extra={
-                        "request_path": (
-                            getattr(request, "url", {}).path
-                            if hasattr(getattr(request, "url", {}), "path")
-                            else "unknown" if request else "websocket"
-                        ),
+                        "request_path": request_path,
+                        "all_cookies": list(request.cookies.keys()) if request else [],
+                        "cookie_count": len(request.cookies) if request else 0,
+                        "auth_header": bool(request.headers.get("Authorization")) if request else False,
+                        "origin": request.headers.get("origin") if request else None,
+                        "user_agent": request.headers.get("user-agent", "")[:50] if request else None
                     },
                 )
             # mark as logged for this request to avoid duplicate logs

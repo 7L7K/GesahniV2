@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Comprehensive Auth Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+        }
+
+        button {
+            padding: 12px 24px;
+            margin: 8px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: black;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+
+        .log-entry {
+            margin: 5px 0;
+            padding: 8px;
+            border-left: 3px solid #ccc;
+            font-family: monospace;
+            font-size: 11px;
+        }
+
+        .log-info {
+            border-left-color: #17a2b8;
+        }
+
+        .log-error {
+            border-left-color: #dc3545;
+            background: #fef2f2;
+        }
+
+        .log-success {
+            border-left-color: #28a745;
+            background: #f0f9f0;
+        }
+
+        h3 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .status-card {
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .status-ok {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-fail {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-unknown {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔍 Comprehensive Authentication Debug Tool</h1>
+
+        <div class="section info">
+            <h3>🎯 Quick Actions</h3>
+            <button class="btn-primary" onclick="runFullDiagnostic()">🔍 Run Full Diagnostic</button>
+            <button class="btn-success" onclick="attemptLogin()">📝 Attempt Login</button>
+            <button class="btn-warning" onclick="checkCurrentState()">📊 Check Current State</button>
+            <button class="btn-danger" onclick="clearEverything()">🧹 Clear Everything</button>
+        </div>
+
+        <div class="grid">
+            <div class="section">
+                <h3>📊 Current Status</h3>
+                <div id="statusGrid" class="status-grid"></div>
+            </div>
+
+            <div class="section">
+                <h3>🍪 Cookie Analysis</h3>
+                <div id="cookieAnalysis"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🔍 Authentication Tests</h3>
+            <div class="grid">
+                <div>
+                    <h4>Backend Tests</h4>
+                    <button onclick="testBackendLogin()">Test Backend Login</button>
+                    <button onclick="testBackendWhoami()">Test Backend Whoami</button>
+                    <div id="backendTests"></div>
+                </div>
+                <div>
+                    <h4>Frontend Simulation</h4>
+                    <button onclick="simulateFrontendFlow()">Simulate Frontend</button>
+                    <button onclick="testCrossOrigin()">Test CORS</button>
+                    <div id="frontendTests"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>📋 Live Logs</h3>
+            <button onclick="clearLogs()">Clear Logs</button>
+            <button onclick="exportLogs()">Export Logs</button>
+            <div id="logs" style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;"></div>
+        </div>
+    </div>
+
+    <script>
+        let logs = [];
+        let logDiv = document.getElementById('logs');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toISOString();
+            const entry = { timestamp, message, type };
+            logs.push(entry);
+
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.textContent = `[${timestamp.split('T')[1].split('.')[0]}] ${message}`;
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLogs() {
+            logs = [];
+            logDiv.innerHTML = '';
+        }
+
+        function exportLogs() {
+            const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `auth-debug-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+        }
+
+        function updateStatus(key, status, message) {
+            const statusGrid = document.getElementById('statusGrid');
+            let statusCard = document.getElementById(`status-${key}`);
+
+            if (!statusCard) {
+                statusCard = document.createElement('div');
+                statusCard.id = `status-${key}`;
+                statusCard.className = 'status-card';
+                statusGrid.appendChild(statusCard);
+            }
+
+            const statusClass = status === 'ok' ? 'status-ok' : status === 'fail' ? 'status-fail' : 'status-unknown';
+            statusCard.className = `status-card ${statusClass}`;
+            statusCard.innerHTML = `<strong>${key}</strong><br>${message}`;
+        }
+
+        function updateCookieAnalysis() {
+            const cookieDiv = document.getElementById('cookieAnalysis');
+            const cookies = document.cookie;
+
+            if (cookies) {
+                const cookieList = cookies.split(';').map(c => c.trim());
+                const authCookies = cookieList.filter(c =>
+                    c.startsWith('GSNH_') ||
+                    c.startsWith('access_token') ||
+                    c.startsWith('__session')
+                );
+
+                cookieDiv.innerHTML = `
+                    <p><strong>Total Cookies:</strong> ${cookieList.length}</p>
+                    <p><strong>Auth Cookies:</strong> ${authCookies.length}</p>
+                    <pre>${authCookies.map(c => {
+                    const [name, value] = c.split('=');
+                    return `${name}=${value ? value.substring(0, 20) + '...' : 'empty'}`;
+                }).join('\n')}</pre>
+                `;
+            } else {
+                cookieDiv.innerHTML = '<p>❌ No cookies found</p>';
+            }
+        }
+
+        async function checkCurrentState() {
+            log('=== CHECKING CURRENT STATE ===');
+
+            // Check localStorage
+            const hasAccess = !!localStorage.getItem('auth:access');
+            const hasRefresh = !!localStorage.getItem('auth:refresh');
+            const authEpoch = localStorage.getItem('auth:epoch');
+
+            updateStatus('LocalStorage', hasAccess ? 'ok' : 'fail',
+                `Access: ${hasAccess ? '✅' : '❌'}<br>Refresh: ${hasRefresh ? '✅' : '❌'}`);
+
+            log(`LocalStorage - Access: ${hasAccess}, Refresh: ${hasRefresh}, Epoch: ${authEpoch}`);
+
+            // Check cookies
+            updateCookieAnalysis();
+
+            // Test backend whoami
+            try {
+                const response = await fetch('http://localhost:8000/v1/whoami', {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    updateStatus('Backend Auth', 'ok',
+                        `User: ${data.user_id}<br>Source: ${data.source}`);
+                    log(`Backend whoami: ✅ ${data.user_id} (${data.source})`, 'success');
+                } else {
+                    updateStatus('Backend Auth', 'fail', `HTTP ${response.status}`);
+                    log(`Backend whoami: ❌ ${response.status}`, 'error');
+                }
+            } catch (error) {
+                updateStatus('Backend Auth', 'fail', 'Network Error');
+                log(`Backend whoami error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testBackendLogin() {
+            log('=== TESTING BACKEND LOGIN ===');
+
+            try {
+                const response = await fetch('http://localhost:8000/v1/auth/login?username=qazwsxppo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                log(`Login response: ${response.status} ${response.statusText}`);
+
+                // Check Set-Cookie headers
+                const setCookie = response.headers.get('set-cookie');
+                if (setCookie) {
+                    log(`Set-Cookie headers found: ${setCookie}`, 'success');
+                } else {
+                    log('No Set-Cookie headers found', 'error');
+                }
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`Login successful: ${JSON.stringify(data)}`, 'success');
+                    updateStatus('Backend Login', 'ok', 'Login Success');
+
+                    // Update cookie analysis
+                    setTimeout(updateCookieAnalysis, 100);
+                } else {
+                    log(`Login failed: ${response.status}`, 'error');
+                    updateStatus('Backend Login', 'fail', `HTTP ${response.status}`);
+                }
+            } catch (error) {
+                log(`Login error: ${error.message}`, 'error');
+                updateStatus('Backend Login', 'fail', 'Network Error');
+            }
+        }
+
+        async function testBackendWhoami() {
+            log('=== TESTING BACKEND WHOAMI ===');
+
+            try {
+                const response = await fetch('http://localhost:8000/v1/whoami', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Origin': 'http://localhost:3000'
+                    }
+                });
+
+                log(`Whoami response: ${response.status} ${response.statusText}`);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`Whoami data: ${JSON.stringify(data, null, 2)}`, 'success');
+                    updateStatus('Backend Whoami', 'ok',
+                        `User: ${data.user_id}<br>Auth: ${data.is_authenticated ? '✅' : '❌'}`);
+                } else {
+                    const errorText = await response.text();
+                    log(`Whoami failed: ${errorText}`, 'error');
+                    updateStatus('Backend Whoami', 'fail', `HTTP ${response.status}`);
+                }
+            } catch (error) {
+                log(`Whoami error: ${error.message}`, 'error');
+                updateStatus('Backend Whoami', 'fail', 'Network Error');
+            }
+        }
+
+        async function simulateFrontendFlow() {
+            log('=== SIMULATING FRONTEND FLOW ===');
+
+            // This simulates what the frontend AuthOrchestrator should do
+            try {
+                // Step 1: Check if we have localStorage tokens
+                const hasLocalStorageToken = !!localStorage.getItem('auth:access');
+                log(`LocalStorage token: ${hasLocalStorageToken ? 'Found' : 'Not found'}`);
+
+                // Step 2: Make whoami request like the frontend would
+                const response = await fetch('http://localhost:8000/v1/whoami', {
+                    method: 'GET',
+                    credentials: 'include', // This is what the frontend should do
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'Origin': 'http://localhost:3000',
+                        'User-Agent': 'FrontendSimulator/1.0'
+                    }
+                });
+
+                log(`Frontend whoami simulation: ${response.status} ${response.statusText}`);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`Frontend would see: ${JSON.stringify(data, null, 2)}`, 'success');
+
+                    if (data.is_authenticated) {
+                        updateStatus('Frontend Simulation', 'ok',
+                            `Should show authenticated<br>User: ${data.user_id}`);
+                    } else {
+                        updateStatus('Frontend Simulation', 'fail',
+                            'Would show NOT authenticated');
+                    }
+                } else {
+                    log(`Frontend simulation failed: ${response.status}`, 'error');
+                    updateStatus('Frontend Simulation', 'fail', `HTTP ${response.status}`);
+                }
+            } catch (error) {
+                log(`Frontend simulation error: ${error.message}`, 'error');
+                updateStatus('Frontend Simulation', 'fail', 'Network Error');
+            }
+        }
+
+        async function testCrossOrigin() {
+            log('=== TESTING CORS ===');
+
+            try {
+                const response = await fetch('http://localhost:8000/v1/whoami', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Origin': 'http://localhost:3000',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                log(`CORS test: ${response.status} ${response.statusText}`);
+                log(`CORS headers: ${JSON.stringify([...response.headers.entries()])}`);
+
+                if (response.ok) {
+                    updateStatus('CORS', 'ok', 'Working with credentials');
+                } else {
+                    updateStatus('CORS', 'fail', `HTTP ${response.status}`);
+                }
+            } catch (error) {
+                log(`CORS error: ${error.message}`, 'error');
+                updateStatus('CORS', 'fail', 'Network Error');
+            }
+        }
+
+        async function attemptLogin() {
+            log('=== ATTEMPTING LOGIN ===');
+
+            try {
+                // First clear everything
+                localStorage.clear();
+                document.cookie.split(";").forEach(function (c) {
+                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                });
+
+                log('Cleared localStorage and cookies');
+
+                // Login via backend
+                const loginResponse = await fetch('http://localhost:8000/v1/auth/login?username=qazwsxppo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                if (loginResponse.ok) {
+                    log('Backend login successful', 'success');
+
+                    // Wait a bit for cookies to be set
+                    setTimeout(async () => {
+                        updateCookieAnalysis();
+                        await checkCurrentState();
+                        await simulateFrontendFlow();
+                    }, 500);
+                } else {
+                    log(`Login failed: ${loginResponse.status}`, 'error');
+                }
+            } catch (error) {
+                log(`Login attempt error: ${error.message}`, 'error');
+            }
+        }
+
+        function clearEverything() {
+            log('=== CLEARING EVERYTHING ===');
+
+            // Clear localStorage
+            localStorage.clear();
+            log('LocalStorage cleared');
+
+            // Clear cookies
+            document.cookie.split(";").forEach(function (c) {
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+            log('Cookies cleared');
+
+            // Reset status
+            document.getElementById('statusGrid').innerHTML = '';
+            document.getElementById('cookieAnalysis').innerHTML = '';
+
+            updateStatus('State', 'unknown', 'Cleared');
+        }
+
+        async function runFullDiagnostic() {
+            log('=== STARTING FULL DIAGNOSTIC ===');
+            clearLogs();
+
+            await checkCurrentState();
+            await testCrossOrigin();
+
+            // If not authenticated, try login
+            const hasAuth = document.getElementById('status-Backend Auth')?.className.includes('status-ok');
+            if (!hasAuth) {
+                log('Not authenticated, attempting login...');
+                await attemptLogin();
+            }
+        }
+
+        // Auto-run on page load
+        window.onload = function () {
+            log('🎯 Comprehensive Auth Debug Tool loaded');
+            setTimeout(runFullDiagnostic, 1000);
+        };
+    </script>
+</body>
+
+</html>

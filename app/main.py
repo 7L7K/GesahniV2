@@ -1280,9 +1280,9 @@ if _safe_import_router("from .api.integrations_status import router as integrati
 if _safe_import_router("from .api.selftest import router as selftest_router", "selftest"):
     app.include_router(selftest_router, prefix="/v1")
 
-# Whoami (explicit auth probe)
-if _safe_import_router("from .api.whoami import router as whoami_router", "whoami"):
-    app.include_router(whoami_router, prefix="/v1")
+# Whoami: Use only the canonical implementation from app.api.auth
+# Do NOT include the minimal whoami router to avoid shadowing /v1/whoami
+# which provides silent refresh and a richer response shape required by the frontend.
 
 # app.api.auth already included once above; do not include again
 

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Final Auth Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔍 Final Auth Test After Clerk Removal</h1>
+
+    <div class="section">
+        <h3>Test Complete Flow</h3>
+        <button onclick="testCompleteFlow()">Test Complete Auth Flow</button>
+        <div id="result"></div>
+    </div>
+
+    <div class="section">
+        <h3>Logs</h3>
+        <button onclick="clearLogs()">Clear</button>
+        <pre id="logs"></pre>
+    </div>
+
+    <script>
+        let logDiv = document.getElementById('logs');
+
+        function log(message) {
+            const timestamp = new Date().toISOString();
+            logDiv.textContent += `[${timestamp.split('T')[1].split('.')[0]}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLogs() {
+            logDiv.textContent = '';
+        }
+
+        async function testCompleteFlow() {
+            const resultDiv = document.getElementById('result');
+            log('=== TESTING COMPLETE AUTH FLOW ===');
+
+            try {
+                // Step 1: Clear everything first
+                log('Step 1: Clearing localStorage and cookies...');
+                localStorage.clear();
+
+                // Clear all cookies
+                document.cookie.split(";").forEach(function (c) {
+                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                });
+
+                log('Step 2: Login via backend...');
+                const loginResponse = await fetch('http://localhost:8000/v1/auth/login?username=qazwsxppo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                if (!loginResponse.ok) {
+                    throw new Error(`Login failed: ${loginResponse.status}`);
+                }
+
+                const loginData = await loginResponse.json();
+                log(`Login successful: ${JSON.stringify(loginData)}`);
+
+                // Wait for cookies to be set
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                log('Step 3: Check cookies after login...');
+                log(`Cookies: ${document.cookie}`);
+
+                log('Step 4: Test whoami with cookies...');
+                const whoamiResponse = await fetch('http://localhost:8000/v1/whoami', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Origin': 'http://localhost:3000'
+                    }
+                });
+
+                if (whoamiResponse.ok) {
+                    const whoamiData = await whoamiResponse.json();
+                    log(`Whoami success: ${JSON.stringify(whoamiData, null, 2)}`);
+
+                    if (whoamiData.is_authenticated) {
+                        log('✅ Backend authentication working!');
+
+                        log('Step 5: Test Spotify status...');
+                        const spotifyResponse = await fetch('http://localhost:8000/v1/spotify/status', {
+                            credentials: 'include'
+                        });
+
+                        if (spotifyResponse.ok) {
+                            const spotifyData = await spotifyResponse.json();
+                            log(`Spotify status: ${JSON.stringify(spotifyData)}`);
+
+                            if (spotifyData.connected) {
+                                resultDiv.innerHTML = '<div class="success">🎉 SUCCESS! Everything is working:<br>✅ Authentication<br>✅ Cookies<br>✅ Spotify</div>';
+                            } else {
+                                resultDiv.innerHTML = '<div class="error">❌ Spotify not connected</div>';
+                            }
+                        } else {
+                            resultDiv.innerHTML = '<div class="error">❌ Spotify status check failed</div>';
+                        }
+                    } else {
+                        resultDiv.innerHTML = '<div class="error">❌ Backend says not authenticated</div>';
+                    }
+                } else {
+                    log(`Whoami failed: ${whoamiResponse.status}`);
+                    resultDiv.innerHTML = '<div class="error">❌ Whoami check failed</div>';
+                }
+
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Auto-run test
+        window.onload = function () {
+            log('🎯 Final auth test starting...');
+            setTimeout(testCompleteFlow, 1000);
+        };
+    </script>
+</body>
+
+</html>
