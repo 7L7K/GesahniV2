@@ -191,8 +191,7 @@ async function testEnvironmentConfiguration() {
     ];
 
     const optionalEnvVars = [
-        'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-        'CLERK_SECRET_KEY'
+        // No optional external auth provider vars
     ];
 
     log('Required Environment Variables:', 'blue');
@@ -205,13 +204,15 @@ async function testEnvironmentConfiguration() {
         }
     }
 
-    log('\nOptional Environment Variables:', 'blue');
-    for (const envVar of optionalEnvVars) {
-        const value = process.env[envVar];
-        if (value) {
-            log(`✅ ${envVar}: Set`, 'green');
-        } else {
-            log(`⚠️  ${envVar}: Not set (optional)`, 'yellow');
+    if (optionalEnvVars.length) {
+        log('\nOptional Environment Variables:', 'blue');
+        for (const envVar of optionalEnvVars) {
+            const value = process.env[envVar];
+            if (value) {
+                log(`✅ ${envVar}: Set`, 'green');
+            } else {
+                log(`⚠️  ${envVar}: Not set (optional)`, 'yellow');
+            }
         }
     }
 }

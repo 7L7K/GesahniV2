@@ -39,11 +39,7 @@ jest.mock('@/services/wsHub', () => ({
     },
 }));
 
-// Mock Clerk
-jest.mock('@clerk/nextjs', () => ({
-    SignInButton: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    SignUpButton: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
+// Clerk removed: no mocks needed
 
 // Mock music components
 jest.mock('@/components/music/NowPlayingCard', () => ({

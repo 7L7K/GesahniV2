@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { toast } from '@/lib/toast';
 import { ToastManager } from '@/components/ui/ToastManager';
 import AuthHUD from '@/components/AuthHUD';
+import { disconnectSpotify, getIntegrationsStatus } from '@/lib/api/integrations';
 
 // Force dynamic rendering to prevent SSR issues
 noStore();
@@ -41,6 +42,8 @@ function SettingsPageInner() {
     const router = useRouter();
     const authState = useAuthState();
     const deterministicAuth = useDeterministicAuth();
+    const [spotifyLogoutLoading, setSpotifyLogoutLoading] = useState(false);
+    const [spotifyLogoutError, setSpotifyLogoutError] = useState<string | null>(null);
 
     // Handle URL hash and auto-expand cards + Spotify OAuth bootstrap
     useEffect(() => {
@@ -166,6 +169,41 @@ function SettingsPageInner() {
 
         checkIntegrations();
     }, [authState.is_authenticated]);
+
+    const refreshIntegrationsFromServer = async () => {
+        const data = await getIntegrationsStatus();
+        const sp = data.spotify || {};
+        const gg = data.google || {};
+        const ha = data.home_assistant || {};
+
+        const spotifyConnected = Boolean(sp.connected || sp.linked);
+        const googleConnected = Boolean(gg.connected || gg.linked);
+        const haConnected = Boolean(ha.connected || ha.healthy);
+
+        setIntegrations(prev => ({
+            ...prev,
+            spotify: { ...prev.spotify, status: spotifyConnected ? 'connected' : (sp.reason ? 'error' : 'disconnected'), connected: spotifyConnected, lastChecked: new Date(), error: sp.reason || undefined },
+            google: { ...prev.google, status: googleConnected ? 'connected' : (gg.reason ? 'error' : 'disconnected'), connected: googleConnected, lastChecked: new Date(), error: gg.reason || undefined },
+            home_assistant: { ...prev.home_assistant, status: haConnected ? 'connected' : (ha.reason ? 'error' : 'disconnected'), connected: haConnected, lastChecked: new Date(), error: ha.reason || undefined },
+        }));
+    };
+
+    const handleLogoutSpotify = async (e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        setSpotifyLogoutError(null);
+        setSpotifyLogoutLoading(true);
+        try {
+            await disconnectSpotify();
+            await refreshIntegrationsFromServer();
+            toast.success('Spotify disconnected');
+        } catch (err: any) {
+            const msg = err?.message ?? 'Failed to disconnect Spotify';
+            setSpotifyLogoutError(msg);
+            toast.error(msg);
+        } finally {
+            setSpotifyLogoutLoading(false);
+        }
+    };
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -844,9 +882,20 @@ function SettingsPageInner() {
                                                 ▶
                                             </span>
                                             {integrations.spotify.status === 'connected' ? (
-                                                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); window.open('/v1/spotify/status', '_blank'); }}>
-                                                    🔗 Manage
-                                                </Button>
+                                                <div className="flex items-center space-x-2">
+                                                    <Button variant="outline" size="sm" disabled={spotifyLogoutLoading} onClick={(e) => { e.stopPropagation(); window.open('/v1/spotify/status', '_blank'); }}>
+                                                        🔗 Manage
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md disabled:opacity-50"
+                                                        size="sm"
+                                                        disabled={spotifyLogoutLoading}
+                                                        onClick={handleLogoutSpotify}
+                                                    >
+                                                        {spotifyLogoutLoading ? 'Logging out…' : 'Log out'}
+                                                    </Button>
+                                                </div>
                                             ) : !authState.is_authenticated ? (
                                                 <Button
                                                     size="sm"
@@ -940,11 +989,23 @@ function SettingsPageInner() {
                                                         <span>✓ Queue Management</span>
                                                         <span>✓ Current Track Info</span>
                                                     </div>
-                                                    <div className="flex space-x-2">
-                                                        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); window.open('/v1/spotify/status', '_blank'); }}>
+                                                    <div className="flex items-center space-x-2">
+                                                        <Button variant="outline" size="sm" disabled={spotifyLogoutLoading} onClick={(e) => { e.stopPropagation(); window.open('/v1/spotify/status', '_blank'); }}>
                                                             🔗 Manage Connection
                                                         </Button>
+                                                        <Button
+                                                            className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md disabled:opacity-50"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            disabled={spotifyLogoutLoading}
+                                                            onClick={handleLogoutSpotify}
+                                                        >
+                                                            {spotifyLogoutLoading ? 'Logging out…' : 'Log out'}
+                                                        </Button>
                                                     </div>
+                                                    {spotifyLogoutError && (
+                                                        <p className="mt-2 text-sm text-red-600">{spotifyLogoutError}</p>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <div>

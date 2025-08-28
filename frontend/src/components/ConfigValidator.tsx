@@ -17,17 +17,7 @@ export function ConfigValidator() {
         const checkConfiguration = () => {
             const newIssues: ConfigIssue[] = [];
 
-            // Check Clerk configuration
-            const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-            const clerkSecretKey = process.env.CLERK_SECRET_KEY;
-
-            if (!clerkPublishableKey || !clerkSecretKey) {
-                newIssues.push({
-                    type: 'warning',
-                    message: 'Clerk authentication is not configured',
-                    suggestion: 'Add NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY to .env.local for Clerk authentication, or remove Clerk dependencies entirely.'
-                });
-            }
+            // Clerk removed: cookie/header auth only
 
             // Check API configuration
             const apiOrigin = process.env.NEXT_PUBLIC_API_ORIGIN;

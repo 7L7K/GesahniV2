@@ -1,16 +1,18 @@
 'use client'
-import { SignUp } from '@clerk/nextjs'
-import { useSearchParams } from 'next/navigation'
-import { buildAuthUrl } from '@/lib/urls'
+import { useEffect } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { sanitizeNextPath } from '@/lib/utils'
 
 export default function SignUpPage() {
     const params = useSearchParams();
-    const next = sanitizeNextPath(params.get('next'), '/');
-    const finishUrl = buildAuthUrl('/v1/auth/finish', next);
+    const router = useRouter();
+    useEffect(() => {
+        const next = sanitizeNextPath(params.get('next'), '/');
+        router.replace(`/login?next=${encodeURIComponent(next)}`)
+    }, [params, router]);
     return (
         <div className="mx-auto max-w-md py-10">
-            <SignUp routing="path" path="/sign-up" afterSignInUrl={finishUrl} afterSignUpUrl={finishUrl} />
+            <p className="text-sm text-muted-foreground">Redirecting to login…</p>
         </div>
     )
 }

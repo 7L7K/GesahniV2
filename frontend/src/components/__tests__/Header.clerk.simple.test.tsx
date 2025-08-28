@@ -8,13 +8,7 @@ jest.mock('next/navigation', () => ({
     usePathname: jest.fn(),
 }));
 
-// Mock Clerk components
-jest.mock('@clerk/nextjs', () => ({
-    SignedIn: ({ children }: { children: React.ReactNode }) => <div data-testid="signed-in">{children}</div>,
-    SignInButton: ({ children }: { children: React.ReactNode }) => <div data-testid="sign-in-button">{children}</div>,
-    SignUpButton: ({ children }: { children: React.ReactNode }) => <div data-testid="sign-up-button">{children}</div>,
-    UserButton: () => <div data-testid="user-button">User Button</div>,
-}));
+// Clerk removed: no mocks needed
 
 // Mock other dependencies
 jest.mock('@/hooks/useAuth', () => ({
@@ -46,7 +40,7 @@ jest.mock('../ThemeToggle', () => {
     };
 });
 
-describe('Header Component - Clerk Authentication (Simple)', () => {
+describe('Header Component - Cookie Authentication', () => {
     const mockRouter = {
         push: jest.fn(),
         replace: jest.fn(),
@@ -55,48 +49,18 @@ describe('Header Component - Clerk Authentication (Simple)', () => {
     beforeEach(() => {
         (useRouter as jest.Mock).mockReturnValue(mockRouter);
         (usePathname as jest.Mock).mockReturnValue('/');
-        // Reset environment variable
-        delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
     });
 
     afterEach(() => {
         jest.clearAllMocks();
     });
 
-    test('should render without Clerk when NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not set', () => {
+    test('renders header with cookie auth only', () => {
         const Header = require('../Header').default;
         render(<Header />);
 
         expect(screen.getByText('Gesahni')).toBeInTheDocument();
         expect(screen.getByTestId('theme-toggle')).toBeInTheDocument();
-    });
-
-    test('should render with Clerk when NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is set', () => {
-        process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = 'test-key';
-
-        const Header = require('../Header').default;
-        render(<Header />);
-
-        expect(screen.getByText('Gesahni')).toBeInTheDocument();
-        expect(screen.getByTestId('theme-toggle')).toBeInTheDocument();
-    });
-
-    test('should handle missing Clerk hooks gracefully', () => {
-        process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = 'test-key';
-
-        // Mock require to throw an error
-        const originalRequire = global.require;
-        global.require = jest.fn(() => {
-            throw new Error('Clerk not available');
-        });
-
-        const Header = require('../Header').default;
-        render(<Header />);
-
-        expect(screen.getByText('Gesahni')).toBeInTheDocument();
-
-        // Restore original require
-        global.require = originalRequire;
     });
 
     test('should maintain core functionality when Clerk is disabled', () => {
@@ -111,15 +75,11 @@ describe('Header Component - Clerk Authentication (Simple)', () => {
     });
 
     test('should handle environment variable changes', () => {
-        // Test with Clerk disabled
-        delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
         const Header1 = require('../Header').default;
         const { unmount } = render(<Header1 />);
         expect(screen.getByText('Gesahni')).toBeInTheDocument();
         unmount();
 
-        // Test with Clerk enabled
-        process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = 'test-key';
         const Header2 = require('../Header').default;
         render(<Header2 />);
         expect(screen.getByText('Gesahni')).toBeInTheDocument();
