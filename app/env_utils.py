@@ -29,8 +29,9 @@ def load_env(force: bool | int | str = False) -> None:
     """Load environment variables with strict precedence and sane reloads.
 
     Precedence (highest → lowest):
-    - .env (if present): overrides existing process env values
-    - .env.example and env.example: fill missing keys only (never override)
+    - Existing process env values (e.g. shell/export, test monkeypatch)
+    - .env (if present): populate missing keys only (never override process env)
+    - .env.example, env.example, env.dev, env.staging, env.prod, env.localhost: fill missing keys only
 
     Reload rules:
     - Recompute when any tracked file mtime changes

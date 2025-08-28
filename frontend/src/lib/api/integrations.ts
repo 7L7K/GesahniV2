@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api';
+import { getGoogleAuthUrl } from '@/lib/api';
 
 export async function disconnectSpotify(): Promise<void> {
   const res = await apiFetch("/v1/spotify/disconnect", {
@@ -28,16 +29,10 @@ export async function getGoogleStatus() {
   return res.json();
 }
 
-export async function connectGoogle(): Promise<{ authorize_url?: string } | null> {
-  const res = await apiFetch('/v1/google/connect', { method: 'GET', credentials: 'include', auth: true });
-  if (!res.ok) {
-    if (res.status === 302) {
-      const loc = res.headers.get('Location');
-      return { authorize_url: loc || undefined };
-    }
-    throw new Error(`Failed to start Google connect (${res.status})`);
-  }
-  return await res.json().catch(() => null);
+export async function connectGoogle(next: string = '/settings#google=connected'): Promise<{ authorize_url?: string } | null> {
+  // Use the canonical login_url endpoint so state format matches callback verification
+  const authUrl = await getGoogleAuthUrl(next);
+  return { authorize_url: authUrl };
 }
 
 export async function disconnectGoogle(): Promise<void> {

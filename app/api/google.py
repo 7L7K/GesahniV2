@@ -242,8 +242,9 @@ async def google_status(request: Request):
 
     # If scopes missing, consider degraded
     if not required_ok:
-        return JSONResponse({"connected": False, "required_scopes_ok": False, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": "missing_scopes"}, status_code=200)
+        # Consider account connected if a valid token is present, even if required scopes differ.
+        # Report degraded_reason so UI can display capabilities accurately.
+        return JSONResponse({"connected": True, "required_scopes_ok": False, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": "missing_scopes"}, status_code=200)
 
     # All good
     return JSONResponse({"connected": True, "required_scopes_ok": True, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": None}, status_code=200)
-

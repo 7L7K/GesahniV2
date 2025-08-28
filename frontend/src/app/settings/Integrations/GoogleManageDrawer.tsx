@@ -7,15 +7,20 @@ import { toast } from '@/lib/toast';
 export default function GoogleManageDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
     const [gmailOk, setGmailOk] = useState<boolean | null>(null);
     const [calOk, setCalOk] = useState<boolean | null>(null);
+    const [scopes, setScopes] = useState<string[]>([]);
+
+    const hasGmailScope = (s: string[]) => s.some(x => x.includes('gmail.') || x.endsWith('/gmail.send') || x.endsWith('/gmail.readonly'));
+    const hasCalendarScope = (s: string[]) => s.some(x => x.includes('calendar.') || x.endsWith('/calendar.events') || x.endsWith('/calendar.readonly'));
 
     useEffect(() => {
         if (!open) return;
         (async () => {
             try {
                 const s = await getGoogleStatus();
-                const sc = s.scopes || [];
-                setGmailOk(sc.includes('https://www.googleapis.com/auth/gmail.readonly'));
-                setCalOk(sc.includes('https://www.googleapis.com/auth/calendar.readonly'));
+                const sc: string[] = Array.isArray(s.scopes) ? s.scopes : [];
+                setScopes(sc);
+                setGmailOk(hasGmailScope(sc));
+                setCalOk(hasCalendarScope(sc));
             } catch (e) {
                 setGmailOk(false); setCalOk(false);
             }
@@ -48,7 +53,9 @@ export default function GoogleManageDrawer({ open, onClose }: { open: boolean; o
                         <div className="flex items-center justify-between">
                             <div>
                                 <div className="font-medium">Gmail access</div>
-                                <div className="text-sm text-gray-600">Count-only probe for unread messages</div>
+                                <div className="text-sm text-gray-600">
+                                    Capabilities: {scopes.some(s=>s.endsWith('/gmail.send')) ? 'Send email' : scopes.some(s=>s.endsWith('/gmail.readonly')) ? 'Read email' : '—'}
+                                </div>
                             </div>
                             <div>{gmailOk === null ? '…' : gmailOk ? '✅' : '❌'}</div>
                         </div>
@@ -58,7 +65,9 @@ export default function GoogleManageDrawer({ open, onClose }: { open: boolean; o
                         <div className="flex items-center justify-between">
                             <div>
                                 <div className="font-medium">Calendar access</div>
-                                <div className="text-sm text-gray-600">Probe for next event access</div>
+                                <div className="text-sm text-gray-600">
+                                    Capabilities: {scopes.some(s=>s.endsWith('/calendar.events')) ? 'Create events' : scopes.some(s=>s.endsWith('/calendar.readonly')) ? 'Read events' : '—'}
+                                </div>
                             </div>
                             <div>{calOk === null ? '…' : calOk ? '✅' : '❌'}</div>
                         </div>
@@ -69,9 +78,10 @@ export default function GoogleManageDrawer({ open, onClose }: { open: boolean; o
                         <button className="px-4 py-2 border rounded text-red-600" onClick={handleDisconnect}>Disconnect</button>
                     </div>
                 </div>
+                {scopes.length>0 && (
+                    <div className="mt-4 text-xs text-gray-500 break-words">Scopes: {scopes.join(' ')}</div>
+                )}
             </div>
         </div>
     );
 }
-
-

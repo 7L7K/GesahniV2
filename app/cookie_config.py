@@ -57,7 +57,9 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
     cookie_secure = (is_tls) or env_force_secure
 
     # If in dev or on localhost over plain HTTP, ensure cookies are accepted by browsers
-    if dev_env_detected and not is_tls:
+    if dev_env_detected and not is_tls and not env_force_secure:
+        # Only relax to Secure=False on HTTP when not explicitly forced by env
+        # This keeps operator intent when COOKIE_SECURE=1 is set.
         cookie_secure = False
         # Force SameSite=Lax for localhost/http to maximize compatibility
         cookie_samesite = "lax"
@@ -131,12 +133,12 @@ def get_token_ttls() -> tuple[int, int]:
     Returns:
         Tuple[int, int]: (access_ttl_seconds, refresh_ttl_seconds)
     """
-    # Access token TTL (default: 15 minutes)
-    access_minutes = int(os.getenv("JWT_EXPIRE_MINUTES", "15"))
+    # Access token TTL (default: 30 minutes)
+    access_minutes = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
     access_ttl = access_minutes * 60
 
-    # Refresh token TTL (default: 30 days)
-    refresh_minutes = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "43200"))
+    # Refresh token TTL (default: 1440 minutes = 1 day)
+    refresh_minutes = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
     refresh_ttl = refresh_minutes * 60
 
     return access_ttl, refresh_ttl

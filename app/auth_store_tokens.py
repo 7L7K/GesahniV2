@@ -114,6 +114,26 @@ class TokenDAO:
 
                 conn.commit()
 
+    async def _apply_repo_migration(self) -> None:
+        """Attempt to apply the packaged migration SQL (002_add_access_token_enc.sql).
+
+        This is best-effort and only used to remediate local dev DB schema drift.
+        """
+        try:
+            here = os.path.dirname(__file__)
+            migration_path = os.path.join(here, "migrations", "002_add_access_token_enc.sql")
+            if os.path.exists(migration_path):
+                with open(migration_path, "r", encoding="utf-8") as f:
+                    sql = f.read()
+                # Execute the migration SQL in a single script run
+                with sqlite3.connect(self.db_path) as conn:
+                    cur = conn.cursor()
+                    cur.executescript(sql)
+                    conn.commit()
+                    logger.info("Applied repository migration: 002_add_access_token_enc.sql", extra={"meta": {"migration": migration_path}})
+        except Exception as e:
+            logger.warning(f"Repository migration application failed: {e}")
+
     async def upsert_token(self, token: ThirdPartyToken) -> bool:
         """
         Insert or update a token.
@@ -189,12 +209,32 @@ class TokenDAO:
                         1 if token.is_valid else 0,
                     )
 
-                    cursor.execute("""
-                        INSERT INTO third_party_tokens
-                        (id, user_id, provider, access_token, access_token_enc, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count,
-                         scope, expires_at, created_at, updated_at, is_valid)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, insert_tuple)
+                    try:
+                        cursor.execute("""
+                            INSERT INTO third_party_tokens
+                            (id, user_id, provider, access_token, access_token_enc, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count,
+                             scope, expires_at, created_at, updated_at, is_valid)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, insert_tuple)
+                    except sqlite3.OperationalError as op_e:
+                        # Defensive migration: if the table schema is missing new columns,
+                        # attempt to apply the repository migration SQL and retry once.
+                        msg = str(op_e).lower()
+                        if "no column" in msg or "has no column" in msg or "no such column" in msg:
+                            logger.warning("Detected schema mismatch, attempting to apply migration", extra={"meta": {"error": str(op_e)}})
+                            try:
+                                await self._apply_repo_migration()
+                                # Retry insert once after migration
+                                cursor.execute("""
+                                    INSERT INTO third_party_tokens
+                                    (id, user_id, provider, access_token, access_token_enc, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count,
+                                     scope, expires_at, created_at, updated_at, is_valid)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                """, insert_tuple)
+                            except Exception as retry_e:
+                                raise retry_e
+                        else:
+                            raise
 
                     conn.commit()
 

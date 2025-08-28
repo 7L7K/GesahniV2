@@ -4,11 +4,12 @@ import base64
 import email.utils
 import os
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from app.auth import EXPIRE_MINUTES as APP_JWT_EXPIRE_MINUTES
+from app.deps.user import get_current_user_id
 from app.security import _jwt_decode
 
 from . import oauth  # import module so tests can monkey‑patch its attributes
@@ -20,6 +21,7 @@ router = APIRouter(tags=["Auth"])
 
 # Note: this sample integration uses a stubbed session layer for demo purposes.
 def _current_user_id(req: Request) -> str:
+    # Legacy stub; prefer dependency injection when available
     return "anon"
 
 
@@ -124,6 +126,56 @@ def get_auth_url(request: Request):
 @router.get("/test")
 def test_endpoint():
     return {"message": "Google router is working"}
+
+
+# New: Start OAuth connect flow for frontend settings button
+@router.get("/connect")
+def google_connect(request: Request, user_id: str = Depends(get_current_user_id)):
+    """Return Google authorization URL and set short-lived state cookies.
+
+    Response body matches frontend expectations: { "authorize_url": "..." }.
+    """
+    # Try preferred helper; fall back to manual URL when client libs unavailable
+    try:
+        auth_url, state = oauth.build_auth_url(user_id)
+    except Exception:
+        # Manual build (no google client libs). Keep scopes aligned with config.
+        from urllib.parse import urlencode
+
+        required_scopes = " ".join(oauth.get_google_scopes()) if hasattr(oauth, "get_google_scopes") else (
+            "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly"
+        )
+        import jwt, time, secrets as _secrets
+        payload = {"uid": user_id or "anon", "tx": _secrets.token_hex(8), "exp": int(time.time()) + 600}
+        state = jwt.encode(payload, os.getenv("JWT_STATE_SECRET", os.getenv("JWT_SECRET", "dev")), algorithm="HS256")
+        params = {
+            "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+            "response_type": "code",
+            "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
+            "scope": required_scopes,
+            "state": state,
+            "access_type": "offline",
+            "include_granted_scopes": "true",
+            "prompt": "consent",
+        }
+        auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+
+    # Set short-lived OAuth state cookies recognized by the canonical callback
+    from app.cookies import set_oauth_state_cookies
+
+    # Prefer explicit APP_URL or FRONTEND_URL for post-connect redirect
+    app_url = os.getenv("APP_URL") or os.getenv("FRONTEND_URL") or "http://localhost:3000"
+    next_url = f"{app_url.rstrip('/')}/settings#google=connected"
+
+    from fastapi.responses import JSONResponse
+
+    resp = JSONResponse({"authorize_url": auth_url})
+    try:
+        set_oauth_state_cookies(resp, state=state, next_url=next_url, request=request, ttl=600, provider="g")
+    except Exception:
+        # Cookie setting is best-effort; frontend can still follow URL
+        pass
+    return resp
 
 
 # REMOVED: Duplicate route /auth/login_url - replaced by stateless endpoint in app.api.google_oauth
@@ -265,14 +317,35 @@ def calendar_create(evt: CreateEventIn, request: Request):
 
 
 @router.get("/status")
-def google_status(request: Request):
-    uid = _current_user_id(request)
+def google_status(request: Request, user_id: str = Depends(get_current_user_id)):
+    uid = user_id or _current_user_id(request)
     with SessionLocal() as s:
         row = s.get(GoogleToken, uid)
         if not row:
-            return {"linked": False}
-        return {
+            return {"linked": False, "connected": False}
+        # Include both legacy (linked) and modern (connected) flags for compatibility
+        out = {
             "linked": True,
-            "scopes": row.scopes.split(),
-            "expiry": row.expiry.isoformat(),
+            "connected": True,
+            "scopes": row.scopes.split() if getattr(row, "scopes", None) else [],
+            "expiry": row.expiry.isoformat() if getattr(row, "expiry", None) else None,
         }
+        # Also provide expires_at (seconds) for UI convenience when available
+        try:
+            import time as _t
+            out["expires_at"] = int(row.expiry.timestamp())
+        except Exception:
+            pass
+        return out
+
+
+@router.delete("/disconnect")
+def google_disconnect(request: Request, user_id: str = Depends(get_current_user_id)):
+    """Disconnect Google by removing stored tokens for the current user."""
+    uid = user_id or _current_user_id(request)
+    with SessionLocal() as s:
+        row = s.get(GoogleToken, uid)
+        if row:
+            s.delete(row)
+            s.commit()
+    return {"ok": True}

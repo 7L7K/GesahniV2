@@ -9,16 +9,19 @@ export default function GoogleCard({ onManage }: { onManage?: () => void }) {
     const [scopes, setScopes] = useState<string[]>([]);
     const [expiresAt, setExpiresAt] = useState<number | null>(null);
 
+    const hasGmailScope = (s: string[]) => s.some(x => x.includes('gmail.') || x.endsWith('/gmail.send') || x.endsWith('/gmail.readonly'));
+    const hasCalendarScope = (s: string[]) => s.some(x => x.includes('calendar.') || x.endsWith('/calendar.events') || x.endsWith('/calendar.readonly'));
+
     const fetchStatus = async () => {
         try {
             const j = await getGoogleStatus();
             if (j.connected) {
                 setStatus('connected');
-                setScopes(j.scopes || []);
+                setScopes(Array.isArray(j.scopes) ? j.scopes : []);
                 setExpiresAt(j.expires_at || null);
             } else {
                 setStatus(j.degraded_reason ? 'error' : 'not_connected');
-                setScopes(j.scopes || []);
+                setScopes(Array.isArray(j.scopes) ? j.scopes : []);
             }
         } catch (e: any) {
             console.error('Failed to fetch google status', e);
@@ -106,13 +109,16 @@ export default function GoogleCard({ onManage }: { onManage?: () => void }) {
                     <div>
                         <div className="text-sm text-gray-600">Last checked: {expiresAt ? new Date(expiresAt * 1000).toLocaleString() : '—'}</div>
                         <div className="mt-2 flex space-x-2">
-                            {scopes.includes('https://www.googleapis.com/auth/gmail.readonly') && <span className="px-2 py-1 bg-gray-100 rounded text-xs">Gmail Read</span>}
-                            {scopes.includes('https://www.googleapis.com/auth/calendar.readonly') && <span className="px-2 py-1 bg-gray-100 rounded text-xs">Calendar Read</span>}
+                            {hasGmailScope(scopes) && <span className="px-2 py-1 bg-gray-100 rounded text-xs">Gmail</span>}
+                            {hasCalendarScope(scopes) && <span className="px-2 py-1 bg-gray-100 rounded text-xs">Calendar</span>}
                         </div>
                         <div className="mt-4 flex space-x-2">
                             <button className="px-3 py-2 border rounded" onClick={() => onManage?.()}>Manage</button>
                             <button className="px-3 py-2 text-red-600 border rounded" onClick={handleDisconnect}>Disconnect</button>
                         </div>
+                        {scopes?.length > 0 && (
+                            <div className="mt-3 text-xs text-gray-500 break-words">Scopes: {scopes.join(' ')}</div>
+                        )}
                     </div>
                 )}
 
@@ -128,5 +134,4 @@ export default function GoogleCard({ onManage }: { onManage?: () => void }) {
         </div>
     );
 }
-
 

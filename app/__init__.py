@@ -4,8 +4,11 @@
 # and simple import contexts that call asyncio.get_event_loop().
 import asyncio
 
+# Avoid deprecated get_event_loop() probe on import in Python 3.12+.
+# If no running loop exists, install a fresh default loop so modules that
+# assume a default loop (e.g., tests) continue to work without warnings.
 try:  # pragma: no cover - environment bootstrap
-    asyncio.get_event_loop()
+    asyncio.get_running_loop()
 except RuntimeError:
     asyncio.set_event_loop(asyncio.new_event_loop())
 

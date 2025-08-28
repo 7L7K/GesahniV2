@@ -846,16 +846,15 @@ async def google_callback(request: Request) -> Response:
             pass
 
         # Set tokens as HttpOnly cookies and redirect to frontend
-        # If a next URL cookie was set during connect/initiation, prefer it.
-        # Validate against optional allowlist to avoid open redirects.
-        if next_cookie and _allow_redirect(next_cookie):
-            final_root = next_cookie
-        else:
-            # Determine final frontend origin similar to earlier logic
-            final_root = f"{app_url.rstrip('/')}/"
-        try:
-            from urllib.parse import urlparse
+        # Prefer the next URL cookie set during connect/initiation. If it's a
+        # relative path (e.g., "/settings"), resolve it against the frontend
+        # origin so we don't redirect to the backend (8000) by accident.
+        from urllib.parse import urlparse
 
+        # Determine best frontend base
+        frontend_base = app_url.rstrip("/")
+        try:
+            # If APP_URL points at backend host:port, try to use request origin
             parsed = urlparse(app_url)
             host_matches_backend = False
             try:
@@ -868,9 +867,25 @@ async def google_callback(request: Request) -> Response:
                 origin = request.headers.get("origin") or request.headers.get("referer")
                 if origin:
                     op = urlparse(origin)
-                    final_root = f"{op.scheme}://{op.netloc}/"
+                    frontend_base = f"{op.scheme}://{op.netloc}"
         except Exception:
             pass
+
+        def _resolve_next(n: str) -> str:
+            if not n:
+                return f"{frontend_base}/"
+            # If absolute, return as-is after allowlist
+            if n.startswith("http://") or n.startswith("https://"):
+                return n
+            # Treat as relative path
+            if not n.startswith("/"):
+                n = "/" + n
+            return f"{frontend_base}{n}"
+
+        if next_cookie and _allow_redirect(next_cookie):
+            final_root = _resolve_next(next_cookie)
+        else:
+            final_root = f"{frontend_base}/"
 
         # Decide whether to perform a 302 redirect or return an HTML shim that
         # sets cookies and immediately redirects via JS. The HTML shim can be

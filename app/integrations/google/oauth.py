@@ -280,6 +280,13 @@ def build_auth_url(user_id: str, state_payload: dict | None = None) -> tuple[str
             status_code=503, detail="Google OAuth libraries unavailable"
         )
     flow = create_flow()
+    # Ensure redirect_uri is explicitly set on the Flow before generating the
+    # authorization URL so Google receives it as a parameter. Some environments
+    # do not propagate redirect_uris from client config until explicitly set.
+    try:  # best-effort; fall back silently if unavailable
+        flow.redirect_uri = CLIENT_CONFIG["web"]["redirect_uris"][0]
+    except Exception:
+        pass
     if state_payload:
         state = _sign_state(state_payload)
     else:

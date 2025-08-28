@@ -175,9 +175,10 @@ def _get_access_ttl_seconds() -> int:
     """Get access token TTL in seconds from environment."""
     # First try JWT_ACCESS_TTL_SECONDS for direct seconds config
     if os.getenv("JWT_ACCESS_TTL_SECONDS"):
-        return int(os.getenv("JWT_ACCESS_TTL_SECONDS", "900"))
+        # Default to 1800s (30 minutes) if the var is present but empty
+        return int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1800"))
     # Fall back to JWT_EXPIRE_MINUTES converted to seconds
-    minutes = int(os.getenv("JWT_EXPIRE_MINUTES", "15"))
+    minutes = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
     return minutes * 60
 
 
@@ -185,9 +186,10 @@ def _get_refresh_ttl_seconds() -> int:
     """Get refresh token TTL in seconds from environment."""
     # First try JWT_REFRESH_TTL_SECONDS for direct seconds config
     if os.getenv("JWT_REFRESH_TTL_SECONDS"):
-        return int(os.getenv("JWT_REFRESH_TTL_SECONDS", "2592000"))
+        # Default to 86400s (1 day) if the var is present but empty
+        return int(os.getenv("JWT_REFRESH_TTL_SECONDS", "86400"))
     # Fall back to JWT_REFRESH_EXPIRE_MINUTES converted to seconds
-    minutes = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "43200"))
+    minutes = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
     return minutes * 60
 
 
