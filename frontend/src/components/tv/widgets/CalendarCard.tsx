@@ -48,7 +48,9 @@ function computeLeaveBy(now: Date, item: CalendarItem): string | null {
 
 export function CalendarCard() {
   const [items, setItems] = useState<CalendarItem[]>([]);
-  const [now, setNow] = useState<Date>(new Date());
+  // Avoid initializing Date on server; set on mount
+  const [now, setNow] = useState<Date | null>(null);
+  const [mounted, setMounted] = useState<boolean>(false);
 
   useEffect(() => {
     let mounted = true;
@@ -61,6 +63,9 @@ export function CalendarCard() {
       }
     })();
     const t = setInterval(() => setNow(new Date()), 30_000);
+    // initialize now and mark mounted to prevent SSR/client mismatch
+    setNow(new Date());
+    setMounted(true);
     return () => {
       mounted = false;
       clearInterval(t);
@@ -68,7 +73,7 @@ export function CalendarCard() {
   }, []);
 
   const first = items[0];
-  const leaveBy = useMemo(() => (first ? computeLeaveBy(now, first) : null), [now, first]);
+  const leaveBy = useMemo(() => (first && now ? computeLeaveBy(now, first) : null), [now, first]);
 
   if (!first) {
     return (

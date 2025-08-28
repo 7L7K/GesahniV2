@@ -76,13 +76,15 @@ async def google_connect(request: Request, user_id: str = Depends(get_current_us
     # Return JSON and set short-lived oauth state cookies for CSRF protection
     resp = JSONResponse(content={"authorize_url": auth_url})
     try:
+        # Use the same provider prefix ("g") as the canonical callback handler
+        # so the callback at /v1/google/auth/callback can validate the cookie.
         set_oauth_state_cookies(
             resp,
             state=state,
             next_url=f"{os.getenv('FRONTEND_URL','http://localhost:3000')}/settings#google=connected",
             request=request,
             ttl=600,
-            provider="google_oauth",
+            provider="g",
         )
         GOOGLE_CONNECT_AUTHORIZE_URL_ISSUED.labels(user_id, "na").inc()
     except Exception:
@@ -244,5 +246,4 @@ async def google_status(request: Request):
 
     # All good
     return JSONResponse({"connected": True, "required_scopes_ok": True, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": None}, status_code=200)
-
 

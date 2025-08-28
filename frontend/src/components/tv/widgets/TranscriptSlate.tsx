@@ -16,7 +16,8 @@ export function TranscriptSlate() {
 
     const delay = (n: number) => {
       const base = Math.min(30_000, 500 * Math.pow(2, n));
-      const jitter = base * (0.15 * (Math.random() * 2 - 1));
+      // Avoid producing non-deterministic jitter during SSR; jitter is fine client-side
+      const jitter = (typeof window !== 'undefined') ? base * (0.15 * (Math.random() * 2 - 1)) : 0;
       return Math.max(250, Math.floor(base + jitter));
     };
 

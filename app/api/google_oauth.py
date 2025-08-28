@@ -583,28 +583,17 @@ async def google_callback(request: Request) -> Response:
             _log_request_summary(request, 400, duration, error="invalid_state")
             return _error_response("invalid_state", status=400)
 
-    # State is valid - clear/rotate the state cookie after use
+    # Mark cookies for clearing (actual clearing will be applied to final response)
     logger.info(
-        "Clearing OAuth state cookies after successful validation",
+        "Preparing to clear OAuth state cookies after validation",
         extra={
             "meta": {
                 "req_id": req_id,
                 "component": "google_oauth",
-                "msg": "state_cookies_cleared",
+                "msg": "state_cookies_prepare_clear",
             }
         },
     )
-
-    # Create response object to set cleared cookie
-    response = Response(
-        content="OAuth callback received successfully. State validation passed.",
-        media_type="text/plain",
-    )
-
-    # Clear OAuth state cookies using centralized surface
-    from ..cookies import clear_oauth_state_cookies
-
-    clear_oauth_state_cookies(response, request, provider="g")
 
     # State validation complete - proceed with usual session logic
     logger.info(
@@ -661,6 +650,12 @@ async def google_callback(request: Request) -> Response:
                 )
         except Exception:
             pass
+
+        # Prefer frontend redirect target from cookie if present/allowed
+        try:
+            next_cookie = request.cookies.get("g_next")
+        except Exception:
+            next_cookie = None
 
         # Emit extra telemetry in logs/meta
         try:
@@ -765,6 +760,56 @@ async def google_callback(request: Request) -> Response:
                 },
             )
 
+        # Also persist to the shared ThirdPartyToken store so UI status and
+        # management endpoints can detect connection state consistently.
+        try:
+            from ..models.third_party_tokens import ThirdPartyToken
+            from ..auth_store_tokens import upsert_token
+
+            now = int(time.time())
+            expiry = rec.get("expiry")
+            try:
+                expires_at = int(expiry.timestamp()) if hasattr(expiry, "timestamp") else int(time.mktime(expiry.timetuple()))  # type: ignore[attr-defined]
+            except Exception:
+                expires_at = now + int(rec.get("expires_in", 3600))
+
+            token = ThirdPartyToken(
+                id=f"google:{secrets.token_hex(8)}",
+                user_id=uid,
+                provider="google",
+                access_token=rec.get("access_token", ""),
+                refresh_token=rec.get("refresh_token"),
+                scope=rec.get("scopes"),
+                expires_at=expires_at,
+                created_at=now,
+                updated_at=now,
+            )
+            # Upsert asynchronously (function is async)
+            await upsert_token(token)
+            logger.info(
+                "Third-party token upserted for Google",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "component": "google_oauth",
+                        "msg": "third_party_token_upserted",
+                        "user_id": uid,
+                    }
+                },
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to upsert ThirdPartyToken (non-fatal)",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "component": "google_oauth",
+                        "msg": "third_party_token_upsert_failed",
+                        "error": str(e),
+                    }
+                },
+            )
+
         # Mint application JWTs (access + refresh) for the user and redirect
         app_url = os.getenv("APP_URL", "http://localhost:3000")
         # Use tokens.py facade instead of direct JWT encoding
@@ -800,9 +845,14 @@ async def google_callback(request: Request) -> Response:
             # Best-effort only; fall back to APP_URL env value
             pass
 
-        # Set tokens as HttpOnly cookies and redirect to frontend root
-        # Determine final frontend origin similar to earlier logic
-        final_root = f"{app_url.rstrip('/')}/"
+        # Set tokens as HttpOnly cookies and redirect to frontend
+        # If a next URL cookie was set during connect/initiation, prefer it.
+        # Validate against optional allowlist to avoid open redirects.
+        if next_cookie and _allow_redirect(next_cookie):
+            final_root = next_cookie
+        else:
+            # Determine final frontend origin similar to earlier logic
+            final_root = f"{app_url.rstrip('/')}/"
         try:
             from urllib.parse import urlparse
 
@@ -1021,6 +1071,14 @@ async def google_callback(request: Request) -> Response:
                 logger.warning(
                     "oauth.callback.fail_rate_high", extra={"meta": {"fail_rate": rate}}
                 )
+        except Exception:
+            pass
+
+        # Clear OAuth state cookies on the final response
+        try:
+            from ..cookies import clear_oauth_state_cookies
+
+            clear_oauth_state_cookies(resp, request, provider="g")
         except Exception:
             pass
 

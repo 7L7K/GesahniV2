@@ -29,7 +29,8 @@ function useBattery(): BatteryInfo {
 
 function useHeartbeat() {
     const [lastAt, setLastAt] = useState<number>(0);
-    const [online, setOnline] = useState<boolean>(typeof navigator !== "undefined" ? navigator.onLine : true);
+    // Default to true during SSR; update on mount
+    const [online, setOnline] = useState<boolean>(true);
     useEffect(() => {
         const onPing = () => setLastAt(Date.now());
         const onHeart = () => setLastAt(Date.now());
@@ -52,10 +53,17 @@ function useHeartbeat() {
 export function VitalsBadge() {
     const { lastAt, online } = useHeartbeat();
     const bat = useBattery();
-    const stale = useMemo(() => (Date.now() - (lastAt || 0)) > 60_000, [lastAt]);
-    const netLabel = online && !stale ? "Online ✓" : stale ? "Reconnecting…" : "Offline";
+    const [mounted, setMounted] = useState<boolean>(false);
+    // Avoid Date.now() on server; only compute stale after mount
+    const stale = useMemo(() => {
+        if (!mounted) return false;
+        return (Date.now() - (lastAt || 0)) > 60_000;
+    }, [lastAt, mounted]);
+    const netLabel = mounted ? (online && !stale ? "Online ✓" : stale ? "Reconnecting…" : "Offline") : "—";
     const batPct = bat ? Math.round((bat.level || 0) * 100) : null;
     const batLabel = batPct !== null ? `${batPct}%${bat?.charging ? " ⚡" : ""}` : "—";
+
+    useEffect(() => { setMounted(true); }, []);
 
     return (
         <div className="flex items-center gap-4 text-white">
