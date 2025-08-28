@@ -51,7 +51,8 @@ def test_spotify_flow_with_mocking():
         # Step 2: Call the login endpoint
         print("\nStep 1: Calling /v1/spotify/login...")
         login_url = "http://localhost:8000/v1/spotify/login?user_id=test_user"
-        cookies = {"auth_token": "dummy_jwt_token"}
+        from app.cookie_names import GSNH_AT
+        cookies = {GSNH_AT: "dummy_jwt_token"}
 
         login_response = requests.get(login_url, cookies=cookies)
         print(f"Login status: {login_response.status_code}")

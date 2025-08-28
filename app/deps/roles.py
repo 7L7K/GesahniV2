@@ -72,7 +72,13 @@ def require_roles(required: Iterable[str], *, any_of: bool = True):
         if request.method == "OPTIONS":
             return
         # Ensure authentication was established (401 if not)
-        user_id = get_current_user_id(request=request)
+        # Use resolve_user_id helper to avoid raising in dependency construction
+        try:
+            from .user import resolve_user_id
+
+            user_id = resolve_user_id(request=request)
+        except Exception:
+            user_id = get_current_user_id(request=request)
         if not user_id or user_id == "anon":
             raise HTTPException(status_code=401, detail="Unauthorized")
         # Authorize based on roles (403 if missing)

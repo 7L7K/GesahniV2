@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
 
-from ..deps.user import get_current_user_id
+from ..deps.user import get_current_user_id, resolve_user_id
 from ..integrations.spotify.client import SpotifyClient
 
 router = APIRouter()
@@ -10,7 +10,8 @@ router = APIRouter()
 async def integrations_status(request: Request):
     spotify_result = {"connected": False}
     try:
-        current_user = get_current_user_id(request=request)
+        # Use resolve_user_id for internal calls to avoid raising in non-FastAPI contexts
+        current_user = resolve_user_id(request=request)
         if current_user and current_user != "anon":
             client = SpotifyClient(current_user)
             try:

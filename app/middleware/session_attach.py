@@ -24,7 +24,10 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
         try:
             # Try to get user_id using existing logic first
             try:
-                user_id = get_current_user_id(request=request)
+                # Use resolve_user_id to avoid exceptions propagating in middleware
+                from app.deps.user import resolve_user_id
+
+                user_id = resolve_user_id(request=request)
             except Exception:
                 user_id = None
 

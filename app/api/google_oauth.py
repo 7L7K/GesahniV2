@@ -279,11 +279,7 @@ async def google_login_url(request: Request) -> Response:
                             "req_id": req_id,
                             "component": "google_oauth",
                             "msg": "redirect_blocked",
-                            "next_url": (
-                                next_url[:100] + "..."
-                                if len(next_url) > 100
-                                else next_url
-                            ),
+                            "next_url_length": len(next_url) if next_url else 0,
                         }
                     },
                 )
@@ -317,7 +313,7 @@ async def google_login_url(request: Request) -> Response:
 
         duration = (time.time() - start_time) * 1000
 
-        # Log successful completion with required fields
+        # Log successful completion with required fields (no previews)
         logger.info(
             "oauth.login_url",
             extra={
@@ -326,7 +322,7 @@ async def google_login_url(request: Request) -> Response:
                     "component": "google_oauth",
                     "msg": "oauth.login_url",
                     "state_set": True,
-                    "next": next_url or "/",
+                    "next_length": len(next_url) if next_url else 0,
                     "cookie_http_only": True,
                     "samesite": "Lax",
                 }

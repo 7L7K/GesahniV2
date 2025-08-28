@@ -133,7 +133,7 @@ def get_current_user_id(
     try:
         logged_flag = None
         if target is not None:
-            logged_flag = getattr(target.state, "auth_token_source_logged", None)
+            logged_flag = getattr(target.state, "auth_cookie_source_logged", None)
         if not logged_flag:
             request_path = (
                 getattr(request, "url", {}).path
@@ -148,7 +148,6 @@ def get_current_user_id(
                         "token_source": token_source,
                         "has_token": bool(token),
                         "token_length": len(token) if token else 0,
-                        "token_preview": token[:20] + "..." if token and len(token) > 20 else token,
                         "request_path": request_path,
                         "all_cookies": list(request.cookies.keys()) if request else [],
                         "cookie_count": len(request.cookies) if request else 0,
@@ -172,7 +171,7 @@ def get_current_user_id(
             # mark as logged for this request to avoid duplicate logs
             if target is not None:
                 try:
-                    setattr(target.state, "auth_token_source_logged", True)
+                    setattr(target.state, "auth_cookie_source_logged", True)
                 except Exception:
                     pass
     except Exception:
@@ -418,6 +417,19 @@ def get_current_user_id(
     return user_id
 
 
+def resolve_user_id(request: Request | None = None, websocket: WebSocket | None = None) -> str:
+    """Safe wrapper to resolve a user id from a Request or WebSocket.
+
+    This helper catches exceptions and returns "anon" on failure so callers
+    that cannot use FastAPI's `Depends` (middleware, internal helpers) can
+    use a stable API.
+    """
+    try:
+        return get_current_user_id(request=request, websocket=websocket)
+    except Exception:
+        return "anon"
+
+
 async def require_user(request: Request) -> str:
     """FastAPI dependency that enforces a valid user authentication.
 
@@ -584,4 +596,5 @@ __all__ = [
     "get_current_session_device",
     "resolve_session_id",
     "require_user",
+    "resolve_user_id",
 ]

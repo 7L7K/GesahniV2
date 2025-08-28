@@ -15,7 +15,8 @@ def test_complete_e2e_spotify_flow():
     login_url = "http://localhost:8000/v1/spotify/login?user_id=test_user"
 
     # Simulate having a main auth cookie
-    cookies = {"auth_token": "dummy_jwt_token"}
+    from app.cookie_names import GSNH_AT
+    cookies = {GSNH_AT: "dummy_jwt_token"}
 
     login_response = requests.get(login_url, cookies=cookies)
 

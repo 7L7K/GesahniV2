@@ -59,8 +59,7 @@ class SpotifyOAuth:
         verifier = secrets.token_urlsafe(64)
         logger.debug("🎵 SPOTIFY PKCE: Generated verifier", extra={
             "meta": {
-                "verifier_length": len(verifier),
-                "verifier_preview": verifier[:20] + "..."
+                "verifier_length": len(verifier)
             }
         })
 
@@ -74,7 +73,6 @@ class SpotifyOAuth:
         logger.debug("🎵 SPOTIFY PKCE: Generated challenge", extra={
             "meta": {
                 "challenge_length": len(challenge),
-                "challenge_preview": challenge[:20] + "...",
                 "hash_algorithm": "SHA256"
             }
         })
@@ -84,8 +82,7 @@ class SpotifyOAuth:
 
         logger.debug("🎵 SPOTIFY PKCE: Generated state", extra={
             "meta": {
-                "state_length": len(state),
-                "state_preview": state[:20] + "..."
+                "state_length": len(state)
             }
         })
 
@@ -316,7 +313,6 @@ class _MakeAuthorizeUrl:
         logger.info("🎵 SPOTIFY AUTH URL: Authorization URL built", extra={
             "meta": {
                 "auth_url_length": len(auth_url),
-                "auth_url_preview": auth_url[:100] + "...",
                 "client_id_configured": bool(client_id),
                 "redirect_uri_configured": bool(redirect),
                 "scopes": scopes,
@@ -341,9 +337,7 @@ async def exchange_code(code: str, code_verifier: str) -> ThirdPartyToken:
     logger.info("🎵 SPOTIFY EXCHANGE: Starting code exchange...", extra={
         "meta": {
             "code_length": len(code) if code else 0,
-            "code_verifier_length": len(code_verifier) if code_verifier else 0,
-            "code_preview": code[:20] + "..." if code and len(code) > 20 else code or "None",
-            "code_verifier_preview": code_verifier[:20] + "..." if code_verifier and len(code_verifier) > 20 else code_verifier or "None"
+            "code_verifier_length": len(code_verifier) if code_verifier else 0
         }
     })
 

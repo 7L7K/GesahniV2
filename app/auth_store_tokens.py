@@ -27,6 +27,13 @@ class TokenDAO:
         async with self._lock:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
+                try:
+                    logger.info(
+                        "🔐 TOKEN STORE: ensuring table",
+                        extra={"meta": {"db_path": self.db_path}},
+                    )
+                except Exception:
+                    pass
 
                 # Create table if it doesn't exist
                 cursor.execute("""
@@ -160,7 +167,10 @@ class TokenDAO:
                             "token_id": token.id,
                             "user_id": token.user_id,
                             "provider": token.provider,
-                            "operation": "upsert_success"
+                            "operation": "upsert_success",
+                            "db_path": self.db_path,
+                            "expires_at": token.expires_at,
+                            "has_refresh_enc": bool(refresh_token_enc),
                         }
                     })
 
@@ -196,14 +206,31 @@ class TokenDAO:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
 
-                cursor.execute("""
-                    SELECT id, user_id, provider, access_token, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count,
-                           scope, expires_at, created_at, updated_at, is_valid
+                # Select columns in the canonical order expected by ThirdPartyToken.from_db_row
+                cursor.execute(
+                    """
+                    SELECT 
+                        id,
+                        user_id,
+                        provider,
+                        access_token,
+                        refresh_token,
+                        scope,
+                        expires_at,
+                        created_at,
+                        updated_at,
+                        is_valid,
+                        refresh_token_enc,
+                        envelope_key_version,
+                        last_refresh_at,
+                        refresh_error_count
                     FROM third_party_tokens
                     WHERE user_id = ? AND provider = ? AND is_valid = 1
                     ORDER BY created_at DESC
                     LIMIT 1
-                """, (user_id, provider))
+                    """,
+                    (user_id, provider),
+                )
 
                 row = cursor.fetchone()
                 if row:
@@ -217,6 +244,21 @@ class TokenDAO:
                     except Exception:
                         # Decryption failed: keep plaintext column if present (rollback mode)
                         logger.warning("Failed to decrypt refresh_token_enc, falling back to plaintext column if available")
+                    try:
+                        logger.info(
+                            "🔐 TOKEN STORE: get_token fetched",
+                            extra={
+                                "meta": {
+                                    "user_id": user_id,
+                                    "provider": provider,
+                                    "db_path": self.db_path,
+                                    "expires_at": t.expires_at,
+                                    "is_valid": t.is_valid,
+                                }
+                            },
+                        )
+                    except Exception:
+                        pass
                     return t
 
                 return None
@@ -241,13 +283,29 @@ class TokenDAO:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
 
-                cursor.execute("""
-                    SELECT id, user_id, provider, access_token, refresh_token,
-                           scope, expires_at, created_at, updated_at, is_valid
+                cursor.execute(
+                    """
+                    SELECT 
+                        id,
+                        user_id,
+                        provider,
+                        access_token,
+                        refresh_token,
+                        scope,
+                        expires_at,
+                        created_at,
+                        updated_at,
+                        is_valid,
+                        refresh_token_enc,
+                        envelope_key_version,
+                        last_refresh_at,
+                        refresh_error_count
                     FROM third_party_tokens
                     WHERE user_id = ? AND is_valid = 1
                     ORDER BY provider, created_at DESC
-                """, (user_id,))
+                    """,
+                    (user_id,),
+                )
 
                 rows = cursor.fetchall()
                 return [ThirdPartyToken.from_db_row(row) for row in rows]

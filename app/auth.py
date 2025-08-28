@@ -20,6 +20,7 @@ from .deps.scopes import require_scope
 from .deps.user import get_current_user_id
 from .security import _jwt_decode
 from .user_store import user_store
+from .api.auth import _jwt_secret
 
 # Configuration
 DB_PATH = os.getenv("USERS_DB", "users.db")
@@ -569,8 +570,6 @@ async def register(req: RegisterRequest, request: Request, response: Response):
         from .cookie_config import get_cookie_config, get_token_ttls
         from .cookies import set_auth_cookies
         # Decode access token to extract JTI for session mapping
-        from .api.auth import _jwt_secret
-
         cookie_config = get_cookie_config(request)
         access_ttl, refresh_ttl = get_token_ttls()
 
@@ -942,8 +941,6 @@ async def login(req: LoginRequest, request: Request, response: Response):
         try:
             # Decode the access token to get the JTI
             # Use dynamic JWT secret function to handle test environment changes
-            from .api.auth import _jwt_secret
-
             secret = _jwt_secret()
             payload = _jwt_decode(access_token, secret, algorithms=[ALGORITHM])
             jti = payload.get("jti")
@@ -1026,8 +1023,6 @@ async def login(req: LoginRequest, request: Request, response: Response):
             try:
                 # Decode the access token to get the JTI
                 # Use dynamic JWT secret function to handle test environment changes
-                from .api.auth import _jwt_secret
-
                 secret = _jwt_secret()
                 payload = _jwt_decode(access_token, secret, algorithms=[ALGORITHM])
                 jti = payload.get("jti")

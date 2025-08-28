@@ -122,11 +122,12 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch):
             logger.warning(f"⚠️  Unexpected redirect location: {location}")
 
     # Check cookies
+    from app.cookie_names import GSNH_AT
     final_cookies = list(client.cookies.keys())
     logger.info(f"Final cookies: {final_cookies}")
 
-    if "auth_token" in final_cookies:
-        logger.info("✅ Main auth_token cookie preserved")
+    if GSNH_AT in final_cookies:
+        logger.info("✅ Main GSNH_AT cookie preserved")
     else:
         logger.warning("⚠️  Main auth cookie may have been cleared")
 

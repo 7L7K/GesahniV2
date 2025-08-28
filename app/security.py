@@ -283,6 +283,17 @@ def _jwt_decode(
     if algorithms is None:
         algorithms = ["HS256"]
     opts = kwargs.pop("options", {"require": ["exp", "iat"]})
+
+    # Enforce issuer/audience when configured via environment variables unless
+    # the caller already provided explicit values. This hardens state and token
+    # validation across the codebase.
+    iss_env = os.getenv("JWT_ISS") or os.getenv("JWT_ISSUER")
+    aud_env = os.getenv("JWT_AUD") or os.getenv("JWT_AUDIENCE")
+    if "issuer" not in kwargs and iss_env:
+        kwargs["issuer"] = iss_env
+    if "audience" not in kwargs and aud_env:
+        kwargs["audience"] = aud_env
+
     return jwt.decode(token, key, algorithms=algorithms, options=opts, **kwargs)  # type: ignore[arg-type]
 
 

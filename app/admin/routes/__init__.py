@@ -52,7 +52,13 @@ async def retrieval_trace(
 ):
     # Resolve user id, but never fail in tests
     try:
-        user_id = get_current_user_id(request=request)  # type: ignore[arg-type]
+        # Prefer resolve_user_id for internal/non-FastAPI call sites
+        from app.deps.user import resolve_user_id
+
+        user_id = resolve_user_id(request=request)
+        if user_id == "anon" and not _is_test_mode():
+            # If resolution failed and we are not in test mode, raise to preserve previous behavior
+            raise Exception("unauthenticated")
     except Exception:
         # In test mode, allow anonymous without JWT
         if _is_test_mode():

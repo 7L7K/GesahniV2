@@ -30,7 +30,8 @@ def test_callback_invalid_pkce_redirects(monkeypatch, caplog):
     monkeypatch.setattr(spotify_mod, "_jwt_decode", fake_jwt_decode)
     monkeypatch.setattr(spotify_mod, "get_pkce_challenge_by_state", lambda sid, state: None)
 
-    client.get("/v1/spotify/callback?code=abc&state=stateX", cookies={"auth_token": "t"})
+    from app.cookie_names import GSNH_AT
+    client.get("/v1/spotify/callback?code=abc&state=stateX", cookies={GSNH_AT: "t"})
     assert "spotify.callback:redirect" in caplog.text
     assert "Invalid session/state - no matching PKCE found" in caplog.text
 
@@ -55,7 +56,8 @@ def test_callback_token_exchange_failure(monkeypatch, caplog):
     monkeypatch.setattr(spotify_mod, "get_pkce_challenge_by_state", fake_get_pkce_challenge_by_state)
     monkeypatch.setattr(spotify_mod, "exchange_code", bad_exchange)
 
-    client.get("/v1/spotify/callback?code=abc&state=stateX", cookies={"auth_token": "t"})
+    from app.cookie_names import GSNH_AT
+    client.get("/v1/spotify/callback?code=abc&state=stateX", cookies={GSNH_AT: "t"})
     assert "spotify.callback:redirect" in caplog.text
     assert "Token exchange or persistence failed" in caplog.text
 

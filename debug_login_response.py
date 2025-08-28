@@ -5,7 +5,8 @@ import requests
 
 # Call the login endpoint
 url = "http://localhost:8000/v1/spotify/login?user_id=test_user"
-cookies = {"auth_token": "dummy_jwt_token"}
+# Use canonical cookie name for access token
+cookies = {"GSNH_AT": "dummy_jwt_token"}
 
 print("Making request to:", url)
 response = requests.get(url, cookies=cookies)

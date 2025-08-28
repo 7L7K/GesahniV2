@@ -3,16 +3,47 @@ Stateless OAuth transaction store.
 
 This module provides a simple key-value store for OAuth transactions,
 storing PKCE code verifiers keyed by transaction ID.
+
+Backed by Redis when REDIS_URL is configured and reachable; otherwise
+falls back to an in-process dictionary suitable only for single-instance
+development. Using Redis ensures transactions survive across instances
+behind a load balancer.
 """
 
 import logging
 import time
+import json
+import os
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 # In-memory store for development; use Redis in production
 _store: Dict[str, tuple[Dict[str, Any], float]] = {}
+
+_redis = None
+
+def _get_redis_sync():
+    global _redis
+    if _redis is not None:
+        return _redis
+    url = os.getenv("REDIS_URL")
+    if not url:
+        return None
+    try:
+        import redis  # type: ignore
+    except Exception:
+        return None
+    try:
+        _redis = redis.from_url(url, encoding="utf-8", decode_responses=True)
+        # health check
+        _redis.ping()
+        logger.info("OAuth store: Redis connection established")
+        return _redis
+    except Exception as e:
+        logger.warning(f"OAuth store: failed to connect Redis, using memory: {e}")
+        _redis = None
+        return None
 
 
 def put_tx(tx_id: str, data: Dict[str, Any], ttl_seconds: int = 600) -> None:
@@ -25,7 +56,22 @@ def put_tx(tx_id: str, data: Dict[str, Any], ttl_seconds: int = 600) -> None:
         ttl_seconds: Time to live in seconds (default: 10 minutes)
     """
     expiry_time = time.time() + ttl_seconds
-    _store[tx_id] = (data, expiry_time)
+
+    # Prefer Redis when available to ensure cross-instance consistency
+    r = _get_redis_sync()
+    if r is not None:
+        try:
+            key = f"oauth:tx:{tx_id}"
+            payload = json.dumps({"data": data})
+            # Atomic set with expiry
+            r.setex(key, int(ttl_seconds), payload)
+        except Exception as e:
+            logger.warning(
+                f"OAuth store: Redis put_tx failed (falling back to memory): {e}"
+            )
+            _store[tx_id] = (data, expiry_time)
+    else:
+        _store[tx_id] = (data, expiry_time)
 
     logger.info("🔐 OAuth TX STORED", extra={
         "meta": {
@@ -50,6 +96,57 @@ def pop_tx(tx_id: str) -> Optional[Dict[str, Any]]:
     Returns:
         Transaction data if found and not expired, None otherwise
     """
+    # Try Redis first (atomic GETDEL when available)
+    r = _get_redis_sync()
+    if r is not None:
+        try:
+            key = f"oauth:tx:{tx_id}"
+            raw = None
+            try:
+                # Redis 6.2+ supports GETDEL
+                raw = r.getdel(key)  # type: ignore[attr-defined]
+            except Exception:
+                # Fallback: pipeline WATCH/GET/DEL
+                with r.pipeline() as p:
+                    p.watch(key)
+                    raw = r.get(key)
+                    p.multi()
+                    p.delete(key)
+                    p.execute()
+            if not raw:
+                logger.warning(
+                    "🔐 OAuth TX NOT FOUND",
+                    extra={"meta": {"tx_id": tx_id, "store": "redis"}},
+                )
+                return None
+            try:
+                obj = json.loads(raw)
+                data = obj.get("data") if isinstance(obj, dict) else None
+            except Exception:
+                data = None
+            if not isinstance(data, dict):
+                logger.warning(
+                    "🔐 OAuth TX INVALID PAYLOAD",
+                    extra={"meta": {"tx_id": tx_id, "store": "redis"}},
+                )
+                return None
+            logger.info(
+                "🔐 OAuth TX POPPED",
+                extra={
+                    "meta": {
+                        "tx_id": tx_id,
+                        "user_id": data.get("user_id", "unknown"),
+                        "data_keys": list(data.keys()),
+                        "store": "redis",
+                    }
+                },
+            )
+            return data
+        except Exception as e:
+            logger.warning(
+                f"OAuth store: Redis pop_tx failed (falling back to memory): {e}"
+            )
+
     row = _store.pop(tx_id, None)
     if not row:
         logger.warning("🔐 OAuth TX NOT FOUND", extra={
@@ -100,6 +197,30 @@ def get_tx(tx_id: str) -> Optional[Dict[str, Any]]:
     Returns:
         Transaction data if found and not expired, None otherwise
     """
+    # Try Redis first
+    r = _get_redis_sync()
+    if r is not None:
+        try:
+            key = f"oauth:tx:{tx_id}"
+            raw = r.get(key)
+            if not raw:
+                logger.debug(
+                    "🔐 OAuth TX GET - NOT FOUND", extra={"meta": {"tx_id": tx_id, "store": "redis"}}
+                )
+                return None
+            try:
+                obj = json.loads(raw)
+                data = obj.get("data") if isinstance(obj, dict) else None
+            except Exception:
+                data = None
+            if not isinstance(data, dict):
+                return None
+            return data
+        except Exception as e:
+            logger.warning(
+                f"OAuth store: Redis get_tx failed (falling back to memory): {e}"
+            )
+
     row = _store.get(tx_id)
     if not row:
         logger.debug("🔐 OAuth TX GET - NOT FOUND", extra={

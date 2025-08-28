@@ -433,11 +433,11 @@ def set_named_cookie(
     value: str,
     ttl: int,
     request: Request,
+    path: str = "/",
     httponly: bool = True,
-    path: str = None,
-    domain: str = None,
-    secure: bool = None,
-    samesite: str = None,
+    samesite: str | None = None,
+    secure: bool | None = None,
+    domain: str | None = None,
 ) -> None:
     """
     Set a generic named cookie with centralized configuration.
@@ -464,8 +464,12 @@ def set_named_cookie(
     # Use provided values or fall back to config defaults
     cookie_path = path or cookie_config["path"]
     cookie_domain = domain if domain is not None else cookie_config["domain"]
-    cookie_secure = secure if secure is not None else cookie_config["secure"]
-    cookie_samesite = samesite or cookie_config["samesite"]
+    cookie_samesite = (samesite or cookie_config["samesite"]).lower()
+    cookie_secure = cookie_config["secure"] if secure is None else bool(secure)
+
+    # Enforce policy: SameSite=None is only valid with Secure=True
+    if cookie_samesite == "none":
+        cookie_secure = True
 
     # Format the cookie header
     header = format_cookie_header(

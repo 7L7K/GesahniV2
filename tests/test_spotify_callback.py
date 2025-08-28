@@ -41,7 +41,8 @@ def test_callback_success_flow(monkeypatch, caplog):
     monkeypatch.setattr(spotify_mod, "upsert_token", fake_upsert_token)
 
     # Make the callback request with cookie set (as connect would)
-    cookies = {"auth_token": "dummy-token"}
+    from app.cookie_names import GSNH_AT
+    cookies = {GSNH_AT: "dummy-token"}
     res = client.get("/v1/spotify/callback?code=abc&state=state123", cookies=cookies)
 
     # Expect initial redirect to connected (TestClient may follow it). Check history
@@ -88,7 +89,8 @@ def test_callback_missing_code_redirects_no_code(monkeypatch, caplog):
     monkeypatch.setattr(spotify_mod, "_jwt_decode", fake_jwt_decode)
     monkeypatch.setattr(spotify_mod, "get_pkce_challenge_by_state", fake_get_pkce_challenge_by_state)
 
-    client.get("/v1/spotify/callback?state=state123", cookies={"auth_token": "t"})
+    from app.cookie_names import GSNH_AT
+    client.get("/v1/spotify/callback?state=state123", cookies={GSNH_AT: "t"})
     assert "Missing authorization code" in caplog.text
 
 

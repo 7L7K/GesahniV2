@@ -87,12 +87,13 @@ def test_complete_spotify_oauth_flow():
         else:
             logger.warning(f"⚠️  Unexpected redirect location: {location}")
 
-    # Check if main auth cookie is still present
+    # Check if main auth cookie is still present (use canonical name)
+    from app.cookie_names import GSNH_AT
     main_cookies = list(client.cookies.keys())
     logger.info(f"Cookies after callback: {main_cookies}")
 
-    if "auth_token" in main_cookies:
-        logger.info("✅ Main auth_token cookie preserved")
+    if GSNH_AT in main_cookies:
+        logger.info("✅ Main GSNH_AT cookie preserved")
     else:
         logger.warning("⚠️  Main auth cookie may have been cleared")
 
