@@ -326,38 +326,9 @@ async def spotify_callback_test(request: Request):
 
 @router.get("/debug-cookie")
 async def spotify_debug_cookie(request: Request) -> dict:
-    """Dev-only helper: return detailed auth and cookie information."""
+    """Dev-only helper (stubbed in production)."""
     if os.getenv("DEV_MODE") or os.getenv("SPOTIFY_TEST_MODE") == "1":
-        # Check all possible auth cookies
-        gsnh_at = request.cookies.get(GSNH_AT)
-        auth_token = request.cookies.get("auth_token")
-        access_token = request.cookies.get("access_token")
-        
-        # Check Authorization header
-        auth_header = request.headers.get("Authorization", "")
-        has_bearer = auth_header.startswith("Bearer ")
-        
-        # Get all cookies for debugging
-        all_cookies = dict(request.cookies)
-        
-        return {
-            "has_auth_cookie": bool(gsnh_at or auth_token or access_token),
-            "cookies": {
-                "GSNH_AT": bool(gsnh_at),
-                "auth_token": bool(auth_token),
-                "access_token": bool(access_token),
-                "all_cookies": list(all_cookies.keys())
-            },
-            "headers": {
-                "has_authorization": has_bearer,
-                "authorization_preview": auth_header[:50] + "..." if len(auth_header) > 50 else auth_header
-            },
-            "request_info": {
-                "host": request.headers.get("host"),
-                "origin": request.headers.get("origin"),
-                "referer": request.headers.get("referer")
-            }
-        }
+        return {"cookies": list(request.cookies.keys())}
     raise HTTPException(status_code=404, detail="not_found")
 
 @router.get("/callback")
@@ -371,25 +342,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
     from starlette.responses import RedirectResponse
     from ..api.auth import _jwt_secret
 
-    logger.info("🎵 SPOTIFY CALLBACK: Stateless callback started", extra={
-        "meta": {
-            "has_code": bool(code),
-            "has_state": bool(state),
-            "code_length": len(code) if code else 0,
-            "state_length": len(state) if state else 0,
-            "code_preview": code[:20] + "..." if code and len(code) > 20 else code or "None",
-            "state_preview": state[:50] + "..." if state and len(state) > 50 else state or "None",
-            "cookies_count": len(request.cookies),
-            "cookie_names": list(request.cookies.keys()),
-            "has_gsnh_at": bool(request.cookies.get(GSNH_AT)),
-            "has_auth_token": bool(request.cookies.get("auth_token")),
-            "authorization_header": bool(request.headers.get("Authorization")),
-            "host": request.headers.get("host"),
-            "origin": request.headers.get("origin"),
-            "referer": request.headers.get("referer"),
-            "user_agent": request.headers.get("user-agent", "")[:50] + "..." if len(request.headers.get("user-agent", "")) > 50 else request.headers.get("user-agent", "")
-        }
-    })
+    logger.info("🎵 SPOTIFY CALLBACK: start has_code=%s has_state=%s", bool(code), bool(state))
 
     # 1) Verify state JWT (no cookies needed)
     logger.info("🎵 SPOTIFY CALLBACK: Step 1 - Verifying JWT state...")
@@ -400,15 +353,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
         uid = payload["uid"]
         exp_time = payload.get("exp", 0)
 
-        logger.info("🎵 SPOTIFY CALLBACK: JWT state decoded successfully", extra={
-            "meta": {
-                "tx_id": tx_id,
-                "user_id": uid,
-                "exp_timestamp": exp_time,
-                "expires_in_seconds": max(0, exp_time - int(time.time())),
-                "jwt_payload_keys": list(payload.keys())
-            }
-        })
+        logger.debug("🎵 SPOTIFY CALLBACK: JWT decoded tx=%s uid=%s", tx_id, uid)
     except jwt.ExpiredSignatureError as e:
         logger.error("🎵 SPOTIFY CALLBACK: JWT state expired", extra={
             "meta": {"error_type": "ExpiredSignatureError", "error_message": str(e)}
@@ -458,44 +403,16 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
     code_verifier = tx["code_verifier"]
     tx_timestamp = tx.get("ts", 0)
 
-    logger.info("🎵 SPOTIFY CALLBACK: Transaction recovered successfully", extra={
-        "meta": {
-            "tx_id": tx_id,
-            "user_id": uid,
-            "code_verifier_length": len(code_verifier),
-            "code_verifier_preview": code_verifier[:20] + "..." if len(code_verifier) > 20 else code_verifier,
-            "tx_created_at": tx_timestamp,
-            "tx_age_seconds": int(time.time() - tx_timestamp),
-            "tx_data_keys": list(tx.keys())
-        }
-    })
+    logger.info("🎵 SPOTIFY CALLBACK: transaction recovered tx=%s uid=%s", tx_id, uid)
 
     # 3) Exchange code → tokens
     logger.info("🎵 SPOTIFY CALLBACK: Step 3 - Exchanging authorization code for tokens...")
     try:
-        logger.info("🎵 SPOTIFY CALLBACK: Calling Spotify token endpoint", extra={
-        "meta": {
-                "code_length": len(code) if code else 0,
-                "code_verifier_length": len(code_verifier),
-                "user_id": uid,
-                "tx_id": tx_id
-            }
-        })
+        logger.debug("🎵 SPOTIFY CALLBACK: calling token endpoint tx=%s", tx_id)
 
         token_data = await exchange_code(code=code, code_verifier=code_verifier)
 
-        logger.info("🎵 SPOTIFY CALLBACK: Token exchange successful", extra={
-            "meta": {
-                "has_access_token": bool(token_data.access_token),
-                "has_refresh_token": bool(token_data.refresh_token),
-                "access_token_length": len(token_data.access_token or ""),
-                "refresh_token_length": len(token_data.refresh_token or "") if token_data.refresh_token else 0,
-                "token_type": "Bearer",  # Spotify tokens are always Bearer type
-                "expires_in": token_data.expires_at - int(time.time()) if token_data.expires_at else 0,
-                "scope": token_data.scope or "unknown",
-                "response_keys": ["access_token", "refresh_token", "scope", "expires_at"]  # ThirdPartyToken attributes
-            }
-        })
+        logger.info("🎵 SPOTIFY CALLBACK: token exchange successful tx=%s", tx_id)
     except Exception as e:
         logger.error("🎵 SPOTIFY CALLBACK: Token exchange failed", extra={
             "meta": {
@@ -520,18 +437,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
         refresh_token = token_data.refresh_token
         expires_at = token_data.expires_at
 
-        logger.info("🎵 SPOTIFY CALLBACK: Preparing token data for storage", extra={
-            "meta": {
-                "user_id": uid,
-                "provider": "spotify",
-                "access_token_length": len(access_token),
-                "has_refresh_token": bool(refresh_token),
-                "refresh_token_length": len(refresh_token) if refresh_token else 0,
-                "expires_at_timestamp": expires_at,
-                "expires_at_formatted": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(expires_at)),
-                "scope": token_data.scope
-            }
-        })
+        logger.debug("🎵 SPOTIFY CALLBACK: persisting tokens tx=%s uid=%s", tx_id, uid)
 
         # Create a new ThirdPartyToken with the correct user_id
         token_for_storage = ThirdPartyToken(
@@ -545,21 +451,13 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
 
         await upsert_token(token_for_storage)
 
-        logger.info("🎵 SPOTIFY CALLBACK: Tokens persisted successfully", extra={
-            "meta": {
-                "user_id": uid,
-                "tx_id": tx_id,
-                "tokens_stored": True,
-                "expires_at_formatted": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(expires_at))
-            }
-        })
+        logger.info("🎵 SPOTIFY CALLBACK: tokens persisted tx=%s uid=%s", tx_id, uid)
 
         # Metrics: oauth callback success
         try:
             OAUTH_CALLBACK.labels("spotify").inc()
-            logger.debug("🎵 SPOTIFY CALLBACK: Metrics incremented")
         except Exception as e:
-            logger.debug("🎵 SPOTIFY CALLBACK: Metrics increment failed", extra={"error": str(e)})
+            logger.debug("🎵 SPOTIFY CALLBACK: metrics increment failed: %s", str(e))
 
     except Exception as e:
         logger.error("🎵 SPOTIFY CALLBACK: Token persistence failed", extra={
@@ -579,17 +477,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
     redirect_url = f"{frontend_url}/settings#spotify?connected=1"
 
-    logger.info("🎵 SPOTIFY CALLBACK: Step 5 - OAuth flow completed successfully", extra={
-        "meta": {
-            "user_id": uid,
-            "tx_id": tx_id,
-            "redirect_url": redirect_url,
-            "frontend_url": frontend_url,
-            "flow_duration_seconds": int(time.time() - tx_timestamp),
-            "stateless_flow": True,
-            "no_cookies_used": True
-        }
-    })
+    logger.info("🎵 SPOTIFY CALLBACK: completed tx=%s uid=%s", tx_id, uid)
 
     return RedirectResponse(redirect_url, status_code=302)
 
