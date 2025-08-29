@@ -34,7 +34,91 @@ def _admin_token() -> str | None:
 
 @router.get("/health")
 async def health(user_id: str = Depends(get_current_user_id)) -> dict:
-    return {"status": "ok"}
+    """Authenticated health snapshot for the UI.
+
+    Combines core readiness (unauthenticated) with optional dependency checks
+    into a simple schema consumed by the frontend:
+
+    {
+      status: 'ok' | 'degraded' | 'fail',
+      timestamp: ISO8601,
+      checks: { backend: 'ok', llama: 'ok'|'error'|'skipped', ha: 'ok'|'error'|'skipped', ... },
+      metrics: { llama_hits, gpt_hits, cache_hit_rate }
+    }
+    """
+    from .api.health import health_ready as _ready, health_deps as _deps  # lazy import
+    import datetime
+
+    # Gather readiness and dependency snapshots (unauthenticated endpoints)
+    ready = await _ready()  # may be dict or JSONResponse
+    deps = await _deps()  # may be dict or JSONResponse
+
+    # Normalize potential Response objects into plain dicts for internal use
+    import json
+    from fastapi import Response
+
+    def _normalize(resp):
+        # If already a dict, return as-is
+        if isinstance(resp, dict):
+            return resp
+        # If it's a Response/JSONResponse, try to parse the body
+        try:
+            if isinstance(resp, Response):
+                body = getattr(resp, "body", None)
+                if body is None:
+                    # Some Response subclasses may store media/content
+                    body = getattr(resp, "media", None) or getattr(resp, "content", None)
+                if isinstance(body, (bytes, bytearray)):
+                    return json.loads(body.decode())
+                if isinstance(body, str):
+                    return json.loads(body)
+                if isinstance(body, dict):
+                    return body
+        except Exception:
+            pass
+        return {}
+
+    ready = _normalize(ready)
+    deps = _normalize(deps)
+
+    # Build checks map starting with backend (always ok if we reached here)
+    checks: dict[str, str] = {"backend": "ok"}
+
+    # Map readiness components (healthy/unhealthy -> ok/error)
+    comps = (ready or {}).get("components", {}) if isinstance(ready, dict) else {}
+    for name, comp in comps.items():
+        status = str(comp.get("status", "unhealthy"))
+        checks[name] = "ok" if status == "healthy" else ("degraded" if status == "degraded" else "error")
+
+    # Merge dependency checks (ok/error/skipped)
+    dep_checks = (deps or {}).get("checks", {}) if isinstance(deps, dict) else {}
+    for name, st in dep_checks.items():
+        # Only add if not present from readiness
+        checks.setdefault(name, str(st))
+
+    # Overall status derived from readiness first, then deps
+    if (ready or {}).get("status") == "fail":
+        overall = "fail"
+    elif (ready or {}).get("status") == "degraded" or (deps or {}).get("status") == "degraded":
+        overall = "degraded"
+    else:
+        overall = "ok"
+
+    # Lightweight metrics for visibility
+    m = get_metrics()
+    metrics = {
+        "llama_hits": m.get("llama", 0),
+        "gpt_hits": m.get("gpt", 0),
+        "fallbacks": m.get("fallback", 0),
+        "cache_hit_rate": cache_hit_rate(),
+    }
+
+    return {
+        "status": overall,
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        "checks": checks,
+        "metrics": metrics,
+    }
 
 
 @router.get("/healthz")

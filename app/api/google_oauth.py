@@ -887,6 +887,31 @@ async def google_callback(request: Request) -> Response:
         else:
             final_root = f"{frontend_base}/"
 
+        # Append token query params to the redirect target so frontend can
+        # pick up `access_token`/`refresh_token` when present (header-mode flows).
+        # Important: if final_root contains a fragment (#), insert query params
+        # before the fragment per URL rules so the browser preserves the fragment
+        # while the frontend can read the tokens from the query string.
+        try:
+            if q:
+                # Split off fragment if present
+                frag = ""
+                if "#" in final_root:
+                    base_part, frag = final_root.split("#", 1)
+                    base_part = base_part.rstrip("/")
+                else:
+                    base_part = final_root
+
+                if "?" in base_part:
+                    new_base = f"{base_part}&{q}"
+                else:
+                    new_base = f"{base_part}?{q}"
+
+                final_root = f"{new_base}{('#' + frag) if frag else ''}"
+        except Exception:
+            # Defensive: if q is undefined or any error occurs, fall back silently
+            pass
+
         # Decide whether to perform a 302 redirect or return an HTML shim that
         # sets cookies and immediately redirects via JS. The HTML shim can be
         # more reliable for some browsers when Set-Cookie appears on redirect

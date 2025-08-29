@@ -19,7 +19,14 @@ import { RateLimitToast, AuthMismatchToast } from '@/components/ui/toast';
 import { WebSocketStatus } from '@/components/WebSocketStatus';
 import { useAuthState, useAuthOrchestrator } from '@/hooks/useAuth';
 import { useBootstrapManager } from '@/hooks/useBootstrap';
+import { useWsOpen } from '@/hooks/useWs';
 import Link from 'next/link';
+import StatusBanner from '@/components/StatusBanner';
+import WsIndicator from '@/components/WsIndicator';
+import { ModelSelector } from '@/components/ModelSelector';
+import EmptyState from '@/components/EmptyState';
+import { useHealthPolling } from '@/hooks/useHealth';
+import { useSpotifyStatus, useMusicDevices } from '@/hooks/useSpotify';
 
 interface ChatMessage {
   id: string;
@@ -31,13 +38,19 @@ interface ChatMessage {
 // Clerk completely removed - using cookie authentication only
 
 export default function Page() {
+  // Guard rendering to avoid SSR/CSR markup mismatch: render a deterministic
+  // placeholder on the server and mount the full interactive UI only on the
+  // client. This prevents hydration errors caused by client-only APIs
+  // (navigator/localStorage/window) that run during mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const router = useRouter();
   const authState = useAuthState();
   const authOrchestrator = useAuthOrchestrator();
   const bootstrapManager = useBootstrapManager();
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [sessionReady, setSessionReady] = useState<boolean>(false);
-  const [backendOffline, setBackendOffline] = useState<boolean>(false);
+  // Backend status banner moved to StatusBanner component
 
   const authBootOnce = useRef<boolean>(false);
   const finishOnceRef = useRef<boolean>(false);
@@ -73,6 +86,15 @@ export default function Page() {
   // 'auto' lets the backend route to skills/LLM; user can still force a model
   const bottomRef = useRef<HTMLDivElement>(null);
   const musicStateFetchAttempted = useRef<boolean>(false);
+  const { health, llamaDegraded } = useHealthPolling(15000);
+  const [modelHint, setModelHint] = useState<string | null>(null);
+  const wsMusicOpen = useWsOpen('music', 2000);
+  const spotifyOk = (String(health?.checks?.spotify || 'ok') === 'ok') || (String(health?.checks?.spotify || '') === 'skipped');
+  const { connected: spotifyConnected } = useSpotifyStatus(45000);
+  const { hasDevice } = useMusicDevices(45000);
+  const musicUiReady = wsMusicOpen && spotifyOk && spotifyConnected;
+  const shouldPollHttpMusic = (!wsMusicOpen) && spotifyOk && spotifyConnected;
+  const musicDegradedReason = !spotifyConnected ? 'Connect Spotify to enable playback' : (!spotifyOk ? 'Spotify degraded' : (!wsMusicOpen ? 'Connection lost — trying to reconnect' : (!hasDevice ? 'No device available' : 'Unavailable')));
 
   // Helpers: scope storage keys per user id for privacy
   const historyKey = `chat_history_${authState.user?.id || 'anon'}`;
@@ -256,6 +278,26 @@ export default function Page() {
     }
   }, [authed, authError]);
 
+  // Fallback polling when WS is down but Spotify is ok and connected
+  useEffect(() => {
+    if (!shouldPollHttpMusic) return;
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const state = await getMusicState();
+        if (mounted) setMusicState(state);
+        // also nudge queue refreshers
+        try {
+          const ev = new CustomEvent('music.queue.updated', { detail: { source: 'http-poll' } });
+          window.dispatchEvent(ev);
+        } catch { /* noop */ }
+      } catch { /* ignore */ }
+    };
+    const id = window.setInterval(poll, 5000);
+    poll();
+    return () => { mounted = false; window.clearInterval(id); };
+  }, [shouldPollHttpMusic]);
+
   // WebSocket connection - only when authenticated
   useEffect(() => {
     if (!authed) {
@@ -289,124 +331,7 @@ export default function Page() {
     };
   }, [authed]);
 
-  // Backend status check with bootstrap coordination
-  useEffect(() => {
-    // DISABLED: Health polling should be controlled by orchestrator
-    // Health check state tracking
-    // const healthCheckState = {
-    //   hasEverSucceeded: false,
-    //   lastSuccessTs: 0,
-    //   lastCheckTs: 0,
-    //   consecutiveFailures: 0,
-    //   nextCheckDelay: 5000, // Start with 5 seconds
-    //   maxCheckDelay: 300000, // Max 5 minutes
-    //   successThrottleDelay: 60000, // 1 minute after success
-    // };
-
-    // const checkBackend = async () => {
-    //   // Check if health polling is allowed by bootstrap manager
-    //   if (!bootstrapManager.startHealthPolling()) {
-    //     console.info('Page: Health polling blocked by bootstrap manager');
-    //     return;
-    //   }
-
-    //   const now = Date.now();
-
-    //   // Check if we should skip this health check due to throttling
-    //   if (healthCheckState.hasEverSucceeded) {
-    //     const timeSinceSuccess = now - healthCheckState.lastSuccessTs;
-    //     if (timeSinceSuccess < healthCheckState.successThrottleDelay) {
-    //       console.debug('Skipping health check - throttled after success (%dms remaining)',
-    //         healthCheckState.successThrottleDelay - timeSinceSuccess);
-    //       return;
-    //     }
-    //   }
-
-    //   // Check if we should skip due to exponential backoff
-    //   const timeSinceLastCheck = now - healthCheckState.lastCheckTs;
-    //   if (!healthCheckState.hasEverSucceeded && timeSinceLastCheck < healthCheckState.nextCheckDelay) {
-    //     console.debug('Skipping health check - exponential backoff (%dms remaining)',
-    //       healthCheckState.nextCheckDelay - timeSinceLastCheck);
-    //     return;
-    //   }
-
-    //   healthCheckState.lastCheckTs = now;
-
-    //   try {
-    //     const response = await apiFetch('/v1/status', { method: 'GET', auth: false });
-    //     const isOnline = response.ok;
-    //     setBackendOffline(!isOnline);
-
-    //     if (isOnline) {
-    //       // Success - update state
-    //       healthCheckState.hasEverSucceeded = true;
-    //       healthCheckState.lastSuccessTs = now;
-    //       healthCheckState.consecutiveFailures = 0;
-    //       healthCheckState.nextCheckDelay = 5000; // Reset to initial delay
-    //       console.debug('Backend health check successful');
-    //     } else {
-    //       // Failure
-    //       healthCheckState.consecutiveFailures += 1;
-
-    //       // Exponential backoff: double the delay, capped at max_delay
-    //       if (!healthCheckState.hasEverSucceeded) {
-    //         healthCheckState.nextCheckDelay = Math.min(
-    //           healthCheckState.nextCheckDelay * 2,
-    //           healthCheckState.maxCheckDelay
-    //         );
-    //         console.warn('Backend health check failed (attempt %d, next check in %dms)',
-    //           healthCheckState.consecutiveFailures,
-    //           healthCheckState.nextCheckDelay);
-    //       } else {
-    //         console.warn('Backend health check failed after previous success');
-    //       }
-    //     }
-    //   } catch {
-    //     setBackendOffline(true);
-    //     healthCheckState.consecutiveFailures += 1;
-
-    //     // Exponential backoff: double the delay, capped at max_delay
-    //     if (!healthCheckState.hasEverSucceeded) {
-    //       healthCheckState.nextCheckDelay = Math.min(
-    //         healthCheckState.nextCheckDelay * 2,
-    //         healthCheckState.maxCheckDelay
-    //       );
-    //       console.warn('Backend health check failed (attempt %d, next check in %dms)',
-    //         healthCheckState.consecutiveFailures,
-    //         healthCheckState.nextCheckDelay);
-    //     } else {
-    //       console.warn('Backend health check failed after previous success');
-    //     }
-    //   } finally {
-    //     // Always stop health polling when done
-    //     bootstrapManager.stopHealthPolling();
-    //   }
-    // };
-
-    // checkBackend();
-
-    // // Use a more intelligent interval that adapts based on health check state
-    // const interval = setInterval(() => {
-    //   const now = Date.now();
-    //   let delay = 30000; // Default 30 seconds
-
-    //   if (healthCheckState.hasEverSucceeded) {
-    //     // After success: throttle to once per minute
-    //     delay = healthCheckState.successThrottleDelay;
-    //   } else {
-    //     // Before success: use exponential backoff
-    //     delay = healthCheckState.nextCheckDelay;
-    //   }
-
-    //   // Schedule next check
-    //   setTimeout(checkBackend, delay);
-    // }, 30000); // Check every 30 seconds initially, then adapt
-
-    // return () => {
-    //   clearInterval(interval);
-    //   bootstrapManager.stopHealthPolling();
-    // };
-  }, [bootstrapManager]);
+  // Health polling now handled by <StatusBanner />
 
   // Persist messages after each update & auto‑scroll
   useEffect(() => {
@@ -425,6 +350,17 @@ export default function Page() {
       localStorage.setItem(modelKey, model);
     }
   }, [model]);
+
+  // Guard model selection when LLaMA is degraded; force auto and show inline hint
+  useEffect(() => {
+    if (!llamaDegraded) { setModelHint(null); return; }
+    if (model.toLowerCase().startsWith('llama')) {
+      setModel('auto');
+      setModelHint('LLaMA is degraded—temporarily forcing auto.');
+    } else {
+      setModelHint('LLaMA is degraded—auto recommended.');
+    }
+  }, [llamaDegraded]);
 
   const handleSend = async (content: string) => {
     if (!content.trim() || loading) return;
@@ -474,8 +410,8 @@ export default function Page() {
     localStorage.removeItem(historyKey);
   };
 
-  // Show loading state while auth is being determined
-  if (authState.isLoading) {
+  // Show loading state while auth is being determined (server renders skeleton)
+  if (!mounted || authState.isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -521,6 +457,7 @@ export default function Page() {
     <div className="flex flex-col h-full">
       <RateLimitToast />
       <AuthMismatchToast />
+      <StatusBanner />
 
       {/* Auth Finish Error */}
       {finishError && (
@@ -541,12 +478,7 @@ export default function Page() {
         </div>
       )}
 
-      {/* Backend Offline Notice */}
-      {backendOffline && (
-        <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 dark:text-yellow-300 px-4 py-2 text-center">
-          <p className="text-sm">Backend is offline. Some features may be unavailable.</p>
-        </div>
-      )}
+      {/* Backend offline/degraded banners handled by <StatusBanner /> */}
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col lg:flex-row gap-6 p-6">
@@ -554,7 +486,7 @@ export default function Page() {
         <div className="flex-1 flex flex-col">
           <div className="flex-1 overflow-y-auto space-y-4 mb-4">
             {messages.length === 0 ? (
-              <ChatBubble role="assistant" text={createInitialMessage().content} />
+              <EmptyState />
             ) : (
               messages.map((message) => (
                 <ChatBubble key={message.id} role={message.role} text={message.content} />
@@ -565,10 +497,11 @@ export default function Page() {
           <InputBar
             onSend={handleSend}
             loading={loading}
-            model={model}
-            onModelChange={setModel}
             authed={authed}
           />
+          {modelHint && (
+            <div className="mt-2 text-xs text-amber-700 dark:text-amber-300" role="status" aria-live="polite">{modelHint}</div>
+          )}
           <div className="flex justify-between items-center mt-4 text-sm text-muted-foreground">
             <span>Connected as {authState.user?.id || 'Unknown'}</span>
             <div className="flex items-center gap-4">
@@ -603,15 +536,42 @@ export default function Page() {
           </div>
         )}
 
-        {musicState && !authError && (
+        {/* Right-rail: show static placeholders when WS down */}
+        {(!authError) && (
           <div className="w-full lg:w-80 space-y-4">
-            <NowPlayingCard state={musicState} />
-            <DiscoveryCard />
-            <MoodDial />
-            <QueueCard />
-            <DevicePicker />
+            {musicUiReady ? (
+              <>
+                {musicState && <NowPlayingCard state={musicState} />}
+                <DiscoveryCard />
+                <MoodDial />
+                <QueueCard />
+                <DevicePicker />
+              </>
+            ) : (
+              <>
+                <div className="rounded-lg border p-4 text-sm text-muted-foreground" role="status" aria-live="polite">
+                  <div>Music service unavailable. Showing static controls.</div>
+                  <div className="mt-1 text-xs">{musicDegradedReason}</div>
+                </div>
+                {!hasDevice && spotifyConnected && (
+                  <div className="rounded-lg border p-4 text-sm">
+                    No device available — open Spotify on a device or select one below.
+                    <div className="mt-2"><DevicePicker /></div>
+                  </div>
+                )}
+                <div className="rounded-lg border p-4"><div className="h-4 bg-muted rounded w-1/2" /><div className="mt-2 h-3 bg-muted rounded w-2/3" /></div>
+                <div className="rounded-lg border p-4"><div className="h-40 bg-muted rounded" /></div>
+                <div className="rounded-lg border p-4"><div className="h-24 bg-muted rounded" /></div>
+              </>
+            )}
           </div>
         )}
+      </div>
+
+      {/* Footer: WS indicators + model picker */}
+      <div className="border-t px-6 py-2 flex items-center justify-between">
+        <WsIndicator />
+        <ModelSelector value={model} onChange={setModel} />
       </div>
     </div>
   );

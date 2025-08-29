@@ -1144,6 +1144,10 @@ if _safe_import_router("from .health import router as health_diag_router", "heal
     # expected by tests (api.health).
     app.include_router(health_diag_router, prefix="/v1/diag")
 
+# Simple logs endpoint for UI issue tray
+if _safe_import_router("from .api.logs_simple import router as logs_router", "logs_simple"):
+    app.include_router(logs_router, prefix="/v1")
+
 # =============================================================================
 # EXISTING EXTERNAL ROUTERS - Keep in modern-first order
 # =============================================================================

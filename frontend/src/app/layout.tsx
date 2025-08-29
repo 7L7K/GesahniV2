@@ -5,8 +5,7 @@ import { ThemeProvider } from "next-themes";
 // Clerk intentionally not used in cookie-only frontend; keep layout simple
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import Header from "@/components/Header";
-import BackendBanner from "@/components/BackendBanner";
-import DegradedNotice from "@/components/DegradedNotice";
+// Status banners are now handled within the chat layout (authenticated)
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { getCSPPolicy, generateNonce } from "@/lib/csp";
@@ -63,8 +62,7 @@ export default function RootLayout({
                 <ClientOnly>
                   <Header />
                 </ClientOnly>
-                <BackendBanner />
-                <DegradedNotice />
+                {/* Status banners moved to chat layout */}
                 <ConfigValidator />
                 <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-primary text-primary-foreground rounded px-3 py-2">Skip to content</a>
                 <div id="main" className="bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-50 via-background to-background dark:from-zinc-900/20">

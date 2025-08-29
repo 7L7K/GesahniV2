@@ -2,20 +2,15 @@
 import { Send } from "lucide-react";
 import { useState, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { ModelSelector } from "@/components/ModelSelector";
 import TextareaAutosize from "react-textarea-autosize";
 
 export default function InputBar({
   onSend,
   loading,
-  model,
-  onModelChange,
   authed = true,
 }: {
   onSend: (text: string) => Promise<void> | void;
   loading: boolean;
-  model: string;
-  onModelChange: (m: string) => void;
   authed?: boolean;
 }) {
   const [text, setText] = useState("");
@@ -42,11 +37,6 @@ export default function InputBar({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="inline-flex w-full items-center justify-between rounded-xl border bg-background p-1">
-        <ModelSelector value={model} onChange={onModelChange} />
-        <div className="text-[10px] text-muted-foreground px-2">Shift+Enter for newline</div>
-      </div>
-
       <div className="flex items-end gap-2">
         <div className="flex-1">
           <TextareaAutosize
