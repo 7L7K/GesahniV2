@@ -570,12 +570,21 @@ async def _build_state_payload(user_id: str) -> StateResponse:
 async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
     # Validate WebSocket Origin explicitly
     origin = ws.headers.get("Origin")
-    allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
-    # Use single origin for WebSocket CORS
-    if "," in allowed_origins:
-        allowed_origins = allowed_origins.split(",")[0].strip()
+    # Prefer runtime-resolved origins from app state when available
+    try:
+        configured_origins = list(getattr(ws.app.state, "allowed_origins", []))  # type: ignore[attr-defined]
+    except Exception:
+        configured_origins = []
 
-    if origin and origin not in origins:
+    # Fallback to env when app state not populated
+    if not configured_origins:
+        _env_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000") or "http://localhost:3000"
+        configured_origins = [o.strip() for o in _env_origins.split(",") if o.strip()]
+        if not configured_origins:
+            configured_origins = ["http://localhost:3000"]
+
+    # For WS, enforce exact-origin match against configured list
+    if origin and origin not in configured_origins:
         try:
             await ws.close(code=1008, reason="origin_not_allowed")
         except Exception:
@@ -583,6 +592,20 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
         return
 
     await verify_ws(ws)
+    # If session store is down and no Authorization header/user identity, fail handshake early
+    try:
+        hdr = ws.headers.get("Authorization") or ""
+        has_authz = hdr.lower().startswith("bearer ")
+        uid = getattr(ws.state, "user_id", None)
+        outage = getattr(ws.state, "session_store_unavailable", False)
+        if outage and (not has_authz) and (not uid):
+            try:
+                await ws.close(code=1013, reason="identity_unavailable")
+            except Exception:
+                pass
+            return
+    except Exception:
+        pass
     # If strict auth is required, close unauthenticated with policy violation
     try:
         require_jwt = os.getenv("REQUIRE_JWT", "0").strip().lower() in {

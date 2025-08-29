@@ -14,7 +14,7 @@ from uuid import uuid4
 import jwt
 
 # JWT configuration constants
-ALGORITHM = "HS256"
+ALGORITHM = os.getenv("JWT_ALGS", "HS256").split(",")[0].strip() or "HS256"
 SECRET_KEY = os.getenv("JWT_SECRET")
 JWT_ISS = os.getenv("JWT_ISS")
 JWT_AUD = os.getenv("JWT_AUD")
@@ -52,10 +52,8 @@ def _create_access_token_internal(
     Returns:
         JWT access token string
     """
-    # Get JWT secret dynamically to handle test environment changes
-    from .api.auth import _jwt_secret
-
-    secret = _jwt_secret()
+    # Choose signing key/alg dynamically
+    alg, key, kid = _select_signing_key()
 
     to_encode = data.copy()
     if expires_delta:
@@ -90,19 +88,8 @@ def _create_access_token_internal(
         },
     )
 
-    # If a key pool is configured, include the primary kid in header when available
-    try:
-        from .api.auth import _primary_kid_secret
-
-        try:
-            kid, _ = _primary_kid_secret()
-        except Exception:
-            kid = None
-    except Exception:
-        kid = None
-
     headers = {"kid": kid} if kid else None
-    return jwt.encode(to_encode, secret, algorithm=ALGORITHM, headers=headers)
+    return jwt.encode(to_encode, key, algorithm=alg, headers=headers)
 
 
 def _create_refresh_token_internal(
@@ -117,10 +104,8 @@ def _create_refresh_token_internal(
     Returns:
         JWT refresh token string
     """
-    # Get JWT secret dynamically to handle test environment changes
-    from .api.auth import _jwt_secret
-
-    secret = _jwt_secret()
+    # Choose signing key/alg dynamically
+    alg, key, kid = _select_signing_key()
 
     to_encode = data.copy()
     if expires_delta:
@@ -155,19 +140,8 @@ def _create_refresh_token_internal(
         },
     )
 
-    # If a key pool is configured, include the primary kid in header when available
-    try:
-        from .api.auth import _primary_kid_secret
-
-        try:
-            kid, _ = _primary_kid_secret()
-        except Exception:
-            kid = None
-    except Exception:
-        kid = None
-
     headers = {"kid": kid} if kid else None
-    return jwt.encode(to_encode, secret, algorithm=ALGORITHM, headers=headers)
+    return jwt.encode(to_encode, key, algorithm=alg, headers=headers)
 
 
 # Centralized TTL defaults (read once and convert to seconds)
@@ -357,3 +331,42 @@ def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> 
         stacklevel=2,
     )
     return _create_refresh_token_internal(data, expires_delta=expires_delta)
+
+
+# -----------------
+# Key selection
+# -----------------
+
+def _select_signing_key() -> tuple[str, str, str | None]:
+    """Select signing algorithm, key, and kid based on environment.
+
+    Prefers RS/ES when JWT_PRIVATE_KEYS is provided; otherwise falls back to HS256.
+    Returns (alg, key, kid).
+    """
+    # Try private keys for RS/ES
+    try:
+        import json
+
+        priv = os.getenv("JWT_PRIVATE_KEYS")
+        if priv:
+            mapping = json.loads(priv)
+            if isinstance(mapping, dict) and mapping:
+                primary = os.getenv("JWT_PRIMARY_KID") or next(iter(mapping.keys()))
+                pem = mapping.get(primary) or next(iter(mapping.values()))
+                # Default alg preference from env JWT_ALGS sequence; else RS256
+                algs = [a.strip() for a in (os.getenv("JWT_ALGS") or "RS256,HS256").split(",") if a.strip()]
+                alg = next((a for a in algs if a in {"RS256", "ES256"}), "RS256")
+                if pem:
+                    return alg, pem, primary
+    except Exception:
+        pass
+    # Fallback HS256
+    # Get JWT secret dynamically to handle test environment changes
+    try:
+        from .api.auth import _jwt_secret
+
+        secret = _jwt_secret()
+    except Exception:
+        secret = os.getenv("JWT_SECRET", "")
+    alg = "HS256"
+    return alg, secret, None

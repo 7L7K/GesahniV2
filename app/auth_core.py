@@ -236,7 +236,15 @@ def require_scope(required: str):
     def _dep(request: Request):
         payload = getattr(request.state, "jwt_payload", None)
         if not has_scope(payload, required):
-            raise HTTPException(status_code=403, detail="forbidden")
+            # Standardized error shape for UI consistency
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "forbidden",
+                    "message": f"missing scope {required}",
+                    "hint": "include scope or use an account with control privileges",
+                },
+            )
 
     return _dep
 

@@ -16,12 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def _is_clerk_enabled() -> bool:
-    """Check if Clerk authentication is enabled via environment variables."""
-    return bool(
-        os.getenv("CLERK_JWKS_URL")
-        or os.getenv("CLERK_ISSUER")
-        or os.getenv("CLERK_DOMAIN")
-    )
+    return False  # Clerk support removed
 
 
 def get_current_user_id(
@@ -339,7 +334,14 @@ def get_current_user_id(
                                 try:
                                     from ..metrics import AUTH_LAZY_REFRESH
 
-                                    AUTH_LAZY_REFRESH.labels(source="deps").inc()
+                                    AUTH_LAZY_REFRESH.labels(source="deps", result="minted").inc()
+                                except Exception:
+                                    pass
+                            else:
+                                try:
+                                    from ..metrics import AUTH_LAZY_REFRESH
+
+                                    AUTH_LAZY_REFRESH.labels(source="deps", result="skipped").inc()
                                 except Exception:
                                     pass
             except Exception:
@@ -455,51 +457,7 @@ def get_current_user_id(
         # Token provided but no secret configured while required → fail-closed
         raise HTTPException(status_code=500, detail="missing_jwt_secret")
 
-    # 5) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
-    # AND the token source is NOT __session (unless Clerk is enabled)
-    clerk_token = None
-    if not user_id and token:
-        # Only try Clerk validation if:
-        # 1. Clerk is enabled, OR
-        # 2. Token came from Authorization header (not __session cookie)
-        clerk_enabled = _is_clerk_enabled()
-        is_authorization_header = token_source == "authorization_header"
-        is_session_cookie = token_source in [
-            "__session_cookie",
-            "websocket_session_cookie",
-        ]
-
-        # Never try to validate __session as a Clerk token unless Clerk is enabled
-        if (clerk_enabled or is_authorization_header) and not (
-            is_session_cookie and not clerk_enabled
-        ):
-            # Basic check if it looks like a Clerk JWT (has 3 parts separated by dots)
-            if token.count(".") == 2:
-                clerk_token = token
-
-    if not user_id and clerk_token:
-        try:
-            from ..deps.clerk_auth import verify_clerk_token
-
-            claims = verify_clerk_token(clerk_token)
-            user_id = str(claims.get("sub") or claims.get("user_id") or "")
-
-            # Store Clerk claims in request state for scope enforcement
-            if target and isinstance(claims, dict):
-                target.state.jwt_payload = claims
-        except Exception:
-            # For WebSocket handshakes, proceed as anonymous on invalid token
-            if websocket is None:
-                try:
-                    logger.warning(
-                        "auth.invalid_clerk_token",
-                        extra={"meta": {"reason": "invalid_clerk_token"}},
-                    )
-                except Exception:
-                    pass
-                raise HTTPException(
-                    status_code=401, detail="Invalid Clerk authentication token"
-                )
+    # Clerk validation removed
 
     if not user_id:
         user_id = "anon"

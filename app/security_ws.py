@@ -43,15 +43,23 @@ async def verify_ws(ws: WebSocket):
         token = (qs.get("token") or [None])[0]
 
     # Unified extraction for cookies/session
+    session_outage = False
     if not token:
         try:
-            from .auth_core import extract_token as _extract, resolve_session_identity as _resolve_sess
+            from .auth_core import (
+                extract_token as _extract,
+                resolve_session_identity as _resolve_sess,
+            )
 
             src, tok = _extract(ws)
             if src == "access_cookie" and tok:
                 token = tok
             elif src == "session" and tok:
-                ident = _resolve_sess(tok)
+                try:
+                    ident = _resolve_sess(tok)
+                except Exception:
+                    ident = None
+                    session_outage = True
                 if ident and isinstance(ident, dict):
                     ws.state.user_id = ident.get("user_id") or ident.get("sub")
                     scopes = _payload_scopes(ident)
@@ -61,6 +69,10 @@ async def verify_ws(ws: WebSocket):
             pass
 
     if not token:
+        # If we attempted session identity and store was unavailable, surface a clearer reason
+        if session_outage:
+            await ws.close(code=1013, reason="identity_unavailable")
+            raise HTTPException(status_code=503, detail="session_store_unavailable")
         await ws.close(code=4401, reason="missing_token")
         raise HTTPException(status_code=401, detail="missing_token")
 

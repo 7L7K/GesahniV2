@@ -281,7 +281,11 @@ def _jwt_decode(
         except Exception:
             kwargs["leeway"] = JWT_CLOCK_SKEW_S
     if algorithms is None:
-        algorithms = ["HS256"]
+        try:
+            algs_env = os.getenv("JWT_ALGS")
+            algorithms = [a.strip() for a in algs_env.split(",") if a.strip()] if algs_env else ["HS256"]
+        except Exception:
+            algorithms = ["HS256"]
     opts = kwargs.pop("options", {"require": ["exp", "iat"]})
 
     # Enforce issuer/audience when configured via environment variables unless
@@ -474,27 +478,7 @@ def _get_request_payload(request: Request | None) -> dict | None:
                 except Exception:
                     pass
 
-    # 4) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
-    # AND the token source is NOT __session (unless Clerk is enabled)
-    clerk_enabled = bool(
-        os.getenv("CLERK_JWKS_URL")
-        or os.getenv("CLERK_ISSUER")
-        or os.getenv("CLERK_DOMAIN")
-    )
-    is_authorization_header = token_source == "authorization_header"
-    is_session_cookie = token_source == "__session_cookie"
-
-    # Never try to validate __session as a Clerk token unless Clerk is enabled
-    if (clerk_enabled or is_authorization_header) and not (
-        is_session_cookie and not clerk_enabled
-    ):
-        try:
-            if _verify_clerk:
-                claims = _verify_clerk(token)  # type: ignore[misc]
-                if isinstance(claims, dict):
-                    return claims
-        except Exception:
-            pass
+    # Clerk validation removed
 
     # All authentication methods failed
     return None
@@ -1029,7 +1013,15 @@ async def verify_token(request: Request, response: Response | None = None) -> No
                                 try:
                                     from .metrics import AUTH_LAZY_REFRESH
 
-                                    AUTH_LAZY_REFRESH.labels(source="verify").inc()
+                                    AUTH_LAZY_REFRESH.labels(source="verify", result="minted").inc()
+                                except Exception:
+                                    pass
+                            else:
+                                # Access token present and not expiring soon
+                                try:
+                                    from .metrics import AUTH_LAZY_REFRESH
+
+                                    AUTH_LAZY_REFRESH.labels(source="verify", result="skipped").inc()
                                 except Exception:
                                     pass
             except Exception:

@@ -18,14 +18,7 @@ from fastapi.responses import RedirectResponse
 from ..deps.user import get_current_user_id, require_user, resolve_session_id
 from ..security import _jwt_decode
 
-# Guard Clerk helpers behind CLERK_ENABLED to avoid accidental Clerk cookie handling
-if os.getenv("CLERK_ENABLED", "0") == "1":
-    try:
-        from ..deps.clerk_auth import require_user as require_user_clerk
-    except Exception:
-        require_user_clerk = None
-else:
-    require_user_clerk = None
+require_user_clerk = None  # Clerk removed
 from fastapi.responses import JSONResponse
 
 from ..auth_monitoring import record_finish_call, record_whoami_call, track_auth_event
@@ -103,9 +96,7 @@ def _append_cookie_with_priority(
     )
 
 
-@router.get("/auth/clerk/protected")
-async def clerk_protected(user_id: str = Depends(require_user)) -> dict[str, Any]:
-    return {"ok": True, "user_id": user_id}
+# Clerk endpoints removed
 
 
 
@@ -321,46 +312,8 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         )
         token_header = None
 
-    # Check for Clerk authentication tokens only if Clerk is enabled
-    try:
-        clerk_token = None
-        if os.getenv("CLERK_ENABLED", "0") == "1":
-            # Check for Clerk session cookies
-            clerk_token = request.cookies.get("__session") or request.cookies.get(
-                "session"
-            )
-            if not clerk_token:
-                # Check for Clerk token in Authorization header
-                ah = request.headers.get("Authorization")
-                if ah and ah.startswith("Bearer "):
-                    potential_clerk_token = ah.split(" ", 1)[1]
-                    # Basic check if it looks like a JWT (has 3 parts separated by dots)
-                    if potential_clerk_token.count(".") == 2:
-                        clerk_token = potential_clerk_token
-        logger.info(
-            "whoami.clerk_check",
-            extra={
-                "meta": {
-                    "req_id": req_id_var.get(),
-                    "has_clerk_cookie": bool(clerk_token),
-                    "clerk_cookie_length": len(clerk_token) if clerk_token else 0,
-                    "timestamp": time.time(),
-                }
-            },
-        )
-    except Exception as e:
-        logger.error(
-            "whoami.clerk_error",
-            extra={
-                "meta": {
-                    "req_id": req_id_var.get(),
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "timestamp": time.time(),
-                }
-            },
-        )
-        clerk_token = None
+    # Clerk checks removed
+    clerk_token = None
 
     # Prefer cookie when valid; otherwise fall back to header; then try Clerk
     session_ready = False
@@ -1806,6 +1759,20 @@ async def login(
             refresh_ttl=refresh_ttl,
             request=request,
         )
+        # Best-effort device cookie for soft device binding (1 year)
+        try:
+            if not request.cookies.get("did"):
+                from ..cookies import set_device_cookie
+
+                set_device_cookie(
+                    response,
+                    value=secrets.token_hex(16),
+                    ttl=365 * 24 * 3600,
+                    request=request,
+                    cookie_name="did",
+                )
+        except Exception:
+            pass
         # Use centralized session ID resolution to ensure consistency
         sid = resolve_session_id(request=request, user_id=username)
         await allow_refresh(sid, jti, ttl_seconds=refresh_ttl)
@@ -1981,6 +1948,21 @@ async def login_v1(
             refresh_ttl=refresh_ttl,
             request=request,
         )
+        # Best-effort device cookie for soft device binding (1 year)
+        try:
+            if not request.cookies.get("did"):
+                from ..cookies import set_device_cookie
+                import secrets as _secrets
+
+                set_device_cookie(
+                    response,
+                    value=_secrets.token_hex(16),
+                    ttl=365 * 24 * 3600,
+                    request=request,
+                    cookie_name="did",
+                )
+        except Exception:
+            pass
         # Use centralized session ID resolution to ensure consistency
         sid = resolve_session_id(request=request, user_id=username)
         await allow_refresh(sid, jti, ttl_seconds=refresh_ttl)

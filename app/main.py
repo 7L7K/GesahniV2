@@ -1132,12 +1132,16 @@ if _safe_import_router("from .api.debug import router as debug_router", "debug")
 if _safe_import_router("from .api.core_misc import router as core_misc_router", "core_misc"):
     app.include_router(core_misc_router, prefix="/v1")
 
-if _safe_import_router("from .api.metrics_root import router as metrics_root_router", "metrics_root"):
+# Prefer the root metrics router; fall back to simple metrics when unavailable
+_metrics_root_loaded = _safe_import_router(
+    "from .api.metrics_root import router as metrics_root_router", "metrics_root"
+)
+if _metrics_root_loaded:
     app.include_router(metrics_root_router)  # keep /metrics at root
-
-# Expose Prometheus metrics (scrapable) if our simple metrics router is available
-if _safe_import_router("from .api.metrics import router as metrics_simple_router", "metrics_simple"):
-    app.include_router(metrics_simple_router)
+else:
+    # Expose Prometheus metrics (scrapable) only when root router failed to import
+    if _safe_import_router("from .api.metrics import router as metrics_simple_router", "metrics_simple"):
+        app.include_router(metrics_simple_router)
 
 if _safe_import_router("from .health import router as health_diag_router", "health_diag"):
     # Mount diagnostics under a non-conflicting prefix to avoid shadowing /v1/health/*
@@ -1156,6 +1160,14 @@ app.include_router(status_router, prefix="/v1")
 app.include_router(health_router)
 if _safe_import_router("from .api.well_known import router as well_known_router", "well_known"):
     app.include_router(well_known_router)
+
+# Validate configuration on startup (logs only)
+try:
+    from .config_validator import run_config_validation
+
+    run_config_validation()
+except Exception:
+    pass
 
 # Include modern auth API router first to avoid route shadowing
 if _safe_import_router("from .api.auth import router as auth_api_router", "auth_api", required_in_prod=True):
