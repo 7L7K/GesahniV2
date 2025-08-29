@@ -10,10 +10,15 @@ from ..integrations.spotify.client import (
     SpotifyRateLimitedError,
 )
 from ..security import verify_token
+from ..auth_core import require_scope
 from ..metrics import SPOTIFY_PLAY_COUNT, SPOTIFY_DEVICE_LIST_COUNT
 import logging
 
-router = APIRouter(prefix="/v1/spotify", tags=["spotify"], dependencies=[Depends(verify_token)])
+router = APIRouter(
+    prefix="/v1/spotify",
+    tags=["spotify"],
+    dependencies=[Depends(verify_token), Depends(require_scope("music:control"))],
+)
 logger = logging.getLogger(__name__)
 
 
@@ -54,6 +59,14 @@ async def play(request: Request, body: dict, user_id: str = Depends(get_current_
 
     Body shape: { "uris"?: [], "context_uri"?: "", "device_id"?: "" }
     """
+    # Optional CSRF guard (enabled when CSRF_ENABLED=1)
+    try:
+        from app.auth_core import csrf_validate
+
+        csrf_validate(request)
+    except Exception:
+        pass
+
     client = SpotifyClient(user_id)
     device_id = body.get("device_id")
     try:

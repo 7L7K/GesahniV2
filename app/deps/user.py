@@ -74,6 +74,25 @@ def get_current_user_id(
         except Exception:
             token = None
 
+    # Unified extraction via auth_core when no header/WS param token
+    if token is None and target is not None:
+        try:
+            from ..auth_core import extract_token as _extract
+
+            src, tok = _extract(target)
+            if tok:
+                token = tok
+                if src == "authorization":
+                    token_source = "authorization_header"
+                elif src == "access_cookie":
+                    token_source = "access_token_cookie"
+                elif src == "session":
+                    token_source = (
+                        "websocket_session_cookie" if websocket is not None else "__session_cookie"
+                    )
+        except Exception:
+            pass
+
     # Cookie fallback so browser sessions persist without sending headers
     if token is None and request is not None:
         try:
@@ -241,6 +260,12 @@ def get_current_user_id(
                 if target is not None:
                     setattr(target.state, "session_store_unavailable", True)
                     setattr(target.state, "session_cookie_present", True)
+                    try:
+                        from ..metrics import AUTH_STORE_OUTAGE
+
+                        AUTH_STORE_OUTAGE.inc()
+                    except Exception:
+                        pass
             except Exception:
                 pass
             identity = None
@@ -281,16 +306,19 @@ def get_current_user_id(
                             rt_claims = None
 
                         if rt_claims:
-                            # Helper for expiring soon
-                            def _is_expiring_soon(payload: dict, window_s: int = 60) -> bool:
+                            # Helper for expiring soon with flag-configurable window
+                            from ..flags import get_lazy_refresh_window_s
+
+                            def _is_expiring_soon(payload: dict, window_s: int) -> bool:
                                 try:
                                     exp = int(payload.get("exp", 0))
                                     return exp == 0 or (exp - int(time.time()) < window_s)
                                 except Exception:
                                     return True
 
+                            window = get_lazy_refresh_window_s()
                             exp_soon = (not at) or _is_expiring_soon(
-                                getattr(target.state, "jwt_payload", {}) if target else {}, 60
+                                getattr(target.state, "jwt_payload", {}) if target else {}, window
                             )
                             if exp_soon:
                                 uid = str(rt_claims.get("sub") or rt_claims.get("user_id") or user_id)
@@ -308,6 +336,12 @@ def get_current_user_id(
                                     request=request,
                                     identity=identity or rt_claims,
                                 )
+                                try:
+                                    from ..metrics import AUTH_LAZY_REFRESH
+
+                                    AUTH_LAZY_REFRESH.labels(source="deps").inc()
+                                except Exception:
+                                    pass
             except Exception:
                 # Best-effort; do not block auth
                 pass
@@ -666,6 +700,32 @@ def resolve_session_id(
 
     # 8. Ultimate fallback
     return "anon"
+
+
+def resolve_session_id_strict(
+    request: Request | None = None, websocket: WebSocket | None = None
+) -> str | None:
+    """Strict resolver: returns None when not found or invalid.
+
+    Deprecation path: callers should migrate from resolve_session_id() to this.
+    """
+    sid = None
+    target = request or websocket
+    try:
+        if isinstance(request, Request):
+            from ..cookie_names import GSNH_SESS
+
+            sid = request.cookies.get(f"__Host-{GSNH_SESS}") or request.cookies.get(GSNH_SESS)
+        elif websocket is not None:
+            raw = websocket.headers.get("Cookie") or ""
+            parts = [p.strip() for p in raw.split(";") if p.strip()]
+            for p in parts:
+                if p.startswith("__Host-GSNH_SESS=") or p.startswith("GSNH_SESS="):
+                    sid = p.split("=", 1)[1]
+                    break
+    except Exception:
+        sid = None
+    return sid
 
 
 __all__ = [

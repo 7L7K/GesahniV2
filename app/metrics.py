@@ -105,6 +105,29 @@ SPOTIFY_DEVICE_LIST_COUNT = Counter(
 # Phase 6.1: Clean Prometheus Metrics (no sampling)
 # Phase 7.6: Label Hygiene & Cardinality Management
 
+# Auth core scaffolding metrics (Phase 2)
+AUTH_LAZY_REFRESH = Counter(
+    "auth_lazy_refresh_total", "Lazy AT refresh events", ["source", "result"]
+)
+
+AUTH_RT_REJECT = Counter(
+    "auth_rt_reject_total", "Refresh token rejected", ["reason"]
+)
+
+AUTH_STORE_OUTAGE = Counter(
+    "auth_store_outage_total", "Session store outage detections"
+)
+
+AUTH_STATUS_LATENCY = Histogram(
+    "auth_status_latency_ms", "Auth resolution latency (ms)"
+)
+
+AUTH_IDENTITY_RESOLVE = Counter(
+    "auth_identity_resolve_total",
+    "Auth identity resolution outcome",
+    ["source", "result"],
+)
+
 
 def normalize_model_label(model: str) -> str:
     """

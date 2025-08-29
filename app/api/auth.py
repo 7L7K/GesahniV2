@@ -2060,6 +2060,44 @@ async def logout(request: Request, response: Response):
 
 
 @router.post(
+    "/auth/logout_all",
+    responses={204: {"description": "Logout all sessions for this family"}},
+)
+async def logout_all(request: Request, response: Response):
+    """Revoke the refresh family for the current session and clear cookies.
+
+    Best-effort; returns 204 even if revocation partially fails.
+    """
+    try:
+        from ..token_store import revoke_refresh_family
+        from ..deps.user import resolve_session_id_strict
+
+        sid = resolve_session_id_strict(request=request)
+        if sid:
+            await revoke_refresh_family(sid, ttl_seconds=_get_refresh_ttl_seconds())
+    except Exception:
+        pass
+    # Delete session id
+    try:
+        from ..auth import _delete_session_id
+
+        sid = request.cookies.get("__Host-GSNH_SESS") or request.cookies.get("GSNH_SESS") or request.cookies.get("__session")
+        if sid:
+            _delete_session_id(sid)
+    except Exception:
+        pass
+    # Clear cookies
+    try:
+        from ..cookies import clear_auth_cookies
+
+        clear_auth_cookies(response, request)
+    except Exception:
+        pass
+    response.status_code = 204
+    return response
+
+
+@router.post(
     "/auth/refresh",
     responses={
         200: {

@@ -109,10 +109,22 @@ def set_auth_cookies(
     # Get cookie configuration from request context
     cookie_config = cookie_cfg.get_cookie_config(request)
 
-    # Set access token cookie (write canonical name)
-    # Use the GSNH_* canonical name as required by cookie_names.py
+    # Compute __Host- prefix for secure, host-only cookies in production
+    host_prefix = ""
+    try:
+        if (
+            cookie_config["secure"]
+            and (cookie_config["domain"] is None)
+            and cookie_config["path"] == "/"
+            and os.getenv("USE_HOST_COOKIE_PREFIX", "1").strip().lower() in {"1", "true", "yes", "on"}
+        ):
+            host_prefix = "__Host-"
+    except Exception:
+        host_prefix = ""
+
+    # Set access token cookie (canonical name, optionally __Host- prefixed)
     access_header = format_cookie_header(
-        key=GSNH_AT,
+        key=f"{host_prefix}{GSNH_AT}",
         value=access,
         max_age=access_ttl,
         secure=cookie_config["secure"],
@@ -126,7 +138,7 @@ def set_auth_cookies(
     # Set/rotate refresh token cookie only when explicitly provided (None means leave as-is)
     if refresh is not None:
         refresh_header = format_cookie_header(
-            key=GSNH_RT,
+            key=f"{host_prefix}{GSNH_RT}",
             value=refresh,
             max_age=refresh_ttl,
             secure=cookie_config["secure"],
@@ -143,7 +155,7 @@ def set_auth_cookies(
     if session_id:
         # Use external-facing session cookie name (`__session`) for integrations
         session_header = format_cookie_header(
-            key=GSNH_SESS,
+            key=f"{host_prefix}{GSNH_SESS}",
             value=session_id,
             max_age=access_ttl,  # Always use access_ttl for session alignment
             secure=cookie_config["secure"],

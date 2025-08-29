@@ -824,33 +824,43 @@ async def verify_token(request: Request, response: Response | None = None) -> No
     token = None
     token_source = "none"
 
+    # Phase 2: Try auth_core.resolve_auth first; if Authorization/access cookie resolved, attach and return
+    try:
+        from .auth_core import resolve_auth as _resolve
+
+        out = _resolve(request)
+        src = getattr(request.state, "auth_source", "none")
+        payload = getattr(request.state, "jwt_payload", None)
+        if src in {"authorization", "access_cookie"} and isinstance(payload, dict):
+            return
+    except Exception:
+        pass
+
     # 1) Try access_token first (Authorization header or cookie)
     auth = request.headers.get("Authorization")
     if auth and auth.startswith("Bearer "):
         token = auth.split(" ", 1)[1]
         token_source = "authorization_header"
 
-    # Fallback to access_token cookie (canonical first; accept legacy during Phase 1)
+    # Fallback to unified extraction when no Authorization header
     if not token:
         try:
-            from .cookie_names import GSNH_AT, ACCESS_TOKEN
+            from .auth_core import extract_token as _extract
 
-            token = request.cookies.get(GSNH_AT) or request.cookies.get(ACCESS_TOKEN)
-            if token:
-                token_source = "access_token_cookie"
+            src, tok = _extract(request)
+            if tok:
+                token = tok
+                token_source = (
+                    "authorization_header"
+                    if src == "authorization"
+                    else "access_token_cookie"
+                    if src == "access_cookie"
+                    else "__session_cookie"
+                    if src == "session"
+                    else "none"
+                )
         except Exception:
-            token = request.cookies.get("access_token")
-
-    # 2) Try session cookie if access_token failed (canonical first; accept legacy)
-    if not token:
-        try:
-            from .cookie_names import GSNH_SESS, SESSION
-
-            token = request.cookies.get(GSNH_SESS) or request.cookies.get(SESSION) or request.cookies.get("session")
-            if token:
-                token_source = "__session_cookie"
-        except Exception:
-            token = request.cookies.get("__session") or request.cookies.get("session")
+            pass
 
     # Log which cookie/token source authenticated the request (debug level to reduce spam)
     if token:
@@ -869,7 +879,8 @@ async def verify_token(request: Request, response: Response | None = None) -> No
 
     if not token:
         # If JWT is required, enforce 401 even under tests
-        if require_jwt:
+        from .auth_core import CFG as _CFG
+        if require_jwt or (_CFG.strict and request.method.upper() != "OPTIONS"):
             try:
                 record_privileged_call_blocked(
                     endpoint=request.url.path, reason="missing_token", user_id="unknown"
@@ -879,7 +890,7 @@ async def verify_token(request: Request, response: Response | None = None) -> No
             if AUTH_FAIL:
                 AUTH_FAIL.labels(reason="missing_token").inc()
             logger.warning("deny: missing_token")
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            raise HTTPException(status_code=401, detail={"code": "unauthorized", "message": "missing token"})
         # Otherwise allow anonymous when tests indicate JWT is optional OR when scopes enforcement is disabled.
         if test_bypass or os.getenv("ENFORCE_JWT_SCOPES", "1").strip() in {
             "0",
@@ -975,17 +986,32 @@ async def verify_token(request: Request, response: Response | None = None) -> No
                             )
                             if str(rt_claims.get("type") or "") != "refresh":
                                 rt_claims = None
+                                try:
+                                    from .metrics import AUTH_RT_REJECT
+
+                                    AUTH_RT_REJECT.labels(reason="wrong_type").inc()
+                                except Exception:
+                                    pass
                         except Exception:
                             rt_claims = None
+                            try:
+                                from .metrics import AUTH_RT_REJECT
+
+                                AUTH_RT_REJECT.labels(reason="invalid").inc()
+                            except Exception:
+                                pass
                         if rt_claims:
-                            def _is_expiring_soon(payload: dict, window_s: int = 60) -> bool:
+                            from .flags import get_lazy_refresh_window_s
+
+                            def _is_expiring_soon(payload: dict, window_s: int) -> bool:
                                 try:
                                     exp = int(payload.get("exp", 0))
                                     return exp == 0 or (exp - int(_t.time()) < window_s)
                                 except Exception:
                                     return True
 
-                            if (not at) or _is_expiring_soon(getattr(request.state, "jwt_payload", {}) or {}, 60):
+                            window = get_lazy_refresh_window_s()
+                            if (not at) or _is_expiring_soon(getattr(request.state, "jwt_payload", {}) or {}, window):
                                 uid = str(rt_claims.get("sub") or rt_claims.get("user_id") or getattr(request.state, "user_id", ""))
                                 access_ttl, _ = get_token_ttls()
                                 new_at = make_access({"user_id": uid}, ttl_s=access_ttl)
@@ -1000,12 +1026,22 @@ async def verify_token(request: Request, response: Response | None = None) -> No
                                     request=request,
                                     identity=identity or rt_claims,
                                 )
+                                try:
+                                    from .metrics import AUTH_LAZY_REFRESH
+
+                                    AUTH_LAZY_REFRESH.labels(source="verify").inc()
+                                except Exception:
+                                    pass
             except Exception:
                 pass
             return
         # If store is down and this was session-only, surface 503 for protected routes
         if getattr(request.state, "session_store_unavailable", False):
-            raise HTTPException(status_code=503, detail="session_store_unavailable")
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "session_store_unavailable", "message": "Temporary outage", "hint": "retry"},
+                headers={"Retry-After": "5"},
+            )
         # Otherwise fall through to Clerk/invalid handling
 
     # 5) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled

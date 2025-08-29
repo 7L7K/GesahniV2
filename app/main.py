@@ -1154,6 +1154,8 @@ if _safe_import_router("from .api.logs_simple import router as logs_router", "lo
 app.include_router(status_router, prefix="/v1")
 # Tiered health (unauthenticated): /healthz/* endpoints
 app.include_router(health_router)
+if _safe_import_router("from .api.well_known import router as well_known_router", "well_known"):
+    app.include_router(well_known_router)
 
 # Include modern auth API router first to avoid route shadowing
 if _safe_import_router("from .api.auth import router as auth_api_router", "auth_api", required_in_prod=True):
