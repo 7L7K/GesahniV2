@@ -21,7 +21,7 @@ from fastapi import Header
 logger = logging.getLogger(__name__)
 
 import jwt
-from fastapi import Depends, HTTPException, Request, WebSocket, WebSocketException
+from fastapi import Depends, HTTPException, Request, WebSocket, WebSocketException, Response
 
 try:
     # Optional Clerk JWT verification for RS256 tokens
@@ -776,7 +776,7 @@ async def _apply_rate_limit(key: str, record: bool = True) -> bool:
     return len(timestamps) <= RATE_LIMIT
 
 
-async def verify_token(request: Request) -> None:
+async def verify_token(request: Request, response: Response | None = None) -> None:
     """Validate JWT from Authorization header or HttpOnly cookie when configured.
 
     Token reading order:
@@ -830,30 +830,23 @@ async def verify_token(request: Request) -> None:
         token = auth.split(" ", 1)[1]
         token_source = "authorization_header"
 
-    # Fallback to access_token cookie (accept canonical or legacy during migration)
+    # Fallback to access_token cookie (canonical first; accept legacy during Phase 1)
     if not token:
         try:
-            from .cookie_names import GSNH_AT, ACCESS_TOKEN, ACCESS_TOKEN_LEGACY
+            from .cookie_names import GSNH_AT, ACCESS_TOKEN
 
-            token = request.cookies.get(GSNH_AT) or request.cookies.get(ACCESS_TOKEN) or request.cookies.get(
-                ACCESS_TOKEN_LEGACY
-            )
+            token = request.cookies.get(GSNH_AT) or request.cookies.get(ACCESS_TOKEN)
             if token:
                 token_source = "access_token_cookie"
         except Exception:
             token = request.cookies.get("access_token")
 
-    # 2) Try __session cookie if access_token failed (accept canonical/legacy)
+    # 2) Try session cookie if access_token failed (canonical first; accept legacy)
     if not token:
         try:
-            from .cookie_names import GSNH_SESS, SESSION, SESSION_LEGACY
+            from .cookie_names import GSNH_SESS, SESSION
 
-            token = (
-                request.cookies.get(GSNH_SESS)
-                or request.cookies.get(SESSION)
-                or request.cookies.get(SESSION_LEGACY)
-                or request.cookies.get("session")
-            )
+            token = request.cookies.get(GSNH_SESS) or request.cookies.get(SESSION) or request.cookies.get("session")
             if token:
                 token_source = "__session_cookie"
         except Exception:
@@ -942,7 +935,80 @@ async def verify_token(request: Request) -> None:
             # Traditional JWT failed, try Clerk if enabled and appropriate
             pass
 
-    # 4) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
+    # 4) For session cookies, resolve identity from session store (Phase 1)
+    if token_source == "__session_cookie":
+        try:
+            from .session_store import get_session_store, SessionStoreUnavailable
+
+            store = get_session_store()
+            identity = store.get_session_identity(token)
+        except SessionStoreUnavailable:
+            # Outage: allow requests with Authorization header, but session-only protected routes may choose to 503
+            identity = None
+            try:
+                setattr(request.state, "session_store_unavailable", True)
+                setattr(request.state, "session_cookie_present", True)
+            except Exception:
+                pass
+
+        if identity and isinstance(identity, dict):
+            request.state.jwt_payload = identity
+            # Lazy refresh: if RT exists and AT missing/expiring soon, mint a new AT
+            try:
+                if response is not None:
+                    from .cookie_names import GSNH_RT, GSNH_AT, GSNH_SESS
+                    from .tokens import make_access
+                    from .cookie_config import get_token_ttls
+                    from .cookies import set_auth_cookies
+                    import time as _t
+
+                    now = int(_t.time())
+                    at = request.cookies.get(GSNH_AT) or request.cookies.get("access_token")
+                    rt = request.cookies.get(GSNH_RT)
+                    if rt and os.getenv("JWT_SECRET"):
+                        try:
+                            rt_claims = _jwt_decode(
+                                rt,
+                                os.getenv("JWT_SECRET"),
+                                algorithms=["HS256"],
+                                leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60),
+                            )
+                            if str(rt_claims.get("type") or "") != "refresh":
+                                rt_claims = None
+                        except Exception:
+                            rt_claims = None
+                        if rt_claims:
+                            def _is_expiring_soon(payload: dict, window_s: int = 60) -> bool:
+                                try:
+                                    exp = int(payload.get("exp", 0))
+                                    return exp == 0 or (exp - int(_t.time()) < window_s)
+                                except Exception:
+                                    return True
+
+                            if (not at) or _is_expiring_soon(getattr(request.state, "jwt_payload", {}) or {}, 60):
+                                uid = str(rt_claims.get("sub") or rt_claims.get("user_id") or getattr(request.state, "user_id", ""))
+                                access_ttl, _ = get_token_ttls()
+                                new_at = make_access({"user_id": uid}, ttl_s=access_ttl)
+                                sid = request.cookies.get(GSNH_SESS)
+                                set_auth_cookies(
+                                    response,
+                                    access=new_at,
+                                    refresh=None,
+                                    session_id=sid,
+                                    access_ttl=access_ttl,
+                                    refresh_ttl=0,
+                                    request=request,
+                                    identity=identity or rt_claims,
+                                )
+            except Exception:
+                pass
+            return
+        # If store is down and this was session-only, surface 503 for protected routes
+        if getattr(request.state, "session_store_unavailable", False):
+            raise HTTPException(status_code=503, detail="session_store_unavailable")
+        # Otherwise fall through to Clerk/invalid handling
+
+    # 5) Try Clerk authentication only if traditional JWT failed AND Clerk is enabled
     # AND the token source is NOT __session (unless Clerk is enabled)
     clerk_enabled = bool(
         os.getenv("CLERK_JWKS_URL")

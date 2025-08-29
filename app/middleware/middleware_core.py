@@ -852,7 +852,7 @@ async def silent_refresh_middleware(request: Request, call_next):
             set_auth_cookies(
                 response,
                 access=new_token,
-                refresh="",
+                refresh=None,
                 session_id=None,
                 access_ttl=access_ttl,
                 refresh_ttl=0,

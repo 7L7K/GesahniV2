@@ -42,6 +42,67 @@ async def verify_ws(ws: WebSocket):
         qs = parse_qs(ws.url.query or "")
         token = (qs.get("token") or [None])[0]
 
+    # Cookie fallback (canonical first, then legacy) for browser WS handshakes
+    if not token:
+        try:
+            raw = ws.headers.get("cookie") or ws.headers.get("Cookie") or ""
+            parts = [p.strip() for p in raw.split(";") if p.strip()]
+            for p in parts:
+                if p.startswith("GSNH_AT="):
+                    token = p.split("=", 1)[1]
+                    break
+            if not token:
+                for p in parts:
+                    if p.startswith("access_token="):
+                        token = p.split("=", 1)[1]
+                        try:
+                            if os.getenv("AUTH_LEGACY_COOKIE_NAMES", "1").strip().lower() in {"1","true","yes","on"}:
+                                log.debug("auth.legacy_cookie_used", extra={"meta": {"name": "access_token"}})
+                        except Exception:
+                            pass
+                        break
+        except Exception:
+            token = None
+
+    # If still no Authorization, try session cookie identity path
+    if not token:
+        # Canonical session cookie first, legacy fallback
+        try:
+            raw = ws.headers.get("cookie") or ws.headers.get("Cookie") or ""
+            parts = [p.strip() for p in raw.split(";") if p.strip()]
+            sid = None
+            for p in parts:
+                if p.startswith("GSNH_SESS="):
+                    sid = p.split("=", 1)[1]
+                    break
+            if not sid:
+                for p in parts:
+                    if p.startswith("__session="):
+                        sid = p.split("=", 1)[1]
+                        try:
+                            if os.getenv("AUTH_LEGACY_COOKIE_NAMES", "1").strip().lower() in {"1","true","yes","on"}:
+                                log.debug("auth.legacy_cookie_used", extra={"meta": {"name": "__session"}})
+                        except Exception:
+                            pass
+                        break
+        except Exception:
+            sid = None
+
+        if sid:
+            try:
+                from .session_store import get_session_store, SessionStoreUnavailable
+
+                store = get_session_store()
+                ident = store.get_session_identity(sid)
+                if ident and isinstance(ident, dict):
+                    ws.state.user_id = ident.get("user_id") or ident.get("sub")
+                    scopes = _payload_scopes(ident)
+                    ws.state.scopes = scopes
+                    return ws.state.user_id
+            except SessionStoreUnavailable:
+                # Outage; allow the WS to proceed only if an auth header/token is present, otherwise close
+                pass
+
     if not token:
         await ws.close(code=4401, reason="missing_token")
         raise HTTPException(status_code=401, detail="missing_token")

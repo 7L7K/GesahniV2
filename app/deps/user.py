@@ -5,7 +5,7 @@ import os
 from uuid import uuid4
 
 import jwt
-from fastapi import HTTPException, Request, WebSocket
+from fastapi import HTTPException, Request, WebSocket, Response
 
 from ..security import _jwt_decode
 from ..telemetry import LogRecord, hash_user_id, log_record_var
@@ -27,6 +27,7 @@ def _is_clerk_enabled() -> bool:
 def get_current_user_id(
     request: Request = None,
     websocket: WebSocket = None,
+    response: Response | None = None,
 ) -> str:
     """Return the current user's identifier.
 
@@ -102,30 +103,47 @@ def get_current_user_id(
     if not token and request is not None:
         # Only treat __session as session cookie when Clerk is enabled; otherwise prefer canonical GSNH_SESS
         try:
-            if os.getenv("CLERK_ENABLED", "0") == "1":
-                session_token = request.cookies.get("__session") or request.cookies.get(
-                    "session"
-                )
-            else:
-                from ..cookie_names import GSNH_SESS
+            from ..cookie_names import GSNH_SESS, SESSION
 
-                session_token = request.cookies.get(GSNH_SESS)
+            # Canonical first
+            session_token = request.cookies.get(GSNH_SESS)
+            if not session_token:
+                # Legacy fallback (Phase 1 window)
+                if os.getenv("AUTH_LEGACY_COOKIE_NAMES", "1").strip().lower() in {"1","true","yes","on"}:
+                    session_token = request.cookies.get(SESSION) or request.cookies.get("session")
+                    if session_token:
+                        try:
+                            logger.debug("auth.legacy_cookie_used", extra={"meta": {"name": SESSION}})
+                        except Exception:
+                            pass
         except Exception:
             session_token = request.cookies.get("session")
         if session_token:
             token = session_token
             token_source = "__session_cookie"
 
-    # 4) Try __session cookie for WebSocket handshakes
+    # 4) Try __session cookie for WebSocket handshakes (canonical first)
     if not token and websocket is not None:
         try:
             raw_cookie = websocket.headers.get("Cookie") or ""
             parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
             for p in parts:
-                if p.startswith("__session="):
+                if p.startswith("GSNH_SESS="):
                     token = p.split("=", 1)[1]
                     token_source = "websocket_session_cookie"
                     break
+            if not token:
+                # Legacy fallback for WS with DEBUG deprecation
+                for p in parts:
+                    if p.startswith("__session="):
+                        token = p.split("=", 1)[1]
+                        token_source = "websocket_session_cookie"
+                        try:
+                            if os.getenv("AUTH_LEGACY_COOKIE_NAMES", "1").strip().lower() in {"1","true","yes","on"}:
+                                logger.debug("auth.legacy_cookie_used", extra={"meta": {"name": "__session"}})
+                        except Exception:
+                            pass
+                        break
         except Exception:
             token = None
 
@@ -207,91 +225,146 @@ def get_current_user_id(
         secret = None
         require_jwt = False
 
-    # Handle opaque session ID resolution for __session cookies
+    # Handle opaque session ID resolution for __session cookies (Identity-first)
     if token and token_source in ["__session_cookie", "websocket_session_cookie"]:
-        # For __session cookies, we expect an opaque session ID (never a JWT)
-        # Use the canonical session resolver to get the JTI
-        from ..session_store import get_session_store
+        from ..session_store import (
+            get_session_store,
+            SessionStoreUnavailable,
+        )
 
         store = get_session_store()
-        jti = store.get_session(token)
+        try:
+            identity = store.get_session_identity(token)
+        except SessionStoreUnavailable:
+            # Flag for up-stack decision (503 on protected routes when session-only)
+            try:
+                if target is not None:
+                    setattr(target.state, "session_store_unavailable", True)
+                    setattr(target.state, "session_cookie_present", True)
+            except Exception:
+                pass
+            identity = None
 
-        if jti:
-            # Found valid session, now get the access token to extract user_id
-            access_token = None
-            if request is not None:
-                access_token = request.cookies.get("access_token")
-            elif websocket is not None:
+        if identity and isinstance(identity, dict):
+            # Identity-first success
+            user_id = str(identity.get("user_id") or identity.get("sub") or "")
+            if target is not None:
                 try:
-                    raw_cookie = websocket.headers.get("Cookie") or ""
-                    parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
-                    for p in parts:
-                        if p.startswith("access_token="):
-                            access_token = p.split("=", 1)[1]
-                            break
+                    target.state.jwt_payload = identity
+                    setattr(target.state, "auth_source", "session_identity")
                 except Exception:
                     pass
 
-            if access_token and secret:
-                try:
-                    # Decode the access token to get user_id (allow small skew)
-                    payload = _jwt_decode(
-                        access_token,
-                        secret,
-                        algorithms=["HS256"],
-                        leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60),
-                    )
-                    user_id_from_token = payload.get("user_id") or payload.get("sub")
+            # Lazy refresh: If we have a refresh token, and access token is missing or expiring soon, mint a new access
+            try:
+                if request is not None and response is not None:
+                    from ..cookie_names import GSNH_RT, GSNH_AT, GSNH_SESS
+                    from ..tokens import make_access
+                    from ..cookie_config import get_token_ttls
+                    from ..cookies import set_auth_cookies
+                    from ..security import _jwt_decode
+                    import time
 
-                    if user_id_from_token:
-                        user_id = user_id_from_token
-                        # Store JWT payload in request state for scope enforcement
-                        if target and isinstance(payload, dict):
-                            target.state.jwt_payload = payload
-                        logger.info(
-                            "auth.opaque_session_resolved",
-                            extra={
-                                "user_id": user_id,
-                                "session_id": token,
-                                "jti": jti,
-                                "token_source": token_source,
-                            },
-                        )
-                    else:
-                        logger.warning(
-                            "auth.opaque_session_no_user_id",
-                            extra={
-                                "session_id": token,
-                                "jti": jti,
-                                "token_source": token_source,
-                            },
-                        )
-                except jwt.PyJWTError:
-                    logger.warning(
-                        "auth.opaque_session_token_decode_failed",
-                        extra={
-                            "session_id": token,
-                            "jti": jti,
-                            "token_source": token_source,
-                        },
-                    )
-            else:
-                logger.warning(
-                    "auth.opaque_session_no_access_token",
-                    extra={
-                        "session_id": token,
-                        "jti": jti,
-                        "token_source": token_source,
-                    },
-                )
+                    rt = request.cookies.get(GSNH_RT)
+                    at = request.cookies.get(GSNH_AT) or request.cookies.get("access_token")
+                    if rt and os.getenv("JWT_SECRET"):
+                        try:
+                            rt_claims = _jwt_decode(
+                                rt,
+                                os.getenv("JWT_SECRET"),
+                                algorithms=["HS256"],
+                                leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60),
+                            )
+                            if str(rt_claims.get("type") or "") != "refresh":
+                                rt_claims = None
+                        except Exception:
+                            rt_claims = None
+
+                        if rt_claims:
+                            # Helper for expiring soon
+                            def _is_expiring_soon(payload: dict, window_s: int = 60) -> bool:
+                                try:
+                                    exp = int(payload.get("exp", 0))
+                                    return exp == 0 or (exp - int(time.time()) < window_s)
+                                except Exception:
+                                    return True
+
+                            exp_soon = (not at) or _is_expiring_soon(
+                                getattr(target.state, "jwt_payload", {}) if target else {}, 60
+                            )
+                            if exp_soon:
+                                uid = str(rt_claims.get("sub") or rt_claims.get("user_id") or user_id)
+                                access_ttl, _refresh_ttl = get_token_ttls()
+                                new_at = make_access({"user_id": uid}, ttl_s=access_ttl)
+                                # Keep RT unchanged; pass current session id for identity store continuity
+                                sid = request.cookies.get(GSNH_SESS)
+                                set_auth_cookies(
+                                    response,
+                                    access=new_at,
+                                    refresh=None,
+                                    session_id=sid,
+                                    access_ttl=access_ttl,
+                                    refresh_ttl=0,
+                                    request=request,
+                                    identity=identity or rt_claims,
+                                )
+            except Exception:
+                # Best-effort; do not block auth
+                pass
         else:
-            logger.warning(
-                "auth.opaque_session_invalid",
-                extra={
-                    "session_id": token,
-                    "token_source": token_source,
-                },
-            )
+            # Backward-compat window: try legacy JTI mapping + access token backfill
+            try:
+                jti = store.get_session(token)
+            except SessionStoreUnavailable:
+                jti = None
+            if jti and secret:
+                access_token = None
+                if request is not None:
+                    try:
+                        from ..cookie_names import GSNH_AT
+
+                        access_token = request.cookies.get(GSNH_AT) or request.cookies.get("access_token")
+                    except Exception:
+                        access_token = request.cookies.get("access_token")
+                elif websocket is not None:
+                    try:
+                        raw_cookie = websocket.headers.get("Cookie") or ""
+                        parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
+                        for p in parts:
+                            if p.startswith("GSNH_AT="):
+                                access_token = p.split("=", 1)[1]
+                                break
+                        if not access_token:
+                            for p in parts:
+                                if p.startswith("access_token="):
+                                    access_token = p.split("=", 1)[1]
+                                    break
+                    except Exception:
+                        pass
+
+                if access_token:
+                    try:
+                        payload = _jwt_decode(
+                            access_token,
+                            secret,
+                            algorithms=["HS256"],
+                            leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60),
+                        )
+                        uid = payload.get("user_id") or payload.get("sub")
+                        if uid:
+                            user_id = str(uid)
+                            if target is not None:
+                                target.state.jwt_payload = payload
+                                setattr(target.state, "auth_source", "session_backfill")
+                            # Optionally write identity for future session-only auth
+                            if os.getenv("AUTH_IDENTITY_BACKFILL", "1").strip().lower() in {"1","true","yes","on"}:
+                                try:
+                                    exp_s = int(payload.get("exp"))
+                                    store.set_session_identity(token, payload, exp_s)
+                                except Exception:
+                                    pass
+                    except jwt.PyJWTError:
+                        pass
 
     # Try traditional JWT first (same secret/issuer checks for both access_token and __session)
     if (
@@ -436,15 +509,19 @@ async def require_user(request: Request) -> str:
     Returns 401 if no valid authentication is found.
     On success, returns the user id.
     """
-    # Skip CORS preflight requests
+    # Skip CORS preflight requests (never 401 on OPTIONS)
     if request.method == "OPTIONS":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        return "anon"
 
     try:
         user_id = get_current_user_id(request=request)
 
-        # If no valid user found, return 401
+        # If no valid user found, return 401 or 503 when session-only and store down
         if not user_id or user_id == "anon":
+            st_unavail = getattr(request.state, "session_store_unavailable", False)
+            sess_present = getattr(request.state, "session_cookie_present", False)
+            if st_unavail and sess_present:
+                raise HTTPException(status_code=503, detail="session_store_unavailable")
             raise HTTPException(status_code=401, detail="Unauthorized")
 
         return user_id

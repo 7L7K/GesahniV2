@@ -79,11 +79,12 @@ def set_auth_cookies(
     resp: Response,
     *,
     access: str,
-    refresh: str,
+    refresh: str | None = None,
     session_id: str | None = None,
     access_ttl: int,
     refresh_ttl: int,
     request: Request,
+    identity: dict | None = None,
 ) -> None:
     """
     Set authentication cookies on the response.
@@ -122,8 +123,8 @@ def set_auth_cookies(
     )
     resp.headers.append("Set-Cookie", access_header)
 
-    # Set refresh token cookie only if provided
-    if refresh:
+    # Set/rotate refresh token cookie only when explicitly provided (None means leave as-is)
+    if refresh is not None:
         refresh_header = format_cookie_header(
             key=GSNH_RT,
             value=refresh,
@@ -152,6 +153,48 @@ def set_auth_cookies(
             domain=cookie_config["domain"],
         )
         resp.headers.append("Set-Cookie", session_header)
+
+        # Phase 1: Write session identity to the store using mint payload when available
+        try:
+            from .session_store import get_session_store
+
+            store = get_session_store()
+
+            # Prefer provided identity payload (caller-side mint payload)
+            ident = identity
+            exp_s: int | None = None
+
+            if not ident:
+                # Fallback: safe decode of freshly-minted access token to extract identity
+                try:
+                    import os
+                    import jwt
+                    from .security import _jwt_decode as _decode
+
+                    leeway = int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60)
+                    secret = os.getenv("JWT_SECRET")
+                    if secret:
+                        claims = _decode(access, secret, algorithms=["HS256"], leeway=leeway)
+                        ident = dict(claims) if isinstance(claims, dict) else None
+                except Exception:
+                    ident = None
+
+            # Extract exp for TTL
+            try:
+                if ident and isinstance(ident, dict):
+                    exp_s = int(ident.get("exp")) if ident.get("exp") else None
+            except Exception:
+                exp_s = None
+
+            if ident and exp_s:
+                # Never fail login if store write fails; best-effort only
+                try:
+                    store.set_session_identity(session_id, ident, exp_s)
+                except Exception:
+                    pass
+        except Exception:
+            # Never block cookie writes on identity persistence errors
+            pass
 
     # No legacy cookie clears — writes only touch canonical names
 
