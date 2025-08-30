@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from ..deps.user import get_current_user_id
 from ..tts_orchestrator import synthesize
 
-router = APIRouter(prefix="/tts", tags=["TTS"])
+router = APIRouter(prefix="/tts", tags=["Music"])
 
 
 class TTSRequest(BaseModel):
@@ -32,16 +32,38 @@ class TTSRequest(BaseModel):
     )
 
 
+class TTSAck(BaseModel):
+    status: str = "ok"
+    message: str = "TTS request accepted"
+
+    model_config = ConfigDict(
+        title="TTSAck",
+        json_schema_extra={
+            "example": {
+                "status": "ok",
+                "message": "TTS request accepted",
+            }
+        }
+    )
+
+
 @router.post(
     "/speak",
+    response_model=TTSAck,
     responses={
         200: {
+            "description": "TTS audio generated successfully",
             "content": {
                 "audio/wav": {
                     "schema": {
                         "type": "string",
                         "format": "binary",
                         "description": "PCM WAV audio stream",
+                    }
+                },
+                "application/json": {
+                    "schema": {
+                        "$ref": "#/components/schemas/TTSAck"
                     }
                 }
             }

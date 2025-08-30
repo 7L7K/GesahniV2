@@ -12,5 +12,5 @@ def test_csrf_grace_period_warns(monkeypatch, capsys):
     c.cookies.set("csrf_token", "tok")
     r = c.post("/v1/profile", headers={"X-CSRF": "tok"}, json={})
     assert r.status_code == HTTPStatus.OK
-    out = capsys.readouterr().out
-    assert "csrf.legacy_header used" in out
+    captured = capsys.readouterr()
+    assert "csrf.legacy_header used removal=2025-12-31" in captured.err

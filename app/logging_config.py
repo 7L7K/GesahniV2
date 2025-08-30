@@ -67,6 +67,24 @@ class JsonFormatter(logging.Formatter):
                     payload["session_id"] = record.meta.get("session_id")
             except Exception:
                 pass
+            # Lift common structured keys to top-level for uniformity
+            try:
+                if isinstance(record.meta, dict):
+                    for k_src, k_dst in [
+                        ("provider", "provider"),
+                        ("service", "service"),
+                        ("sub", "sub"),
+                        ("status_code", "status_code"),
+                        ("latency_ms", "latency_ms"),
+                        ("duration_ms", "latency_ms"),  # legacy rename
+                        ("error_code", "error_code"),
+                        ("trace_id", "trace_id"),
+                    ]:
+                        v = record.meta.get(k_src)
+                        if v is not None and payload.get(k_dst) is None:
+                            payload[k_dst] = v
+            except Exception:
+                pass
         else:
             # Try to pick up session_id from in-process telemetry record when available
             try:

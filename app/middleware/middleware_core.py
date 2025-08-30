@@ -10,7 +10,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from ..env_utils import load_env
-from ..security import _jwt_decode
+from ..security import jwt_decode
 
 try:  # Optional dependency; provide a tiny fallback to avoid hard dep in tests
     from cachetools import TTLCache  # type: ignore
@@ -798,7 +798,7 @@ async def silent_refresh_middleware(request: Request, call_next):
             return response
         # Decode without hard-failing on expiry/format
         try:
-            payload = _jwt_decode(token, secret, algorithms=["HS256"])
+            payload = jwt_decode(token, secret, algorithms=["HS256"])
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
             payload = None
         except Exception:
@@ -865,7 +865,7 @@ async def silent_refresh_middleware(request: Request, call_next):
             try:
                 rtok = read_refresh_cookie(request)
                 if rtok:
-                    rp = _jwt_decode(rtok, secret, algorithms=["HS256"])  # may raise
+                    rp = jwt_decode(rtok, secret, algorithms=["HS256"])  # may raise
                     r_exp = int(rp.get("exp", now))
                     import random as _rand
 

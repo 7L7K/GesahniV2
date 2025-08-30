@@ -76,7 +76,7 @@ async def google_connect(request: Request, user_id: str = Depends(get_current_us
         pass
 
     # Return JSON and set short-lived oauth state cookies for CSRF protection
-    resp = JSONResponse(content={"authorize_url": auth_url})
+    resp = JSONResponse(content={"auth_url": auth_url})
     try:
         # Use the same provider prefix ("g") as the canonical callback handler
         # so the callback at /v1/google/auth/callback can validate the cookie.
@@ -105,7 +105,8 @@ async def google_callback(request: Request, code: str | None = None, state: str 
         return RedirectResponse(f"{frontend_url}/settings#google?google_error=bad_state", status_code=302)
 
     try:
-        payload = jwt.decode(state, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
+        from ..security import jwt_decode
+        payload = jwt_decode(state, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
         uid = payload.get("uid")
     except Exception:
         return RedirectResponse(f"{frontend_url}/settings#google?google_error=bad_state", status_code=302)
@@ -125,6 +126,25 @@ async def google_callback(request: Request, code: str | None = None, state: str 
         # Convert credentials into a record
         record = creds_to_record(creds)
 
+        # Extract provider_sub (OIDC `sub`) best-effort for account guardrails
+        provider_sub = None
+        try:
+            import jwt as _jwt
+            idt = record.get("id_token")
+            if idt:
+                claims = _jwt.decode(idt, options={"verify_signature": False})
+                provider_sub = str(claims.get("sub")) if claims.get("sub") is not None else None
+        except Exception:
+            provider_sub = None
+
+        # Account mismatch guardrail: if existing token has different sub, abort
+        try:
+            existing = await get_token(uid, "google")
+            if existing and getattr(existing, "provider_sub", None) and provider_sub and str(provider_sub) != str(existing.provider_sub):
+                return RedirectResponse(f"{frontend_url}/settings#google?google_error=account_mismatch", status_code=302)
+        except Exception:
+            pass
+
         # Build ThirdPartyToken from record
         now = int(time.time())
         expiry = record.get("expiry")
@@ -133,10 +153,36 @@ async def google_callback(request: Request, code: str | None = None, state: str 
         except Exception:
             expires_at = now + int(record.get("expires_in", 3600))
 
+        # Resolve provider_iss from id_token claims if available; else reuse existing row's issuer
+        provider_iss = None
+        try:
+            idt = record.get("id_token")
+            if idt:
+                import jwt as _jwt
+
+                claims = _jwt.decode(idt, options={"verify_signature": False})
+                provider_iss = claims.get("iss") or None
+        except Exception:
+            provider_iss = None
+
+        if not provider_iss:
+            try:
+                existing = await get_token(uid, "google")
+                if existing and getattr(existing, "provider_iss", None):
+                    provider_iss = existing.provider_iss
+            except Exception:
+                provider_iss = None
+
+        if not provider_iss:
+            # Fail early: do not persist rows without issuer metadata
+            return RedirectResponse(f"{frontend_url}/settings#google?google_error=missing_provider_iss", status_code=302)
+
         token = ThirdPartyToken(
             id=f"google:{secrets.token_hex(8)}",
             user_id=uid,
             provider="google",
+            provider_sub=provider_sub,
+            provider_iss=provider_iss,
             access_token=record.get("access_token", ""),
             refresh_token=record.get("refresh_token"),
             scope=record.get("scopes"),
@@ -209,7 +255,7 @@ async def google_status(request: Request):
     ]
 
     if not token:
-        return JSONResponse({"connected": False, "required_scopes_ok": False, "scopes": [], "expires_at": None, "last_refresh_at": None, "degraded_reason": "no_token"}, status_code=200)
+        return JSONResponse({"connected": False, "required_scopes_ok": False, "scopes": [], "expires_at": None, "last_refresh_at": None, "degraded_reason": "no_token", "services": {}}, status_code=200)
 
     # Check scopes
     token_scopes = (token.scope or "").split()
@@ -244,11 +290,27 @@ async def google_status(request: Request):
             # Mark degraded on refresh failure
             return JSONResponse({"connected": False, "required_scopes_ok": required_ok, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": f"refresh_failed: {str(e)[:200]}"}, status_code=200)
 
+    # Build services block from service_state JSON
+    try:
+        from ..service_state import parse as _parse_state
+
+        st = _parse_state(getattr(token, "service_state", None))
+        services = {}
+        for svc in ("gmail", "calendar"):
+            entry = st.get(svc) or {}
+            details = entry.get("details") or {}
+            services[svc] = {
+                "status": entry.get("status", "disabled"),
+                "last_error_code": details.get("last_error_code"),
+                "last_error_at": details.get("last_error_at"),
+                "updated_at": entry.get("updated_at"),
+            }
+    except Exception:
+        services = {}
+
     # If scopes missing, consider degraded
     if not required_ok:
-        # Consider account connected if a valid token is present, even if required scopes differ.
-        # Report degraded_reason so UI can display capabilities accurately.
-        return JSONResponse({"connected": True, "required_scopes_ok": False, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": "missing_scopes"}, status_code=200)
+        return JSONResponse({"connected": True, "required_scopes_ok": False, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": "missing_scopes", "services": services}, status_code=200)
 
     # All good
-    return JSONResponse({"connected": True, "required_scopes_ok": True, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": None}, status_code=200)
+    return JSONResponse({"connected": True, "required_scopes_ok": True, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": None, "services": services}, status_code=200)

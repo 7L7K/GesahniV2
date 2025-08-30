@@ -16,6 +16,7 @@ from ...budget import get_budget_state
 from ...http_utils import json_request
 from ...models.third_party_tokens import ThirdPartyToken
 from .oauth import SpotifyOAuth, SpotifyOAuthError
+from .budget import get_spotify_budget_manager
 
 
 @dataclass
@@ -53,6 +54,7 @@ class SpotifyClient:
         self.user_id = user_id
         self.oauth = SpotifyOAuth()
         self._circuit_breaker_state = {"failures": 0, "last_failure": 0.0}
+        self._budget_manager = get_spotify_budget_manager(user_id)
 
     # ------------------------------------------------------------------
     # Token management with unified storage
@@ -127,24 +129,12 @@ class SpotifyClient:
 
     def _check_budget(self) -> None:
         """Check if user is within budget limits."""
-        budget_state = get_budget_state(self.user_id)
-        if not budget_state.get("escalate_allowed", True):
+        if self._budget_manager.is_budget_exceeded():
             raise SpotifyAuthError("Budget limit exceeded for Spotify operations")
 
     def _get_timeout(self) -> float:
         """Get appropriate timeout based on budget and router settings."""
-        # Respect ROUTER_BUDGET_MS environment variable
-        router_budget_ms = float(os.getenv("ROUTER_BUDGET_MS", "30000"))  # 30 seconds default
-
-        # Use a portion of the router budget for Spotify calls
-        spotify_timeout = min(router_budget_ms / 1000 * 0.8, 30.0)  # 80% of budget, max 30s
-
-        # Check budget state for additional constraints
-        budget_state = get_budget_state(self.user_id)
-        if budget_state.get("reply_len_target") == "short":
-            spotify_timeout = min(spotify_timeout, 10.0)  # Reduce timeout under budget pressure
-
-        return spotify_timeout
+        return self._budget_manager.get_timeout()
 
     # ------------------------------------------------------------------
     # HTTP client with retry and circuit breaker
@@ -268,6 +258,9 @@ class SpotifyClient:
         if self._is_circuit_open():
             raise SpotifyAuthError("Circuit breaker open - too many recent failures")
 
+        # Check if we're in backoff period
+        await self._budget_manager.wait_for_backoff()
+
         access_token = await self._get_valid_access_token()
 
         headers = {"Authorization": f"Bearer {access_token}"}
@@ -287,7 +280,7 @@ class SpotifyClient:
             except Exception:
                 pass
 
-            # Handle rate limit explicitly
+            # Handle rate limit explicitly with proper backoff
             if r.status_code == 429:
                 try:
                     SPOTIFY_429.labels(path).inc()
@@ -296,8 +289,11 @@ class SpotifyClient:
                 retry_after = None
                 try:
                     retry_after = int((r.headers or {}).get("Retry-After", "0") or 0)
+                    # Apply backoff using the Retry-After header value
+                    self._budget_manager.apply_backoff(retry_after)
                 except Exception:
-                    retry_after = None
+                    # Apply exponential backoff if no Retry-After header
+                    self._budget_manager.apply_backoff()
                 # Surface a specialized exception for UI
                 raise SpotifyRateLimitedError(retry_after, "rate_limited")
 
@@ -306,27 +302,27 @@ class SpotifyClient:
                     SPOTIFY_REFRESH.inc()
                 except Exception:
                     pass
-                # If token is expired according to DB, attempt a proactive refresh then retry once
-                from ...auth_store_tokens import get_token as _get_token
-                t = await _get_token(self.user_id, "spotify")
-                now = int(time.time())
-                if t and t.expires_at <= now:
+
+                # Only attempt refresh on first attempt to avoid infinite loops
+                if attempt == 1:
+                    # Check if token needs refresh based on expiry
+                    from ...auth_store_tokens import get_token as _get_token
+                    t = await _get_token(self.user_id, "spotify")
+                    now = int(time.time())
+
+                    # Always attempt refresh on 401, regardless of expiry time
+                    # Spotify may revoke tokens or have clock skew
                     try:
                         await self._refresh_tokens()
                         access_token = await self._get_valid_access_token()
                         headers["Authorization"] = f"Bearer {access_token}"
-                        continue
+                        continue  # Retry with new token
                     except SpotifyAuthError:
+                        # Refresh failed - token is invalid, user needs reauth
                         raise SpotifyAuthError("needs_reauth")
                 else:
-                    # Token not expired yet but 401 occurred - do one refresh attempt
-                    try:
-                        await self._refresh_tokens()
-                        access_token = await self._get_valid_access_token()
-                        headers["Authorization"] = f"Bearer {access_token}"
-                        continue
-                    except SpotifyAuthError:
-                        raise SpotifyAuthError("needs_reauth")
+                    # Already attempted refresh on first attempt, give up
+                    raise SpotifyAuthError("needs_reauth")
 
             if r.status_code == 403:
                 # Premium required or other forbidden reason
@@ -337,11 +333,13 @@ class SpotifyClient:
                 await asyncio.sleep(0.2 * attempt)
                 continue
 
-            # Record circuit state
+            # Record circuit state and handle backoff
             if r.status_code >= 500:
                 self._record_failure()
             else:
                 self._record_success()
+                # Clear backoff on successful response
+                self._budget_manager.clear_backoff()
 
             return r
 

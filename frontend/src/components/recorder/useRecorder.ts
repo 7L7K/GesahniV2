@@ -157,6 +157,22 @@ export function useRecorder(): RecorderExports {
             return;
         }
 
+        // Health-gate the live transcription WS to avoid failing connects during outages
+        try {
+            const controller = new AbortController();
+            const to = setTimeout(() => controller.abort(), 1500);
+            const h = await apiFetch('/healthz/ready', { auth: false, dedupe: false, cache: 'no-store', signal: controller.signal });
+            clearTimeout(to);
+            const ok = h.ok && ((await h.json().catch(() => ({ status: 'fail' }))).status === 'ok');
+            if (!ok) {
+                setState({ status: "error", message: "Backend not ready. Please try again in a moment." });
+                return;
+            }
+        } catch {
+            setState({ status: "error", message: "Backend check failed. Please try again." });
+            return;
+        }
+
         const ws = new WebSocket(wsUrl("/v1/transcribe"));
         setWsOpen(false);
         ws.onopen = () => {

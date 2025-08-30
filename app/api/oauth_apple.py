@@ -9,10 +9,10 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
 
-from ..security import _jwt_decode
+from ..security import jwt_decode
 from ..sessions_store import sessions_store
 
-router = APIRouter(tags=["auth"], include_in_schema=False)
+router = APIRouter(tags=["Auth"], include_in_schema=False)
 
 
 def _allow_redirect(url: str) -> bool:
@@ -135,7 +135,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
         # Basic decode without verification to extract email/sub
 
         try:
-            payload = _jwt_decode(id_token, options={"verify_signature": False})
+            payload = jwt_decode(id_token, options={"verify_signature": False})
         except Exception:
             payload = {}
 
@@ -170,7 +170,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
     try:
         from ..auth import _create_session_id
 
-        payload = _jwt_decode(access, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt_decode(access, SECRET_KEY, algorithms=[ALGORITHM])
         jti = payload.get("jti")
         expires_at = payload.get("exp", time.time() + access_ttl)
         if jti:

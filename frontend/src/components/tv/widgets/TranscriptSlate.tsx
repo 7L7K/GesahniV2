@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { wsUrl } from "@/lib/api";
+import { wsUrl, apiFetch } from "@/lib/api";
 import { useSceneManager } from "@/state/sceneManager";
 
 export function TranscriptSlate() {
@@ -15,14 +15,30 @@ export function TranscriptSlate() {
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const delay = (n: number) => {
-      const base = Math.min(30_000, 500 * Math.pow(2, n));
-      // Avoid producing non-deterministic jitter during SSR; jitter is fine client-side
-      const jitter = (typeof window !== 'undefined') ? base * (0.15 * (Math.random() * 2 - 1)) : 0;
-      return Math.max(250, Math.floor(base + jitter));
+      const base = Math.min(5_000, 500 * Math.pow(2, n));
+      const jitter = (typeof window !== 'undefined') ? base * (0.10 * (Math.random() * 2 - 1)) : 0;
+      return Math.max(500, Math.floor(base + jitter));
     };
 
-    const setup = () => {
+    const healthy = async (): Promise<boolean> => {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 1500);
+        const res = await apiFetch('/v1/health', { auth: true, dedupe: false, cache: 'no-store', signal: controller.signal });
+        clearTimeout(t);
+        if (!res.ok) return false;
+        const body = await res.json().catch(() => ({ status: 'fail' }));
+        return body?.status === 'ok';
+      } catch { return false; }
+    };
+
+    const setup = async () => {
       try { ws?.close(); } catch { }
+      if (!(await healthy())) {
+        const d = delay(retry++);
+        timer = setTimeout(() => setup(), d);
+        return;
+      }
       ws = new WebSocket(wsUrl("/v1/transcribe"));
       ws.onopen = () => { retry = 0; };
       ws.onmessage = (e) => {

@@ -1,4 +1,5 @@
 import os
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +15,35 @@ def client(monkeypatch):
     monkeypatch.delenv("JWT_SECRET", raising=False)
     monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
     return TestClient(app)
+
+
+@pytest.fixture
+def app_client(monkeypatch):
+    """Alias for client fixture to match test expectations."""
+    # Put app in test mode for routes that relax auth in tests
+    monkeypatch.setenv("PYTEST_MODE", "1")
+    # Allow anonymous requests in tests unless a JWT is explicitly set by a test
+    monkeypatch.delenv("JWT_SECRET", raising=False)
+    monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
+    return TestClient(app)
+
+
+@pytest.fixture
+async def seed_spotify_token():
+    """Seed a Spotify token for testing."""
+    from app.models.third_party_tokens import ThirdPartyToken
+    from app.auth_store_tokens import upsert_token
+
+    token = ThirdPartyToken(
+        user_id="test_user",
+        provider="spotify",
+        access_token="test_access_token",
+        refresh_token="test_refresh_token",
+        expires_at=int(time.time()) + 3600,  # 1 hour from now
+        scope="user-read-private,user-read-email"
+    )
+    await upsert_token(token)
+    return token
 
 
 # conftest.py

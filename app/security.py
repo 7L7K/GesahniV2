@@ -119,13 +119,120 @@ from . import metrics
 
 JWT_SECRET: str | None = None  # backwards compat; actual value read from env
 API_TOKEN = os.getenv("API_TOKEN")
+
+
+class _DynamicRateLimitConfig:
+    """Dynamic rate limit configuration that reads from environment variables."""
+
+    def __init__(self):
+        self._cache = {}
+
+    def _get_env_int(self, key: str, default: str | int) -> int:
+        """Get integer value from environment with caching."""
+        if key not in self._cache:
+            env_value = os.getenv(key)
+            if env_value is not None:
+                try:
+                    self._cache[key] = int(env_value)
+                except ValueError:
+                    self._cache[key] = int(default) if isinstance(default, str) else default
+            else:
+                self._cache[key] = int(default) if isinstance(default, str) else default
+        return self._cache[key]
+
+    def clear_cache(self):
+        """Clear cached values - useful for testing."""
+        self._cache.clear()
+
+    def set_test_config(self, **kwargs):
+        """Set test configuration values - for testing only."""
+        for key, value in kwargs.items():
+            self._cache[key] = value
+
+    def reset_test_config(self):
+        """Reset test configuration to environment defaults."""
+        self.clear_cache()
+
+    @property
+    def rate_limit(self) -> int:
+        """Get current RATE_LIMIT value."""
+        return self._get_env_int("RATE_LIMIT_PER_MIN", self._get_env_int("RATE_LIMIT", 60))
+
+    @property
+    def rate_limit_burst(self) -> int:
+        """Get current RATE_LIMIT_BURST value."""
+        return self._get_env_int("RATE_LIMIT_BURST", 10)
+
+
+# Global instance for dynamic configuration
+_dynamic_config = _DynamicRateLimitConfig()
+
 # Total requests allowed per long window (defaults retained for back-compat)
 # Use sane import-time defaults; prefer env when present
-RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MIN", os.getenv("RATE_LIMIT", "60")))
+
+class _RateLimitConstants:
+    """Container for rate limit constants that can be updated dynamically."""
+
+    def __init__(self):
+        self._rate_limit = None
+        self._rate_limit_burst = None
+
+    @property
+    def RATE_LIMIT(self):
+        """Get current rate limit value."""
+        if self._rate_limit is None:
+            self._rate_limit = _dynamic_config.rate_limit
+        return self._rate_limit
+
+    @RATE_LIMIT.setter
+    def RATE_LIMIT(self, value):
+        """Set rate limit value."""
+        self._rate_limit = value
+
+    @property
+    def RATE_LIMIT_BURST(self):
+        """Get current rate limit burst value."""
+        if self._rate_limit_burst is None:
+            self._rate_limit_burst = _dynamic_config.rate_limit_burst
+        return self._rate_limit_burst
+
+    @RATE_LIMIT_BURST.setter
+    def RATE_LIMIT_BURST(self, value):
+        """Set rate limit burst value."""
+        self._rate_limit_burst = value
+
+    def refresh_from_env(self):
+        """Refresh values from environment variables."""
+        self._rate_limit = None
+        self._rate_limit_burst = None
+
+# Global constants container
+_rate_limit_constants = _RateLimitConstants()
+
+# For backward compatibility - these will be module-level attributes that refresh from env
+def _get_current_rate_limit():
+    """Get current rate limit, checking environment for changes."""
+    return _dynamic_config.rate_limit
+
+def _get_current_rate_limit_burst():
+    """Get current rate limit burst, checking environment for changes."""
+    return _dynamic_config.rate_limit_burst
+
+# Set initial values, but they can be refreshed
+RATE_LIMIT = _get_current_rate_limit()
 # Long-window size (seconds), configurable for deterministic tests
 _window = float(os.getenv("RATE_LIMIT_WINDOW_S", "60"))
 # Short burst bucket
-RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "10"))
+RATE_LIMIT_BURST = _get_current_rate_limit_burst()
+
+# Test helper function to refresh rate limit constants from environment
+def _refresh_rate_limit_constants():
+    """Refresh rate limit constants from current environment variables."""
+    global RATE_LIMIT, RATE_LIMIT_BURST
+    # Clear the cache so new environment values are picked up
+    _dynamic_config.clear_cache()
+    RATE_LIMIT = _get_current_rate_limit()
+    RATE_LIMIT_BURST = _get_current_rate_limit_burst()
 # Default burst window to 60s (was 10s); accept either *_S or legacy var for compatibility
 _burst_window = float(
     os.getenv("RATE_LIMIT_BURST_WINDOW_S", os.getenv("RATE_LIMIT_BURST_WINDOW", "60"))
@@ -265,7 +372,7 @@ else:
     JWT_CLOCK_SKEW_S = int(_env_jwt_skew or "60")
 
 
-def _jwt_decode(
+def jwt_decode(
     token: str, key: str | None = None, algorithms: list[str] | None = None, **kwargs
 ) -> dict:
     """Decode a JWT using a consistent leeway and sensible default options.
@@ -299,6 +406,9 @@ def _jwt_decode(
         kwargs["audience"] = aud_env
 
     return jwt.decode(token, key, algorithms=algorithms, options=opts, **kwargs)  # type: ignore[arg-type]
+
+# Backwards-compat alias; prefer jwt_decode going forward.
+_jwt_decode = jwt_decode
 
 
 def _rl_key(kind: str, user_key: str, window: str) -> str:
@@ -459,9 +569,9 @@ def _get_request_payload(request: Request | None) -> dict | None:
                     opts["audience"] = aud
 
                 if opts:
-                    return _jwt_decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
+                    return jwt_decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
                 else:
-                    return _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+                    return jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
             except Exception:
                 # Traditional JWT failed, try Clerk if enabled and appropriate
                 pass
@@ -478,7 +588,7 @@ def _get_request_payload(request: Request | None) -> dict | None:
             )
             if dev_mode or test_mode:
                 try:
-                    return _jwt_decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
+                    return jwt_decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
                 except Exception:
                     pass
 
@@ -562,9 +672,9 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
                     opts["audience"] = aud
 
                 if opts:
-                    return _jwt_decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
+                    return jwt_decode(token, secret, algorithms=["HS256"], **opts)  # type: ignore[arg-type]
                 else:
-                    return _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+                    return jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
             except Exception:
                 # Traditional JWT failed, try Clerk if enabled and appropriate
                 pass
@@ -581,7 +691,7 @@ def _get_ws_payload(websocket: WebSocket | None) -> dict | None:
             )
             if dev_mode or test_mode:
                 try:
-                    return _jwt_decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
+                    return jwt_decode(token, options={"verify_signature": False})  # type: ignore[arg-type]
                 except Exception:
                     pass
 
@@ -764,7 +874,7 @@ async def _apply_rate_limit(key: str, record: bool = True) -> bool:
     return len(timestamps) <= RATE_LIMIT
 
 
-async def verify_token(request: Request, response: Response | None = None) -> None:
+async def verify_token(request: Request, response: Response = None) -> None:  # type: ignore[assignment]
     """Validate JWT from Authorization header or HttpOnly cookie when configured.
 
     Token reading order:
@@ -802,10 +912,16 @@ async def verify_token(request: Request, response: Response | None = None) -> No
     if test_bypass and not jwt_secret:
         return
     if not jwt_secret:
-        # Fail-closed when required
+        # Fail-closed when required → treat as unauthorized, not server error
         if require_jwt:
             logger.error("deny: missing_jwt_secret")
-            raise HTTPException(status_code=500, detail="missing_jwt_secret")
+            from .http_errors import unauthorized
+
+            raise unauthorized(
+                code="missing_jwt_secret",
+                message="authentication required",
+                hint="missing JWT secret configuration",
+            )
         # Otherwise operate in pass-through mode (dev/test)
         return
 
@@ -912,11 +1028,11 @@ async def verify_token(request: Request, response: Response | None = None) -> No
             if aud:
                 opts["audience"] = aud
             if opts:
-                payload = _jwt_decode(
+                payload = jwt_decode(
                     token, jwt_secret, algorithms=["HS256"], leeway=skew, **opts
                 )
             else:
-                payload = _jwt_decode(
+                payload = jwt_decode(
                     token, jwt_secret, algorithms=["HS256"], leeway=skew
                 )
             request.state.jwt_payload = payload
@@ -974,7 +1090,7 @@ async def verify_token(request: Request, response: Response | None = None) -> No
                     rt = read_refresh_cookie(request)
                     if rt and os.getenv("JWT_SECRET"):
                         try:
-                            rt_claims = _jwt_decode(
+                            rt_claims = jwt_decode(
                                 rt,
                                 os.getenv("JWT_SECRET"),
                                 algorithms=["HS256"],
@@ -1128,7 +1244,7 @@ async def verify_token_strict(request: Request) -> None:
 
         raise unauthorized(message="missing token", hint="send Authorization: Bearer <jwt>")
     try:
-        payload = _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+        payload = jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
         request.state.jwt_payload = payload
     except jwt.PyJWTError:
         try:
@@ -1316,9 +1432,9 @@ async def verify_ws(websocket: WebSocket) -> None:
         if aud:
             opts["audience"] = aud
         if opts:
-            payload = _jwt_decode(token, jwt_secret, algorithms=["HS256"], **opts)
+            payload = jwt_decode(token, jwt_secret, algorithms=["HS256"], **opts)
         else:
-            payload = _jwt_decode(token, jwt_secret, algorithms=["HS256"])
+            payload = jwt_decode(token, jwt_secret, algorithms=["HS256"])
         websocket.state.jwt_payload = payload
         uid = payload.get("user_id") or payload.get("sub")
         if uid:

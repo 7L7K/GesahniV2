@@ -35,11 +35,28 @@ export default function GoogleCard({ onManage }: { onManage?: () => void }) {
         // Hash handler
         if (typeof window !== 'undefined') {
             const h = window.location.hash;
-            if (h.startsWith('#google=connected')) {
-                toast.success('Google connected');
-                history.replaceState({}, '', window.location.pathname + window.location.search);
-                fetchStatus();
-            }
+                if (h.startsWith('#google=connected')) {
+                    toast.success('Google connected');
+                    history.replaceState({}, '', window.location.pathname + window.location.search);
+                    fetchStatus();
+                }
+                // Optionally show per-service health banner from /v1/health/google
+                (async () => {
+                    try {
+                        const health = await fetch('/v1/health/google', { credentials: 'include' });
+                        if (health.ok) {
+                            const j = await health.json();
+                            // If service reports errors, show small notice
+                            const svc = j.services || {};
+                            if (svc.gmail && svc.gmail.status === 'error') {
+                                toast.warning(`Gmail: ${svc.gmail.last_error?.code || 'error'}`);
+                            }
+                            if (svc.calendar && svc.calendar.status === 'error') {
+                                toast.warning(`Calendar: ${svc.calendar.last_error?.code || 'error'}`);
+                            }
+                        }
+                    } catch (e) { }
+                })();
             if (h.startsWith('#google=error:')) {
                 const code = h.split(':')[1] || 'error';
                 toast.error(`Google connection failed: ${code}`);
@@ -134,4 +151,3 @@ export default function GoogleCard({ onManage }: { onManage?: () => void }) {
         </div>
     );
 }
-

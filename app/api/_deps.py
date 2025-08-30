@@ -54,9 +54,9 @@ def require_admin_scope():
             try:
                 import os
 
-                from app.security import _jwt_decode
+                from app.security import jwt_decode
 
-                payload = _jwt_decode(token, key=os.getenv("JWT_SECRET"))
+                payload = jwt_decode(token, key=os.getenv("JWT_SECRET"))
                 scopes = payload.get("scopes", [])
                 if isinstance(scopes, str):
                     scopes = [s.strip() for s in scopes.split()]

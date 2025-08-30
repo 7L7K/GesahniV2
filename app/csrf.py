@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from secrets import token_urlsafe
 
 from fastapi import Request
@@ -128,14 +129,14 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         token_hdr, used_legacy, legacy_allowed = _extract_csrf_header(request)
 
         if is_cross_site:
-            # Cross-site CSRF validation: require token in header + additional security
+            # Cross-site CSRF validation: require token in header + basic validation
             if not token_hdr:
                 logger.warning(
                     "deny: csrf_missing_header_cross_site header=<%s>",
                     token_hdr[:8] + "..." if token_hdr else "None",
                 )
                 return JSONResponse(
-                    status_code=400, content={"detail": "missing_csrf_cross_site"}
+                    status_code=403, content={"detail": "missing_csrf_cross_site"}
                 )
 
             # Basic validation for cross-site tokens
@@ -148,8 +149,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     status_code=403, content={"detail": "invalid_csrf_format"}
                 )
 
-            # For cross-site, we accept the token from header only
-            # Additional security measures could be added here (e.g., server-side validation)
+            # For cross-site, we accept any properly formatted token
+            # (server-side validation is optional for basic functionality)
             logger.info(
                 "allow: csrf_cross_site_validation header=<%s>",
                 token_hdr[:8] + "..." if token_hdr else "None",
@@ -191,6 +192,102 @@ async def get_csrf_token() -> str:
     """
     # For now, just return a random per-call token; a route should set cookie.
     return token_urlsafe(16)
+
+
+class CSRFTokenStore:
+    """Server-side storage for CSRF tokens to enhance cross-site security.
+
+    Stores valid CSRF tokens with TTL for validation in cross-site scenarios.
+    Falls back to in-memory storage if Redis is not available.
+    """
+
+    def __init__(self):
+        self._local_store = {}
+        self._redis_available = self._check_redis_available()
+
+    def _check_redis_available(self) -> bool:
+        """Check if Redis is available for token storage."""
+        try:
+            redis_url = os.getenv("REDIS_URL")
+            if not redis_url:
+                return False
+            import redis
+            client = redis.from_url(redis_url)
+            client.ping()
+            return True
+        except Exception:
+            return False
+
+    def _get_redis_client(self):
+        """Get Redis client if available."""
+        if not self._redis_available:
+            return None
+        try:
+            import redis
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            return redis.from_url(redis_url)
+        except Exception:
+            return None
+
+    def store_token(self, token: str, ttl_seconds: int = 600) -> None:
+        """Store a CSRF token with TTL for server-side validation."""
+        if self._redis_available:
+            try:
+                client = self._get_redis_client()
+                if client:
+                    key = f"csrf_token:{token}"
+                    client.setex(key, ttl_seconds, "valid")
+                    logger.debug("csrf_token_stored_redis token=<%s> ttl=%d", token[:8] + "...", ttl_seconds)
+                    return
+            except Exception as e:
+                logger.warning("csrf_token_store_redis_failed error=%s", str(e))
+
+        # Fallback to in-memory storage
+        expires_at = time.time() + ttl_seconds
+        self._local_store[token] = expires_at
+        logger.debug("csrf_token_stored_memory token=<%s> ttl=%d", token[:8] + "...", ttl_seconds)
+
+        # Clean up expired tokens periodically
+        self._cleanup_expired()
+
+    def validate_token(self, token: str) -> bool:
+        """Validate a CSRF token against server-side storage."""
+        if self._redis_available:
+            try:
+                client = self._get_redis_client()
+                if client:
+                    key = f"csrf_token:{token}"
+                    result = client.get(key)
+                    if result:
+                        logger.debug("csrf_token_validated_redis token=<%s>", token[:8] + "...")
+                        return True
+            except Exception as e:
+                logger.warning("csrf_token_validate_redis_failed error=%s", str(e))
+
+        # Check in-memory storage
+        if token in self._local_store:
+            expires_at = self._local_store[token]
+            if time.time() < expires_at:
+                logger.debug("csrf_token_validated_memory token=<%s>", token[:8] + "...")
+                return True
+            else:
+                # Token expired, remove it
+                del self._local_store[token]
+
+        return False
+
+    def _cleanup_expired(self) -> None:
+        """Clean up expired tokens from in-memory storage."""
+        current_time = time.time()
+        expired_tokens = [token for token, expires_at in self._local_store.items() if current_time >= expires_at]
+        for token in expired_tokens:
+            del self._local_store[token]
+        if expired_tokens:
+            logger.debug("csrf_token_cleanup_removed count=%d", len(expired_tokens))
+
+
+# Global CSRF token store instance
+_csrf_token_store = CSRFTokenStore()
 
 
 __all__ = ["CSRFMiddleware", "get_csrf_token", "_extract_csrf_header"]

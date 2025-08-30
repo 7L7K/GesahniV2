@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.auth import EXPIRE_MINUTES as APP_JWT_EXPIRE_MINUTES
 from app.deps.user import get_current_user_id
-from app.security import _jwt_decode
+from app.security import jwt_decode
 
 from . import oauth  # import module so tests can monkey‑patch its attributes
 from .config import validate_config
@@ -50,7 +50,7 @@ def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "
     try:
         from app.auth import _create_session_id
 
-        payload = _jwt_decode(
+        payload = jwt_decode(
             access_token, os.getenv("JWT_SECRET"), algorithms=["HS256"]
         )
         jti = payload.get("jti")
@@ -217,7 +217,9 @@ def gmail_send(payload: SendEmailIn, request: Request):
     with SessionLocal() as s:
         row = s.get(GoogleToken, uid)
         if not row:
-            raise HTTPException(400, "No Google account linked")
+            from ..error_envelope import raise_enveloped
+
+            raise_enveloped("needs_reconnect", "No Google account linked", hint="Connect Google in Settings", status=400)
         creds = oauth.record_to_creds(row)
         # Lazy import to avoid heavy dependency at module import time
         from .services import gmail_service
@@ -290,7 +292,9 @@ def calendar_create(evt: CreateEventIn, request: Request):
     with SessionLocal() as s:
         row = s.get(GoogleToken, uid)
         if not row:
-            raise HTTPException(400, "No Google account linked")
+            from ..error_envelope import raise_enveloped
+
+            raise_enveloped("needs_reconnect", "No Google account linked", hint="Connect Google in Settings", status=400)
         creds = oauth.record_to_creds(row)
         # Lazy import to avoid heavy dependency at module import time
         from .services import calendar_service

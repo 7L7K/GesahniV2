@@ -254,7 +254,9 @@ def _verify_state(state: str) -> dict:
             raise ValueError("expired")
         return payload
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid state")
+        from ...error_envelope import raise_enveloped
+
+        raise_enveloped("invalid_state", "Invalid state", hint="retry the OAuth flow", status=400)
 
 
 def create_flow(scopes: list[str] | None = None):
@@ -263,9 +265,9 @@ def create_flow(scopes: list[str] | None = None):
     Raises HTTPException when unavailable so callers can degrade gracefully.
     """
     if not _GOOGLE_AVAILABLE or _Flow is None:  # pragma: no cover - env-dependent
-        raise HTTPException(
-            status_code=503, detail="Google OAuth libraries unavailable"
-        )
+        from ...error_envelope import raise_enveloped
+
+        raise_enveloped("unavailable", "Google OAuth libraries unavailable", status=503)
     return _Flow.from_client_config(CLIENT_CONFIG, scopes=scopes or get_google_scopes())
 
 
@@ -276,9 +278,9 @@ def build_auth_url(user_id: str, state_payload: dict | None = None) -> tuple[str
         Tuple[str, str]: (auth_url, state)
     """
     if not _GOOGLE_AVAILABLE or _Flow is None:  # pragma: no cover - env-dependent
-        raise HTTPException(
-            status_code=503, detail="Google OAuth libraries unavailable"
-        )
+        from ...error_envelope import raise_enveloped
+
+        raise_enveloped("unavailable", "Google OAuth libraries unavailable", status=503)
     flow = create_flow()
     # Ensure redirect_uri is explicitly set on the Flow before generating the
     # authorization URL so Google receives it as a parameter. Some environments
@@ -323,7 +325,9 @@ def exchange_code(code: str, state: str, verify_state: bool = True) -> Any:
                     }
                 },
             )
-            raise HTTPException(status_code=400, detail="Invalid state")
+            from ..error_envelope import raise_enveloped
+
+            raise_enveloped("invalid_state", "Invalid state", hint="Retry the OAuth flow", status=400)
 
     if not _GOOGLE_AVAILABLE or _Flow is None:  # pragma: no cover - env-dependent
         # Optional google libs are unavailable; fall back to manual token exchange below.
@@ -434,7 +438,9 @@ def exchange_code(code: str, state: str, verify_state: bool = True) -> Any:
                             }
                         },
                     )
-                    raise HTTPException(status_code=400, detail="oauth_exchange_failed")
+                from ..error_envelope import raise_enveloped
+
+                raise_enveloped("oauth_exchange_failed", "oauth exchange failed", status=400)
 
                 data = resp.json()
                 logger.info(
@@ -529,7 +535,9 @@ def exchange_code(code: str, state: str, verify_state: bool = True) -> Any:
                     }
                 },
             )
-            raise HTTPException(status_code=400, detail=f"oauth_exchange_failed: {e}")
+            from ..error_envelope import raise_enveloped
+
+            raise_enveloped("oauth_exchange_failed", f"oauth exchange failed: {e}", status=400)
 
 
 def refresh_if_needed(creds: Any) -> Any:
@@ -574,14 +582,18 @@ def creds_to_record(creds: Any) -> dict:
             "expiry": expiry_dt,
         }
     except Exception as e:  # pragma: no cover - defensive
-        raise HTTPException(status_code=400, detail=f"bad_credentials_object: {e}")
+        from ..error_envelope import raise_enveloped
+
+        raise_enveloped("bad_credentials_object", f"bad credentials object: {e}", status=400)
 
 
 def record_to_creds(record):
     if (
         not _GOOGLE_AVAILABLE or _Credentials is None
     ):  # pragma: no cover - env-dependent
-        raise HTTPException(status_code=501, detail="google credentials unavailable")
+        from ..error_envelope import raise_enveloped
+
+        raise_enveloped("google_unavailable", "google credentials unavailable", status=501)
     return _Credentials(
         token=record.access_token,
         refresh_token=record.refresh_token,

@@ -9,13 +9,11 @@ from fastapi import APIRouter, Depends, WebSocket
 
 from app.deps.user import get_current_user_id
 from app.security import verify_ws
+from app.ws_manager import get_ws_manager
 from .music_http import _build_state_payload
 
 
 router = APIRouter(tags=["Music"])  # mounted under /v1
-
-
-_ws_clients: set[WebSocket] = set()
 
 
 def _ws_origin_allowed(ws: WebSocket) -> bool:
@@ -31,30 +29,30 @@ def _ws_origin_allowed(ws: WebSocket) -> bool:
 
 
 async def _broadcast(topic: str, payload: dict) -> None:
-    if not _ws_clients:
-        return
+    """Enhanced WebSocket broadcasting using the connection manager."""
     import asyncio as _aio
-    dead: list[WebSocket] = []
-    sem = _aio.Semaphore(int(os.getenv("WS_BROADCAST_CONCURRENCY", "64") or 64))
+    import logging as _log
 
-    async def _send(ws: WebSocket) -> None:
-        try:
-            async with sem:
-                await ws.send_json({"topic": topic, "data": payload})
-        except Exception:
-            dead.append(ws)
+    logger = _log.getLogger(__name__)
 
-    await _aio.gather(*[_send(ws) for ws in list(_ws_clients)], return_exceptions=True)
-    for ws in dead:
-        try:
-            _ws_clients.discard(ws)
-            await ws.close()
-        except Exception:
-            pass
+    # Get connection manager and broadcast to all music connections
+    ws_manager = await get_ws_manager()
+    music_connections = ws_manager.get_connections_by_metadata("endpoint", "music")
+
+    if not music_connections:
+        return
+
+    # Use the connection manager's broadcast method
+    message = {"topic": topic, "data": payload}
+    await ws_manager.broadcast_to_all(message)
+
+    logger.debug("ws.music.broadcast: topic=%s connections=%d", topic, len(music_connections))
 
 
 @router.websocket("/ws/music")
 async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
+    ws_manager = await get_ws_manager()
+
     if not _ws_origin_allowed(ws):
         try:
             await ws.close(code=1008, reason="origin_not_allowed")
@@ -63,6 +61,8 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
         return
 
     await verify_ws(ws)
+
+    # Additional validation checks
     try:
         hdr = ws.headers.get("Authorization") or ""
         has_authz = hdr.lower().startswith("bearer ")
@@ -76,6 +76,7 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
             return
     except Exception:
         pass
+
     try:
         require_jwt = os.getenv("REQUIRE_JWT", "0").strip().lower() in {"1", "true", "yes", "on"}
         uid = getattr(ws.state, "user_id", None)
@@ -92,12 +93,17 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
         await ws.accept(subprotocol="json.realtime.v1")
     except Exception:
         await ws.accept()
-    _ws_clients.add(ws)
+
+    # Add connection to manager
+    uid = getattr(ws.state, "user_id", "unknown")
+    conn_state = await ws_manager.add_connection(ws, uid, endpoint="music")
+
     _logger = logging.getLogger(__name__)
     connected_at = _t.time()
     last_pong = _t.monotonic()
+
     try:
-        _logger.info("ws.music.accept", extra={"meta": {"user_id": getattr(ws.state, "user_id", None)}})
+        _logger.info("ws.music.accept", extra={"meta": {"user_id": uid}})
     except Exception:
         pass
     try:
@@ -112,10 +118,13 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
                     await recv_task
                 except _aio.CancelledError:
                     pass
+                # Send ping and update connection activity
                 try:
                     await ws.send_text("ping")
+                    conn_state.update_activity()
                 except Exception:
                     break
+                # Check for pong timeout
                 if (_t.monotonic() - last_pong) > 60.0:
                     try:
                         await ws.close()
@@ -123,35 +132,45 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
                         pass
                     break
                 continue
+
             raw = recv_task.result()
             if raw.get("type") == "websocket.disconnect":
                 break
+
             data = raw.get("text") or raw.get("bytes")
             if data == "pong" or (isinstance(data, (bytes, bytearray)) and bytes(data) == b"pong"):
                 last_pong = _t.monotonic()
+                conn_state.update_activity()
                 continue
+
             try:
                 import json
                 payload = json.loads(data) if isinstance(data, (str, bytes, bytearray)) else None
             except Exception:
                 payload = None
+
             if not payload or not isinstance(payload, dict):
                 continue
+
+            # Update activity for any message
+            conn_state.update_activity()
+
             if payload.get("type") == "refreshState":
                 try:
                     uid = getattr(ws.state, "user_id", None) or "anon"
                     state_payload = await _build_state_payload(uid)
                     await ws.send_json({"topic": "music.state", "data": state_payload.model_dump()})
-                except Exception:
-                    pass
+                except Exception as e:
+                    _logger.debug("ws.music.refresh_state.error: user_id=%s error=%s", uid, str(e))
             elif payload.get("type") == "pong":
                 last_pong = _t.monotonic()
                 continue
     finally:
-        _ws_clients.discard(ws)
+        # Remove from connection manager
+        await ws_manager.remove_connection(uid)
         try:
             dur = int(round(_t.time() - connected_at))
-            _logger.info("ws.music.close", extra={"meta": {"duration_s": dur}})
+            _logger.info("ws.music.close", extra={"meta": {"user_id": uid, "duration_s": dur}})
         except Exception:
             pass
 

@@ -1,4 +1,8 @@
 from prometheus_client import Counter, Histogram
+try:
+    from prometheus_client import Gauge
+except Exception:  # pragma: no cover - optional dependency
+    Gauge = None  # type: ignore
 
 SPOTIFY_REQUESTS = Counter(
     "integration_spotify_requests_total",
@@ -222,6 +226,18 @@ except Exception:  # pragma: no cover - optional dependency
             self.value += amount
 
     Counter = Histogram = _MetricStub
+    class _GaugeStub:
+        def __init__(self, name, *a, **k):
+            self.name = name
+            self.value = 0.0
+
+        def labels(self, *a, **k):
+            return self
+
+        def set(self, amount: float):
+            self.value = amount
+
+    Gauge = _GaugeStub  # type: ignore
 
 # 6.1.a Core HTTP Metrics
 # Requests by route & method & status
@@ -341,6 +357,21 @@ except Exception:  # pragma: no cover
 
     HEALTH_CHECK_DURATION_SECONDS = _H2()  # type: ignore
 
+# Simple health gauges
+try:
+    HEALTH_OK = Gauge("health_ok", "Overall backend health ok (1/0)")
+    HEALTH_DEPS_OK = Gauge("health_deps_ok", "Dependency health ok (1/0)", ["component"])
+except Exception:  # pragma: no cover
+
+    class _G:
+        def labels(self, *a, **k):
+            return self
+
+        def set(self, *a, **k):
+            return None
+
+    HEALTH_OK = HEALTH_DEPS_OK = _G()  # type: ignore
+
 # Authentication metrics -------------------------------------------------------
 try:
     WHOAMI_CALLS_TOTAL = Counter(
@@ -375,6 +406,29 @@ except Exception:  # pragma: no cover
             return None
 
     FINISH_CALLS_TOTAL = _C3()  # type: ignore
+
+# Ask endpoint auth metrics
+try:
+    AUTH_401_TOTAL = Counter(
+        "auth_401_total",
+        "401 responses by route",
+        ["route", "reason"],  # reason: no_auth|bad_token
+    )
+    AUTH_403_TOTAL = Counter(
+        "auth_403_total",
+        "403 responses by route",
+        ["route", "scope"],
+    )
+except Exception:  # pragma: no cover
+
+    class _C401:
+        def labels(self, *a, **k):
+            return self
+
+        def inc(self, *a, **k):
+            return None
+
+    AUTH_401_TOTAL = AUTH_403_TOTAL = _C401()  # type: ignore
 
 # Spotify-specific counters for Phase 6
 try:

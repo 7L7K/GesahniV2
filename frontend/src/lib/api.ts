@@ -29,6 +29,55 @@ const SHORT_CACHE: Map<string, { ts: number; res: Response }> = new Map();
 const DEFAULT_DEDUPE_MS = Number(process.env.NEXT_PUBLIC_FETCH_DEDUPE_MS || 300) || 300;
 const DEFAULT_SHORT_CACHE_MS = Number(process.env.NEXT_PUBLIC_FETCH_SHORT_CACHE_MS || 750) || 750;
 
+// Request body materialization for safe retries
+type BodyFactory = () => BodyInit | null | undefined;
+function buildBodyFactory(body: any): BodyFactory {
+  if (body == null) return () => body;
+  // Strings, URLSearchParams, FormData, plain objects (stringified elsewhere)
+  if (typeof body === 'string' || body instanceof URLSearchParams || body instanceof FormData) {
+    return () => body as any;
+  }
+  // Blob: return a fresh slice
+  if (typeof Blob !== 'undefined' && body instanceof Blob) {
+    const b: Blob = body;
+    return () => b.slice(0, b.size, b.type);
+  }
+  // ArrayBuffer or typed arrays
+  if (body instanceof ArrayBuffer) {
+    const buf = body.slice(0);
+    return () => buf.slice(0);
+  }
+  if (ArrayBuffer.isView(body)) {
+    const view = new Uint8Array((body as ArrayBufferView).buffer).slice();
+    return () => view.buffer.slice(0);
+  }
+  // ReadableStream: buffer once into ArrayBuffer then reuse
+  try {
+    const isStream = typeof body.getReader === 'function' || typeof (body as any)[Symbol.asyncIterator] === 'function';
+    if (isStream) {
+      let cached: ArrayBuffer | null = null;
+      const load = async () => {
+        if (cached) return cached;
+        const rsp = new Response(body);
+        cached = await rsp.arrayBuffer();
+        return cached;
+      };
+      // Return factory that yields cached buffer synchronously when available
+      return (() => {
+        // This wrapper returns a Promise in browsers that accept BodyInit=ReadableStream|Blob|etc.
+        // We use ArrayBuffer to be broadly accepted.
+        // Note: callers of fetch can accept a Promise for body in modern browsers; for safety we resolve eagerly.
+        // Here we synchronously return cached if present; otherwise kick off load (not awaited here).
+        if (cached) return cached.slice(0);
+        // Best effort: this will be resolved before first retry since we call load() eagerly below
+        return cached as any;
+      }) as any;
+    }
+  } catch { /* noop */ }
+  // Fallback: return as-is
+  return () => body as any;
+}
+
 // -----------------------------
 // Auth & context keying helpers
 // -----------------------------
@@ -312,12 +361,14 @@ export async function apiFetch(
   const isHeaderMode = process.env.NEXT_PUBLIC_HEADER_AUTH_MODE === '1';
   const isOAuthEndpoint = path.includes('/google/auth/login_url') || path.includes('/google/auth/callback');
   const isWhoamiEndpoint = path.includes('/whoami');
+  const isAskEndpoint = path.includes('/v1/ask');
   const isAuthEndpoint = (
     path.includes('/login') ||
     path.includes('/register') ||
     path.includes('/logout') ||
     path.includes('/refresh') ||
-    isWhoamiEndpoint
+    isWhoamiEndpoint ||
+    isAskEndpoint
   );
 
   // For OAuth endpoints and whoami, always use credentials: 'include' for cookie mode
@@ -340,7 +391,9 @@ export async function apiFetch(
   // For public endpoints, default to no auth unless explicitly specified
   const defaultAuth = isPublicEndpoint ? false : true;
 
-  const { auth = defaultAuth, headers, dedupe = true, shortCacheMs, contextKey, credentials = defaultCredentials, ...rest } = init as any;
+  const { auth = defaultAuth, headers, dedupe = true, shortCacheMs, contextKey, credentials: initCreds = defaultCredentials, ...rest } = init as any;
+  // Always include credentials for authenticated/protected endpoints
+  const credentials: RequestCredentials = auth ? 'include' : initCreds;
   const isAbsolute = /^(?:https?:)?\/\//i.test(path);
   const isBrowser = typeof window !== "undefined";
   const base = API_URL || (isBrowser ? "" : "http://localhost:8000");
@@ -417,13 +470,25 @@ export async function apiFetch(
     }
   }
 
-  if (isAuthRequest) {
+  if (isAskEndpoint && process.env.NODE_ENV !== 'test') {
+    // Log a single sanitized line for /v1/ask (no token contents)
+    const hasAuthHeader = !!mergedHeaders && typeof mergedHeaders === 'object' && 'Authorization' in mergedHeaders;
+    const hasCsrf = !!mergedHeaders && typeof mergedHeaders === 'object' && 'X-CSRF-Token' in mergedHeaders;
+    console.info('ASK request', {
+      method,
+      url,
+      hasAuthHeader,
+      hasCSRF: hasCsrf,
+      credentials,
+    });
+  } else if (isAuthRequest) {
     console.info('API_FETCH auth.headers', {
       path,
       auth,
       isHeaderMode,
       credentials,
-      mergedHeaders: Object.fromEntries(Object.entries(mergedHeaders)),
+      // Avoid logging token contents
+      mergedHeaders: Object.fromEntries(Object.entries(mergedHeaders).map(([k, v]) => (k.toLowerCase() === 'authorization' ? [k, 'Bearer <redacted>'] : [k, v]))),
       hasAuthHeader: !!mergedHeaders && typeof mergedHeaders === 'object' && 'Authorization' in mergedHeaders,
       hasCsrfToken: !!mergedHeaders && typeof mergedHeaders === 'object' && 'X-CSRF-Token' in mergedHeaders,
       localStorage: {
@@ -465,7 +530,30 @@ export async function apiFetch(
     res = await p;
   } else {
     // Use specified credentials (default to omit for header mode)
-    res = await fetch(url, { ...rest, headers: mergedHeaders, credentials });
+    // Materialize body for safe retries
+    const maxAttempts = 2;
+    const bodyFactory: BodyFactory = buildBodyFactory(rest.body);
+    let attempt = 0;
+    let lastErr: unknown = null;
+    while (attempt < maxAttempts) {
+      attempt += 1;
+      try {
+        const bodyInst = typeof rest.body === 'string' || rest.body instanceof FormData || rest.body instanceof URLSearchParams || rest.body == null
+          ? rest.body
+          : bodyFactory();
+        res = await fetch(url, { ...rest, body: bodyInst as any, headers: mergedHeaders, credentials });
+        // Retry on transient upstream errors
+        if (res.status >= 500 && res.status < 600) {
+          if (attempt < maxAttempts) { await new Promise(r => setTimeout(r, 150 * attempt)); continue; }
+        }
+        break;
+      } catch (e) {
+        lastErr = e;
+        if (attempt >= maxAttempts) throw e;
+        await new Promise(r => setTimeout(r, 150 * attempt));
+        continue;
+      }
+    }
   }
 
   if (isSpotifyRequest) {
@@ -497,8 +585,14 @@ export async function apiFetch(
       const remaining = Number(res.headers.get('X-RateLimit-Remaining') || '0')
       const retryAfter = Number(res.headers.get('Retry-After') || '0')
       let detail: any = null
+      // Parse problem+json from a cloned response to avoid consuming the body
       if (ct.includes('application/problem+json')) {
-        detail = await res.json().catch(() => null)
+        try {
+          const clone = res.clone();
+          detail = await clone.json().catch(() => null)
+        } catch {
+          detail = null
+        }
       }
       if (typeof window !== 'undefined') {
         const ev = new CustomEvent('rate-limit', { detail: { path, remaining, retryAfter, problem: detail } })
@@ -533,25 +627,47 @@ export async function apiFetch(
         } catch { /* ignore SSR errors */ }
       }
     } else {
+      // Check if this endpoint should work with anonymous access
+      const shouldWorkAnonymously = path.includes('/health') || path.includes('/v1/health') || path.includes('/v1/music/devices');
+
+      if (shouldWorkAnonymously) {
+        console.warn('API_FETCH auth.401_anonymous_endpoint - clearing invalid tokens', {
+          path,
+          timestamp: new Date().toISOString(),
+        });
+        // Clear invalid tokens that are causing 401 on endpoints that should work anonymously
+        clearTokens();
+        return; // Don't try to refresh or redirect
+      }
+
       console.warn('API_FETCH auth.401_non_auth_endpoint - not clearing tokens, likely scope/permission issue', {
         path,
         timestamp: new Date().toISOString(),
       });
 
-      // For non-auth endpoints, trigger auth refresh instead of full logout
-      // This allows the user to stay logged in while fixing the issue
-      try {
-        const { getAuthOrchestrator } = await import('@/services/authOrchestrator');
-        const authOrchestrator = getAuthOrchestrator();
-        await authOrchestrator.refreshAuth();
-      } catch (authError) {
-        console.error('Failed to refresh authentication state:', authError);
-        // If refresh fails, then redirect to login
-        clearTokens();
-        if (typeof document !== "undefined") {
-          try {
-            window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
-          } catch { /* ignore SSR errors */ }
+      // Avoid refresh loops on optional/non-critical endpoints (e.g., Spotify)
+      const shouldSkipRefresh = isSpotifyRequest || path.includes('/v1/state') || path.includes('/v1/music');
+
+      // Throttle refresh attempts globally to once per 15s
+      const nowTs = Date.now();
+      (window as any).__lastRefreshAttemptTs = (window as any).__lastRefreshAttemptTs || 0;
+      const tooSoon = (nowTs - (window as any).__lastRefreshAttemptTs) < 15000;
+
+      if (!shouldSkipRefresh && !tooSoon) {
+        try {
+          const { getAuthOrchestrator } = await import('@/services/authOrchestrator');
+          const authOrchestrator = getAuthOrchestrator();
+          (window as any).__lastRefreshAttemptTs = nowTs;
+          await authOrchestrator.refreshAuth();
+        } catch (authError) {
+          console.error('Failed to refresh authentication state:', authError);
+          // If refresh fails, then redirect to login
+          clearTokens();
+          if (typeof document !== "undefined") {
+            try {
+              window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+            } catch { /* ignore SSR errors */ }
+          }
         }
       }
     }
@@ -606,31 +722,10 @@ export async function setVibe(v: Partial<{
 
 export async function getMusicState(): Promise<MusicState> {
   const device = getActiveDeviceId();
-  const res = await apiFetch(`/v1/state`, { auth: true, contextKey: device ? [`device:${device}`] : undefined })
-  if (!res.ok) {
-    const errorText = await res.text();
-    let errorMessage = errorText;
-
-    // Try to parse JSON error response
-    try {
-      const errorData = JSON.parse(errorText);
-      errorMessage = errorData.detail || errorData.message || errorText;
-    } catch {
-      // If not JSON, use the raw text
-    }
-
-    // Provide more specific error messages
-    if (res.status === 401) {
-      throw new Error(`Unauthorized: ${errorMessage}`);
-    } else if (res.status === 403) {
-      throw new Error(`Forbidden: ${errorMessage}`);
-    } else if (res.status >= 500) {
-      throw new Error(`Server error: ${errorMessage}`);
-    } else {
-      throw new Error(`Failed to fetch music state: ${errorMessage}`);
-    }
-  }
-  return (await res.json()) as MusicState
+  const ctx = device ? [`device:${device}`] : undefined;
+  // Deduplicate concurrent requests to /v1/state
+  const json = await _dedup(`/v1/state`, ctx);
+  return json as MusicState;
 }
 
 // Lightweight dedupe cache for read-only endpoints (coalesce concurrent calls)
@@ -672,6 +767,16 @@ export async function getRecommendations(): Promise<{ recommendations: any[] }> 
 }
 
 export async function listDevices(): Promise<{ devices: any[] }> {
+  // Gate devices fetching on backend online OR recent whoami success
+  try {
+    const authOrchestrator = getAuthOrchestrator();
+    const s = authOrchestrator.getState();
+    const last = Number(s.lastChecked || 0);
+    const recent = last && (Date.now() - last) < 60_000; // 60s
+    if (!(s.is_authenticated && (recent || s.session_ready))) {
+      return { devices: [] };
+    }
+  } catch { /* ignore and proceed */ }
   return _dedup(`/v1/music/devices`);
 }
 

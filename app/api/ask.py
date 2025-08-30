@@ -4,6 +4,7 @@ import asyncio
 import inspect
 import logging
 import os
+import uuid
 from datetime import UTC, datetime
 from importlib import import_module
 
@@ -12,13 +13,15 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.deps.user import get_current_user_id
+from app.auth_core import csrf_validate, require_scope as require_scope_core
+from app.deps.user import get_current_user_id, require_user
 from app.otel_utils import get_trace_id_hex, start_span
 from app.policy import moderation_precheck
 from app.router import OLLAMA_TIMEOUT_MS, OPENAI_TIMEOUT_MS
+from app.security import verify_token
 from app.telemetry import hash_user_id
 
-from ..security import _jwt_decode
+from ..security import jwt_decode
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +144,7 @@ class AskRequest(BaseModel):
     )
 
 
-from app.security import verify_token
+
 
 router = APIRouter(tags=["Care"])  # dependency added per-route to allow env gate
 
@@ -277,112 +280,8 @@ def _map_http_status_to_error_type(status_code: int) -> str:
         return "unknown_error"
 
 
-# Auth gate dependency
-async def auth_gate(request: Request) -> str:
-    """
-    Consolidated authentication gate for all /ask endpoints.
-
-    This dependency:
-    - Honors REQUIRE_AUTH_FOR_ASK environment variable
-    - Honors ASK_STRICT_BEARER environment variable
-    - Sets request.state.user_id
-    - Returns 401 when missing/invalid
-
-    Returns the user_id for authenticated requests, "anon" for unauthenticated.
-    """
-    # Skip CORS preflight requests
-    if request.method == "OPTIONS":
-        request.state.user_id = "anon"
-        return "anon"
-
-    # Check if authentication is required
-    require_auth = os.getenv("REQUIRE_AUTH_FOR_ASK", "1").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-
-    if not require_auth:
-        # Auth not required, set anon user
-        request.state.user_id = "anon"
-        return "anon"
-
-    # Authentication is required
-    use_strict_bearer = os.getenv("ASK_STRICT_BEARER", "0").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-
-    if use_strict_bearer:
-        # Strict bearer token validation
-        secret = os.getenv("JWT_SECRET")
-        if not secret:
-            raise HTTPException(status_code=500, detail="missing_jwt_secret")
-
-        auth = request.headers.get("Authorization")
-        token = None
-        if auth and auth.startswith("Bearer "):
-            token = auth.split(" ", 1)[1]
-
-        if not token:
-            logger.info(
-                "auth.missing_bearer",
-                extra={
-                    "meta": {"path": getattr(getattr(request, "url", None), "path", "/")}
-                },
-            )
-            from ..http_errors import unauthorized
-
-            raise unauthorized(message="authentication required", hint="login or include Authorization header")
-
-        try:
-            payload = _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
-            request.state.jwt_payload = payload
-
-            # Extract user_id from JWT payload
-            user_id = payload.get("sub") or payload.get("user_id") or "anon"
-            request.state.user_id = user_id
-            return user_id
-
-        except jwt.PyJWTError:
-            logger.info(
-                "auth.invalid_token",
-                extra={
-                    "meta": {"path": getattr(getattr(request, "url", None), "path", "/")}
-                },
-            )
-            from ..http_errors import unauthorized
-
-            raise unauthorized(message="authentication required", hint="login or include Authorization header")
-    else:
-        # Use the standard verify_token which handles cookie/header hybrid auth
-        try:
-            await verify_token(request)
-            # Get the user_id that was set by verify_token
-            user_id = getattr(request.state, "user_id", None)
-            if user_id is None:
-                user_id = get_current_user_id(request)
-            request.state.user_id = user_id
-            return user_id
-        except Exception as e:
-            logger.info(
-                "auth.verify_token_failed",
-                extra={
-                    "meta": {
-                        "path": getattr(getattr(request, "url", None), "path", "/"),
-                        "error": str(e)
-                    }
-                },
-            )
-            from ..http_errors import unauthorized
-
-            raise unauthorized(message="authentication required", hint="login or include Authorization header")
-
 # Log auth dependency configuration at startup
-logger.info("🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id")
+logger.info("🔐 AUTH: /v1/ask using get_current_user_id + require_user + scope(chat:write) + CSRF")
 
 
 # Enforce auth/rate-limit with env gates
@@ -401,7 +300,9 @@ async def _verify_bearer_strict(request: Request) -> None:
         return
     secret = os.getenv("JWT_SECRET")
     if not secret:
-        raise HTTPException(status_code=500, detail="missing_jwt_secret")
+        # Treat as auth failure rather than server error to avoid 500s
+        from ..http_errors import unauthorized
+        raise unauthorized(message="authentication required", hint="missing JWT secret configuration")
     auth = request.headers.get("Authorization")
     token = None
     if auth and auth.startswith("Bearer "):
@@ -417,7 +318,7 @@ async def _verify_bearer_strict(request: Request) -> None:
 
         raise unauthorized(message="authentication required", hint="login or include Authorization header")
     try:
-        payload = _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
+        payload = jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
         request.state.jwt_payload = payload
     except jwt.PyJWTError:
         logger.info(
@@ -451,7 +352,11 @@ async def _require_auth_dep(request: Request) -> None:
 
 @router.post(
     "/ask",
-    dependencies=[Depends(auth_gate)],
+    dependencies=[
+        Depends(require_user),                   # 401 on missing/invalid auth (WWW-Authenticate: Bearer)
+        Depends(require_scope_core("chat:write")),  # 403 on missing scope with structured detail
+        Depends(csrf_validate),                 # Enforce CSRF for POST when enabled
+    ],
     responses={
         200: {
             "content": {
@@ -508,19 +413,7 @@ async def _ask(request: Request, body: dict | None):
     # Use canonical user_id from resolved parameter
     _user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
 
-    # Enforce authentication - return 401 if no valid user
-    if user_id == "anon":
-        try:
-            from ..metrics import ROUTER_ASK_USER_ID_MISSING_TOTAL
-
-            ROUTER_ASK_USER_ID_MISSING_TOTAL.labels(
-                env=os.getenv("ENV", "dev"), route="/v1/ask"
-            ).inc()
-        except Exception:
-            pass
-        from ..http_errors import unauthorized
-
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+    # Authentication and scope are enforced by dependencies above.
 
     # Liberal parsing: normalize various legacy shapes into (prompt_text, model, opts)
     def _dget(obj: dict | None, path: str):
@@ -747,8 +640,13 @@ async def _ask(request: Request, body: dict | None):
                 _error_detail = None
             # TEMP: Return detailed error info for debugging
             import traceback
-
-            detailed_error = f"{code}: {detail}\n{traceback.format_exc()}"
+            try:
+                detail_text = (
+                    d if isinstance(d, str) else str(d.get("detail") if isinstance(d, dict) else d)
+                )
+            except Exception:
+                detail_text = None
+            detailed_error = f"{code}: {detail_text}\n{traceback.format_exc()}"
             await queue.put(f"[error:{code}: {detailed_error}]")
         except Exception as e:  # pragma: no cover - defensive
             # Ensure HTTP status reflects failure and propagate a useful error token

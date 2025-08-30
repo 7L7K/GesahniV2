@@ -1,6 +1,6 @@
 "use client";
 
-import { wsUrl } from "@/lib/api";
+import { wsUrl, apiFetch } from "@/lib/api";
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
 
 type WSName = "music" | "care";
@@ -27,7 +27,7 @@ class WsHub {
       lastPong: 0,
       startRefs: 0,
       reconnectAttempts: 0,
-      maxReconnectAttempts: 1, // Only one reconnect attempt per requirement
+      maxReconnectAttempts: 20,
       lastFailureTime: 0,
       failureReason: null,
     },
@@ -38,7 +38,7 @@ class WsHub {
       lastPong: 0,
       startRefs: 0,
       reconnectAttempts: 0,
-      maxReconnectAttempts: 1, // Only one reconnect attempt per requirement
+      maxReconnectAttempts: 20,
       lastFailureTime: 0,
       failureReason: null,
     },
@@ -130,9 +130,50 @@ class WsHub {
   }
 
   private jitteredDelayFor(retry: number) {
-    const base = Math.min(30_000, 500 * Math.pow(2, retry)); // cap @ 30s
-    const jitter = base * (0.15 * (Math.random() * 2 - 1));  // ±15%
-    return Math.max(250, Math.floor(base + jitter));
+    // Backoff: 0.5s → 1s → 2s → 4s, cap at ~5s with light jitter
+    const base = Math.min(5_000, 500 * Math.pow(2, retry));
+    const jitter = base * (0.10 * (Math.random() * 2 - 1));  // ±10%
+    return Math.max(500, Math.floor(base + jitter));
+  }
+
+  // Lightweight cached health gate to avoid WS attempts during outages
+  private _healthCache: { ts: number; healthy: boolean } | null = null;
+  private async isBackendHealthy(): Promise<boolean> {
+    const now = Date.now();
+    if (this._healthCache && (now - this._healthCache.ts) < 2000) {
+      return this._healthCache.healthy;
+    }
+    try {
+      // If whoami was recently green, allow reconnects regardless of health snapshot
+      try {
+        const authOrchestrator = getAuthOrchestrator();
+        const s = authOrchestrator.getState();
+        const last = Number(s.lastChecked || 0);
+        const recent = last && (now - last) < 60_000; // 60s window
+        if (s.is_authenticated && s.session_ready && recent) {
+          this._healthCache = { ts: now, healthy: true };
+          return true;
+        }
+      } catch { /* ignore */ }
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 1500);
+      const res = await apiFetch('/v1/health', { auth: true, dedupe: false, cache: 'no-store', signal: controller.signal });
+      clearTimeout(t);
+      // Treat 200 responses as online (even if degraded); only offline for network errors or 5xx
+      let ok = false;
+      if (res.status >= 500) {
+        ok = false;
+      } else if (res.ok) {
+        ok = true;
+      } else {
+        ok = false;
+      }
+      this._healthCache = { ts: now, healthy: ok };
+      return ok;
+    } catch {
+      this._healthCache = { ts: now, healthy: false };
+      return false;
+    }
   }
 
   private resumeAll(reason: string) {
@@ -228,7 +269,7 @@ class WsHub {
   }
 
   // Generic connector with per-socket hooks
-  private connect(
+  private async connect(
     name: WSName,
     path: string,
     onOpenExtra: (ws: WebSocket) => void,
@@ -237,11 +278,23 @@ class WsHub {
   ) {
     // Check authentication before attempting connection
     const authOrchestrator = getAuthOrchestrator();
-    const authState = authOrchestrator.getState();
+    const _state: any = authOrchestrator.getState();
+    const isAuthed = Boolean(_state.is_authenticated ?? _state.isAuthenticated);
+    const sessionReady = Boolean(_state.session_ready ?? _state.sessionReady);
+    const whoamiOk = (_state.whoamiOk === undefined) ? true : Boolean(_state.whoamiOk);
 
-    if (!(authState.is_authenticated && authState.session_ready)) {
+    if (!(isAuthed && sessionReady && whoamiOk)) {
       console.info(`WS ${name}: Skipping connection - not authenticated`);
       this.surfaceConnectionFailure(name, "Not authenticated");
+      return;
+    }
+
+    // Check backend health to avoid connect attempts during outages
+    const healthy = await this.isBackendHealthy();
+    if (!healthy) {
+      this.surfaceConnectionFailure(name, "Backend not healthy");
+      const delay = this.jitteredDelayFor(retry++);
+      this.connections[name].timer = setTimeout(() => this.connect(name, path, onOpenExtra, onMessage, retry), delay);
       return;
     }
 
@@ -291,14 +344,17 @@ class WsHub {
         if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
 
         // Check if we should attempt reconnection
-        const authState = authOrchestrator.getState();
-        if ((authState.is_authenticated && authState.session_ready) && this.connections[name].reconnectAttempts < this.connections[name].maxReconnectAttempts) {
+        const s: any = authOrchestrator.getState();
+        const okAuthed = Boolean(s.is_authenticated ?? s.isAuthenticated);
+        const okSession = Boolean(s.session_ready ?? s.sessionReady);
+        const okWhoami = (s.whoamiOk === undefined) ? true : Boolean(s.whoamiOk);
+        if ((okAuthed && okSession && okWhoami) && this.connections[name].reconnectAttempts < this.connections[name].maxReconnectAttempts) {
           this.connections[name].reconnectAttempts += 1;
           const delay = this.jitteredDelayFor(retry++);
           this.connections[name].timer = setTimeout(() => this.connect(name, path, onOpenExtra, onMessage, retry), delay);
         } else {
           // Max attempts reached or not authenticated - surface failure
-          if (!(authState.is_authenticated && authState.session_ready)) {
+          if (!(okAuthed && okSession && okWhoami)) {
             this.surfaceConnectionFailure(name, "Connection lost - not authenticated");
           } else {
             this.surfaceConnectionFailure(name, "Connection lost - max reconnection attempts reached");

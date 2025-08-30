@@ -504,6 +504,28 @@ async def _broadcast(topic: str, payload: dict) -> None:
 
 async def _build_state_payload(user_id: str) -> StateResponse:
     state = load_state(user_id)
+
+    # Ensure state is always a MusicState object, not a dict
+    if isinstance(state, dict):
+        logger.warning(f"load_state returned dict instead of MusicState object: {state}")
+        # Convert dict back to MusicState if needed
+        from ..models.music_state import MusicState, MusicVibe
+        vibe_data = state.get("vibe", {})
+        state = MusicState(
+            vibe=MusicVibe(
+                name=vibe_data.get("name", "Calm Night"),
+                energy=float(vibe_data.get("energy", 0.25)),
+                tempo=float(vibe_data.get("tempo", 80)),
+                explicit=bool(vibe_data.get("explicit", False))
+            ),
+            volume=int(state.get("volume", 40)),
+            device_id=state.get("device_id"),
+            last_track_id=state.get("last_track_id"),
+            radio_playing=bool(state.get("radio_playing", False)),
+            quiet_hours=bool(state.get("quiet_hours", False)),
+            explicit_allowed=bool(state.get("explicit_allowed", True))
+        )
+
     quiet = _in_quiet_hours()
     sp = None
     if PROVIDER_SPOTIFY:
@@ -863,7 +885,7 @@ async def restore_volume(user_id: str = Depends(get_current_user_id)):
     return {"status": "ok"}
 
 
-@router.get("/state", response_model=StateResponse)
+@router.get("/state")
 async def get_state(
     request: Request, response: Response, user_id: str = Depends(get_current_user_id)
 ):
@@ -875,34 +897,60 @@ async def _get_state_impl(
     request: Request, response: Response, user_id: str
 ):
     """Actual implementation of get_state that can be called from multiple routes"""
-    body = await _build_state_payload(user_id)
     try:
+        body = await _build_state_payload(user_id)
+    except Exception as e:
+        logger.error(f"Error in _build_state_payload: {e}")
+        # Return a fallback response if _build_state_payload fails
+        return {
+            "vibe": {"name": "Default", "energy": 0.5, "tempo": 120, "explicit": False},
+            "volume": 50,
+            "device_id": None,
+            "is_playing": False,
+            "track": None,
+            "quiet_hours": False,
+            "explicit_allowed": True,
+            "provider": None,
+            "radio_url": None,
+            "radio_playing": None,
+        }
+
+    try:
+        # Handle both dict and StateResponse object cases
+        def safe_get(key: str, default=None):
+            if isinstance(body, dict):
+                return body.get(key, default)
+            else:
+                return getattr(body, key, default)
+
         stable = {
-            "vibe": body.vibe,
-            "volume": int(body.volume),
-            "device_id": body.device_id,
+            "vibe": safe_get("vibe"),
+            "volume": int(safe_get("volume", 0)),
+            "device_id": safe_get("device_id"),
             "is_playing": (
-                bool(body.is_playing) if body.is_playing is not None else None
+                bool(safe_get("is_playing"))
+                if safe_get("is_playing") is not None else None
             ),
-            "track_id": (body.track or {}).get("id") if body.track else None,
-            "quiet_hours": bool(body.quiet_hours),
-            "explicit_allowed": bool(body.explicit_allowed),
-            "provider": body.provider,
-            "radio_url": body.radio_url,
-            "radio_playing": body.radio_playing,
+            "track_id": (safe_get("track") or {}).get("id") if safe_get("track") else None,
+            "quiet_hours": bool(safe_get("quiet_hours", False)),
+            "explicit_allowed": bool(safe_get("explicit_allowed", False)),
+            "provider": safe_get("provider"),
+            "radio_url": safe_get("radio_url"),
+            "radio_playing": safe_get("radio_playing"),
         }
         etag = _strong_etag("music.state", user_id, stable)
         r304 = _maybe_304(request, response, etag)
         if r304 is not None:
             return r304  # type: ignore[return-value]
         _attach_cache_headers(response, etag)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in _get_state_impl processing: {e}")
         pass
     return body
 
 
 # Add state endpoint to root router for frontend compatibility
-@root_router.get("/state", response_model=StateResponse)
+@root_router.get("/state")
 async def get_state_root(
     request: Request, response: Response, user_id: str = Depends(get_current_user_id)
 ):

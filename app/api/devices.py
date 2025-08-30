@@ -17,7 +17,7 @@ from app.device_tokens import (
 )
 from app.security import verify_token
 
-router = APIRouter(tags=["Devices"])
+router = APIRouter(tags=["Admin"])
 
 
 def _jwt_secret() -> str:

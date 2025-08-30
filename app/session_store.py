@@ -151,7 +151,14 @@ class SessionCookieStore:
             try:
                 data = self._redis_client.get(self._get_key(session_id))
                 if data:
-                    session_data = json.loads(data)
+                    try:
+                        session_data = json.loads(data)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Corrupt session data for {session_id}: {e}")
+                        # Clean up corrupt data
+                        self._redis_client.delete(self._get_key(session_id))
+                        return None
+
                     if session_data.get("expires_at", 0) > time.time():
                         return session_data.get("jti")
                     else:
@@ -402,7 +409,8 @@ def list_sessions(status: SessionStatus | None = None) -> list[dict[str, Any]]:
     for session_dir in SESSIONS_DIR.iterdir():
         if session_dir.is_dir():
             meta = load_meta(session_dir.name)
-            if meta and (status is None or meta.get("status") == status.value):
+            # Only include sessions with valid metadata (at minimum session_id)
+            if meta and meta.get("session_id") and (status is None or meta.get("status") == status.value):
                 sessions.append(meta)
     return sorted(sessions, key=lambda x: x.get("created_at", ""), reverse=True)
 

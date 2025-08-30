@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["Util"])
+router = APIRouter(tags=["Admin"])
 
 
 @router.options("/csrf", include_in_schema=False)
@@ -34,22 +34,23 @@ async def get_csrf(request: Request):
     """Issuer endpoint for double-submit CSRF token.
 
     Returns JSON {"csrf_token": "<token>"} and sets a non-HttpOnly cookie
-    via the centralized cookie helper.
+    via the centralized cookie helper. Also stores token server-side for
+    enhanced cross-site validation.
     """
     import os
 
     from app.cookies import set_csrf_cookie
-    from app.csrf import get_csrf_token
+    from app.csrf import get_csrf_token, _csrf_token_store
 
     token = await get_csrf_token()
     ttl = int(os.getenv("CSRF_TTL_SECONDS", "600"))
     resp = JSONResponse({"csrf_token": token})
-    # Best-effort: set cookie using central helper
-    try:
-        set_csrf_cookie(resp, token, request=request, ttl=ttl)
-    except Exception:
-        # Don't fail the endpoint if cookie setting is unavailable in this context
-        pass
+
+    # Store token server-side for enhanced validation
+    _csrf_token_store.store_token(token, ttl)
+
+    # Set cookie using central helper
+    set_csrf_cookie(resp, token=token, ttl=ttl, request=request)
     return resp
 
 

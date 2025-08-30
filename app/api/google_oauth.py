@@ -20,10 +20,11 @@ from pydantic import BaseModel
 from .. import cookie_config as cookie_cfg
 from ..integrations.google.config import JWT_STATE_SECRET
 from ..logging_config import req_id_var
-from ..security import _jwt_decode
+from ..security import jwt_decode
+from ..error_envelope import raise_enveloped
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["auth"])
+router = APIRouter(tags=["Auth"])
 
 
 # Simple in-memory monitor for OAuth callback failures and clock skew alerts
@@ -239,10 +240,8 @@ async def google_login_url(request: Request) -> Response:
                 "Missing GOOGLE_CLIENT_ID or GOOGLE_REDIRECT_URI",
             )
             _log_request_summary(request, 503, duration, error="config_missing")
-            raise HTTPException(
-                status_code=503,
-                detail="Google OAuth not configured (set GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI)",
-            )
+            from fastapi import HTTPException
+            raise HTTPException(status_code=503, detail="Google OAuth not configured")
 
         # Generate signed state for CSRF protection
         state = _generate_signed_state()
@@ -289,7 +288,7 @@ async def google_login_url(request: Request) -> Response:
         oauth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
         # Create JSON response with state cookie
-        response_data = {"url": oauth_url}
+        response_data = {"auth_url": oauth_url}
 
         # Set OAuth state cookie using centralized cookie surface
         # Create a Response object to set the cookie
@@ -346,7 +345,9 @@ async def google_login_url(request: Request) -> Response:
             exc_info=True,
         )
         _log_request_summary(request, 500, duration, error="unexpected_error")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        from ..error_envelope import raise_enveloped
+
+        raise_enveloped("internal", "internal server error", hint="try again shortly", status=500)
 
 
 def _verify_signed_state(state: str) -> bool:
@@ -673,15 +674,17 @@ async def google_callback(request: Request) -> Response:
             google_token_latency_ms=token_exchange_duration,
         )
 
-        # Try to extract email/sub from id_token (best-effort, without verification)
-        provider_user_id = None
+        # Try to extract iss/sub/email from id_token (best-effort, without verification)
+        provider_sub = None
+        provider_iss = None
         email = None
         try:
             id_token = getattr(creds, "id_token", None)
             if id_token:
-                claims = _jwt_decode(id_token, options={"verify_signature": False})
+                claims = jwt_decode(id_token, options={"verify_signature": False})
                 email = claims.get("email") or claims.get("email_address")
-                provider_user_id = claims.get("sub") or email
+                provider_sub = claims.get("sub") or None
+                provider_iss = claims.get("iss") or None
         except Exception as e:
             logger.warning(
                 "Failed to decode ID token",
@@ -694,18 +697,13 @@ async def google_callback(request: Request) -> Response:
                     }
                 },
             )
-            provider_user_id = None
 
         # Fallback identifiers
-        if not provider_user_id:
-            provider_user_id = (
-                getattr(creds, "refresh_token", None)
-                or getattr(creds, "token", None)
-                or str(uuid4())
-            )
+        if not provider_sub:
+            provider_sub = None
         if not email:
-            # Use provider_user_id as email fallback (not ideal but deterministic)
-            email = str(provider_user_id)
+            # Use provider_sub as email fallback (not ideal but deterministic)
+            email = str(provider_sub or uuid4())
 
         # Persist provider record into google_oauth DB (best-effort)
         try:
@@ -760,6 +758,41 @@ async def google_callback(request: Request) -> Response:
                 },
             )
 
+        # Guardrails: ensure provider_iss is present. If id_token didn't include
+        # iss, try to reuse an existing valid row's provider_iss for this user/sub.
+        try:
+            from ..auth_store_tokens import get_token as _get_token
+
+            # If provider_iss missing, attempt to reuse from existing DB row
+            if not provider_iss:
+                # Try exact (user, provider, provider_sub) lookup
+                existing = await _get_token(uid, "google", provider_sub)
+                if existing and getattr(existing, "provider_iss", None):
+                    provider_iss = existing.provider_iss
+            # Additional guard: if we still lack provider_iss, try any valid google token for uid
+            if not provider_iss:
+                existing_any = await _get_token(uid, "google")
+                if existing_any and getattr(existing_any, "provider_iss", None):
+                    provider_iss = existing_any.provider_iss
+
+            if existing := await _get_token(uid, "google"):
+                # If an existing valid row has a provider_sub and incoming sub present,
+                # ensure they match to avoid accidental account mixing
+                if getattr(existing, "provider_sub", None) and provider_sub and str(provider_sub) != str(existing.provider_sub):
+                    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                    return RedirectResponse(f"{frontend_url}/settings#google?google_error=account_mismatch", status_code=302)
+        except Exception:
+            pass
+
+        # If provider_iss is still missing, fail - do not insert rows with NULL provider_iss
+        if not provider_iss:
+            raise_enveloped(
+                "invalid_state",
+                "missing_provider_iss",
+                hint="reconnect your Google account to provide issuer metadata",
+                status=400,
+            )
+
         # Also persist to the shared ThirdPartyToken store so UI status and
         # management endpoints can detect connection state consistently.
         try:
@@ -777,6 +810,8 @@ async def google_callback(request: Request) -> Response:
                 id=f"google:{secrets.token_hex(8)}",
                 user_id=uid,
                 provider="google",
+                provider_sub=str(provider_sub) if provider_sub else None,
+                provider_iss=str(provider_iss),
                 access_token=rec.get("access_token", ""),
                 refresh_token=rec.get("refresh_token"),
                 scope=rec.get("scopes"),
@@ -954,7 +989,7 @@ async def google_callback(request: Request) -> Response:
             try:
                 from ..auth import _create_session_id
 
-                payload = _jwt_decode(at, os.getenv("JWT_SECRET"), algorithms=["HS256"])
+                payload = jwt_decode(at, os.getenv("JWT_SECRET"), algorithms=["HS256"])
                 jti = payload.get("jti")
                 expires_at = payload.get("exp", time.time() + access_ttl)
                 if jti:

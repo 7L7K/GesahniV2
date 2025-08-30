@@ -411,6 +411,18 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
 
             if (response.ok) {
                 const data = await response.json();
+                // Health gate: require backend to be healthy before marking session_ready
+                let healthOk = true;
+                try {
+                    const controller = new AbortController();
+                    const to = setTimeout(() => controller.abort(), 1500);
+                    const h = await apiFetch('/v1/health', { auth: true, dedupe: false, cache: 'no-store', signal: controller.signal });
+                    clearTimeout(to);
+                    // Treat any 2xx as online (degraded allowed); only network errors or 5xx as offline
+                    healthOk = h.status < 500;
+                } catch {
+                    healthOk = false;
+                }
                 console.info(`AUTH Orchestrator: Whoami success #${this.whoamiCallCount}`, {
                     userId: data.user_id,
                     hasUser: !!data.user_id,
@@ -429,6 +441,7 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
                 // where we consider the user authenticated if they have a valid user_id
                 const isAuthenticatedFromResponse = data.is_authenticated !== undefined ? data.is_authenticated : hasValidUserId;
                 const shouldBeAuthenticated = isAuthenticatedFromResponse && hasValidUserId;
+                const shouldBeReady = shouldBeAuthenticated && healthOk;
 
                 if (data.is_authenticated !== undefined && data.is_authenticated && !hasValidUserId) {
                     console.warn(`AUTH Orchestrator: Auth gate triggered - isAuthenticated=true but no userId`, {
@@ -495,7 +508,7 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
 
                 const newState: AuthState = {
                     is_authenticated: shouldBeAuthenticated,
-                    session_ready: shouldBeAuthenticated,
+                    session_ready: shouldBeReady,
                     user_id: data.user_id,
                     user: shouldBeAuthenticated ? {
                         id: data.user_id,
@@ -506,7 +519,7 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
                     lastChecked: now,
                     isLoading: false,
                     error: null,
-                    whoamiOk: shouldBeAuthenticated,
+                    whoamiOk: shouldBeReady,
                 };
 
                 // Check for oscillation

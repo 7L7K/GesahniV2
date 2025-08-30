@@ -10,6 +10,16 @@ export default function SpotifyControls() {
     const [uri, setUri] = useState('spotify:track:4cOdK2wGLETKBW3PvgPWqT'); // test
 
     const refreshDevices = async () => {
+        // Gate device fetch on backend online OR recent whoami success
+        try {
+            const { getAuthOrchestrator } = await import('@/services/authOrchestrator');
+            const auth = getAuthOrchestrator().getState();
+            const last = Number(auth.lastChecked || 0);
+            const recent = last && (Date.now() - last) < 60_000;
+            if (!(auth.is_authenticated && (recent || auth.session_ready))) {
+                return;
+            }
+        } catch { /* ignore and attempt fetch */ }
         const { apiFetch } = await import('@/lib/api');
         const r = await apiFetch('/v1/spotify/devices', { credentials: 'include', auth: true });
         const j = await r.json();

@@ -534,6 +534,11 @@ class VibeResponse(BaseModel):
     status: str = "ok"
     vibe: dict
 
+    model_config = ConfigDict(
+        title="VibeResponse",
+        json_schema_extra={"title": "VibeResponse"}
+    )
+
 
 @router.post("/vibe", response_model=VibeResponse, responses={200: {"model": VibeResponse}})
 async def set_vibe(
@@ -566,17 +571,32 @@ async def set_vibe(
 @router.get("/state", response_model=StateResponse)
 async def music_state(request: Request, response: Response, user_id: str = Depends(get_current_user_id)):
     payload = await _build_state_payload(user_id)
-    def _state_fingerprint(state: StateResponse) -> dict:
-        vibe = state.vibe or {}
-        return {
-            "t": (state.track or {}).get("id"),
-            "p": bool(state.is_playing),
-            "v": int(state.volume),
-            "d": state.device_id,
-            "vb": round(float(vibe.get("energy", 0) or 0), 2),
-            "vt": int(float(vibe.get("tempo", 0) or 0)),
-            "e": bool(vibe.get("explicit", False)),
-        }
+    def _state_fingerprint(state) -> dict:
+        # Handle both StateResponse objects and dict inputs
+        if isinstance(state, dict):
+            vibe = state.get("vibe") or {}
+            track = state.get("track") or {}
+            return {
+                "t": track.get("id"),
+                "p": bool(state.get("is_playing", False)),
+                "v": int(state.get("volume", 0)),
+                "d": state.get("device_id"),
+                "vb": round(float(vibe.get("energy", 0) or 0), 2),
+                "vt": int(float(vibe.get("tempo", 0) or 0)),
+                "e": bool(vibe.get("explicit", False)),
+            }
+        else:
+            # Handle StateResponse object
+            vibe = state.vibe or {}
+            return {
+                "t": (state.track or {}).get("id"),
+                "p": bool(state.is_playing),
+                "v": int(state.volume),
+                "d": state.device_id,
+                "vb": round(float(vibe.get("energy", 0) or 0), 2),
+                "vt": int(float(vibe.get("tempo", 0) or 0)),
+                "e": bool(vibe.get("explicit", False)),
+            }
     finger = _state_fingerprint(payload.model_dump())
     etag = _strong_etag("state", user_id, finger)
     maybe = _maybe_304(request, response, etag)

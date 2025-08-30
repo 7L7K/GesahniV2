@@ -13,6 +13,7 @@ import pytest
 from app.session_store import (
     SessionCookieStore,
     SessionStatus,
+    SessionStoreUnavailable,
     append_error,
     create_session,
     get_session,
@@ -65,9 +66,10 @@ class TestSessionCookieStore:
 
             assert session_id.startswith("sess_")
             assert session_id in store._memory_store
-            stored_jti, stored_expires = store._memory_store[session_id]
-            assert stored_jti == jti
-            assert stored_expires == expires_at
+            stored_payload = store._memory_store[session_id]
+            assert isinstance(stored_payload, dict)
+            assert stored_payload["jti"] == jti
+            assert stored_payload["expires_at"] == expires_at
 
     def test_create_session_redis_backend(self):
         """Test creating session with Redis backend."""
@@ -306,6 +308,8 @@ class TestSessionCookieStore:
 
                 assert retrieved_jti is None
                 mock_redis.get.assert_called_once_with("session:sess_123")
+                # Should clean up corrupt data
+                mock_redis.delete.assert_called_once_with("session:sess_123")
 
     def test_corrupt_token_handling_redis_exception(self):
         """Test handling of Redis exceptions during token retrieval."""
@@ -317,9 +321,9 @@ class TestSessionCookieStore:
                 mock_redis_class.from_url.return_value = mock_redis
                 store = SessionCookieStore()
 
-                retrieved_jti = store.get_session("sess_123")
+                with pytest.raises(SessionStoreUnavailable):
+                    store.get_session("sess_123")
 
-                assert retrieved_jti is None
                 mock_redis.get.assert_called_once_with("session:sess_123")
 
     def test_corrupt_token_handling_redis_delete_exception(self):
@@ -332,9 +336,9 @@ class TestSessionCookieStore:
                 mock_redis_class.from_url.return_value = mock_redis
                 store = SessionCookieStore()
 
-                result = store.delete_session("sess_123")
+                with pytest.raises(SessionStoreUnavailable):
+                    store.delete_session("sess_123")
 
-                assert result is False
                 mock_redis.delete.assert_called_once_with("session:sess_123")
 
 

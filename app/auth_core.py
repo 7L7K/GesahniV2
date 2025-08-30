@@ -7,6 +7,7 @@ import time
 from typing import Any, Optional, Tuple
 
 import jwt
+from .security import jwt_decode
 
 from fastapi import Request
 from starlette.websockets import WebSocket
@@ -50,7 +51,7 @@ def _hs_decode(token: str, leeway: int) -> dict:
         opts["issuer"] = CFG.issuer
     if CFG.audience:
         opts["audience"] = CFG.audience
-    return jwt.decode(token, CFG.hs_secret, algorithms=["HS256"], leeway=leeway, **opts)
+    return jwt_decode(token, CFG.hs_secret, algorithms=["HS256"], leeway=leeway, **opts)
 
 
 def _rs_decode(token: str, leeway: int) -> Optional[dict]:
@@ -72,26 +73,33 @@ def _rs_decode(token: str, leeway: int) -> Optional[dict]:
                 opts["issuer"] = CFG.issuer
             if CFG.audience:
                 opts["audience"] = CFG.audience
-            return jwt.decode(token, pem, algorithms=["RS256", "ES256"], leeway=leeway, **opts)
+            return jwt_decode(token, pem, algorithms=["RS256", "ES256"], leeway=leeway, **opts)
         except Exception:
             continue
     return None
 
 
-def decode_any(token: str) -> dict:
+def decode_any(token: str, leeway: int = None) -> dict:
     """Decode token using HS first, then public keys when configured.
 
     Raises jwt.ExpiredSignatureError for expired tokens and jwt.InvalidTokenError for invalid tokens.
+
+    Args:
+        token: JWT token to decode
+        leeway: Custom leeway in seconds, uses CFG.leeway if None
     """
+    if leeway is None:
+        leeway = CFG.leeway
+
     last_err: Exception | None = None
     # HS first for back-compat
     try:
-        return _hs_decode(token, CFG.leeway)
+        return _hs_decode(token, leeway)
     except Exception as e:
         last_err = e
     # Try RS/ES when available
     try:
-        out = _rs_decode(token, CFG.leeway)
+        out = _rs_decode(token, leeway)
         if out is not None:
             return out
     except Exception as e:
@@ -100,6 +108,174 @@ def decode_any(token: str) -> dict:
     if isinstance(last_err, jwt.ExpiredSignatureError):
         raise last_err
     raise jwt.InvalidTokenError("invalid_token")
+
+
+def decode_with_leeway(token: str, operation: str = "default") -> dict:
+    """Decode token with operation-specific leeway handling.
+
+    Args:
+        token: JWT token to decode
+        operation: Operation type for leeway calculation ("refresh", "access", "default")
+
+    Returns:
+        Decoded token payload
+
+    Raises:
+        jwt.ExpiredSignatureError: Token is expired
+        jwt.InvalidTokenError: Token is invalid
+    """
+    # Calculate operation-specific leeway
+    base_leeway = CFG.leeway
+
+    # Increase leeway for refresh operations to handle clock skew
+    if operation == "refresh":
+        leeway = min(base_leeway * 2, 300)  # Max 5 minutes for refresh
+    elif operation == "access":
+        leeway = base_leeway
+    else:
+        leeway = base_leeway
+
+    try:
+        return decode_any(token, leeway)
+    except jwt.ExpiredSignatureError:
+        # Record leeway usage for monitoring
+        try:
+            from .metrics_auth import record_jwt_leeway_usage
+            record_jwt_leeway_usage(operation, leeway)
+        except Exception:
+            pass
+        raise
+    except jwt.InvalidTokenError as e:
+        # Record validation failure
+        try:
+            from .metrics_auth import record_token_validation
+            record_token_validation("jwt", "failed")
+        except Exception:
+            pass
+        raise
+
+
+def validate_token_expiry(payload: dict, grace_period: int = 0) -> bool:
+    """Validate token expiry with optional grace period.
+
+    Args:
+        payload: Token payload
+        grace_period: Additional grace period in seconds
+
+    Returns:
+        True if token is valid (not expired), False otherwise
+    """
+    try:
+        exp = int(payload.get("exp", 0))
+        if exp == 0:
+            return False
+
+        now = int(time.time())
+        return (exp + grace_period) > now
+    except Exception:
+        return False
+
+
+def get_token_expiry_info(payload: dict) -> dict:
+    """Get detailed expiry information for a token.
+
+    Returns:
+        Dict with expiry information:
+        - exp: expiration timestamp
+        - seconds_until_expiry: seconds until expiry
+        - is_expired: boolean
+        - is_expiring_soon: boolean (within 5 minutes)
+    """
+    try:
+        exp = int(payload.get("exp", 0))
+        now = time.time()
+
+        if exp == 0:
+            return {
+                "exp": 0,
+                "seconds_until_expiry": 0,
+                "is_expired": True,
+                "is_expiring_soon": True,
+            }
+
+        seconds_until = exp - now
+        is_expired = seconds_until <= 0
+        is_expiring_soon = seconds_until <= 300  # 5 minutes
+
+        return {
+            "exp": exp,
+            "seconds_until_expiry": max(0, seconds_until),
+            "is_expired": is_expired,
+            "is_expiring_soon": is_expiring_soon,
+        }
+    except Exception:
+        return {
+            "exp": 0,
+            "seconds_until_expiry": 0,
+            "is_expired": True,
+            "is_expiring_soon": True,
+        }
+
+
+def extract_token_metadata(token: str) -> dict:
+    """Extract metadata from a JWT token without full validation.
+
+    Useful for logging and monitoring without exposing sensitive claims.
+
+    Returns:
+        Dict with token metadata (safe for logging)
+    """
+    try:
+        # Get unverified header
+        header = jwt.get_unverified_header(token)
+        algorithm = header.get("alg", "unknown")
+        token_type = header.get("typ", "JWT")
+
+        # Try to get basic claims without verification
+        try:
+            unverified = jwt.decode(token, options={"verify_signature": False})
+            user_id = unverified.get("sub") or unverified.get("user_id", "unknown")
+            token_type_claim = unverified.get("type", "unknown")
+            jti = unverified.get("jti", "unknown")
+            exp = unverified.get("exp", 0)
+            iat = unverified.get("iat", 0)
+
+            return {
+                "algorithm": algorithm,
+                "type": token_type,
+                "token_type": token_type_claim,
+                "user_id_hash": hash(user_id) if user_id != "unknown" else "unknown",
+                "jti": jti,
+                "exp": exp,
+                "iat": iat,
+                "is_expired": exp > 0 and exp < time.time(),
+                "length": len(token),
+            }
+        except Exception:
+            # If we can't decode at all, return minimal info
+            return {
+                "algorithm": algorithm,
+                "type": token_type,
+                "token_type": "unknown",
+                "user_id_hash": "unknown",
+                "jti": "unknown",
+                "exp": 0,
+                "iat": 0,
+                "is_expired": True,
+                "length": len(token),
+            }
+    except Exception:
+        return {
+            "algorithm": "unknown",
+            "type": "unknown",
+            "token_type": "unknown",
+            "user_id_hash": "unknown",
+            "jti": "unknown",
+            "exp": 0,
+            "iat": 0,
+            "is_expired": True,
+            "length": len(token) if token else 0,
+        }
 
 
 def extract_token(target: Request | WebSocket) -> tuple[str, Optional[str]]:
@@ -241,8 +417,33 @@ def require_scope(required: str):
                 status_code=403,
                 detail={
                     "code": "forbidden",
-                    "message": f"missing scope {required}",
-                    "hint": "include scope or use an account with control privileges",
+                    "message": "missing scope",
+                    "hint": required,
+                },
+            )
+
+    return _dep
+
+
+def require_spotify_scope(required_scope: str = "user-read-private"):
+    """Require specific Spotify scope for the request.
+
+    This is a minimal hook for Spotify scope enforcement.
+    Default scope is user-read-private which is commonly needed.
+    """
+    from fastapi import HTTPException
+
+    def _dep(request: Request):
+        payload = getattr(request.state, "jwt_payload", None)
+
+        # Check if user has the required Spotify scope
+        if not has_scope(payload, f"spotify:{required_scope}"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "spotify_scope_required",
+                    "message": f"Spotify scope '{required_scope}' required",
+                    "hint": f"spotify:{required_scope}",
                 },
             )
 
@@ -282,10 +483,15 @@ __all__ = [
     "AuthConfig",
     "CFG",
     "decode_any",
+    "decode_with_leeway",
+    "validate_token_expiry",
+    "get_token_expiry_info",
+    "extract_token_metadata",
     "extract_token",
     "resolve_session_identity",
     "resolve_auth",
     "csrf_validate",
     "has_scope",
     "require_scope",
+    "require_spotify_scope",
 ]

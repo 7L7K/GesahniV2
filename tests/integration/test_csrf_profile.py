@@ -9,12 +9,30 @@ def test_profile_mutation_requires_csrf(monkeypatch):
     client = TestClient(app)
     # Ensure dev cookie semantics for TestClient over http
     monkeypatch.setenv("COOKIE_SECURE", "0")
-    # Login (register if needed)
-    lr = client.post("/v1/login", json={"username": "king", "password": "secret123"})
+    monkeypatch.setenv("CSRF_ENABLED", "1")
+
+    # First get a CSRF token (should work without auth)
+    cr = client.get("/v1/csrf")
+    assert cr.status_code == HTTPStatus.OK
+    token = cr.json()["csrf_token"]
+
+    # Now login with CSRF token
+    lr = client.post(
+        "/v1/login",
+        json={"username": "king", "password": "secret123"},
+        headers={"X-CSRF-Token": token}
+    )
     if lr.status_code in (HTTPStatus.BAD_REQUEST, HTTPStatus.UNAUTHORIZED):
-        client.post("/v1/register", json={"username": "king", "password": "secret123"})
+        # Try registering with CSRF token
+        client.post(
+            "/v1/register",
+            json={"username": "king", "password": "secret123"},
+            headers={"X-CSRF-Token": token}
+        )
         lr = client.post(
-            "/v1/login", json={"username": "king", "password": "secret123"}
+            "/v1/login",
+            json={"username": "king", "password": "secret123"},
+            headers={"X-CSRF-Token": token}
         )
     assert lr.status_code in (HTTPStatus.OK, HTTPStatus.FOUND)
 

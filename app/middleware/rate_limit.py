@@ -1,11 +1,16 @@
 # app/middleware/rate_limit.py
 import hashlib
 import os
+import sys
 import time
 
 from fastapi.responses import PlainTextResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
+
+# Import settings and header utilities
+from app.settings_rate import rate_limit_settings
+from app.headers import get_rate_limit_headers, get_retry_after_header
 
 # Phase 6.1: Clean rate limit metrics
 try:
@@ -29,19 +34,15 @@ _METRICS = {
 
 # These will be read dynamically in the middleware to support test configuration
 def _get_window_s():
-    return int(os.getenv("RATE_LIMIT_WINDOW_S", "60"))
+    return rate_limit_settings.window_seconds
 
 
 def _get_max_req():
-    return int(os.getenv("RATE_LIMIT_PER_MIN", "60"))
+    return rate_limit_settings.rate_limit_per_min
 
 
 def _get_bypass_scopes():
-    return (
-        set((os.getenv("RATE_LIMIT_BYPASS_SCOPES") or "").split(","))
-        if os.getenv("RATE_LIMIT_BYPASS_SCOPES")
-        else set()
-    )
+    return rate_limit_settings.bypass_scopes
 
 
 def _key(client_ip: str, path: str, user_id: str | None) -> str:
@@ -93,19 +94,21 @@ def _test_set_config(
     bypass_scopes: str | None = None,
 ):
     """Test helper to dynamically set rate limit configuration."""
+    config_updates = {}
     if max_req is not None:
-        os.environ["RATE_LIMIT_PER_MIN"] = str(max_req)
+        config_updates["RATE_LIMIT_PER_MIN"] = max_req
     if window_s is not None:
-        os.environ["RATE_LIMIT_WINDOW_S"] = str(window_s)
+        config_updates["RATE_LIMIT_WINDOW_S"] = window_s
     if bypass_scopes is not None:
-        os.environ["RATE_LIMIT_BYPASS_SCOPES"] = bypass_scopes
+        config_updates["RATE_LIMIT_BYPASS_SCOPES"] = set(s.strip() for s in bypass_scopes.split(",") if s.strip())
+
+    if config_updates:
+        rate_limit_settings.set_test_config(**config_updates)
 
 
 def _test_reset_config():
     """Test helper to reset rate limit configuration to defaults."""
-    os.environ.pop("RATE_LIMIT_PER_MIN", None)
-    os.environ.pop("RATE_LIMIT_WINDOW_S", None)
-    os.environ.pop("RATE_LIMIT_BYPASS_SCOPES", None)
+    rate_limit_settings.reset_test_config()
 
 
 def _test_clear_buckets():
@@ -140,7 +143,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # When running under pytest, skip enforcing rate limits so tests do not
         # intermittently fail due to small in-process buckets. Tests control rate
         # limit behavior explicitly via helpers when needed.
-        if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING"):
+        # Allow enabling rate limiting in tests via environment variable
+        is_pytest = (
+            "pytest" in sys.modules or
+            "PYTEST_CURRENT_TEST" in os.environ or
+            "PYTEST_RUNNING" in os.environ or
+            any("pytest" in str(m) for m in sys.modules.values() if hasattr(m, "__file__"))
+        )
+        enable_rate_limiting_in_tests = os.getenv("ENABLE_RATE_LIMIT_IN_TESTS", "0").lower() in ("1", "true", "yes")
+        if is_pytest and not enable_rate_limiting_in_tests:
             return await call_next(request)
 
         # Debug: track that middleware is being called
@@ -183,8 +194,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 route_name = getattr(request.scope.get("endpoint"), "__name__", None)
                 metric_label = route_name if route_name else p
                 RATE_LIMITED.labels(route=metric_label).inc()
+
+            # Create rate limit headers for 429 response
+            rate_limit_headers = get_rate_limit_headers(max_req, 0, window_s)
+            retry_after_headers = get_retry_after_header(window_s)
+            headers = {**rate_limit_headers, **retry_after_headers}
+
             return PlainTextResponse(
-                "rate_limited", status_code=429, headers={"Retry-After": str(window_s)}
+                "rate_limited", status_code=429, headers=headers
             )
 
-        return await call_next(request)
+        # For successful requests, add rate limit headers to the response
+        response = await call_next(request)
+
+        # Calculate remaining requests
+        remaining = max(0, max_req - cnt)
+
+        # Add rate limit headers to successful response
+        rate_limit_headers = get_rate_limit_headers(max_req, remaining, window_s)
+        for header_name, header_value in rate_limit_headers.items():
+            response.headers[header_name] = header_value
+
+        return response

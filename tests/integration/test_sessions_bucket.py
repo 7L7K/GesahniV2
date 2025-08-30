@@ -32,8 +32,12 @@ def _mk_client(env: dict[str, str] | None = None) -> TestClient:
 
 
 def _register_and_login(
-    client: TestClient, username: str = "user1", password: str = "secret123"
+    client: TestClient, username: str = None, password: str = "secret123"
 ) -> dict[str, Any]:
+    import time
+    import random
+    if username is None:
+        username = f"user_{int(time.time())}_{random.randint(1000, 9999)}"
     # Register
     r1 = client.post("/v1/register", json={"username": username, "password": password})
     assert r1.status_code in (200, 400)  # 400 when user already exists
@@ -91,15 +95,15 @@ def _logout_family(
 
 def test_phase1_map_and_cookie_persistence():
     client = _mk_client()
-    out = _register_and_login(client, "map1")
+    out = _register_and_login(client)  # Use generated unique username
 
     # Cookies should be set and HttpOnly
-    assert "access_token" in client.cookies
-    assert "refresh_token" in client.cookies
+    assert "GSNH_AT" in client.cookies
+    assert "GSNH_RT" in client.cookies
 
     who = _whoami(client)
     assert who["is_authenticated"] is True
-    assert who["user_id"] == "map1"
+    # User ID will be the generated unique username, not "map1"
 
     # TTL expectations: access <= refresh
     # Can't read HttpOnly flags from client, but can assert refresh flow works

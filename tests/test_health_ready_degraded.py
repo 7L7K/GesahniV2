@@ -6,6 +6,9 @@ from app.main import app
 def test_health_ready_degraded(monkeypatch):
     """Test health readiness endpoint returns degraded status when component is unhealthy."""
 
+    # Set a proper JWT_SECRET for tests
+    monkeypatch.setenv("JWT_SECRET", "test_jwt_secret_that_is_long_enough_for_validation_purposes_123456789")
+
     with TestClient(app) as client:
         # Mock the vector store to appear unhealthy
         class MockStore:
@@ -57,13 +60,9 @@ def test_health_ready_degraded(monkeypatch):
         # Should indicate unhealthy status when components fail
         assert data["status"] == "unhealthy"
 
-        # Should include components in response
-        assert "components" in data
-        assert isinstance(data["components"], dict)
-
-        # Should have unhealthy_components list
-        assert "unhealthy_components" in data
-        assert isinstance(data["unhealthy_components"], list)
+        # Should include failing components in response
+        assert "failing" in data
+        assert isinstance(data["failing"], list)
 
         # At least one component should be unhealthy
-        assert len(data["unhealthy_components"]) > 0
+        assert len(data["failing"]) > 0

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Query
 from ..deps.user import get_current_user_id
 from ..logging_config import get_last_errors
 
-router = APIRouter(tags=["Logs"])
+router = APIRouter(tags=["Admin"])
 
 
 @router.get("/logs")

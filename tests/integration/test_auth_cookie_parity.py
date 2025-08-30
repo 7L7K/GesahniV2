@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-COOKIE_RE = re.compile(r"(access_token|refresh_token)=[^;]+; .*")
+COOKIE_RE = re.compile(r"(GSNH_AT|GSNH_RT|GSNH_SESS|did|g_state|g_next)=[^;]*; .*")
 
 
 def _assert_auth_cookies(
@@ -13,11 +13,11 @@ def _assert_auth_cookies(
 ):
     names = [h.split("=", 1)[0] for h in set_cookie_headers]
     assert any(
-        h.startswith("access_token=") for h in set_cookie_headers
-    ), "access_token not set"
+        h.startswith("GSNH_AT=") for h in set_cookie_headers
+    ), "GSNH_AT not set"
     assert any(
-        h.startswith("refresh_token=") for h in set_cookie_headers
-    ), "refresh_token not set"
+        h.startswith("GSNH_RT=") for h in set_cookie_headers
+    ), "GSNH_RT not set"
     for h in set_cookie_headers:
         assert COOKIE_RE.search(h), f"bad cookie format: {h}"
         if expect_secure is not None:
@@ -48,18 +48,33 @@ def test_classic_login_sets_cookies_on_final_response(monkeypatch):
 def test_oauth_callback_sets_cookies_on_callback_response_single_hop(monkeypatch):
     client = TestClient(app, follow_redirects=False)
     monkeypatch.setenv("COOKIE_SECURE", "0")
+    monkeypatch.setenv("DEV_MODE", "1")
     # Monkeypatch exchange_code to succeed
     import app.integrations.google.oauth as go
+
+    import jwt
+
+    # Create a mock ID token with proper issuer
+    mock_id_token_payload = {
+        "iss": "https://accounts.google.com",
+        "sub": "123456789",
+        "email": "test@example.com",
+        "email_verified": True,
+        "aud": "test-client-id",
+        "iat": int(__import__("time").time()),
+        "exp": int(__import__("time").time()) + 3600
+    }
+    mock_id_token = jwt.encode(mock_id_token_payload, "test-secret", algorithm="HS256")
 
     class _C:
         token = "t"
         refresh_token = "rt"
-        id_token = "it"
+        id_token = mock_id_token
         scopes = ["email"]
         expiry = __import__("datetime").datetime.utcnow()
 
-    monkeypatch.setattr(go, "exchange_code", lambda code, state: _C())
-    r = client.get("/v1/google/oauth/callback?code=fake&state=xyz")
+    monkeypatch.setattr(go, "exchange_code", lambda code, state, verify_state=True: _C())
+    r = client.get("/v1/google/auth/callback?code=fake&state=xyz")
     # First hop sets cookies and 302s
     assert r.status_code in (HTTPStatus.FOUND, HTTPStatus.TEMPORARY_REDIRECT)
     set_cookies = r.headers.get_list("set-cookie")
@@ -72,7 +87,8 @@ def test_oauth_cross_site_uses_finisher_then_redirects(monkeypatch):
     # Simulate cross-site by forcing SameSite=None; Secure expectations
     monkeypatch.setenv("COOKIE_SECURE", "1")
     monkeypatch.setenv("COOKIE_SAMESITE", "none")
-    r1 = client.get("/v1/google/oauth/callback?code=fake&state=cross")
+    monkeypatch.setenv("DEV_MODE", "1")
+    r1 = client.get("/v1/google/auth/callback?code=fake&state=cross")
     assert r1.status_code == HTTPStatus.FOUND
     # In our integration, callback itself sets cookies; if a finisher route exists, it should be used.
     # Accept either direct cookies on callback OR a finisher hop that sets them.

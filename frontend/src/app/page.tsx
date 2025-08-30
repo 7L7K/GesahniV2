@@ -191,7 +191,7 @@ export default function Page() {
 
   // Music state management
   useEffect(() => {
-    if (!authed) {
+    if (!authed || !authState.session_ready) {
       musicStateFetchAttempted.current = false;
       return;
     }
@@ -249,11 +249,11 @@ export default function Page() {
     return () => {
       window.removeEventListener('music.state', handleMusicState as EventListener);
     };
-  }, [authed, authOrchestrator]);
+  }, [authed, authState.session_ready, authOrchestrator]);
 
   // Listen for authentication state changes to retry music state fetch
   useEffect(() => {
-    if (authed && !musicStateFetchAttempted.current) {
+    if (authed && authState.session_ready && !musicStateFetchAttempted.current) {
       // Auth was restored, retry music state fetch
       const fetchMusicState = async () => {
         try {
@@ -269,7 +269,7 @@ export default function Page() {
 
       fetchMusicState();
     }
-  }, [authed]);
+  }, [authed, authState.session_ready]);
 
   // Clear auth error when authentication is successful
   useEffect(() => {

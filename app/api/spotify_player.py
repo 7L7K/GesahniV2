@@ -16,7 +16,7 @@ import logging
 
 router = APIRouter(
     prefix="/v1/spotify",
-    tags=["spotify"],
+    tags=["Music"],
     dependencies=[Depends(verify_token), Depends(require_scope("music:control"))],
 )
 logger = logging.getLogger(__name__)

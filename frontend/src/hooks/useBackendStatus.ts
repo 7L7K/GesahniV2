@@ -17,30 +17,34 @@ export function useBackendStatus() {
         let mounted = true;
         const pollReady = async () => {
             try {
-                console.log('[BackendStatus] Polling /healthz/ready...');
-                // Use AbortController instead of AbortSignal.timeout() for better browser compatibility
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2000);
+        console.log('[BackendStatus] Polling /v1/health...');
+        // Use AbortController instead of AbortSignal.timeout() for better browser compatibility
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-                const res = await apiFetch('/healthz/ready', {
-                    signal: controller.signal,
-                    cache: 'no-store'
-                });
+        const res = await apiFetch('/v1/health', {
+            signal: controller.signal,
+            cache: 'no-store'
+        });
 
                 clearTimeout(timeoutId);
 
-                console.log('[BackendStatus] Response:', res.status, res.ok);
+        console.log('[BackendStatus] Response:', res.status, res.ok);
 
-                if (!mounted) return;
-                setHasChecked(true);
-                if (res.ok) {
-                    const body = await res.json().catch(() => ({} as Record<string, unknown>));
-                    console.log('[BackendStatus] Body:', body);
-                    setReady(body?.status === 'ok' ? 'online' : 'offline');
-                } else {
-                    console.log('[BackendStatus] Response not ok, setting offline');
-                    setReady('offline');
-                }
+        if (!mounted) return;
+        setHasChecked(true);
+        if (res.status >= 500) {
+            console.log('[BackendStatus] 5xx status, setting offline');
+            setReady('offline');
+        } else if (res.ok) {
+            const body = await res.json().catch(() => ({} as Record<string, unknown>));
+            console.log('[BackendStatus] Body:', body);
+            // Treat ok:false or degraded as online (degraded allowed)
+            setReady('online');
+        } else {
+            console.log('[BackendStatus] Non-2xx but not 5xx, treating as online (degraded)');
+            setReady('online');
+        }
             } catch (error) {
                 console.log('[BackendStatus] Error:', error);
                 if (!mounted) return;
@@ -71,13 +75,13 @@ export function useBackendStatus() {
         const pollDeps = async () => {
             try {
                 // Use AbortController instead of AbortSignal.timeout() for better browser compatibility
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-                const res = await apiFetch('/healthz/deps', {
-                    signal: controller.signal,
-                    cache: 'no-store'
-                });
+        const res = await apiFetch('/healthz/deps', {
+            signal: controller.signal,
+            cache: 'no-store'
+        });
 
                 clearTimeout(timeoutId);
 

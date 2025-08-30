@@ -104,19 +104,29 @@ def create_vector_store() -> VectorStore:
             elif legacy_store == "qdrant":
                 url = os.getenv("QDRANT_URL", "http://localhost:6333")
                 api_key = os.getenv("QDRANT_API_KEY", "")
-                if api_key:
-                    dsn = f"qdrant://{url}?api_key={api_key}"
+                # Remove protocol from URL if present, as we'll add it back
+                if url.startswith(("http://", "https://", "grpc://")):
+                    url_no_protocol = url.split("://", 1)[1]
                 else:
-                    dsn = f"qdrant://{url}"
+                    url_no_protocol = url
+                if api_key:
+                    dsn = f"qdrant://{url_no_protocol}?api_key={api_key}"
+                else:
+                    dsn = f"qdrant://{url_no_protocol}"
             elif legacy_store == "dual":
                 # Dual mode requires both backends configured
                 qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
                 qdrant_api_key = os.getenv("QDRANT_API_KEY", "")
                 chroma_path = os.getenv("CHROMA_PATH", ".chroma_data")
-                if qdrant_api_key:
-                    dsn = f"dual://qdrant://{qdrant_url}?api_key={qdrant_api_key}&chroma_path={chroma_path}"
+                # Remove protocol from URL if present, as we'll add it back
+                if qdrant_url.startswith(("http://", "https://", "grpc://")):
+                    qdrant_url_no_protocol = qdrant_url.split("://", 1)[1]
                 else:
-                    dsn = f"dual://qdrant://{qdrant_url}&chroma_path={chroma_path}"
+                    qdrant_url_no_protocol = qdrant_url
+                if qdrant_api_key:
+                    dsn = f"dual://qdrant://{qdrant_url_no_protocol}?api_key={qdrant_api_key}&chroma_path={chroma_path}"
+                else:
+                    dsn = f"dual://qdrant://{qdrant_url_no_protocol}?chroma_path={chroma_path}"
 
     # Default to local ChromaDB if no DSN provided
     if not dsn:

@@ -18,7 +18,7 @@ from fastapi import APIRouter
 logger = logging.getLogger(__name__)
 
 # Create router for health diagnostics endpoints
-router = APIRouter(tags=["Health Diagnostics"])
+router = APIRouter(tags=["Admin"])
 
 # ---------------------------------------------------------------------------
 # Health Check Data Structures

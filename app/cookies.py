@@ -194,8 +194,8 @@ def set_auth_cookies(
     )
     resp.headers.append("Set-Cookie", access_header)
 
-    # Set/rotate refresh token cookie only when explicitly provided (None means leave as-is)
-    if refresh is not None:
+    # Set/rotate refresh token cookie only when explicitly provided (None or empty means leave as-is)
+    if refresh and refresh.strip():
         refresh_header = format_cookie_header(
             key=f"{host_prefix}{GSNH_RT}",
             value=refresh,
@@ -239,8 +239,7 @@ def set_auth_cookies(
                 # Fallback: safe decode of freshly-minted access token to extract identity
                 try:
                     import os
-                    import jwt
-                    from .security import _jwt_decode as _decode
+                    from .security import jwt_decode as _decode
 
                     leeway = int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60)
                     secret = os.getenv("JWT_SECRET")

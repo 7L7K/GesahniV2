@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from .deps.scopes import require_scope
 from .deps.user import get_current_user_id
-from .security import _jwt_decode
+from .security import jwt_decode
 from .user_store import user_store
 from .api.auth import _jwt_secret
 
@@ -575,7 +575,7 @@ async def register(req: RegisterRequest, request: Request, response: Response):
 
         try:
             secret = _jwt_secret()
-            payload = _jwt_decode(access_token, secret, algorithms=[ALGORITHM])
+            payload = jwt_decode(access_token, secret, algorithms=[ALGORITHM])
             jti = payload.get("jti")
             expires_at = payload.get("exp", time.time() + access_ttl)
             session_id = _create_session_id(jti, expires_at) if jti else f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
@@ -944,7 +944,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
             # Decode the access token to get the JTI
             # Use dynamic JWT secret function to handle test environment changes
             secret = _jwt_secret()
-            payload = _jwt_decode(access_token, secret, algorithms=[ALGORITHM])
+            payload = jwt_decode(access_token, secret, algorithms=[ALGORITHM])
             jti = payload.get("jti")
             expires_at = payload.get("exp", time.time() + access_ttl)
 
@@ -1026,7 +1026,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
                 # Decode the access token to get the JTI
                 # Use dynamic JWT secret function to handle test environment changes
                 secret = _jwt_secret()
-                payload = _jwt_decode(access_token, secret, algorithms=[ALGORITHM])
+                payload = jwt_decode(access_token, secret, algorithms=[ALGORITHM])
                 jti = payload.get("jti")
                 expires_at = payload.get("exp", time.time() + access_ttl)
 

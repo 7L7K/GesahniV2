@@ -56,12 +56,12 @@ class TestComprehensiveErrors:
         self.client = TestClient(app)
 
         # Track errors during test
-        self.errors_before = len(get_last_errors())
+        self.errors_before = len(get_last_errors(100))
 
         yield
 
         # Check for new errors after test
-        errors_after = len(get_last_errors())
+        errors_after = len(get_last_errors(100))
         if errors_after > self.errors_before:
             recent_errors = get_last_errors(errors_after - self.errors_before)
             print(f"New errors detected during test: {recent_errors}")
@@ -276,7 +276,7 @@ class TestComprehensiveErrors:
     def test_error_logging_completeness(self):
         """Test that errors are properly logged."""
         # Clear existing errors
-        initial_errors = len(get_last_errors())
+        initial_errors = len(get_last_errors(100))
 
         # Trigger an error
         try:
@@ -285,7 +285,7 @@ class TestComprehensiveErrors:
             pass
 
         # Check that errors were logged
-        final_errors = len(get_last_errors())
+        final_errors = len(get_last_errors(100))
         assert final_errors >= initial_errors
 
     def test_startup_failure_recovery(self):

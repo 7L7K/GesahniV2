@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import HTTPException, Request, WebSocket
 from jwt import PyJWKClient
 
-from ..security import _jwt_decode
+from ..security import jwt_decode
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +205,7 @@ def verify_clerk_token(token: str) -> dict[str, Any]:
             kwargs["issuer"] = iss
         if aud:
             kwargs["audience"] = aud
-        claims = _jwt_decode(
+        claims = jwt_decode(
             token, signing_key.key, algorithms=["RS256"], options=options, **kwargs
         )
         return claims

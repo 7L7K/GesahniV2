@@ -36,25 +36,50 @@ def _client_ip(ws: WebSocket) -> str:
 
 
 async def _broadcast(topic: str, payload: dict) -> None:
+    """Enhanced topic-based WebSocket broadcasting with improved error handling."""
     async with _lock:
         clients = set(_topics.get(topic) or set())
     if not clients:
         return
+
+    import asyncio as _aio
+    import logging as _log
+    import time as _time
+
+    logger = _log.getLogger(__name__)
     dead = []
-    for ws in list(clients):
+    sem = _aio.Semaphore(int(os.getenv("WS_BROADCAST_CONCURRENCY", "64") or 64))
+    start_time = _time.monotonic()
+
+    async def _send(ws: WebSocket) -> None:
         try:
-            await ws.send_json({"topic": topic, "data": payload})
-        except Exception:
+            async with sem:
+                await ws.send_json({"topic": topic, "data": payload})
+        except Exception as e:
+            logger.debug("ws.broadcast.error: failed_to_send_topic topic=%s user_id=%s error=%s",
+                        topic, getattr(ws.state, "user_id", "unknown"), str(e))
             dead.append(ws)
+
+    # Use gather with return_exceptions for parallel sending
+    results = await _aio.gather(*[_send(ws) for ws in list(clients)], return_exceptions=True)
+
     if dead:
         async with _lock:
             for ws in dead:
                 try:
                     for t in list(_topics.keys()):
                         _topics[t].discard(ws)
-                    await ws.close()
-                except Exception:
-                    pass
+                    user_id = getattr(ws.state, "user_id", "unknown")
+                    logger.info("ws.broadcast.cleanup: removed_dead_connection_topic topic=%s user_id=%s", topic, user_id)
+                    await ws.close(code=1000, reason="connection_unhealthy")
+                except Exception as e:
+                    logger.debug("ws.broadcast.cleanup.error: failed_to_close user_id=%s error=%s",
+                                getattr(ws.state, "user_id", "unknown"), str(e))
+
+    # Log broadcast metrics
+    duration = _time.monotonic() - start_time
+    logger.debug("ws.broadcast.complete: topic=%s clients=%d dead=%d duration_ms=%.2f",
+                topic, len(clients), len(dead), duration * 1000)
 
 
 class WSSubscribeExample(BaseModel):

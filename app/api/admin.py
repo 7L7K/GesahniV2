@@ -216,6 +216,41 @@ async def admin_system_status():
     }
 
 
+@router.get("/tokens/google", dependencies=[Depends(require_scope("admin:read"))])
+async def admin_tokens_google(user_id: str | None = None):
+    """Admin view: compact tokens for a given user_id (auth-gated).
+
+    Returns a compact list of token rows (valid and invalid) for inspection.
+    """
+    try:
+        from ..auth_store_tokens import token_dao
+
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id required")
+        rows = await token_dao.get_all_user_tokens(user_id)
+        out = []
+        for r in rows:
+            out.append(
+                {
+                    "id": r.id,
+                    "provider": r.provider,
+                    "provider_iss": r.provider_iss,
+                    "provider_sub": r.provider_sub,
+                    "scope": r.scope,
+                    "scope_union_since": r.scope_union_since,
+                    "is_valid": r.is_valid,
+                    "replaced_by_id": r.replaced_by_id,
+                    "service_state": r.service_state,
+                    "expires_at": r.expires_at,
+                    "created_at": r.created_at,
+                    "updated_at": r.updated_at,
+                }
+            )
+        return {"user_id": user_id, "tokens": out}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 def _is_test_mode() -> bool:
     """Return True when running under tests.
 

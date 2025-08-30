@@ -9,7 +9,7 @@ from ..auth_core import require_scope
 
 router = APIRouter(
     prefix="/v1/spotify",
-    tags=["spotify"],
+    tags=["Music"],
     dependencies=[Depends(verify_token), Depends(require_scope("music:control"))],
 )
 

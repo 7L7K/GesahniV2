@@ -56,7 +56,7 @@ def tmp_audit_dir(tmp_path, monkeypatch):
 def test_audit_file_created_on_request(client, tmp_audit_dir):
     """Test that audit file is created when requests are made"""
     # Make a request to trigger audit logging
-    response = client.get("/healthz")
+    response = client.get("/v1/healthz")
     assert response.status_code == 200
 
     # Check the actual audit file location
@@ -67,7 +67,7 @@ def test_audit_file_created_on_request(client, tmp_audit_dir):
 def test_audit_append_basic_structure(client, tmp_audit_dir):
     """Test basic structure of audit events"""
     # Make a request
-    response = client.get("/healthz")
+    response = client.get("/v1/healthz")
     assert response.status_code == 200
 
     # Read audit file
@@ -80,7 +80,7 @@ def test_audit_append_basic_structure(client, tmp_audit_dir):
     lines = content.split("\n")
     assert len(lines) >= 1, "Should have at least one audit event"
 
-    # Find the event for our specific request (GET /healthz)
+    # Find the event for our specific request (GET /v1/healthz)
     target_event = None
     for line in reversed(lines):  # Search from most recent backwards
         try:
@@ -92,7 +92,7 @@ def test_audit_append_basic_structure(client, tmp_audit_dir):
                 and event.get("status") == 200
                 and (
                     event.get("route") == "healthz"
-                    or "/healthz" in event.get("meta", {}).get("path", "")
+                    or "/v1/healthz" in event.get("meta", {}).get("path", "")
                 )
             ):
                 target_event = event
@@ -120,7 +120,7 @@ def test_audit_append_basic_structure(client, tmp_audit_dir):
 def test_audit_append_multiple_events(client, tmp_audit_dir):
     """Test that multiple requests create multiple audit events"""
     # Make multiple requests
-    client.get("/healthz")
+    client.get("/v1/healthz")
     client.get("/v1/admin/metrics")
     client.post("/v1/admin/config", json={"test": "data"})
 
@@ -166,7 +166,7 @@ def test_audit_append_with_error_status(client, tmp_audit_dir):
 def test_audit_append_preserves_history(client, tmp_audit_dir):
     """Test that audit file preserves history across requests"""
     # Make first request
-    client.get("/healthz")
+    client.get("/v1/healthz")
     audit_file = tmp_audit_dir / "events.ndjson"
     content1 = audit_file.read_text().strip()
     lines1 = content1.split("\n")
@@ -184,7 +184,7 @@ def test_audit_append_timestamp_format(client, tmp_audit_dir):
     """Test that timestamps are in proper ISO format"""
     import re
 
-    client.get("/healthz")
+    client.get("/v1/healthz")
 
     audit_file = tmp_audit_dir / "events.ndjson"
     content = audit_file.read_text().strip()
@@ -240,7 +240,7 @@ def test_audit_append_with_authentication(client, tmp_audit_dir):
 
 def test_audit_append_file_permissions(client, tmp_audit_dir):
     """Test that audit file has appropriate permissions"""
-    client.get("/healthz")
+    client.get("/v1/healthz")
 
     audit_file = tmp_audit_dir / "events.ndjson"
     assert audit_file.exists()
@@ -258,7 +258,7 @@ def test_audit_append_concurrent_access(client, tmp_audit_dir):
     import concurrent.futures
 
     def make_request():
-        return client.get("/healthz")
+        return client.get("/v1/healthz")
 
     # Make concurrent requests
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
@@ -285,7 +285,7 @@ def test_audit_append_file_rotation_scenario(client, tmp_audit_dir):
     """Test audit file behavior (in a real system, this would test log rotation)"""
     # Make many requests to simulate file growth
     for i in range(100):
-        client.get("/healthz")
+        client.get("/v1/healthz")
 
     audit_file = tmp_audit_dir / "events.ndjson"
     content = audit_file.read_text().strip()

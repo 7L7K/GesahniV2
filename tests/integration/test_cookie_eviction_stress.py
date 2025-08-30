@@ -3,6 +3,7 @@ from http import HTTPStatus
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.cookie_names import GSNH_AT, GSNH_RT
 
 
 def test_cookie_eviction_stress(monkeypatch):
@@ -14,14 +15,14 @@ def test_cookie_eviction_stress(monkeypatch):
     # Some auth modules may enforce stronger password or return 401 depending on config; accept 200/302/401
     assert r.status_code in (HTTPStatus.OK, HTTPStatus.FOUND, HTTPStatus.UNAUTHORIZED)
     # If login failed, seed cookies directly (dev helper sets only access token)
-    if c.cookies.get("access_token") is None:
+    if c.cookies.get(GSNH_AT) is None:
         try:
             c.get("/v1/mock/set_access_cookie", params={"max_age": 120})
         except Exception:
             pass
         # Ensure both present for test stability
-        if c.cookies.get("refresh_token") is None:
-            c.cookies.set("refresh_token", "rtok")
+        if c.cookies.get(GSNH_RT) is None:
+            c.cookies.set(GSNH_RT, "rtok")
     # Simulate many other cookies
     for i in range(60):
         c.cookies.set(f"junk{i}", "1")
@@ -31,5 +32,5 @@ def test_cookie_eviction_stress(monkeypatch):
     body = w.json()
     # Allow best-effort: is_authenticated can be False if JWT_SECRET not set for cookie decode
     # But presence of cookies should keep them from being evicted; emulate by asserting cookies still exist
-    assert c.cookies.get("access_token") is not None
-    assert c.cookies.get("refresh_token") is not None
+    assert c.cookies.get(GSNH_AT) is not None
+    assert c.cookies.get(GSNH_RT) is not None

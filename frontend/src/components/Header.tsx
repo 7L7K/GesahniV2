@@ -59,9 +59,9 @@ export default function Header() {
     const [localMode, setLocalMode] = useState(false);
     const [nearCap, setNearCap] = useState(false);
 
-    // Budget check (only when authenticated)
+    // Budget check (only when authenticated and session is ready)
     useEffect(() => {
-        if (!authed) return;
+        if (!(authed && authState.session_ready)) return;
         let cancelled = false;
         const checkBudget = async () => {
             try {
@@ -75,7 +75,7 @@ export default function Header() {
         };
         checkBudget();
         return () => { cancelled = true };
-    }, [authed]);
+    }, [authed, authState.session_ready]);
 
     // Local mode detection
     useEffect(() => {

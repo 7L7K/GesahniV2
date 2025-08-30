@@ -4,8 +4,19 @@ const path = require('path');
 /** @type {import('next').NextConfig} */
 module.exports = {
   eslint: { ignoreDuringBuilds: true },
-  webpack(config) {
+  webpack(config, { isServer }) {
+    // Path alias for src/
     config.resolve.alias['@'] = path.resolve(__dirname, 'src');
+
+    // Ensure server runtime looks for chunks in server/chunks
+    // Fixes runtime requiring './<id>.js' instead of './chunks/<id>.js'
+    if (isServer) {
+      config.output = {
+        ...config.output,
+        chunkFilename: 'chunks/[id].js',
+      };
+    }
+
     return config;
   },
   // Avoid Safari blowing up on new URL("") in Next dev hot reloader

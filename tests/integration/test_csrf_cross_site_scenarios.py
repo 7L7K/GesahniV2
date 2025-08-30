@@ -50,9 +50,9 @@ def test_csrf_cross_site_validation(monkeypatch):
 
     # Test that CSRF token cookie is set with SameSite=None
     assert "csrf_token" in csrf_resp.cookies
-    # Check the Set-Cookie header for SameSite=None (lowercase 'none' is correct)
+    # Check the Set-Cookie header for SameSite=None (capital 'None' is correct per RFC)
     set_cookie_header = csrf_resp.headers.get("set-cookie", "")
-    assert "SameSite=none" in set_cookie_header
+    assert "SameSite=None" in set_cookie_header
 
     # Test refresh endpoint with valid CSRF token and intent header
     refresh_resp = client.post(
@@ -92,7 +92,7 @@ def test_csrf_cross_site_missing_intent(monkeypatch):
     refresh_resp = client.post("/v1/auth/refresh", headers={"X-CSRF-Token": csrf_token})
     assert refresh_resp.status_code == 400
     # The auth endpoint should return the cross-site specific error
-    assert "missing_intent_header_cross_site" in refresh_resp.json()["detail"]
+    assert "missing_intent_header_cross_site" in refresh_resp.json()["message"]
 
 
 def test_csrf_cross_site_invalid_token_format(monkeypatch):
@@ -216,3 +216,33 @@ def test_csrf_middleware_same_origin_validation(monkeypatch):
             201,
             400,
         ]  # Success or validation error, not CSRF error
+
+
+def test_csrf_cross_site_server_side_validation(monkeypatch):
+    """Test enhanced server-side CSRF token validation for cross-site requests."""
+    monkeypatch.setenv("CSRF_ENABLED", "1")
+    monkeypatch.setenv("COOKIE_SAMESITE", "none")
+
+    client = TestClient(app)
+
+    # Get a valid CSRF token (this will be stored server-side)
+    csrf_resp = client.get("/v1/csrf")
+    valid_token = csrf_resp.json()["csrf_token"]
+
+    # Test refresh endpoint with valid server-side stored token
+    refresh_resp = client.post(
+        "/v1/auth/refresh",
+        headers={"X-CSRF-Token": valid_token, "X-Auth-Intent": "refresh"},
+    )
+    # Should fail due to missing auth, but not CSRF error
+    assert refresh_resp.status_code in [401, 403]  # Auth error, not CSRF error
+
+    # Test with invalid token (not stored server-side)
+    invalid_token = "invalid_token_not_stored_server_side"
+    refresh_resp_invalid = client.post(
+        "/v1/auth/refresh",
+        headers={"X-CSRF-Token": invalid_token, "X-Auth-Intent": "refresh"},
+    )
+    # Should fail with CSRF server validation error
+    assert refresh_resp_invalid.status_code == 403
+    assert "invalid_csrf_server_validation" in refresh_resp_invalid.json()["detail"]

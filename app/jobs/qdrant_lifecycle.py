@@ -27,7 +27,13 @@ def bootstrap_collection(name: str, dim: int = 1536) -> dict[str, str]:
         exists = False
         from qdrant_client.http.models import Distance, VectorParams
 
-        c.recreate_collection(
+        # Check if collection exists and delete if it does, then create
+        try:
+            c.delete_collection(name)
+        except Exception:
+            pass  # Collection doesn't exist, which is fine
+
+        c.create_collection(
             collection_name=name,
             vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
         )

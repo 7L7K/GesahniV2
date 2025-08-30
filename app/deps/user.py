@@ -7,7 +7,7 @@ from uuid import uuid4
 import jwt
 from fastapi import HTTPException, Request, WebSocket, Response
 
-from ..security import _jwt_decode
+from ..security import jwt_decode
 from ..telemetry import LogRecord, hash_user_id, log_record_var
 
 JWT_SECRET: str | None = None  # overridden in tests; env used when None
@@ -22,7 +22,7 @@ def _is_clerk_enabled() -> bool:
 def get_current_user_id(
     request: Request = None,
     websocket: WebSocket = None,
-    response: Response | None = None,
+    response: Response = None,  # type: ignore[assignment]
 ) -> str:
     """Return the current user's identifier.
 
@@ -263,79 +263,23 @@ def get_current_user_id(
                 except Exception:
                     pass
 
-            # Lazy refresh: If we have a refresh token, and access token is missing or expiring soon, mint a new access
+            # Lazy refresh: Use the new auth_refresh module for robust token management
             try:
                 if request is not None and response is not None:
-                    from ..cookie_names import GSNH_RT, GSNH_AT, GSNH_SESS
-                    from ..tokens import make_access
-                    from ..cookie_config import get_token_ttls
-                    from ..cookies import set_auth_cookies
-                    from ..security import _jwt_decode
-                    import time
+                    from ..auth_refresh import perform_lazy_refresh
+                    from ..metrics_auth import lazy_refresh_minted, lazy_refresh_skipped, lazy_refresh_failed
 
-                    from ..cookies import read_refresh_cookie, read_access_cookie
-                    rt = read_refresh_cookie(request)
-                    at = read_access_cookie(request)
-                    if rt and os.getenv("JWT_SECRET"):
-                        try:
-                            rt_claims = _jwt_decode(
-                                rt,
-                                os.getenv("JWT_SECRET"),
-                                algorithms=["HS256"],
-                                leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60),
-                            )
-                            if str(rt_claims.get("type") or "") != "refresh":
-                                rt_claims = None
-                        except Exception:
-                            rt_claims = None
-
-                        if rt_claims:
-                            # Helper for expiring soon with flag-configurable window
-                            from ..flags import get_lazy_refresh_window_s
-
-                            def _is_expiring_soon(payload: dict, window_s: int) -> bool:
-                                try:
-                                    exp = int(payload.get("exp", 0))
-                                    return exp == 0 or (exp - int(time.time()) < window_s)
-                                except Exception:
-                                    return True
-
-                            window = get_lazy_refresh_window_s()
-                            exp_soon = (not at) or _is_expiring_soon(
-                                getattr(target.state, "jwt_payload", {}) if target else {}, window
-                            )
-                            if exp_soon:
-                                uid = str(rt_claims.get("sub") or rt_claims.get("user_id") or user_id)
-                                access_ttl, _refresh_ttl = get_token_ttls()
-                                new_at = make_access({"user_id": uid}, ttl_s=access_ttl)
-                                # Keep RT unchanged; pass current session id for identity store continuity
-                                from ..cookies import read_session_cookie
-                                sid = read_session_cookie(request)
-                                set_auth_cookies(
-                                    response,
-                                    access=new_at,
-                                    refresh=None,
-                                    session_id=sid,
-                                    access_ttl=access_ttl,
-                                    refresh_ttl=0,
-                                    request=request,
-                                    identity=identity or rt_claims,
-                                )
-                                try:
-                                    from ..metrics import AUTH_LAZY_REFRESH
-
-                                    AUTH_LAZY_REFRESH.labels(source="deps", result="minted").inc()
-                                except Exception:
-                                    pass
-                            else:
-                                try:
-                                    from ..metrics import AUTH_LAZY_REFRESH
-
-                                    AUTH_LAZY_REFRESH.labels(source="deps", result="skipped").inc()
-                                except Exception:
-                                    pass
-            except Exception:
+                    if perform_lazy_refresh(request, response, user_id, identity):
+                        lazy_refresh_minted("deps")
+                    else:
+                        lazy_refresh_skipped("deps")
+            except Exception as e:
                 # Best-effort; do not block auth
+                try:
+                    from ..metrics_auth import lazy_refresh_failed
+                    lazy_refresh_failed("deps")
+                except Exception:
+                    pass
                 pass
         else:
             # Backward-compat window: try legacy JTI mapping + access token backfill
@@ -371,7 +315,7 @@ def get_current_user_id(
 
                 if access_token:
                     try:
-                        payload = _jwt_decode(
+                        payload = jwt_decode(
                             access_token,
                             secret,
                             algorithms=["HS256"],
@@ -411,9 +355,9 @@ def get_current_user_id(
                 opts["audience"] = aud
 
             if opts:
-                payload = _jwt_decode(token, secret, algorithms=["HS256"], **opts)
+                payload = jwt_decode(token, secret, algorithms=["HS256"], **opts)
             else:
-                payload = _jwt_decode(token, secret, algorithms=["HS256"])
+                payload = jwt_decode(token, secret, algorithms=["HS256"])
 
             user_id = payload.get("user_id") or payload.get("sub") or user_id
 
@@ -445,8 +389,9 @@ def get_current_user_id(
                     status_code=401, detail="Invalid authentication token"
                 )
     elif token and not secret and require_jwt:
-        # Token provided but no secret configured while required → fail-closed
-        raise HTTPException(status_code=500, detail="missing_jwt_secret")
+        # Token provided but no secret configured while required → unauthorized, not 500
+        from ..http_errors import unauthorized
+        raise unauthorized(code="missing_jwt_secret", message="authentication required", hint="missing JWT secret configuration")
 
     # Clerk validation removed
 

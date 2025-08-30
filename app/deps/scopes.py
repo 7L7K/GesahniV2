@@ -447,9 +447,6 @@ def require_scope(required: str) -> Callable[[Request], None]:
         # Skip CORS preflight requests
         if str(request.method).upper() == "OPTIONS":
             return
-        # Only enforce when a JWT is in play
-        if not os.getenv("JWT_SECRET"):
-            return
 
         # Use session middleware's 3-state logic instead of direct payload extraction
         user_id = _get_user_id_from_request(request)

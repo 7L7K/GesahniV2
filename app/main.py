@@ -20,6 +20,17 @@ from starlette.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+# CORS configuration
+from .settings_cors import (
+    get_cors_origins,
+    get_cors_allow_credentials,
+    get_cors_allow_methods,
+    get_cors_allow_headers,
+    get_cors_expose_headers,
+    get_cors_max_age,
+    validate_cors_origins,
+)
+
 from . import router
 from .deps.scheduler import shutdown as scheduler_shutdown
 from .gpt_client import close_client
@@ -35,11 +46,11 @@ async def route_prompt(prompt: str, user_id: str, **kwargs):
         raise
 
 
-import jwt as _pyjwt
-
 import app.skills  # populate SKILLS
 
 from .logging_config import configure_logging, req_id_var
+from .error_envelope import build_error, shape_from_status
+from .otel_utils import get_trace_id_hex
 
 # Backward-compat shims: some tests expect these names on app.main
 try:  # optional import for tests/monkeypatching
@@ -54,35 +65,19 @@ except Exception:  # pragma: no cover - optional
     def llama_startup():  # type: ignore
         return None
 
-# Patch PyJWT decode to apply a sane default clock skew across the app
-_PYJWT_DECODE_ORIG = getattr(_pyjwt, "decode", None)
-
-
-def _pyjwt_decode_with_leeway(token, key=None, *args, **kwargs):
-    # Default leeway from env (seconds)
-    if "leeway" not in kwargs:
-        try:
-            kwargs["leeway"] = int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60)
-        except Exception:
-            kwargs["leeway"] = 60
-    if _PYJWT_DECODE_ORIG is None:
-        raise RuntimeError("pyjwt.decode not available")
-    return _PYJWT_DECODE_ORIG(token, key, *args, **kwargs)
-
-
-_pyjwt.decode = _pyjwt_decode_with_leeway
+# Central note: Do NOT monkey‑patch PyJWT globally.
+# All JWT decoding is centralized in app.security.jwt_decode.
 from .api.health import router as health_router
-from .auth import router as auth_router
 from .csrf import CSRFMiddleware
 from .otel_utils import shutdown_tracing
 from .status import router as status_router
+from .api.schema import router as schema_router
 
 try:
     from .api.preflight import router as preflight_router
 except Exception:
     preflight_router = None  # type: ignore
 from .api.google_oauth import router as google_oauth_router
-from .api.oauth_google import router as oauth_google_router
 
 try:
     from .api.oauth_apple import router as _oauth_apple_router
@@ -185,6 +180,7 @@ except Exception:  # pragma: no cover - optional
 from app.middleware import (
     DedupMiddleware,
     EnhancedErrorHandlingMiddleware,
+    ErrorHandlerMiddleware,
     HealthCheckFilterMiddleware,
     RateLimitMiddleware,
     RedactHashMiddleware,
@@ -225,33 +221,15 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 
-def _safe_import_router(import_statement: str, feature_name: str, required_in_prod: bool = False):
-    """
-    Safely execute a router import with different behavior in dev vs prod.
+# Import helper: prefer importlib over exec for safety/readability.
+import importlib
 
-    Args:
-        import_statement: The import statement to execute (e.g., "from .api.sessions import router as sessions_router")
-        feature_name: Human-readable name for logging (e.g., "sessions")
-        required_in_prod: Whether this router is required in production
-    """
-    is_dev = os.getenv("ENV", "dev").lower() == "dev" or os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
-
+def _import_router(module_path: str, *, attr: str = "router"):
     try:
-        # Execute the import statement in the current namespace
-        exec(import_statement, globals())
-        logger.debug(f"Router {feature_name} imported successfully")
-        return True
-
+        module = importlib.import_module(module_path, package=__package__)
+        return getattr(module, attr)
     except Exception as e:
-        if is_dev:
-            logger.warning(f"Feature {feature_name} disabled (import failed: {e})")
-            return False
-        else:
-            if required_in_prod:
-                raise RuntimeError(f"Required feature {feature_name} failed to import in production: {e}")
-            else:
-                logger.warning(f"Feature {feature_name} disabled in production (import failed: {e})")
-                return False
+        return None
 
 
 def _enforce_jwt_strength() -> None:
@@ -359,6 +337,7 @@ async def _enhanced_startup():
         # Initialize core components with error tracking
         components = [
             ("Database", _init_database),
+            ("Token Store Schema", _init_token_store_schema),
             ("OpenAI Health Check", _init_openai_health_check),
             ("Vector Store", _init_vector_store),
             ("LLaMA Integration", _init_llama),
@@ -423,84 +402,36 @@ async def _init_database():
         raise
 
 
-async def _init_openai_health_check():
-    """Perform OpenAI startup health check with tiny ping."""
+async def _init_token_store_schema():
     try:
+        from .auth_store_tokens import token_dao
+
+        await token_dao.ensure_schema_migrated()
+        logger.debug("Token store schema check complete")
+    except Exception as e:
+        logger.error(f"Token store schema init failed: {e}")
+        raise
+
+
+async def _init_openai_health_check():
+    """Perform OpenAI startup health check using the startup module."""
+    try:
+        from .startup import check_vendor_health_gated
+
         logger.info("Performing OpenAI startup health check")
+        result = await check_vendor_health_gated("openai")
 
-        # Check if API key is configured
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            logger.error("vendor_health vendor=openai ok=false reason=OPENAI_API_KEY_not_set")
-            raise RuntimeError("OPENAI_API_KEY not configured")
-
-        # Validate API key format (basic check)
-        if not api_key.startswith("sk-"):
-            logger.error("vendor_health vendor=openai ok=false reason=invalid_api_key_format")
-            raise RuntimeError("Invalid OpenAI API key format")
-
-        # Check base URL configuration
-        base_url = os.getenv("OPENAI_BASE_URL")
-        if base_url and not base_url.endswith("/v1"):
-            logger.warning("OPENAI_BASE_URL should end with /v1, got: %s", base_url)
-
-        # Perform tiny ping with 5-token prompt
-        try:
-            from .gpt_client import ask_gpt
-            from .router import RoutingDecision
-
-            model = os.getenv("OPENAI_MODEL", "gpt-4o")
-            routing_decision = RoutingDecision(
-                vendor="openai",
-                model=model,
-                reason="startup_health_check",
-                keyword_hit=None,
-                stream=False,
-                allow_fallback=False,
-                request_id="startup_check"
-            )
-
-            # Use a very small prompt to minimize costs
-            tiny_prompt = "ping"
-            system_prompt = "You are a helpful assistant."
-            timeout = 10  # Short timeout for startup
-
-            # This will test: network connectivity, API key validity, model accessibility
-            text, _, _, _ = await ask_gpt(
-                tiny_prompt,
-                model=model,
-                system=system_prompt,
-                timeout=timeout,
-                routing_decision=routing_decision
-            )
-
-            # Check if we got a reasonable response
-            if text and len(text.strip()) > 0:
-                logger.info("vendor_health vendor=openai ok=true reason=successful_ping model=%s", model)
-                logger.debug("OpenAI startup health check successful, response: %s", text.strip())
-            else:
-                logger.error("vendor_health vendor=openai ok=false reason=empty_response model=%s", model)
-                raise RuntimeError("Empty response from OpenAI")
-
-        except Exception as e:
-            error_type = type(e).__name__
-            error_msg = str(e)
-
-            # Classify common error types
-            if "timeout" in error_msg.lower() or "connect" in error_msg.lower():
-                reason = "network_connectivity_error"
-            elif "unauthorized" in error_msg.lower() or "invalid" in error_msg.lower():
-                reason = "api_key_invalid"
-            elif "not found" in error_msg.lower() or "model" in error_msg.lower():
-                reason = "model_access_error"
-            elif "rate limit" in error_msg.lower():
-                reason = "rate_limit_error"
-            else:
-                reason = f"{error_type}_{error_msg[:50].replace(' ', '_')}"
-
-            logger.error("vendor_health vendor=openai ok=false reason=%s error_type=%s error_msg=%s",
-                        reason, error_type, error_msg)
-            raise RuntimeError(f"OpenAI health check failed: {reason}")
+        if result["status"] in ["skipped", "missing_config"]:
+            logger.debug("OpenAI health check %s: %s", result["status"], result.get("reason", ""))
+            return
+        elif result["status"] == "healthy":
+            logger.info("OpenAI startup health check successful")
+            return
+        else:
+            # Health check failed
+            error_msg = result.get("error", f"Health check failed with status: {result['status']}")
+            logger.error("OpenAI startup health check failed: %s", error_msg)
+            raise RuntimeError(f"OpenAI health check failed: {error_msg}")
 
     except Exception as e:
         logger.error("OpenAI startup health check failed: %s", e)
@@ -749,7 +680,6 @@ tags_metadata = [
     {"name": "TV", "description": "TV UI and related endpoints."},
     {"name": "Admin", "description": "Admin, status, models, diagnostics, and tools."},
     {"name": "Auth", "description": "Authentication and authorization."},
-    {"name": "TTS", "description": "Text-to-Speech APIs."},
 ]
 
 
@@ -784,15 +714,14 @@ def _get_version() -> str:
 
 _IS_DEV_ENV = os.getenv("ENV", "dev").strip().lower() == "dev"
 
-_docs_url = "/docs" if _IS_DEV_ENV else None
-_redoc_url = "/redoc" if _IS_DEV_ENV else None
-_openapi_url = "/openapi.json" if _IS_DEV_ENV else None
+# Import docs configuration
+from .config_docs import get_docs_visibility_config, get_swagger_ui_parameters
 
-_swagger_ui_parameters = {
-    "docExpansion": "list",
-    "filter": True,
-    "persistAuthorization": True,
-}
+_docs_config = get_docs_visibility_config()
+_docs_url = _docs_config["docs_url"]
+_redoc_url = _docs_config["redoc_url"]
+_openapi_url = _docs_config["openapi_url"]
+_swagger_ui_parameters = get_swagger_ui_parameters()
 
 # Snapshot dev servers override at import time so tests that temporarily set
 # OPENAPI_DEV_SERVERS during module reload still see the intended values even if
@@ -886,179 +815,186 @@ async def _unified_http_error(request: Request, exc: StarletteHTTPException):
     status = getattr(exc, "status_code", 500)
     headers = getattr(exc, "headers", None)
     detail = getattr(exc, "detail", None)
-    # If already structured, pass through
+    # If already structured, map to standardized keys and pass through
     if isinstance(detail, dict) and ("code" in detail or "error" in detail):
-        return JSONResponse(detail, status_code=status, headers=headers)
+        shaped = dict(detail)
+        # Normalize provider/model routing errors to a stable code
+        if "error" in shaped and "code" not in shaped:
+            err = str(shaped.get("error") or "").lower()
+            if status == 503 and err in {"vendor_unavailable", "all_vendors_unavailable"}:
+                shaped = {"code": "llm_unavailable", "message": "Llm unavailable"}
+            else:
+                # Fallback: lift "error" into "code" for consistency
+                shaped = {**shaped, "code": shaped.get("code") or shaped.get("error")}
+        # Emit auth metrics for /v1/ask
+        try:
+            from .metrics import AUTH_401_TOTAL, AUTH_403_TOTAL
+
+            path = getattr(request.url, "path", "")
+            if path.startswith("/v1/ask"):
+                if status == 401:
+                    hdr = request.headers.get("Authorization") or ""
+                    reason = "bad_token" if hdr.lower().startswith("bearer ") else "no_auth"
+                    AUTH_401_TOTAL.labels(route="/v1/ask", reason=reason).inc()
+                elif status == 403:
+                    scope = str(detail.get("hint") or detail.get("scope") or "unknown")
+                    AUTH_403_TOTAL.labels(route="/v1/ask", scope=scope).inc()
+        except Exception:
+            pass
+        # Always ensure details block present with req_id/trace_id when possible
+        try:
+            tid = get_trace_id_hex()
+        except Exception:
+            tid = None
+        d = {
+            "status_code": status,
+            "trace_id": tid,
+            "path": request.url.path,
+            "method": request.method,
+        }
+        shaped.setdefault("details", {})
+        if isinstance(shaped["details"], dict):
+            shaped["details"].update({k: v for k, v in d.items() if v is not None})
+        # Tag envelope code and ids in header for logging middleware introspection
+        try:
+            code_hdr = shaped.get("code") or shaped.get("error")
+            headers = dict(headers or {})
+            if code_hdr:
+                headers["X-Error-Code"] = str(code_hdr)
+            # Expose error_id and trace_id when available for client correlation
+            details = shaped.get("details") or {}
+            if isinstance(details, dict):
+                if details.get("error_id"):
+                    headers["X-Error-ID"] = str(details.get("error_id"))
+                if details.get("trace_id"):
+                    headers["X-Trace-ID"] = str(details.get("trace_id"))
+        except Exception:
+            pass
+        return JSONResponse(shaped, status_code=status, headers=headers)
 
     # Map to a stable shape
-    code = "error"
-    msg = "error"
-    hint = None
-    if status == 401:
-        code, msg, hint = "unauthorized", "unauthorized", "missing or invalid token"
-    elif status == 403:
-        code, msg, hint = "forbidden", "forbidden", "missing scope or not allowed"
-    elif status == 404:
-        code, msg = "not_found", "not found"
-    elif status == 405:
-        code, msg = "method_not_allowed", "method not allowed"
-    elif status == 409:
-        code, msg = "conflict", "conflict"
-    elif status == 413:
-        code, msg = "payload_too_large", "payload too large"
-    elif status == 415:
-        code, msg = "unsupported_media_type", "unsupported media type"
-    elif status == 422:
-        code, msg = "invalid", "validation error"
-    elif 500 <= status < 600:
-        code, msg = "server_error", "internal error"
+    code, msg, hint = shape_from_status(status)
 
     if isinstance(detail, str) and detail and detail not in {"Unauthorized", "forbidden", "Forbidden"}:
         msg = detail
 
-    body = {k: v for k, v in {"code": code, "message": msg, "hint": hint}.items() if v}
-    return JSONResponse(body, status_code=status, headers=headers)
+    # Build details
+    try:
+        tid = get_trace_id_hex()
+    except Exception:
+        tid = None
+    details = {
+        "status_code": status,
+        "trace_id": tid,
+        "path": request.url.path,
+        "method": request.method,
+    }
+
+    # Emit auth metrics for /v1/ask on generic errors too
+    try:
+        from .metrics import AUTH_401_TOTAL, AUTH_403_TOTAL
+
+        path = getattr(request.url, "path", "")
+        if path.startswith("/v1/ask"):
+            if status == 401:
+                hdr = request.headers.get("Authorization") or ""
+                reason = "bad_token" if hdr.lower().startswith("bearer ") else "no_auth"
+                AUTH_401_TOTAL.labels(route="/v1/ask", reason=reason).inc()
+            elif status == 403:
+                # Attempt to extract scope from existing detail if available later
+                scope = "chat:write" if "chat:write" in str(detail or "") else "unknown"
+                AUTH_403_TOTAL.labels(route="/v1/ask", scope=scope).inc()
+    except Exception:
+        pass
+    # Hint backoff for 5xx responses
+    if 500 <= status < 600:
+        try:
+            headers = dict(headers or {})
+            headers.setdefault("Retry-After", "1")
+        except Exception:
+            pass
+    # Tag envelope code in header for logging middleware introspection
+    try:
+        headers = dict(headers or {})
+        headers["X-Error-Code"] = code
+    except Exception:
+        pass
+    return JSONResponse(build_error(code=code, message=msg, hint=hint, details=details), status_code=status, headers=headers)
+
+
+# Catch-all: never leak raw tracebacks to clients; standardize error envelope
+@app.exception_handler(Exception)
+async def _catch_all_errors(request: Request, exc: Exception):
+    try:
+        logger.exception("unhandled.exception")
+    except Exception:
+        pass
+    try:
+        tid = get_trace_id_hex()
+    except Exception:
+        tid = None
+    details = {
+        "status_code": 500,
+        "trace_id": tid,
+        "path": request.url.path,
+        "method": request.method,
+    }
+    # Prefer 500; build envelope and expose IDs in headers for correlation
+    env = build_error(code="internal", message="internal error", hint="try again shortly", details=details)
+    hdrs = {"X-Error-Code": "internal"}
+    try:
+        if env.get("details") and isinstance(env.get("details"), dict):
+            d = env.get("details")
+            if d.get("error_id"):
+                hdrs["X-Error-ID"] = str(d.get("error_id"))
+            if d.get("trace_id"):
+                hdrs["X-Trace-ID"] = str(d.get("trace_id"))
+    except Exception:
+        pass
+    return JSONResponse(env, status_code=500, headers=hdrs)
 
 
 @app.exception_handler(RequestValidationError)
 async def _unified_validation_error(request: Request, exc: RequestValidationError):
-    return JSONResponse(
-        {"code": "invalid", "message": "validation error", "hint": None, "errors": exc.errors()},
-        status_code=422,
-    )
+    env = build_error(code="invalid_input", message="invalid input", details={"status_code": 422, "errors": exc.errors(), "path": request.url.path, "method": request.method})
+    hdrs = {"X-Error-Code": "invalid_input"}
+    try:
+        if env.get("details") and isinstance(env.get("details"), dict) and env["details"].get("error_id"):
+            hdrs["X-Error-ID"] = str(env["details"].get("error_id"))
+        if env.get("details") and isinstance(env.get("details"), dict) and env["details"].get("trace_id"):
+            hdrs["X-Trace-ID"] = str(env["details"].get("trace_id"))
+    except Exception:
+        pass
+    return JSONResponse(env, status_code=422, headers=hdrs)
 
 
 def _custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
-    schema = get_openapi(
+
+    from .openapi import generate_custom_openapi
+    from .config_docs import should_show_servers, get_dev_servers
+
+    schema = generate_custom_openapi(
         title=app.title,
         version=app.version,
         routes=app.routes,
         tags=tags_metadata,
     )
+
     # Provide developer-friendly servers list in dev
-    if _IS_DEV_ENV:
-        servers_env = _DEV_SERVERS_SNAPSHOT or os.getenv(
-            "OPENAPI_DEV_SERVERS",
-            "http://localhost:8000",
-        )
-        servers = [
-            {"url": s.strip()}
-            for s in (servers_env.split(",") if servers_env else [])
-            if s and s.strip()
-        ]
+    if should_show_servers():
+        servers = get_dev_servers()
         if servers:
-            schema["servers"] = servers
+            schema["servers"] = [{"url": url} for url in servers]
+
     app.openapi_schema = schema
     return app.openapi_schema
 
 
 app.openapi = _custom_openapi  # type: ignore[assignment]
 
-# CORS configuration - will be added as outermost middleware
-# WebSocket requirement: Only accept http://localhost:3000 for consistent origin validation
-
-# CORS configuration - simplified logging
-_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
-
-# Parse and normalize entries
-origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
-
-# Normalize common localhost variants (127.0.0.1 -> localhost)
-origins = [
-    o.replace("http://127.0.0.1:", "http://localhost:").replace(
-        "https://127.0.0.1:", "https://localhost:"
-    )
-    for o in origins
-]
-
-# Remove any literal 'null' tokens (case-insensitive)
-origins = [o for o in origins if o and o.lower() != "null"]
-
-# Strict sanitization: prefer the single canonical localhost origin when
-# any localhost-style origin is present; otherwise, strip obvious
-# unwanted entries (raw IPs and common non-frontend ports like 8080).
-import re
-from urllib.parse import urlparse
-
-sanitized = []
-found_localhost = False
-for o in origins:
-    try:
-        p = urlparse(o)
-        host = p.hostname or ""
-        port = p.port
-        scheme = p.scheme or "http"
-        # Map any localhost or 127.0.0.1 entry to the canonical frontend origin
-        if host in ("localhost", "127.0.0.1"):
-            if port is None or port == 3000 or scheme == "http":
-                found_localhost = True
-                continue
-        # Skip raw IP addresses (e.g. 10.0.0.138) to avoid leaking LAN IPs
-        if re.match(r"^\d+(?:\.\d+){3}$", host):
-            continue
-        # Skip alternate common dev ports that are not the frontend (e.g. :8080)
-        if port == 8080:
-            continue
-        # Keep everything else (likely legitimate production origins)
-        sanitized.append(o)
-    except Exception:
-        # If unparsable, drop it
-        continue
-
-if found_localhost:
-    origins = ["http://localhost:3000"]
-else:
-    # Deduplicate but preserve order-ish
-    seen = set()
-    out = []
-    for o in sanitized:
-        if o in seen:
-            continue
-        seen.add(o)
-        out.append(o)
-    origins = out or ["http://localhost:3000"]
-
-if not origins:
-    logging.warning("No CORS origins configured. Defaulting to http://localhost:3000")
-    origins = ["http://localhost:3000"]
-
-
-def is_same_address_family(origin_list):
-    """Check if all origins are in the same address family (localhost or IP)"""
-    if not origin_list:
-        return True
-    localhost_count = sum(
-        1 for o in origin_list if "localhost" in o or "127.0.0.1" in o
-    )
-    ip_count = sum(
-        1 for o in origin_list if "localhost" not in o and "127.0.0.1" not in o
-    )
-    return localhost_count == 0 or ip_count == 0
-
-
-if not is_same_address_family(origins):
-    logging.warning("Mixed address families detected in CORS origins (post-sanitize).")
-    logging.warning(
-        "This may cause WebSocket connection issues. Consider using consistent addressing."
-    )
-
-# Allow credentials: yes (cookies/tokens) — enforce true for local dev to support cookies with exact origin
-allow_credentials = True
-
-# Store as single source of truth for HTTP+WS origin validation
-app.state.allowed_origins = origins
-
-# Log CORS configuration - clear INFO log for debugging origin issues
-logging.info(
-    "CORS resolved origins=%s | allow_credentials=%s | allow_methods=%s | allow_headers=%s | expose_headers=%s",
-    origins,
-    allow_credentials,
-    ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    ["*", "Authorization"],
-    ["X-Request-ID"],
-)
+# CORS configuration will be set up later after all imports
 
 # The HTTP->WS guard and debug endpoints have been moved to modular routers:
 # - HTTP->WS guard is implemented in `app/api/ws_endpoints.py` as an APIRouter
@@ -1113,7 +1049,7 @@ class AskRequest(BaseModel):
         title="AskRequest",
         validate_by_name=True,
         validate_by_alias=True,
-        json_schema_extra={"example": {"prompt": "hello"}},
+        json_schema_extra={"examples": [{"prompt": "hello"}]},
     )
 
 
@@ -1124,11 +1060,11 @@ class ServiceRequest(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
+            "examples": [{
                 "domain": "light",
                 "service": "turn_on",
                 "data": {"entity_id": "light.kitchen"},
-            }
+            }]
         }
     )
 
@@ -1160,6 +1096,30 @@ def include(router_spec: str, *, prefix: str = "") -> None:
     except Exception as e:
         logging.warning("Router include failed for %s: %s", router_spec, e)
 
+# CORS configuration using settings module
+origins = get_cors_origins()
+allow_credentials = get_cors_allow_credentials()
+allow_methods = get_cors_allow_methods()
+allow_headers = get_cors_allow_headers()
+expose_headers = get_cors_expose_headers()
+max_age = get_cors_max_age()
+
+# Validate CORS origins
+validate_cors_origins(origins)
+
+# Store as single source of truth for HTTP+WS origin validation
+app.state.allowed_origins = origins
+
+# Log CORS configuration - clear INFO log for debugging origin issues
+logging.info(
+    "CORS resolved origins=%s | allow_credentials=%s | allow_methods=%s | allow_headers=%s | expose_headers=%s",
+    origins,
+    allow_credentials,
+    allow_methods,
+    allow_headers,
+    expose_headers,
+)
+
 # Core, sessions, utilities
 include("app.api.capture:router", prefix="/v1")
 include("app.api.sessions_http:router", prefix="/v1")
@@ -1172,15 +1132,13 @@ include("app.api.debug:router", prefix="/v1")
 include("app.api.core_misc:router", prefix="/v1")
 
 # Prefer the root metrics router; fall back to simple metrics when unavailable
-_metrics_root_loaded = _safe_import_router(
-    "from .api.metrics_root import router as metrics_root_router", "metrics_root"
-)
-if _metrics_root_loaded:
-    app.include_router(metrics_root_router)  # keep /metrics at root
+_metrics_root = _import_router(".api.metrics_root")
+if _metrics_root is not None:
+    app.include_router(_metrics_root)  # keep /metrics at root
 else:
-    # Expose Prometheus metrics (scrapable) only when root router failed to import
-    if _safe_import_router("from .api.metrics import router as metrics_simple_router", "metrics_simple"):
-        app.include_router(metrics_simple_router)
+    _metrics_simple = _import_router(".api.metrics")
+    if _metrics_simple is not None:
+        app.include_router(_metrics_simple)
 
 include("app.health:router", prefix="/v1/diag")
 
@@ -1190,7 +1148,10 @@ include("app.api.logs_simple:router", prefix="/v1")
 # =============================================================================
 # EXISTING EXTERNAL ROUTERS - Keep in modern-first order
 # =============================================================================
+# Mount status router at both /v1/status and /status for compatibility
 app.include_router(status_router, prefix="/v1")
+app.include_router(status_router, include_in_schema=False)
+app.include_router(schema_router)
 app.include_router(health_router)
 include("app.api.well_known:router")
 
@@ -1205,38 +1166,39 @@ except Exception:
 # Include modern auth API router first to avoid route shadowing
 include("app.api.auth:router", prefix="/v1")
 
+# Include legacy auth router for backward compatibility (/v1/refresh, /v1/logout)
+include("app.auth:router", prefix="/v1")
+
 # Legacy auth router split into focused modules. Mount conditionally based on env.
 from .auth_providers import admin_enabled
 
-# Mount whoami + finish endpoints (always available when auth router enabled)
-if admin_enabled():
-    include("app.api.auth_router_whoami:router", prefix="/v1")
+# Mount refresh router (kept separate)
+# TEMPORARILY DISABLED: Testing original auth router
+# if _safe_import_router("from .api.auth_router_refresh import router as auth_refresh_router", "auth_refresh"):
+#     app.include_router(auth_refresh_router, prefix="/v1")
 
-    # Mount refresh router (kept separate)
-    # TEMPORARILY DISABLED: Testing original auth router
-    # if _safe_import_router("from .api.auth_router_refresh import router as auth_refresh_router", "auth_refresh"):
-    #     app.include_router(auth_refresh_router, prefix="/v1")
+# Mount PATs router
+# TEMPORARILY DISABLED: Testing original auth router
+# if _safe_import_router("from .api.auth_router_pats import router as auth_pats_router", "auth_pats"):
+#     app.include_router(auth_pats_router, prefix="/v1")
 
-    # Mount PATs router
-    # TEMPORARILY DISABLED: Testing original auth router
-    # if _safe_import_router("from .api.auth_router_pats import router as auth_pats_router", "auth_pats"):
-    #     app.include_router(auth_pats_router, prefix="/v1")
+# Dev-only auth helpers
+# TEMPORARILY DISABLED: Testing original auth router
+# if os.getenv("ENV", "dev").strip().lower() in {"dev", "development"}:
+#     if _safe_import_router("from .api.auth_router_dev import router as auth_dev_router", "auth_dev"):
+#         app.include_router(auth_dev_router, prefix="/v1")
 
-    # Dev-only auth helpers
-    # TEMPORARILY DISABLED: Testing original auth router
-    # if os.getenv("ENV", "dev").strip().lower() in {"dev", "development"}:
-    #     if _safe_import_router("from .api.auth_router_dev import router as auth_dev_router", "auth_dev"):
-    #         app.include_router(auth_dev_router, prefix="/v1")
-
-print("INFO: Auth routers mounted (admin_enabled=True)")
+try:
+    logging.info("Auth routers processed (admin_enabled=%s)", bool(admin_enabled()))
+except Exception:
+    # Fallback to a simple log if admin_enabled() import fails
+    logging.info("Auth routers processed (admin_enabled=unknown)")
 if preflight_router is not None:
     app.include_router(preflight_router, prefix="/v1")
 if device_auth_router is not None:
     app.include_router(device_auth_router, prefix="/v1")
-# Removed duplicate inclusion of app.api.auth router to avoid route shadowing
-app.include_router(oauth_google_router, prefix="/v1")
+# Keep only the canonical Google OAuth router; legacy router removed to avoid overlap.
 app.include_router(google_oauth_router, prefix="/v1")
-app.include_router(auth_router, prefix="/v1")
 if _oauth_apple_router is not None:
     app.include_router(_oauth_apple_router, prefix="/v1")
 # Mount Apple OAuth stub for local/dev when enabled, now that `app` exists
@@ -1255,6 +1217,8 @@ if auth_password_router is not None:
 # Provide both versioned and unversioned, under /google to match redirect defaults
 app.include_router(google_router, prefix="/v1/google")
 app.include_router(google_router, prefix="/google", include_in_schema=False)
+include("app.api.google_services:router")
+include("app.api.health_google:router", prefix="/v1/health")
 
 # New modular routers for HA and profile/admin
 try:
@@ -1280,19 +1244,19 @@ if admin_enabled():
     try:
         from .api.admin import router as admin_api_router
         app.include_router(admin_api_router, prefix="/v1")
-        print("INFO: Admin routes mounted (admin_enabled=True)")
+        logging.info("Admin routes mounted (admin_enabled=%s)", True)
     except Exception:
-        print("INFO: Admin routes disabled (import failed)")
+        logging.info("Admin routes disabled (import failed)")
 else:
-    print("INFO: Admin routes disabled (admin_enabled=False)")
+    logging.info("Admin routes disabled (admin_enabled=%s)", False)
 
 # Conditionally mount all admin-related routers
 if admin_enabled():
     include("app.api.admin_ui:router", prefix="/v1")
     include("app.admin.routes:router", prefix="/v1")
-    print("INFO: Admin UI and extras routers processed (admin_enabled=True)")
+    logging.info("Admin UI and extras routers processed (admin_enabled=%s)", True)
 else:
-    print("INFO: Admin UI and extras routers disabled (admin_enabled=False)")
+    logging.info("Admin UI and extras routers disabled (admin_enabled=%s)", False)
 
 include("app.api.me:router", prefix="/v1")
 include("app.api.devices:router", prefix="/v1")
@@ -1318,11 +1282,11 @@ if admin_enabled():
     try:
         from .api.status_plus import router as status_plus_router
         app.include_router(status_plus_router, prefix="/v1", dependencies=[Depends(docs_security_with(["admin:write"]))])
-        print("INFO: Status plus router mounted (admin_enabled=True)")
+        logging.info("Status plus router mounted (admin_enabled=%s)", True)
     except Exception:
-        print("INFO: Status plus router disabled (import failed)")
+        logging.info("Status plus router disabled (import failed)")
 else:
-    print("INFO: Status plus router disabled (admin_enabled=False)")
+    logging.info("Status plus router disabled (admin_enabled=%s)", False)
 
 include("app.api.rag:router", prefix="/v1")
 
@@ -1374,6 +1338,8 @@ try:
 except Exception as e:
     logging.warning("Router include failed for app.caregiver:router: %s", e)
 
+include("app.api.music:router", prefix="/v1")
+include("app.api.music:root_router", prefix="/v1")
 include("app.api.music_http:router", prefix="/v1")
 include("app.api.music_ws:router", prefix="/v1")
 include("app.api.tv_music_sim:router", prefix="/v1")
@@ -1413,17 +1379,18 @@ def register_middlewares_once(application):
         add_mw(application, SilentRefreshMiddleware, name="SilentRefreshMiddleware")
 
     # Error boundary
+    add_mw(application, ErrorHandlerMiddleware, name="ErrorHandlerMiddleware")
     add_mw(application, EnhancedErrorHandlingMiddleware, name="EnhancedErrorHandlingMiddleware")
 
-    # CORS outermost
+    # CORS outermost - using custom CorsMiddleware
     application.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
         allow_credentials=allow_credentials,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["*", "Authorization"],
-        expose_headers=["X-Request-ID"],
-        max_age=600,
+        allow_methods=allow_methods,
+        allow_headers=allow_headers,
+        expose_headers=expose_headers,
+        max_age=max_age,
     )
 
     try:
@@ -1460,6 +1427,7 @@ def _assert_middleware_order_dev(app):
         # outer → inner (as reported by Starlette)
         "CORSMiddleware",
         "EnhancedErrorHandlingMiddleware",
+        "ErrorHandlerMiddleware",
         # Optional dev middleware (in reverse order since they're added later)
         *(
             ["SilentRefreshMiddleware"]
@@ -1503,6 +1471,7 @@ Expected registration order (inner→outer):
 - CSRFMiddleware
 - ReloadEnvMiddleware (optional, DEV_MODE={os.getenv('DEV_MODE', '0')})
 - SilentRefreshMiddleware (optional, SILENT_REFRESH_ENABLED={os.getenv('SILENT_REFRESH_ENABLED', '1')})
+- ErrorHandlerMiddleware
 - EnhancedErrorHandlingMiddleware
 - CORSMiddleware (outermost)
 

@@ -12,6 +12,7 @@ from .custom import (
     ReloadEnvMiddleware,
     SilentRefreshMiddleware,
 )
+from .error_handler import ErrorHandlerMiddleware
 from .loader import add_mw
 from .middleware_core import (
     DedupMiddleware,
@@ -33,6 +34,7 @@ __all__ = [
     "RedactHashMiddleware",
     "RateLimitMiddleware",
     "SessionAttachMiddleware",
+    "ErrorHandlerMiddleware",
     "EnhancedErrorHandlingMiddleware",
     "SilentRefreshMiddleware",
     "ReloadEnvMiddleware",

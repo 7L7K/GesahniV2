@@ -38,13 +38,11 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
         dict: Cookie configuration with secure, samesite, httponly, path, domain
     """
     # Base configuration from environment
-    # Determine secure flag automatically: HTTPS requests should be secure
-    env_force_secure = os.getenv("COOKIE_SECURE", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    # Determine secure flag: check if explicitly forced
+    env_secure = os.getenv("COOKIE_SECURE", "").strip().lower()
+    env_force_secure = env_secure in {"1", "true", "yes", "on"}
+    env_force_insecure = env_secure in {"0", "false", "no", "off"}
+
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
     dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
 
@@ -53,16 +51,20 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
     dev_env_detected = dev_mode or _is_dev_environment(request)
     is_tls = _get_scheme(request) == "https"
 
-    # Default secure: True for HTTPS, else False. Allow env to force secure.
-    cookie_secure = (is_tls) or env_force_secure
+    # Determine secure flag: HTTPS by default, but allow explicit override
+    if env_force_secure:
+        cookie_secure = True
+    elif env_force_insecure:
+        cookie_secure = False
+    else:
+        # Default: True for HTTPS, False for HTTP
+        cookie_secure = is_tls
 
     # If in dev or on localhost over plain HTTP, ensure cookies are accepted by browsers
-    if dev_env_detected and not is_tls and not env_force_secure:
-        # Only relax to Secure=False on HTTP when not explicitly forced by env
-        # This keeps operator intent when COOKIE_SECURE=1 is set.
+    if dev_env_detected and not is_tls:
+        # In dev mode over HTTP, always force Secure=False for localhost compatibility
+        # This overrides any COOKIE_SECURE setting to ensure cookies work in development
         cookie_secure = False
-        # Force SameSite=Lax for localhost/http to maximize compatibility
-        cookie_samesite = "lax"
 
     # SameSite=None requires Secure=True. If SameSite=None is requested but secure is not
     # set, force secure=True to avoid creating invalid cookie combinations.

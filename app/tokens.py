@@ -67,7 +67,7 @@ def _create_access_token_internal(
             "iat": datetime.utcnow(),
             "jti": uuid4().hex,
             "type": "access",
-            "scopes": data.get("scopes", ["care:resident", "music:control"]),
+            "scopes": data.get("scopes", ["care:resident", "music:control", "chat:write"]),
         }
     )
 
@@ -119,7 +119,7 @@ def _create_refresh_token_internal(
             "iat": datetime.utcnow(),
             "jti": uuid4().hex,
             "type": "refresh",
-            "scopes": data.get("scopes", ["care:resident", "music:control"]),
+            "scopes": data.get("scopes", ["care:resident", "music:control", "chat:write"]),
         }
     )
 
@@ -179,7 +179,7 @@ def _normalize_access_claims(claims: dict[str, Any]) -> dict[str, Any]:
 
     # Add standard claims
     normalized.setdefault("type", "access")
-    normalized.setdefault("scopes", ["care:resident", "music:control"])
+    normalized.setdefault("scopes", ["care:resident", "music:control", "chat:write"])
 
     # Add standard JWT claims that will be set by create_access_token
     # (iat, exp, jti will be added by the underlying implementation)
@@ -199,7 +199,7 @@ def _normalize_refresh_claims(claims: dict[str, Any]) -> dict[str, Any]:
 
     # Add standard claims
     normalized.setdefault("type", "refresh")
-    normalized.setdefault("scopes", ["care:resident", "music:control"])
+    normalized.setdefault("scopes", ["care:resident", "music:control", "chat:write"])
 
     # Ensure JTI is present for refresh tokens (required for revocation)
     if "jti" not in normalized:

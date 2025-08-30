@@ -48,9 +48,9 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
                     try:
                         import os
 
-                        from app.security import _jwt_decode
+                        from app.security import jwt_decode
 
-                        payload = _jwt_decode(token, key=os.getenv("JWT_SECRET"))
+                        payload = jwt_decode(token, key=os.getenv("JWT_SECRET"))
                         user_id = payload.get("sub") or payload.get("uid")
                         if user_id:
                             # Successfully authenticated - normalize scopes
@@ -88,6 +88,15 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
         request.state.scopes = (
             scopes  # None = unauthenticated, [] = authenticated but no scopes
         )
+
+        # Also set the JWT payload if we have it for scope checking functions
+        if user_id and user_id != "anon":
+            try:
+                payload = _get_request_payload(request)
+                if isinstance(payload, dict):
+                    request.state.jwt_payload = payload
+            except Exception:
+                pass
 
         # Record metrics for authenticated requests
         if user_id and user_id != "anon":

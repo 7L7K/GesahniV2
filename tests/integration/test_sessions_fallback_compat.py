@@ -1,13 +1,13 @@
 from http import HTTPStatus
 
-import jwt
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.util_tokens import mint_jwt_token
 
 
 def _auth_headers():
-    tok = jwt.encode({"user_id": "tester"}, "secret", algorithm="HS256")
+    tok = mint_jwt_token(sub="tester", secret="secret")
     return {"Authorization": f"Bearer {tok}"}
 
 

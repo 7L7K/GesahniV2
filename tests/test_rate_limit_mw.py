@@ -15,6 +15,8 @@ def _spin():
     os.environ["RATE_LIMIT_WINDOW_S"] = "1"  # 1 second window
     # Disable middleware order check for testing
     os.environ["ENV"] = "dev"
+    # Enable rate limiting in tests
+    os.environ["ENABLE_RATE_LIMIT_IN_TESTS"] = "1"
 
     # Clear the rate limit bucket to ensure test isolation
     from app.middleware.rate_limit import _BUCKET
@@ -62,7 +64,7 @@ def test_rate_limit_options_exempt():
     # Multiple OPTIONS requests should all succeed
     for _ in range(5):
         r = c.options("/v1/csrf")
-        assert r.status_code == 200
+        assert r.status_code in (200, 204)  # 204 is valid for OPTIONS
 
 
 def test_rate_limit_window_reset():

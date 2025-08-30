@@ -62,6 +62,8 @@ def test_expired_access_token(monkeypatch):
     monkeypatch.setenv(
         "JWT_SECRET", "test-secret-key-for-testing-only-not-for-production"
     )
+    # Disable clock skew for strict expiry testing
+    monkeypatch.setenv("JWT_CLOCK_SKEW_S", "0")
     c = TestClient(app)
     # ttl -1 to force expiry
     tok = _mint(

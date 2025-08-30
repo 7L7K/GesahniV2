@@ -75,6 +75,8 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
         from datetime import datetime
 
         from app.logging_config import req_id_var
+        from app.otel_utils import get_trace_id_hex  # best-effort
+        from app.error_envelope import build_error
 
         logger = logging.getLogger(__name__)
         start_time = time.time()
@@ -129,22 +131,38 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
             # Add error code for 4xx/5xx responses
             error_code = None
             if 400 <= response.status_code < 600:
-                error_code = _generate_error_code(response.status_code)
+                # Prefer envelope code from response header if present
+                try:
+                    error_code = response.headers.get("X-Error-Code") or None
+                except Exception:
+                    error_code = None
+                if not error_code:
+                    error_code = _generate_error_code(response.status_code)
 
             log_extra = {
                 "req_id": req_id,
                 "route": route_name,
                 "user_anon": user_anon,
                 "status_code": response.status_code,
-                "duration_ms": duration * 1000,
+                "latency_ms": duration * 1000,
             }
             if error_code:
                 log_extra["error_code"] = error_code
+            try:
+                tid = get_trace_id_hex()
+                if tid:
+                    log_extra["trace_id"] = tid
+            except Exception:
+                pass
 
-            logger.info(
+            # INFO sampling
+            import os, random
+            info_sampling = float(os.getenv("INFO_SAMPLING", "1.0"))
+            if info_sampling >= 1.0 or random.random() < max(0.0, min(1.0, info_sampling)):
+                logger.info(
                 f"Request completed: {request.method} {request.url.path} -> {response.status_code} ({duration:.3f}s)",
                 extra={"meta": log_extra},
-            )
+                )
             return response
 
         except Exception as e:
@@ -153,7 +171,11 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
             # Generate error code for server errors
             error_code = _generate_error_code(500, type(e).__name__)
 
-            logger.error(
+            # ERROR sampling
+            import os, random
+            err_sampling = float(os.getenv("ERROR_SAMPLING", "1.0"))
+            if err_sampling >= 1.0 or random.random() < max(0.0, min(1.0, err_sampling)):
+                logger.error(
                 f"Request failed: {request.method} {request.url.path} -> {type(e).__name__}: {e}",
                 exc_info=True,
                 extra={
@@ -161,23 +183,35 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
                         "req_id": req_id,
                         "route": route_name,
                         "user_anon": user_anon,
-                        "duration_ms": duration * 1000,
+                        "latency_ms": duration * 1000,
                         "error_type": type(e).__name__,
                         "error_message": str(e),
                         "error_code": error_code,
                     }
                 },
-            )
+                )
             # unify error shape
             from fastapi.responses import JSONResponse
 
+            details = {
+                "status_code": 500,
+                "error_code": error_code,
+                "route": route_name,
+            }
+            try:
+                tid = get_trace_id_hex()
+                if tid:
+                    details["trace_id"] = tid
+            except Exception:
+                pass
             return JSONResponse(
                 status_code=500,
-                content={
-                    "error": "Internal server error",
-                    "req_id": req_id,
-                    "timestamp": datetime.utcnow().isoformat(),
-                },
+                content=build_error(
+                    code="server_error",
+                    message="internal error",
+                    hint="try again shortly",
+                    details=details,
+                ),
             )
 
 
