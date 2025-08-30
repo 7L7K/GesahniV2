@@ -80,6 +80,8 @@ LLAMA_HEALTHY: bool = True
 # Circuit breaker state
 llama_failures: int = 0
 llama_circuit_open: bool = False
+# Track last failure time for cool-down decisions
+llama_last_failure_ts: float = 0.0
 
 # Health check state tracking
 llama_health_check_state = {
@@ -193,25 +195,25 @@ async def _check_and_set_flag() -> None:
 
 
 def _record_failure() -> None:
-    """Update circuit breaker failure counters."""
-    global llama_failures, llama_circuit_open
+    """Update circuit breaker failure counters with a real timestamp."""
+    global llama_failures, llama_circuit_open, llama_last_failure_ts
     now = time.monotonic()
-    # Update failures count; timestamp tracked only when needed elsewhere
-    if (
-        now - getattr(globals().get("llama_last_failure_ts", 0), "__class__", 0) > 60
-    ):  # sentinel check
+    # If last failure was over 60s ago, reset the rolling count
+    if now - llama_last_failure_ts > 60.0:
         llama_failures = 1
     else:
         llama_failures += 1
+    llama_last_failure_ts = now
     if llama_failures >= 3:
         llama_circuit_open = True
 
 
 def _reset_failures() -> None:
     """Reset circuit breaker state after a successful call."""
-    global llama_failures, llama_circuit_open
+    global llama_failures, llama_circuit_open, llama_last_failure_ts
     llama_failures = 0
     llama_circuit_open = False
+    llama_last_failure_ts = 0.0
 
 
 async def _schedule_next_health_check() -> None:

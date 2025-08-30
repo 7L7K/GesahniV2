@@ -23,5 +23,9 @@ async def token_for_sdk(request: Request, user_id: str = Depends(get_current_use
     except RuntimeError as e:
         detail = str(e)
         if detail in ("not_connected", "needs_reauth"):
-            raise HTTPException(status_code=401, detail=detail)
+            from ..http_errors import unauthorized
+
+            msg = "spotify not connected" if detail == "not_connected" else "spotify needs reauth"
+            hint = "connect Spotify account" if detail == "not_connected" else "reauthorize Spotify access"
+            raise unauthorized(code=detail, message=msg, hint=hint)
         raise

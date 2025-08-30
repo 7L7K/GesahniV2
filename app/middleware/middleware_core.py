@@ -789,7 +789,10 @@ async def silent_refresh_middleware(request: Request, call_next):
                 return response
         except Exception:
             pass
-        token = request.cookies.get("access_token")
+        # Accept both canonical and legacy cookie names for access token
+        from ..cookies import read_access_cookie, read_refresh_cookie
+
+        token = read_access_cookie(request)
         secret = os.getenv("JWT_SECRET")
         if not token or not secret:
             return response
@@ -860,7 +863,7 @@ async def silent_refresh_middleware(request: Request, call_next):
             )
             # Optionally extend refresh cookie if present (best-effort) with jitter to avoid herd
             try:
-                rtok = request.cookies.get("refresh_token")
+                rtok = read_refresh_cookie(request)
                 if rtok:
                     rp = _jwt_decode(rtok, secret, algorithms=["HS256"])  # may raise
                     r_exp = int(rp.get("exp", now))

@@ -334,7 +334,9 @@ async def auth_gate(request: Request) -> str:
                     "meta": {"path": getattr(getattr(request, "url", None), "path", "/")}
                 },
             )
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            from ..http_errors import unauthorized
+
+            raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
         try:
             payload = _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
@@ -352,7 +354,9 @@ async def auth_gate(request: Request) -> str:
                     "meta": {"path": getattr(getattr(request, "url", None), "path", "/")}
                 },
             )
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            from ..http_errors import unauthorized
+
+            raise unauthorized(message="authentication required", hint="login or include Authorization header")
     else:
         # Use the standard verify_token which handles cookie/header hybrid auth
         try:
@@ -373,7 +377,9 @@ async def auth_gate(request: Request) -> str:
                     }
                 },
             )
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            from ..http_errors import unauthorized
+
+            raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
 # Log auth dependency configuration at startup
 logger.info("🔐 AUTH: /v1/ask using auth_dependency=get_current_user_id")
@@ -407,7 +413,9 @@ async def _verify_bearer_strict(request: Request) -> None:
                 "meta": {"path": getattr(getattr(request, "url", None), "path", "/")}
             },
         )
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
     try:
         payload = _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
         request.state.jwt_payload = payload
@@ -418,7 +426,9 @@ async def _verify_bearer_strict(request: Request) -> None:
                 "meta": {"path": getattr(getattr(request, "url", None), "path", "/")}
             },
         )
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
 
 async def _require_auth_dep(request: Request) -> None:
@@ -508,7 +518,9 @@ async def _ask(request: Request, body: dict | None):
             ).inc()
         except Exception:
             pass
-        raise HTTPException(status_code=401, detail="Authentication required")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
     # Liberal parsing: normalize various legacy shapes into (prompt_text, model, opts)
     def _dget(obj: dict | None, path: str):
@@ -961,7 +973,9 @@ async def ask_dry_explain(
             ).inc()
         except Exception:
             pass
-        raise HTTPException(status_code=401, detail="Authentication required")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
     # Use the same normalization logic
     (
@@ -1110,7 +1124,9 @@ async def ask_stream(
             ).inc()
         except Exception:
             pass
-        raise HTTPException(status_code=401, detail="Authentication required")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
     # Use the same normalization logic
     (

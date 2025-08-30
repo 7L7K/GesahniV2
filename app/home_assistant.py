@@ -183,12 +183,18 @@ async def refresh_services_registry() -> None:
         schema: dict[tuple[str, str], set[str]] = {}
         if isinstance(data, list):
             for dom in data:
+                if not isinstance(dom, dict):
+                    continue
                 domain = dom.get("domain")
+                if not isinstance(domain, str) or not domain:
+                    continue
                 services = dom.get("services", {}) or {}
                 if not isinstance(services, dict):
                     continue
                 registry.setdefault(domain, set())
                 for svc_name, info in services.items():
+                    if not isinstance(svc_name, str) or not svc_name:
+                        continue
                     registry[domain].add(svc_name)
                     fields = set((info or {}).get("fields", {}).keys())
                     schema[(domain, svc_name)] = fields
@@ -422,14 +428,25 @@ def _best_fuzzy_match(target: str, states: list[dict]) -> tuple[str | None, floa
     return best_id, best_score
 
 
+_HANDLE_CMD_DEPRECATION_WARNED = False
+
+
 async def handle_command(prompt: str) -> CommandResult | None:
-    """Parse HA control commands and execute them.
+    """[DEPRECATED] Parse HA control phrases and execute actions.
+
+    This legacy path is superseded by the Skills system which should be used
+    for all user intents. This function remains for backward compatibility but
+    may be removed in a future version.
 
     Supports:
       - "turn on/off <name>"
       - "toggle <name>"
       - "set <name> brightness <0-100>" (lights)
     """
+    global _HANDLE_CMD_DEPRECATION_WARNED
+    if not _HANDLE_CMD_DEPRECATION_WARNED:
+        logger.warning("home_assistant.handle_command is deprecated; use Skills instead")
+        _HANDLE_CMD_DEPRECATION_WARNED = True
     text = prompt.strip()
     # toggle
     m = re.match(r"^(?:ha[:]?)?\s*toggle\s+(.+)$", text, re.I)

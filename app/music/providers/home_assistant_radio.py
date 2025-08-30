@@ -12,12 +12,17 @@ HA_URL = os.getenv("HOME_ASSISTANT_URL", "http://localhost:8123")
 HA_TOKEN = os.getenv("HOME_ASSISTANT_TOKEN")
 
 
+from .base import Device
+
+
 class HomeAssistantRadioProvider:
     """Fallback provider that calls Home Assistant `media_player.play_media`.
 
     This provider assumes Home Assistant REST API is reachable and a long-lived
     token is available in `HOME_ASSISTANT_TOKEN`.
     """
+
+    name = "ha"
 
     def __init__(self, ha_url: str | None = None, token: str | None = None) -> None:
         self.ha_url = ha_url or HA_URL
@@ -60,7 +65,7 @@ class HomeAssistantRadioProvider:
                     logger.error("HA previous failed: %s %s", resp.status, text)
                     raise RuntimeError("Home Assistant previous failed")
 
-    async def get_devices(self) -> List[Dict[str, Any]]:
+    async def list_devices(self) -> List[Device]:
         url = f"{self.ha_url}/api/states"
         headers = {"Authorization": f"Bearer {self.token}"}
         async with aiohttp.ClientSession() as sess:
@@ -70,7 +75,17 @@ class HomeAssistantRadioProvider:
                     return []
                 data = await resp.json()
                 # Filter media_player entities
-                devices = [s for s in data if s.get("entity_id", "").startswith("media_player.")]
+                devices = [
+                    Device(
+                        id=s.get("entity_id", "media_player.unknown"),
+                        name=(s.get("attributes", {}) or {}).get("friendly_name", s.get("entity_id", "")),
+                        type="media_player",
+                        volume=(s.get("attributes", {}) or {}).get("volume_level"),
+                        active=(s.get("state") == "playing"),
+                    )
+                    for s in data
+                    if s.get("entity_id", "").startswith("media_player.")
+                ]
                 return devices
 
     async def play_url(self, url: str | None, entity_id: str | None = None) -> None:
@@ -86,5 +101,4 @@ class HomeAssistantRadioProvider:
                     text = await resp.text()
                     logger.error("HA play_url failed: %s %s", resp.status, text)
                     raise RuntimeError("Home Assistant play failed")
-
 

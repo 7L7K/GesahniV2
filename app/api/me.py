@@ -71,7 +71,9 @@ async def sessions(
     ),
 ) -> list[dict[str, Any]] | dict[str, Any]:
     if user_id == "anon":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
     rows = await sessions_store.list_user_sessions(user_id)
     items = _to_session_info(rows)
     try:
@@ -90,7 +92,9 @@ async def sessions_paginated(
     cursor: str | None = Query(default=None),
 ) -> dict[str, Any]:
     if user_id == "anon":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
     rows = await sessions_store.list_user_sessions(user_id)
     start = 0
     try:
@@ -109,7 +113,9 @@ async def revoke_session(
     sid: str, user_id: str = Depends(get_current_user_id)
 ) -> dict[str, str]:
     if user_id == "anon":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
     await sessions_store.revoke_family(sid)
     return {"status": "ok"}
 

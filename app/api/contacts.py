@@ -178,8 +178,4 @@ async def start_call(
 
 
 # Merge TV endpoints into the care router so main.py includes everything under one router
-try:
-    router  # type: ignore[name-defined]
-except NameError:
-    router = APIRouter(tags=["Care"])  # fallback, but should not happen
 router.include_router(tv_router)

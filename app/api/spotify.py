@@ -102,7 +102,8 @@ if os.getenv("SPOTIFY_LOGIN_LEGACY", "0") == "1":
         # `auth_token` cookie to reduce confusion and surface area.
         from ..cookie_names import GSNH_AT
 
-        jwt_token = request.cookies.get(GSNH_AT)
+    from ..cookies import read_access_cookie
+    jwt_token = read_access_cookie(request)
 
         if jwt_token:
             # Temp cookie for legacy flow: HttpOnly + SameSite=Lax; Secure per env
@@ -206,7 +207,9 @@ async def spotify_connect(request: Request, user_id: str = Depends(get_current_u
     # user_id is provided by dependency injection (requires authentication)
     if not user_id or user_id == "anon":
         logger.error("Spotify connect: unauthenticated request")
-        raise HTTPException(status_code=401, detail="authentication_failed")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(code="authentication_failed", message="authentication failed", hint="reconnect Spotify account")
     logger.info(f"Spotify connect: authenticated user_id='{user_id}'")
 
     logger.info("🎵 SPOTIFY CONNECT: Preparing stateless OAuth flow", extra={
@@ -657,7 +660,9 @@ async def spotify_disconnect(request: Request) -> dict:
         if user_id == "anon":
             raise Exception("unauthenticated")
     except Exception:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
     # Mark tokens invalid and record revocation timestamp using async DAO
     success = await SpotifyClient(user_id).disconnect()

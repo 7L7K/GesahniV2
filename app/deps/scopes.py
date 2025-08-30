@@ -258,11 +258,9 @@ def require_scope(scope: str) -> Callable[[Request], bool]:
             except Exception:
                 pass  # Continue even if audit fails
 
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="auth_required",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            from ..http_errors import unauthorized
+
+            raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
         # Check if the required scope is satisfied
         scope_satisfied = scope in scopes
@@ -341,11 +339,9 @@ def require_any_scopes(
 
         if scopes is None:
             logger.warning("rbac.unauthorized", user_id=user_id or "anonymous")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="auth_required",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            from ..http_errors import unauthorized
+
+            raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
         if not (req & scopes):
             logger.warning(
@@ -462,11 +458,9 @@ def require_scope(required: str) -> Callable[[Request], None]:
         if scopes is None:
             # Not authenticated - return 401
             logger.warning("deny: missing_scope scope=<%s> reason=no_payload", required)
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="auth_required",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            from ..http_errors import unauthorized
+
+            raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
         # Check if the required scope is satisfied
         scope_satisfied = required in scopes
@@ -526,7 +520,9 @@ def require_any_scope(required: Iterable[str]) -> Callable[[Request], None]:
                 "deny: missing_scope scopes=<%s> reason=no_payload",
                 ",".join(required_set),
             )
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            from ..http_errors import unauthorized
+
+            raise unauthorized(message="authentication required", hint="login or include Authorization header")
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
@@ -595,7 +591,9 @@ def require_scopes(required: Iterable[str]) -> Callable[[Request], None]:
                 "deny: missing_scope scopes=<%s> reason=no_payload",
                 ",".join(required_set),
             )
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            from ..http_errors import unauthorized
+
+            raise unauthorized(message="authentication required", hint="login or include Authorization header")
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
@@ -630,7 +628,9 @@ def require_any_scopes(required: Iterable[str]) -> Callable[[Request], None]:
                 "deny: missing_scope scopes=<%s> reason=no_payload",
                 ",".join(required_set),
             )
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            from ..http_errors import unauthorized
+
+            raise unauthorized(message="authentication required", hint="login or include Authorization header")
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
@@ -654,7 +654,9 @@ def require_scopes_ws(required: Iterable[str]) -> Callable[[WebSocket], None]:
         payload = _extract_payload(websocket)
         if not isinstance(payload, dict):
             # For WS, map to 4401-equivalent by raising HTTPException which FastAPI will map to 403-ish close.
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            from ..http_errors import unauthorized
+
+            raise unauthorized(message="authentication required", hint="authenticate before opening WebSocket")
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
@@ -672,7 +674,9 @@ def require_any_scopes_ws(required: Iterable[str]) -> Callable[[WebSocket], None
             return
         payload = _extract_payload(websocket)
         if not isinstance(payload, dict):
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            from ..http_errors import unauthorized
+
+            raise unauthorized(message="authentication required", hint="authenticate before opening WebSocket")
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]

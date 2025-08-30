@@ -74,7 +74,9 @@ async def verify_ws(ws: WebSocket):
             await ws.close(code=1013, reason="identity_unavailable")
             raise HTTPException(status_code=503, detail="session_store_unavailable")
         await ws.close(code=4401, reason="missing_token")
-        raise HTTPException(status_code=401, detail="missing_token")
+        from .http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="include token in Authorization header or query")
 
     try:
         payload = _jwt_decode(token, key=os.getenv("JWT_SECRET"))  # 60s leeway inside

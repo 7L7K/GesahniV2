@@ -218,9 +218,11 @@ class SpotifyClient:
                 # Success - create a mock response object for compatibility
                 class MockResponse:
                     status_code = 200
+                    headers: dict[str, Any]
 
                     def __init__(self, data: Any):
                         self.data = data
+                        self.headers = {}
 
                     def json(self) -> Any:
                         return self.data

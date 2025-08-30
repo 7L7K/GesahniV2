@@ -418,19 +418,23 @@ def _get_request_payload(request: Request | None) -> dict | None:
     except Exception:
         auth = None
 
-    # Fallback to access_token cookie
+    # Fallback to access token cookie (accept canonical + legacy)
     if not token:
         try:
-            token = request.cookies.get("access_token")
+            from .cookies import read_access_cookie
+
+            token = read_access_cookie(request)
             if token:
                 token_source = "access_token_cookie"
         except Exception:
             token = None
 
-    # 2) Try __session cookie if access_token failed
+    # 2) Try session cookie if access_token failed (accept canonical + legacy)
     if not token:
         try:
-            token = request.cookies.get("__session") or request.cookies.get("session")
+            from .cookies import read_session_cookie
+
+            token = read_session_cookie(request)
             if token:
                 token_source = "__session_cookie"
         except Exception:
@@ -874,7 +878,9 @@ async def verify_token(request: Request, response: Response | None = None) -> No
             if AUTH_FAIL:
                 AUTH_FAIL.labels(reason="missing_token").inc()
             logger.warning("deny: missing_token")
-            raise HTTPException(status_code=401, detail={"code": "unauthorized", "message": "missing token"})
+            from .http_errors import unauthorized
+
+            raise unauthorized(message="missing token", hint="send Authorization: Bearer <jwt> or include auth cookies")
         # Otherwise allow anonymous when tests indicate JWT is optional OR when scopes enforcement is disabled.
         if test_bypass or os.getenv("ENFORCE_JWT_SCOPES", "1").strip() in {
             "0",
@@ -889,7 +895,9 @@ async def verify_token(request: Request, response: Response | None = None) -> No
         except Exception:
             pass
         logger.warning("deny: missing_token")
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from .http_errors import unauthorized
+
+        raise unauthorized(message="missing token", hint="authenticate to access this endpoint")
 
     # 3) Try traditional JWT first (only for non-session cookies)
     # __session cookies contain opaque session IDs only, never JWTs
@@ -925,7 +933,9 @@ async def verify_token(request: Request, response: Response | None = None) -> No
                 AUTH_FAIL.labels(reason="expired").inc()
             logger.warning("deny: token_expired")
             logger.debug("verify_token: cookie=%s, expired=true, reason=token_expired", token_source)
-            raise HTTPException(status_code=401, detail="token_expired")
+            from .http_errors import unauthorized
+
+            raise unauthorized(code="token_expired", message="token expired", hint="refresh your session or use refresh token")
         except jwt.PyJWTError:
             # Traditional JWT failed, try Clerk if enabled and appropriate
             pass
@@ -958,8 +968,10 @@ async def verify_token(request: Request, response: Response | None = None) -> No
                     import time as _t
 
                     now = int(_t.time())
-                    at = request.cookies.get(GSNH_AT) or request.cookies.get("access_token")
-                    rt = request.cookies.get(GSNH_RT)
+                    from .cookies import read_access_cookie, read_refresh_cookie
+
+                    at = read_access_cookie(request)
+                    rt = read_refresh_cookie(request)
                     if rt and os.getenv("JWT_SECRET"):
                         try:
                             rt_claims = _jwt_decode(
@@ -999,7 +1011,8 @@ async def verify_token(request: Request, response: Response | None = None) -> No
                                 uid = str(rt_claims.get("sub") or rt_claims.get("user_id") or getattr(request.state, "user_id", ""))
                                 access_ttl, _ = get_token_ttls()
                                 new_at = make_access({"user_id": uid}, ttl_s=access_ttl)
-                                sid = request.cookies.get(GSNH_SESS)
+                                from .cookies import read_session_cookie
+                                sid = read_session_cookie(request)
                                 set_auth_cookies(
                                     response,
                                     access=new_at,
@@ -1073,17 +1086,10 @@ async def verify_token(request: Request, response: Response | None = None) -> No
         AUTH_FAIL.labels(reason="invalid").inc()
     logger.warning("deny: invalid_token")
     logger.debug("verify_token: cookie=%s, expired=false, reason=invalid_token", token_source)
-    # Emit structured reason code for unauthorized access
-    exc = HTTPException(status_code=401, detail="Unauthorized")
-    try:
-        import logging
+    # Emit standardized unauthorized error
+    from .http_errors import unauthorized
 
-        logging.getLogger(__name__).warning(
-            "auth.unauthorized", extra={"meta": {"reason": "unauthorized"}}
-        )
-    except Exception:
-        pass
-    raise exc
+    raise unauthorized(message="invalid token", hint="provide a valid bearer token or auth cookies")
 
 
 async def verify_token_strict(request: Request) -> None:
@@ -1118,7 +1124,9 @@ async def verify_token_strict(request: Request) -> None:
         except Exception:
             pass
         logger.warning("deny: missing_token_strict")
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from .http_errors import unauthorized
+
+        raise unauthorized(message="missing token", hint="send Authorization: Bearer <jwt>")
     try:
         payload = _jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
         request.state.jwt_payload = payload
@@ -1132,7 +1140,9 @@ async def verify_token_strict(request: Request) -> None:
         except Exception:
             pass
         logger.warning("deny: invalid_token_strict")
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from .http_errors import unauthorized
+
+        raise unauthorized(message="invalid token", hint="provide a valid bearer token in Authorization header")
 
 
 def _compose_key(base: str, request: Request | None) -> str:
@@ -1631,7 +1641,9 @@ async def verify_webhook(
     if ts_val is not None:
         now = time.time()
         if abs(now - ts_val) > max_skew:
-            raise HTTPException(status_code=401, detail="stale_timestamp")
+            from .http_errors import unauthorized
+
+            raise unauthorized(code="stale_timestamp", message="stale timestamp", hint="adjust sender clock or increase skew")
     # Verify signature (new contract first: includes timestamp)
     if ts_val is not None:
         for s in secrets:
@@ -1656,7 +1668,9 @@ async def verify_webhook(
         calc = sign_webhook(body, s)
         if hmac.compare_digest(calc.lower(), sig):
             return body
-    raise HTTPException(status_code=401, detail="invalid_signature")
+    from .http_errors import unauthorized
+
+    raise unauthorized(code="invalid_signature", message="invalid signature", hint="verify secret and signature format")
 
 
 def rotate_webhook_secret() -> str:

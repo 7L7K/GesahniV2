@@ -91,14 +91,13 @@ def get_current_user_id(
     # Cookie fallback so browser sessions persist without sending headers
     if token is None and request is not None:
         try:
-            # Use canonical cookie name only
-            from ..cookie_names import GSNH_AT
+            from ..cookies import read_access_cookie
 
-            token = request.cookies.get(GSNH_AT)
+            token = read_access_cookie(request)
             if token:
                 token_source = "access_token_cookie"
         except Exception:
-            token = request.cookies.get("access_token")
+            token = None
 
     # Cookie header fallback for WS handshakes
     if token is None and websocket is not None:
@@ -113,25 +112,14 @@ def get_current_user_id(
         except Exception:
             token = None
 
-    # 3) Try __session cookie if access_token failed (contains opaque session ID only)
+    # 3) Try session cookie if access_token failed (contains opaque session ID only)
     if not token and request is not None:
-        # Only treat __session as session cookie when Clerk is enabled; otherwise prefer canonical GSNH_SESS
         try:
-            from ..cookie_names import GSNH_SESS, SESSION
+            from ..cookies import read_session_cookie
 
-            # Canonical first
-            session_token = request.cookies.get(GSNH_SESS)
-            if not session_token:
-                # Legacy fallback (Phase 1 window)
-                if os.getenv("AUTH_LEGACY_COOKIE_NAMES", "1").strip().lower() in {"1","true","yes","on"}:
-                    session_token = request.cookies.get(SESSION) or request.cookies.get("session")
-                    if session_token:
-                        try:
-                            logger.debug("auth.legacy_cookie_used", extra={"meta": {"name": SESSION}})
-                        except Exception:
-                            pass
+            session_token = read_session_cookie(request)
         except Exception:
-            session_token = request.cookies.get("session")
+            session_token = None
         if session_token:
             token = session_token
             token_source = "__session_cookie"
@@ -285,8 +273,9 @@ def get_current_user_id(
                     from ..security import _jwt_decode
                     import time
 
-                    rt = request.cookies.get(GSNH_RT)
-                    at = request.cookies.get(GSNH_AT) or request.cookies.get("access_token")
+                    from ..cookies import read_refresh_cookie, read_access_cookie
+                    rt = read_refresh_cookie(request)
+                    at = read_access_cookie(request)
                     if rt and os.getenv("JWT_SECRET"):
                         try:
                             rt_claims = _jwt_decode(
@@ -320,7 +309,8 @@ def get_current_user_id(
                                 access_ttl, _refresh_ttl = get_token_ttls()
                                 new_at = make_access({"user_id": uid}, ttl_s=access_ttl)
                                 # Keep RT unchanged; pass current session id for identity store continuity
-                                sid = request.cookies.get(GSNH_SESS)
+                                from ..cookies import read_session_cookie
+                                sid = read_session_cookie(request)
                                 set_auth_cookies(
                                     response,
                                     access=new_at,
@@ -359,9 +349,10 @@ def get_current_user_id(
                     try:
                         from ..cookie_names import GSNH_AT
 
-                        access_token = request.cookies.get(GSNH_AT) or request.cookies.get("access_token")
+                        from ..cookies import read_access_cookie
+                        access_token = read_access_cookie(request)
                     except Exception:
-                        access_token = request.cookies.get("access_token")
+                        access_token = None
                 elif websocket is not None:
                     try:
                         raw_cookie = websocket.headers.get("Cookie") or ""
@@ -514,12 +505,16 @@ async def require_user(request: Request) -> str:
             sess_present = getattr(request.state, "session_cookie_present", False)
             if st_unavail and sess_present:
                 raise HTTPException(status_code=503, detail="session_store_unavailable")
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            from ..http_errors import unauthorized
+
+            raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
         return user_id
     except HTTPException:
         # Re-raise with consistent error message
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
 
 def get_current_session_device(
@@ -568,9 +563,8 @@ def resolve_session_id(
     # 1. Try __session cookie first (contains opaque session ID only)
     try:
         if isinstance(request, Request):
-            session_id = request.cookies.get("__session") or request.cookies.get(
-                "session"
-            )
+            from ..cookies import read_session_cookie
+            session_id = read_session_cookie(request)
             if session_id:
                 # Validate that this is an opaque session ID (not a JWT)
                 if not session_id.count(".") == 2:  # JWT has 3 parts separated by dots
@@ -673,7 +667,8 @@ def resolve_session_id_strict(
         if isinstance(request, Request):
             from ..cookie_names import GSNH_SESS
 
-            sid = request.cookies.get(f"__Host-{GSNH_SESS}") or request.cookies.get(GSNH_SESS)
+            from ..cookies import read_session_cookie
+            sid = read_session_cookie(request)
         elif websocket is not None:
             raw = websocket.headers.get("Cookie") or ""
             parts = [p.strip() for p in raw.split(";") if p.strip()]

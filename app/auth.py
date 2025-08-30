@@ -854,7 +854,9 @@ async def login(req: LoginRequest, request: Request, response: Response):
                 }
             },
         )
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        from .http_errors import unauthorized
+
+        raise unauthorized(code="invalid_credentials", message="invalid credentials", hint="check username and password")
 
     # Record successful attempts for both user and IP
     _record_attempt(user_key, success=True)

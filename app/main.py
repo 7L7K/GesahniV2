@@ -17,6 +17,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import router
 from .deps.scheduler import shutdown as scheduler_shutdown
@@ -104,12 +106,7 @@ try:
     from .api.auth_password import router as auth_password_router
 except Exception:
     auth_password_router = None  # type: ignore
-try:
-    from .api.music import router as music_router
-    logging.debug("Music router imported successfully")
-except Exception as e:
-    logging.warning(f"Music router import failed: {e}")
-    music_router = None  # type: ignore
+music_router = None  # legacy placeholder; music_http/music_ws are mounted explicitly
 try:
     from .auth_device import router as device_auth_router
 except Exception:
@@ -880,6 +877,56 @@ app = FastAPI(
     swagger_ui_parameters=_swagger_ui_parameters,
 )
 
+# Unified error contract for HTTP errors
+@app.exception_handler(StarletteHTTPException)
+async def _unified_http_error(request: Request, exc: StarletteHTTPException):
+    # Let CORS preflight go untouched
+    if request.method.upper() == "OPTIONS":
+        return None
+    status = getattr(exc, "status_code", 500)
+    headers = getattr(exc, "headers", None)
+    detail = getattr(exc, "detail", None)
+    # If already structured, pass through
+    if isinstance(detail, dict) and ("code" in detail or "error" in detail):
+        return JSONResponse(detail, status_code=status, headers=headers)
+
+    # Map to a stable shape
+    code = "error"
+    msg = "error"
+    hint = None
+    if status == 401:
+        code, msg, hint = "unauthorized", "unauthorized", "missing or invalid token"
+    elif status == 403:
+        code, msg, hint = "forbidden", "forbidden", "missing scope or not allowed"
+    elif status == 404:
+        code, msg = "not_found", "not found"
+    elif status == 405:
+        code, msg = "method_not_allowed", "method not allowed"
+    elif status == 409:
+        code, msg = "conflict", "conflict"
+    elif status == 413:
+        code, msg = "payload_too_large", "payload too large"
+    elif status == 415:
+        code, msg = "unsupported_media_type", "unsupported media type"
+    elif status == 422:
+        code, msg = "invalid", "validation error"
+    elif 500 <= status < 600:
+        code, msg = "server_error", "internal error"
+
+    if isinstance(detail, str) and detail and detail not in {"Unauthorized", "forbidden", "Forbidden"}:
+        msg = detail
+
+    body = {k: v for k, v in {"code": code, "message": msg, "hint": hint}.items() if v}
+    return JSONResponse(body, status_code=status, headers=headers)
+
+
+@app.exception_handler(RequestValidationError)
+async def _unified_validation_error(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        {"code": "invalid", "message": "validation error", "hint": None, "errors": exc.errors()},
+        status_code=422,
+    )
+
 
 def _custom_openapi():
     if app.openapi_schema:
@@ -1100,37 +1147,29 @@ class ServiceRequest(BaseModel):
 
 
 # =============================================================================
-# NEW MODULAR ROUTERS - Extracted from local handlers
+# Canonical router mounts (explicit prefixes)
 # =============================================================================
-# Use capture router for capture endpoints (no duplication with sessions)
-if _safe_import_router("from .api.capture import router as capture_router", "capture"):
-    app.include_router(capture_router, prefix="/v1")
 
-# Sessions router provides unique endpoints: /upload, /transcribe, /storytime websockets
-if _safe_import_router("from .api.sessions import router as sessions_router", "sessions"):
-    app.include_router(sessions_router, prefix="/v1")
+def include(router_spec: str, *, prefix: str = "") -> None:
+    try:
+        mod, name = router_spec.split(":", 1)
+        module = __import__(mod, fromlist=[name])
+        r = getattr(module, name, None)
+        if r is not None:
+            app.include_router(r, prefix=prefix)
+    except Exception as e:
+        logging.warning("Router include failed for %s: %s", router_spec, e)
 
-if _safe_import_router("from .api.transcribe import router as transcribe_router", "transcribe"):
-    app.include_router(transcribe_router, prefix="/v1")
-
-if _safe_import_router("from .api.ha_local import router as ha_local_router", "ha_local"):
-    app.include_router(ha_local_router, prefix="/v1")
-
-if _safe_import_router("from .api.memories import router as memories_router", "memories"):
-    app.include_router(memories_router, prefix="/v1")
-
-if _safe_import_router("from .api.util import router as util_router", "util"):
-    # Single mount provides both API docs visibility and routing
-    app.include_router(util_router, prefix="/v1")
-
-if _safe_import_router("from .api.ws_endpoints import router as ws_local_router", "ws_endpoints"):
-    app.include_router(ws_local_router, prefix="/v1")
-
-if _safe_import_router("from .api.debug import router as debug_router", "debug"):
-    app.include_router(debug_router, prefix="/v1")
-
-if _safe_import_router("from .api.core_misc import router as core_misc_router", "core_misc"):
-    app.include_router(core_misc_router, prefix="/v1")
+# Core, sessions, utilities
+include("app.api.capture:router", prefix="/v1")
+include("app.api.sessions_http:router", prefix="/v1")
+include("app.api.sessions_ws:router", prefix="/v1")
+include("app.api.transcribe:router", prefix="/v1")
+include("app.api.ha_local:router", prefix="/v1")
+include("app.api.memories:router", prefix="/v1")
+include("app.api.util:router", prefix="/v1")
+include("app.api.debug:router", prefix="/v1")
+include("app.api.core_misc:router", prefix="/v1")
 
 # Prefer the root metrics router; fall back to simple metrics when unavailable
 _metrics_root_loaded = _safe_import_router(
@@ -1143,23 +1182,17 @@ else:
     if _safe_import_router("from .api.metrics import router as metrics_simple_router", "metrics_simple"):
         app.include_router(metrics_simple_router)
 
-if _safe_import_router("from .health import router as health_diag_router", "health_diag"):
-    # Mount diagnostics under a non-conflicting prefix to avoid shadowing /v1/health/*
-    # expected by tests (api.health).
-    app.include_router(health_diag_router, prefix="/v1/diag")
+include("app.health:router", prefix="/v1/diag")
 
 # Simple logs endpoint for UI issue tray
-if _safe_import_router("from .api.logs_simple import router as logs_router", "logs_simple"):
-    app.include_router(logs_router, prefix="/v1")
+include("app.api.logs_simple:router", prefix="/v1")
 
 # =============================================================================
 # EXISTING EXTERNAL ROUTERS - Keep in modern-first order
 # =============================================================================
 app.include_router(status_router, prefix="/v1")
-# Tiered health (unauthenticated): /healthz/* endpoints
 app.include_router(health_router)
-if _safe_import_router("from .api.well_known import router as well_known_router", "well_known"):
-    app.include_router(well_known_router)
+include("app.api.well_known:router")
 
 # Validate configuration on startup (logs only)
 try:
@@ -1170,16 +1203,14 @@ except Exception:
     pass
 
 # Include modern auth API router first to avoid route shadowing
-if _safe_import_router("from .api.auth import router as auth_api_router", "auth_api", required_in_prod=True):
-    app.include_router(auth_api_router, prefix="/v1")
+include("app.api.auth:router", prefix="/v1")
 
 # Legacy auth router split into focused modules. Mount conditionally based on env.
 from .auth_providers import admin_enabled
 
 # Mount whoami + finish endpoints (always available when auth router enabled)
 if admin_enabled():
-    if _safe_import_router("from .api.auth_router_whoami import router as auth_whoami_router", "auth_whoami"):
-        app.include_router(auth_whoami_router, prefix="/v1")
+    include("app.api.auth_router_whoami:router", prefix="/v1")
 
     # Mount refresh router (kept separate)
     # TEMPORARILY DISABLED: Testing original auth router
@@ -1226,7 +1257,8 @@ app.include_router(google_router, prefix="/v1/google")
 app.include_router(google_router, prefix="/google", include_in_schema=False)
 
 # New modular routers for HA and profile/admin
-if _safe_import_router("from .api.ha import router as ha_api_router", "ha_api"):
+try:
+    from .api.ha import router as ha_api_router
     app.include_router(
         ha_api_router,
         prefix="/v1",
@@ -1236,138 +1268,100 @@ if _safe_import_router("from .api.ha import router as ha_api_router", "ha_api"):
             Depends(docs_security_with(["care:resident"])),
         ],
     )
+except Exception as e:
+    logging.warning("Router include failed for app.api.ha:router: %s", e)
 
-if _safe_import_router("from .api.reminders import router as reminders_router", "reminders"):
-    app.include_router(reminders_router, prefix="/v1")
+include("app.api.reminders:router", prefix="/v1")
 
-if _safe_import_router("from .api.profile import router as profile_router", "profile"):
-    app.include_router(profile_router, prefix="/v1")
+include("app.api.profile:router", prefix="/v1")
 
 # Conditionally mount admin router based on environment
 if admin_enabled():
-    if _safe_import_router("from .api.admin import router as admin_api_router", "admin"):
-        # Mount the new RBAC-powered admin router
-        # The router already has prefix="/admin" so final paths will be /v1/admin/*
-        app.include_router(
-            admin_api_router,
-            prefix="/v1",
-            # No global dependencies - each endpoint uses its own RBAC rules
-        )
+    try:
+        from .api.admin import router as admin_api_router
+        app.include_router(admin_api_router, prefix="/v1")
         print("INFO: Admin routes mounted (admin_enabled=True)")
-    else:
+    except Exception:
         print("INFO: Admin routes disabled (import failed)")
 else:
     print("INFO: Admin routes disabled (admin_enabled=False)")
 
 # Conditionally mount all admin-related routers
 if admin_enabled():
-    if _safe_import_router("from .api.admin_ui import router as admin_ui_router", "admin_ui"):
-        app.include_router(admin_ui_router, prefix="/v1")
-
-    # Also include experimental admin diagnostics (retrieval trace) router
-    if _safe_import_router("from .admin.routes import router as admin_extras_router", "admin_extras"):
-        app.include_router(admin_extras_router, prefix="/v1")
-
+    include("app.api.admin_ui:router", prefix="/v1")
+    include("app.admin.routes:router", prefix="/v1")
     print("INFO: Admin UI and extras routers processed (admin_enabled=True)")
 else:
     print("INFO: Admin UI and extras routers disabled (admin_enabled=False)")
 
-if _safe_import_router("from .api.me import router as me_router", "me"):
-    app.include_router(me_router, prefix="/v1")
-
-if _safe_import_router("from .api.devices import router as devices_router", "devices"):
-    app.include_router(devices_router, prefix="/v1")
+include("app.api.me:router", prefix="/v1")
+include("app.api.devices:router", prefix="/v1")
 
 # Spotify SDK short-lived token router
-if _safe_import_router("from .api.spotify_sdk import router as spotify_sdk", "spotify_sdk"):
-    # spotify_sdk router defines its own prefix (/v1/spotify)
-    app.include_router(spotify_sdk)
-
-# Spotify OAuth router for login and callback
-if _safe_import_router("from .api.spotify import router as spotify_router", "spotify"):
-    app.include_router(spotify_router, prefix="/v1")
-if _safe_import_router("from .api.spotify_player import router as spotify_player_router", "spotify_player"):
-    # spotify_player router already includes /v1/spotify prefix
-    app.include_router(spotify_player_router)
+include("app.api.spotify_sdk:router")
+include("app.api.spotify:router", prefix="/v1")
+include("app.api.spotify_player:router")
 
 # Integrations status endpoint (aggregate third-party connection states)
-if _safe_import_router("from .api.integrations_status import router as integrations_status_router", "integrations_status"):
-    app.include_router(integrations_status_router, prefix="/v1")
+include("app.api.integrations_status:router", prefix="/v1")
 
 # Selftest router
-if _safe_import_router("from .api.selftest import router as selftest_router", "selftest"):
-    app.include_router(selftest_router, prefix="/v1")
+include("app.api.selftest:router", prefix="/v1")
 
 # Canonical whoami route provided by app.api.auth; do not mount alternate handlers
 
-if _safe_import_router("from .api.models import router as models_router", "models"):
-    app.include_router(models_router, prefix="/v1")
+include("app.api.models:router", prefix="/v1")
 
-if _safe_import_router("from .api.history import router as history_router", "history"):
-    app.include_router(history_router, prefix="/v1")
+include("app.api.history:router", prefix="/v1")
 
 if admin_enabled():
-    if _safe_import_router("from .api.status_plus import router as status_plus_router", "status_plus"):
-        app.include_router(
-            status_plus_router,
-            prefix="/v1",
-            dependencies=[Depends(docs_security_with(["admin:write"]))],
-        )
+    try:
+        from .api.status_plus import router as status_plus_router
+        app.include_router(status_plus_router, prefix="/v1", dependencies=[Depends(docs_security_with(["admin:write"]))])
         print("INFO: Status plus router mounted (admin_enabled=True)")
-    else:
+    except Exception:
         print("INFO: Status plus router disabled (import failed)")
 else:
     print("INFO: Status plus router disabled (admin_enabled=False)")
 
-if _safe_import_router("from .api.rag import router as rag_router", "rag"):
-    app.include_router(rag_router, prefix="/v1")
+include("app.api.rag:router", prefix="/v1")
 
-if _safe_import_router("from .api.skills import router as skills_router", "skills"):
-    app.include_router(skills_router, prefix="/v1")
+include("app.api.skills:router", prefix="/v1")
 
-if _safe_import_router("from .api.tv import router as tv_router", "tv"):
-    app.include_router(tv_router, prefix="/v1")
+include("app.api.tv:router", prefix="/v1")
 
-# TTS router (new)
-if _safe_import_router("from .api.tts import router as tts_router", "tts"):
-    app.include_router(tts_router, prefix="/v1")
+include("app.api.tts:router", prefix="/v1")
 
 # Additional feature routers used by TV/companion UIs
-if _safe_import_router("from .api.contacts import router as contacts_router", "contacts"):
-    app.include_router(contacts_router, prefix="/v1")
+include("app.api.contacts:router", prefix="/v1")
 
-if _safe_import_router("from .api.caregiver_auth import router as caregiver_auth_router", "caregiver_auth"):
-    app.include_router(caregiver_auth_router, prefix="/v1")
+include("app.api.caregiver_auth:router", prefix="/v1")
 
-if _safe_import_router("from .api.photos import router as photos_router", "photos"):
-    app.include_router(photos_router, prefix="/v1")
+include("app.api.photos:router", prefix="/v1")
 
-if _safe_import_router("from .api.calendar import router as calendar_router", "calendar"):
-    app.include_router(calendar_router, prefix="/v1")
+include("app.api.calendar:router", prefix="/v1")
 
-# Voices catalog
-if _safe_import_router("from .api.voices import router as voices_router", "voices"):
-    app.include_router(voices_router, prefix="/v1")
+include("app.api.voices:router", prefix="/v1")
 
-if _safe_import_router("from .api.memory_ingest import router as memory_ingest_router", "memory_ingest"):
-    app.include_router(memory_ingest_router, prefix="/v1")
+include("app.api.memory_ingest:router", prefix="/v1")
 
-if _safe_import_router("from .api.ask import router as ask_router", "ask", required_in_prod=True):
-    app.include_router(ask_router, prefix="/v1")
+include("app.api.ask:router", prefix="/v1")
 
 # Optional diagnostic/auxiliary routers -------------------------------------
-if _safe_import_router("from .api.care import router as care_router", "care"):
+try:
+    from .api.care import router as care_router
     app.include_router(
         care_router,
         prefix="/v1",
         dependencies=[Depends(docs_security_with(["care:resident"]))],
     )
+except Exception as e:
+    logging.warning("Router include failed for app.api.care:router: %s", e)
 
-if _safe_import_router("from .api.care_ws import router as care_ws_router", "care_ws"):
-    app.include_router(care_ws_router, prefix="/v1")
+include("app.api.care_ws:router", prefix="/v1")
 
-if _safe_import_router("from .caregiver import router as caregiver_router", "caregiver"):
-    # Caregiver portal scaffold (e.g., /v1/caregiver/*)
+try:
+    from .caregiver import router as caregiver_router
     app.include_router(
         caregiver_router,
         prefix="/v1",
@@ -1377,46 +1371,12 @@ if _safe_import_router("from .caregiver import router as caregiver_router", "car
             Depends(docs_security_with(["care:caregiver"])),
         ],
     )
+except Exception as e:
+    logging.warning("Router include failed for app.caregiver:router: %s", e)
 
-# Music API router: attach HTTP dependencies to HTTP paths only
-if music_router is not None:
-    if _safe_import_router("from .api.music_http import music_http", "music_http"):
-        app.include_router(music_http, prefix="/v1")
-    else:
-        # Fallback: include the music router directly without building a local APIRouter
-        # This avoids creating APIRouter instances inside main.py
-        app.include_router(music_router, prefix="/v1")
-
-    # Keep non-prefixed inclusion for schema compatibility (music router only)
-    app.include_router(music_router, include_in_schema=False)
-
-    # Mount WS endpoints without HTTP dependencies
-    if _safe_import_router("from .api.music import ws_router as music_ws_router", "music_ws"):
-        app.include_router(music_ws_router, prefix="/v1")
-
-    # Sim WS helpers for UI duck/restore
-    if _safe_import_router("from .api.tv_music_sim import router as tv_music_sim_router", "tv_music_sim"):
-        app.include_router(tv_music_sim_router, prefix="/v1")
-
-    # Add /v1/state endpoint directly to main app
-    # This fixes the 404 error when frontend tries to access /v1/state
-    try:
-        from .api.music import get_state as music_get_state
-        from .deps.user import get_current_user_id
-        from fastapi import Request, Response
-
-        @app.get("/v1/state")
-        async def get_music_state(
-            request: Request,
-            response: Response,
-            user_id: str = Depends(get_current_user_id)
-        ):
-            """Direct proxy to music state endpoint to fix frontend 404 errors."""
-            return await music_get_state(request, response, user_id)
-
-        logging.info("Successfully added /v1/state endpoint")
-    except Exception as e:
-        logging.warning(f"Could not add /v1/state endpoint: {e}")
+include("app.api.music_http:router", prefix="/v1")
+include("app.api.music_ws:router", prefix="/v1")
+include("app.api.tv_music_sim:router", prefix="/v1")
 
 
 

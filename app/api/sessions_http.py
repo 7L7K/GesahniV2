@@ -1,58 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
-
-from fastapi import APIRouter, Depends, HTTPException
-
-from ..deps.user import get_current_user_id
-from ..sessions_store import sessions_store
-
-router = APIRouter(tags=["auth"], include_in_schema=False)
-
-
-@router.get("/sessions")
-async def list_sessions_endpoint(
-    user_id: str = Depends(get_current_user_id),
-) -> dict[str, list[dict[str, Any]]]:
-    if user_id == "anon":
-        from ..http_errors import unauthorized
-
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
-    out = await sessions_store.list_user_sessions(user_id)
-    return {"items": out}
-
-
-@router.post("/sessions/{sid}/revoke")
-async def revoke_session(
-    sid: str, user_id: str = Depends(get_current_user_id)
-) -> dict[str, str]:
-    if user_id == "anon":
-        from ..http_errors import unauthorized
-
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
-    await sessions_store.revoke_family(sid)
-    return {"status": "ok"}
-
-
-@router.post("/devices/{did}/rename")
-async def rename_device(
-    did: str, new_name: str, user_id: str = Depends(get_current_user_id)
-) -> dict[str, str]:
-    if user_id == "anon":
-        from ..http_errors import unauthorized
-
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
-    ok = await sessions_store.rename_device(user_id, did, new_name)
-    if not ok:
-        raise HTTPException(status_code=400, detail="rename_failed")
-    return {"status": "ok"}
-
-
-__all__ = ["router"]
-
 import json
-import logging
 from pathlib import Path
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -60,9 +10,9 @@ from fastapi import (
     Depends,
     File,
     Form,
+    HTTPException,
     Request,
     UploadFile,
-    WebSocket,
 )
 
 from app.deps.user import get_current_user_id
@@ -74,9 +24,8 @@ from app.session_manager import start_session as start_capture_session
 from app.session_store import SessionStatus
 from app.session_store import list_sessions as list_session_store
 from app.tasks import enqueue_summary, enqueue_transcription
-from app.transcription import TranscriptionStream, transcribe_file
+from app.transcription import transcribe_file
 
-logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Care"])
 
@@ -95,7 +44,6 @@ async def upload(
     dest = session_dir / "source.wav"
     content = await file.read()
     dest.write_bytes(content)
-    logger.info("sessions.upload", extra={"meta": {"dest": str(dest)}})
     return {"session_id": session_id}
 
 
@@ -117,7 +65,11 @@ async def capture_save(
     tags: str | None = Form(None),
     user_id: str = Depends(get_current_user_id),
 ):
-    tags_list = json.loads(tags) if tags else None
+    tags_list: list[str] | None = None
+    try:
+        tags_list = json.loads(tags) if tags else None
+    except Exception:
+        tags_list = None
     await finalize_capture_session(session_id, audio, video, transcript, tags_list)
     return get_session_meta(session_id)
 
@@ -147,7 +99,7 @@ async def capture_status(
 async def list_sessions_listing(
     status: str | None = None,
     user_id: str = Depends(get_current_user_id),
-):
+) -> list[dict[str, Any]] | dict[str, Any]:
     # Accept plain string in query for test compatibility and map to enum
     enum_val = None
     if status:
@@ -176,48 +128,6 @@ async def trigger_summary_endpoint(
     return {"status": "accepted"}
 
 
-@router.websocket("/transcribe")
-async def websocket_transcribe(
-    ws: WebSocket,
-    user_id: str = Depends(get_current_user_id),
-):
-    stream = TranscriptionStream(ws)
-    await stream.process()
-
-
-@router.websocket("/storytime")
-async def websocket_storytime(
-    ws: WebSocket, user_id: str = Depends(get_current_user_id)
-):
-    """Storytime streaming: audio → Whisper transcription with JSONL logging.
-
-    Uses the same streaming mechanics as ``/transcribe`` but appends each
-    incremental transcript chunk to `stories/` for later summarization.
-    """
-
-    from app.storytime import append_transcript_line
-
-    stream = TranscriptionStream(ws)
-
-    async def _transcribe_and_log(path: str) -> str:
-        text = await transcribe_file(path)
-        if text and text.strip():
-            try:
-                append_transcript_line(
-                    session_id=stream.session_id,
-                    text=text,
-                    user_id=user_id,
-                    speaker="user",
-                )
-            except Exception:
-                logger.debug("append_transcript_line failed", exc_info=True)
-        return text
-
-    # Inject our wrapper after we know the session_id
-    stream.transcribe = _transcribe_and_log  # type: ignore[assignment]
-    await stream.process()
-
-
 async def _background_transcribe(session_id: str) -> None:
     base = Path(SESSIONS_DIR)
     audio_path = base / session_id / "audio.wav"
@@ -226,8 +136,9 @@ async def _background_transcribe(session_id: str) -> None:
         text = await transcribe_file(str(audio_path))
         transcript_path.parent.mkdir(parents=True, exist_ok=True)
         transcript_path.write_text(text, encoding="utf-8")
-    except Exception as e:  # pragma: no cover - best effort
-        logger.exception("Transcription failed: %s", e)
+    except Exception:
+        # best-effort background task
+        pass
 
 
 @router.post("/transcribe/{session_id}")
@@ -253,3 +164,7 @@ async def get_transcription(
     if alt.exists():
         return {"text": ""}
     raise HTTPException(status_code=404, detail="Transcript not found")
+
+
+__all__ = ["router"]
+

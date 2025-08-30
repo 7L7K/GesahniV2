@@ -158,7 +158,9 @@ async def _require_user_or_dev(request: Request) -> str:
             HTTPException as _HTTPException,
         )  # lazy to avoid import cycles
 
-        raise _HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized as _unauth
+
+        raise _unauth(message="authentication required", hint="login or include Authorization header")
 
 
 async def verify_pat_async(
@@ -249,11 +251,10 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
 
     try:
         # Prefer canonical cookie name but accept legacy for migration
-        from ..cookie_names import ACCESS_TOKEN, ACCESS_TOKEN_LEGACY
+        # Accept canonical and legacy access cookie names via centralized reader
+        from ..cookies import read_access_cookie
 
-        token_cookie = request.cookies.get(ACCESS_TOKEN) or request.cookies.get(
-            ACCESS_TOKEN_LEGACY
-        )
+        token_cookie = read_access_cookie(request)
         logger.info(
             "whoami.cookie_check",
             extra={
@@ -751,10 +752,10 @@ async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONR
 
     # Otherwise, attempt silent rotation if refresh cookie present and no access cookie
     try:
-        from ..cookie_names import ACCESS_TOKEN, REFRESH_TOKEN
+        from ..cookies import read_access_cookie, read_refresh_cookie
 
-        access_cookie = request.cookies.get(ACCESS_TOKEN)
-        has_refresh = bool(request.cookies.get(REFRESH_TOKEN))
+        access_cookie = read_access_cookie(request)
+        has_refresh = bool(read_refresh_cookie(request))
         if not access_cookie and has_refresh:
             tokens = await rotate_refresh_cookies(request, Response())
             if tokens and isinstance(tokens, dict):
@@ -922,7 +923,9 @@ async def list_pats(
         list[dict]: List of PATs with id, name, scopes, created_at, revoked_at (no tokens)
     """
     if user_id == "anon":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
     await _ensure_auth()
     return await _list_pats_for_user(user_id)
 
@@ -949,7 +952,9 @@ async def create_pat(
     body: dict[str, Any], user_id: str = Depends(get_current_user_id)
 ) -> dict[str, Any]:
     if user_id == "anon":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
     await _ensure_auth()
     name = str(body.get("name") or "")
     scopes = body.get("scopes") or []
@@ -984,7 +989,9 @@ async def revoke_pat(
         dict: Success confirmation
     """
     if user_id == "anon":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
     await _ensure_auth()
 
     # Check if PAT exists and belongs to user
@@ -1091,7 +1098,9 @@ def _decode_any(token: str, *, leeway: int = 0) -> dict:
             continue
     if isinstance(last_err, jwt.ExpiredSignatureError):
         raise last_err
-    raise HTTPException(status_code=401, detail="Unauthorized")
+    from ..http_errors import unauthorized
+
+    raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
 
 def _get_refresh_ttl_seconds() -> int:
@@ -1212,7 +1221,9 @@ async def finish_clerk_login(
                     "X-Auth-Intent"
                 )
                 if str(intent or "").strip().lower() != "refresh":
-                    raise HTTPException(status_code=401, detail="missing_intent_header")
+                    from ..http_errors import unauthorized
+
+                    raise unauthorized(code="missing_intent_header", message="missing intent header", hint="include X-Auth-Intent: refresh")
         except HTTPException:
             raise
         except Exception:
@@ -1440,7 +1451,10 @@ async def rotate_refresh_cookies(
     for attempt in range(max_retries):
         try:
             secret = _jwt_secret()
-            rtok = refresh_override or request.cookies.get("refresh_token")
+            # Accept both canonical and legacy cookie names for refresh token
+            from ..cookies import read_refresh_cookie
+
+            rtok = refresh_override or read_refresh_cookie(request)
             if not rtok:
                 try:
                     # Log only safe headers to avoid leaking sensitive information
@@ -1476,7 +1490,9 @@ async def rotate_refresh_cookies(
                     raise HTTPException(status_code=400, detail="invalid_token_type")
             user_id = payload.get("user_id") or payload.get("sub")
             if not user_id:
-                raise HTTPException(status_code=401, detail="invalid_token")
+                from ..http_errors import unauthorized
+
+                raise unauthorized(code="invalid_token", message="invalid token", hint="provide a valid refresh token")
             now = int(time.time())
             r_exp = int(payload.get("exp", now))
             ttl = max(1, r_exp - now)
@@ -1489,7 +1505,9 @@ async def rotate_refresh_cookies(
                 from ..cookies import clear_auth_cookies
 
                 clear_auth_cookies(response, request)
-                raise HTTPException(status_code=401, detail="refresh_family_revoked")
+                from ..http_errors import unauthorized
+
+                raise unauthorized(code="refresh_family_revoked", message="refresh family revoked", hint="relogin required")
 
             # Single-use guard for this refresh token (replay protection). Claim FIRST, before any rotation.
             first_use, error_reason = await claim_refresh_jti_with_retry(
@@ -1557,7 +1575,9 @@ async def rotate_refresh_cookies(
                     AUTH_REFRESH_FAIL.labels(reason="replay").inc()
                 except Exception:
                     pass
-                raise HTTPException(status_code=401, detail="refresh_reused")
+                from ..http_errors import unauthorized
+
+                raise unauthorized(code="refresh_reused", message="refresh reused", hint="token replay detected; relogin")
 
             # Mint new access + refresh with consistent TTLs
             from ..cookie_config import get_cookie_config, get_token_ttls
@@ -1853,10 +1873,14 @@ async def login_v1(
                 row = await cur.fetchone()
 
         if not row:
-            raise HTTPException(status_code=401, detail="invalid_credentials")
+            from ..http_errors import unauthorized
+
+            raise unauthorized(code="invalid_credentials", message="invalid credentials", hint="check username/password")
 
         if not _pwd.verify(password, row[0]):
-            raise HTTPException(status_code=401, detail="invalid_credentials")
+            from ..http_errors import unauthorized
+
+            raise unauthorized(code="invalid_credentials", message="invalid credentials", hint="check username/password")
     except HTTPException:
         raise
     except Exception as e:
@@ -2005,7 +2029,8 @@ async def logout(request: Request, response: Response):
         from ..auth import _delete_session_id
 
         # Get session ID from __session cookie
-        session_id = request.cookies.get("__session")
+        from ..cookies import read_session_cookie
+        session_id = read_session_cookie(request)
         if session_id:
             _delete_session_id(session_id)
             logger.info(
@@ -2063,7 +2088,8 @@ async def logout_all(request: Request, response: Response):
     try:
         from ..auth import _delete_session_id
 
-        sid = request.cookies.get("__Host-GSNH_SESS") or request.cookies.get("GSNH_SESS") or request.cookies.get("__session")
+        from ..cookies import read_session_cookie
+        sid = read_session_cookie(request)
         if sid:
             _delete_session_id(sid)
     except Exception:
@@ -2205,7 +2231,8 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
     # Log incoming refresh token status
     rt_source = "cookie" if not refresh_override else "body"
     from ..cookie_names import GSNH_RT
-    rt_value = refresh_override or request.cookies.get(GSNH_RT) or "missing"
+    from ..cookies import read_refresh_cookie
+    rt_value = refresh_override or read_refresh_cookie(request) or "missing"
     logger.info("refresh_flow: incoming_rt=%s, source=%s", rt_value[:20] + "..." if rt_value != "missing" else "missing", rt_source)
 
     t0 = time.time()
@@ -2223,7 +2250,8 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
         try:
             from ..cookie_names import GSNH_AT
 
-            atok = request.cookies.get(GSNH_AT)
+            from ..cookies import read_access_cookie
+            atok = read_access_cookie(request)
             if atok:
                 claims = _decode_any(atok)
                 uid_fb = str(claims.get("user_id") or claims.get("sub") or "anon")
@@ -2244,7 +2272,9 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
         except Exception:
             pass
         logger.info("refresh_flow: fallback_used=false, reason=no_valid_tokens")
-        raise HTTPException(status_code=401, detail="invalid_refresh")
+    from ..http_errors import unauthorized
+
+    raise unauthorized(code="invalid_refresh", message="invalid refresh token", hint="provide a valid refresh token")
     # Prefer user_id from rotation outcome; include tokens for header-auth clients
     try:
         dt = int((time.time() - t0) * 1000)

@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 def _std_401() -> HTTPException:
-    return HTTPException(status_code=401, detail="Unauthorized")
+    from ..http_errors import unauthorized
+    return unauthorized(message="authentication required", hint="login or include Authorization header")
 
 
 def _std_500(msg: str) -> HTTPException:
@@ -75,13 +76,15 @@ def _extract_bearer_from_request(request: Request) -> str | None:
 
     # Fallback to access_token cookie
     if not token:
-        token = request.cookies.get("access_token")
+        from ..cookies import read_access_cookie
+        token = read_access_cookie(request)
         if token:
             token_source = "access_token_cookie"
 
     # 2) Try __session cookie if access_token failed
     if not token:
-        token = request.cookies.get("__session") or request.cookies.get("session")
+        from ..cookies import read_session_cookie
+        token = read_session_cookie(request)
         if token:
             token_source = "__session_cookie"
 

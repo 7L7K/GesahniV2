@@ -33,6 +33,8 @@ Usage:
 """
 
 from fastapi import Request, Response
+import logging
+import os
 
 from . import cookie_config as cookie_cfg
 from .cookie_config import format_cookie_header, get_cookie_config
@@ -47,6 +49,63 @@ from .cookie_names import (
     SESSION,
     SESSION_LEGACY,
 )
+
+log = logging.getLogger(__name__)
+
+def _read_first_cookie(request: Request, names: list[str]) -> tuple[str | None, str | None]:
+    """Return (value, name) for the first present cookie among names.
+
+    Handles both `__Host-<name>` and `<name>` automatically when secure host cookies
+    are enabled. Does not raise.
+    """
+    try:
+        # Prefer __Host- prefixed variant when configured
+        use_host_prefix = os.getenv("USE_HOST_COOKIE_PREFIX", "1").strip().lower() in {"1","true","yes","on"}
+    except Exception:
+        use_host_prefix = True
+    for n in names:
+        # Check __Host- prefixed first, then raw name
+        if use_host_prefix:
+            v = request.cookies.get(f"__Host-{n}")
+            if v:
+                return v, f"__Host-{n}"
+        v = request.cookies.get(n)
+        if v:
+            return v, n
+    return None, None
+
+def _warn_legacy_cookie_used(found_name: str, canonical: str) -> None:
+    try:
+        # Treat ACCESS_TOKEN/REFRESH_TOKEN/SESSION (and bare 'session') as legacy readers
+        legacy_names = {ACCESS_TOKEN, REFRESH_TOKEN, SESSION, "session"}
+        if found_name in legacy_names:
+            log.warning("auth.legacy_cookie_read name=%s canonical=%s", found_name, canonical)
+    except Exception:
+        pass
+
+def read_access_cookie(request: Request) -> str | None:
+    """Read access token cookie, accepting both canonical (GSNH_AT) and legacy (access_token).
+
+    Logs a warning if a legacy cookie name was used.
+    """
+    val, name = _read_first_cookie(request, [GSNH_AT, ACCESS_TOKEN])
+    if name:
+        _warn_legacy_cookie_used(name, GSNH_AT)
+    return val
+
+def read_refresh_cookie(request: Request) -> str | None:
+    """Read refresh token cookie, accepting both canonical (GSNH_RT) and legacy (refresh_token)."""
+    val, name = _read_first_cookie(request, [GSNH_RT, REFRESH_TOKEN])
+    if name:
+        _warn_legacy_cookie_used(name, GSNH_RT)
+    return val
+
+def read_session_cookie(request: Request) -> str | None:
+    """Read session cookie, accepting both canonical (GSNH_SESS) and legacy (__session/session)."""
+    val, name = _read_first_cookie(request, [GSNH_SESS, SESSION, "session"])  # final fallback "session"
+    if name:
+        _warn_legacy_cookie_used(name, GSNH_SESS)
+    return val
 
 
 def set_auth_cookie(resp: Response, name: str, value: str, max_age: int):

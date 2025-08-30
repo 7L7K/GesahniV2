@@ -59,9 +59,13 @@ async def login_pw(body: dict[str, str]):
         ) as cur:
             row = await cur.fetchone()
     if not row:
-        raise HTTPException(status_code=401, detail="invalid")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(code="invalid_credentials", message="invalid credentials", hint="check username/password")
     if not _pwd.verify(p, row[0]):
-        raise HTTPException(status_code=401, detail="invalid")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(code="invalid_credentials", message="invalid credentials", hint="check username/password")
     return {"status": "ok"}
 
 

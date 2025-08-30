@@ -42,7 +42,9 @@ async def devices(request: Request, user_id: str = Depends(get_current_user_id))
             SPOTIFY_DEVICE_LIST_COUNT.labels(status="fail").inc()
         except Exception:
             pass
-        raise HTTPException(status_code=401, detail="spotify_not_authenticated")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(code="spotify_not_authenticated", message="Spotify not authenticated", hint="connect Spotify account")
     except Exception as e:
         logger.exception("spotify.devices_error")
         try:
@@ -93,7 +95,9 @@ async def play(request: Request, body: dict, user_id: str = Depends(get_current_
             SPOTIFY_PLAY_COUNT.labels(status="fail").inc()
         except Exception:
             pass
-        raise HTTPException(status_code=401, detail="spotify_not_authenticated")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(code="spotify_not_authenticated", message="Spotify not authenticated", hint="connect Spotify account")
     except HTTPException:
         raise
     except Exception as e:

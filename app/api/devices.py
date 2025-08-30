@@ -36,7 +36,9 @@ async def pair_start(
     request: Request, user_id: str = Depends(get_current_user_id)
 ) -> dict[str, Any]:
     if not user_id or user_id == "anon":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
     label = (request.headers.get("X-Device-Label") or "tv").strip()
     code = secrets.token_hex(3).lower()
     ttl = int(os.getenv("DEVICE_PAIR_CODE_TTL_S", "300"))

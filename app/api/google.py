@@ -36,7 +36,9 @@ async def google_connect(request: Request, user_id: str = Depends(get_current_us
     import jwt
 
     if not user_id or user_id == "anon":
-        raise HTTPException(status_code=401, detail="authentication_failed")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(code="authentication_failed", message="authentication failed", hint="reauthorize Google access")
 
     # Use integration's helper to build auth URL + state (signed)
     try:
@@ -175,7 +177,9 @@ async def google_disconnect(request: Request):
         if user_id == "anon":
             raise Exception("unauthenticated")
     except Exception:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        from ..http_errors import unauthorized
+
+        raise unauthorized(message="authentication required", hint="login or include Authorization header")
 
     success = await mark_invalid(user_id, "google")
     if success:
