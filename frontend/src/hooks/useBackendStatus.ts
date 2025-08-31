@@ -17,36 +17,53 @@ export function useBackendStatus() {
         let mounted = true;
         const pollReady = async () => {
             try {
-        console.log('[BackendStatus] Polling /v1/health...');
-        // Use AbortController instead of AbortSignal.timeout() for better browser compatibility
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+                console.log('[BackendStatus] Polling /v1/health...');
+                // Use AbortController instead of AbortSignal.timeout() for better browser compatibility
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-        const res = await apiFetch('/v1/health', {
-            signal: controller.signal,
-            cache: 'no-store'
-        });
+                const res = await apiFetch('/v1/health', {
+                    signal: controller.signal,
+                    cache: 'no-store'
+                });
 
                 clearTimeout(timeoutId);
 
-        console.log('[BackendStatus] Response:', res.status, res.ok);
+                console.log('[BackendStatus] Response:', res.status, res.ok);
 
-        if (!mounted) return;
-        setHasChecked(true);
-        if (res.status >= 500) {
-            console.log('[BackendStatus] 5xx status, setting offline');
-            setReady('offline');
-        } else if (res.ok) {
-            const body = await res.json().catch(() => ({} as Record<string, unknown>));
-            console.log('[BackendStatus] Body:', body);
-            // Treat ok:false or degraded as online (degraded allowed)
-            setReady('online');
-        } else {
-            console.log('[BackendStatus] Non-2xx but not 5xx, treating as online (degraded)');
-            setReady('online');
-        }
+                if (!mounted) return;
+                setHasChecked(true);
+
+                const prevReady = ready;
+                let newReady: ReadyStatus;
+
+                if (res.status >= 500) {
+                    console.log('[BackendStatus] 5xx status, setting offline');
+                    newReady = 'offline';
+                } else if (res.ok) {
+                    const body = await res.json().catch(() => ({} as Record<string, unknown>));
+                    console.log('[BackendStatus] Body:', body);
+                    // Treat ok:false or degraded as online (degraded allowed)
+                    newReady = 'online';
+                } else {
+                    console.log('[BackendStatus] Non-2xx but not 5xx, treating as online (degraded)');
+                    newReady = 'online';
+                }
+
+                setReady(newReady);
+
+                // Dispatch event if status changed
+                if (prevReady !== newReady && typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('backend:status_changed', {
+                        detail: {
+                            online: newReady === 'online',
+                            source: 'useBackendStatus',
+                            timestamp: Date.now()
+                        }
+                    }));
+                }
             } catch (error) {
-                console.log('[BackendStatus] Error:', error);
+                console.warn('[BackendStatus] Health check failed:', error);
                 if (!mounted) return;
 
                 // Handle AbortError specifically - don't treat as offline if request was aborted
@@ -56,11 +73,23 @@ export function useBackendStatus() {
                 }
 
                 setHasChecked(true);
+
+                // Dispatch offline event if we were previously online
+                if (ready === 'online' && typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('backend:status_changed', {
+                        detail: {
+                            online: false,
+                            source: 'useBackendStatus_error',
+                            timestamp: Date.now()
+                        }
+                    }));
+                }
+
                 setReady('offline');
             } finally {
                 if (!mounted) return;
-                // DISABLED: Health polling should be controlled by orchestrator
-                // readyTimer.current = window.setTimeout(pollReady, 3000);
+                // Re-enable health polling for proper backend online status tracking
+                readyTimer.current = window.setTimeout(pollReady, 3000);
             }
         };
         pollReady();
@@ -75,13 +104,13 @@ export function useBackendStatus() {
         const pollDeps = async () => {
             try {
                 // Use AbortController instead of AbortSignal.timeout() for better browser compatibility
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-        const res = await apiFetch('/healthz/deps', {
-            signal: controller.signal,
-            cache: 'no-store'
-        });
+                const res = await apiFetch('/healthz/deps', {
+                    signal: controller.signal,
+                    cache: 'no-store'
+                });
 
                 clearTimeout(timeoutId);
 
@@ -102,8 +131,8 @@ export function useBackendStatus() {
                 // keep last snapshot
             } finally {
                 if (!mounted) return;
-                // DISABLED: Health polling should be controlled by orchestrator
-                // depsTimer.current = window.setTimeout(pollDeps, 10000);
+                // Re-enable deps polling for proper backend status tracking
+                depsTimer.current = window.setTimeout(pollDeps, 10000);
             }
         };
         pollDeps();

@@ -71,10 +71,26 @@ export function useSpotifyStatus(pollMs: number = 30000) {
         let unauth = false;
         let rateLimited = false;
 
+        let needsSpotifyConnect = false;
+
         if (devResSettled.status === 'fulfilled') {
           const r = devResSettled.value;
           devices_ok = r.ok;
-          unauth = unauth || r.status === 401;
+          // Check if this is a "needs Spotify connect" vs general auth error
+          if (r.status === 401) {
+            try {
+              const errorData = await r.json().catch(() => ({}));
+              if (errorData.code === 'spotify_not_authenticated') {
+                needsSpotifyConnect = true;
+                console.log(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Devices endpoint needs Spotify OAuth`);
+              } else {
+                unauth = true;
+              }
+            } catch (error) {
+              console.warn(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Failed to parse devices error response, falling back to auth error`, error);
+              unauth = true; // Fallback to general auth error
+            }
+          }
           rateLimited = rateLimited || r.status === 429;
           console.log(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Devices endpoint`, {
             ok: r.ok,
@@ -82,6 +98,7 @@ export function useSpotifyStatus(pollMs: number = 30000) {
             statusText: r.statusText,
             devicesOk: devices_ok,
             unauth: unauth,
+            needsSpotifyConnect: needsSpotifyConnect,
             rateLimited: rateLimited
           });
         } else {
@@ -91,7 +108,21 @@ export function useSpotifyStatus(pollMs: number = 30000) {
         if (stateResSettled.status === 'fulfilled') {
           const r = stateResSettled.value;
           state_ok = r.ok;
-          unauth = unauth || r.status === 401;
+          // Check if this is a "needs Spotify connect" vs general auth error
+          if (r.status === 401) {
+            try {
+              const errorData = await r.json().catch(() => ({}));
+              if (errorData.code === 'spotify_not_authenticated') {
+                needsSpotifyConnect = true;
+                console.log(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - State endpoint needs Spotify OAuth`);
+              } else {
+                unauth = true;
+              }
+            } catch (error) {
+              console.warn(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Failed to parse state error response, falling back to auth error`, error);
+              unauth = true; // Fallback to general auth error
+            }
+          }
           rateLimited = rateLimited || r.status === 429;
           console.log(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - State endpoint`, {
             ok: r.ok,
@@ -99,6 +130,7 @@ export function useSpotifyStatus(pollMs: number = 30000) {
             statusText: r.statusText,
             stateOk: state_ok,
             unauth: unauth,
+            needsSpotifyConnect: needsSpotifyConnect,
             rateLimited: rateLimited
           });
         } else {
@@ -106,7 +138,11 @@ export function useSpotifyStatus(pollMs: number = 30000) {
         }
 
         const isConnected = devices_ok || state_ok;
-        const finalReason = isConnected ? null : unauth ? 'auth_required' : rateLimited ? 'rate_limited' : 'disconnected';
+        const finalReason = isConnected ? null :
+          needsSpotifyConnect ? 'needs_spotify_connect' :
+            unauth ? 'auth_required' :
+              rateLimited ? 'rate_limited' :
+                'disconnected';
 
         console.log(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Final status`, {
           connected: isConnected,
@@ -114,6 +150,7 @@ export function useSpotifyStatus(pollMs: number = 30000) {
           devicesOk: devices_ok,
           stateOk: state_ok,
           unauth,
+          needsSpotifyConnect,
           rateLimited,
           timestamp: new Date().toISOString()
         });
@@ -129,6 +166,17 @@ export function useSpotifyStatus(pollMs: number = 30000) {
         setReason('network_error');
       } finally {
         if (!mounted) return;
+
+        // Don't continue polling if we have a stable state that doesn't need monitoring
+        // Only stop polling for truly stable states (connected or needs OAuth setup)
+        const shouldStopPolling = finalReason === 'needs_spotify_connect' ||
+          (isConnected && !rateLimited);
+
+        if (shouldStopPolling) {
+          console.log(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Stopping polling, stable state: ${finalReason || 'connected'}`);
+          return;
+        }
+
         console.log(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Scheduling next poll in ${pollMs}ms`);
         timerRef.current = window.setTimeout(poll, pollMs);
       }
@@ -142,6 +190,32 @@ export function useSpotifyStatus(pollMs: number = 30000) {
       console.log('🎵 SPOTIFY STATUS HOOK: Cleanup completed');
     };
   }, [pollMs]);
+
+  // Listen for auth state changes to trigger immediate polling when session becomes ready
+  useEffect(() => {
+    const handleAuthStateChange = (event: any) => {
+      const detail = event.detail;
+      // If session became ready and we're authenticated, trigger immediate poll
+      if (!detail.prevState.session_ready && detail.newState.session_ready && detail.newState.is_authenticated) {
+        console.info('🎵 SPOTIFY STATUS HOOK: Session became ready, triggering immediate poll');
+        // Clear any pending timer and trigger immediate poll
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+        // Small delay to ensure auth propagation
+        setTimeout(() => {
+          if (timerRef.current === null) { // Only if not already triggered
+            // This will trigger the poll function from the main useEffect
+            window.dispatchEvent(new CustomEvent('spotify:force_poll'));
+          }
+        }, 100);
+      }
+    };
+
+    window.addEventListener('auth:state_changed', handleAuthStateChange);
+    return () => window.removeEventListener('auth:state_changed', handleAuthStateChange);
+  }, []);
 
   return { connected, reason, hasChecked } as const;
 }
@@ -176,9 +250,9 @@ export function useMusicDevices(pollMs: number = 45000) {
             timerRef.current = window.setTimeout(poll, pollMs);
             return;
           }
-        } catch {
+        } catch (error) {
           // If we can't read orchestrator, avoid fetching
-          console.warn(`🎵 MUSIC DEVICES HOOK: Poll #${pollCount} - Auth orchestrator unavailable, deferring device fetch`);
+          console.warn(`🎵 MUSIC DEVICES HOOK: Poll #${pollCount} - Auth orchestrator unavailable, deferring device fetch`, error);
           setHasChecked(true);
           setDevices([]);
           timerRef.current = window.setTimeout(poll, pollMs);
@@ -202,6 +276,14 @@ export function useMusicDevices(pollMs: number = 45000) {
           return;
         }
 
+        // Check if we got a spotify_not_authenticated error
+        if (resp?.error?.code === 'spotify_not_authenticated') {
+          console.log(`🎵 MUSIC DEVICES HOOK: Poll #${pollCount} - Spotify not connected, stopping polling`);
+          setDevices([]);
+          // Don't schedule next poll for this stable state
+          return;
+        }
+
         const deviceList = Array.isArray(resp?.devices) ? resp.devices : [];
         console.log(`🎵 MUSIC DEVICES HOOK: Poll #${pollCount} - Setting devices`, {
           deviceCount: deviceList.length,
@@ -222,6 +304,17 @@ export function useMusicDevices(pollMs: number = 45000) {
         setDevices([]);
       } finally {
         if (!mounted) return;
+
+        // Don't continue polling only for definitive stable states
+        // Stop polling if Spotify is not authenticated (user needs to connect)
+        // Keep polling if no devices found (devices might become available)
+        const hasStableState = resp?.error?.code === 'spotify_not_authenticated';
+
+        if (hasStableState) {
+          console.log(`🎵 MUSIC DEVICES HOOK: Poll #${pollCount} - Stopping polling, stable state`);
+          return;
+        }
+
         console.log(`🎵 MUSIC DEVICES HOOK: Poll #${pollCount} - Scheduling next poll in ${pollMs}ms`);
         timerRef.current = window.setTimeout(poll, pollMs);
       }
@@ -235,6 +328,32 @@ export function useMusicDevices(pollMs: number = 45000) {
       console.log('🎵 MUSIC DEVICES HOOK: Cleanup completed');
     };
   }, [pollMs]);
+
+  // Listen for auth state changes to trigger immediate polling when session becomes ready
+  useEffect(() => {
+    const handleAuthStateChange = (event: any) => {
+      const detail = event.detail;
+      // If session became ready and we're authenticated, trigger immediate poll
+      if (!detail.prevState.session_ready && detail.newState.session_ready && detail.newState.is_authenticated) {
+        console.info('🎵 MUSIC DEVICES HOOK: Session became ready, triggering immediate poll');
+        // Clear any pending timer and trigger immediate poll
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+        // Small delay to ensure auth propagation
+        setTimeout(() => {
+          if (timerRef.current === null) { // Only if not already triggered
+            // This will trigger the poll function from the main useEffect
+            window.dispatchEvent(new CustomEvent('music_devices:force_poll'));
+          }
+        }, 100);
+      }
+    };
+
+    window.addEventListener('auth:state_changed', handleAuthStateChange);
+    return () => window.removeEventListener('auth:state_changed', handleAuthStateChange);
+  }, []);
 
   const hasDevice = devices && devices.length > 0;
   console.log('🎵 MUSIC DEVICES HOOK: Returning state', {

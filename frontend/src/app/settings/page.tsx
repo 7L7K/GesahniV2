@@ -57,7 +57,6 @@ function SettingsPageInner() {
             // Check for Spotify OAuth parameters
             const spotifyConnected = urlParams.get('spotify') === 'connected';
             const spotifyError = urlParams.get('spotify_error');
-            const hasSpotifyParams = hash === '#spotify' || spotifyConnected || spotifyError;
 
             if (hasSpotifyParams) {
                 setActiveTab('integrations');
@@ -241,6 +240,11 @@ function SettingsPageInner() {
         }
     };
 
+    // Parse URL parameters for Spotify OAuth detection
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const hash = typeof window !== 'undefined' ? window.location.hash : '';
+    const hasSpotifyParams = (urlParams?.get('spotify') === 'connected' || urlParams?.get('spotify_error')) || (hash === '#spotify');
+
     // Show loading while checking auth
     if (authState.isLoading) {
         const isSpotifyOAuth = hasSpotifyParams;
@@ -320,8 +324,6 @@ function SettingsPageInner() {
     */
 
     // Show authentication status instead of redirecting
-    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-    const hasSpotifyParams = urlParams?.get('spotify') === 'connected' || urlParams?.get('spotify_error');
     const spotifySuccess = urlParams?.get('spotify') === 'connected';
     const spotifyError = urlParams?.get('spotify_error');
 

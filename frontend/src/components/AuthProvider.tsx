@@ -7,21 +7,23 @@ import { useEffect } from 'react';
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
-    // Initialize auth orchestrator synchronously during render
-    if (typeof window !== 'undefined') {
-        try {
-            const orchestrator = getAuthOrchestrator();
-            // Expose for debugging
-            (window as any).__authOrchestrator = orchestrator;
-            // Initialize orchestrator synchronously (idempotent)
-            void orchestrator.initialize();
-        } catch (e) {
-            // eslint-disable-next-line no-console
-            console.error('AuthProvider: error during init', e);
+    // Initialize auth orchestrator asynchronously in useEffect
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const orchestrator = getAuthOrchestrator();
+                // Expose for debugging
+                (window as any).__authOrchestrator = orchestrator;
+                // Initialize orchestrator asynchronously (idempotent)
+                void orchestrator.initialize();
+            } catch (e) {
+                // eslint-disable-next-line no-console
+                console.error('AuthProvider: error during init', e);
+            }
         }
-    }
+    }, []);
 
-    // Still use useEffect for cleanup
+    // Cleanup in separate useEffect
     useEffect(() => {
         return () => {
             if (typeof window !== 'undefined') {

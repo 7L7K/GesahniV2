@@ -24,7 +24,7 @@ from pathlib import Path
 # Add the app directory to the path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.tokens import create_access_token, create_refresh_token
+from app.tokens import make_access, make_refresh
 
 def check_token_expiration():
     """Check expiration status of tokens in cookies.txt"""
@@ -86,14 +86,14 @@ def generate_fresh_tokens():
     """Generate fresh JWT tokens"""
     print("🔄 Generating fresh JWT tokens...")
 
-    # Create access token
+        # Create access token
     access_data = {
         "user_id": "testuser",
         "sub": "testuser",
         "type": "access",
         "scopes": ["care:resident", "music:control", "chat:write"]
     }
-    access_token = create_access_token(access_data)
+    access_token = make_access(access_data)
 
     # Create refresh token
     refresh_data = {
@@ -101,7 +101,7 @@ def generate_fresh_tokens():
         "sub": "testuser",
         "type": "refresh"
     }
-    refresh_token = create_refresh_token(refresh_data)
+    refresh_token = make_refresh(refresh_data)
 
     print("✅ Fresh tokens generated!")
     print(f"Access Token: {access_token[:50]}...")
