@@ -447,7 +447,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
         if accept.startswith("application/json") or not user_agent or "testclient" in user_agent.lower():
             raise HTTPException(status_code=400, detail="missing_state")
         from starlette.responses import RedirectResponse
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
         return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=bad_state", status_code=302)
     if not code:
         logger.error("🎵 SPOTIFY CALLBACK: Missing authorization code")
@@ -458,7 +458,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
         if accept.startswith("application/json") or not user_agent or "testclient" in user_agent.lower():
             raise HTTPException(status_code=400, detail="missing_code")
         from starlette.responses import RedirectResponse
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
         return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=missing_code", status_code=302)
     try:
         secret = _jwt_secret()
@@ -479,19 +479,19 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
         logger.error("🎵 SPOTIFY CALLBACK: JWT state expired", extra={
             "meta": {"error_type": "ExpiredSignatureError", "error_message": str(e)}
         })
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
         return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=expired_state", status_code=302)
     except jwt.InvalidTokenError as e:
         logger.error("🎵 SPOTIFY CALLBACK: Invalid JWT state", extra={
             "meta": {"error_type": "InvalidTokenError", "error_message": str(e)}
         })
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
         return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=bad_state", status_code=302)
     except Exception as e:
         logger.error("🎵 SPOTIFY CALLBACK: JWT decode error", extra={
             "meta": {"error_type": type(e).__name__, "error_message": str(e)}
         })
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
         return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=bad_state", status_code=302)
 
     # 2) Recover PKCE + user from server store. We prefer the stateless tx_id
@@ -529,7 +529,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                 "store_empty": True
             }
         })
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
         return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=expired_txn", status_code=302)
 
     if tx.get("user_id") != uid:
@@ -542,7 +542,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                 "user_mismatch": True
             }
         })
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
         return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=user_mismatch", status_code=302)
 
     # The code_verifier is sensitive; never log or include previews. Only use it
@@ -591,7 +591,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                 "token_data_attributes": list(vars(token_data).keys()) if 'token_data' in locals() and hasattr(token_data, '__dict__') else 'N/A'
             }
         })
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
         return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=token_exchange_failed", status_code=302)
 
     # 4) Persist tokens for user
@@ -653,7 +653,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                 }
             },
         )
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
         return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=token_save_failed", status_code=302)
 
     # 5) Redirect to UI success
@@ -719,40 +719,72 @@ async def spotify_status(request: Request) -> dict:
 
     client = SpotifyClient(current_user)
 
-    # First determine token connectivity without hitting Spotify
+    # Determine token connectivity by performing a lightweight probe to /me.
+    #  - 200 -> token valid
+    #  - 401/403 -> invalidate stored token and mark as not connected (reauthorize)
     connected = False
     reason: str | None = None
-    try:
-        token = await client._bearer_token_only()
-        connected = bool(token)
-    except RuntimeError as e:
-        connected = False
-        reason = str(e)
-
-    # Probe devices and playback state best-effort; do not raise
     devices_ok = False
     state_ok = False
+    required_scopes_ok: bool | None = None
+
+    try:
+        # Lightweight probe: user profile
+        profile = await client.get_user_profile()
+        if profile is not None:
+            connected = True
+        else:
+            connected = False
+    except Exception as e:
+        # If we get an auth-related error, mark tokens invalid so frontend knows to reauth
+        try:
+            from ..integrations.spotify.client import SpotifyAuthError, SpotifyPremiumRequiredError
+            from ..auth_store_tokens import mark_invalid
+
+            if isinstance(e, SpotifyAuthError) or isinstance(e, SpotifyPremiumRequiredError) or str(e).lower().find('401') != -1 or str(e).lower().find('needs_reauth') != -1:
+                # Invalidate tokens to avoid false-positive "connected" UX
+                try:
+                    await mark_invalid(current_user, 'spotify')
+                except Exception:
+                    logger.warning("🎵 SPOTIFY STATUS: failed to mark token invalid", extra={"meta": {"user_id": current_user, "err": str(e)}})
+                connected = False
+                reason = 'needs_reauth'
+            else:
+                connected = False
+                reason = str(e)
+        except Exception:
+            connected = False
+            reason = str(e)
+
+    # If token looks connected, optionally verify device/state probes and scopes
     if connected:
         try:
             devices = await client.get_devices()
-            # If the API call succeeded, consider devices_ok True even if empty
             devices_ok = True
-        except Exception as e:
-            try:
-                logger.warning("🎵 SPOTIFY STATUS: devices probe failed", extra={"meta": {"error": str(e)}})
-            except Exception:
-                pass
+        except Exception:
+            devices_ok = False
         try:
-            # current playback probe; success means token is valid and API reachable
             _ = await client.get_currently_playing()
             state_ok = True
-        except Exception as e:
-            try:
-                logger.warning("🎵 SPOTIFY STATUS: state probe failed", extra={"meta": {"error": str(e)}})
-            except Exception:
-                pass
+        except Exception:
+            state_ok = False
+
+        # Verify required scopes are present on stored token when possible
+        try:
+            toks = await client._get_tokens()
+            tok_scope = (toks.scope or "") if toks else ""
+            token_scopes = set(s for s in tok_scope.split() if s)
+            required = {"user-read-playback-state", "user-modify-playback-state", "user-read-currently-playing"}
+            required_scopes_ok = required.issubset(token_scopes)
+        except Exception:
+            required_scopes_ok = None
 
     body: dict = {"connected": connected, "devices_ok": devices_ok, "state_ok": state_ok}
     if not connected and reason:
         body["reason"] = reason
+    if required_scopes_ok is not None:
+        body["required_scopes_ok"] = required_scopes_ok
+        if toks := (await client._get_tokens() if required_scopes_ok is not None else None):
+            body["scopes"] = (toks.scope or "").split()
+            body["expires_at"] = toks.expires_at
     return JSONResponse(body, status_code=200)

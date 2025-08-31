@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -17,6 +18,8 @@ from ...http_utils import json_request
 from ...models.third_party_tokens import ThirdPartyToken
 from .oauth import SpotifyOAuth, SpotifyOAuthError
 from .budget import get_spotify_budget_manager
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -250,9 +253,29 @@ class SpotifyClient:
         Retries on 5xx with backoff, refreshes on 401 once, and raises
         specialized exceptions for 403 (premium_required) and 429 (rate_limited).
         """
+        logger.info("🎵 SPOTIFY CLIENT: _proxy_request starting", extra={
+            "meta": {
+                "user_id": self.user_id,
+                "method": method,
+                "path": path,
+                "params": params,
+                "has_json_body": json_body is not None,
+                "json_body_size": len(str(json_body)) if json_body else 0
+            }
+        })
+
         self._check_budget()
         timeout = self._get_timeout()
         url = f"{self.api_base}{path}"
+
+        logger.debug("🎵 SPOTIFY CLIENT: _proxy_request URL constructed", extra={
+            "meta": {
+                "user_id": self.user_id,
+                "method": method,
+                "url": url,
+                "timeout": timeout
+            }
+        })
 
         # Circuit breaker check
         if self._is_circuit_open():
@@ -268,10 +291,35 @@ class SpotifyClient:
         attempt = 0
         while attempt < 3:
             attempt += 1
+            logger.debug("🎵 SPOTIFY CLIENT: Making HTTP request", extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "attempt": attempt,
+                    "method": method,
+                    "url": url,
+                    "has_params": params is not None,
+                    "has_json_body": json_body is not None,
+                    "timeout": timeout
+                }
+            })
+
             async with httpx.AsyncClient(timeout=timeout) as client:
                 t0 = perf_counter()
                 r = await client.request(method, url, params=params, json=json_body, headers=headers)
                 dt = perf_counter() - t0
+
+            logger.info("🎵 SPOTIFY CLIENT: HTTP response received", extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "attempt": attempt,
+                    "method": method,
+                    "path": path,
+                    "status_code": r.status_code,
+                    "response_time_ms": round(dt * 1000, 2),
+                    "headers": dict(r.headers),
+                    "response_size": len(r.text) if r.text else 0
+                }
+            })
 
             # observe metrics
             try:
@@ -282,6 +330,16 @@ class SpotifyClient:
 
             # Handle rate limit explicitly with proper backoff
             if r.status_code == 429:
+                logger.warning("🎵 SPOTIFY CLIENT: Rate limited by Spotify", extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "attempt": attempt,
+                        "method": method,
+                        "path": path,
+                        "retry_after_header": (r.headers or {}).get("Retry-After")
+                    }
+                })
+
                 try:
                     SPOTIFY_429.labels(path).inc()
                 except Exception:
@@ -289,15 +347,31 @@ class SpotifyClient:
                 retry_after = None
                 try:
                     retry_after = int((r.headers or {}).get("Retry-After", "0") or 0)
+                    logger.info("🎵 SPOTIFY CLIENT: Applying Retry-After backoff", extra={
+                        "meta": {"user_id": self.user_id, "retry_after": retry_after}
+                    })
                     # Apply backoff using the Retry-After header value
                     self._budget_manager.apply_backoff(retry_after)
                 except Exception:
                     # Apply exponential backoff if no Retry-After header
+                    logger.info("🎵 SPOTIFY CLIENT: Applying exponential backoff", extra={
+                        "meta": {"user_id": self.user_id}
+                    })
                     self._budget_manager.apply_backoff()
                 # Surface a specialized exception for UI
                 raise SpotifyRateLimitedError(retry_after, "rate_limited")
 
             if r.status_code == 401:
+                logger.warning("🎵 SPOTIFY CLIENT: 401 Unauthorized from Spotify", extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "attempt": attempt,
+                        "method": method,
+                        "path": path,
+                        "max_attempts": 3
+                    }
+                })
+
                 try:
                     SPOTIFY_REFRESH.inc()
                 except Exception:
@@ -305,42 +379,109 @@ class SpotifyClient:
 
                 # Only attempt refresh on first attempt to avoid infinite loops
                 if attempt == 1:
+                    logger.info("🎵 SPOTIFY CLIENT: Attempting token refresh on 401", extra={
+                        "meta": {"user_id": self.user_id, "attempt": attempt}
+                    })
+
                     # Check if token needs refresh based on expiry
                     from ...auth_store_tokens import get_token as _get_token
                     t = await _get_token(self.user_id, "spotify")
                     now = int(time.time())
 
+                    logger.debug("🎵 SPOTIFY CLIENT: Token status check", extra={
+                        "meta": {
+                            "user_id": self.user_id,
+                            "has_token": t is not None,
+                            "token_expires_at": getattr(t, 'expires_at', None) if t else None,
+                            "current_time": now,
+                            "token_expired": getattr(t, 'expires_at', 0) < now if t else None
+                        }
+                    })
+
                     # Always attempt refresh on 401, regardless of expiry time
                     # Spotify may revoke tokens or have clock skew
                     try:
+                        logger.info("🎵 SPOTIFY CLIENT: Refreshing tokens", extra={
+                            "meta": {"user_id": self.user_id}
+                        })
                         await self._refresh_tokens()
                         access_token = await self._get_valid_access_token()
                         headers["Authorization"] = f"Bearer {access_token}"
+                        logger.info("🎵 SPOTIFY CLIENT: Token refresh successful, retrying request", extra={
+                            "meta": {"user_id": self.user_id}
+                        })
                         continue  # Retry with new token
-                    except SpotifyAuthError:
+                    except SpotifyAuthError as refresh_error:
+                        logger.error("🎵 SPOTIFY CLIENT: Token refresh failed", extra={
+                            "meta": {
+                                "user_id": self.user_id,
+                                "error": str(refresh_error)
+                            }
+                        })
                         # Refresh failed - token is invalid, user needs reauth
                         raise SpotifyAuthError("needs_reauth")
                 else:
+                    logger.error("🎵 SPOTIFY CLIENT: Giving up after failed refresh attempt", extra={
+                        "meta": {"user_id": self.user_id, "attempt": attempt}
+                    })
                     # Already attempted refresh on first attempt, give up
                     raise SpotifyAuthError("needs_reauth")
 
             if r.status_code == 403:
+                logger.warning("🎵 SPOTIFY CLIENT: 403 Forbidden - Premium required or other permission issue", extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "attempt": attempt,
+                        "method": method,
+                        "path": path,
+                        "status_code": r.status_code
+                    }
+                })
                 # Premium required or other forbidden reason
                 raise SpotifyPremiumRequiredError("premium_required")
 
             # Retry on server errors
             if r.status_code >= 500 and attempt < 3:
+                logger.warning("🎵 SPOTIFY CLIENT: Server error, retrying", extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "attempt": attempt,
+                        "method": method,
+                        "path": path,
+                        "status_code": r.status_code,
+                        "retry_delay": 0.2 * attempt
+                    }
+                })
                 await asyncio.sleep(0.2 * attempt)
                 continue
 
             # Record circuit state and handle backoff
             if r.status_code >= 500:
+                logger.warning("🎵 SPOTIFY CLIENT: Recording failure for circuit breaker", extra={
+                    "meta": {"user_id": self.user_id, "status_code": r.status_code}
+                })
                 self._record_failure()
             else:
+                logger.info("🎵 SPOTIFY CLIENT: Request successful, clearing backoff", extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "status_code": r.status_code,
+                        "attempt": attempt
+                    }
+                })
                 self._record_success()
                 # Clear backoff on successful response
                 self._budget_manager.clear_backoff()
 
+            logger.info("🎵 SPOTIFY CLIENT: Returning response", extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "method": method,
+                    "path": path,
+                    "status_code": r.status_code,
+                    "final_attempt": attempt
+                }
+            })
             return r
 
     # ------------------------------------------------------------------
@@ -406,11 +547,52 @@ class SpotifyClient:
 
     async def get_devices(self) -> list[dict[str, Any]]:
         """Get available playback devices (raw proxy semantics)."""
-        r = await self._proxy_request("GET", "/me/player/devices")
-        if r.status_code != 200:
-            return []
-        data = r.json() or {}
-        return data.get("devices", [])
+        logger.info("🎵 SPOTIFY CLIENT: get_devices called", extra={
+            "meta": {"user_id": self.user_id}
+        })
+
+        try:
+            r = await self._proxy_request("GET", "/me/player/devices")
+            logger.info("🎵 SPOTIFY CLIENT: get_devices API response", extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "status_code": r.status_code,
+                    "headers": dict(r.headers),
+                    "response_time": getattr(r, '_response_time', None)
+                }
+            })
+
+            if r.status_code != 200:
+                logger.warning("🎵 SPOTIFY CLIENT: get_devices non-200 response", extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "status_code": r.status_code,
+                        "response_text": r.text[:500] if r.text else None
+                    }
+                })
+                return []
+
+            data = r.json() or {}
+            devices = data.get("devices", [])
+
+            logger.info("🎵 SPOTIFY CLIENT: get_devices success", extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "device_count": len(devices),
+                    "devices": devices
+                }
+            })
+
+            return devices
+        except Exception as e:
+            logger.error("🎵 SPOTIFY CLIENT: get_devices error", extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__
+                }
+            })
+            raise
 
     async def transfer_playback(self, device_id: str, play: bool = True) -> bool:
         """Transfer playback to a specific device (raw proxy)."""

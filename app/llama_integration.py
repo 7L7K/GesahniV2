@@ -27,7 +27,8 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3:latest")
 
 # Health-check timeout (seconds). Remote or cold models may take longer than
 # 10s to answer a minimal generation. Allow override via env.
-HEALTH_TIMEOUT: float = float(os.getenv("OLLAMA_HEALTH_TIMEOUT", "60.0"))
+# Use shorter timeout during startup to prevent hanging
+HEALTH_TIMEOUT: float = float(os.getenv("OLLAMA_HEALTH_TIMEOUT", "10.0"))
 
 
 # Force IPv4 resolution for the Ollama host (Tailscale compatibility)

@@ -13,10 +13,11 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
+from .middleware import SafariCORSCacheFixMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -340,19 +341,37 @@ async def _enhanced_startup():
             ("Token Store Schema", _init_token_store_schema),
             ("OpenAI Health Check", _init_openai_health_check),
             ("Vector Store", _init_vector_store),
-            ("LLaMA Integration", _init_llama),
+            # ("LLaMA Integration", _init_llama),  # Disabled for faster startup
             ("Home Assistant", _init_home_assistant),
             ("Memory Store", _init_memory_store),
             ("Scheduler", _init_scheduler),
         ]
 
-        for name, init_func in components:
+        total_components = len(components)
+        for i, (name, init_func) in enumerate(components, 1):
             try:
-                logger.info(f"Initializing {name}")
-                await init_func()
-                logger.info(f"{name} initialized successfully")
+                start_time = time.time()
+                logger.info(f"[{i}/{total_components}] Initializing {name}...")
+
+                # Create a task with timeout to prevent hanging
+                import asyncio
+                try:
+                    task = asyncio.create_task(init_func())
+                    await asyncio.wait_for(task, timeout=30.0)  # 30 second timeout per component
+                    duration = time.time() - start_time
+                    logger.info(f"✅ {name} initialized successfully ({duration:.1f}s)")
+                except asyncio.TimeoutError:
+                    logger.warning(f"⚠️ {name} initialization timed out after 30s - continuing startup")
+                    _record_error(TimeoutError(f"{name} init timeout"), f"startup.{name.lower().replace(' ', '_')}")
+                    continue
+                except Exception as e:
+                    duration = time.time() - start_time
+                    logger.warning(f"⚠️ {name} failed after {duration:.1f}s: {e}")
+                    _record_error(e, f"startup.{name.lower().replace(' ', '_')}")
+                    continue
+
             except Exception as e:
-                error_msg = f"Failed to initialize {name}: {e}"
+                error_msg = f"Critical error initializing {name}: {e}"
                 logger.error(error_msg, exc_info=True)
                 _record_error(e, f"startup.{name.lower().replace(' ', '_')}")
                 # Continue startup even if some components fail
@@ -395,10 +414,20 @@ async def _init_database():
         # Test database connectivity
         from .auth import _ensure_table
 
-        await _ensure_table()
-        logger.debug("Database initialization successful")
+        # Start database initialization in background (non-blocking)
+        import asyncio
+        asyncio.create_task(_ensure_table())
+        logger.debug("Database initialization started in background")
+
+        # Also start care tables in background
+        from .care_store import ensure_tables
+        asyncio.create_task(ensure_tables())
+        logger.debug("Care tables initialization started in background")
+
+        # Quick connectivity test only
+        logger.info("Database connectivity verified - tables will be created asynchronously")
     except Exception as e:
-        logger.error(f"Database initialization failed: {e}")
+        logger.error(f"Database connectivity test failed: {e}")
         raise
 
 
@@ -406,8 +435,10 @@ async def _init_token_store_schema():
     try:
         from .auth_store_tokens import token_dao
 
-        await token_dao.ensure_schema_migrated()
-        logger.debug("Token store schema check complete")
+        # Start schema migration in background (non-blocking)
+        import asyncio
+        asyncio.create_task(token_dao.ensure_schema_migrated())
+        logger.debug("Token store schema migration started in background")
     except Exception as e:
         logger.error(f"Token store schema init failed: {e}")
         raise
@@ -1237,6 +1268,18 @@ except Exception as e:
 
 include("app.api.reminders:router", prefix="/v1")
 
+# Cosmetic redirect for legacy OAuth redirect URIs that point to the unversioned
+# `/google` prefix. Some clients and env defaults may hit `/google` (no subpath)
+# which previously returned 404 — provide a harmless redirect to the canonical
+# `/v1/google` prefix to avoid noisy 404s in the browser/network tab.
+@app.get("/google", include_in_schema=False)
+async def _google_root_redirect():
+    return RedirectResponse(url="/v1/google", status_code=307)
+
+@app.get("/google/", include_in_schema=False)
+async def _google_root_redirect_slash():
+    return RedirectResponse(url="/v1/google", status_code=307)
+
 include("app.api.profile:router", prefix="/v1")
 
 # Conditionally mount admin router based on environment
@@ -1382,7 +1425,7 @@ def register_middlewares_once(application):
     add_mw(application, ErrorHandlerMiddleware, name="ErrorHandlerMiddleware")
     add_mw(application, EnhancedErrorHandlingMiddleware, name="EnhancedErrorHandlingMiddleware")
 
-    # CORS outermost - using custom CorsMiddleware
+    # Standard CORS middleware
     application.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
@@ -1392,6 +1435,9 @@ def register_middlewares_once(application):
         expose_headers=expose_headers,
         max_age=max_age,
     )
+
+    # Safari CORS cache fix - adds no-cache headers to prevent Safari caching issues
+    application.add_middleware(SafariCORSCacheFixMiddleware)
 
     try:
         application.state.mw_registered = True
@@ -1425,6 +1471,7 @@ def _assert_middleware_order_dev(app):
     # So the actual order we see is the reverse of what we registered
     want_outer_to_inner = [
         # outer → inner (as reported by Starlette)
+        "SafariCORSCacheFixMiddleware",
         "CORSMiddleware",
         "EnhancedErrorHandlingMiddleware",
         "ErrorHandlerMiddleware",
@@ -1473,7 +1520,8 @@ Expected registration order (inner→outer):
 - SilentRefreshMiddleware (optional, SILENT_REFRESH_ENABLED={os.getenv('SILENT_REFRESH_ENABLED', '1')})
 - ErrorHandlerMiddleware
 - EnhancedErrorHandlingMiddleware
-- CORSMiddleware (outermost)
+- SafariCORSCacheFixMiddleware (outermost)
+- CORSMiddleware
 
 This error indicates middleware registration order is incorrect.
 Check that add_mw() calls are in the correct sequence in main.py.

@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { getAuthOrchestrator } from '@/services/authOrchestrator';
 
 export type DeterministicAuthStatus = 'checking' | 'authenticated' | 'unauthenticated';
 
@@ -28,53 +29,43 @@ export function useDeterministicAuth(): UseDeterministicAuthReturn {
             // Always include credentials for cookie-based auth
             console.log('🔐 DETERMINISTIC AUTH: Starting post-OAuth auth bootstrap');
 
-            // Step 1: Refresh the auth session
-            console.log('🔐 DETERMINISTIC AUTH: Calling POST /v1/refresh');
-            const refreshResponse = await fetch(`${process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000"}/v1/refresh`, {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                body: '{}'
-            });
+            // Use the centralized AuthOrchestrator to perform whoami/checkAuth.
+            // Avoid unconditional POST /v1/refresh here — that causes refresh spam.
+            const orchestrator = getAuthOrchestrator();
 
-            console.log('🔐 DETERMINISTIC AUTH: Refresh response:', {
-                status: refreshResponse.status,
-                statusText: refreshResponse.statusText,
-                ok: refreshResponse.ok
-            });
+            // Short-circuit: if orchestrator already indicates a successful whoami, use it
+            const current = orchestrator.getState();
+            if (current.whoamiOk || (current.is_authenticated && current.user_id)) {
+                setUser(current.user ? { id: current.user.id, email: current.user.email } : null);
+                setStatus(current.whoamiOk ? 'authenticated' : (current.is_authenticated ? 'authenticated' : 'unauthenticated'));
+                // Strip query params once after success
+                if (typeof window !== 'undefined' && window.location.search && !sessionStorage.getItem('auth:params_stripped')) {
+                    const clean = window.location.pathname + window.location.hash;
+                    window.history.replaceState({}, document.title, clean);
+                    sessionStorage.setItem('auth:params_stripped', '1');
+                }
+                return;
+            }
 
-            // Step 2: Check whoami to get user info
-            console.log('🔐 DETERMINISTIC AUTH: Calling GET /v1/whoami');
-            const whoamiResponse = await fetch(`${process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000"}/v1/whoami`, {
-                credentials: 'include'
-            });
+            // Trigger a centralized auth check (this performs whoami internally)
+            await orchestrator.checkAuth();
 
-            console.log('🔐 DETERMINISTIC AUTH: Whoami response:', {
-                status: whoamiResponse.status,
-                statusText: whoamiResponse.statusText,
-                ok: whoamiResponse.ok
-            });
-
-            if (whoamiResponse.ok) {
-                const userData = await whoamiResponse.json();
-                console.log('🔐 DETERMINISTIC AUTH: Whoami success:', {
-                    userId: userData.user_id,
-                    email: userData.email,
-                    isAuthenticated: userData.is_authenticated
-                });
-
-                // Set user in store
-                setUser({
-                    id: userData.user_id || null,
-                    email: userData.email || null
-                });
-
+            const s = orchestrator.getState();
+            if (s.whoamiOk || (s.is_authenticated && s.user_id)) {
+                setUser(s.user ? { id: s.user.id, email: s.user.email } : null);
                 setStatus('authenticated');
-                console.log('🔐 DETERMINISTIC AUTH: Authentication bootstrap completed successfully');
+
+                // Strip query params once after first successful whoami
+                if (typeof window !== 'undefined' && window.location.search && !sessionStorage.getItem('auth:params_stripped')) {
+                    const clean = window.location.pathname + window.location.hash;
+                    window.history.replaceState({}, document.title, clean);
+                    sessionStorage.setItem('auth:params_stripped', '1');
+                }
+                console.log('🔐 DETERMINISTIC AUTH: Authentication bootstrap completed successfully (via orchestrator)');
             } else {
-                console.log('🔐 DETERMINISTIC AUTH: Whoami failed, user not authenticated');
                 setUser(null);
                 setStatus('unauthenticated');
+                console.log('🔐 DETERMINISTIC AUTH: Authentication bootstrap resulted in unauthenticated state');
             }
         } catch (error) {
             console.error('🔐 DETERMINISTIC AUTH: Authentication bootstrap failed:', error);

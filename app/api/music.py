@@ -53,7 +53,7 @@ from datetime import time as dtime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.common import OkResponse as CommonOkResponse
@@ -62,11 +62,10 @@ from ..deps.user import get_current_user_id
 # Use unified Spotify client that reads/writes tokens via auth_store_tokens
 from ..integrations.spotify.client import SpotifyAuthError, SpotifyClient
 from ..models.music_state import MusicVibe, load_state, save_state
-from ..security import verify_ws
+
 from .ws_helpers import handle_reauth
 
 router = APIRouter(prefix="", tags=["Music"])  # rate limit applied selectively in main
-ws_router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
@@ -469,32 +468,10 @@ class StateResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-_ws_clients: set[WebSocket] = set()
-
-
 async def _broadcast(topic: str, payload: dict) -> None:
-    if not _ws_clients:
-        return
-    # Fan-out with bounded concurrency and isolate slow clients
-    import asyncio as _aio
-
-    dead: list[WebSocket] = []
-    sem = _aio.Semaphore(int(os.getenv("WS_BROADCAST_CONCURRENCY", "64") or 64))
-
-    async def _send(ws: WebSocket) -> None:
-        try:
-            async with sem:
-                await ws.send_json({"topic": topic, "data": payload})
-        except Exception:
-            dead.append(ws)
-
-    await _aio.gather(*[_send(ws) for ws in list(_ws_clients)], return_exceptions=True)
-    for ws in dead:
-        try:
-            _ws_clients.discard(ws)
-            await ws.close()
-        except Exception:
-            pass
+    """Broadcast to WebSocket clients (legacy implementation removed)"""
+    # Note: Broadcasting is now handled by music_ws.py via ws_manager
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -586,134 +563,6 @@ async def _build_state_payload(user_id: str) -> StateResponse:
             else None
         ),
     )
-
-
-@ws_router.websocket("/ws/music")
-async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
-    # Validate WebSocket Origin explicitly
-    origin = ws.headers.get("Origin")
-    # Prefer runtime-resolved origins from app state when available
-    try:
-        configured_origins = list(getattr(ws.app.state, "allowed_origins", []))  # type: ignore[attr-defined]
-    except Exception:
-        configured_origins = []
-
-    # Fallback to env when app state not populated
-    if not configured_origins:
-        _env_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000") or "http://localhost:3000"
-        configured_origins = [o.strip() for o in _env_origins.split(",") if o.strip()]
-        if not configured_origins:
-            configured_origins = ["http://localhost:3000"]
-
-    # For WS, enforce exact-origin match against configured list
-    if origin and origin not in configured_origins:
-        try:
-            await ws.close(code=1008, reason="origin_not_allowed")
-        except Exception:
-            pass
-        return
-
-    await verify_ws(ws)
-    # If session store is down and no Authorization header/user identity, fail handshake early
-    try:
-        hdr = ws.headers.get("Authorization") or ""
-        has_authz = hdr.lower().startswith("bearer ")
-        uid = getattr(ws.state, "user_id", None)
-        outage = getattr(ws.state, "session_store_unavailable", False)
-        if outage and (not has_authz) and (not uid):
-            try:
-                await ws.close(code=1013, reason="identity_unavailable")
-            except Exception:
-                pass
-            return
-    except Exception:
-        pass
-    # If strict auth is required, close unauthenticated with policy violation
-    try:
-        require_jwt = os.getenv("REQUIRE_JWT", "0").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
-        uid = getattr(ws.state, "user_id", None)
-        if require_jwt and not uid:
-            try:
-                await ws.close(code=1008)
-            except Exception:
-                pass
-            return
-    except Exception:
-        pass
-    # Prefer subprotocol if requested; otherwise accept default
-    try:
-        await ws.accept(subprotocol="json.realtime.v1")
-    except Exception:
-        await ws.accept()
-    _ws_clients.add(ws)
-    _logger = logging.getLogger(__name__)
-    import time as _t
-
-    connected_at = _t.time()
-    last_pong = _t.monotonic()
-    try:
-        _logger.info(
-            "ws.music.accept",
-            extra={"meta": {"user_id": getattr(ws.state, "user_id", None)}},
-        )
-    except Exception:
-        pass
-    try:
-        while True:
-            import asyncio as _aio
-
-            recv_task = _aio.create_task(ws.receive())
-            done, _ = await _aio.wait({recv_task}, timeout=25.0)
-            if not done:
-                # idle: send ping and check pong freshness
-                try:
-                    await ws.send_text("ping")
-                except Exception:
-                    break
-                if (_t.monotonic() - last_pong) > 60.0:
-                    # idle timeout
-                    try:
-                        await ws.close()
-                    except Exception:
-                        pass
-                    break
-                continue
-            raw = recv_task.result()
-            if raw.get("type") == "websocket.disconnect":
-                break
-            data = raw.get("text") or raw.get("bytes")
-            if data == "pong" or (
-                isinstance(data, (bytes, bytearray)) and bytes(data) == b"pong"
-            ):
-                last_pong = _t.monotonic()
-                continue
-            try:
-                import json
-
-                payload = json.loads(data) if isinstance(data, (str, bytes)) else None
-            except Exception:
-                payload = None
-            # Reauth handling
-            if await handle_reauth(ws, payload or {}):
-                await ws.send_json({"type": "reauth_ok"})
-                continue
-            # Simple ping/pong
-            if data == "ping":
-                await ws.send_text("pong")
-    except Exception:
-        pass
-    finally:
-        _ws_clients.discard(ws)
-        try:
-            dur = int(round(_t.time() - connected_at))
-            _logger.info("ws.music.close", extra={"meta": {"duration_s": dur}})
-        except Exception:
-            pass
 
 
 # ---------------------------------------------------------------------------
@@ -1137,34 +986,100 @@ class DeviceBody(BaseModel):
 async def list_devices(
     request: Request, response: Response, user_id: str = Depends(get_current_user_id)
 ):
+    logger.info("🎵 MUSIC DEVICES: Request started", extra={
+        "meta": {
+            "user_id": user_id,
+            "method": request.method,
+            "url": str(request.url),
+            "headers": dict(request.headers),
+            "provider_spotify_enabled": PROVIDER_SPOTIFY
+        }
+    })
+
     if not PROVIDER_SPOTIFY:
+        logger.warning("🎵 MUSIC DEVICES: Spotify provider not enabled", extra={
+            "meta": {"user_id": user_id}
+        })
         body = {"devices": []}
         try:
             etag = _strong_etag("music.devices", user_id, {"ids": []})
             r304 = _maybe_304(request, response, etag)
             if r304 is not None:
+                logger.info("🎵 MUSIC DEVICES: Returning 304 Not Modified", extra={
+                    "meta": {"user_id": user_id, "etag": etag}
+                })
                 return r304  # type: ignore[return-value]
             _attach_cache_headers(response, etag)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("🎵 MUSIC DEVICES: Cache header error", extra={
+                "meta": {"user_id": user_id, "error": str(e)}
+            })
+        logger.info("🎵 MUSIC DEVICES: Returning empty devices (Spotify disabled)", extra={
+            "meta": {"user_id": user_id}
+        })
         return body
+
     try:
+        logger.info("🎵 MUSIC DEVICES: Creating Spotify client", extra={
+            "meta": {"user_id": user_id}
+        })
         client = SpotifyClient(user_id)
+        logger.info("🎵 MUSIC DEVICES: Calling get_devices()", extra={
+            "meta": {"user_id": user_id}
+        })
         devices = await client.get_devices()
-    except SpotifyAuthError:
+        logger.info("🎵 MUSIC DEVICES: get_devices() completed", extra={
+            "meta": {
+                "user_id": user_id,
+                "device_count": len(devices) if devices else 0,
+                "devices": devices
+            }
+        })
+    except SpotifyAuthError as e:
+        logger.warning("🎵 MUSIC DEVICES: Spotify auth error", extra={
+            "meta": {"user_id": user_id, "error": str(e)}
+        })
         devices = []
-    except Exception:
+    except Exception as e:
+        logger.error("🎵 MUSIC DEVICES: Unexpected error getting devices", extra={
+            "meta": {"user_id": user_id, "error": str(e), "error_type": type(e).__name__}
+        })
         devices = []
+
     body = {"devices": devices}
+    logger.info("🎵 MUSIC DEVICES: Preparing response", extra={
+        "meta": {
+            "user_id": user_id,
+            "device_count": len(devices) if devices else 0,
+            "response_body": body
+        }
+    })
+
     try:
         stable = {"ids": [d.get("id") for d in devices if isinstance(d, dict)]}
         etag = _strong_etag("music.devices", user_id, stable)
         r304 = _maybe_304(request, response, etag)
         if r304 is not None:
+            logger.info("🎵 MUSIC DEVICES: Returning 304 Not Modified (with data)", extra={
+                "meta": {"user_id": user_id, "etag": etag}
+            })
             return r304  # type: ignore[return-value]
         _attach_cache_headers(response, etag)
-    except Exception:
-        pass
+        logger.info("🎵 MUSIC DEVICES: Attached cache headers", extra={
+            "meta": {"user_id": user_id, "etag": etag}
+        })
+    except Exception as e:
+        logger.warning("🎵 MUSIC DEVICES: Cache header error (with data)", extra={
+            "meta": {"user_id": user_id, "error": str(e)}
+        })
+
+    logger.info("🎵 MUSIC DEVICES: Returning devices", extra={
+        "meta": {
+            "user_id": user_id,
+            "device_count": len(devices) if devices else 0,
+            "final_response": body
+        }
+    })
     return body
 
 
@@ -1187,4 +1102,4 @@ async def set_device(body: DeviceBody, user_id: str = Depends(get_current_user_i
 
 
 # Export the routers for use in main.py
-__all__ = ["router", "root_router", "ws_router"]
+__all__ = ["router", "root_router"]

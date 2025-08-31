@@ -10,38 +10,116 @@ export default function SpotifyControls() {
     const [uri, setUri] = useState('spotify:track:4cOdK2wGLETKBW3PvgPWqT'); // test
 
     const refreshDevices = async () => {
+        console.log('🎵 SPOTIFY CONTROLS: Starting device refresh');
+
         // Gate device fetch on backend online OR recent whoami success
         try {
+            console.log('🎵 SPOTIFY CONTROLS: Checking auth orchestrator state...');
             const { getAuthOrchestrator } = await import('@/services/authOrchestrator');
             const auth = getAuthOrchestrator().getState();
             const last = Number(auth.lastChecked || 0);
             const recent = last && (Date.now() - last) < 60_000;
+
+            console.log('🎵 SPOTIFY CONTROLS: Auth state check', {
+                isAuthenticated: auth.is_authenticated,
+                sessionReady: auth.session_ready,
+                lastChecked: new Date(last).toISOString(),
+                recent: recent,
+                canProceed: auth.is_authenticated && (recent || auth.session_ready),
+                timestamp: new Date().toISOString()
+            });
+
             if (!(auth.is_authenticated && (recent || auth.session_ready))) {
+                console.warn('🎵 SPOTIFY CONTROLS: Auth gate blocked device fetch');
                 return;
             }
-        } catch { /* ignore and attempt fetch */ }
-        const { apiFetch } = await import('@/lib/api');
-        const r = await apiFetch('/v1/spotify/devices', { credentials: 'include', auth: true });
-        const j = await r.json();
-        if (j.ok) setDevices(j.devices || []);
+        } catch (authError) {
+            console.warn('🎵 SPOTIFY CONTROLS: Auth check failed, proceeding anyway:', authError);
+        }
+
+        try {
+            console.log('🎵 SPOTIFY CONTROLS: Fetching devices from API...');
+            const { apiFetch } = await import('@/lib/api');
+            const r = await apiFetch('/v1/spotify/devices', { credentials: 'include', auth: true });
+
+            console.log('🎵 SPOTIFY CONTROLS: Devices API response', {
+                status: r.status,
+                statusText: r.statusText,
+                ok: r.ok,
+                headers: Object.fromEntries(r.headers.entries()),
+                timestamp: new Date().toISOString()
+            });
+
+            const j = await r.json();
+            console.log('🎵 SPOTIFY CONTROLS: Devices API JSON response', j);
+
+            if (j.ok) {
+                const deviceList = j.devices || [];
+                console.log('🎵 SPOTIFY CONTROLS: Setting devices', {
+                    count: deviceList.length,
+                    devices: deviceList.map((d: any) => ({ id: d.id, name: d.name, type: d.type, is_active: d.is_active })),
+                    timestamp: new Date().toISOString()
+                });
+                setDevices(deviceList);
+            } else {
+                console.warn('🎵 SPOTIFY CONTROLS: API response not OK', j);
+            }
+        } catch (error) {
+            console.error('🎵 SPOTIFY CONTROLS: Device fetch failed', error);
+        }
     };
 
     useEffect(() => { refreshDevices(); }, []);
 
     const play = async (device_id?: string) => {
+        console.log('🎵 SPOTIFY CONTROLS: Starting play command', {
+            uri: uri,
+            deviceId: device_id,
+            hasDeviceId: !!device_id,
+            timestamp: new Date().toISOString()
+        });
+
         setLoading(true);
         try {
+            const requestBody = { uris: [uri], device_id };
+            console.log('🎵 SPOTIFY CONTROLS: Play request payload', requestBody);
+
             const { apiFetch } = await import('@/lib/api');
             const r = await apiFetch('/v1/spotify/play', {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uris: [uri], device_id }),
+                body: JSON.stringify(requestBody),
                 auth: true,
             });
-            if (r.status === 403) alert('Premium required for playback.');
-            if (r.status === 429) alert('Rate limited—try again shortly.');
-            if (!r.ok && r.status !== 403 && r.status !== 429) alert('Play failed.');
+
+            console.log('🎵 SPOTIFY CONTROLS: Play API response', {
+                status: r.status,
+                statusText: r.statusText,
+                ok: r.ok,
+                headers: Object.fromEntries(r.headers.entries()),
+                timestamp: new Date().toISOString()
+            });
+
+            if (r.status === 403) {
+                console.warn('🎵 SPOTIFY CONTROLS: Premium required for playback');
+                alert('Premium required for playback.');
+            }
+            if (r.status === 429) {
+                console.warn('🎵 SPOTIFY CONTROLS: Rate limited');
+                alert('Rate limited—try again shortly.');
+            }
+            if (!r.ok && r.status !== 403 && r.status !== 429) {
+                console.error('🎵 SPOTIFY CONTROLS: Play failed with unexpected status');
+                alert('Play failed.');
+            }
+
+            if (r.ok) {
+                console.log('🎵 SPOTIFY CONTROLS: Play command successful');
+            }
+        } catch (error) {
+            console.error('🎵 SPOTIFY CONTROLS: Play command failed with exception', error);
+            alert('Play failed with error.');
         } finally {
             setLoading(false);
         }

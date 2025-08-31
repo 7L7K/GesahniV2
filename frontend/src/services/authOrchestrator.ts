@@ -34,6 +34,7 @@ export interface AuthOrchestrator {
     // Actions (only these can trigger whoami calls)
     checkAuth(): Promise<void>;
     refreshAuth(): Promise<void>;
+    markExplicitStateChange(): void;
 
     // Lifecycle
     initialize(): Promise<void>;
@@ -77,6 +78,8 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
     private lastSuccessfulState: Partial<AuthState> | null = null;
     private oscillationDetectionCount = 0;
     private readonly MAX_OSCILLATION_COUNT = 2; // Reduced from 3 to 2 to trigger backoff sooner
+    private oauthParamsCleaned = false; // Track one-time OAuth param cleanup
+    private explicitStateChange = false; // Track when state changes are initiated by code (vs external events)
 
     constructor() {
         // Subscribe to bootstrap manager for auth finish coordination
@@ -125,6 +128,15 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
         this.refreshAuth();
     };
 
+    markExplicitStateChange(): void {
+        console.info('AUTH Orchestrator: Marking next state change as explicit');
+        this.explicitStateChange = true;
+        // Reset the flag after a short delay to avoid affecting unrelated state changes
+        setTimeout(() => {
+            this.explicitStateChange = false;
+        }, 100);
+    }
+
     getState(): AuthState {
         return { ...this.state };
     }
@@ -143,11 +155,10 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
         const prevState = this.state;
         this.state = { ...this.state, ...updates };
 
-        // Check for oscillation - rapid state changes
-        // Only check after we have a successful state to compare against and after initialization
-        if (this.lastSuccessfulState && this.initialized && this.detectOscillation(prevState, this.state)) {
+        // Only bump oscillation counter on explicit state changes (like clearTokens()), not random 401s
+        if (this.explicitStateChange && this.lastSuccessfulState && this.initialized && this.detectOscillation(prevState, this.state)) {
             this.oscillationDetectionCount++;
-            console.warn(`AUTH Orchestrator: Oscillation detected (${this.oscillationDetectionCount}/${this.MAX_OSCILLATION_COUNT})`);
+            console.warn(`AUTH Orchestrator: Oscillation detected from explicit change (${this.oscillationDetectionCount}/${this.MAX_OSCILLATION_COUNT})`);
 
             if (this.oscillationDetectionCount >= this.MAX_OSCILLATION_COUNT) {
                 console.error('AUTH Orchestrator: Max oscillation count reached, applying extended backoff');
@@ -157,6 +168,9 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
             // Reset oscillation count on successful authentication
             this.oscillationDetectionCount = 0;
         }
+
+        // Reset the explicit change flag after use
+        this.explicitStateChange = false;
 
         // Only notify if state actually changed
         if (JSON.stringify(prevState) !== JSON.stringify(this.state)) {
@@ -318,6 +332,16 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
 
         if (this.authFinishInProgress) {
             console.info('AUTH Orchestrator: Skipping refresh - auth finish in progress');
+            return;
+        }
+
+        // Short-circuit refresh when already authenticated to prevent oscillation
+        if (this.state.is_authenticated && this.state.whoamiOk) {
+            console.info('AUTH Orchestrator: Short-circuiting refresh - already authenticated', {
+                isAuthenticated: this.state.is_authenticated,
+                whoamiOk: this.state.whoamiOk,
+                timestamp: new Date().toISOString(),
+            });
             return;
         }
 
@@ -545,6 +569,32 @@ class AuthOrchestratorImpl implements AuthOrchestrator {
 
                 this.lastSuccessfulState = { ...newState };
                 this.setState(newState);
+
+                // One-time cleanup after first successful whoami to prevent oscillation
+                if (shouldBeAuthenticated && !this.oauthParamsCleaned) {
+                    this.oauthParamsCleaned = true;
+                    console.info('AUTH Orchestrator: Performing one-time OAuth param cleanup', {
+                        timestamp: new Date().toISOString(),
+                    });
+
+                    // Strip OAuth params to avoid re-triggering auth flows
+                    if (typeof window !== 'undefined') {
+                        try {
+                            const url = new URL(window.location.href);
+                            ['code', 'state', 'spotify', 'error', 'scope'].forEach(k => url.searchParams.delete(k));
+                            if (window.location.search !== url.search) {
+                                window.history.replaceState(null, '', url.toString());
+                                console.info('AUTH Orchestrator: OAuth params stripped from URL', {
+                                    original: window.location.href,
+                                    cleaned: url.toString(),
+                                    timestamp: new Date().toISOString(),
+                                });
+                            }
+                        } catch (error) {
+                            console.warn('AUTH Orchestrator: Failed to clean OAuth params from URL', error);
+                        }
+                    }
+                }
 
                 console.info(`AUTH Orchestrator: Whoami check #${this.whoamiCallCount} completed successfully`, {
                     timestamp: new Date().toISOString(),

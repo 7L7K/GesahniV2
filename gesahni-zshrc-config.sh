@@ -26,7 +26,7 @@ gesahni-stop() {
 
     echo "🛑 Stopping Gesahni Development Environment"
 
-    patterns=("uvicorn app.main:app" "next dev" "pnpm dev" "npm run dev")
+    patterns=("uvicorn app.main:app" "next dev" "pnpm dev" "npm run dev" "npm" "node")
     ports=(8000 3000)
 
     found=false
@@ -52,19 +52,32 @@ gesahni-stop() {
       fi
     done
 
-    # Stop by ports (if any process is listening)
+    # Stop by ports (ALL connection states, not just LISTEN)
     for port in "${ports[@]}"; do
+      # First try LISTENING processes
       pids=$(lsof -t -iTCP:$port -sTCP:LISTEN 2>/dev/null || true)
       if [ -n "$pids" ]; then
         found=true
-        echo "Found listeners on port $port: $pids"
+        echo "Found LISTENING processes on port $port: $pids"
         for pid in $pids; do
           if kill -0 "$pid" 2>/dev/null; then
             kill -TERM "$pid" 2>/dev/null || true
           fi
         done
+      fi
+
+      # Also kill ALL processes connected to this port (including CLOSED connections)
+      all_pids=$(lsof -t -iTCP:$port 2>/dev/null || true)
+      if [ -n "$all_pids" ]; then
+        found=true
+        echo "Found ALL processes on port $port: $all_pids"
+        for pid in $all_pids; do
+          if kill -0 "$pid" 2>/dev/null; then
+            kill -TERM "$pid" 2>/dev/null || true
+          fi
+        done
         sleep 1
-        for pid in $pids; do
+        for pid in $all_pids; do
           if kill -0 "$pid" 2>/dev/null; then
             echo "Forcing kill PID $pid"
             kill -KILL "$pid" 2>/dev/null || true
@@ -73,8 +86,20 @@ gesahni-stop() {
       fi
     done
 
+    # Final cleanup - kill any remaining processes on our ports
+    sleep 2
+    for port in "${ports[@]}"; do
+      remaining_pids=$(lsof -t -iTCP:$port 2>/dev/null || true)
+      if [ -n "$remaining_pids" ]; then
+        echo "⚠️  Force-killing remaining processes on port $port: $remaining_pids"
+        for pid in $remaining_pids; do
+          kill -KILL "$pid" 2>/dev/null || true
+        done
+      fi
+    done
+
     if [ "$found" = true ]; then
-      echo "✅ Stopped matching development processes"
+      echo "✅ Stopped all development processes and cleaned up stragglers"
     else
       echo "ℹ️  No matching development processes found"
     fi

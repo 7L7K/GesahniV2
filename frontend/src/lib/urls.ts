@@ -99,9 +99,8 @@ export function buildWebSocketUrl(apiOrigin: string, path: string): string {
  * @returns WebSocket URL
  */
 export function buildCanonicalWebSocketUrl(apiOrigin: string, path: string): string {
-    // Use the canonical frontend origin for consistent origin validation
-    const canonicalOrigin = getCanonicalFrontendOrigin();
-    const parsed = new URL(canonicalOrigin);
+    // Use the API origin for WebSocket connections, not frontend origin
+    const parsed = new URL(apiOrigin);
     const wsScheme = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsBase = `${wsScheme}//${parsed.host}`;
 

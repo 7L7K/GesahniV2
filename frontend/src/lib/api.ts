@@ -220,6 +220,17 @@ export function setTokens(access: string, refresh?: string): void {
 
 export function clearTokens(): void {
   try {
+    // Mark this as an explicit state change in the orchestrator
+    // This helps prevent oscillation detection on legitimate token clears
+    try {
+      const { getAuthOrchestrator } = require('@/services/authOrchestrator');
+      const authOrchestrator = getAuthOrchestrator();
+      authOrchestrator.markExplicitStateChange();
+    } catch (e) {
+      // Ignore errors if orchestrator is not available
+      console.warn('Could not mark explicit state change:', e);
+    }
+
     // Always clear localStorage tokens regardless of Clerk configuration
     // This ensures logout works in both header mode and Clerk mode
     removeLocalStorage("auth:access");
@@ -336,9 +347,12 @@ async function tryRefresh(): Promise<Response | null> {
 }
 
 // List of public endpoints that don't require authentication
-const PUBLIC_ENDPOINTS = [
+const PUBLIC_PATHS = new Set([
+  '/v1/health',
+  '/v1/csrf',
   '/v1/login',
   '/v1/register',
+  '/v1/state',
   '/v1/models',
   '/v1/status',
   '/health/live',
@@ -350,7 +364,7 @@ const PUBLIC_ENDPOINTS = [
   '/metrics',
   '/v1/auth/finish',
   '/v1/google/auth/login_url',
-];
+]);
 
 // Centralized fetch that targets the backend API base and handles 401→refresh
 export async function apiFetch(
@@ -386,10 +400,10 @@ export async function apiFetch(
   }
 
   // Determine if this is a public endpoint
-  const isPublicEndpoint = PUBLIC_ENDPOINTS.some(endpoint => path.includes(endpoint));
+  const isPublic = PUBLIC_PATHS.has(path);
 
   // For public endpoints, default to no auth unless explicitly specified
-  const defaultAuth = isPublicEndpoint ? false : true;
+  const defaultAuth = isPublic ? false : true;
 
   const { auth = defaultAuth, headers, dedupe = true, shortCacheMs, contextKey, credentials: initCreds = defaultCredentials, ...rest } = init as any;
   // Always include credentials for authenticated/protected endpoints
@@ -397,7 +411,11 @@ export async function apiFetch(
   const isAbsolute = /^(?:https?:)?\/\//i.test(path);
   const isBrowser = typeof window !== "undefined";
   const base = API_URL || (isBrowser ? "" : "http://localhost:8000");
-  const url = isAbsolute ? path : `${base}${path}`;
+
+  // Add cache-busting parameter for Safari CORS requests
+  const separator = path.includes('?') ? '&' : '?';
+  const cacheBustParam = `cors_cache_bust=${Date.now()}`;
+  const url = isAbsolute ? path : `${base}${path}${separator}${cacheBustParam}`;
 
   // Enhanced logging for auth-related requests
   const isAuthRequest = isAuthEndpoint;
@@ -408,7 +426,7 @@ export async function apiFetch(
       path,
       method: rest.method || 'GET',
       auth,
-      isPublicEndpoint,
+      isPublic,
       credentials,
       dedupe,
       isAbsolute,
@@ -425,7 +443,7 @@ export async function apiFetch(
       path,
       method: rest.method || 'GET',
       auth,
-      isPublicEndpoint,
+      isPublic,
       dedupe,
       isAbsolute,
       base,
@@ -456,6 +474,10 @@ export async function apiFetch(
     (mergedHeaders as Record<string, string>)["Content-Type"] = "application/json";
   }
   if (auth) Object.assign(mergedHeaders as Record<string, string>, authHeaders());
+  // Hard guard: never send Authorization to public routes
+  if (isPublic && (mergedHeaders as Record<string, string>).Authorization) {
+    delete (mergedHeaders as Record<string, string>).Authorization;
+  }
 
   // Handle CSRF token for mutating requests (POST/PUT/PATCH/DELETE)
   // Send CSRF for authenticated requests and for auth endpoints (login/register/logout)
@@ -600,55 +622,66 @@ export async function apiFetch(
       }
     } catch { /* ignore */ }
   }
-  if (res.status === 401 && auth) {
-    if (isAuthRequest) {
-      console.info('API_FETCH auth.401_header_mode', {
-        path,
-        timestamp: new Date().toISOString(),
-      });
+  if (res.status === 401) {
+    // Parse error response body for more specific error information (defensive)
+    let parsedBody = null;
+    try {
+      parsedBody = await res.clone().json().catch(() => null);
+    } catch { parsedBody = null; }
+    const code = parsedBody?.errorCode || parsedBody?.error_code || parsedBody?.code || parsedBody?.error;
+
+    // Only clear tokens for public endpoints when the backend explicitly
+    // indicates the token is invalid/expired. Do NOT clear app tokens for
+    // private endpoint 401s (this causes mystery logouts).
+    if (isPublic && (code === 'unauthorized' || code === 'invalid_token' || code === 'token_expired')) {
+      console.warn('API_FETCH public.401.invalid_token - clearing tokens', { path, code, timestamp: new Date().toISOString() });
+      clearTokens();
+    } else {
+      console.warn('API_FETCH 401 (not clearing tokens)', { path, code, timestamp: new Date().toISOString() });
     }
 
-    // Only treat 401 as "user logged out" for authentication endpoints
-    // For other endpoints, it might be a scope/permission issue, not authentication
+    const errorDetails = parsedBody;
+    const errorCode = errorDetails?.code || errorDetails?.error_code;
+    const errorMessage = errorDetails?.message;
+    const errorHint = errorDetails?.hint;
+
     const isAuthCheckEndpoint = path.includes('/whoami') || path.includes('/me') || path.includes('/profile');
 
     if (isAuthCheckEndpoint) {
-      console.warn('API_FETCH auth.401_auth_endpoint - clearing tokens and redirecting', {
-        path,
-        timestamp: new Date().toISOString(),
-      });
-
-      // In header mode, 401 on auth endpoints means access token is missing or expired
-      clearTokens();
+      console.warn('API_FETCH auth.401_auth_endpoint - redirecting to login (tokens preserved)', { path, errorCode, errorMessage, timestamp: new Date().toISOString() });
       if (typeof document !== "undefined") {
-        try {
-          // Redirect to sign-in page
-          window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
-        } catch { /* ignore SSR errors */ }
+        try { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search); } catch { }
       }
+      // Fall through to let caller handle the 401 response as well
     } else {
-      // Check if this endpoint should work with anonymous access
-      const shouldWorkAnonymously = path.includes('/health') || path.includes('/v1/health') || path.includes('/v1/music/devices');
-
-      if (shouldWorkAnonymously) {
-        console.warn('API_FETCH auth.401_anonymous_endpoint - clearing invalid tokens', {
-          path,
-          timestamp: new Date().toISOString(),
-        });
-        // Clear invalid tokens that are causing 401 on endpoints that should work anonymously
-        clearTokens();
-        return; // Don't try to refresh or redirect
+      if (errorCode === 'spotify_not_authenticated') {
+        if (typeof window !== 'undefined') {
+          const event = new CustomEvent('auth:error', { detail: { type: 'spotify_connection_required', message: 'Please connect your Spotify account to use music features', hint: errorHint || 'connect Spotify account', path, timestamp: new Date().toISOString() } });
+          window.dispatchEvent(event);
+        }
+      } else if (errorCode === 'unauthorized' && errorMessage?.includes('missing token')) {
+        if (typeof window !== 'undefined') {
+          const event = new CustomEvent('auth:error', { detail: { type: 'authentication_required', message: 'Please log in to access this feature', hint: 'login required', path, timestamp: new Date().toISOString() } });
+          window.dispatchEvent(event);
+        }
+      } else {
+        // Permission/scope issues or other auth errors: surface a friendly event
+        if (typeof window !== 'undefined') {
+          const event = new CustomEvent('auth:error', {
+            detail: {
+              type: 'permission_denied',
+              message: errorMessage || 'You don\'t have permission to access this feature',
+              hint: errorHint || 'check your account permissions',
+              path: path,
+              timestamp: new Date().toISOString()
+            }
+          });
+          window.dispatchEvent(event);
+        }
       }
 
-      console.warn('API_FETCH auth.401_non_auth_endpoint - not clearing tokens, likely scope/permission issue', {
-        path,
-        timestamp: new Date().toISOString(),
-      });
-
-      // Avoid refresh loops on optional/non-critical endpoints (e.g., Spotify)
+      // Avoid refresh loops on optional/non-critical endpoints
       const shouldSkipRefresh = isSpotifyRequest || path.includes('/v1/state') || path.includes('/v1/music');
-
-      // Throttle refresh attempts globally to once per 15s
       const nowTs = Date.now();
       (window as any).__lastRefreshAttemptTs = (window as any).__lastRefreshAttemptTs || 0;
       const tooSoon = (nowTs - (window as any).__lastRefreshAttemptTs) < 15000;
@@ -661,12 +694,9 @@ export async function apiFetch(
           await authOrchestrator.refreshAuth();
         } catch (authError) {
           console.error('Failed to refresh authentication state:', authError);
-          // If refresh fails, then redirect to login
-          clearTokens();
+          // If refresh fails, redirect to login (do not forcibly clear tokens)
           if (typeof document !== "undefined") {
-            try {
-              window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
-            } catch { /* ignore SSR errors */ }
+            try { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search); } catch { }
           }
         }
       }
@@ -766,7 +796,7 @@ export async function getRecommendations(): Promise<{ recommendations: any[] }> 
   return _dedup(`/v1/recommendations`);
 }
 
-export async function listDevices(): Promise<{ devices: any[] }> {
+export async function listDevices(): Promise<{ ok: boolean; status?: number; code?: string; devices: any[] }> {
   // Gate devices fetching on backend online OR recent whoami success
   try {
     const authOrchestrator = getAuthOrchestrator();
@@ -774,10 +804,24 @@ export async function listDevices(): Promise<{ devices: any[] }> {
     const last = Number(s.lastChecked || 0);
     const recent = last && (Date.now() - last) < 60_000; // 60s
     if (!(s.is_authenticated && (recent || s.session_ready))) {
-      return { devices: [] };
+      return { ok: false, status: 0, code: 'not_ready', devices: [] };
     }
   } catch { /* ignore and proceed */ }
-  return _dedup(`/v1/music/devices`);
+
+  try {
+    const res = await apiFetch(`/v1/music/devices`, { auth: true, dedupe: false, cache: 'no-store' } as any);
+    const status = res?.status ?? 0;
+    if (!res || !res.ok) {
+      return { ok: false, status, code: 'request_failed', devices: [] };
+    }
+    const json = await res.json().catch(() => null);
+    const devices = json?.items ?? json?.devices ?? [];
+    return { ok: true, status, devices };
+  } catch (err: any) {
+    const status = err?.status ?? 0;
+    const code = err?.code ?? err?.error ?? 'unknown';
+    return { ok: false, status, code, devices: [] };
+  }
 }
 
 export async function setDevice(device_id: string): Promise<void> {
@@ -799,6 +843,95 @@ export function wsUrl(path: string): string {
   const sep = path.includes("?") ? "&" : "?";
   // Backend accepts both token and access_token; prefer access_token for consistency with HTTP
   return `${baseUrl}${sep}access_token=${encodeURIComponent(token)}`;
+}
+
+// -----------------------------
+// Auth Error Event Handling
+// -----------------------------
+
+export type AuthErrorType =
+  | 'spotify_connection_required'
+  | 'authentication_required'
+  | 'permission_denied'
+  | 'unknown_error';
+
+export interface AuthErrorEvent {
+  type: AuthErrorType;
+  message: string;
+  hint: string;
+  path: string;
+  timestamp: string;
+}
+
+/**
+ * Listen for authentication errors and handle them appropriately
+ * Usage: listenForAuthErrors((error) => { showToast(error.message) });
+ */
+export function listenForAuthErrors(
+  callback: (error: AuthErrorEvent) => void,
+  options?: { once?: boolean }
+): () => void {
+  const handler = (event: CustomEvent<AuthErrorEvent>) => {
+    callback(event.detail);
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('auth:error', handler as EventListener, { once: options?.once });
+    return () => window.removeEventListener('auth:error', handler as EventListener);
+  }
+
+  return () => { }; // No-op for SSR
+}
+
+/**
+ * Helper to create user-friendly error messages based on error type
+ */
+export function getAuthErrorMessage(error: AuthErrorEvent): {
+  title: string;
+  message: string;
+  action?: {
+    label: string;
+    href?: string;
+    onClick?: () => void;
+  };
+} {
+  switch (error.type) {
+    case 'spotify_connection_required':
+      return {
+        title: '🎵 Spotify Connection Required',
+        message: error.message,
+        action: {
+          label: 'Connect Spotify',
+          href: '/spotify/connect' // You might need to adjust this path
+        }
+      };
+
+    case 'authentication_required':
+      return {
+        title: '🔐 Login Required',
+        message: error.message,
+        action: {
+          label: 'Sign In',
+          href: '/login'
+        }
+      };
+
+    case 'permission_denied':
+      return {
+        title: '⚠️ Access Denied',
+        message: error.message,
+        action: {
+          label: 'Contact Support',
+          href: '/support' // You might need to adjust this path
+        }
+      };
+
+    default:
+      return {
+        title: '⚠️ Error',
+        message: error.message || 'An unexpected error occurred'
+      };
+  }
 }
 
 // High-level helpers -----------------------------------------------------------

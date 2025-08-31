@@ -66,6 +66,14 @@ function SettingsPageInner() {
                 // If Spotify OAuth parameters are present, do deterministic auth bootstrap
                 if (spotifyConnected || spotifyError) {
                     console.log('🎵 SETTINGS: Spotify OAuth parameters detected, starting deterministic auth bootstrap');
+
+                    // Mark handled to prevent duplicate handling from other effects
+                    try {
+                        sessionStorage.setItem('spotify:handled', '1');
+                    } catch (e) {
+                        /* ignore */
+                    }
+
                     deterministicAuth.ensureAuth().then(() => {
                         // After auth bootstrap completes, clear URL parameters
                         if (spotifyConnected) {
@@ -314,6 +322,92 @@ function SettingsPageInner() {
     // Show authentication status instead of redirecting
     const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const hasSpotifyParams = urlParams?.get('spotify') === 'connected' || urlParams?.get('spotify_error');
+    const spotifySuccess = urlParams?.get('spotify') === 'connected';
+    const spotifyError = urlParams?.get('spotify_error');
+
+    // Clear Spotify handled flag if there are no Spotify parameters (user navigated normally)
+    useEffect(() => {
+        if (!hasSpotifyParams) {
+            try {
+                sessionStorage.removeItem('spotify:handled');
+            } catch (e) {
+                /* ignore storage access issues */
+            }
+        }
+    }, [hasSpotifyParams]);
+
+    // Handle Spotify OAuth completion (success or error)
+    useEffect(() => {
+        // Avoid duplicate refresh if another handler already processed the Spotify OAuth
+        try {
+            const handled = typeof window !== 'undefined' && sessionStorage.getItem('spotify:handled');
+            if (handled) {
+                console.log('🎵 SETTINGS: Spotify OAuth already handled, skipping duplicate processing');
+                return;
+            }
+        } catch (e) {
+            // ignore storage access issues and proceed
+        }
+
+        if (spotifySuccess && authState.is_authenticated && authState.session_ready) {
+            console.log('🎵 SETTINGS: Spotify OAuth success detected, refreshing integration status');
+
+            // Mark as handled to prevent duplicate processing
+            try {
+                sessionStorage.setItem('spotify:handled', '1');
+            } catch (e) {
+                /* ignore storage errors */
+            }
+
+            // Clear the URL parameter to prevent re-triggering
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete('spotify');
+            window.history.replaceState({}, '', newUrl.toString());
+
+            // Refresh integration status to show the connection
+            refreshIntegrationsFromServer();
+
+            // Show success message
+            setTimeout(() => {
+                toast.success('🎵 Spotify connected successfully!');
+            }, 1000); // Small delay to allow the status update
+        } else if (spotifyError) {
+            console.log('🎵 SETTINGS: Spotify OAuth error detected:', spotifyError);
+
+            // Mark as handled to prevent duplicate processing
+            try {
+                sessionStorage.setItem('spotify:handled', '1');
+            } catch (e) {
+                /* ignore storage errors */
+            }
+
+            // Clear the error parameter and show user feedback
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete('spotify_error');
+            window.history.replaceState({}, '', newUrl.toString());
+
+            // Map error codes to user-friendly messages
+            let errorMessage = 'Spotify connection failed';
+            switch (spotifyError) {
+                case 'bad_state':
+                    errorMessage = 'Spotify connection failed due to an invalid state. Please try again.';
+                    break;
+                case 'missing_code':
+                    errorMessage = 'Spotify authorization code was missing. Please try again.';
+                    break;
+                case 'expired_state':
+                    errorMessage = 'Spotify authorization expired. Please try connecting again.';
+                    break;
+                case 'token_exchange_failed':
+                    errorMessage = 'Failed to exchange authorization code for access token. Please try again.';
+                    break;
+                default:
+                    errorMessage = `Spotify connection failed: ${spotifyError}`;
+            }
+
+            toast.error(errorMessage);
+        }
+    }, [spotifySuccess, spotifyError, authState.is_authenticated, authState.session_ready]);
 
     // Show loading while checking auth (use deterministic auth for Spotify OAuth)
     if (authState.isLoading || (hasSpotifyParams && deterministicAuth.status === 'checking')) {
