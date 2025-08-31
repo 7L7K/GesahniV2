@@ -393,7 +393,7 @@ def jwt_decode(
             algorithms = [a.strip() for a in algs_env.split(",") if a.strip()] if algs_env else ["HS256"]
         except Exception:
             algorithms = ["HS256"]
-    opts = kwargs.pop("options", {"require": ["exp", "iat"]})
+    opts = kwargs.pop("options", {"require": ["exp"]})
 
     # Enforce issuer/audience when configured via environment variables unless
     # the caller already provided explicit values. This hardens state and token

@@ -3,6 +3,9 @@
 # =============================================================================
 # Add this section to your ~/.zshrc file for easy Gesahni development
 
+# Avoid noisy zsh glob errors when patterns don't match
+setopt NO_NOMATCH 2>/dev/null || true
+
 # Gesahni project directory
 export GESAHNI_DIR="$HOME/2025/GesahniV2"
 
@@ -20,7 +23,61 @@ gesahni-start() {
 # Function to stop Gesahni development environment
 gesahni-stop() {
     cd "$GESAHNI_DIR"
-    ./scripts/stop.sh
+
+    echo "🛑 Stopping Gesahni Development Environment"
+
+    patterns=("uvicorn app.main:app" "next dev" "pnpm dev" "npm run dev")
+    ports=(8000 3000)
+
+    found=false
+
+    # Stop by process pattern
+    for pat in "${patterns[@]}"; do
+      pids=$(pgrep -f -- "$pat" || true)
+      if [ -n "$pids" ]; then
+        found=true
+        echo "Found processes for '$pat': $pids"
+        for pid in $pids; do
+          if kill -0 "$pid" 2>/dev/null; then
+            kill -TERM "$pid" 2>/dev/null || true
+          fi
+        done
+        sleep 1
+        for pid in $pids; do
+          if kill -0 "$pid" 2>/dev/null; then
+            echo "Forcing kill PID $pid"
+            kill -KILL "$pid" 2>/dev/null || true
+          fi
+        done
+      fi
+    done
+
+    # Stop by ports (if any process is listening)
+    for port in "${ports[@]}"; do
+      pids=$(lsof -t -iTCP:$port -sTCP:LISTEN 2>/dev/null || true)
+      if [ -n "$pids" ]; then
+        found=true
+        echo "Found listeners on port $port: $pids"
+        for pid in $pids; do
+          if kill -0 "$pid" 2>/dev/null; then
+            kill -TERM "$pid" 2>/dev/null || true
+          fi
+        done
+        sleep 1
+        for pid in $pids; do
+          if kill -0 "$pid" 2>/dev/null; then
+            echo "Forcing kill PID $pid"
+            kill -KILL "$pid" 2>/dev/null || true
+          fi
+        done
+      fi
+    done
+
+    if [ "$found" = true ]; then
+      echo "✅ Stopped matching development processes"
+    else
+      echo "ℹ️  No matching development processes found"
+    fi
 }
 
 # Function to restart Gesahni development environment
@@ -45,7 +102,7 @@ gesahni-test() {
 gesahni-back() {
     cd "$GESAHNI_DIR"
     source .venv/bin/activate
-    uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 }
 
 # Function to start only frontend
@@ -129,3 +186,4 @@ alias gst="gesahni-status"
 alias go="gesahni-open"
 alias gh="gesahni-help"
 alias g="gesahni"
+

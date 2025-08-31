@@ -111,8 +111,8 @@ async def check_qdrant() -> HealthResult:
     base = (os.getenv("QDRANT_URL") or "").strip()
     if not base:
         return "skipped"
-    # Qdrant exposes /healthz returning 200 when alive
-    return await _http_probe(base.rstrip("/") + "/healthz", method="GET")
+    # Qdrant exposes /readyz returning 200 when ready
+    return await _http_probe(base.rstrip("/") + "/readyz", method="GET")
 
 
 async def check_spotify() -> HealthResult:

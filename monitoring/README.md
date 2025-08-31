@@ -151,7 +151,7 @@ Add to your CI pipeline:
 - name: Validate Monitoring Configuration
   run: |
     # Start Gesahni app in background
-    uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+    uvicorn app.main:app --host 127.0.0.1 --port 8000 &
     sleep 10  # Wait for app to start
 
     # Run monitoring validations

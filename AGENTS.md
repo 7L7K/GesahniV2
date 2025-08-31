@@ -171,7 +171,7 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
    ```
 3. **Start backend**
    ```bash
-   uvicorn app.main:app --host :: --port 8000 --reload
+   uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
    ```
 4. **Start frontend**
    ```bash

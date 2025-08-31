@@ -130,13 +130,13 @@ For complete documentation, see [Environment Configuration](docs/environment_con
 Start FastAPI:
 
 ```bash
-uvicorn app.main:app --host :: --port 8000
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Or use environment variables:
 
 ```bash
-HOST=:: PORT=8000 uvicorn app.main:app
+HOST=127.0.0.1 PORT=8000 uvicorn app.main:app
 ```
 
 ### 📦 Frontend

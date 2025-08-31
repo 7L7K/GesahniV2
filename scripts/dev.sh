@@ -3,8 +3,8 @@ set -euo pipefail
 
 echo "🚀 Starting Gesahni Development Environment"
 echo "📋 Configuration:"
-echo "  - Frontend: http://localhost:3000 (bound to :: IPv6)"
-echo "  - Backend: http://localhost:8000 (bound to :: IPv6)"
+echo "  - Frontend: http://localhost:3000 (bound to 127.0.0.1)"
+echo "  - Backend: http://localhost:8000 (bound to 127.0.0.1)"
 echo "  - API Origin: http://localhost:8000"
 echo ""
 
@@ -32,10 +32,10 @@ pkill -f "next dev" 2>/dev/null || true
 sleep 2
 
 # Start backend
-echo "🔧 Starting backend (bound to :: IPv6)..."
+echo "🔧 Starting backend (bound to 127.0.0.1)..."
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
-uvicorn app.main:app --host :: --port 8000 --reload &
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload &
 BACKEND_PID=$!
 
 # Wait for backend to be ready
@@ -46,7 +46,7 @@ done
 echo "✅ Backend ready at http://localhost:8000"
 
 # Start frontend
-echo "🎨 Starting frontend (bound to :: IPv6)..."
+echo "🎨 Starting frontend (bound to 127.0.0.1)..."
 cd frontend
 # Set PORT to 3000 to ensure Next.js uses the correct port
 export PORT=3000

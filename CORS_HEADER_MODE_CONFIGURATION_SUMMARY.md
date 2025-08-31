@@ -117,7 +117,7 @@ if not is_same_address_family(origins):
 
 ### Starting the Backend
 ```bash
-uvicorn app.main:app --host :: --port 8000 --reload
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ### Starting the Frontend

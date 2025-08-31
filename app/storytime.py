@@ -24,7 +24,21 @@ from pathlib import Path
 from .gpt_client import ask_gpt
 from .memory.vector_store import add_user_memory
 from .redaction import redact_and_store
-from .router import OPENAI_TIMEOUT_MS
+"""
+Note: importing the `router` package at module import time can cause
+import cycles when `app.main` imports `storytime` while `router` is
+still being initialized. Import only the constant at use-time to avoid
+ImportError during app startup.
+"""
+
+# Don't import OPENAI_TIMEOUT_MS at module import time to avoid import cycles.
+def _get_openai_timeout_ms() -> int:
+    import os
+
+    try:
+        return int(os.getenv("OPENAI_TIMEOUT_MS", "6000"))
+    except Exception:
+        return 6000
 from .token_utils import count_tokens
 
 logger = logging.getLogger(__name__)
@@ -133,8 +147,9 @@ def _summarize_text_sync(text: str) -> str:
         "keeping dates/names if present.\n\n" + text
     )
     try:
+        timeout_ms = _get_openai_timeout_ms()
         summary, _, _, _ = asyncio.run(
-            ask_gpt(prompt, timeout=OPENAI_TIMEOUT_MS / 1000, routing_decision=None)
+            ask_gpt(prompt, timeout=timeout_ms / 1000, routing_decision=None)
         )
     except Exception as e:
         logger.warning("storytime summarize failed: %s", e)

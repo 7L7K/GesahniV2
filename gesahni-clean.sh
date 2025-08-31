@@ -24,7 +24,7 @@ alias gc="cd $GESAHNI_DIR && ./scripts/clear-cookies.sh"
 alias gt="cd $GESAHNI_DIR && ./scripts/test-localhost.sh"
 
 # Start only backend
-alias gb="cd $GESAHNI_DIR && source .venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+alias gb="cd $GESAHNI_DIR && source .venv/bin/activate && uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
 
 # Start only frontend
 alias gf="cd $GESAHNI_DIR/frontend && unset PORT && npm run dev"
