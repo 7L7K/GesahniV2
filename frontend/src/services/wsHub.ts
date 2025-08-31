@@ -68,7 +68,7 @@ class WsHub {
         window.addEventListener("auth:tokens_cleared", () => this.refreshAuth());
         window.addEventListener("auth:epoch_bumped", () => this.refreshAuth());
         // Also listen for general auth state changes to handle session_ready updates
-        window.addEventListener("auth:state_changed", (event: any) => {
+        window.addEventListener("auth:state_changed", (event: CustomEvent) => {
           const detail = event.detail;
           // If session became ready, try to reconnect any failed connections
           if (!detail.prevState.session_ready && detail.newState.session_ready && detail.newState.is_authenticated) {
@@ -78,7 +78,7 @@ class WsHub {
         });
 
         // Listen for backend status changes to trigger reconnection when backend comes online
-        window.addEventListener("backend:status_changed", (event: any) => {
+        window.addEventListener("backend:status_changed", (event: CustomEvent) => {
           const detail = event.detail;
           if (detail.online) {
             console.info('WS Hub: Backend came online, attempting reconnection');
@@ -340,10 +340,10 @@ class WsHub {
   ) {
     // Check authentication before attempting connection
     const authOrchestrator = getAuthOrchestrator();
-    const _state: any = authOrchestrator.getState();
-    const isAuthed = Boolean(_state.is_authenticated ?? _state.isAuthenticated);
-    const sessionReady = Boolean(_state.session_ready ?? _state.sessionReady);
-    const whoamiOk = (_state.whoamiOk === undefined) ? true : Boolean(_state.whoamiOk);
+    const _state = authOrchestrator.getState();
+    const isAuthed = Boolean(_state.is_authenticated);
+    const sessionReady = Boolean(_state.session_ready);
+    const whoamiOk = Boolean(_state.whoamiOk);
 
     if (!(isAuthed && sessionReady && whoamiOk)) {
       console.info(`WS ${name}: Skipping connection - not authenticated`);
@@ -416,10 +416,10 @@ class WsHub {
         }
 
         // Check if we should attempt reconnection
-        const s: any = authOrchestrator.getState();
-        const okAuthed = Boolean(s.is_authenticated ?? s.isAuthenticated);
-        const okSession = Boolean(s.session_ready ?? s.sessionReady);
-        const okWhoami = (s.whoamiOk === undefined) ? true : Boolean(s.whoamiOk);
+        const s = authOrchestrator.getState();
+        const okAuthed = Boolean(s.is_authenticated);
+        const okSession = Boolean(s.session_ready);
+        const okWhoami = Boolean(s.whoamiOk);
         if ((okAuthed && okSession && okWhoami) && this.connections[name].reconnectAttempts < this.connections[name].maxReconnectAttempts) {
           this.connections[name].reconnectAttempts += 1;
           const delay = this.jitteredDelayFor(retry++);
@@ -467,7 +467,7 @@ class WsHub {
   private onMusicMessage(e: MessageEvent) {
     const raw = String(e.data ?? "");
     if (!raw || raw === 'pong') return;
-    let msg: any;
+    let msg: { topic?: string; data?: unknown };
     try { msg = JSON.parse(raw); } catch (error) {
       console.debug('WS Hub: Failed to parse music message JSON', error);
       return;
@@ -502,7 +502,7 @@ class WsHub {
   private onCareMessage(e: MessageEvent) {
     const raw = String(e.data ?? "");
     if (!raw || raw === 'pong') return;
-    let msg: any;
+    let msg: { data?: { event?: string } };
     try { msg = JSON.parse(raw); } catch (error) {
       console.debug('WS Hub: Failed to parse care message JSON', error);
       return;

@@ -43,6 +43,14 @@ module.exports = {
   experimental: {
     middlewarePrefetch: 'flexible',
   },
+  // Bundle optimization
+  optimizeFonts: true,
+  swcMinify: true,
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn']
+    } : false,
+  },
   // Reduce development noise
   onDemandEntries: {
     // period (in ms) where the server will keep pages in the buffer

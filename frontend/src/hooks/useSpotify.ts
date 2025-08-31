@@ -24,9 +24,9 @@ export function useSpotifyStatus(pollMs: number = 30000) {
 
       // Gate on auth orchestrator readiness: don't probe Spotify until session is ready
       try {
-        const s: any = getAuthOrchestrator().getState();
-        const isAuthed = Boolean(s.is_authenticated ?? s.isAuthenticated);
-        const ready = Boolean(s.session_ready ?? s.sessionReady);
+        const s = getAuthOrchestrator().getState();
+        const isAuthed = Boolean(s.is_authenticated);
+        const ready = Boolean(s.session_ready);
         if (!(isAuthed && ready)) {
           console.warn(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Auth gate blocked, will retry in ${pollMs}ms`);
           setHasChecked(true);
@@ -193,7 +193,7 @@ export function useSpotifyStatus(pollMs: number = 30000) {
 
   // Listen for auth state changes to trigger immediate polling when session becomes ready
   useEffect(() => {
-    const handleAuthStateChange = (event: any) => {
+    const handleAuthStateChange = (event: CustomEvent) => {
       const detail = event.detail;
       // If session became ready and we're authenticated, trigger immediate poll
       if (!detail.prevState.session_ready && detail.newState.session_ready && detail.newState.is_authenticated) {
@@ -221,7 +221,7 @@ export function useSpotifyStatus(pollMs: number = 30000) {
 }
 
 export function useMusicDevices(pollMs: number = 45000) {
-  const [devices, setDevices] = useState<any[]>([]);
+  const [devices, setDevices] = useState<unknown[]>([]);
   const [hasChecked, setHasChecked] = useState(false);
   const timerRef = useRef<number | null>(null);
 
@@ -240,9 +240,9 @@ export function useMusicDevices(pollMs: number = 45000) {
       try {
         // Hard gate: don't fetch devices until auth session is ready to avoid startup stampede
         try {
-          const s: any = getAuthOrchestrator().getState();
-          const isAuthed = Boolean(s.is_authenticated ?? s.isAuthenticated);
-          const ready = Boolean(s.session_ready ?? s.sessionReady);
+          const s = getAuthOrchestrator().getState();
+          const isAuthed = Boolean(s.is_authenticated);
+          const ready = Boolean(s.session_ready);
           if (!(isAuthed && ready)) {
             console.warn(`🎵 MUSIC DEVICES HOOK: Poll #${pollCount} - Auth gate blocked, deferring device fetch`);
             setHasChecked(true);
@@ -287,7 +287,7 @@ export function useMusicDevices(pollMs: number = 45000) {
         const deviceList = Array.isArray(resp?.devices) ? resp.devices : [];
         console.log(`🎵 MUSIC DEVICES HOOK: Poll #${pollCount} - Setting devices`, {
           deviceCount: deviceList.length,
-          devices: deviceList.map((d: any) => ({
+          devices: deviceList.map((d: unknown) => ({
             id: d?.id,
             name: d?.name,
             type: d?.type,
@@ -331,7 +331,7 @@ export function useMusicDevices(pollMs: number = 45000) {
 
   // Listen for auth state changes to trigger immediate polling when session becomes ready
   useEffect(() => {
-    const handleAuthStateChange = (event: any) => {
+    const handleAuthStateChange = (event: CustomEvent) => {
       const detail = event.detail;
       // If session became ready and we're authenticated, trigger immediate poll
       if (!detail.prevState.session_ready && detail.newState.session_ready && detail.newState.is_authenticated) {
