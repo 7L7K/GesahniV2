@@ -12,8 +12,8 @@ export default function middleware(req: NextRequest, ev: NextFetchEvent) {
 
 export const config = {
     matcher: [
-        // All app routes except static files, Next internals, and backend paths
-        '/((?!v1/|healthz|metrics|shared_photos|album_art|_next/static|_next/image|favicon.ico|apple-touch-icon.png|capture/|.*\.(?:js|css|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf)).*)',
+        // Skip Next.js internals completely
+        '/((?!__nextjs_|_next/static|_next/webpack-hmr|_next/development|_next/image|v1/|healthz|metrics|shared_photos|album_art|favicon.ico|apple-touch-icon.png|capture/|.*\.(?:js|css|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf)).*)',
         // Include Next.js API routes (not backend /v1)
         '/(api)(.*)'
     ],
