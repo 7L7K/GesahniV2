@@ -31,7 +31,7 @@ class GoogleOAuth:
         self.client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
         self.client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
         self.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
-        self.scopes = os.getenv("GOOGLE_SCOPES", "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly").strip()
+        self.scopes = os.getenv("GOOGLE_SCOPES", "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly").strip()
 
         if not self.client_id or not self.client_secret:
             raise ValueError("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required")
@@ -51,7 +51,7 @@ class GoogleOAuth:
         }
         return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
-    async def exchange_code_for_tokens(self, code: str) -> dict[str, Any]:
+    async def exchange_code_for_tokens(self, code: str, code_verifier: str | None = None) -> dict[str, Any]:
         token_url = "https://oauth2.googleapis.com/token"
         data = {
             "code": code,
@@ -61,11 +61,34 @@ class GoogleOAuth:
             "grant_type": "authorization_code",
         }
 
+        # Add PKCE code_verifier if provided
+        if code_verifier:
+            data["code_verifier"] = code_verifier
+
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             r = await client.post(token_url, data=data, headers=headers)
             if r.status_code != 200:
+                # Log token exchange failure with masked error body
+                error_body = r.text[:400] if r.text else ""
+                # Mask potential tokens in error response
+                if "access_token" in error_body or "refresh_token" in error_body:
+                    error_body = "[REDACTED_TOKEN_DATA]"
+
+                logger.warning(
+                    "google_token_exchange_failed",
+                    extra={
+                        "meta": {
+                            "method": "async_httpx",
+                            "status": r.status_code,
+                            "error_class": "HTTPError",
+                            "error_detail": f"HTTP {r.status_code}",
+                            "response_body": error_body,
+                            "pkce_used": bool(code_verifier),
+                        }
+                    },
+                )
                 raise GoogleOAuthError(f"Token exchange failed: {r.status_code} {r.text}")
             td = r.json()
             now = int(time.time())
@@ -127,9 +150,9 @@ def make_authorize_url(state: str) -> str:
     return GoogleOAuth().get_authorization_url(state)
 
 
-async def exchange_code(code: str) -> ThirdPartyToken:
+async def exchange_code(code: str, code_verifier: str | None = None) -> ThirdPartyToken:
     oauth = GoogleOAuth()
-    td = await oauth.exchange_code_for_tokens(code)
+    td = await oauth.exchange_code_for_tokens(code, code_verifier)
     now = int(time.time())
     expires_at = int(td.get("expires_at", now + int(td.get("expires_in", 3600))))
 
@@ -281,6 +304,17 @@ def build_auth_url(user_id: str, state_payload: dict | None = None) -> tuple[str
         from ...error_envelope import raise_enveloped
 
         raise_enveloped("unavailable", "Google OAuth libraries unavailable", status=503)
+
+    # Debug: Log what scopes will be used
+    current_scopes = get_google_scopes()
+    logger.info("🎵 GOOGLE BUILD_AUTH_URL: Scopes being used", extra={
+        "meta": {
+            "user_id": user_id,
+            "scopes": current_scopes,
+            "scopes_count": len(current_scopes)
+        }
+    })
+
     flow = create_flow()
     # Ensure redirect_uri is explicitly set on the Flow before generating the
     # authorization URL so Google receives it as a parameter. Some environments
@@ -297,13 +331,14 @@ def build_auth_url(user_id: str, state_payload: dict | None = None) -> tuple[str
     return flow.authorization_url()[0], state
 
 
-def exchange_code(code: str, state: str, verify_state: bool = True) -> Any:
+def exchange_code(code: str, state: str, verify_state: bool = True, code_verifier: str | None = None) -> Any:
     """Exchange an authorization code for credentials.
 
     Args:
         code: Authorization code from Google
         state: State parameter (verified if verify_state=True)
         verify_state: Whether to verify the state parameter
+        code_verifier: PKCE code verifier for enhanced security (optional)
 
     Returns:
         Credentials object with token, refresh_token, etc.
@@ -408,25 +443,38 @@ def exchange_code(code: str, state: str, verify_state: bool = True) -> Any:
                 start_time = time.time()
                 from ...otel_utils import start_span
 
+                # Prepare token exchange payload
+                payload = {
+                    "code": code,
+                    "client_id": CLIENT_CONFIG["web"]["client_id"],
+                    "client_secret": CLIENT_CONFIG["web"]["client_secret"],
+                    "redirect_uri": CLIENT_CONFIG["web"]["redirect_uris"][0],
+                    "grant_type": "authorization_code",
+                }
+
+                # Add PKCE code_verifier if provided
+                if code_verifier:
+                    payload["code_verifier"] = code_verifier
+
                 with start_span(
-                    "google.oauth.token.exchange", {"method": "manual_http_requests"}
+                    "google.oauth.token.exchange", {"method": "manual_http_requests", "pkce_used": bool(code_verifier)}
                 ) as _span:
                     resp = requests.post(
                         CLIENT_CONFIG["web"]["token_uri"],
-                        data={
-                            "code": code,
-                            "client_id": CLIENT_CONFIG["web"]["client_id"],
-                            "client_secret": CLIENT_CONFIG["web"]["client_secret"],
-                            "redirect_uri": CLIENT_CONFIG["web"]["redirect_uris"][0],
-                            "grant_type": "authorization_code",
-                        },
+                        data=payload,
                         timeout=10,
                     )
                 duration = (time.time() - start_time) * 1000
 
                 if not resp.ok:
-                    logger.error(
-                        "Google token exchange failed",
+                    # Log token exchange failure with masked error body
+                    error_body = resp.text[:400] if resp.text else ""
+                    # Mask potential tokens in error response
+                    if "access_token" in error_body or "refresh_token" in error_body:
+                        error_body = "[REDACTED_TOKEN_DATA]"
+
+                    logger.warning(
+                        "google_token_exchange_failed",
                         extra={
                             "meta": {
                                 "method": "manual_http_requests",
@@ -434,7 +482,8 @@ def exchange_code(code: str, state: str, verify_state: bool = True) -> Any:
                                 "latency_ms": duration,
                                 "error_class": "HTTPError",
                                 "error_detail": f"HTTP {resp.status_code}",
-                                "response_body": resp.text[:200] if resp.text else None,
+                                "response_body": error_body,
+                                "pkce_used": bool(code_verifier),
                             }
                         },
                     )
@@ -475,15 +524,21 @@ def exchange_code(code: str, state: str, verify_state: bool = True) -> Any:
                 )
 
                 start_time = time.time()
-                post_data = urllib.parse.urlencode(
-                    {
-                        "code": code,
-                        "client_id": CLIENT_CONFIG["web"]["client_id"],
-                        "client_secret": CLIENT_CONFIG["web"]["client_secret"],
-                        "redirect_uri": CLIENT_CONFIG["web"]["redirect_uris"][0],
-                        "grant_type": "authorization_code",
-                    }
-                ).encode()
+
+                # Prepare token exchange payload for stdlib
+                payload_data = {
+                    "code": code,
+                    "client_id": CLIENT_CONFIG["web"]["client_id"],
+                    "client_secret": CLIENT_CONFIG["web"]["client_secret"],
+                    "redirect_uri": CLIENT_CONFIG["web"]["redirect_uris"][0],
+                    "grant_type": "authorization_code",
+                }
+
+                # Add PKCE code_verifier if provided
+                if code_verifier:
+                    payload_data["code_verifier"] = code_verifier
+
+                post_data = urllib.parse.urlencode(payload_data).encode()
                 req = urllib.request.Request(
                     CLIENT_CONFIG["web"]["token_uri"],
                     data=post_data,

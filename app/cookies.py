@@ -326,6 +326,7 @@ def set_oauth_state_cookies(
     request: Request,
     ttl: int = 600,  # Default 10 minutes
     provider: str = "oauth",  # Provider-specific cookie prefix
+    code_verifier: str | None = None,  # PKCE code verifier for enhanced security
 ) -> None:
     """
     Set OAuth state cookies for Google/Apple OAuth flows.
@@ -340,6 +341,7 @@ def set_oauth_state_cookies(
         request: FastAPI Request object for cookie configuration
         ttl: Time to live in seconds (default: 600 = 10 minutes)
         provider: Provider prefix for cookie names (e.g., "g" for Google, "oauth" for Apple)
+        code_verifier: PKCE code verifier for enhanced security (optional)
     """
     # Get cookie configuration from request context
     cookie_config = get_cookie_config(request)
@@ -372,6 +374,21 @@ def set_oauth_state_cookies(
     )
     resp.headers.append("Set-Cookie", next_header)
 
+    # Set PKCE code verifier cookie if provided (HttpOnly for security)
+    if code_verifier:
+        verifier_cookie_name = f"{provider}_code_verifier"
+        verifier_header = format_cookie_header(
+            key=verifier_cookie_name,
+            value=code_verifier,
+            max_age=ttl,
+            secure=cookie_config["secure"],
+            samesite=cookie_config["samesite"],
+            path=cookie_config["path"],
+            httponly=True,  # Code verifier should be HttpOnly for security
+            domain=cookie_config["domain"],
+        )
+        resp.headers.append("Set-Cookie", verifier_header)
+
 
 def clear_oauth_state_cookies(
     resp: Response, request: Request, provider: str = "oauth"
@@ -390,7 +407,8 @@ def clear_oauth_state_cookies(
     # Clear OAuth state cookies with Max-Age=0
     state_cookie_name = f"{provider}_state"
     next_cookie_name = f"{provider}_next"
-    oauth_cookies = [state_cookie_name, next_cookie_name]
+    verifier_cookie_name = f"{provider}_code_verifier"
+    oauth_cookies = [state_cookie_name, next_cookie_name, verifier_cookie_name]
 
     for cookie_name in oauth_cookies:
         header = format_cookie_header(
@@ -400,7 +418,7 @@ def clear_oauth_state_cookies(
             secure=cookie_config["secure"],
             samesite=cookie_config["samesite"],
             path=cookie_config["path"],
-            httponly=cookie_name == state_cookie_name,  # State is HttpOnly, next is not
+            httponly=cookie_name in [state_cookie_name, verifier_cookie_name],  # State and verifier are HttpOnly, next is not
             domain=cookie_config["domain"],
         )
         resp.headers.append("Set-Cookie", header)

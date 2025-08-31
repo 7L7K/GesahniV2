@@ -78,6 +78,7 @@ try:
     from .api.preflight import router as preflight_router
 except Exception:
     preflight_router = None  # type: ignore
+from .api.settings import router as settings_router
 from .api.google_oauth import router as google_oauth_router
 
 try:
@@ -1243,6 +1244,10 @@ except Exception:
     pass
 if auth_password_router is not None:
     app.include_router(auth_password_router, prefix="/v1")
+
+# Settings router (both versioned and unversioned for compatibility)
+app.include_router(settings_router, prefix="/v1")
+app.include_router(settings_router, prefix="", include_in_schema=False)
 
 # Google integration (optional)
 # Provide both versioned and unversioned, under /google to match redirect defaults

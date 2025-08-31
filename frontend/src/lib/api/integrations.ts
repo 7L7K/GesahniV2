@@ -149,15 +149,20 @@ export async function connectGoogle(next: string = '/settings#google=connected')
   });
 
   // Use the canonical login_url endpoint so state format matches callback verification
+  console.log('🎵 GOOGLE INTEGRATIONS: Calling getGoogleAuthUrl...');
   const authUrl = await getGoogleAuthUrl(next);
 
   console.log('🎵 GOOGLE INTEGRATIONS: Google auth URL obtained', {
     hasAuthUrl: !!authUrl,
     authUrlLength: authUrl?.length || 0,
+    authUrlPreview: authUrl?.substring(0, 100) + '...',
     timestamp: new Date().toISOString()
   });
 
-  return { authorize_url: authUrl };
+  const result = { authorize_url: authUrl };
+  console.log('🎵 GOOGLE INTEGRATIONS: Returning result:', JSON.stringify(result, null, 2));
+
+  return result;
 }
 
 export async function disconnectGoogle(): Promise<void> {

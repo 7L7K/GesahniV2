@@ -16,15 +16,15 @@ function LoginPageInner() {
     const [loading, setLoading] = useState(false);
     const router = useRouter();
     const params = useSearchParams();
-    const next = sanitizeNextPath(params.get('next'), '/');
+    const next = sanitizeNextPath(params?.get('next') || null, '/');
 
     // Handle Google OAuth redirect carrying tokens in query
     useEffect(() => {
-        const access = params.get('access_token');
-        const refresh = params.get('refresh_token') || undefined;
+        const access = params?.get('access_token');
+        const refresh = params?.get('refresh_token') || undefined;
 
         // Only set tokens if they're actually from OAuth (not from logout redirect)
-        if (access && !params.get('logout')) {
+        if (access && !params?.get('logout')) {
             console.info('LOGIN oauth.tokens_in_query', {
                 hasAccessToken: !!access,
                 hasRefreshToken: !!refresh,
@@ -48,7 +48,7 @@ function LoginPageInner() {
                 });
                 router.replace(next);
             });
-        } else if (params.get('logout')) {
+        } else if (params?.get('logout')) {
             console.info('LOGIN logout_redirect: Skipping token setup due to logout parameter');
         }
     }, [params, next, router]);
@@ -57,9 +57,9 @@ function LoginPageInner() {
     useEffect(() => {
         if (!params) return;
 
-        const error = params.get('error');
-        const errorDescription = params.get('error_description');
-        const spotifyError = params.get('spotify_error');
+        const error = params?.get('error');
+        const errorDescription = params?.get('error_description');
+        const spotifyError = params?.get('spotify_error');
 
         // Only handle global auth errors, not Spotify-specific errors
         // Spotify errors should be handled by the settings page with spotify_error param

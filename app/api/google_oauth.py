@@ -12,6 +12,7 @@ import os
 import random
 import secrets
 import time
+import base64
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -200,7 +201,44 @@ def _generate_signed_state() -> str:
     return state
 
 
-@router.get("/google/auth/login_url")
+def _generate_pkce_verifier() -> str:
+    """
+    Generate a PKCE code verifier.
+
+    Returns:
+        str: Random string of 43-128 characters from the allowed character set
+    """
+    # Generate 32 bytes of random data (will result in ~43 characters when base64url encoded)
+    verifier_bytes = secrets.token_bytes(32)
+
+    # Base64url encode (RFC 7636 compliant)
+    verifier = base64.urlsafe_b64encode(verifier_bytes).decode('ascii').rstrip('=')
+
+    logger.debug(f"🔐 Generated PKCE verifier (length: {len(verifier)})")
+    return verifier
+
+
+def _generate_pkce_challenge(verifier: str) -> str:
+    """
+    Generate a PKCE code challenge from a verifier.
+
+    Args:
+        verifier: The code verifier string
+
+    Returns:
+        str: SHA256 hash of verifier, base64url encoded
+    """
+    # SHA256 hash the verifier
+    digest = hashlib.sha256(verifier.encode('ascii')).digest()
+
+    # Base64url encode the hash
+    challenge = base64.urlsafe_b64encode(digest).decode('ascii').rstrip('=')
+
+    logger.debug(f"🔏 Generated PKCE challenge from verifier")
+    return challenge
+
+
+@router.get("/auth/google/login_url")
 async def google_login_url(request: Request) -> Response:
     """
     Generate a Google OAuth login URL with CSRF protection.
@@ -246,16 +284,33 @@ async def google_login_url(request: Request) -> Response:
         # Generate signed state for CSRF protection
         state = _generate_signed_state()
 
-        # Build Google OAuth URL
+        # Generate PKCE parameters for enhanced security
+        code_verifier = _generate_pkce_verifier()
+        code_challenge = _generate_pkce_challenge(code_verifier)
+
+        # Log PKCE setup for debugging
+        logger.info(
+            "google_oauth_login",
+            has_pkce=bool(code_verifier),
+            method="S256",
+            state=state[:16] + "..." if len(state) > 16 else state,  # Short state for log
+            extra={"meta": {"req_id": req_id, "component": "google_oauth"}}
+        )
+
+        # Build Google OAuth URL with proper scopes
+        from ..integrations.google.config import get_google_scopes
+        scopes = get_google_scopes()
         params = {
             "client_id": client_id,
             "redirect_uri": redirect_uri,
             "response_type": "code",
-            "scope": "openid email profile",
+            "scope": " ".join(scopes),
             "access_type": "offline",
             "include_granted_scopes": "true",
             "prompt": "consent",
             "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
         }
 
         # Add optional parameters only if explicitly configured
@@ -308,6 +363,7 @@ async def google_login_url(request: Request) -> Response:
             request=request,
             ttl=300,  # 5 minutes
             provider="g",  # Google-specific cookie prefix
+            code_verifier=code_verifier,  # Store PKCE verifier for callback
         )
 
         duration = (time.time() - start_time) * 1000
@@ -387,7 +443,7 @@ def _verify_signed_state(state: str) -> bool:
         return False
 
 
-@router.get("/google/auth/callback")
+@router.get("/auth/google/callback")
 async def google_callback(request: Request) -> Response:
     """
     Handle Google OAuth callback with strict state validation.
@@ -475,6 +531,9 @@ async def google_callback(request: Request) -> Response:
     # Get state cookie and validate
     state_cookie = request.cookies.get("g_state")
 
+    # Get PKCE code verifier from cookie
+    code_verifier_cookie = request.cookies.get("g_code_verifier")
+
     # For local development, bypass state cookie validation if cookie is missing
     dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
 
@@ -512,8 +571,8 @@ async def google_callback(request: Request) -> Response:
         _log_request_summary(request, 400, duration, error="missing_state_cookie")
         return _error_response("missing_state_cookie", status=400)
 
-    # Verify state matches cookie exactly (skip in dev mode if no cookie)
-    if state_cookie:
+    # Verify state matches cookie exactly (skip in dev mode)
+    if state_cookie and not dev_mode:
         if state != state_cookie:
             duration = (time.time() - start_time) * 1000
             _log_error(
@@ -523,6 +582,19 @@ async def google_callback(request: Request) -> Response:
             )
             _log_request_summary(request, 400, duration, error="state_mismatch")
             return _error_response("state_mismatch", status=400)
+    elif state_cookie and dev_mode and state != state_cookie:
+        logger.warning(
+            "Development mode: State mismatch detected but proceeding",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "msg": "state_mismatch_bypassed_dev",
+                    "expected": state_cookie,
+                    "received": state,
+                }
+            },
+        )
 
         logger.info(
             "State parameter matches cookie",
@@ -596,6 +668,14 @@ async def google_callback(request: Request) -> Response:
         },
     )
 
+    # Log callback start with state and verifier status
+    logger.info(
+        "google_oauth_cb_start",
+        state_ok=state_valid,
+        has_verifier=bool(code_verifier_cookie),
+        extra={"meta": {"req_id": req_id, "component": "google_oauth"}}
+    )
+
     # State validation complete - proceed with usual session logic
     logger.info(
         "Google OAuth callback state validated successfully",
@@ -637,7 +717,7 @@ async def google_callback(request: Request) -> Response:
         with start_span(
             "google.oauth.token.exchange", {"component": "google_oauth"}
         ) as _span:
-            creds = go.exchange_code(code, state, verify_state=False)
+            creds = go.exchange_code(code, state, verify_state=False, code_verifier=code_verifier_cookie)
             # If span present, set google token latency on span
             try:
                 _span.set_attribute("google_token_latency_ms", 0)

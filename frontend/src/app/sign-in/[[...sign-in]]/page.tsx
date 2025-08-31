@@ -7,7 +7,7 @@ export default function SignInPage() {
     const params = useSearchParams();
     const router = useRouter();
     useEffect(() => {
-        const next = sanitizeNextPath(params.get('next'), '/');
+        const next = sanitizeNextPath(params?.get('next') || null, '/');
         router.replace(`/login?next=${encodeURIComponent(next)}`)
     }, [params, router]);
     return (

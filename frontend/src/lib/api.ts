@@ -441,25 +441,39 @@ export async function putTvConfig(residentId: string, token: string, cfg: TvConf
 
 // Google integration helpers
 export async function getGoogleAuthUrl(next?: string): Promise<string> {
+    console.log('🔗 API: getGoogleAuthUrl called with next:', next);
+
     // Sanitize the next parameter to prevent open redirects
     const sanitizedNext = next ? sanitizeNextPath(next, '/') : '/';
+    console.log('🔗 API: sanitized next:', sanitizedNext);
 
     const params = new URLSearchParams();
     params.append('next', sanitizedNext);
 
-    const response = await apiFetch(`/v1/google/auth/login_url?${params.toString()}`, {
+    const endpoint = `/v1/google/connect?${params.toString()}`;
+    console.log('🔗 API: Making request to:', endpoint);
+
+    const response = await apiFetch(endpoint, {
         method: 'GET',
         // credentials enforced by apiFetch defaults for OAuth endpoints; explicit to be safe
         credentials: 'include', // Ensure cookies are sent for g_state cookie
     });
 
+    console.log('🔗 API: Response status:', response.status, response.ok);
+
     if (!response.ok) {
+        console.error('🔗 API: Failed to get Google auth URL, status:', response.status);
         throw new Error('Failed to get Google auth URL');
     }
 
     const data = await response.json();
-    // Backend returns {"url": oauth_url} but we expect {"auth_url": oauth_url}
-    return data.url || data.auth_url;
+    console.log('🔗 API: Response data:', data);
+
+    // Backend returns {"auth_url": oauth_url} or {"authorize_url": oauth_url}
+    const result = data.url || data.auth_url || data.authorize_url;
+    console.log('🔗 API: Extracted auth URL:', result);
+
+    return result;
 }
 
 export async function initiateGoogleSignIn(next?: string): Promise<void> {

@@ -706,17 +706,48 @@ async def spotify_status(request: Request) -> dict:
     """
     from fastapi.responses import JSONResponse
 
+    logger.info("🎵 SPOTIFY STATUS: Request started", extra={
+        "meta": {
+            "headers": dict(request.headers),
+            "cookies_count": len(request.cookies),
+            "has_authorization": bool(request.headers.get("Authorization"))
+        }
+    })
+
     # Check if user is authenticated
     current_user = None
     try:
         current_user = get_current_user_id(request=request)
-    except Exception:
-        pass
+        logger.info("🎵 SPOTIFY STATUS: User authentication", extra={
+            "meta": {
+                "user_id": current_user,
+                "is_authenticated": current_user is not None and current_user != "anon"
+            }
+        })
+    except Exception as e:
+        logger.warning("🎵 SPOTIFY STATUS: Authentication error", extra={
+            "meta": {
+                "error": str(e),
+                "error_type": type(e).__name__
+            }
+        })
 
     if not current_user or current_user == "anon":
+        logger.info("🎵 SPOTIFY STATUS: Unauthenticated user", extra={
+            "meta": {
+                "user_id": current_user,
+                "returning_not_authenticated": True
+            }
+        })
         # Return status for unauthenticated users - not connected
         body: dict = {"connected": False, "devices_ok": False, "state_ok": False, "reason": "not_authenticated"}
         return JSONResponse(body, status_code=200)
+
+    logger.info("🎵 SPOTIFY STATUS: Creating Spotify client", extra={
+        "meta": {
+            "user_id": current_user
+        }
+    })
 
     client = SpotifyClient(current_user)
 
@@ -729,31 +760,105 @@ async def spotify_status(request: Request) -> dict:
     state_ok = False
     required_scopes_ok: bool | None = None
 
+    logger.info("🎵 SPOTIFY STATUS: Starting connectivity probe", extra={
+        "meta": {
+            "user_id": current_user,
+            "probe_endpoint": "/me"
+        }
+    })
+
     try:
         # Lightweight probe: user profile
+        logger.info("🎵 SPOTIFY STATUS: Calling get_user_profile", extra={
+            "meta": {
+                "user_id": current_user
+            }
+        })
+
         profile = await client.get_user_profile()
+
+        logger.info("🎵 SPOTIFY STATUS: get_user_profile result", extra={
+            "meta": {
+                "user_id": current_user,
+                "profile_received": profile is not None,
+                "profile_keys": list(profile.keys()) if profile else None
+            }
+        })
+
         if profile is not None:
             connected = True
+            logger.info("🎵 SPOTIFY STATUS: Profile found, marking as connected", extra={
+                "meta": {
+                    "user_id": current_user,
+                    "connected": True
+                }
+            })
         else:
             connected = False
+            logger.warning("🎵 SPOTIFY STATUS: Profile is None, marking as not connected", extra={
+                "meta": {
+                    "user_id": current_user,
+                    "connected": False
+                }
+            })
     except Exception as e:
+        logger.error("🎵 SPOTIFY STATUS: Exception during connectivity probe", extra={
+            "meta": {
+                "user_id": current_user,
+                "error": str(e),
+                "error_type": type(e).__name__
+            }
+        })
+
         # If we get an auth-related error, mark tokens invalid so frontend knows to reauth
         try:
             from ..integrations.spotify.client import SpotifyAuthError, SpotifyPremiumRequiredError
             from ..auth_store_tokens import mark_invalid
 
+            logger.info("🎵 SPOTIFY STATUS: Checking exception type", extra={
+                "meta": {
+                    "user_id": current_user,
+                    "is_spotify_auth_error": isinstance(e, SpotifyAuthError),
+                    "is_premium_required": isinstance(e, SpotifyPremiumRequiredError),
+                    "error_contains_401": str(e).lower().find('401') != -1,
+                    "error_contains_needs_reauth": str(e).lower().find('needs_reauth') != -1
+                }
+            })
+
             if isinstance(e, SpotifyAuthError) or isinstance(e, SpotifyPremiumRequiredError) or str(e).lower().find('401') != -1 or str(e).lower().find('needs_reauth') != -1:
+                logger.info("🎵 SPOTIFY STATUS: Auth error detected, invalidating tokens", extra={
+                    "meta": {
+                        "user_id": current_user
+                    }
+                })
                 # Invalidate tokens to avoid false-positive "connected" UX
                 try:
                     await mark_invalid(current_user, 'spotify')
-                except Exception:
-                    logger.warning("🎵 SPOTIFY STATUS: failed to mark token invalid", extra={"meta": {"user_id": current_user, "err": str(e)}})
+                    logger.info("🎵 SPOTIFY STATUS: Tokens marked invalid", extra={
+                        "meta": {
+                            "user_id": current_user
+                        }
+                    })
+                except Exception as mark_error:
+                    logger.warning("🎵 SPOTIFY STATUS: failed to mark token invalid", extra={
+                        "meta": {
+                            "user_id": current_user,
+                            "mark_error": str(mark_error)
+                        }
+                    })
                 connected = False
                 reason = 'needs_reauth'
             else:
                 connected = False
                 reason = str(e)
-        except Exception:
+        except Exception as inner_e:
+            logger.error("🎵 SPOTIFY STATUS: Exception in exception handler", extra={
+                "meta": {
+                    "user_id": current_user,
+                    "original_error": str(e),
+                    "inner_error": str(inner_e)
+                }
+            })
             connected = False
             reason = str(e)
 
@@ -781,11 +886,53 @@ async def spotify_status(request: Request) -> dict:
             required_scopes_ok = None
 
     body: dict = {"connected": connected, "devices_ok": devices_ok, "state_ok": state_ok}
+
+    logger.info("🎵 SPOTIFY STATUS: Building response", extra={
+        "meta": {
+            "user_id": current_user,
+            "connected": connected,
+            "devices_ok": devices_ok,
+            "state_ok": state_ok,
+            "reason": reason,
+            "required_scopes_ok": required_scopes_ok
+        }
+    })
+
     if not connected and reason:
         body["reason"] = reason
+        logger.info("🎵 SPOTIFY STATUS: Adding reason to response", extra={
+            "meta": {
+                "user_id": current_user,
+                "reason": reason
+            }
+        })
+
     if required_scopes_ok is not None:
         body["required_scopes_ok"] = required_scopes_ok
+        logger.info("🎵 SPOTIFY STATUS: Adding scopes info", extra={
+            "meta": {
+                "user_id": current_user,
+                "required_scopes_ok": required_scopes_ok
+            }
+        })
+
         if toks := (await client._get_tokens() if required_scopes_ok is not None else None):
             body["scopes"] = (toks.scope or "").split()
             body["expires_at"] = toks.expires_at
+            logger.info("🎵 SPOTIFY STATUS: Adding token details", extra={
+                "meta": {
+                    "user_id": current_user,
+                    "scopes": (toks.scope or "").split(),
+                    "expires_at": toks.expires_at
+                }
+            })
+
+    logger.info("🎵 SPOTIFY STATUS: Returning response", extra={
+        "meta": {
+            "user_id": current_user,
+            "response_body": body,
+            "status_code": 200
+        }
+    })
+
     return JSONResponse(body, status_code=200)

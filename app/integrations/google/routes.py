@@ -322,6 +322,11 @@ def calendar_create(evt: CreateEventIn, request: Request):
 
 @router.get("/status")
 def google_status(request: Request, user_id: str = Depends(get_current_user_id)):
+    # Check if user is actually authenticated (not anonymous)
+    if user_id == "anon":
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Authentication required")
+
     uid = user_id or _current_user_id(request)
     with SessionLocal() as s:
         row = s.get(GoogleToken, uid)

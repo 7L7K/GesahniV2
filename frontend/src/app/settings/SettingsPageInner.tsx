@@ -149,7 +149,7 @@ function SettingsPageInner() {
             if (!(authState.is_authenticated && authState.session_ready)) return;
 
             try {
-                const res = await apiFetch('/v1/integrations/status', { credentials: 'include', auth: false });
+                const res = await apiFetch('/v1/integrations/status', { credentials: 'include', auth: true });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
 

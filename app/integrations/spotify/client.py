@@ -65,8 +65,36 @@ class SpotifyClient:
 
     async def _get_tokens(self) -> SpotifyTokens | None:
         """Retrieve tokens from unified token store."""
+        logger.info("🎵 SPOTIFY CLIENT: _get_tokens called", extra={
+            "meta": {
+                "user_id": self.user_id,
+                "provider": "spotify"
+            }
+        })
+
         token = await get_token(self.user_id, "spotify")
+
+        logger.info("🎵 SPOTIFY CLIENT: _get_tokens result", extra={
+            "meta": {
+                "user_id": self.user_id,
+                "has_token": token is not None,
+                "token_id": getattr(token, 'id', None) if token else None,
+                "token_user_id": getattr(token, 'user_id', None) if token else None,
+                "token_provider": getattr(token, 'provider', None) if token else None,
+                "has_access_token": bool(getattr(token, 'access_token', None)) if token else False,
+                "has_refresh_token": bool(getattr(token, 'refresh_token', None)) if token else False,
+                "expires_at": getattr(token, 'expires_at', None) if token else None,
+                "scope": getattr(token, 'scope', None) if token else None
+            }
+        })
+
         if not token:
+            logger.warning("🎵 SPOTIFY CLIENT: No token found in store", extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "provider": "spotify"
+                }
+            })
             return None
 
         return SpotifyTokens(
@@ -116,24 +144,102 @@ class SpotifyClient:
 
     async def _get_valid_access_token(self) -> str:
         """Get a valid access token, refreshing if necessary."""
+        logger.info("🎵 SPOTIFY CLIENT: _get_valid_access_token called", extra={
+            "meta": {
+                "user_id": self.user_id,
+                "provider": "spotify"
+            }
+        })
+
         # Use the new robust token service
         from ...auth_store_tokens import get_valid_token_with_auto_refresh
+
+        logger.info("🎵 SPOTIFY CLIENT: Calling get_valid_token_with_auto_refresh", extra={
+            "meta": {
+                "user_id": self.user_id,
+                "provider": "spotify",
+                "force_refresh": False
+            }
+        })
 
         token = await get_valid_token_with_auto_refresh(
             self.user_id, "spotify", force_refresh=False
         )
 
+        logger.info("🎵 SPOTIFY CLIENT: get_valid_token_with_auto_refresh result", extra={
+            "meta": {
+                "user_id": self.user_id,
+                "provider": "spotify",
+                "has_token": token is not None,
+                "token_type": type(token).__name__ if token else None,
+                "token_id": getattr(token, 'id', None) if token else None,
+                "token_user_id": getattr(token, 'user_id', None) if token else None,
+                "token_provider": getattr(token, 'provider', None) if token else None,
+                "has_access_token": bool(getattr(token, 'access_token', None)) if token else False,
+                "has_refresh_token": bool(getattr(token, 'refresh_token', None)) if token else False,
+                "expires_at": getattr(token, 'expires_at', None) if token else None,
+                "scope": getattr(token, 'scope', None) if token else None
+            }
+        })
+
         if not token:
+            logger.error("🎵 SPOTIFY CLIENT: No valid Spotify tokens found", extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "provider": "spotify"
+                }
+            })
             raise SpotifyAuthError("No valid Spotify tokens found")
 
         # Double-check token is not expired (additional safety)
+        logger.info("🎵 SPOTIFY CLIENT: Checking token expiry", extra={
+            "meta": {
+                "user_id": self.user_id,
+                "provider": "spotify",
+                "expires_at": getattr(token, 'expires_at', None),
+                "current_time": int(time.time()),
+                "is_expired_60s": getattr(token, 'is_expired', lambda x: True)(60)
+            }
+        })
+
         if token.is_expired(60):  # 1 minute buffer
+            logger.warning("🎵 SPOTIFY CLIENT: Token expired, forcing refresh", extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "provider": "spotify",
+                    "expires_at": getattr(token, 'expires_at', None)
+                }
+            })
+
             # Force refresh if still expired
             token = await get_valid_token_with_auto_refresh(
                 self.user_id, "spotify", force_refresh=True
             )
+
+            logger.info("🎵 SPOTIFY CLIENT: Force refresh result", extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "provider": "spotify",
+                    "has_token_after_refresh": token is not None
+                }
+            })
+
             if not token:
+                logger.error("🎵 SPOTIFY CLIENT: Failed to refresh Spotify token", extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "provider": "spotify"
+                    }
+                })
                 raise SpotifyAuthError("Failed to refresh Spotify token")
+
+        logger.info("🎵 SPOTIFY CLIENT: Returning valid access token", extra={
+            "meta": {
+                "user_id": self.user_id,
+                "provider": "spotify",
+                "token_length": len(getattr(token, 'access_token', '')) if token else 0
+            }
+        })
 
         return token.access_token
 

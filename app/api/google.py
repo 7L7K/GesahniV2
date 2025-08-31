@@ -51,11 +51,19 @@ async def google_connect(request: Request, user_id: str = Depends(get_current_us
         state = jwt.encode(state_payload, secret, algorithm="HS256")
         required_scopes = [
             "openid",
-            "email",
-            "profile",
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/userinfo.profile",
             "https://www.googleapis.com/auth/gmail.readonly",
             "https://www.googleapis.com/auth/calendar.readonly",
         ]
+
+        # Debug: Log what scopes are being used
+        logger.info("🎵 GOOGLE CONNECT: Required scopes", extra={
+            "meta": {
+                "user_id": user_id,
+                "required_scopes": required_scopes
+            }
+        })
         from urllib.parse import urlencode, quote
         params = {
             "client_id": os.getenv("GOOGLE_CLIENT_ID"),
@@ -112,7 +120,8 @@ async def google_callback(request: Request, code: str | None = None, state: str 
         return RedirectResponse(f"{frontend_url}/settings#google?google_error=bad_state", status_code=302)
 
     # Verify state cookie matches provided state to protect against CSRF
-    cookie_state = request.cookies.get("google_oauth_state")
+    # Use the same provider prefix ("g") as the connect endpoint for consistency
+    cookie_state = request.cookies.get("g_state")
     if not cookie_state or cookie_state != state:
         logger.warning("google callback: state cookie mismatch or missing", extra={"cookie_state_present": bool(cookie_state)})
         return RedirectResponse(f"{frontend_url}/settings#google?google_error=bad_state_cookie", status_code=302)
@@ -209,7 +218,8 @@ async def google_callback(request: Request, code: str | None = None, state: str 
     # Clear oauth state cookies on successful callback
     redirect = RedirectResponse(f"{frontend_url}/settings#google=connected", status_code=302)
     try:
-        clear_oauth_state_cookies(redirect, request=request, provider="google_oauth")
+        # Use the same provider prefix ("g") as the connect endpoint for consistency
+        clear_oauth_state_cookies(redirect, request=request, provider="g")
     except Exception:
         pass
     return redirect
@@ -239,17 +249,27 @@ async def google_disconnect(request: Request):
 @router.get("/status")
 async def google_status(request: Request):
     from fastapi.responses import JSONResponse
+    import logging
+    logger = logging.getLogger(__name__)
+
     try:
         current_user = get_current_user_id(request=request)
-    except Exception:
+        logger.info(f"Google status: current_user = {current_user}")
+
+        # Check if user is actually authenticated (not anonymous)
+        if current_user == "anon":
+            logger.info("Google status: User is anonymous, returning 401")
+            return JSONResponse({"error_code": "auth_required"}, status_code=401)
+    except Exception as e:
+        logger.exception(f"Google status: Exception during auth check: {e}")
         return JSONResponse({"error_code": "auth_required"}, status_code=401)
 
     token = await get_token(current_user, "google")
 
     required_scopes = [
         "openid",
-        "email",
-        "profile",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
         "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/calendar.readonly",
     ]
