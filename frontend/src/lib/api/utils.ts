@@ -79,9 +79,10 @@ export function buildBodyFactory(body: any): BodyFactory {
     return () => buf.slice(0);
   }
   if (ArrayBuffer.isView && ArrayBuffer.isView(body)) {
-    const view = body;
+    const view = body as any;
     const buf = view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
-    return () => new view.constructor(buf, 0, view.length);
+    const Constructor = view.constructor as any;
+    return () => new Constructor(buf, 0, view.length);
   }
   // ReadableStream: tee for safe retries
   if (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream) {

@@ -110,4 +110,5 @@ export function useProfile() {
 }
 
 // Import required functions
-import { getModels } from '../integrations';
+// Correct import path: integrations helpers live under `./integrations`
+import { getModels } from './integrations';

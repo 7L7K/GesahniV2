@@ -18,8 +18,12 @@ async def integrations_status(request: Request):
         if current_user and current_user != "anon":
             client = SpotifyClient(current_user)
             try:
-                await client._bearer_token_only()
-                spotify_result = {"connected": True}
+                # Actually test the Spotify API connection instead of just checking token existence
+                profile = await client.get_user_profile()
+                if profile is not None:
+                    spotify_result = {"connected": True}
+                else:
+                    spotify_result = {"connected": False, "reason": "profile_check_failed"}
             except RuntimeError as e:
                 spotify_result = {"connected": False, "reason": str(e)}
     except Exception as e:

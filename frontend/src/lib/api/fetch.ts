@@ -3,10 +3,8 @@
  */
 
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
-import { getToken, clearTokens, getLocalStorage, requestKey, authHeaders, tryRefresh, buildBodyFactory, API_URL, DEFAULT_DEDUPE_MS, DEFAULT_SHORT_CACHE_MS, INFLIGHT_REQUESTS, SHORT_CACHE } from './auth';
-import type { BodyFactory } from './utils';
-
-const API_URL = process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000"; // canonical API origin for localhost consistency
+import { getToken, clearTokens, requestKey, authHeaders, API_URL } from './auth';
+import { buildBodyFactory, DEFAULT_DEDUPE_MS, DEFAULT_SHORT_CACHE_MS, INFLIGHT_REQUESTS, SHORT_CACHE, type BodyFactory } from './utils';
 
 // Boot log for observability
 if (typeof console !== 'undefined') {

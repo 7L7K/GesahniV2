@@ -63,6 +63,10 @@ export class AuthOscillationDetector {
     getOscillationCount(): number {
         return this.oscillationDetectionCount;
     }
+
+    getMaxOscillationCount(): number {
+        return this.MAX_OSCILLATION_COUNT;
+    }
 }
 
 export class AuthBackoffManager {

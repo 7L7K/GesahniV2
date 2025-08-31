@@ -612,6 +612,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
             refresh_token=refresh_token,
             expires_at=expires_at,
             scope=token_data.scope,
+            provider_iss="https://accounts.spotify.com",  # Spotify OAuth issuer
         )
 
         persisted = await upsert_token(token_for_storage)

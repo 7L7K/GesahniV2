@@ -16,6 +16,25 @@ else
     echo "⚠️  Warning: env.localhost not found, using default configuration"
 fi
 
+# Check and start Qdrant container if it exists
+echo "🗃️  Checking Qdrant container..."
+if command -v docker >/dev/null 2>&1; then
+    if docker ps -a --format 'table {{.Names}}' | grep -q "^gesahni-qdrant$"; then
+        echo "✅ Found gesahni-qdrant container"
+        if docker ps --format 'table {{.Names}}' | grep -q "^gesahni-qdrant$"; then
+            echo "✅ gesahni-qdrant container is already running"
+        else
+            echo "🔄 Starting gesahni-qdrant container..."
+            docker start gesahni-qdrant >/dev/null 2>&1
+            echo "✅ gesahni-qdrant container started"
+        fi
+    else
+        echo "ℹ️  gesahni-qdrant container not found (assuming it's running externally)"
+    fi
+else
+    echo "⚠️  Docker not available, assuming Qdrant is running externally"
+fi
+
 # Setup frontend environment
 echo "🎨 Setting up frontend environment..."
 if [ -f "frontend/env.localhost" ]; then

@@ -36,7 +36,21 @@ async def me(user_id: str = Depends(get_current_user_id)) -> dict[str, Any]:
         "last_login": (stats or {}).get("last_login"),
         "request_count": (stats or {}).get("request_count", 0),
     }
-    return {"is_authenticated": is_auth, "profile": profile, "flags": flags}
+
+    # Return format compatible with frontend auth orchestrator expectations
+    return {
+        "is_authenticated": is_auth,
+        "session_ready": is_auth,  # For authenticated users, session is ready
+        "user_id": user_id if is_auth else None,
+        "user": {
+            "id": user_id if is_auth else None,
+            "email": None,  # Email not available in this endpoint
+        } if is_auth else None,
+        "source": "cookie" if is_auth else "missing",
+        "version": 1,
+        "profile": profile,
+        "flags": flags
+    }
 
 
 # /v1/whoami is canonically served from app.api.auth; keep no duplicate here.

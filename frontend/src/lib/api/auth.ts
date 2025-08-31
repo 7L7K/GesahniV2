@@ -35,7 +35,7 @@ export function bumpAuthEpoch(): void {
   } catch { /* noop */ }
 }
 
-function getAuthNamespace(): string {
+export function getAuthNamespace(): string {
   const tok = getToken();
   const suffix = tok ? tok.slice(-8) : 'anon';
   return `hdr:${suffix}`;
@@ -52,14 +52,14 @@ export function buildQueryKey(base: string, extra?: any, ctx?: string | string[]
 }
 
 // Compose a stable request key for dedupe/cache: METHOD URL AUTH_NS [CTX]
-function requestKey(method: string, url: string, ctx?: string | string[]): string {
+export function requestKey(method: string, url: string, ctx?: string | string[]): string {
   const authNs = getAuthNamespace();
   const device = getActiveDeviceId();
   const ctxNorm = normalizeContextKey([ctx as any].flat().filter(Boolean).concat(device ? [`device:${device}`] : []));
   return `${method.toUpperCase()} ${url} ${authNs}${ctxNorm ? ` ${ctxNorm}` : ''}`;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000"; // canonical API origin for localhost consistency
+export const API_URL = process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000"; // canonical API origin for localhost consistency
 
 // Boot log for observability
 if (typeof console !== 'undefined') {
@@ -153,6 +153,19 @@ export function isAuthed(): boolean {
   return Boolean(getToken());
 }
 
+// Header mode: attach Authorization header if token is present
+export function authHeaders(): Record<string, string> {
+  // Attach Authorization if access token is present (safe alongside cookies)
+  try {
+    const tok = getToken();
+    if (tok) {
+      return { Authorization: `Bearer ${tok}` };
+    }
+  } catch { /* noop */ }
+  // Cookie mode or no token: rely on cookies
+  return {};
+}
+
 export function useSessionState() {
   return useQuery({
     queryKey: buildQueryKey('session'),
@@ -168,7 +181,6 @@ export function useSessionState() {
 }
 
 // Import required dependencies at the end to avoid circular imports
-import { getLocalStorage, setLocalStorage, removeLocalStorage, safeNow, normalizeContextKey, getActiveDeviceId } from '../utils';
-import { INFLIGHT_REQUESTS, SHORT_CACHE } from './utils';
+import { getLocalStorage, setLocalStorage, removeLocalStorage, safeNow, normalizeContextKey, getActiveDeviceId, INFLIGHT_REQUESTS, SHORT_CACHE } from './utils';
 import { apiFetch } from './fetch';
 import { useQuery } from "@tanstack/react-query";

@@ -257,3 +257,10 @@ export async function toggleGoogleService(service: string, enable: boolean) {
   toast.error(msg);
   throw new Error(msg);
 }
+
+export interface ModelItem { engine: string; name: string }
+export async function getModels(): Promise<{ items: ModelItem[] }> {
+  const res = await apiFetch("/v1/models", { method: "GET" });
+  if (!res.ok) throw new Error("models_failed");
+  return res.json();
+}

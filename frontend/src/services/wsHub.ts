@@ -68,8 +68,9 @@ class WsHub {
         window.addEventListener("auth:tokens_cleared", () => this.refreshAuth());
         window.addEventListener("auth:epoch_bumped", () => this.refreshAuth());
         // Also listen for general auth state changes to handle session_ready updates
-        window.addEventListener("auth:state_changed", (event: CustomEvent) => {
-          const detail = event.detail;
+        window.addEventListener("auth:state_changed", (event: Event) => {
+          const customEvent = event as CustomEvent;
+          const detail = customEvent.detail;
           // If session became ready, try to reconnect any failed connections
           if (!detail.prevState.session_ready && detail.newState.session_ready && detail.newState.is_authenticated) {
             console.info('WS Hub: Session became ready, attempting reconnection');
@@ -78,8 +79,9 @@ class WsHub {
         });
 
         // Listen for backend status changes to trigger reconnection when backend comes online
-        window.addEventListener("backend:status_changed", (event: CustomEvent) => {
-          const detail = event.detail;
+        window.addEventListener("backend:status_changed", (event: Event) => {
+          const customEvent = event as CustomEvent;
+          const detail = customEvent.detail;
           if (detail.online) {
             console.info('WS Hub: Backend came online, attempting reconnection');
             this.resumeAll("backend_online");

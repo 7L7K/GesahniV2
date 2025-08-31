@@ -127,7 +127,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         if (this.explicitStateChange && this.lastSuccessfulState && this.initialized) {
             if (this.oscillationDetector.detectOscillation(prevState, this.state, this.lastWhoamiCall)) {
                 const count = this.oscillationDetector.incrementOscillationCount();
-                console.warn(`AUTH Orchestrator: Oscillation detected from explicit change (${count}/${this.oscillationDetector.MAX_OSCILLATION_COUNT})`);
+                console.warn(`AUTH Orchestrator: Oscillation detected from explicit change (${count}/${this.oscillationDetector.getMaxOscillationCount()})`);
 
                 if (this.oscillationDetector.shouldApplyBackoff(count)) {
                     const backoffMs = this.oscillationDetector.applyOscillationBackoff(this.backoffManager.getBackoffUntil(), this.MAX_BACKOFF);
