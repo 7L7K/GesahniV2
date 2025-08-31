@@ -44,6 +44,19 @@ SPOTIFY_REFRESH_ERROR = Counter(
     "Spotify refresh errors",
 )
 
+# Token Store Metrics
+TOKEN_STORE_OPERATIONS = Counter(
+    "token_store_operations_total",
+    "Token store operations",
+    ["operation", "provider", "result"]
+)
+
+TOKEN_REFRESH_OPERATIONS = Counter(
+    "token_refresh_operations_total",
+    "Token refresh operations",
+    ["provider", "result", "attempt"]
+)
+
 # Google OAuth specific metrics
 GOOGLE_CONNECT_STARTED = Counter(
     "google_connect_started_total",

@@ -42,6 +42,16 @@ async def debug_config():
     }
 
 
+@router.get("/debug/token-health", include_in_schema=False)
+async def token_health():
+    """Get comprehensive token system health information."""
+    if not _is_dev():
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    from ..auth_store_tokens import get_token_system_health
+    return await get_token_system_health()
+
+
 @router.get("/docs/ws", include_in_schema=False)
 async def ws_helper_page():
     if not _is_dev():

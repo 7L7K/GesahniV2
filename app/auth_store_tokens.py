@@ -4,11 +4,13 @@ import asyncio
 import logging
 import os
 import sqlite3
+import time
 from typing import Optional
 
 from .models.third_party_tokens import ThirdPartyToken, TokenQuery, TokenUpdate
 from .crypto_tokens import encrypt_token, decrypt_token
 from .service_state import set_status as set_service_status_json
+from .metrics import TOKEN_STORE_OPERATIONS, TOKEN_REFRESH_OPERATIONS
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +219,22 @@ class TokenDAO:
         Returns:
             True if successful, False otherwise
         """
+        start_time = time.time()
+        success = False
+
+        # Validate token before attempting storage
+        if not self._validate_token_for_storage(token):
+            logger.warning("🔐 TOKEN STORE: Invalid token rejected", extra={
+                "meta": {"token_id": token.id, "user_id": token.user_id, "provider": token.provider}
+            })
+            try:
+                TOKEN_STORE_OPERATIONS.labels(
+                    operation="upsert", provider=token.provider, result="invalid_token"
+                ).inc()
+            except Exception:
+                pass
+            return False
+
         logger.info("🔐 TOKEN STORE: Upserting token", extra={
             "meta": {
                 "token_id": token.id,
@@ -504,22 +522,37 @@ class TokenDAO:
                 row = cursor.fetchone()
                 if row:
                     t = ThirdPartyToken.from_db_row(row)
+
+                    # Validate token structure before proceeding
+                    if not self._validate_token_structure(t):
+                        logger.warning("🔐 TOKEN STORE: Invalid token structure detected", extra={
+                            "meta": {"token_id": t.id, "user_id": user_id, "provider": provider}
+                        })
+                        return None
+
                     # If encrypted access or refresh token present, attempt decryption
                     try:
                         if t.refresh_token_enc:
                             from .crypto_tokens import decrypt_token
-
                             t.refresh_token = decrypt_token(t.refresh_token_enc)
                     except Exception:
                         # Decryption failed: keep plaintext column if present (rollback mode)
                         logger.warning("Failed to decrypt refresh_token_enc, falling back to plaintext column if available")
+
                     try:
                         if t.access_token_enc:
                             from .crypto_tokens import decrypt_token
-
                             t.access_token = decrypt_token(t.access_token_enc)
                     except Exception:
                         logger.warning("Failed to decrypt access_token_enc, falling back to plaintext access_token if available")
+
+                    # Validate decrypted tokens
+                    if not self._validate_decrypted_tokens(t):
+                        logger.warning("🔐 TOKEN STORE: Invalid decrypted tokens", extra={
+                            "meta": {"token_id": t.id, "user_id": user_id, "provider": provider}
+                        })
+                        return None
+
                     try:
                         logger.info(
                             "🔐 TOKEN STORE: get_token fetched",
@@ -530,6 +563,8 @@ class TokenDAO:
                                     "db_path": self.db_path,
                                     "expires_at": t.expires_at,
                                     "is_valid": t.is_valid,
+                                    "has_refresh_token": bool(t.refresh_token),
+                                    "time_until_expiry": t.time_until_expiry()
                                 }
                             },
                         )
@@ -540,8 +575,83 @@ class TokenDAO:
                 return None
 
         except Exception as e:
-            logger.error(f"Failed to get token for {user_id}@{provider}: {e}")
+            logger.error("🔐 TOKEN STORE: get_token failed", extra={
+                "meta": {
+                    "user_id": user_id,
+                    "provider": provider,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e)
+                }
+            })
             return None
+
+    def _validate_token_structure(self, token: ThirdPartyToken) -> bool:
+        """Validate basic token structure and required fields."""
+        try:
+            # Required fields for all tokens
+            if not token.id or not token.user_id or not token.provider:
+                return False
+
+            # Provider-specific validation
+            if token.provider == "spotify":
+                if not token.provider_iss or token.provider_iss != "https://accounts.spotify.com":
+                    return False
+
+            # Access token is required
+            if not token.access_token and not token.access_token_enc:
+                return False
+
+            # Must have either access token or refresh token
+            has_access = bool(token.access_token or token.access_token_enc)
+            has_refresh = bool(token.refresh_token or token.refresh_token_enc)
+
+            if not has_access and not has_refresh:
+                return False
+
+            return True
+        except Exception:
+            return False
+
+    def _validate_token_for_storage(self, token: ThirdPartyToken) -> bool:
+        """Validate token before storage."""
+        try:
+            # Required fields
+            if not token.id or not token.user_id or not token.provider:
+                return False
+
+            # Must have at least access token or refresh token
+            has_access = bool(token.access_token or token.access_token_enc)
+            has_refresh = bool(token.refresh_token or token.refresh_token_enc)
+
+            if not has_access and not has_refresh:
+                return False
+
+            # Provider-specific validation
+            if token.provider == "spotify":
+                if not token.provider_iss or token.provider_iss != "https://accounts.spotify.com":
+                    return False
+            elif token.provider == "google":
+                if not token.provider_iss or token.provider_iss != "https://accounts.google.com":
+                    return False
+
+            return True
+        except Exception:
+            return False
+
+    def _validate_decrypted_tokens(self, token: ThirdPartyToken) -> bool:
+        """Validate decrypted tokens are properly formatted."""
+        try:
+            # Validate access token format (basic check)
+            if token.access_token and not token.access_token.startswith(('B', 'e')):
+                return False
+
+            # Validate refresh token format if present
+            if token.refresh_token and len(token.refresh_token) < 10:
+                return False
+
+            return True
+        except Exception:
+            return False
 
     async def get_canonical_row(self, user_id: str, provider: str, provider_iss: str, provider_sub: Optional[str]) -> Optional[ThirdPartyToken]:
         """Return the single valid canonical row for (user,provider,provider_iss,provider_sub) or None.
@@ -878,3 +988,299 @@ async def get_all_user_tokens(user_id: str) -> list[ThirdPartyToken]:
 async def mark_invalid(user_id: str, provider: str) -> bool:
     """Convenience function to mark tokens as invalid."""
     return await token_dao.mark_invalid(user_id, provider)
+
+
+# ============================================================================
+# TOKEN REFRESH SERVICE
+# ============================================================================
+
+class TokenRefreshService:
+    """Service for handling automatic token refresh with retry logic."""
+
+    def __init__(self):
+        self._refresh_lock = asyncio.Lock()
+        self._refresh_attempts = {}
+        self._max_refresh_attempts = 3
+        self._refresh_backoff_seconds = [1, 2, 4]  # Exponential backoff
+
+    async def get_valid_token_with_refresh(
+        self,
+        user_id: str,
+        provider: str,
+        provider_sub: Optional[str] = None,
+        force_refresh: bool = False
+    ) -> Optional[ThirdPartyToken]:
+        """
+        Get a valid token, automatically refreshing if needed.
+
+        Args:
+            user_id: User identifier
+            provider: Provider name
+            provider_sub: Provider sub-identifier (optional)
+            force_refresh: Force refresh even if token appears valid
+
+        Returns:
+            Valid token or None if refresh fails
+        """
+        # Prevent concurrent refresh for same user/provider
+        lock_key = f"{user_id}:{provider}:{provider_sub or ''}"
+
+        async with self._refresh_lock:
+            # Get current token
+            token = await get_token(user_id, provider, provider_sub)
+
+            if not token:
+                logger.info("🔄 TOKEN REFRESH: No token found", extra={
+                    "meta": {"user_id": user_id, "provider": provider}
+                })
+                return None
+
+            # Check if token needs refresh
+            needs_refresh = force_refresh or self._should_refresh_token(token)
+
+            if not needs_refresh:
+                return token
+
+            # Check refresh attempt limits
+            attempt_key = f"{user_id}:{provider}"
+            attempts = self._refresh_attempts.get(attempt_key, 0)
+
+            if attempts >= self._max_refresh_attempts:
+                logger.warning("🔄 TOKEN REFRESH: Max refresh attempts exceeded", extra={
+                    "meta": {"user_id": user_id, "provider": provider, "attempts": attempts}
+                })
+                # Mark token as invalid if we can't refresh it
+                await mark_invalid(user_id, provider)
+                return None
+
+            # Attempt refresh
+            refreshed_token = await self._refresh_token_for_provider(token)
+
+            if refreshed_token:
+                # Reset attempt counter on success
+                self._refresh_attempts[attempt_key] = 0
+                logger.info("🔄 TOKEN REFRESH: Success", extra={
+                    "meta": {"user_id": user_id, "provider": provider}
+                })
+                try:
+                    TOKEN_REFRESH_OPERATIONS.labels(
+                        provider=provider, result="success", attempt=str(attempts + 1)
+                    ).inc()
+                except Exception:
+                    pass
+                return refreshed_token
+            else:
+                # Increment attempt counter on failure
+                self._refresh_attempts[attempt_key] = attempts + 1
+                logger.warning("🔄 TOKEN REFRESH: Failed", extra={
+                    "meta": {"user_id": user_id, "provider": provider, "attempts": attempts + 1}
+                })
+                try:
+                    TOKEN_REFRESH_OPERATIONS.labels(
+                        provider=provider, result="failure", attempt=str(attempts + 1)
+                    ).inc()
+                except Exception:
+                    pass
+
+                # If this was the last attempt, mark token invalid
+                if attempts + 1 >= self._max_refresh_attempts:
+                    await mark_invalid(user_id, provider)
+
+                return None
+
+    def _should_refresh_token(self, token: ThirdPartyToken, buffer_seconds: int = 300) -> bool:
+        """Determine if a token should be refreshed."""
+        try:
+            # Refresh if expired or will expire soon
+            return token.is_expired(buffer_seconds)
+        except Exception:
+            # If we can't determine expiry, assume it needs refresh
+            return True
+
+    async def _refresh_token_for_provider(self, token: ThirdPartyToken) -> Optional[ThirdPartyToken]:
+        """Refresh token based on provider."""
+        try:
+            if token.provider == "spotify":
+                return await self._refresh_spotify_token(token)
+            elif token.provider == "google":
+                return await self._refresh_google_token(token)
+            else:
+                logger.warning("🔄 TOKEN REFRESH: Unsupported provider", extra={
+                    "meta": {"provider": token.provider}
+                })
+                return None
+        except Exception as e:
+            logger.error("🔄 TOKEN REFRESH: Refresh failed", extra={
+                "meta": {
+                    "provider": token.provider,
+                    "user_id": token.user_id,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e)
+                }
+            })
+            return None
+
+    async def _refresh_spotify_token(self, token: ThirdPartyToken) -> Optional[ThirdPartyToken]:
+        """Refresh Spotify token."""
+        try:
+            from .integrations.spotify.client import SpotifyClient
+            client = SpotifyClient(token.user_id)
+
+            # Use the client's refresh method
+            refreshed_tokens = await client._refresh_tokens()
+
+            # Create new token object
+            refreshed_token = ThirdPartyToken(
+                user_id=token.user_id,
+                provider="spotify",
+                access_token=refreshed_tokens.access_token,
+                refresh_token=refreshed_tokens.refresh_token,
+                expires_at=refreshed_tokens.expires_at,
+                scope=refreshed_tokens.scope,
+                provider_iss="https://accounts.spotify.com"
+            )
+
+            # Store the refreshed token
+            await upsert_token(refreshed_token)
+            return refreshed_token
+
+        except Exception as e:
+            logger.error("🔄 SPOTIFY REFRESH: Failed", extra={
+                "meta": {"user_id": token.user_id, "error": str(e)}
+            })
+            return None
+
+    async def _refresh_google_token(self, token: ThirdPartyToken) -> Optional[ThirdPartyToken]:
+        """Refresh Google token."""
+        try:
+            # Import here to avoid circular dependencies
+            from .integrations.google.oauth import refresh_access_token
+
+            # Refresh the token
+            token_data = await refresh_access_token(token.refresh_token)
+
+            # Create new token object
+            refreshed_token = ThirdPartyToken(
+                user_id=token.user_id,
+                provider="google",
+                access_token=token_data.get("access_token", ""),
+                refresh_token=token_data.get("refresh_token", token.refresh_token),
+                expires_at=int(token_data.get("expires_at", 0)),
+                scope=token_data.get("scope"),
+                provider_iss="https://accounts.google.com"
+            )
+
+            # Store the refreshed token
+            await upsert_token(refreshed_token)
+            return refreshed_token
+
+        except Exception as e:
+            logger.error("🔄 GOOGLE REFRESH: Failed", extra={
+                "meta": {"user_id": token.user_id, "error": str(e)}
+            })
+            return None
+
+    def reset_refresh_attempts(self, user_id: str, provider: str):
+        """Reset refresh attempt counter for a user/provider."""
+        attempt_key = f"{user_id}:{provider}"
+        self._refresh_attempts.pop(attempt_key, None)
+
+
+# Global instance
+token_refresh_service = TokenRefreshService()
+
+
+async def get_valid_token_with_auto_refresh(
+    user_id: str,
+    provider: str,
+    provider_sub: Optional[str] = None,
+    force_refresh: bool = False
+) -> Optional[ThirdPartyToken]:
+    """
+    Convenience function to get a valid token with automatic refresh.
+
+    This is the main entry point for getting tokens - it handles validation
+    and automatic refresh when needed.
+    """
+    return await token_refresh_service.get_valid_token_with_refresh(
+        user_id, provider, provider_sub, force_refresh
+    )
+
+
+# ============================================================================
+# HEALTH MONITORING
+# ============================================================================
+
+async def get_token_system_health() -> dict:
+    """
+    Get comprehensive health status of the token system.
+
+    Returns:
+        Health status dictionary with various metrics
+    """
+    try:
+        dao = TokenDAO()
+        await dao._ensure_table()
+
+        # Get database stats
+        with sqlite3.connect(DEFAULT_DB_PATH) as conn:
+            cursor = conn.cursor()
+
+            # Count total tokens
+            cursor.execute("SELECT COUNT(*) FROM third_party_tokens")
+            total_tokens = cursor.fetchone()[0]
+
+            # Count valid tokens
+            cursor.execute("SELECT COUNT(*) FROM third_party_tokens WHERE is_valid = 1")
+            valid_tokens = cursor.fetchone()[0]
+
+            # Count tokens by provider
+            cursor.execute("""
+                SELECT provider, COUNT(*) as count, COUNT(CASE WHEN is_valid = 1 THEN 1 END) as valid_count
+                FROM third_party_tokens
+                GROUP BY provider
+            """)
+            provider_stats = cursor.fetchall()
+
+            # Count expired tokens
+            now = int(time.time())
+            cursor.execute("SELECT COUNT(*) FROM third_party_tokens WHERE expires_at < ? AND is_valid = 1", (now,))
+            expired_tokens = cursor.fetchone()[0]
+
+        # Get refresh service stats
+        refresh_stats = {
+            "active_refresh_attempts": len(token_refresh_service._refresh_attempts),
+            "max_refresh_attempts": token_refresh_service._max_refresh_attempts,
+        }
+
+        return {
+            "status": "healthy",
+            "timestamp": time.time(),
+            "database": {
+                "total_tokens": total_tokens,
+                "valid_tokens": valid_tokens,
+                "expired_tokens": expired_tokens,
+                "providers": {
+                    provider: {"total": count, "valid": valid_count}
+                    for provider, count, valid_count in provider_stats
+                }
+            },
+            "refresh_service": refresh_stats,
+            "metrics": {
+                "token_validation_enabled": True,
+                "automatic_refresh_enabled": True,
+                "monitoring_enabled": True,
+            }
+        }
+
+    except Exception as e:
+        logger.error("Token system health check failed", extra={
+            "meta": {"error_type": type(e).__name__, "error_message": str(e)}
+        })
+        return {
+            "status": "unhealthy",
+            "timestamp": time.time(),
+            "error": str(e),
+            "database": {"status": "unknown"},
+            "refresh_service": {"status": "unknown"},
+        }

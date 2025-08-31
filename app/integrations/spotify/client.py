@@ -116,15 +116,26 @@ class SpotifyClient:
 
     async def _get_valid_access_token(self) -> str:
         """Get a valid access token, refreshing if necessary."""
-        tokens = await self._get_tokens()
-        if not tokens:
-            raise SpotifyAuthError("No Spotify tokens found")
+        # Use the new robust token service
+        from ...auth_store_tokens import get_valid_token_with_auto_refresh
 
-        # Check if token is expired or will expire soon (within 5 minutes)
-        if time.time() >= (tokens.expires_at - 300):
-            tokens = await self._refresh_tokens()
+        token = await get_valid_token_with_auto_refresh(
+            self.user_id, "spotify", force_refresh=False
+        )
 
-        return tokens.access_token
+        if not token:
+            raise SpotifyAuthError("No valid Spotify tokens found")
+
+        # Double-check token is not expired (additional safety)
+        if token.is_expired(60):  # 1 minute buffer
+            # Force refresh if still expired
+            token = await get_valid_token_with_auto_refresh(
+                self.user_id, "spotify", force_refresh=True
+            )
+            if not token:
+                raise SpotifyAuthError("Failed to refresh Spotify token")
+
+        return token.access_token
 
     # ------------------------------------------------------------------
     # Budget and timeout support
