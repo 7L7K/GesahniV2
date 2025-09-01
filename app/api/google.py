@@ -30,202 +30,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/google")
 
 
-@router.get("/connect")
-async def google_connect(request: Request, user_id: str = Depends(get_current_user_id)) -> JSONResponse:  # type: ignore
-    import uuid
-    import jwt
-
-    if not user_id or user_id == "anon":
-        from ..http_errors import unauthorized
-
-        raise unauthorized(code="authentication_failed", message="authentication failed", hint="reauthorize Google access")
-
-    # Use integration's helper to build auth URL + state (signed)
-    try:
-        auth_url, state = build_auth_url(user_id)
-    except Exception:
-        # Fallback: craft a simple state JWT if build_auth_url unavailable
-        tx_id = uuid.uuid4().hex
-        state_payload = {"tx": tx_id, "uid": user_id, "exp": int(time.time()) + 600}
-        secret = _jwt_secret()
-        state = jwt.encode(state_payload, secret, algorithm="HS256")
-        required_scopes = [
-            "openid",
-            "https://www.googleapis.com/auth/userinfo.email",
-            "https://www.googleapis.com/auth/userinfo.profile",
-            "https://www.googleapis.com/auth/gmail.readonly",
-            "https://www.googleapis.com/auth/calendar.readonly",
-        ]
-
-        # Debug: Log what scopes are being used
-        logger.info("🎵 GOOGLE CONNECT: Required scopes", extra={
-            "meta": {
-                "user_id": user_id,
-                "required_scopes": required_scopes
-            }
-        })
-        from urllib.parse import urlencode, quote
-        params = {
-            "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-            "response_type": "code",
-            "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),
-            "scope": " ".join(required_scopes),
-            "state": state,
-            "access_type": "offline",
-            "include_granted_scopes": "true",
-            "prompt": "consent",
-        }
-        auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
-
-    try:
-        OAUTH_START.labels("google").inc()
-        GOOGLE_CONNECT_STARTED.labels(user_id, "na").inc()
-    except Exception:
-        pass
-
-    # Return JSON and set short-lived oauth state cookies for CSRF protection
-    resp = JSONResponse(content={"auth_url": auth_url})
-    try:
-        # Use the same provider prefix ("g") as the canonical callback handler
-        # so the callback at /v1/google/auth/callback can validate the cookie.
-        set_oauth_state_cookies(
-            resp,
-            state=state,
-            next_url=f"{os.getenv('FRONTEND_URL','http://localhost:3000')}/settings#google=connected",
-            request=request,
-            ttl=600,
-            provider="g",
-        )
-        GOOGLE_CONNECT_AUTHORIZE_URL_ISSUED.labels(user_id, "na").inc()
-    except Exception:
-        pass
-
-    return resp
+# New integrations endpoints at /v1/integrations/google/
+integrations_router = APIRouter(prefix="/integrations/google")
 
 
-@router.get("/callback")
-async def google_callback(request: Request, code: str | None = None, state: str | None = None):
-    import jwt
-
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-
-    if not state:
-        return RedirectResponse(f"{frontend_url}/settings#google?google_error=bad_state", status_code=302)
-
-    try:
-        from ..security import jwt_decode
-        payload = jwt_decode(state, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
-        uid = payload.get("uid")
-    except Exception:
-        return RedirectResponse(f"{frontend_url}/settings#google?google_error=bad_state", status_code=302)
-
-    # Verify state cookie matches provided state to protect against CSRF
-    # Use the same provider prefix ("g") as the connect endpoint for consistency
-    cookie_state = request.cookies.get("g_state")
-    if not cookie_state or cookie_state != state:
-        logger.warning("google callback: state cookie mismatch or missing", extra={"cookie_state_present": bool(cookie_state)})
-        return RedirectResponse(f"{frontend_url}/settings#google?google_error=bad_state_cookie", status_code=302)
-
-    if not code:
-        return RedirectResponse(f"{frontend_url}/settings#google?google_error=no_code", status_code=302)
-
-    try:
-        # Use the integration's exchange_code (sync) which returns credentials object
-        creds = exchange_code(code, state, verify_state=False)
-        # Convert credentials into a record
-        record = creds_to_record(creds)
-
-        # Extract provider_sub (OIDC `sub`) best-effort for account guardrails
-        provider_sub = None
-        try:
-            import jwt as _jwt
-            idt = record.get("id_token")
-            if idt:
-                claims = _jwt.decode(idt, options={"verify_signature": False})
-                provider_sub = str(claims.get("sub")) if claims.get("sub") is not None else None
-        except Exception:
-            provider_sub = None
-
-        # Account mismatch guardrail: if existing token has different sub, abort
-        try:
-            existing = await get_token(uid, "google")
-            if existing and getattr(existing, "provider_sub", None) and provider_sub and str(provider_sub) != str(existing.provider_sub):
-                return RedirectResponse(f"{frontend_url}/settings#google?google_error=account_mismatch", status_code=302)
-        except Exception:
-            pass
-
-        # Build ThirdPartyToken from record
-        now = int(time.time())
-        expiry = record.get("expiry")
-        try:
-            expires_at = int(expiry.timestamp()) if hasattr(expiry, "timestamp") else int(time.mktime(expiry.timetuple()))
-        except Exception:
-            expires_at = now + int(record.get("expires_in", 3600))
-
-        # Resolve provider_iss from id_token claims if available; else reuse existing row's issuer
-        provider_iss = None
-        try:
-            idt = record.get("id_token")
-            if idt:
-                import jwt as _jwt
-
-                claims = _jwt.decode(idt, options={"verify_signature": False})
-                provider_iss = claims.get("iss") or None
-        except Exception:
-            provider_iss = None
-
-        if not provider_iss:
-            try:
-                existing = await get_token(uid, "google")
-                if existing and getattr(existing, "provider_iss", None):
-                    provider_iss = existing.provider_iss
-            except Exception:
-                provider_iss = None
-
-        if not provider_iss:
-            # Fail early: do not persist rows without issuer metadata
-            return RedirectResponse(f"{frontend_url}/settings#google?google_error=missing_provider_iss", status_code=302)
-
-        token = ThirdPartyToken(
-            id=f"google:{secrets.token_hex(8)}",
-            user_id=uid,
-            provider="google",
-            provider_sub=provider_sub,
-            provider_iss=provider_iss,
-            access_token=record.get("access_token", ""),
-            refresh_token=record.get("refresh_token"),
-            scope=record.get("scopes"),
-            expires_at=expires_at,
-            created_at=now,
-            updated_at=now,
-        )
-
-        await upsert_token(token)
-        try:
-            OAUTH_CALLBACK.labels("google").inc()
-            GOOGLE_CALLBACK_SUCCESS.labels(uid, "na").inc()
-        except Exception:
-            pass
-
-    except Exception as e:
-        logger.exception("Google callback error: %s", e)
-        try:
-            GOOGLE_CALLBACK_FAILED.labels(uid if 'uid' in locals() else 'anon', str(e)[:200]).inc()
-        except Exception:
-            pass
-        return RedirectResponse(f"{frontend_url}/settings#google?google_error=token_exchange_failed", status_code=302)
-
-    # Clear oauth state cookies on successful callback
-    redirect = RedirectResponse(f"{frontend_url}/settings#google=connected", status_code=302)
-    try:
-        # Use the same provider prefix ("g") as the connect endpoint for consistency
-        clear_oauth_state_cookies(redirect, request=request, provider="g")
-    except Exception:
-        pass
-    return redirect
 
 
-@router.delete("/disconnect")
+
+
+
+
+# New canonical integrations endpoints
+@integrations_router.get("/status")
+async def integrations_google_status(request: Request):
+    """Canonical Google status endpoint at /v1/integrations/google/status"""
+    # Reuse existing status logic
+    return await google_status(request)
+
+
 async def google_disconnect(request: Request):
     try:
         from ..deps.user import resolve_user_id
@@ -246,22 +68,21 @@ async def google_disconnect(request: Request):
     return {"ok": success}
 
 
-@router.get("/status")
+@integrations_router.post("/disconnect")
+async def integrations_google_disconnect(request: Request):
+    """Canonical Google disconnect endpoint at /v1/integrations/google/disconnect"""
+    # Reuse existing disconnect logic
+    return await google_disconnect(request)
+
+
+
+
+
 async def google_status(request: Request):
     from fastapi.responses import JSONResponse
-    import logging
-    logger = logging.getLogger(__name__)
-
     try:
         current_user = get_current_user_id(request=request)
-        logger.info(f"Google status: current_user = {current_user}")
-
-        # Check if user is actually authenticated (not anonymous)
-        if current_user == "anon":
-            logger.info("Google status: User is anonymous, returning 401")
-            return JSONResponse({"error_code": "auth_required"}, status_code=401)
-    except Exception as e:
-        logger.exception(f"Google status: Exception during auth check: {e}")
+    except Exception:
         return JSONResponse({"error_code": "auth_required"}, status_code=401)
 
     token = await get_token(current_user, "google")
@@ -281,12 +102,15 @@ async def google_status(request: Request):
     token_scopes = (token.scope or "").split()
     required_ok = all(s in token_scopes for s in required_scopes)
 
+    # Track if token was refreshed
+    refreshed = False
+
     # If token expired or stale (<300s), attempt refresh
     STALE_BUFFER = int(os.getenv("GOOGLE_STALE_SECONDS", "300"))
     if (token.expires_at - int(time.time())) < STALE_BUFFER:
         try:
             if not token.refresh_token:
-                return JSONResponse({"connected": False, "required_scopes_ok": required_ok, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": "expired_no_refresh"}, status_code=200)
+                return JSONResponse({"connected": False, "required_scopes_ok": required_ok, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "refreshed": refreshed, "degraded_reason": "expired_no_refresh"}, status_code=200)
             td = await refresh_token(token.refresh_token)
             # persist refreshed tokens
             now = int(time.time())
@@ -306,9 +130,10 @@ async def google_status(request: Request):
             token = await get_token(current_user, "google")
             token_scopes = (token.scope or "").split()
             required_ok = all(s in token_scopes for s in required_scopes)
+            refreshed = True  # Successfully refreshed
         except Exception as e:
             # Mark degraded on refresh failure
-            return JSONResponse({"connected": False, "required_scopes_ok": required_ok, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": f"refresh_failed: {str(e)[:200]}"}, status_code=200)
+            return JSONResponse({"connected": False, "required_scopes_ok": required_ok, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "refreshed": refreshed, "degraded_reason": f"refresh_failed: {str(e)[:200]}"}, status_code=200)
 
     # Build services block from service_state JSON
     try:
@@ -330,7 +155,7 @@ async def google_status(request: Request):
 
     # If scopes missing, consider degraded
     if not required_ok:
-        return JSONResponse({"connected": True, "required_scopes_ok": False, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": "missing_scopes", "services": services}, status_code=200)
+        return JSONResponse({"connected": True, "required_scopes_ok": False, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "refreshed": refreshed, "degraded_reason": "missing_scopes", "services": services}, status_code=200)
 
     # All good
-    return JSONResponse({"connected": True, "required_scopes_ok": True, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "degraded_reason": None, "services": services}, status_code=200)
+    return JSONResponse({"connected": True, "required_scopes_ok": True, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "refreshed": refreshed, "degraded_reason": None, "services": services}, status_code=200)

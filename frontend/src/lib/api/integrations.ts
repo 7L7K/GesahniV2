@@ -78,11 +78,11 @@ export async function getIntegrationsStatus() {
 // Google integration helpers
 export async function getGoogleStatus() {
   console.log('🎵 GOOGLE INTEGRATIONS: Getting Google status', {
-    endpoint: '/v1/google/status',
+    endpoint: '/v1/integrations/google/status',
     timestamp: new Date().toISOString()
   });
 
-  const res = await apiFetch('/v1/google/status', { method: 'GET', credentials: 'include', auth: true });
+  const res = await apiFetch('/v1/integrations/google/status', { method: 'GET', credentials: 'include', auth: true });
 
   console.log('🎵 GOOGLE INTEGRATIONS: Status API response', {
     status: res.status,
@@ -167,11 +167,11 @@ export async function connectGoogle(next: string = '/settings#google=connected')
 
 export async function disconnectGoogle(): Promise<void> {
   console.log('🎵 GOOGLE INTEGRATIONS: Starting Google disconnect', {
-    endpoint: '/v1/google/disconnect',
+    endpoint: '/v1/integrations/google/disconnect',
     timestamp: new Date().toISOString()
   });
 
-  const res = await apiFetch('/v1/google/disconnect', { method: 'DELETE', credentials: 'include', auth: true });
+  const res = await apiFetch('/v1/integrations/google/disconnect', { method: 'POST', credentials: 'include', auth: true });
 
   console.log('🎵 GOOGLE INTEGRATIONS: Disconnect API response', {
     status: res.status,

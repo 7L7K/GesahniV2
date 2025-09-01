@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from .. import cookie_config as cookie_cfg
 from ..integrations.google.config import JWT_STATE_SECRET
+from ..integrations.google.state import generate_signed_state, verify_signed_state, generate_pkce_verifier, generate_pkce_challenge
 from ..logging_config import req_id_var
 from ..security import jwt_decode
 from ..error_envelope import raise_enveloped
@@ -171,71 +172,7 @@ class LoginUrlResponse(BaseModel):
     url: str
 
 
-def _generate_signed_state() -> str:
-    """
-    Generate a signed state string for CSRF protection.
 
-    Returns:
-        str: timestamp:random:sig format (kept short to avoid URL length issues)
-    """
-    logger.debug("🔐 Generating timestamp for state")
-    timestamp = str(int(time.time()))
-
-    logger.debug("🎲 Generating random token for state")
-    random_token = secrets.token_urlsafe(16)  # Reduced from 32 to 16 for shorter state
-
-    # Create signature using a dedicated state secret (separate from JWT_SECRET)
-    logger.debug("🔏 Creating HMAC signature for state using JWT_STATE_SECRET")
-    message = f"{timestamp}:{random_token}".encode()
-    sig_key = (
-        JWT_STATE_SECRET.encode()
-        if isinstance(JWT_STATE_SECRET, str)
-        else JWT_STATE_SECRET
-    )
-    signature = hmac.new(sig_key, message, hashlib.sha256).hexdigest()[:12]
-
-    state = f"{timestamp}:{random_token}:{signature}"
-    logger.debug(
-        f"✅ State generated: {timestamp}:[random]:[signature] (length: {len(state)})"
-    )
-    return state
-
-
-def _generate_pkce_verifier() -> str:
-    """
-    Generate a PKCE code verifier.
-
-    Returns:
-        str: Random string of 43-128 characters from the allowed character set
-    """
-    # Generate 32 bytes of random data (will result in ~43 characters when base64url encoded)
-    verifier_bytes = secrets.token_bytes(32)
-
-    # Base64url encode (RFC 7636 compliant)
-    verifier = base64.urlsafe_b64encode(verifier_bytes).decode('ascii').rstrip('=')
-
-    logger.debug(f"🔐 Generated PKCE verifier (length: {len(verifier)})")
-    return verifier
-
-
-def _generate_pkce_challenge(verifier: str) -> str:
-    """
-    Generate a PKCE code challenge from a verifier.
-
-    Args:
-        verifier: The code verifier string
-
-    Returns:
-        str: SHA256 hash of verifier, base64url encoded
-    """
-    # SHA256 hash the verifier
-    digest = hashlib.sha256(verifier.encode('ascii')).digest()
-
-    # Base64url encode the hash
-    challenge = base64.urlsafe_b64encode(digest).decode('ascii').rstrip('=')
-
-    logger.debug(f"🔏 Generated PKCE challenge from verifier")
-    return challenge
 
 
 @router.get("/auth/google/login_url")
@@ -265,7 +202,7 @@ async def google_login_url(request: Request) -> Response:
     )
 
     try:
-        # Read required environment variables
+        # Read required environment variables (could also import from integration config)
         client_id = os.getenv("GOOGLE_CLIENT_ID")
         redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
 
@@ -282,11 +219,11 @@ async def google_login_url(request: Request) -> Response:
             raise HTTPException(status_code=503, detail="Google OAuth not configured")
 
         # Generate signed state for CSRF protection
-        state = _generate_signed_state()
+        state = generate_signed_state()
 
         # Generate PKCE parameters for enhanced security
-        code_verifier = _generate_pkce_verifier()
-        code_challenge = _generate_pkce_challenge(code_verifier)
+        code_verifier = generate_pkce_verifier()
+        code_challenge = generate_pkce_challenge(code_verifier)
 
         # Log PKCE setup for debugging
         logger.info(
@@ -297,7 +234,7 @@ async def google_login_url(request: Request) -> Response:
             extra={"meta": {"req_id": req_id, "component": "google_oauth"}}
         )
 
-        # Build Google OAuth URL with proper scopes
+        # Build Google OAuth URL with proper scopes from integration config
         from ..integrations.google.config import get_google_scopes
         scopes = get_google_scopes()
         params = {
@@ -384,6 +321,15 @@ async def google_login_url(request: Request) -> Response:
             },
         )
 
+        # Emit GOOGLE_CONNECT_STARTED metric
+        try:
+            from ..metrics import GOOGLE_CONNECT_STARTED
+            import hashlib
+            scopes_hash = hashlib.sha256(" ".join(sorted(scopes)).encode()).hexdigest()[:8]
+            GOOGLE_CONNECT_STARTED.labels(user_id="unknown", scopes_hash=scopes_hash).inc()
+        except Exception:
+            pass
+
         _log_request_summary(request, 200, duration)
         return http_response
 
@@ -406,41 +352,7 @@ async def google_login_url(request: Request) -> Response:
         raise_enveloped("internal", "internal server error", hint="try again shortly", status=500)
 
 
-def _verify_signed_state(state: str) -> bool:
-    """
-    Verify a signed state string for CSRF protection.
 
-    Args:
-        state: State string in timestamp:random:sig format
-
-    Returns:
-        bool: True if state is valid and fresh
-    """
-    try:
-        parts = state.split(":")
-        if len(parts) != 3:
-            return False
-
-        timestamp, random_token, signature = parts
-
-        # Verify timestamp is recent (within 5 minutes)
-        state_time = int(timestamp)
-        current_time = int(time.time())
-        if current_time - state_time > 300:  # 5 minutes
-            return False
-
-        # Verify signature using the dedicated state secret
-        message = f"{timestamp}:{random_token}".encode()
-        sig_key = (
-            JWT_STATE_SECRET.encode()
-            if isinstance(JWT_STATE_SECRET, str)
-            else JWT_STATE_SECRET
-        )
-        expected_sig = hmac.new(sig_key, message, hashlib.sha256).hexdigest()[:12]
-
-        return signature == expected_sig
-    except Exception:
-        return False
 
 
 @router.get("/auth/google/callback")
@@ -609,7 +521,7 @@ async def google_callback(request: Request) -> Response:
 
     # Verify signed state is valid and fresh
     # Measure state age and signature validity
-    state_valid = _verify_signed_state(state)
+    state_valid = verify_signed_state(state)
     state_age_ms = None
     try:
         # our signed state format was timestamp:random:sig
@@ -1238,6 +1150,15 @@ async def google_callback(request: Request) -> Response:
             pass
 
         # Log auth context
+        # Emit GOOGLE_CALLBACK_SUCCESS metric
+        try:
+            from ..metrics import GOOGLE_CALLBACK_SUCCESS
+            import hashlib
+            scopes_hash = hashlib.sha256(" ".join(sorted(rec.get("scopes", []))).encode()).hexdigest()[:8]
+            GOOGLE_CALLBACK_SUCCESS.labels(user_id=uid, scopes_hash=scopes_hash).inc()
+        except Exception:
+            pass
+
         _log_auth_context(request, user_id=uid, is_authenticated=True)
 
         _log_request_summary(request, 302, duration)

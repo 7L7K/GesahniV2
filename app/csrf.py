@@ -81,7 +81,6 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 "/v1/auth/apple/callback",
                 "/auth/apple/callback",
                 "/v1/auth/google/callback",
-                "/auth/google/callback",
             }
             if path in oauth_callbacks:
                 logger.info("bypass: csrf_oauth_callback path=<%s>", path)

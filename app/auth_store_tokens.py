@@ -269,6 +269,42 @@ class TokenDAO:
                             # Acquire IMMEDIATE transaction to emulate SELECT ... FOR UPDATE
                             cursor.execute("BEGIN IMMEDIATE")
 
+                            # Fetch most recent existing valid row for this user+provider to preserve provider identity
+                            cursor.execute(
+                                """
+                                SELECT id, provider_iss, provider_sub, scope, scope_union_since
+                                FROM third_party_tokens
+                                WHERE user_id = ? AND provider = ? AND is_valid = 1
+                                ORDER BY updated_at DESC LIMIT 1
+                                """,
+                                (token.user_id, token.provider),
+                            )
+                            existing_row = cursor.fetchone()
+                            prev_id = None
+                            if existing_row:
+                                prev_id = existing_row[0]
+                                prev_provider_iss = existing_row[1]
+                                prev_provider_sub = existing_row[2]
+                                prev_scope_raw = existing_row[3] or ""
+                                prev_scope_union_since = existing_row[4]
+                                # Preserve provider_iss/sub from previous row if incoming values are None
+                                if not token.provider_iss and prev_provider_iss:
+                                    token.provider_iss = prev_provider_iss
+                                if not token.provider_sub and prev_provider_sub:
+                                    token.provider_sub = prev_provider_sub
+                                # If both exist but differ, emit metric/log for anomaly
+                                try:
+                                    if prev_provider_sub and token.provider_sub and prev_provider_sub != token.provider_sub:
+                                        logger.warning("google.provider_sub_mismatch detected", extra={"meta": {"user_id": token.user_id, "prev": prev_provider_sub, "new": token.provider_sub}})
+                                        try:
+                                            from .metrics import AUTH_IDENTITY_RESOLVE
+
+                                            AUTH_IDENTITY_RESOLVE.labels(source="google", result="provider_sub_mismatch").inc()
+                                        except Exception:
+                                            pass
+                                except Exception:
+                                    pass
+
                             # Ensure provider_iss presence on Google tokens (do not allow NULL issuer)
                             if not token.provider_iss:
                                 raise ValueError("provider_iss is required for stored tokens")
@@ -287,30 +323,21 @@ class TokenDAO:
                             token.scope = _normalize_scope(token.scope)
 
                             # Select previous valid row for this (user,provider,provider_sub)
-                            prev_id = None
-                            cursor.execute(
-                                """
-                                SELECT id, scope, scope_union_since FROM third_party_tokens
-                                WHERE user_id = ? AND provider = ? AND IFNULL(provider_iss,'') = IFNULL(?, '') AND IFNULL(provider_sub,'') = IFNULL(?, '') AND is_valid = 1
-                                ORDER BY created_at DESC LIMIT 1
-                                """,
-                                (token.user_id, token.provider, token.provider_iss, token.provider_sub),
-                            )
-                            row_prev = cursor.fetchone()
-                            if row_prev:
-                                prev_id = row_prev[0]
-                                prev_scope_raw = row_prev[1] or ""
-                                prev_scopes = set([x.strip().lower() for x in prev_scope_raw.split() if x and x.strip()])
+                            if not existing_row:
+                                prev_id = None
+                                token.scope_union_since = token.created_at
+                                prev_scopes = set()
+                            else:
+                                # Use existing_row values fetched above
+                                prev_scopes = set([x.strip().lower() for x in (prev_scope_raw or "").split() if x and x.strip()])
                                 curr_scopes = set([x.strip().lower() for x in (token.scope or "").split() if x and x.strip()])
                                 merged = prev_scopes | curr_scopes
                                 token.scope = " ".join(sorted(merged)) if merged else None
-                                token.scope_union_since = int(row_prev[2] or token.created_at)
+                                token.scope_union_since = int(prev_scope_union_since or token.created_at)
                                 # Record last added from when new scopes arrive
                                 new_added = merged - prev_scopes
                                 if new_added:
                                     token.scope_last_added_from = token.id
-                            else:
-                                token.scope_union_since = token.created_at
 
                             # Encrypt tokens if present
                             refresh_token_enc = None
@@ -1002,6 +1029,9 @@ class TokenRefreshService:
         self._refresh_attempts = {}
         self._max_refresh_attempts = 3
         self._refresh_backoff_seconds = [1, 2, 4]  # Exponential backoff
+        # In-memory backoff map to avoid aggressive refresh retries after failures
+        # keyed by '{user_id}:{provider}' -> unix timestamp when next refresh allowed
+        self._next_refresh_after: dict[str, float] = {}
 
     async def get_valid_token_with_refresh(
         self,
@@ -1045,6 +1075,16 @@ class TokenRefreshService:
             attempt_key = f"{user_id}:{provider}"
             attempts = self._refresh_attempts.get(attempt_key, 0)
 
+            # Respect light backoff if recently failed
+            now = __import__("time").time()
+            next_allowed = self._next_refresh_after.get(attempt_key)
+            if next_allowed and now < next_allowed:
+                logger.info("🔄 TOKEN REFRESH: Backoff active, skipping refresh", extra={
+                    "meta": {"user_id": user_id, "provider": provider, "next_allowed": next_allowed}
+                })
+                # Return current (possibly stale) token to avoid churn
+                return token
+
             if attempts >= self._max_refresh_attempts:
                 logger.warning("🔄 TOKEN REFRESH: Max refresh attempts exceeded", extra={
                     "meta": {"user_id": user_id, "provider": provider, "attempts": attempts}
@@ -1085,6 +1125,12 @@ class TokenRefreshService:
                 # If this was the last attempt, mark token invalid
                 if attempts + 1 >= self._max_refresh_attempts:
                     await mark_invalid(user_id, provider)
+
+                # On refresh failure, set light backoff to avoid polling churn (~10 minutes)
+                try:
+                    self._next_refresh_after[attempt_key] = __import__("time").time() + 600
+                except Exception:
+                    pass
 
                 return None
 
@@ -1167,7 +1213,8 @@ class TokenRefreshService:
                 refresh_token=token_data.get("refresh_token", token.refresh_token),
                 expires_at=int(token_data.get("expires_at", 0)),
                 scope=token_data.get("scope"),
-                provider_iss="https://accounts.google.com"
+                provider_iss="https://accounts.google.com",
+                # provider_sub intentionally omitted; existing provider_sub will be preserved by upsert
             )
 
             # Store the refreshed token
@@ -1175,8 +1222,14 @@ class TokenRefreshService:
             return refreshed_token
 
         except Exception as e:
-            logger.error("🔄 GOOGLE REFRESH: Failed", extra={
-                "meta": {"user_id": token.user_id, "error": str(e)}
+            # Record light backoff to avoid tight refresh loops
+            try:
+                attempt_key = f"{token.user_id}:google"
+                self._next_refresh_after[attempt_key] = __import__("time").time() + 600
+            except Exception:
+                pass
+            logger.warning("🔄 GOOGLE REFRESH: Failed (masked)", extra={
+                "meta": {"user_id": token.user_id, "error_type": type(e).__name__}
             })
             return None
 

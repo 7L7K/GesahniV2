@@ -89,8 +89,8 @@ async def debug_oauth_routes(request):
         summary = {
             "has_login_url": has("/v1/google/auth/login_url") or has("/google/auth/login_url"),
             "has_callback": has("/v1/google/auth/callback") or has("/google/auth/callback"),
-            "has_v1_google_connect": has("/v1/google/connect"),
-            "has_v1_google_status": has("/v1/google/status"),
+            "has_v1_integrations_google_status": has("/v1/integrations/google/status"),
+            "has_v1_integrations_google_disconnect": has("/v1/integrations/google/disconnect"),
             "all_oauth_paths": sorted(paths),
         }
         return summary
@@ -144,14 +144,15 @@ code{background:#f3f4f6;padding:2px 4px;border-radius:4px}
 async function load(){
   const a = await fetch('/v1/debug/oauth/routes').then(r=>r.json()).catch(e=>({error:String(e)}));
   const b = await fetch('/v1/debug/oauth/config').then(r=>r.json()).catch(e=>({error:String(e)}));
-  const c = await fetch('/v1/google/status', {credentials:'include'}).then(r=>r.json()).catch(e=>({error:String(e)}));
+  const c = await fetch('/v1/integrations/google/status', {credentials:'include'}).then(r=>r.json()).catch(e=>({error:String(e)}));
   const elR = document.getElementById('routes');
   const elC = document.getElementById('config');
   const elS = document.getElementById('status');
   elR.innerHTML = `<h2>Routes</h2>
     <div>login_url: <span class="${a.has_login_url?'ok':'bad'}">${a.has_login_url?'present':'missing'}</span></div>
     <div>callback: <span class="${a.has_callback?'ok':'bad'}">${a.has_callback?'present':'missing'}</span></div>
-    <div>v1 google status: <span class="${a.has_v1_google_status?'ok':'bad'}">${a.has_v1_google_status?'present':'missing'}</span></div>
+    <div>v1 integrations google status: <span class="${a.has_v1_integrations_google_status?'ok':'bad'}">${a.has_v1_integrations_google_status?'present':'missing'}</span></div>
+    <div>v1 integrations google disconnect: <span class="${a.has_v1_integrations_google_disconnect?'ok':'bad'}">${a.has_v1_integrations_google_disconnect?'present':'missing'}</span></div>
     <details><summary>All paths</summary><div class="mono">${(a.all_oauth_paths||[]).join('<br>')}</div></details>`;
   elC.innerHTML = `<h2>Config</h2>
     <div>CLIENT_ID: <span class="${b.GOOGLE_CLIENT_ID_present?'ok':'bad'}">${b.GOOGLE_CLIENT_ID_present?'set':'missing'}</span></div>

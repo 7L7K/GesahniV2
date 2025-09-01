@@ -3,7 +3,7 @@ console.log('Testing Google Connect API...');
 
 async function testGoogleConnect() {
     try {
-        const response = await fetch('http://localhost:8000/v1/google/connect?next=%2Fsettings%23google%3Dconnected', {
+        const response = await fetch('http://localhost:8000/v1/auth/google/login_url?next=%2Fsettings%23google%3Dconnected', {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',

@@ -42,21 +42,24 @@ export type UiStatus = 'not_connected' | 'connecting' | 'connected' | 'error' | 
 
 export type Normalized = {
     connected: boolean;
+    requiredScopesOk?: boolean;
     scopes: string[];
     expiresAt?: number | null; // epoch seconds
 };
 
 export function normalizeFromApi(j: any): Normalized {
     const connected = Boolean(j?.connected);
+    const requiredScopesOk = typeof j?.required_scopes_ok === 'boolean' ? j.required_scopes_ok : undefined;
     const scopes = Array.isArray(j?.scopes) ? j.scopes.filter((s: any) => typeof s === 'string') : [];
     const expiresAt = typeof j?.expires_at === 'number' && isFinite(j.expires_at) ? j.expires_at : null;
-    return { connected, scopes, expiresAt };
+    return { connected, requiredScopesOk, scopes, expiresAt };
 }
 
 export default function GoogleConnectCard({ onManage }: { onManage?: () => void }) {
     const [status, setStatus] = useState<UiStatus>('loading');
     const [scopes, setScopes] = useState<string[]>([]);
     const [expiresAt, setExpiresAt] = useState<number | null>(null);
+    const [requiredScopesOk, setRequiredScopesOk] = useState<boolean | undefined>(undefined);
     const inflight = useRef<AbortController | null>(null);
 
     const hasGmailScope = useCallback((s: string[]) => s.some(x => x.includes('gmail.') || x.endsWith('/gmail.send') || x.endsWith('/gmail.readonly')), []);
@@ -80,6 +83,7 @@ export default function GoogleConnectCard({ onManage }: { onManage?: () => void 
             const n = normalizeFromApi(j);
             setScopes(n.scopes);
             setExpiresAt(n.expiresAt ?? null);
+            setRequiredScopesOk(n.requiredScopesOk);
             setStatus(n.connected ? 'connected' : (j?.degraded_reason ? 'error' : 'not_connected'));
             return n.connected;
         } catch (e: any) {
@@ -209,7 +213,11 @@ export default function GoogleConnectCard({ onManage }: { onManage?: () => void 
                                 {status === 'loading' ? (
                                     <Skeleton className="h-5 w-24" />
                                 ) : status === 'connected' ? (
-                                    <Badge variant="default" className="bg-emerald-600" data-testid="status-connected">Connected</Badge>
+                                    requiredScopesOk === false ? (
+                                        <Badge variant="secondary" className="bg-yellow-600" data-testid="status-connected-limited">Connected (limited) ⚠️</Badge>
+                                    ) : (
+                                        <Badge variant="default" className="bg-emerald-600" data-testid="status-connected">Connected ✅</Badge>
+                                    )
                                 ) : status === 'connecting' ? (
                                     <Badge variant="secondary" className="bg-yellow-600/30" data-testid="status-connecting">Connecting…</Badge>
                                 ) : status === 'error' ? (

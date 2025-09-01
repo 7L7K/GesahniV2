@@ -450,7 +450,7 @@ export async function getGoogleAuthUrl(next?: string): Promise<string> {
     const params = new URLSearchParams();
     params.append('next', sanitizedNext);
 
-    const endpoint = `/v1/google/connect?${params.toString()}`;
+    const endpoint = `/v1/auth/google/login_url?${params.toString()}`;
     console.log('🔗 API: Making request to:', endpoint);
 
     const response = await apiFetch(endpoint, {

@@ -28,7 +28,7 @@ const PUBLIC_PATHS = new Set([
   '/debug/config',
   '/metrics',
   '/v1/auth/finish',
-  '/v1/google/auth/login_url',
+  '/v1/auth/google/login_url',
 ]);
 
 // CSRF token management

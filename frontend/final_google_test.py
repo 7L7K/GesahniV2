@@ -24,7 +24,7 @@ def test_complete_google_flow():
 
     # Test 2: Backend OAuth URL generation
     print("\n2. Backend OAuth URL Generation:")
-    response = client.get("/v1/google/auth/login_url?next=/settings")
+    response = client.get("/v1/auth/google/login_url?next=/settings")
     if response.status_code == 200:
         try:
             data = response.json()
@@ -67,7 +67,7 @@ def test_complete_google_flow():
     
     # Test 4: Status endpoint
     print("\n4. Google Status Endpoint:")
-    response = requests.get("http://localhost:8000/v1/google/status")
+    response = requests.get("http://localhost:8000/v1/integrations/google/status")
     if response.status_code == 200:
         try:
             data = response.json()
@@ -104,7 +104,7 @@ def test_complete_google_flow():
     
     # Test 6: Callback validation
     print("\n6. OAuth Callback Security:")
-    response = requests.get("http://localhost:8000/v1/google/auth/callback?state=invalid&code=invalid")
+    response = requests.get("http://localhost:8000/v1/auth/google/callback?state=invalid&code=invalid")
     if response.status_code == 400:
         print("   ✅ Callback properly rejects invalid parameters")
         print("   🔒 Security validation working")

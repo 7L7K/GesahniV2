@@ -80,6 +80,7 @@ except Exception:
     preflight_router = None  # type: ignore
 from .api.settings import router as settings_router
 from .api.google_oauth import router as google_oauth_router
+from .api.google import integrations_router
 
 try:
     from .api.oauth_apple import router as _oauth_apple_router
@@ -1231,6 +1232,7 @@ if device_auth_router is not None:
     app.include_router(device_auth_router, prefix="/v1")
 # Keep only the canonical Google OAuth router; legacy router removed to avoid overlap.
 app.include_router(google_oauth_router, prefix="/v1")
+app.include_router(integrations_router, prefix="/v1")
 if _oauth_apple_router is not None:
     app.include_router(_oauth_apple_router, prefix="/v1")
 # Mount Apple OAuth stub for local/dev when enabled, now that `app` exists
