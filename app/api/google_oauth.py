@@ -3,6 +3,11 @@ Google OAuth login URL endpoint.
 
 This module provides a stateless endpoint that generates Google OAuth URLs
 and sets short-lived CSRF state cookies for security.
+
+ALERTING THRESHOLDS:
+- google_token_exchange_failed_total > 2/min (5m window) → PAGE
+- google_refresh_failure_total > 1% of refresh attempts (15m window) → WARN
+- provider_sub_mismatch (ever) → WARN
 """
 
 import hashlib
@@ -158,9 +163,17 @@ def _allow_redirect(url: str) -> bool:
     if not allowed:
         return True
     try:
-        from urllib.parse import urlparse
+        from urllib.parse import urlparse, unquote
 
-        host = urlparse(url).netloc.lower()
+        # URL-decode the URL multiple times to handle nested encoding
+        decoded_url = url
+        for _ in range(5):  # Decode up to 5 levels deep
+            previous = decoded_url
+            decoded_url = unquote(decoded_url)
+            if decoded_url == previous:  # No more encoding layers
+                break
+
+        host = urlparse(decoded_url).netloc.lower()
         return any(host.endswith(a.lower()) for a in allowed)
     except Exception:
         return False
@@ -215,7 +228,6 @@ async def google_login_url(request: Request) -> Response:
                 "Missing GOOGLE_CLIENT_ID or GOOGLE_REDIRECT_URI",
             )
             _log_request_summary(request, 503, duration, error="config_missing")
-            from fastapi import HTTPException
             raise HTTPException(status_code=503, detail="Google OAuth not configured")
 
         # Generate signed state for CSRF protection
@@ -228,10 +240,13 @@ async def google_login_url(request: Request) -> Response:
         # Log PKCE setup for debugging
         logger.info(
             "google_oauth_login",
-            has_pkce=bool(code_verifier),
-            method="S256",
-            state=state[:16] + "..." if len(state) > 16 else state,  # Short state for log
-            extra={"meta": {"req_id": req_id, "component": "google_oauth"}}
+            extra={"meta": {
+                "req_id": req_id,
+                "component": "google_oauth",
+                "has_pkce": bool(code_verifier),
+                "method": "S256",
+                "state": state[:16] + "..." if len(state) > 16 else state
+            }}
         )
 
         # Build Google OAuth URL with proper scopes from integration config
@@ -446,6 +461,17 @@ async def google_callback(request: Request) -> Response:
     # Get PKCE code verifier from cookie
     code_verifier_cookie = request.cookies.get("g_code_verifier")
 
+    # Enforce presence of PKCE verifier for security
+    if not code_verifier_cookie:
+        duration = (time.time() - start_time) * 1000
+        _log_error(
+            "ValidationError",
+            "Missing PKCE code verifier",
+            "OAuth callback missing PKCE verifier",
+        )
+        _log_request_summary(request, 400, duration, error="missing_verifier")
+        return _error_response("missing_verifier", status=400)
+
     # For local development, bypass state cookie validation if cookie is missing
     dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
 
@@ -521,10 +547,24 @@ async def google_callback(request: Request) -> Response:
 
     # Verify signed state is valid and fresh
     # Measure state age and signature validity
-    state_valid = verify_signed_state(state)
+    try:
+        # verify_signed_state will consume the nonce on success and raise
+        # NonceConsumedError if the nonce was already consumed.
+        from ..integrations.google.state import NonceConsumedError
+
+        try:
+            state_valid = verify_signed_state(state, consume_nonce_on_success=True)
+            nonce_consumed = False
+        except NonceConsumedError:
+            state_valid = False
+            nonce_consumed = True
+    except Exception:
+        state_valid = False
+        nonce_consumed = False
+
     state_age_ms = None
     try:
-        # our signed state format was timestamp:random:sig
+        # our signed state format is timestamp:random:nonce:sig
         parts = state.split(":")
         if parts and parts[0].isdigit():
             ts = int(parts[0])
@@ -540,6 +580,7 @@ async def google_callback(request: Request) -> Response:
                 "component": "google_oauth",
                 "msg": "signed_state_check",
                 "state_valid": state_valid,
+                "nonce_consumed": nonce_consumed,
                 "state_age_ms": state_age_ms,
                 "dev_mode": dev_mode,
             }
@@ -547,7 +588,17 @@ async def google_callback(request: Request) -> Response:
     )
 
     if not state_valid:
-        if dev_mode:
+        if nonce_consumed:
+            # Nonce already used - return 409 Conflict
+            duration = (time.time() - start_time) * 1000
+            _log_error(
+                "ValidationError",
+                "State nonce already consumed",
+                "OAuth callback state nonce already used (anti-replay protection)",
+            )
+            _log_request_summary(request, 409, duration, error="nonce_already_used")
+            return _error_response("state_already_used", status=409)
+        elif dev_mode:
             logger.warning(
                 "Development mode: Bypassing signed state validation",
                 extra={
@@ -580,12 +631,14 @@ async def google_callback(request: Request) -> Response:
         },
     )
 
-    # Log callback start with state and verifier status
+    # Log callback start with state and verifier status (put custom fields into `extra`)
     logger.info(
         "google_oauth_cb_start",
-        state_ok=state_valid,
-        has_verifier=bool(code_verifier_cookie),
-        extra={"meta": {"req_id": req_id, "component": "google_oauth"}}
+        extra={
+            "meta": {"req_id": req_id, "component": "google_oauth"},
+            "state_ok": state_valid,
+            "has_verifier": bool(code_verifier_cookie),
+        },
     )
 
     # State validation complete - proceed with usual session logic
@@ -629,7 +682,17 @@ async def google_callback(request: Request) -> Response:
         with start_span(
             "google.oauth.token.exchange", {"component": "google_oauth"}
         ) as _span:
-            creds = go.exchange_code(code, state, verify_state=False, code_verifier=code_verifier_cookie)
+            try:
+                creds = await go.exchange_code(code, state, verify_state=False, code_verifier=code_verifier_cookie)
+            except Exception as e:
+                # Integration layer emits metrics and raises OAuthError for sanitized issues.
+                from ..integrations.google.errors import OAuthError as _OAuthError
+
+                if isinstance(e, _OAuthError):
+                    # Use global HTTPException imported at module top
+                    raise HTTPException(status_code=e.http_status, detail=e.as_response())
+                # Unknown errors -> generic 500
+                raise HTTPException(status_code=500, detail="oauth_exchange_failed")
             # If span present, set google token latency on span
             try:
                 _span.set_attribute("google_token_latency_ms", 0)
@@ -670,6 +733,24 @@ async def google_callback(request: Request) -> Response:
         provider_sub = None
         provider_iss = None
         email = None
+
+        # Log what Google actually returned in the credentials
+        creds_id_token = getattr(creds, "id_token", None)
+        logger.info(
+            "Google OAuth credentials received",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "msg": "google_credentials_received",
+                    "has_id_token": creds_id_token is not None,
+                    "id_token_length": len(creds_id_token or ""),
+                    "creds_type": type(creds).__name__,
+                    "creds_attributes": list(vars(creds).keys()) if hasattr(creds, '__dict__') else 'no_attrs',
+                }
+            },
+        )
+
         try:
             id_token = getattr(creds, "id_token", None)
             if id_token:
@@ -677,6 +758,23 @@ async def google_callback(request: Request) -> Response:
                 email = claims.get("email") or claims.get("email_address")
                 provider_sub = claims.get("sub") or None
                 provider_iss = claims.get("iss") or None
+
+                # Fallback for Google OAuth: if iss is missing, use standard Google issuer
+                if not provider_iss and provider_sub:
+                    # This is likely a Google OAuth token if we have a sub but no iss
+                    provider_iss = "https://accounts.google.com"
+                    logger.info(
+                        "Applied Google OAuth issuer fallback",
+                        extra={
+                            "meta": {
+                                "req_id": req_id,
+                                "component": "google_oauth",
+                                "msg": "issuer_fallback_applied",
+                                "provider_sub": provider_sub,
+                                "fallback_issuer": provider_iss,
+                            }
+                        },
+                    )
         except Exception as e:
             logger.warning(
                 "Failed to decode ID token",
@@ -686,9 +784,28 @@ async def google_callback(request: Request) -> Response:
                         "component": "google_oauth",
                         "msg": "id_token_decode_failed",
                         "error": str(e),
+                        "has_id_token": id_token is not None,
+                        "id_token_length": len(id_token) if id_token else 0,
                     }
                 },
             )
+
+        # Log extracted values for debugging
+        logger.info(
+            "Google OAuth token extraction results",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "msg": "token_extraction_results",
+                    "has_provider_iss": provider_iss is not None,
+                    "has_provider_sub": provider_sub is not None,
+                    "has_email": email is not None,
+                    "provider_iss": provider_iss,
+                    "provider_sub_length": len(provider_sub) if provider_sub else 0,
+                }
+            },
+        )
 
         # Fallback identifiers
         if not provider_sub:
@@ -778,10 +895,42 @@ async def google_callback(request: Request) -> Response:
 
         # If provider_iss is still missing, fail - do not insert rows with NULL provider_iss
         if not provider_iss:
+            # Provide specific diagnostic information
+            has_id_token = getattr(creds, "id_token", None) is not None
+            id_token_length = len(getattr(creds, "id_token", "") or "")
+
+            error_detail = "missing_provider_iss"
+            hint_parts = []
+
+            if not has_id_token:
+                error_detail = "google_no_id_token"
+                hint_parts.append("Google OAuth did not return an id_token - check Cloud Console client configuration")
+            else:
+                hint_parts.append("Google returned an id_token but it was malformed or missing the 'iss' claim")
+
+            hint_parts.append("Verify that your Google OAuth client has OpenID Connect enabled")
+            hint_parts.append("Ensure 'openid' scope is requested and supported by your client")
+
+            logger.error(
+                "Google OAuth provider_iss validation failed",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "component": "google_oauth",
+                        "msg": "provider_iss_validation_failed",
+                        "has_id_token": has_id_token,
+                        "id_token_length": id_token_length,
+                        "has_provider_sub": provider_sub is not None,
+                        "scopes_requested": creds.scope,
+                        "error_detail": error_detail,
+                    }
+                },
+            )
+
             raise_enveloped(
                 "invalid_state",
-                "missing_provider_iss",
-                hint="reconnect your Google account to provide issuer metadata",
+                error_detail,
+                hint="; ".join(hint_parts),
                 status=400,
             )
 
@@ -1218,6 +1367,13 @@ async def google_callback(request: Request) -> Response:
                 logger.warning(
                     "oauth.callback.fail_rate_high", extra={"meta": {"fail_rate": rate}}
                 )
+        except Exception:
+            pass
+
+        # Emit GOOGLE_TOKEN_EXCHANGE_FAILED metric
+        try:
+            from ..metrics import GOOGLE_TOKEN_EXCHANGE_FAILED
+            GOOGLE_TOKEN_EXCHANGE_FAILED.labels(user_id="unknown", reason=str(reason_code)).inc()
         except Exception:
             pass
 

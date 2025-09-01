@@ -112,6 +112,18 @@ gesahni-front() {
     npm run dev
 }
 
+# Function to start only backend
+gesahni-back() {
+    cd "$GESAHNI_DIR"
+    ./scripts/backend-only.sh
+}
+
+# Function to start only Qdrant vector store
+gesahni-qdrant() {
+    cd "$GESAHNI_DIR"
+    ./scripts/qdrant-only.sh
+}
+
 # Function to check Gesahni status
 gesahni-status() {
     echo "🔍 Checking Gesahni Development Status"
@@ -148,15 +160,16 @@ gesahni-help() {
     echo "🚀 Gesahni Development Commands"
     echo "==============================="
     echo ""
-    echo "Quick Start:"
-    echo "  gesahni-start     - Start both backend and frontend"
+    echo "Full Orchestra:"
+    echo "  gesahni-start     - Start Qdrant + backend + frontend"
     echo "  gesahni-stop      - Stop all development processes"
-    echo "  gesahni-restart   - Restart both services"
+    echo "  gesahni-restart   - Restart all services"
     echo "  gesahni-clear     - Clear cookies and restart fresh"
     echo ""
     echo "Individual Services:"
-    echo "  gesahni-back      - Start only backend"
-    echo "  gesahni-front     - Start only frontend"
+    echo "  gesahni-back      - Just backend (API debugging)"
+    echo "  gesahni-front     - Just frontend (UI development)"
+    echo "  gesahni-qdrant    - Just vector store (Qdrant testing)"
     echo ""
     echo "Utilities:"
     echo "  gesahni-status    - Check if services are running"
@@ -170,18 +183,20 @@ gesahni-help() {
     echo "URLs:"
     echo "  Frontend: http://localhost:3000"
     echo "  Backend:  http://localhost:8000"
+    echo "  Qdrant:   http://localhost:6333"
     echo "  API Docs: http://localhost:8000/docs"
     echo "  Health:   http://localhost:8000/healthz/ready"
 }
 
 # Aliases for quick access
-alias gs="gesahni-start"
+alias gs="gesahni-start"        # Full orchestra (Qdrant + backend + frontend)
 alias gx="gesahni-stop"
 alias gr="gesahni-restart"
 alias gc="gesahni-clear"
 alias gt="gesahni-test"
-alias gb="gesahni-back"
-alias gf="gesahni-front"
+alias gb="gesahni-back"         # Just backend (API debugging)
+alias gf="gesahni-front"        # Just frontend (UI dev)
+alias gq="gesahni-qdrant"       # Just vector store (Qdrant testing)
 alias gst="gesahni-status"
 alias go="gesahni-open"
 alias gh="gesahni-help"

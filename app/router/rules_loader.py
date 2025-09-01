@@ -1,0 +1,37 @@
+"""Router rules loader for YAML-based configuration."""
+
+import os
+import yaml
+from typing import Dict, Any
+
+
+def get_router_rules() -> Dict[str, Any]:
+    """Load router rules from YAML file.
+
+    Returns:
+        Dict containing router configuration rules
+    """
+    rules_path = os.getenv("ROUTER_RULES_PATH", "router_rules.yaml")
+
+    try:
+        with open(rules_path, 'r') as f:
+            rules = yaml.safe_load(f)
+            return rules or {}
+    except (FileNotFoundError, yaml.YAMLError) as e:
+        # Return default values if file not found or invalid
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to load router rules from {rules_path}: {e}")
+        return {}
+
+
+# Cache the rules to avoid repeated file reads
+_router_rules_cache = None
+
+
+def get_cached_router_rules() -> Dict[str, Any]:
+    """Get cached router rules, loading from file if not cached."""
+    global _router_rules_cache
+    if _router_rules_cache is None:
+        _router_rules_cache = get_router_rules()
+    return _router_rules_cache

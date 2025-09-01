@@ -127,6 +127,7 @@ function SettingsPageInner() {
             // Only redirect if unauthorized; otherwise show error state
             const message = (error as Error).message || '';
             if (/401|403/.test(message)) {
+                console.log('🚨 SETTINGS: Redirecting to login due to auth error');
                 router.push('/login');
             }
         }
@@ -308,7 +309,7 @@ function SettingsPageInner() {
                 const timer = setTimeout(() => {
                     if (!authState.is_authenticated) {
                         console.log('🎵 SETTINGS: Auth still not ready after Spotify OAuth, redirecting to login');
-                        router.replace('/login?next=%2Fsettings');
+                        router.replace(`/login?next=${encodeURIComponent('/settings')}`);
                     }
                 }, 3000); // Wait 3 seconds for auth refresh
 
@@ -318,7 +319,7 @@ function SettingsPageInner() {
 
         // Normal auth check for non-Spotify flows
         if (!authState.is_authenticated) {
-            router.replace('/login?next=%2Fsettings');
+            router.replace(`/login?next=${encodeURIComponent('/settings')}`);
         }
     }, [authState.is_authenticated, router]);
     */
@@ -503,7 +504,7 @@ function SettingsPageInner() {
 
                     <div className="space-y-3">
                         <Button
-                            onClick={() => window.location.href = '/login?next=%2Fsettings'}
+                            onClick={() => window.location.href = `/login?next=${encodeURIComponent('/settings')}`}
                             className="w-full"
                         >
                             {isSpotifyOAuthFailure ? 'Login & Try Spotify Again' : 'Go to Login'}

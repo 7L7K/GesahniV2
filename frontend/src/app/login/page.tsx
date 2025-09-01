@@ -18,6 +18,62 @@ function LoginPageInner() {
     const params = useSearchParams();
     const next = sanitizeNextPath(params?.get('next') || null, '/');
 
+    // Normalize nested/encoded `next` query parameters to prevent redirect loops.
+    // If the incoming `next` decodes to a login-related path or is deeply nested,
+    // replace the browser URL with a sanitized `next` (or remove it) once.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        // Read raw next directly from location.search to be resilient to Next's router updates
+        const sp = new URLSearchParams(window.location.search);
+        const rawNext = sp.get('next');
+        if (!rawNext) return;
+
+        // If sessionStorage indicates we've already normalized, skip
+        try {
+            if (window.sessionStorage && window.sessionStorage.getItem('sanitized_next_done')) return;
+        } catch {
+            // sessionStorage may be unavailable; continue but be conservative
+        }
+
+        const sanitized = sanitizeNextPath(rawNext, '/');
+
+        try {
+            // If sanitized equals '/', remove next param from URL without navigation
+            if (sanitized === '/') {
+                try { window.sessionStorage && window.sessionStorage.setItem('sanitized_next_done', '1'); } catch { }
+                if (window.history && window.history.replaceState) {
+                    const newUrl = '/login';
+                    if (window.location.pathname + window.location.search !== newUrl) {
+                        window.history.replaceState(null, '', newUrl);
+                    }
+                } else {
+                    router.replace('/login');
+                }
+                return;
+            }
+
+            // If decoded raw differs from sanitized, replace URL once
+            let decodedRaw = rawNext;
+            try { decodedRaw = decodeURIComponent(rawNext); } catch { }
+
+            if (decodedRaw !== sanitized) {
+                try { window.sessionStorage && window.sessionStorage.setItem('sanitized_next_done', '1'); } catch { }
+                const newPath = `/login?next=${encodeURIComponent(sanitized)}`;
+                if (window.history && window.history.replaceState) {
+                    // Only replace if it would change the current URL to avoid loops
+                    if (window.location.pathname + window.location.search !== newPath) {
+                        window.history.replaceState(null, '', newPath);
+                    }
+                } else {
+                    router.replace(newPath);
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to normalize next param', e);
+        }
+    }, [router]);
+
     // Handle Google OAuth redirect carrying tokens in query
     useEffect(() => {
         const access = params?.get('access_token');
@@ -46,7 +102,20 @@ function LoginPageInner() {
                 console.info('LOGIN oauth.orchestrator.refresh.complete', {
                     timestamp: new Date().toISOString(),
                 });
-                router.replace(next);
+                // Prevent redirect loops by not redirecting to login-related pages
+                if (!next.includes('/login') && !next.includes('/sign-in') && !next.includes('/sign-up')) {
+                    router.replace(next);
+                } else {
+                    router.replace('/');
+                }
+                // Scrub OAuth query params from URL after successful auth
+                try {
+                    const url = new URL(window.location.href);
+                    ['code', 'state', 'scope', 'authuser', 'prompt', 'hd'].forEach(p => url.searchParams.delete(p));
+                    window.history.replaceState({}, document.title, url.toString());
+                } catch (err) {
+                    // ignore
+                }
             });
         } else if (params?.get('logout')) {
             console.info('LOGIN logout_redirect: Skipping token setup due to logout parameter');
@@ -159,7 +228,12 @@ function LoginPageInner() {
                     timestamp: new Date().toISOString(),
                 });
 
-                router.replace(next);
+                // Prevent redirect loops by not redirecting to login-related pages
+                if (!next.includes('/login') && !next.includes('/sign-in') && !next.includes('/sign-up')) {
+                    router.replace(next);
+                } else {
+                    router.replace('/');
+                }
 
                 console.info('LOGIN complete.success', {
                     timestamp: new Date().toISOString(),

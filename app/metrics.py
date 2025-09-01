@@ -4,6 +4,51 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     Gauge = None  # type: ignore
 
+
+# Lightweight stub used when metric registration collides or prometheus is
+# unavailable at import time. Keeps call sites working without raising.
+class _MetricStub:
+    def __init__(self, name=None, *a, **k):
+        self._name = name
+        self.value = 0.0
+
+    def labels(self, *a, **k):
+        return self
+
+    def inc(self, amount: float = 1.0):
+        try:
+            self.value += amount
+        except Exception:
+            pass
+
+    def observe(self, amount: float):
+        try:
+            self.value += amount
+        except Exception:
+            pass
+
+
+# Wrap real prometheus Counter/Histogram to tolerate duplicate registration
+# by falling back to _MetricStub when registry already contains the timeseries.
+try:
+    _orig_Counter = Counter
+    _orig_Histogram = Histogram
+
+    def Counter(name, doc, *args, **kwargs):
+        try:
+            return _orig_Counter(name, doc, *args, **kwargs)
+        except ValueError:
+            return _MetricStub(name)
+
+    def Histogram(name, doc, *args, **kwargs):
+        try:
+            return _orig_Histogram(name, doc, *args, **kwargs)
+        except ValueError:
+            return _MetricStub(name)
+except Exception:
+    # If anything goes wrong, keep the existing Counter/Histogram (likely stubs)
+    pass
+
 SPOTIFY_REQUESTS = Counter(
     "integration_spotify_requests_total",
     "Spotify requests",
@@ -98,6 +143,24 @@ GOOGLE_DISCONNECT_SUCCESS = Counter(
     "google_disconnect_success_total",
     "Google disconnect success",
     ["user_id"],
+)
+
+GOOGLE_TOKEN_EXCHANGE_OK = Counter(
+    "google_token_exchange_ok_total",
+    "Google token exchange success",
+    ["user_id", "scopes_hash"],
+)
+
+GOOGLE_TOKEN_EXCHANGE_FAILED = Counter(
+    "google_token_exchange_failed_total",
+    "Google token exchange failed",
+    ["user_id", "reason"],
+)
+
+GOOGLE_TOKEN_EXCHANGE_OK = Counter(
+    "google_token_exchange_ok_total",
+    "Google token exchange success",
+    ["user_id", "scopes_hash"],
 )
 
 SPOTIFY_LATENCY = Histogram(

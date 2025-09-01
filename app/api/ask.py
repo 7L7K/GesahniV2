@@ -17,7 +17,8 @@ from app.auth_core import csrf_validate, require_scope as require_scope_core
 from app.deps.user import get_current_user_id, require_user
 from app.otel_utils import get_trace_id_hex, start_span
 from app.policy import moderation_precheck
-from app.router import OLLAMA_TIMEOUT_MS, OPENAI_TIMEOUT_MS
+from app.router import OPENAI_TIMEOUT_MS
+from app.router import OLLAMA_TIMEOUT_MS
 from app.security import verify_token
 from app.telemetry import hash_user_id
 

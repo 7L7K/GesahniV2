@@ -22,7 +22,17 @@ class GoogleTokenResponse:
     expires_at: int
 
 
+from .errors import OAuthError
+from .constants import ERR_OAUTH_EXCHANGE_FAILED, ERR_OAUTH_INVALID_GRANT, METRIC_TOKEN_EXCHANGE_FAILED, METRIC_TOKEN_EXCHANGE_OK
+from .http_exchange import async_token_exchange
+
+
 class GoogleOAuthError(Exception):
+    pass
+
+
+class InvalidGrantError(GoogleOAuthError):
+    """Special exception for invalid_grant errors (user revoked consent)."""
     pass
 
 
@@ -52,49 +62,40 @@ class GoogleOAuth:
         return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
     async def exchange_code_for_tokens(self, code: str, code_verifier: str | None = None) -> dict[str, Any]:
-        token_url = "https://oauth2.googleapis.com/token"
-        data = {
-            "code": code,
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "redirect_uri": self.redirect_uri,
-            "grant_type": "authorization_code",
-        }
+        # Enforce PKCE presence and length
+        if not code_verifier or not (43 <= len(code_verifier) <= 128):
+            from .errors import OAuthError as _OAuthError
+            from .constants import ERR_OAUTH_EXCHANGE_FAILED
 
-        # Add PKCE code_verifier if provided
-        if code_verifier:
-            data["code_verifier"] = code_verifier
+            raise _OAuthError(code=ERR_OAUTH_EXCHANGE_FAILED, http_status=400, reason="missing_or_invalid_pkce", extra=None)
 
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            r = await client.post(token_url, data=data, headers=headers)
-            if r.status_code != 200:
-                # Log token exchange failure with masked error body
-                error_body = r.text[:400] if r.text else ""
-                # Mask potential tokens in error response
-                if "access_token" in error_body or "refresh_token" in error_body:
-                    error_body = "[REDACTED_TOKEN_DATA]"
-
-                logger.warning(
-                    "google_token_exchange_failed",
-                    extra={
-                        "meta": {
-                            "method": "async_httpx",
-                            "status": r.status_code,
-                            "error_class": "HTTPError",
-                            "error_detail": f"HTTP {r.status_code}",
-                            "response_body": error_body,
-                            "pkce_used": bool(code_verifier),
-                        }
-                    },
-                )
-                raise GoogleOAuthError(f"Token exchange failed: {r.status_code} {r.text}")
-            td = r.json()
-            now = int(time.time())
-            expires_in = int(td.get("expires_in", 3600))
-            td["expires_at"] = now + expires_in
+        # Call unified async token exchange helper and emit metrics
+        from ...metrics import GOOGLE_TOKEN_EXCHANGE_OK, GOOGLE_TOKEN_EXCHANGE_FAILED
+        try:
+            td = await async_token_exchange(code, code_verifier=code_verifier)
+            try:
+                scopes_hash = "unknown"
+                GOOGLE_TOKEN_EXCHANGE_OK.labels(user_id="unknown", scopes_hash=scopes_hash).inc()
+            except Exception:
+                pass
             return td
+        except OAuthError:
+            # Integration layer will have sanitized the OAuthError; emit failure metric and re-raise
+            try:
+                GOOGLE_TOKEN_EXCHANGE_FAILED.labels(user_id="unknown", reason="oauth_error").inc()
+            except Exception:
+                pass
+            raise
+        except Exception as e:
+            logger.error("Token exchange unexpected error", extra={"meta": {"error": str(e)}})
+            try:
+                GOOGLE_TOKEN_EXCHANGE_FAILED.labels(user_id="unknown", reason="internal_error").inc()
+            except Exception:
+                pass
+            from .errors import OAuthError as _OAuthError
+            from .constants import ERR_OAUTH_EXCHANGE_FAILED
+
+            raise _OAuthError(code=ERR_OAUTH_EXCHANGE_FAILED, http_status=500, reason="internal_error", extra=None)
 
     async def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
         token_url = "https://oauth2.googleapis.com/token"
@@ -106,8 +107,24 @@ class GoogleOAuth:
         }
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         async with httpx.AsyncClient(timeout=30.0) as client:
-            r = await client.post(token_url, data=data, headers=headers)
+            # Retry once on network errors/timeouts
+            try:
+                r = await client.post(token_url, data=data, headers=headers)
+            except (httpx.RequestError, httpx.TimeoutException) as exc:
+                try:
+                    r = await client.post(token_url, data=data, headers=headers)
+                except Exception:
+                    raise GoogleOAuthError(f"Token refresh failed: network error: {exc}")
+
             if r.status_code != 200:
+                # Check for invalid_grant error (user revoked consent)
+                try:
+                    error_data = r.json()
+                    if error_data.get("error") == "invalid_grant":
+                        # Create a special error for invalid_grant to distinguish from other failures
+                        raise InvalidGrantError(f"Token refresh failed due to invalid_grant: {r.status_code} {r.text}")
+                except Exception:
+                    pass  # Fall through to generic error
                 raise GoogleOAuthError(f"Token refresh failed: {r.status_code} {r.text}")
             td = r.json()
             now = int(time.time())
@@ -150,7 +167,21 @@ def make_authorize_url(state: str) -> str:
     return GoogleOAuth().get_authorization_url(state)
 
 
-async def exchange_code(code: str, code_verifier: str | None = None) -> ThirdPartyToken:
+async def exchange_code(code: str, state: str | None = None, verify_state: bool = True, code_verifier: str | None = None) -> ThirdPartyToken:
+    """Exchange an authorization code for a ThirdPartyToken.
+
+    If `state` is provided and `verify_state` is True, the state will be verified
+    (consuming nonce when applicable). Returns a ThirdPartyToken stub with
+    user_id left for the caller to resolve (caller typically extracts email/sub).
+    """
+    if state and verify_state:
+        try:
+            _verify_state(state)
+        except Exception:
+            from ..error_envelope import raise_enveloped
+
+            raise_enveloped("invalid_state", "Invalid state", hint="Retry the OAuth flow", status=400)
+
     oauth = GoogleOAuth()
     td = await oauth.exchange_code_for_tokens(code, code_verifier)
     now = int(time.time())
@@ -167,6 +198,11 @@ async def exchange_code(code: str, code_verifier: str | None = None) -> ThirdPar
         created_at=now,
         updated_at=now,
     )
+
+    # Add id_token as an attribute so the callback can access it for provider_iss extraction
+    # This is temporary and only used during the OAuth callback process
+    if "id_token" in td:
+        token.id_token = td["id_token"]
 
     return token
 
@@ -330,269 +366,6 @@ def build_auth_url(user_id: str, state_payload: dict | None = None) -> tuple[str
     flow.state = state
     return flow.authorization_url()[0], state
 
-
-def exchange_code(code: str, state: str, verify_state: bool = True, code_verifier: str | None = None) -> Any:
-    """Exchange an authorization code for credentials.
-
-    Args:
-        code: Authorization code from Google
-        state: State parameter (verified if verify_state=True)
-        verify_state: Whether to verify the state parameter
-        code_verifier: PKCE code verifier for enhanced security (optional)
-
-    Returns:
-        Credentials object with token, refresh_token, etc.
-
-    Raises:
-        HTTPException: On exchange failure or invalid state
-    """
-    if verify_state:
-        try:
-            _verify_state(state)
-        except Exception as e:
-            logger.error(
-                "State verification failed",
-                extra={
-                    "meta": {
-                        "error_class": "StateVerificationError",
-                        "error_detail": str(e),
-                        "cause": "Invalid or expired state parameter",
-                    }
-                },
-            )
-            from ..error_envelope import raise_enveloped
-
-            raise_enveloped("invalid_state", "Invalid state", hint="Retry the OAuth flow", status=400)
-
-    if not _GOOGLE_AVAILABLE or _Flow is None:  # pragma: no cover - env-dependent
-        # Optional google libs are unavailable; fall back to manual token exchange below.
-        # We still attempt the manual HTTP token exchange to support lightweight environments.
-        logger.warning(
-            "Google OAuth client libs unavailable; using manual token exchange"
-        )
-
-    # First try via official client (if available)
-    try:
-        from ...otel_utils import start_span
-
-        # Record whether PKCE was used (best-effort: present in code or flow)
-        pkce_used = False
-        try:
-            pkce_used = bool(
-                getattr(flow, "code_verifier", None)
-                or "pkce" in getattr(flow, "scopes", [])
-            )
-        except Exception:
-            pkce_used = False
-
-        with start_span(
-            "google.oauth.token.exchange",
-            {"method": "google_client_lib", "pkce_used": pkce_used},
-        ) as _span:
-            flow = create_flow()
-            # Ensure redirect_uri is explicitly set on the Flow before exchanging
-            # Some environments require the redirect_uri parameter to be present
-            # on the token exchange request; set it from our client config to
-            # avoid "Missing parameter: redirect_uri" errors.
-            try:
-                flow.redirect_uri = CLIENT_CONFIG["web"]["redirect_uris"][0]
-            except Exception:
-                # Best-effort only; proceed and let the library raise if needed
-                pass
-            flow.fetch_token(code=code)
-            logger.info(
-                "Token exchange successful via Google client library",
-                extra={
-                    "meta": {
-                        "method": "google_client_lib",
-                        "status": "success",
-                        "pkce_used": pkce_used,
-                    }
-                },
-            )
-            return flow.credentials
-    except Exception as e:
-        logger.warning(
-            "Google client library token exchange failed, falling back to manual HTTP",
-            extra={
-                "meta": {
-                    "method": "google_client_lib",
-                    "status": "failed",
-                    "error": str(e),
-                }
-            },
-        )
-        # Fallback: manual token exchange to avoid oauthlib scope_changed issues
-        try:
-            # Prefer requests if available for simplicity
-            try:
-                from datetime import datetime, timedelta
-
-                import requests
-
-                logger.info(
-                    "Starting manual HTTP token exchange",
-                    extra={
-                        "meta": {
-                            "method": "manual_http_requests",
-                            "token_uri": CLIENT_CONFIG["web"]["token_uri"],
-                        }
-                    },
-                )
-
-                start_time = time.time()
-                from ...otel_utils import start_span
-
-                # Prepare token exchange payload
-                payload = {
-                    "code": code,
-                    "client_id": CLIENT_CONFIG["web"]["client_id"],
-                    "client_secret": CLIENT_CONFIG["web"]["client_secret"],
-                    "redirect_uri": CLIENT_CONFIG["web"]["redirect_uris"][0],
-                    "grant_type": "authorization_code",
-                }
-
-                # Add PKCE code_verifier if provided
-                if code_verifier:
-                    payload["code_verifier"] = code_verifier
-
-                with start_span(
-                    "google.oauth.token.exchange", {"method": "manual_http_requests", "pkce_used": bool(code_verifier)}
-                ) as _span:
-                    resp = requests.post(
-                        CLIENT_CONFIG["web"]["token_uri"],
-                        data=payload,
-                        timeout=10,
-                    )
-                duration = (time.time() - start_time) * 1000
-
-                if not resp.ok:
-                    # Log token exchange failure with masked error body
-                    error_body = resp.text[:400] if resp.text else ""
-                    # Mask potential tokens in error response
-                    if "access_token" in error_body or "refresh_token" in error_body:
-                        error_body = "[REDACTED_TOKEN_DATA]"
-
-                    logger.warning(
-                        "google_token_exchange_failed",
-                        extra={
-                            "meta": {
-                                "method": "manual_http_requests",
-                                "status": resp.status_code,
-                                "latency_ms": duration,
-                                "error_class": "HTTPError",
-                                "error_detail": f"HTTP {resp.status_code}",
-                                "response_body": error_body,
-                                "pkce_used": bool(code_verifier),
-                            }
-                        },
-                    )
-                from ..error_envelope import raise_enveloped
-
-                raise_enveloped("oauth_exchange_failed", "oauth exchange failed", status=400)
-
-                data = resp.json()
-                logger.info(
-                    "Manual HTTP token exchange successful",
-                    extra={
-                        "meta": {
-                            "method": "manual_http_requests",
-                            "status": resp.status_code,
-                            "latency_ms": duration,
-                            "has_access_token": "access_token" in data,
-                            "has_refresh_token": "refresh_token" in data,
-                            "has_id_token": "id_token" in data,
-                        }
-                    },
-                )
-
-            except ModuleNotFoundError:
-                # Fall back to stdlib when requests isn't installed
-                import json as _json
-                import urllib.parse
-                import urllib.request
-                from datetime import datetime, timedelta
-
-                logger.info(
-                    "Starting manual HTTP token exchange (stdlib)",
-                    extra={
-                        "meta": {
-                            "method": "manual_http_stdlib",
-                            "token_uri": CLIENT_CONFIG["web"]["token_uri"],
-                        }
-                    },
-                )
-
-                start_time = time.time()
-
-                # Prepare token exchange payload for stdlib
-                payload_data = {
-                    "code": code,
-                    "client_id": CLIENT_CONFIG["web"]["client_id"],
-                    "client_secret": CLIENT_CONFIG["web"]["client_secret"],
-                    "redirect_uri": CLIENT_CONFIG["web"]["redirect_uris"][0],
-                    "grant_type": "authorization_code",
-                }
-
-                # Add PKCE code_verifier if provided
-                if code_verifier:
-                    payload_data["code_verifier"] = code_verifier
-
-                post_data = urllib.parse.urlencode(payload_data).encode()
-                req = urllib.request.Request(
-                    CLIENT_CONFIG["web"]["token_uri"],
-                    data=post_data,
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                )
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    body = resp.read().decode()
-                    data = _json.loads(body)
-
-                duration = (time.time() - start_time) * 1000
-                logger.info(
-                    "Manual HTTP token exchange successful (stdlib)",
-                    extra={
-                        "meta": {
-                            "method": "manual_http_stdlib",
-                            "status": resp.status,
-                            "latency_ms": duration,
-                            "has_access_token": "access_token" in data,
-                            "has_refresh_token": "refresh_token" in data,
-                            "has_id_token": "id_token" in data,
-                        }
-                    },
-                )
-
-            class _SimpleCreds:
-                def __init__(self, d):
-                    self.token = d.get("access_token")
-                    self.refresh_token = d.get("refresh_token")
-                    self.id_token = d.get("id_token")
-                    scope_raw = d.get("scope") or " ".join(get_google_scopes())
-                    self.scopes = scope_raw.split()
-                    expires_in = int(d.get("expires_in") or 3600)
-                    self.expiry = datetime.now(UTC) + timedelta(seconds=expires_in)
-                    self.token_uri = CLIENT_CONFIG["web"]["token_uri"]
-                    self.client_id = CLIENT_CONFIG["web"]["client_id"]
-                    self.client_secret = CLIENT_CONFIG["web"]["client_secret"]
-
-            return _SimpleCreds(data)
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(
-                "Manual token exchange failed",
-                extra={
-                    "meta": {
-                        "error_class": type(e).__name__,
-                        "error_detail": str(e),
-                        "cause": "Unexpected error during manual token exchange",
-                    }
-                },
-            )
-            from ..error_envelope import raise_enveloped
-
-            raise_enveloped("oauth_exchange_failed", f"oauth exchange failed: {e}", status=400)
 
 
 def refresh_if_needed(creds: Any) -> Any:

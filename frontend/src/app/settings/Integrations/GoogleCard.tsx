@@ -61,6 +61,8 @@ export default function GoogleConnectCard({ onManage }: { onManage?: () => void 
     const [expiresAt, setExpiresAt] = useState<number | null>(null);
     const [requiredScopesOk, setRequiredScopesOk] = useState<boolean | undefined>(undefined);
     const inflight = useRef<AbortController | null>(null);
+    const lastFetchTime = useRef<number>(0);
+    const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const hasGmailScope = useCallback((s: string[]) => s.some(x => x.includes('gmail.') || x.endsWith('/gmail.send') || x.endsWith('/gmail.readonly')), []);
     const hasCalendarScope = useCallback((s: string[]) => s.some(x => x.includes('calendar.') || x.endsWith('/calendar.events') || x.endsWith('/calendar.readonly')), []);
@@ -71,7 +73,34 @@ export default function GoogleConnectCard({ onManage }: { onManage?: () => void 
         history.replaceState({}, '', pathname + search);
     }, []);
 
-    async function fetchStatus(silent = false) {
+    async function fetchStatus(silent = false, force = false) {
+        const now = Date.now();
+        const timeSinceLastFetch = now - lastFetchTime.current;
+
+        // Rate limiting: minimum 30 seconds with ±20% jitter
+        if (!force && timeSinceLastFetch < 30000) {
+            const remainingMs = 30000 - timeSinceLastFetch;
+            console.log('🔄 GoogleCard: Rate limited, waiting', remainingMs, 'ms');
+
+            // Clear any existing timeout
+            if (fetchTimeoutRef.current) {
+                clearTimeout(fetchTimeoutRef.current);
+            }
+
+            // Schedule delayed fetch
+            fetchTimeoutRef.current = setTimeout(() => {
+                fetchStatus(silent, true); // Force after delay
+            }, remainingMs);
+
+            return false; // Don't fetch now
+        }
+
+        // Add jitter to prevent thundering herd (±20%)
+        const jitter = (Math.random() - 0.5) * 0.4 * 30000; // ±20% of 30s
+        const effectiveInterval = 30000 + jitter;
+
+        lastFetchTime.current = now;
+
         // cancel previous request
         inflight.current?.abort();
         const controller = new AbortController();
@@ -79,12 +108,22 @@ export default function GoogleConnectCard({ onManage }: { onManage?: () => void 
 
         try {
             if (!silent) setStatus('loading');
+            console.log('🔄 GoogleCard: Fetching status (rate limited)');
             const j = await getGoogleStatus();
             const n = normalizeFromApi(j);
             setScopes(n.scopes);
             setExpiresAt(n.expiresAt ?? null);
             setRequiredScopesOk(n.requiredScopesOk);
             setStatus(n.connected ? 'connected' : (j?.degraded_reason ? 'error' : 'not_connected'));
+
+            // Schedule next automatic refresh (with jitter)
+            if (fetchTimeoutRef.current) {
+                clearTimeout(fetchTimeoutRef.current);
+            }
+            fetchTimeoutRef.current = setTimeout(() => {
+                fetchStatus(true, false); // Silent refresh
+            }, effectiveInterval);
+
             return n.connected;
         } catch (e: any) {
             if (e?.name === 'AbortError') return false;
@@ -111,6 +150,27 @@ export default function GoogleConnectCard({ onManage }: { onManage?: () => void 
                     clearHash();
                 }
 
+                // Compatibility fallback: if backend returned tokens in the query
+                // string (e.g. ?access_token=...&refresh_token=...), detect them and
+                // trigger a status refresh so the UI updates immediately. Also
+                // scrub tokens from the URL to avoid leaking them into history.
+                try {
+                    const sp = new URLSearchParams(window.location.search || '');
+                    const at = sp.get('access_token');
+                    const rt = sp.get('refresh_token');
+                    if ((at && at.length > 0) || (rt && rt.length > 0)) {
+                        console.log('🔗 GoogleCard: detected tokens in query string, running silent refresh');
+                        toast.success('Google connected');
+                        // Remove sensitive query params from URL while preserving hash
+                        const cleanSearch = window.location.search.replace(/([?&])(?:access_token|refresh_token)=[^&]*/g, '').replace(/^\?&?/, '?').replace(/\?$/, '');
+                        const newUrl = window.location.pathname + cleanSearch + (window.location.hash || '');
+                        history.replaceState({}, '', newUrl);
+                        await fetchStatus(true);
+                    }
+                } catch (err) {
+                    console.error('🔗 GoogleCard: error checking query tokens', err);
+                }
+
                 try {
                     const apiUrl = `${process.env.NEXT_PUBLIC_API_ORIGIN || 'http://localhost:8000'}/v1/health/google`;
                     console.log('🔗 GoogleCard: Making health request to:', apiUrl);
@@ -131,7 +191,12 @@ export default function GoogleConnectCard({ onManage }: { onManage?: () => void 
             })();
         }
 
-        return () => inflight.current?.abort();
+        return () => {
+            inflight.current?.abort();
+            if (fetchTimeoutRef.current) {
+                clearTimeout(fetchTimeoutRef.current);
+            }
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -250,7 +315,7 @@ export default function GoogleConnectCard({ onManage }: { onManage?: () => void 
                             <Loader2 className="h-5 w-5 animate-spin" />
                         ) : status === 'connected' ? (
                             <>
-                                <Button variant="secondary" className="gap-2" onClick={() => fetchStatus(true)} data-testid="btn-refresh">
+                                <Button variant="secondary" className="gap-2" onClick={() => fetchStatus(true, true)} data-testid="btn-refresh">
                                     <RefreshCw className="h-4 w-4" />
                                     Check
                                 </Button>

@@ -1222,12 +1222,59 @@ class TokenRefreshService:
             return refreshed_token
 
         except Exception as e:
-            # Record light backoff to avoid tight refresh loops
+            # Import here to avoid circular dependencies
+            from .integrations.google.oauth import InvalidGrantError
+
+            # Handle invalid_grant errors specially (user revoked consent)
+            if isinstance(e, InvalidGrantError):
+                logger.warning("🔄 GOOGLE REFRESH: Invalid grant detected - user revoked consent", extra={
+                    "meta": {"user_id": token.user_id, "error_type": "invalid_grant"}
+                })
+
+                # Mark token as invalid to prevent further refresh attempts
+                try:
+                    from .models.third_party_tokens import ThirdPartyToken
+                    invalid_token = ThirdPartyToken(
+                        id=token.id,
+                        user_id=token.user_id,
+                        provider="google",
+                        access_token="",  # Clear access token
+                        refresh_token=None,  # Clear refresh token
+                        scope=None,
+                        expires_at=0,
+                        is_valid=False,  # Mark as invalid
+                        provider_iss=token.provider_iss,
+                        provider_sub=token.provider_sub,
+                    )
+                    await upsert_token(invalid_token)
+
+                    # Emit metric for invalid_grant
+                    try:
+                        from .metrics import GOOGLE_REFRESH_FAILED
+                        GOOGLE_REFRESH_FAILED.labels(user_id=token.user_id, reason="invalid_grant").inc()
+                    except Exception:
+                        pass
+                except Exception as mark_err:
+                    logger.error("🔄 GOOGLE REFRESH: Failed to mark token invalid", extra={
+                        "meta": {"user_id": token.user_id, "error": str(mark_err)}
+                    })
+
+                return None
+
+            # For other errors, use normal backoff
             try:
                 attempt_key = f"{token.user_id}:google"
                 self._next_refresh_after[attempt_key] = __import__("time").time() + 600
             except Exception:
                 pass
+
+            # Emit metric for other refresh failures
+            try:
+                from .metrics import GOOGLE_REFRESH_FAILED
+                GOOGLE_REFRESH_FAILED.labels(user_id=token.user_id, reason="other").inc()
+            except Exception:
+                pass
+
             logger.warning("🔄 GOOGLE REFRESH: Failed (masked)", extra={
                 "meta": {"user_id": token.user_id, "error_type": type(e).__name__}
             })

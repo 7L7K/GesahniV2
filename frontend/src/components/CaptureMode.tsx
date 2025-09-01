@@ -24,7 +24,7 @@ function CaptureInner() {
   useEffect(() => {
     try {
       if (!isAuthed() && !getToken()) {
-        router.replace('/login?next=%2Fcapture');
+        router.replace(`/login?next=${encodeURIComponent('/capture')}`);
         return;
       }
     } catch {

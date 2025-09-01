@@ -44,8 +44,8 @@ module.exports = {
     middlewarePrefetch: 'flexible',
   },
   // Bundle optimization
-  optimizeFonts: true,
-  swcMinify: true,
+  // optimizeFonts and swcMinify are deprecated in Next.js 15+
+  // These are now enabled by default
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? {
       exclude: ['error', 'warn']

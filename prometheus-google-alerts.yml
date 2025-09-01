@@ -1,0 +1,67 @@
+# Google OAuth Integration Alerting Rules
+# These rules should be added to your Prometheus alerting configuration
+
+groups:
+  - name: google_oauth_alerts
+    rules:
+      # Page alert: High token exchange failure rate
+      - alert: GoogleOAuthTokenExchangeFailureRate
+        expr: rate(google_token_exchange_failed_total[5m]) > 2/60
+        for: 2m
+        labels:
+          severity: page
+          service: google_oauth
+        annotations:
+          summary: "High Google OAuth token exchange failure rate"
+          description: "Google OAuth token exchange is failing at >2/min ({{ $value }} failures/min)"
+          runbook_url: "https://docs.example.com/google-oauth-troubleshooting"
+
+      # Warning alert: High refresh failure rate
+      - alert: GoogleOAuthRefreshFailureRate
+        expr: |
+          rate(google_refresh_failed_total{reason!="invalid_grant"}[15m]) /
+          (rate(google_refresh_success_total[15m]) + rate(google_refresh_failed_total[15m])) > 0.01
+        for: 5m
+        labels:
+          severity: warn
+          service: google_oauth
+        annotations:
+          summary: "High Google OAuth refresh failure rate"
+          description: "Google OAuth token refresh failure rate >1% ({{ $value | printf "%.2f" }})"
+          runbook_url: "https://docs.example.com/google-oauth-troubleshooting"
+
+      # Warning alert: Invalid grant detected (user revoked consent)
+      - alert: GoogleOAuthInvalidGrantDetected
+        expr: increase(google_refresh_failed_total{reason="invalid_grant"}[1h]) > 0
+        for: 1m
+        labels:
+          severity: warn
+          service: google_oauth
+        annotations:
+          summary: "Google OAuth invalid_grant detected"
+          description: "Users have revoked Google OAuth consent ({{ $value }} invalid_grant errors in last hour)"
+          runbook_url: "https://docs.example.com/google-oauth-revocation"
+
+      # Warning alert: Provider sub mismatch (account switching)
+      - alert: GoogleOAuthProviderSubMismatch
+        expr: increase(auth_identity_resolve_total{source="google",result="provider_sub_mismatch"}[1h]) > 0
+        for: 1m
+        labels:
+          severity: warn
+          service: google_oauth
+        annotations:
+          summary: "Google OAuth provider sub mismatch detected"
+          description: "Google OAuth account switching detected ({{ $value }} mismatches in last hour)"
+          runbook_url: "https://docs.example.com/google-oauth-account-switching"
+
+      # Info alert: Scope drift detected
+      - alert: GoogleOAuthScopeDriftDetected
+        expr: increase(auth_identity_resolve_total{source="google_scope_drift"}[1h]) > 0
+        for: 1m
+        labels:
+          severity: info
+          service: google_oauth
+        annotations:
+          summary: "Google OAuth scope drift detected"
+          description: "Google OAuth scope drift detected ({{ $value }} missing scopes in last hour)"
+          runbook_url: "https://docs.example.com/google-oauth-scope-drift"

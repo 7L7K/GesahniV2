@@ -15,7 +15,7 @@ function OnboardingPageInner() {
     useEffect(() => {
         // Only check onboarding status if authenticated
         if (!authState.is_authenticated) {
-            router.replace('/login?next=%2Fonboarding');
+            router.replace(`/login?next=${encodeURIComponent('/onboarding')}`);
             return;
         }
 

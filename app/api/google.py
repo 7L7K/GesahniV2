@@ -98,9 +98,60 @@ async def google_status(request: Request):
     if not token:
         return JSONResponse({"connected": False, "required_scopes_ok": False, "scopes": [], "expires_at": None, "last_refresh_at": None, "degraded_reason": "no_token", "services": {}}, status_code=200)
 
+    # Check if token is marked as invalid (due to revocation)
+    if not token.is_valid:
+        return JSONResponse({
+            "connected": False,
+            "required_scopes_ok": False,
+            "scopes": [],
+            "expires_at": token.expires_at,
+            "last_refresh_at": token.last_refresh_at,
+            "refreshed": False,
+            "degraded_reason": "consent_revoked",
+            "services": {}
+        }, status_code=200)
+
     # Check scopes
     token_scopes = (token.scope or "").split()
     required_ok = all(s in token_scopes for s in required_scopes)
+
+    # Scope drift detection: log missing scopes once per day per user
+    if not required_ok:
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Calculate missing scopes
+        missing_scopes = [s for s in required_scopes if s not in token_scopes]
+
+        # Log scope drift detection (once per day to avoid noise)
+        import hashlib
+        scope_drift_key = f"{current_user}:google:scope_drift:{hashlib.md5(''.join(missing_scopes).encode()).hexdigest()[:8]}"
+        today = str(int(time.time()) // 86400)  # Day-based key
+
+        # Simple in-memory cache for daily logging (could be Redis in production)
+        if not hasattr(logger, '_scope_drift_cache'):
+            logger._scope_drift_cache = set()
+
+        cache_key = f"{scope_drift_key}:{today}"
+        if cache_key not in logger._scope_drift_cache:
+            logger._scope_drift_cache.add(cache_key)
+            logger.warning("🔍 GOOGLE SCOPE DRIFT: Missing required scopes detected", extra={
+                "meta": {
+                    "user_id": current_user,
+                    "missing_scopes": missing_scopes,
+                    "current_scopes": token_scopes,
+                    "required_scopes": required_scopes
+                }
+            })
+
+            # Emit metrics for missing scopes
+            try:
+                from .metrics import AUTH_IDENTITY_RESOLVE
+                for scope in missing_scopes:
+                    # Use existing metric with scope info
+                    AUTH_IDENTITY_RESOLVE.labels(source="google_scope_drift", result=f"missing_{scope.split('/')[-1]}").inc()
+            except Exception:
+                pass
 
     # Track if token was refreshed
     refreshed = False
@@ -111,7 +162,10 @@ async def google_status(request: Request):
         try:
             if not token.refresh_token:
                 return JSONResponse({"connected": False, "required_scopes_ok": required_ok, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "refreshed": refreshed, "degraded_reason": "expired_no_refresh"}, status_code=200)
-            td = await refresh_token(token.refresh_token)
+            # Use deduped refresh implementation
+            from ..integrations.google.refresh import refresh_dedup
+
+            refreshed, td = await refresh_dedup(current_user, token.refresh_token)
             # persist refreshed tokens
             now = int(time.time())
             expires_at = int(td.get("expires_at", now + int(td.get("expires_in", 3600))))

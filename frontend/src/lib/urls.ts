@@ -119,15 +119,40 @@ export function sanitizeNextPath(raw: string | null | undefined, fallback: strin
     const input = (raw || '').trim();
     if (!input) return fallback;
 
+    // URL-decode the input multiple times to handle nested encoding
+    let decodedInput: string = input;
+    let previousDecoded: string;
+
+    try {
+        // Decode up to 5 levels deep to prevent infinite loops from malicious input
+        for (let i = 0; i < 5; i++) {
+            previousDecoded = decodedInput;
+            decodedInput = decodeURIComponent(decodedInput);
+
+            // Stop if decoding didn't change anything (no more encoding layers)
+            if (decodedInput === previousDecoded) {
+                break;
+            }
+        }
+    } catch {
+        // If decoding fails at any point, use the last successfully decoded version
+        decodedInput = previousDecoded || input;
+    }
+
     // Reject absolute URLs to prevent open redirects
     // This regex matches URLs with protocol (http:, https:, etc.) followed by //
-    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(input)) return fallback;
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(decodedInput)) return fallback;
 
     // Reject protocol-relative URLs (starting with // but not ///)
-    if (input.startsWith('//') && !input.startsWith('///')) return fallback;
+    if (decodedInput.startsWith('//') && !decodedInput.startsWith('///')) return fallback;
+
+    // Prevent redirect loops by blocking login-related paths
+    if (decodedInput.includes('/login') || decodedInput.includes('/sign-in') || decodedInput.includes('/sign-up')) {
+        return fallback;
+    }
 
     // Normalize multiple slashes to single slash first
-    const normalized = input.replace(/\/+/g, '/');
+    const normalized = decodedInput.replace(/\/+/g, '/');
 
     // Ensure path starts with /
     if (!normalized.startsWith('/')) return fallback;

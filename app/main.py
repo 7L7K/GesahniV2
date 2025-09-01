@@ -1255,7 +1255,7 @@ app.include_router(settings_router, prefix="", include_in_schema=False)
 # Provide both versioned and unversioned, under /google to match redirect defaults
 app.include_router(google_router, prefix="/v1/google")
 app.include_router(google_router, prefix="/google", include_in_schema=False)
-include("app.api.google_services:router")
+include("app.api.google_services:router", prefix="/v1/google")
 include("app.api.health_google:router", prefix="/v1/health")
 
 # New modular routers for HA and profile/admin
