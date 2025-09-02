@@ -8,6 +8,9 @@ from app.main import app
 def test_callback_redirects_303_and_clears_cookies(monkeypatch, status_code):
     client = TestClient(app)
 
+    # Enable dev mode to bypass OAuth state validation
+    monkeypatch.setenv("DEV_MODE", "1")
+
     class DummyCreds:
         token = "at"
         refresh_token = "rt"

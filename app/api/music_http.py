@@ -32,16 +32,25 @@ logger = logging.getLogger(__name__)
 # Feature flags and env
 # ---------------------------------------------------------------------------
 
-_TEST_MODE = (
-    bool(os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING"))
-    or os.getenv("ENV", "").strip().lower() == "test"
-    or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").strip().lower() in {"1", "true", "yes", "on"}
-)
+def is_test_mode() -> bool:
+    """Evaluate test mode dynamically at runtime so tests can set env after import."""
+    return bool(
+        os.getenv("PYTEST_CURRENT_TEST")
+        or os.getenv("PYTEST_RUNNING")
+        or os.getenv("TEST_MODE", "").strip() == "1"
+        or os.getenv("ENV", "").strip().lower() == "test"
+        or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").strip().lower() in {"1", "true", "yes", "on"}
+    )
 
-if _TEST_MODE:
-    PROVIDER_SPOTIFY = False
-else:
-    PROVIDER_SPOTIFY = os.getenv("PROVIDER_SPOTIFY", "true").strip().lower() in {"1", "true", "yes", "on"}
+
+def is_provider_spotify() -> bool:
+    """Return whether Spotify provider should be used for the current runtime.
+
+    This checks test mode dynamically and the PROVIDER_SPOTIFY env var.
+    """
+    if is_test_mode():
+        return False
+    return os.getenv("PROVIDER_SPOTIFY", "true").strip().lower() in {"1", "true", "yes", "on"}
 MUSIC_FALLBACK_RADIO = os.getenv("MUSIC_FALLBACK_RADIO", "false").strip().lower() in {"1", "true", "yes", "on"}
 EXPLICIT_DEFAULT = os.getenv("EXPLICIT_DEFAULT", "true").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -166,7 +175,7 @@ def _should_pause_polling(user_id: str) -> bool:
 
 
 async def _provider_state(user_id: str) -> dict | None:
-    if not PROVIDER_SPOTIFY:
+    if not is_provider_spotify():
         return None
     try:
         if _should_pause_polling(user_id):
@@ -183,7 +192,7 @@ async def _provider_state(user_id: str) -> dict | None:
 
 
 async def _provider_queue(user_id: str) -> tuple[dict | None, list[dict]]:
-    if not PROVIDER_SPOTIFY:
+    if not is_provider_spotify():
         return None, []
     try:
         client = SpotifyClient(user_id)
@@ -197,7 +206,7 @@ async def _provider_queue(user_id: str) -> tuple[dict | None, list[dict]]:
 
 
 async def _provider_play(user_id: str, uris: list[str] | None = None) -> bool:
-    if not PROVIDER_SPOTIFY:
+    if not is_provider_spotify():
         return False
     try:
         client = SpotifyClient(user_id)
@@ -215,7 +224,7 @@ def _mk_orchestrator(user_id: str) -> MusicOrchestrator | None:
 
     Falls back to None when provider is disabled to preserve existing radio flow.
     """
-    if not PROVIDER_SPOTIFY:
+    if not is_provider_spotify():
         return None
     try:
         sp = SpotifyProvider(user_id)
@@ -305,7 +314,7 @@ _RECS_STATE_TTL_S: int = int(os.getenv("RECS_STATE_TTL_S", os.getenv("RECS_STATE
 
 
 def _recs_cache_key(user_id: str, seeds: list[str] | None, vibe: MusicVibe) -> tuple:
-    provider = "spotify" if PROVIDER_SPOTIFY else "default"
+    provider = "spotify" if is_provider_spotify() else "default"
     norm_seeds: list[str] = []
     if seeds:
         seen: set[str] = set()
@@ -398,7 +407,7 @@ async def _build_state_payload(user_id: str) -> StateResponse:
     state = load_state(user_id)
     quiet = _in_quiet_hours()
     sp = None
-    if PROVIDER_SPOTIFY:
+    if is_provider_spotify():
         _res = _provider_state(user_id)
         sp = await _res if inspect.isawaitable(_res) else _res
 
@@ -425,7 +434,7 @@ async def _build_state_payload(user_id: str) -> StateResponse:
         }
         progress_ms = sp.get("progress_ms")
         is_playing = sp.get("is_playing")
-    elif MUSIC_FALLBACK_RADIO and not PROVIDER_SPOTIFY:
+    elif MUSIC_FALLBACK_RADIO and not is_provider_spotify():
         track = {"id": "radio", "name": "Local Radio", "artists": "—", "art_url": "/placeholder.png"}
         is_playing = state.radio_playing
 
@@ -433,7 +442,7 @@ async def _build_state_payload(user_id: str) -> StateResponse:
     state.explicit_allowed = _explicit_allowed(state.vibe)
     save_state(user_id, state)
 
-    provider = "spotify" if PROVIDER_SPOTIFY else ("radio" if MUSIC_FALLBACK_RADIO else None)
+    provider = "spotify" if is_provider_spotify() else ("radio" if MUSIC_FALLBACK_RADIO else None)
     return StateResponse(
         vibe=asdict(state.vibe),
         volume=state.volume,
@@ -445,7 +454,7 @@ async def _build_state_payload(user_id: str) -> StateResponse:
         explicit_allowed=state.explicit_allowed,
         provider=provider,
         radio_url=RADIO_URL or None,
-        radio_playing=(state.radio_playing if (not PROVIDER_SPOTIFY and MUSIC_FALLBACK_RADIO) else None),
+        radio_playing=(state.radio_playing if (not is_provider_spotify() and MUSIC_FALLBACK_RADIO) else None),
     )
 
 
@@ -469,7 +478,7 @@ async def music_command(
     changed = False
 
     if body.command == "play":
-        if not PROVIDER_SPOTIFY and MUSIC_FALLBACK_RADIO:
+        if not is_provider_spotify() and MUSIC_FALLBACK_RADIO:
             state.radio_playing = True
             changed = True
         else:
@@ -480,7 +489,7 @@ async def music_command(
                 await _provider_play(user_id)
         _record_play_activity(user_id, True)
     elif body.command == "pause":
-        if not PROVIDER_SPOTIFY and MUSIC_FALLBACK_RADIO:
+        if not is_provider_spotify() and MUSIC_FALLBACK_RADIO:
             state.radio_playing = False
             changed = True
         else:
@@ -491,7 +500,7 @@ async def music_command(
                 await _provider_pause(user_id)
         _record_play_activity(user_id, False)
     elif body.command == "next":
-        if PROVIDER_SPOTIFY:
+        if is_provider_spotify():
             orch = _mk_orchestrator(user_id)
             if orch:
                 await orch.next()
@@ -500,7 +509,7 @@ async def music_command(
         state.skip_count = (state.skip_count or 0) + 1
         changed = True
     elif body.command == "previous":
-        if PROVIDER_SPOTIFY:
+        if is_provider_spotify():
             orch = _mk_orchestrator(user_id)
             if orch:
                 await orch.previous()
@@ -514,7 +523,7 @@ async def music_command(
             state.duck_from = state.volume
         state.volume = new_level
         changed = True
-        if PROVIDER_SPOTIFY:
+        if is_provider_spotify():
             orch = _mk_orchestrator(user_id)
             if orch:
                 await orch.set_volume(new_level)
@@ -661,7 +670,7 @@ async def list_devices(user_id: str = Depends(get_current_user_id)):
         except Exception:
             return {"items": []}
     # Fallback to legacy direct client for back-compat
-    if not PROVIDER_SPOTIFY:
+    if not is_provider_spotify():
         return {"items": []}
     try:
         client = SpotifyClient(user_id)

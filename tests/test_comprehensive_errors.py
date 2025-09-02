@@ -34,7 +34,24 @@ from app.tokens import create_access_token
 
 
 class TestComprehensiveErrors:
-    """Comprehensive error testing suite."""
+    """Comprehensive error testing suite for edge cases and failure scenarios.
+
+    This test suite covers:
+    - Authentication and token generation edge cases
+    - Concurrent access patterns and race conditions
+    - Memory and resource exhaustion scenarios
+    - Network timeout and connectivity issues
+    - File system permission and I/O errors
+    - Performance degradation under load
+    - Request validation and malformed input handling
+    """
+
+    @pytest.fixture
+    def event_loop(self):
+        """Create an instance of the default event loop for the test session."""
+        loop = asyncio.get_event_loop_policy().new_event_loop()
+        yield loop
+        loop.close()
 
     @pytest.fixture(autouse=True)
     def setup_test_environment(self, monkeypatch):
@@ -64,10 +81,18 @@ class TestComprehensiveErrors:
         errors_after = len(get_last_errors(100))
         if errors_after > self.errors_before:
             recent_errors = get_last_errors(errors_after - self.errors_before)
-            print(f"New errors detected during test: {recent_errors}")
+            # Log new errors for debugging but don't fail the test
+            logging.warning(f"New errors detected during test: {recent_errors}")
 
     def test_auth_token_creation_edge_cases(self):
-        """Test edge cases in token creation."""
+        """Test edge cases in JWT token creation and validation.
+
+        Verifies that token creation handles:
+        - Empty or None input data
+        - Invalid data types
+        - Extremely long usernames
+        - Special characters in usernames
+        """
         # Test with empty data - create_access_token might not raise KeyError anymore
         try:
             token = create_access_token({})
@@ -76,7 +101,7 @@ class TestComprehensiveErrors:
             pass  # Expected behavior if it still raises
 
         # Test with invalid data types
-        with pytest.raises(TypeError):
+        with pytest.raises((TypeError, AttributeError)):
             create_access_token(None)
 
         # Test with very long usernames
@@ -90,7 +115,14 @@ class TestComprehensiveErrors:
         assert len(token) > 0
 
     def test_concurrent_token_creation(self):
-        """Test concurrent token creation to catch race conditions."""
+        """Test concurrent JWT token creation to detect race conditions.
+
+        Creates multiple tokens simultaneously to ensure:
+        - No race conditions in token generation
+        - All tokens are unique
+        - All tokens are properly formatted
+        - Performance remains acceptable under concurrent load
+        """
 
         def create_token(username):
             return create_access_token({"sub": username})
@@ -108,95 +140,102 @@ class TestComprehensiveErrors:
             assert len(token) > 0
             assert isinstance(token, str)
 
-    def test_memory_store_edge_cases(self):
-        """Test edge cases in memory store operations."""
-        # Test with very large content
+    def test_memory_store_large_content(self):
+        """Test memory store handling of very large content."""
+        # Test with very large content - should not crash the system
         large_content = "x" * 1000000  # 1MB
         try:
-            # This might fail due to size limits
             store = _get_store()
-            # Note: This is a test - in real usage we'd handle this gracefully
+            # Large content handling should be graceful
+            assert store is not None
         except Exception as e:
-            print(f"Expected error with large content: {e}")
+            # Should handle large content gracefully without crashing
+            assert isinstance(e, (MemoryError, ValueError, OSError))
 
-        # Test with empty content
+    def test_memory_store_empty_content(self):
+        """Test memory store handling of empty content."""
         try:
             store = _get_store()
-            # Test empty content handling
+            assert store is not None
+            # Empty content should be handled gracefully
         except Exception as e:
-            print(f"Error with empty content: {e}")
+            # Expected to handle empty content without crashing
+            assert isinstance(e, (ValueError, TypeError))
 
-        # Test with None content
+    def test_memory_store_none_content(self):
+        """Test memory store handling of None content."""
         try:
             store = _get_store()
-            # Test None content handling
+            assert store is not None
+            # None content should be handled gracefully
         except Exception as e:
-            print(f"Error with None content: {e}")
+            # Expected to handle None content without crashing
+            assert isinstance(e, (ValueError, TypeError))
 
-    def test_llama_integration_failures(self):
+    def test_llama_integration_failures(self, event_loop):
         """Test LLaMA integration failure scenarios."""
-        # Test when LLaMA is completely unavailable
-        with patch("app.llama_integration.httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post.side_effect = (
-                Exception("Connection failed")
-            )
+        from app.llama_integration import LLAMA_HEALTHY, llama_health_check_state
+        import time
 
-            # This should handle the failure gracefully
-            try:
-                # Use asyncio.create_task and wait instead of asyncio.run
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    task = loop.create_task(_check_and_set_flag())
-                    loop.run_until_complete(asyncio.wait_for(task, timeout=5.0))
-                except Exception as e:
-                    print(f"Expected LLaMA failure handled: {e}")
-                finally:
-                    loop.close()
-            except Exception as e:
-                print(f"Expected LLaMA failure handled: {e}")
+        # Reset health status and state before test
+        import app.llama_integration
+        app.llama_integration.LLAMA_HEALTHY = True
+        # Reset health check state to ensure the check runs
+        now = time.monotonic()
+        llama_health_check_state.update({
+            "last_check_ts": now - 100,  # Make it old enough to run
+            "next_check_delay": 1.0,
+            "has_ever_succeeded": False,
+            "consecutive_failures": 0
+        })
+
+        # Test when LLaMA is completely unavailable
+        with patch("app.llama_integration.json_request") as mock_request:
+            mock_request.return_value = (None, "Connection failed")
+
+            # Debug: Check initial state
+            print(f"Before health check: LLAMA_HEALTHY = {app.llama_integration.LLAMA_HEALTHY}")
+
+            # This should handle the failure gracefully and set LLAMA_HEALTHY to False
+            result = event_loop.run_until_complete(
+                asyncio.wait_for(_check_and_set_flag(), timeout=5.0)
+            )
+            print(f"After health check: LLAMA_HEALTHY = {app.llama_integration.LLAMA_HEALTHY}")
+            assert result is None  # Function returns None
+            assert app.llama_integration.LLAMA_HEALTHY is False  # Should mark as unhealthy
+
+        # Reset health status and state for second test
+        app.llama_integration.LLAMA_HEALTHY = True
+        llama_health_check_state.update({
+            "last_check_ts": now - 100,
+            "next_check_delay": 1.0,
+            "has_ever_succeeded": False,
+            "consecutive_failures": 0
+        })
 
         # Test when LLaMA returns invalid responses
-        with patch("app.llama_integration.httpx.AsyncClient") as mock_client:
-            mock_response = Mock()
-            mock_response.json.return_value = {"invalid": "response"}
-            mock_client.return_value.__aenter__.return_value.post.return_value = (
-                mock_response
+        with patch("app.llama_integration.json_request") as mock_request:
+            mock_request.return_value = ({"invalid": "response"}, None)
+
+            # Should handle invalid responses gracefully
+            result = event_loop.run_until_complete(
+                asyncio.wait_for(_check_and_set_flag(), timeout=5.0)
             )
+            assert result is None  # Function returns None
+            assert LLAMA_HEALTHY is False  # Should mark as unhealthy
 
-            try:
-                # Use asyncio.create_task and wait instead of asyncio.run
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    task = loop.create_task(_check_and_set_flag())
-                    loop.run_until_complete(asyncio.wait_for(task, timeout=5.0))
-                except Exception as e:
-                    print(f"Expected invalid response handled: {e}")
-                finally:
-                    loop.close()
-            except Exception as e:
-                print(f"Expected invalid response handled: {e}")
-
-    def test_gpt_client_failures(self):
+    def test_gpt_client_failures(self, event_loop):
         """Test GPT client failure scenarios."""
-        # Test with invalid API key
+        # Test with invalid API key - should return error response
         with patch.dict(os.environ, {"OPENAI_API_KEY": "invalid-key"}):
-            try:
-                # Use asyncio.create_task and wait instead of asyncio.run
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    task = loop.create_task(ask_gpt("test prompt", routing_decision=None))
-                    loop.run_until_complete(asyncio.wait_for(task, timeout=10.0))
-                except Exception as e:
-                    print(f"Expected GPT failure with invalid key: {e}")
-                finally:
-                    loop.close()
-            except Exception as e:
-                print(f"Expected GPT failure with invalid key: {e}")
+            result = event_loop.run_until_complete(
+                asyncio.wait_for(ask_gpt("test prompt", routing_decision=None), timeout=10.0)
+            )
+            # Should return an error message instead of raising
+            assert isinstance(result, str)
+            assert "error" in result.lower() or "failed" in result.lower()
 
-        # Test with network timeout
+        # Test with network timeout - should return error response
         with patch("app.gpt_client.get_client") as mock_get_client:
             mock_client = AsyncMock()
             mock_client.chat.completions.create.side_effect = TimeoutError(
@@ -204,19 +243,12 @@ class TestComprehensiveErrors:
             )
             mock_get_client.return_value = mock_client
 
-            try:
-                # Use asyncio.create_task and wait instead of asyncio.run
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    task = loop.create_task(ask_gpt("test prompt", routing_decision=None))
-                    loop.run_until_complete(asyncio.wait_for(task, timeout=10.0))
-                except Exception as e:
-                    print(f"Expected GPT timeout handled: {e}")
-                finally:
-                    loop.close()
-            except Exception as e:
-                print(f"Expected GPT timeout handled: {e}")
+            result = event_loop.run_until_complete(
+                asyncio.wait_for(ask_gpt("test prompt", routing_decision=None), timeout=10.0)
+            )
+            # Should return an error message instead of raising
+            assert isinstance(result, str)
+            assert "timeout" in result.lower() or "error" in result.lower()
 
     def test_request_id_collisions(self):
         """Test request ID collision scenarios."""
@@ -232,8 +264,8 @@ class TestComprehensiveErrors:
         # All request IDs should be unique
         assert len(request_ids) == 1000
 
-    def test_concurrent_requests(self):
-        """Test concurrent request handling."""
+    def test_concurrent_request_success(self):
+        """Test that concurrent requests all succeed."""
 
         def make_request():
             return self.client.get("/health")
@@ -247,6 +279,17 @@ class TestComprehensiveErrors:
         for response in responses:
             assert response.status_code == 200
 
+    def test_concurrent_request_unique_ids(self):
+        """Test that concurrent requests generate unique request IDs."""
+
+        def make_request():
+            return self.client.get("/health")
+
+        # Make many concurrent requests
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = [executor.submit(make_request) for _ in range(100)]
+            responses = [future.result() for future in futures]
+
         # All should have unique request IDs
         request_ids = [
             resp.headers.get("X-Request-ID")
@@ -255,38 +298,65 @@ class TestComprehensiveErrors:
         ]
         assert len(set(request_ids)) == len(request_ids)
 
+    def test_test_isolation(self):
+        """Test that tests are properly isolated and don't interfere with each other."""
+        # This test verifies that our test environment setup provides proper isolation
+
+        # Test that environment variables are properly mocked
+        import os
+        assert os.environ.get("OPENAI_API_KEY") == "test-key"
+        assert os.environ.get("OLLAMA_URL") == "http://localhost:11434"
+        assert os.environ.get("JWT_SECRET") == "test-secret-key-for-testing-only"
+
+        # Test that the test client is properly isolated
+        response1 = self.client.get("/health")
+        response2 = self.client.get("/health")
+
+        # Both should succeed and have different request IDs
+        assert response1.status_code == 200
+        assert response2.status_code == 200
+        assert response1.headers.get("X-Request-ID") != response2.headers.get("X-Request-ID")
+
     def test_large_payload_handling(self):
         """Test handling of large payloads."""
         # Test with large JSON payload
         large_payload = {"prompt": "x" * 100000, "user_id": "test-user"}  # 100KB prompt
 
-        try:
-            response = self.client.post("/ask", json=large_payload)
-            # Should either succeed or fail gracefully
-            assert response.status_code in [200, 400, 413, 500]
-        except Exception as e:
-            print(f"Expected error with large payload: {e}")
+        response = self.client.post("/ask", json=large_payload)
+        # Should either succeed or fail gracefully with appropriate status codes
+        assert response.status_code in [200, 400, 413, 500]
+        # If it fails, should provide meaningful error response
+        if response.status_code >= 400:
+            assert response.json() is not None
 
-    def test_malformed_requests(self):
-        """Test handling of malformed requests."""
-        # Test with invalid JSON
+    def test_malformed_json_request(self):
+        """Test handling of requests with invalid JSON."""
         response = self.client.post(
             "/ask", data="invalid json", headers={"Content-Type": "application/json"}
         )
         assert response.status_code in [400, 422]
 
-        # Test with missing required fields
+    def test_missing_required_fields(self):
+        """Test handling of requests missing required fields."""
         response = self.client.post("/ask", json={})
         assert response.status_code in [400, 422]
 
-        # Test with wrong content type
+    def test_wrong_content_type(self):
+        """Test handling of requests with incorrect content type."""
         response = self.client.post(
             "/ask", data="test", headers={"Content-Type": "text/plain"}
         )
         assert response.status_code in [400, 415, 422]
 
     def test_resource_cleanup(self):
-        """Test resource cleanup and basic performance."""
+        """Test resource cleanup and basic performance under repeated requests.
+
+        Verifies that the application:
+        - Handles repeated requests without resource leaks
+        - Maintains consistent performance
+        - Properly cleans up connections and memory
+        - Can sustain load without degradation
+        """
         import gc
 
         # Use /healthz endpoint instead of /health to avoid slow external service checks
@@ -351,12 +421,10 @@ class TestComprehensiveErrors:
             # Make directory read-only
             os.chmod(temp_dir, 0o444)
 
-            try:
-                # Try to write to read-only directory
-                test_file = Path(temp_dir) / "test.txt"
+            # Try to write to read-only directory - should raise PermissionError
+            test_file = Path(temp_dir) / "test.txt"
+            with pytest.raises(PermissionError):
                 test_file.write_text("test")
-            except Exception as e:
-                print(f"Expected file system error: {e}")
 
     def test_network_timeout_scenarios(self):
         """Test network timeout scenarios."""
@@ -364,22 +432,24 @@ class TestComprehensiveErrors:
         with patch("app.http_utils.json_request") as mock_request:
             mock_request.side_effect = TimeoutError("Network timeout")
 
-            try:
-                # This should handle timeout gracefully
-                pass
-            except Exception as e:
-                print(f"Expected timeout handling: {e}")
+            # Should handle timeout gracefully
+            with pytest.raises(TimeoutError, match="Network timeout"):
+                mock_request()
 
     def test_memory_exhaustion(self):
         """Test behavior under memory pressure."""
         # Create large objects to simulate memory pressure
         large_objects = []
 
+        # Test should handle memory pressure gracefully
         try:
             for i in range(1000):
                 large_objects.append("x" * 10000)  # 10KB each
+            # If we get here, memory allocation succeeded
+            assert len(large_objects) == 1000
         except MemoryError:
-            print("Memory exhaustion test completed")
+            # Expected behavior under memory pressure
+            assert len(large_objects) < 1000
         finally:
             # Clean up
             large_objects.clear()
@@ -388,23 +458,21 @@ class TestComprehensiveErrors:
         """Test concurrent database access scenarios."""
 
         def db_operation():
-            try:
-                response = self.client.post(
-                    "/login",
-                    json={"username": f"user_{time.time()}", "password": "testpass123"},
-                )
-                return response.status_code
-            except Exception as e:
-                return f"Error: {e}"
+            response = self.client.post(
+                "/login",
+                json={"username": f"user_{time.time()}", "password": "testpass123"},
+            )
+            return response.status_code
 
         # Perform concurrent database operations
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(db_operation) for _ in range(50)]
             results = [future.result() for future in futures]
 
-        # Check results
+        # Check results - all should be valid HTTP status codes
         for result in results:
-            assert isinstance(result, (int, str))
+            assert isinstance(result, int)
+            assert result in [200, 201, 400, 401, 422, 500]  # Expected status codes
 
     def test_error_propagation(self):
         """Test that errors propagate correctly through the system."""
@@ -446,45 +514,35 @@ class TestComprehensiveErrors:
             # Health check should still work, even if degraded
             assert response.status_code in [200, 503]
 
-    def test_error_recovery(self):
+    def test_error_recovery(self, event_loop):
         """Test error recovery mechanisms."""
         # Test that the system can recover from temporary failures
         with patch("app.llama_integration._check_and_set_flag") as mock_check:
             # First call fails
             mock_check.side_effect = [Exception("Temporary failure"), None]
 
-            # System should handle the failure and recover
-            try:
-                # Use asyncio.create_task and wait instead of asyncio.run
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    task = loop.create_task(_check_and_set_flag())
-                    loop.run_until_complete(asyncio.wait_for(task, timeout=5.0))
-                except Exception:
-                    pass  # Expected first failure
-                finally:
-                    loop.close()
-            except Exception:
-                pass  # Expected first failure
+            # First call should fail
+            with pytest.raises(Exception, match="Temporary failure"):
+                event_loop.run_until_complete(
+                    asyncio.wait_for(_check_and_set_flag(), timeout=5.0)
+                )
 
             # Second call should succeed
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    task = loop.create_task(_check_and_set_flag())
-                    loop.run_until_complete(asyncio.wait_for(task, timeout=5.0))
-                except Exception as e:
-                    pytest.fail(f"System should recover from temporary failures: {e}")
-                finally:
-                    loop.close()
-            except Exception as e:
-                pytest.fail(f"System should recover from temporary failures: {e}")
+            result = event_loop.run_until_complete(
+                asyncio.wait_for(_check_and_set_flag(), timeout=5.0)
+            )
+            assert result is None  # _check_and_set_flag returns None on success
 
 
 class TestIntegrationFailures:
-    """Test integration failure scenarios."""
+    """Test scenarios where external services and integrations fail.
+
+    These tests verify that the application handles failures from:
+    - External APIs (OpenAI, Home Assistant, etc.)
+    - Vector stores and databases
+    - Configuration and environment issues
+    - Network connectivity problems
+    """
 
     def test_external_service_failures(self):
         """Test handling of external service failures."""
@@ -507,18 +565,18 @@ class TestIntegrationFailures:
             mock_store.add_memory.side_effect = Exception("Vector store error")
             mock_get_store.return_value = mock_store
 
-            # Should handle vector store failures gracefully
-            pass
+            # Should handle vector store failures gracefully during ask request
+            client = TestClient(app)
+            response = client.post("/ask", json={"prompt": "test with vector store failure"})
+            assert response.status_code in [500, 503]  # Should fail gracefully
 
     def test_configuration_errors(self):
         """Test handling of configuration errors."""
         # Test with missing required environment variables
         with patch.dict(os.environ, {}, clear=True):
-            try:
-                # This should fail gracefully
-                client = TestClient(app)
-            except Exception as e:
-                print(f"Expected configuration error: {e}")
+            # This should fail gracefully during app initialization
+            with pytest.raises((KeyError, ValueError, ImportError)):
+                TestClient(app)
 
     def test_data_corruption_scenarios(self):
         """Test handling of data corruption scenarios."""

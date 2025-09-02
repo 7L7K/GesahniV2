@@ -168,6 +168,12 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             duration = time.time() - start_time
 
+            # Handle HTTPException specially - preserve its status code
+            from fastapi import HTTPException
+            if isinstance(e, HTTPException):
+                # Re-raise HTTPException to preserve its status code
+                raise e
+
             # Generate error code for server errors
             error_code = _generate_error_code(500, type(e).__name__)
 

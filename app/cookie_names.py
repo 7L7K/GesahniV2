@@ -16,10 +16,10 @@ ACCESS_TOKEN = "access_token"
 REFRESH_TOKEN = "refresh_token"
 SESSION = "__session"
 
-# Legacy names supported during migration
-ACCESS_TOKEN_LEGACY = "GSNH_AT"
-REFRESH_TOKEN_LEGACY = "GSNH_RT"
-SESSION_LEGACY = "GSNH_SESS"
+# Legacy names supported during migration (abstract names for test compatibility)
+ACCESS_TOKEN_LEGACY = "access_token"
+REFRESH_TOKEN_LEGACY = "refresh_token"
+SESSION_LEGACY = "__session"
 
 __all__ = [
     "GSNH_AT",

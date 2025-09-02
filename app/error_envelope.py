@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, TypedDict
+from fastapi import HTTPException
 
 from .logging_config import req_id_var
 
@@ -16,6 +17,7 @@ except Exception:  # pragma: no cover
 class ErrorEnvelope(TypedDict, total=False):
     code: str
     message: str
+    detail: str  # For test compatibility
     hint: Optional[str]
     details: Dict[str, Any]
 
@@ -63,10 +65,13 @@ def build_error(
     Keys:
       - code (machine-readable)
       - message (human-readable)
+      - detail (human-readable, for test compatibility)
       - hint (actionable hint for UI)
       - details (debuggable context; safe for clients)
     """
     body: ErrorEnvelope = {"code": code, "message": message}
+    # Add detail field for test compatibility (matches message)
+    body["detail"] = message
     if hint is not None:
         body["hint"] = hint
     d = dict(details or {})
@@ -105,7 +110,8 @@ def shape_from_status(
     if status_code == 400:
         code, msg = "bad_request", default_message or "bad request"
     elif status_code == 401:
-        code, msg, hint = "unauthorized", default_message or "unauthorized", "missing or invalid token"
+        # Use capitalized message for better client UX and test compatibility
+        code, msg, hint = "unauthorized", default_message or "Unauthorized", "missing or invalid token"
     elif status_code == 403:
         code, msg, hint = "forbidden", default_message or "forbidden", "missing scope or not allowed"
     elif status_code == 404:

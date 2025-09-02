@@ -1,6 +1,6 @@
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from datetime import time as dt_time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -115,7 +115,7 @@ async def health(user_id: str = Depends(get_current_user_id)) -> dict:
 
     return {
         "status": overall,
-        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
         "checks": checks,
         "metrics": metrics,
     }

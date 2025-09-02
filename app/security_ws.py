@@ -22,7 +22,7 @@ async def verify_ws(ws: WebSocket):
 
     # Log connection attempt
     try:
-        log_ws_connect(ws, topic="auth_verification")
+        await log_ws_connect(ws, topic="auth_verification")
     except Exception:
         pass  # Don't fail auth due to logging issues
 
@@ -34,7 +34,7 @@ async def verify_ws(ws: WebSocket):
                    origin, getattr(ws.client, "host", "unknown"))
         record_ws_auth_failure("origin_not_allowed")
         try:
-            log_ws_close(ws, code=4403, reason="origin_not_allowed")
+            await log_ws_close(ws, code=4403, reason="origin_not_allowed")
         except Exception:
             pass
         await ws.close(code=4403, reason="origin_not_allowed")
@@ -103,7 +103,7 @@ async def verify_ws(ws: WebSocket):
         if session_outage:
             log.warning("ws.auth.deny: session_store_unavailable")
             try:
-                log_ws_close(ws, code=1013, reason="identity_unavailable")
+                await log_ws_close(ws, code=1013, reason="identity_unavailable")
             except Exception:
                 pass
             await ws.close(code=1013, reason="identity_unavailable")
@@ -112,7 +112,7 @@ async def verify_ws(ws: WebSocket):
         log.warning("ws.auth.deny: missing_token client=%s", getattr(ws.client, "host", "unknown"))
         record_ws_auth_failure("missing_token")
         try:
-            log_ws_close(ws, code=4401, reason="missing_token")
+            await log_ws_close(ws, code=4401, reason="missing_token")
         except Exception:
             pass
         await ws.close(code=4401, reason="missing_token")
@@ -141,7 +141,7 @@ async def verify_ws(ws: WebSocket):
         log.warning("ws.auth.deny: token_expired user_id=%s", payload.get("sub", "unknown") if 'payload' in locals() else "unknown")
         record_ws_auth_failure("token_expired")
         try:
-            log_ws_close(ws, code=4401, reason="token_expired")
+            await log_ws_close(ws, code=4401, reason="token_expired")
         except Exception:
             pass
         await ws.close(code=4401, reason="token_expired")
@@ -150,7 +150,7 @@ async def verify_ws(ws: WebSocket):
         log.warning("ws.auth.deny: invalid_token error=%s", str(e))
         record_ws_auth_failure("invalid_token")
         try:
-            log_ws_close(ws, code=4401, reason="invalid_token")
+            await log_ws_close(ws, code=4401, reason="invalid_token")
         except Exception:
             pass
         await ws.close(code=4401, reason="invalid_token")
@@ -159,7 +159,7 @@ async def verify_ws(ws: WebSocket):
         log.error("ws.auth.error: unexpected_error error=%s", str(e))
         record_ws_auth_failure("unexpected_error")
         try:
-            log_ws_close(ws, code=4401, reason="auth_error")
+            await log_ws_close(ws, code=4401, reason="auth_error")
         except Exception:
             pass
         await ws.close(code=4401, reason="auth_error")

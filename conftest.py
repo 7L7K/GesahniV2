@@ -1,6 +1,62 @@
 import os
+import sys
+import uuid
+import pathlib
 import time
 import warnings
+import multiprocessing
+import socket
+
+import pytest
+
+# Session-scoped fixtures for live server testing
+@pytest.fixture(scope="session", autouse=True)
+def _bootstrap_db_and_env():
+    os.environ["PYTEST_RUNNING"] = "1"
+    os.environ.setdefault("TEST_MODE", "1")
+    os.environ.setdefault("TEST_DISABLE_RATE_LIMITS", "1")
+    os.environ.setdefault("TEST_DISABLE_CSRF", "1")
+    os.environ.setdefault("ENABLE_GOOGLE_OAUTH", "1")
+    os.environ.setdefault("ENABLE_SPOTIFY", "1")
+
+    # isolated DB dir for this run
+    os.environ.setdefault("GESAHNI_TEST_DB_DIR", f"/tmp/gesahni_tests/{uuid.uuid4().hex}")
+    pathlib.Path(os.environ["GESAHNI_TEST_DB_DIR"]).mkdir(parents=True, exist_ok=True)
+
+    # Don't call init_db_once here - let the app's lifespan handler do it
+    # to avoid event loop conflicts
+    return True
+
+# Live server fixture - only start if needed by tests
+@pytest.fixture(scope="session")
+def live_server(_bootstrap_db_and_env):
+    import subprocess
+
+    # Start server using subprocess with dedicated script
+    cmd = [sys.executable, "test_server.py"]
+    p = subprocess.Popen(cmd, cwd=os.getcwd(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # wait for server
+    deadline = time.time() + 15
+    last_err = None
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", 8000), timeout=0.5) as s:
+                break
+        except Exception as e:
+            last_err = e
+            time.sleep(0.3)
+    else:
+        p.terminate()
+        p.wait(timeout=2)
+        raise RuntimeError(f"Uvicorn failed to start on :8000 (last_err={last_err})")
+
+    yield p
+    try:
+        p.terminate()
+        p.wait(timeout=2)
+    except Exception:
+        pass
 
 # Pytest early hook: set test DB dir and flags before any imports
 def pytest_load_initial_conftests(early_config, parser):
@@ -45,8 +101,6 @@ def pytest_load_initial_conftests(early_config, parser):
     except Exception as e:
         print(f"Warning: Failed to set test configuration: {e}")
         pass
-
-import pytest
 
 # Filter Pydantic v2 deprecation warnings to keep CI green
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="pydantic")

@@ -12,7 +12,7 @@ from .security import jwt_decode
 from fastapi import Request
 from starlette.websockets import WebSocket
 
-from .cookie_names import GSNH_AT, GSNH_SESS, SESSION
+from .cookie_names import GSNH_AT, GSNH_SESS, SESSION, ACCESS_TOKEN
 from .session_store import get_session_store, SessionStoreUnavailable
 
 logger = logging.getLogger(__name__)
@@ -279,30 +279,35 @@ def extract_token_metadata(token: str) -> dict:
 
 
 def extract_token(target: Request | WebSocket) -> tuple[str, Optional[str]]:
-    """Unified token extraction with precedence: header > access cookie > session cookie.
+    """Unified token extraction with precedence: access cookie > header > session cookie.
 
-    Returns (source, token) where source in {"authorization", "access_cookie", "session"}.
+    Returns (source, token) where source in {"access_cookie", "authorization", "session"}.
     token is None when nothing present.
     """
-    # 1) Authorization header
-    try:
-        auth = target.headers.get("Authorization")
-        if auth and auth.startswith("Bearer "):
-            return ("authorization", auth.split(" ", 1)[1])
-    except Exception:
-        pass
-    # 2) Access token cookie
+    # 1) Access token cookie (highest priority)
     try:
         if isinstance(target, Request):
-            tok = target.cookies.get(f"__Host-{GSNH_AT}") or target.cookies.get(GSNH_AT)
+            # Check canonical names first, then legacy names
+            tok = (target.cookies.get(f"__Host-{GSNH_AT}") or
+                   target.cookies.get(GSNH_AT) or
+                   target.cookies.get(ACCESS_TOKEN))
             if tok:
                 return ("access_cookie", tok)
         else:
             raw = target.headers.get("Cookie") or ""
             parts = [p.strip() for p in raw.split(";") if p.strip()]
             for p in parts:
-                if p.startswith(f"__Host-{GSNH_AT}=") or p.startswith(f"{GSNH_AT}="):
+                if (p.startswith(f"__Host-{GSNH_AT}=") or
+                    p.startswith(f"{GSNH_AT}=") or
+                    p.startswith(f"{ACCESS_TOKEN}=")):
                     return ("access_cookie", p.split("=", 1)[1])
+    except Exception:
+        pass
+    # 2) Authorization header (second priority)
+    try:
+        auth = target.headers.get("Authorization")
+        if auth and auth.startswith("Bearer "):
+            return ("authorization", auth.split(" ", 1)[1])
     except Exception:
         pass
     # 3) Session cookie (canonical first; legacy optional)
@@ -471,12 +476,12 @@ def csrf_validate(request: Request) -> None:
         if not tok or not cookie or tok != cookie:
             from fastapi import HTTPException
 
-            raise HTTPException(status_code=403, detail="invalid_csrf")
+            raise HTTPException(status_code=400, detail="invalid_csrf")
     except Exception as e:
         # Be explicit: fail-closed for enabled CSRF on mutation
         from fastapi import HTTPException
 
-        raise HTTPException(status_code=403, detail="invalid_csrf")
+        raise HTTPException(status_code=400, detail="invalid_csrf")
 
 
 __all__ = [

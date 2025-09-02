@@ -5,7 +5,7 @@ import os
 import time
 from secrets import token_urlsafe
 
-from fastapi import Request
+from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -134,9 +134,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     "deny: csrf_missing_header_cross_site header=<%s>",
                     token_hdr[:8] + "..." if token_hdr else "None",
                 )
-                return JSONResponse(
-                    status_code=403, content={"detail": "missing_csrf_cross_site"}
-                )
+                raise HTTPException(400, detail="csrf.missing")
 
             # Basic validation for cross-site tokens
             if len(token_hdr) < 16:
@@ -144,9 +142,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     "deny: csrf_invalid_format_cross_site header=<%s>",
                     token_hdr[:8] + "..." if token_hdr else "None",
                 )
-                return JSONResponse(
-                    status_code=403, content={"detail": "invalid_csrf_format"}
-                )
+                raise HTTPException(400, detail="csrf.invalid")
 
             # For cross-site, we accept any properly formatted token
             # (server-side validation is optional for basic functionality)
@@ -164,7 +160,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     "deny: csrf_legacy_header_disabled header=<%s>",
                     token_hdr[:8] + "..." if token_hdr else "None",
                 )
-                return JSONResponse(status_code=400, content={"detail": "missing_csrf"})
+                raise HTTPException(400, detail="csrf.missing")
             # Require both header and cookie, and match
             if not token_hdr or not token_cookie:
                 logger.warning(
@@ -172,14 +168,14 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     token_hdr[:8] + "..." if token_hdr else "None",
                     token_cookie[:8] + "..." if token_cookie else "None",
                 )
-                return JSONResponse(status_code=403, content={"detail": "invalid_csrf"})
+                raise HTTPException(403, detail="csrf.missing")
             if token_hdr != token_cookie:
                 logger.warning(
                     "deny: csrf_mismatch header=<%s> cookie=<%s>",
                     token_hdr[:8] + "...",
                     token_cookie[:8] + "...",
                 )
-                return JSONResponse(status_code=403, content={"detail": "invalid_csrf"})
+                raise HTTPException(400, detail="csrf.invalid")
             return await call_next(request)
 
 

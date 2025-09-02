@@ -16,8 +16,19 @@ logger = logging.getLogger(__name__)
 
 # Database configuration - lazy path resolution
 def _default_db_path() -> str:
+    # Allow tests to override module-level default path by setting DEFAULT_DB_PATH.
+    try:
+        if globals().get("DEFAULT_DB_PATH"):
+            return str(Path(globals().get("DEFAULT_DB_PATH"))
+                       .resolve())
+    except Exception:
+        pass
     from .db.paths import resolve_db_path
     return str(resolve_db_path("THIRD_PARTY_TOKENS_DB", "third_party_tokens.db"))
+
+
+# Module-level default that tests can override: app.auth_store_tokens.DEFAULT_DB_PATH
+DEFAULT_DB_PATH = _default_db_path()
 
 
 class TokenDAO:
@@ -1321,13 +1332,40 @@ class TokenDAO:
             return False
 
 
-# Global instance for use across the application
+# Global instance for use across the application (kept in sync with module defaults)
 token_dao = TokenDAO()
+
+
+def _sync_token_dao() -> None:
+    """Ensure the global token_dao uses the current module/class DEFAULT_DB_PATH when tests override it."""
+    global token_dao
+    try:
+        import app.auth_store_tokens as ast
+
+        default = getattr(ast, "DEFAULT_DB_PATH", None)
+        # Also check TokenDAO.DEFAULT_DB_PATH if present
+        try:
+            cls_default = getattr(ast.TokenDAO, "DEFAULT_DB_PATH", None)
+            if cls_default and not default:
+                default = str(cls_default)
+        except Exception:
+            pass
+
+        if default and getattr(token_dao, "db_path", None) != str(default):
+            token_dao = TokenDAO(db_path=str(default))
+    except Exception:
+        # If anything goes wrong, keep existing token_dao
+        pass
 
 
 # Convenience functions
 async def upsert_token(token: ThirdPartyToken) -> bool:
     """Convenience function to upsert a token."""
+    # Ensure global token_dao matches any runtime overrides (tests may set DEFAULT_DB_PATH)
+    try:
+        _sync_token_dao()
+    except Exception:
+        pass
     return await token_dao.upsert_token(token)
 
 
@@ -1337,6 +1375,10 @@ async def get_token_by_user_identities(user_id: str, provider: str) -> Optional[
     This pivots via the `auth_identities` table to avoid relying on token.user_id.
     """
     # Simple direct DB query to find tokens by joining identities
+    try:
+        _sync_token_dao()
+    except Exception:
+        pass
     db_path = token_dao.db_path
     try:
         with sqlite3.connect(db_path) as conn:
@@ -1370,16 +1412,28 @@ async def get_token(user_id: str, provider: str, provider_sub: Optional[str] = N
 
     If `provider_sub` is provided (e.g., Google OIDC `sub`), selects the matching row.
     """
+    try:
+        _sync_token_dao()
+    except Exception:
+        pass
     return await token_dao.get_token(user_id, provider, provider_sub)
 
 
 async def get_all_user_tokens(user_id: str) -> list[ThirdPartyToken]:
     """Convenience function to get all user tokens."""
+    try:
+        _sync_token_dao()
+    except Exception:
+        pass
     return await token_dao.get_all_user_tokens(user_id)
 
 
 async def mark_invalid(user_id: str, provider: str) -> bool:
     """Convenience function to mark tokens as invalid."""
+    try:
+        _sync_token_dao()
+    except Exception:
+        pass
     return await token_dao.mark_invalid(user_id, provider)
 
 
@@ -1549,7 +1603,9 @@ class TokenRefreshService:
                 refresh_token=refreshed_tokens.refresh_token,
                 expires_at=refreshed_tokens.expires_at,
                 scopes=refreshed_tokens.scopes,
-                provider_iss="https://accounts.spotify.com"
+                provider_iss=token.provider_iss or "https://accounts.spotify.com",
+                provider_sub=token.provider_sub,
+                identity_id=token.identity_id,
             )
 
             # Store the refreshed token

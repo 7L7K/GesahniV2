@@ -7,7 +7,7 @@ with centralized TTL management and normalized claims handling.
 
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -57,14 +57,14 @@ def _create_access_token_internal(
 
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=EXPIRE_MINUTES)
 
     to_encode.update(
         {
             "exp": expire,
-            "iat": datetime.utcnow(),
+            "iat": datetime.now(timezone.utc),
             "jti": uuid4().hex,
             "type": "access",
             "scopes": data.get("scopes", ["care:resident", "music:control", "chat:write"]),
@@ -109,14 +109,14 @@ def _create_refresh_token_internal(
 
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=REFRESH_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=REFRESH_EXPIRE_MINUTES)
 
     to_encode.update(
         {
             "exp": expire,
-            "iat": datetime.utcnow(),
+            "iat": datetime.now(timezone.utc),
             "jti": uuid4().hex,
             "type": "refresh",
             "scopes": data.get("scopes", ["care:resident", "music:control", "chat:write"]),

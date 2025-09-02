@@ -47,10 +47,16 @@ async def temp_db(tmp_path):
 
     finally:
         # Restore original paths
-        if original_auth_db:
-            app.auth_store.DB_PATH = original_auth_db
-        if original_token_db:
-            app.auth_store_tokens.TokenDAO.DEFAULT_DB_PATH = original_token_db
+        try:
+            if original_auth_db:
+                app.auth_store.DB_PATH = original_auth_db
+        except Exception:
+            pass
+        try:
+            if original_token_db:
+                app.auth_store_tokens.DEFAULT_DB_PATH = original_token_db
+        except Exception:
+            pass
 
 
 @pytest_asyncio.fixture

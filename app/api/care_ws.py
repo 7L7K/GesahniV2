@@ -5,7 +5,7 @@ import logging
 import os
 import time
 
-from fastapi import APIRouter, Depends, WebSocket
+from fastapi import APIRouter, Depends, Request, Response, WebSocket
 from pydantic import BaseModel, ConfigDict
 
 from ..api._deps import dep_verify_ws
@@ -128,8 +128,36 @@ class WSTopicsInfo(BaseModel):
     )
 
 
+# HTTP handler guard (must come before WebSocket endpoint)
+@router.get("/ws/care")
+@router.post("/ws/care")
+@router.put("/ws/care")
+@router.patch("/ws/care")
+@router.delete("/ws/care")
+async def websocket_http_handler(request: Request):
+    try:
+        from app.auth_monitoring import record_ws_reconnect_attempt
+
+        record_ws_reconnect_attempt(
+            endpoint="/v1/ws/care",
+            reason="http_request_to_ws_endpoint",
+            user_id="unknown",
+        )
+    except Exception:
+        pass
+    return Response(
+        content="WebSocket endpoint requires WebSocket protocol",
+        status_code=400,
+        media_type="text/plain",
+        headers={
+            "X-WebSocket-Error": "protocol_required",
+            "X-WebSocket-Reason": "HTTP requests not supported on WebSocket endpoints",
+        },
+    )
+
+
 @router.get(
-    "/ws/care", response_model=WSTopicsInfo, responses={200: {"model": WSTopicsInfo}}
+    "/ws/care/docs", response_model=WSTopicsInfo, responses={200: {"model": WSTopicsInfo}}
 )
 async def ws_care_docs(_user_id: str = Depends(get_current_user_id)):
     """WebSocket entry point documentation.
@@ -328,3 +356,6 @@ async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
 async def broadcast_resident(resident_id: str, event: str, data: dict) -> None:
     topic = f"resident:{resident_id}"
     await _broadcast(topic, {"event": event, **data})
+
+
+

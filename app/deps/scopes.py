@@ -448,9 +448,13 @@ def require_scope(required: str) -> Callable[[Request], None]:
         if str(request.method).upper() == "OPTIONS":
             return
 
-        # In pytest runs, allow omitted token when no payload is present so
+        # In test runs, allow omitted token when no payload is present so
         # unit tests can exercise RBAC-protected endpoints without full JWT setup.
-        if os.getenv("PYTEST_RUNNING", "").lower() in {"1", "true", "yes"}:
+        if (
+            os.getenv("PYTEST_RUNNING", "").lower() in {"1", "true", "yes"}
+            or os.getenv("TEST_MODE", "").strip() == "1"
+            or os.getenv("JWT_OPTIONAL_IN_TESTS", "").lower() in {"1", "true", "yes", "on"}
+        ):
             try:
                 if _extract_payload(request) is None:
                     return

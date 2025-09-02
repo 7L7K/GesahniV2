@@ -106,13 +106,32 @@ class SpotifyClient:
 
     async def _store_tokens(self, tokens: SpotifyTokens) -> None:
         """Store tokens in unified token store."""
+        # Preserve identity_id/provider_sub/provider_iss from existing stored token
+        identity_id = None
+        provider_sub = None
+        provider_iss = None
+        try:
+            cur = await get_token(self.user_id, "spotify")
+            if cur:
+                identity_id = getattr(cur, "identity_id", None)
+                provider_sub = getattr(cur, "provider_sub", None)
+                provider_iss = getattr(cur, "provider_iss", None)
+        except Exception:
+            pass
+
         token = ThirdPartyToken(
             user_id=self.user_id,
             provider="spotify",
+            identity_id=identity_id,
+            provider_sub=provider_sub,
+            provider_iss=provider_iss,
             access_token=tokens.access_token,
             refresh_token=tokens.refresh_token,
             scopes=tokens.scope,
-            expires_at=tokens.expires_at
+            expires_at=tokens.expires_at,
+            created_at=int(time.time()),
+            updated_at=int(time.time()),
+            is_valid=True,
         )
         await upsert_token(token)
 

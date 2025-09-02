@@ -140,18 +140,42 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS" or p.startswith("/health") or p == "/metrics":
             return await call_next(request)
 
-        # When running under pytest, skip enforcing rate limits so tests do not
-        # intermittently fail due to small in-process buckets. Tests control rate
-        # limit behavior explicitly via helpers when needed.
-        # Allow enabling rate limiting in tests via environment variable
-        is_pytest = (
+        # Check if rate limiting should be disabled for tests or by configuration.
+        # Prefer centralized test switch `env_utils.IS_TEST` when available.
+        try:
+            from app.env_utils import IS_TEST
+            test_mode_disabled = IS_TEST
+        except Exception:
+            test_mode_disabled = False
+
+        # Even when env_utils.IS_TEST is available but False, also accept
+        # heuristic indicators of test mode so tests running under pytest in
+        # various CI/local environments are not rate limited unexpectedly.
+        heuristic_test_mode = (
             "pytest" in sys.modules or
             "PYTEST_CURRENT_TEST" in os.environ or
             "PYTEST_RUNNING" in os.environ or
             any("pytest" in str(m) for m in sys.modules.values() if hasattr(m, "__file__"))
         )
+
+        test_mode_disabled = test_mode_disabled or heuristic_test_mode
+
+        # Check for RATE_LIMIT_MODE=off configuration (highest priority)
+        rate_limit_mode_off = os.getenv("RATE_LIMIT_MODE", "").lower() == "off"
+
+        # Allow explicit enabling of rate limiting in tests (overrides IS_TEST)
         enable_rate_limiting_in_tests = os.getenv("ENABLE_RATE_LIMIT_IN_TESTS", "0").lower() in ("1", "true", "yes")
-        if is_pytest and not enable_rate_limiting_in_tests:
+
+        # Debug logging for troubleshooting
+        if test_mode_disabled:
+            _METRICS["requests_total"] += 1  # Track even when disabled
+
+        # Disable rate limiting if:
+        # 1) RATE_LIMIT_MODE=off is set, OR
+        # 2) In test mode AND ENABLE_RATE_LIMIT_IN_TESTS is not explicitly set to enable it
+        should_disable = rate_limit_mode_off or (test_mode_disabled and not enable_rate_limiting_in_tests)
+
+        if should_disable:
             return await call_next(request)
 
         # Debug: track that middleware is being called

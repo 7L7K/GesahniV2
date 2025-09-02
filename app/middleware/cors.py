@@ -12,7 +12,7 @@ import os
 from typing import List, Optional, Set
 
 from fastapi import Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
@@ -179,4 +179,32 @@ class CorsMiddleware(BaseHTTPMiddleware):
         return False
 
 
-__all__ = ["CorsMiddleware"]
+class CorsPreflightMiddleware(BaseHTTPMiddleware):
+    """Handle CORS preflight OPTIONS requests before other middleware."""
+
+    async def dispatch(self, request: Request, call_next):
+        """Handle CORS preflight OPTIONS requests."""
+        # Check if this is an OPTIONS request with Origin header
+        if request.method.upper() == "OPTIONS" and request.headers.get("Origin"):
+            # Create CORS headers
+            cors_headers = {}
+            origin = request.headers.get("Origin")
+
+            # Add basic CORS headers
+            if origin:
+                cors_headers["Access-Control-Allow-Origin"] = origin
+                cors_headers["Access-Control-Allow-Credentials"] = "true"
+                cors_headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+                cors_headers["Access-Control-Allow-Headers"] = "*"
+
+                # Add max-age for caching
+                cors_headers["Access-Control-Max-Age"] = "600"
+
+            # Return 204 No Content for preflight requests
+            return PlainTextResponse("", status_code=204, headers=cors_headers)
+
+        # Continue with normal request processing
+        return await call_next(request)
+
+
+__all__ = ["CorsMiddleware", "CorsPreflightMiddleware"]

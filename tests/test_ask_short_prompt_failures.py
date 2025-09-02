@@ -53,7 +53,12 @@ class TestShortPromptFailures:
         payload = self.base_payload.copy()
         payload["prompt"] = short_prompt
 
-        response = self.client.post("/ask", json=payload)
+        # Mock authentication and scope checking since the endpoint requires it
+        with patch("app.deps.user.get_current_user_id", return_value="test_user"), \
+             patch("app.auth_core.require_scope") as mock_scope:
+            # Make the scope check just return without doing anything
+            mock_scope.return_value = None
+            response = self.client.post("/v1/ask", json=payload)
         assert response.status_code == 422
         assert "empty_prompt" in response.json().get("detail", "")
 
@@ -62,7 +67,12 @@ class TestShortPromptFailures:
         payload = self.base_payload.copy()
         payload["prompt"] = "   \n\t   "  # Various whitespace characters
 
-        response = self.client.post("/ask", json=payload)
+        # Mock authentication and scope checking since the endpoint requires it
+        with patch("app.deps.user.get_current_user_id", return_value="test_user"), \
+             patch("app.auth_core.require_scope") as mock_scope:
+            # Make the scope check just return without doing anything
+            mock_scope.return_value = None
+            response = self.client.post("/v1/ask", json=payload)
         assert response.status_code == 422
         assert "empty_prompt" in response.json().get("detail", "")
 
@@ -72,7 +82,12 @@ class TestShortPromptFailures:
             payload = self.base_payload.copy()
             payload["prompt"] = char
 
-            response = self.client.post("/ask", json=payload)
+            # Mock authentication and scope checking since the endpoint requires it
+            with patch("app.deps.user.get_current_user_id", return_value="test_user"), \
+                 patch("app.auth_core.require_scope") as mock_scope:
+                # Make the scope check just return without doing anything
+                mock_scope.return_value = None
+                response = self.client.post("/v1/ask", json=payload)
             assert response.status_code == 422, f"Single char '{char}' should be rejected"
             assert "empty_prompt" in response.json().get("detail", "")
 
@@ -84,7 +99,12 @@ class TestShortPromptFailures:
             payload = self.base_payload.copy()
             payload["prompt"] = word
 
-            response = self.client.post("/ask", json=payload)
+            # Mock authentication and scope checking since the endpoint requires it
+            with patch("app.deps.user.get_current_user_id", return_value="test_user"), \
+                 patch("app.auth_core.require_scope") as mock_scope:
+                # Make the scope check just return without doing anything
+                mock_scope.return_value = None
+                response = self.client.post("/v1/ask", json=payload)
             assert response.status_code == 422, f"Very short word '{word}' should be rejected"
             assert "empty_prompt" in response.json().get("detail", "")
 
@@ -96,7 +116,12 @@ class TestShortPromptFailures:
             payload = self.base_payload.copy()
             payload["prompt"] = prompt
 
-            response = self.client.post("/ask", json=payload)
+            # Mock authentication and scope checking since the endpoint requires it
+            with patch("app.deps.user.get_current_user_id", return_value="test_user"), \
+                 patch("app.auth_core.require_scope") as mock_scope:
+                # Make the scope check just return without doing anything
+                mock_scope.return_value = None
+                response = self.client.post("/v1/ask", json=payload)
             assert response.status_code == 422, f"Punctuation only prompt '{prompt}' should be rejected"
 
     def test_req_id_consistency_in_error_responses(self):
@@ -104,7 +129,12 @@ class TestShortPromptFailures:
         payload = self.base_payload.copy()
         payload["prompt"] = "x"  # Very short prompt that will be rejected
 
-        response = self.client.post("/ask", json=payload)
+        # Mock authentication and scope checking since the endpoint requires it
+        with patch("app.deps.user.get_current_user_id", return_value="test_user"), \
+             patch("app.auth_core.require_scope") as mock_scope:
+            # Make the scope check just return without doing anything
+            mock_scope.return_value = None
+            response = self.client.post("/v1/ask", json=payload)
 
         # Check that X-Request-ID header is present even in error responses
         assert "X-Request-ID" in response.headers
@@ -120,7 +150,7 @@ class TestShortPromptFailures:
         payload = self.base_payload.copy()
         payload["prompt"] = ""  # Empty prompt
 
-        response = self.client.post("/ask", json=payload)
+        response = self.client.post("/v1/ask", json=payload)
 
         assert response.status_code == 422
         assert response.headers.get("content-type") == "application/json"
@@ -148,7 +178,7 @@ class TestShortPromptFailures:
             mock_main.route_prompt.__name__ = "route_prompt"
 
             # This should not raise UnboundLocalError
-            response = self.client.post("/ask", json=payload)
+            response = self.client.post("/v1/ask", json=payload)
 
             # Should get a 500 error with proper JSON response
             assert response.status_code == 500
@@ -200,7 +230,7 @@ class TestShortPromptFailures:
         payload["prompt"] = "test"
 
         # Even if there's an error, the response should be properly structured
-        response = self.client.post("/ask", json=payload)
+        response = self.client.post("/v1/ask", json=payload)
 
         # Response should be valid JSON regardless of success/failure
         try:

@@ -16,9 +16,9 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
-from app.auth_store_tokens import TokenDAO, DEFAULT_DB_PATH
+from app.auth_store_tokens import TokenDAO, _default_db_path
 from app.models.third_party_tokens import ThirdPartyToken
-from app.auth_store import DB_PATH as AUTH_DB_PATH, link_oauth_identity, ensure_tables
+from app.auth_store import _db_path as AUTH_DB_PATH, link_oauth_identity, ensure_tables
 
 
 @pytest.fixture
@@ -31,18 +31,21 @@ async def temp_dbs(tmp_path):
     auth_db = tmp_path / "test_auth.db"
 
     # Override the DB paths for testing
-    original_token_path = DEFAULT_DB_PATH
-    original_auth_path = AUTH_DB_PATH
+    original_token_path = _default_db_path()
+    original_auth_path = AUTH_DB_PATH()
 
-    # Set up auth database
-    import app.auth_store
-    app.auth_store.DB_PATH = auth_db
+    # Set up auth database using environment variable override
+    import os
+    os.environ["USERS_DB"] = str(auth_db)
 
     # Ensure auth tables exist
     await ensure_tables()
 
-    # Create TokenDAO with temp path and ensure its tables exist
-    dao = TokenDAO(str(token_db))
+    # Set up TokenDAO database using environment variable override
+    os.environ["THIRD_PARTY_TOKENS_DB"] = str(token_db)
+
+    # Create TokenDAO (will use the env var override) and ensure its tables exist
+    dao = TokenDAO()
     await dao._ensure_table()  # Ensure token tables are created
 
     yield dao, auth_db

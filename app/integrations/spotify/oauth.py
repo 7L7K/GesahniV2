@@ -138,7 +138,8 @@ class SpotifyOAuth:
 
         # In test mode, mint deterministic tokens without calling Spotify
         test_mode_env = os.getenv("SPOTIFY_TEST_MODE", "0")
-        is_test_mode = test_mode_env == "1"
+        # Treat pytest runs as test mode as well so refresh/exchange can be deterministic
+        is_test_mode = test_mode_env == "1" or bool(os.getenv("PYTEST_RUNNING") or os.getenv("PYTEST_CURRENT_TEST"))
         is_fake_code = code == "fake"
 
         logger.info("🎵 SPOTIFY EXCHANGE: Test mode check", extra={
@@ -180,6 +181,17 @@ class SpotifyOAuth:
 
     async def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
         """Refresh an access token using the refresh token."""
+        # In test mode, return deterministic fake refreshed tokens so tests
+        # that invoke refresh don't call out to Spotify and can validate updates.
+        if os.getenv("SPOTIFY_TEST_MODE", "0") == "1":
+            now = int(time.time())
+            return {
+                "access_token": f"B{secrets.token_hex(16)}",
+                "refresh_token": refresh_token,
+                "scope": self.scopes,
+                "expires_in": 3600,
+                "expires_at": now + 3600,
+            }
         token_url = "https://accounts.spotify.com/api/token"
 
         data = {

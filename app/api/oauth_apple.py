@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import random
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlencode
 
 import httpx
@@ -152,7 +152,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
 
     sess = await sessions_store.create_session(user_id)
     sid, did = sess["sid"], sess["did"]
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_access, make_refresh
 

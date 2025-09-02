@@ -4,7 +4,7 @@ import json
 import os
 import sqlite3
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 _TEST_MODE = (
@@ -94,7 +94,7 @@ class MusicState:
 
 
 def _now_iso() -> str:
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def load_state(user_id: str) -> MusicState:

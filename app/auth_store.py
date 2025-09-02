@@ -11,6 +11,9 @@ from typing import Any
 
 import aiosqlite
 
+# Optional override for tests to set a custom DB path (tests may assign this)
+DB_PATH: str | None = None
+
 
 def _compute_db_path() -> Path:
     env_path = os.getenv("AUTH_DB")
@@ -27,6 +30,13 @@ def _compute_db_path() -> Path:
 
 
 def _db_path() -> Path:
+    # Allow tests to override the DB path by setting module-level DB_PATH.
+    # Tests set `app.auth_store.DB_PATH = ...` to force a temp DB file.
+    try:
+        if globals().get("DB_PATH"):
+            return Path(globals().get("DB_PATH")).resolve()
+    except Exception:
+        pass
     return resolve_db_path("AUTH_DB", "auth.db")
 
 

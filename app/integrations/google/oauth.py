@@ -167,12 +167,12 @@ def make_authorize_url(state: str) -> str:
     return GoogleOAuth().get_authorization_url(state)
 
 
-async def exchange_code(code: str, state: str | None = None, verify_state: bool = True, code_verifier: str | None = None) -> ThirdPartyToken:
-    """Exchange an authorization code for a ThirdPartyToken.
+async def exchange_code(code: str, state: str | None = None, verify_state: bool = True, code_verifier: str | None = None):
+    """Exchange an authorization code for Google credentials.
 
     If `state` is provided and `verify_state` is True, the state will be verified
-    (consuming nonce when applicable). Returns a ThirdPartyToken stub with
-    user_id left for the caller to resolve (caller typically extracts email/sub).
+    (consuming nonce when applicable). Returns Google credentials object that
+    the callback can use for further processing.
     """
     if state and verify_state:
         try:
@@ -184,27 +184,63 @@ async def exchange_code(code: str, state: str | None = None, verify_state: bool 
 
     oauth = GoogleOAuth()
     td = await oauth.exchange_code_for_tokens(code, code_verifier)
+
+    # Create Google credentials object
+    if not _GOOGLE_AVAILABLE or _Credentials is None:  # pragma: no cover - env-dependent
+        from ..error_envelope import raise_enveloped
+        raise_enveloped("google_unavailable", "google credentials unavailable", status=501)
+
     now = int(time.time())
     expires_at = int(td.get("expires_at", now + int(td.get("expires_in", 3600))))
 
-    token = ThirdPartyToken(
-        id=f"google:{secrets.token_hex(8)}",
-        user_id="<set by caller>",
-        provider="google",
-        access_token=td.get("access_token", ""),
+    # Convert expires_at timestamp to datetime
+    from datetime import datetime, UTC
+    expiry_dt = datetime.fromtimestamp(expires_at, tz=UTC)
+
+    creds = _Credentials(
+        token=td.get("access_token", ""),
         refresh_token=td.get("refresh_token"),
-        scopes=td.get("scope"),
-        expires_at=expires_at,
-        created_at=now,
-        updated_at=now,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=os.getenv("GOOGLE_CLIENT_ID", ""),
+        client_secret=os.getenv("GOOGLE_CLIENT_SECRET", ""),
+        scopes=td.get("scope", "").split() if td.get("scope") else [],
+        expiry=expiry_dt,
     )
 
-    # Add id_token as an attribute so the callback can access it for provider_iss extraction
-    # This is temporary and only used during the OAuth callback process
-    if "id_token" in td:
-        token.id_token = td["id_token"]
+    # Add id_token so the callback can access it. Some Credentials implementations
+    # expose `id_token` as a read-only property which raises on assignment. To be
+    # robust for both real google Credentials and test/mocked objects, try to
+    # attach the attribute directly; if that fails, return a small proxy that
+    # exposes `id_token` while delegating other attribute access to the real
+    # credentials object.
+    id_token_val = td.get("id_token")
+    if id_token_val:
+        try:
+            setattr(creds, "id_token", id_token_val)
+        except Exception:
+            # Create a lightweight proxy wrapper that exposes id_token and
+            # forwards other attribute lookups to the underlying creds object.
+            class _CredentialsProxy:
+                def __init__(self, inner, id_token):
+                    object.__setattr__(self, "_inner", inner)
+                    object.__setattr__(self, "id_token", id_token)
 
-    return token
+                def __getattr__(self, name):
+                    return getattr(self._inner, name)
+
+                def __setattr__(self, name, value):
+                    # Try to set on inner if it has attribute, otherwise set on proxy
+                    try:
+                        setattr(self._inner, name, value)
+                    except Exception:
+                        object.__setattr__(self, name, value)
+
+                def __repr__(self):
+                    return f"CredentialsProxy({repr(self._inner)})"
+
+            return _CredentialsProxy(creds, id_token_val)
+
+    return creds
 
 
 async def refresh_token(refresh_token: str) -> dict[str, Any]:

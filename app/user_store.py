@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import aiosqlite
@@ -61,7 +61,7 @@ class UserStore:
 
     async def increment_login(self, user_id: str) -> None:
         conn = await self._get_conn()
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         await conn.execute(
             """
             UPDATE user_stats

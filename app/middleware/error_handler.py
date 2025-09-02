@@ -55,7 +55,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
 
         if isinstance(exc, HTTPException):
             status_code = exc.status_code
-            code, message, hint = shape_from_status(status_code, exc.detail)
+            code, message, hint = shape_from_status(status_code, default_message=exc.detail)
         elif isinstance(exc, ValueError):
             status_code = 400
             code = "invalid_input"
@@ -123,9 +123,12 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
             exc_info=True,
         )
 
-        # Return HTTPException with envelope
+        # Return a JSONResponse with the standardized envelope and headers so
+        # TestClient gets a normal response object instead of an exception.
+        from fastapi.responses import JSONResponse
+
         headers = {"X-Error-Code": code}
         if tid:
             headers["X-Trace-ID"] = tid
 
-        raise HTTPException(status_code=status_code, detail=envelope, headers=headers)
+        return JSONResponse(status_code=status_code, content=envelope, headers=headers)

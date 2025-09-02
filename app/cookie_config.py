@@ -52,20 +52,31 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
     dev_env_detected = dev_mode or _is_dev_environment(request)
     is_tls = _get_scheme(request) == "https"
 
-    # Determine secure flag: HTTPS by default, but allow explicit override
+    # Determine secure flag with HTTPS taking precedence. Order of precedence:
+    # 1) COOKIE_SECURE=1 (force secure)
+    # 2) If request is TLS (HTTPS) -> secure
+    # 3) COOKIE_SECURE=0 (force insecure)
+    # 4) default to False
     if env_force_secure:
+        cookie_secure = True
+    elif is_tls:
         cookie_secure = True
     elif env_force_insecure:
         cookie_secure = False
     else:
-        # Default: True for HTTPS, False for HTTP
-        cookie_secure = is_tls
+        cookie_secure = False
 
     # If in dev or on localhost over plain HTTP, ensure cookies are accepted by browsers
     if dev_env_detected and not is_tls:
         # In dev mode over HTTP, always force Secure=False for localhost compatibility
         # This overrides any COOKIE_SECURE setting to ensure cookies work in development
         cookie_secure = False
+
+    # Enforce that when SameSite=None is requested, Secure must be True per RFC.
+    # Tests may request SameSite=None and expect Secure to be present; ensure
+    # we add the Secure attribute even if other logic would disable it.
+    if cookie_samesite == "none":
+        cookie_secure = True
 
     # SameSite=None requires Secure=True. If SameSite=None is requested but secure is not
     # set, force secure=True to avoid creating invalid cookie combinations.

@@ -22,7 +22,20 @@ _last_mtime: float | None = None  # None = never loaded
 _last_mtimes: dict[str, float] | None = None
 _loaded_once: bool = False
 
+# Test mode switchboard - central control for test environment
+IS_TEST: bool = False
+
 _logger = logging.getLogger(__name__)
+
+
+def is_test_mode() -> bool:
+    """Check if we're running in test mode.
+
+    Returns True when PYTEST_RUNNING=1 or TEST_MODE=1 or ENV=test.
+    This central switchboard controls test-safe defaults that eliminate
+    "spiky" test failures (rate limits, secure cookies, etc.).
+    """
+    return IS_TEST
 
 
 def load_env(force: bool | int | str = False) -> None:
@@ -40,13 +53,31 @@ def load_env(force: bool | int | str = False) -> None:
 
     Parsing: handled by python-dotenv; supports quoted values and comments.
     """
-    global _last_mtime, _last_mtimes, _loaded_once
+    global _last_mtime, _last_mtimes, _loaded_once, IS_TEST
 
     # Normalize force
     _force = str(force).lower() in {"1", "true", "yes", "on"}
     test_mode = os.getenv("ENV", "").strip().lower() == "test" or bool(
         os.getenv("PYTEST_RUNNING")
     )
+
+    # Set test mode switchboard and apply safe defaults
+    IS_TEST = test_mode
+    if IS_TEST:
+        _logger.info("env_loader: TEST MODE activated - applying safe defaults")
+
+        # Only apply rate limit defaults if ENABLE_RATE_LIMIT_IN_TESTS is not set
+        enable_rate_limiting_in_tests = os.getenv("ENABLE_RATE_LIMIT_IN_TESTS", "0").lower() in ("1", "true", "yes")
+        if not enable_rate_limiting_in_tests:
+            os.environ.setdefault("RATE_LIMIT_MODE", "off")       # kills 429s (unless explicitly enabled)
+
+        # Apply other test-safe defaults
+        os.environ.setdefault("AUTH_MODE", "cookie")              # predictable auth for tests
+        os.environ.setdefault("CSRF_ENFORCED", "1")               # enable CSRF but...
+        os.environ.setdefault("CSRF_MISSING_CODE", "400")         # normalize error code to 400
+        os.environ.setdefault("COOKIE_SECURE", "0")               # allow TestClient
+        os.environ.setdefault("COOKIE_SAMESITE", "Lax")           # safe default
+        os.environ.setdefault("ALLOW_DEV_ROUTERS", "1")           # mount compat routes for tests
 
     # Snapshot current mtimes and existence
     def _mtime(path: Path) -> float:

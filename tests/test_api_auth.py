@@ -151,9 +151,9 @@ class TestWhoami:
         app = _create_test_app()
         client = TestClient(app)
 
-        # Set expired token
+        # Set expired token (expired by more than JWT leeway to ensure failure)
         expired_token = _mint_token(
-            "test-secret-key-for-testing-only-not-for-production", "expired", ttl_s=-1
+            "test-secret-key-for-testing-only-not-for-production", "expired", ttl_s=-120
         )
         client.cookies.set("access_token", expired_token)
 
@@ -498,7 +498,7 @@ class TestWhoamiAdvanced:
     """Additional whoami test scenarios"""
 
     def test_whoami_priority_order(self, monkeypatch):
-        """Test whoami priority order: header > cookie (current implementation)"""
+        """Test whoami priority order: cookie > header"""
         monkeypatch.setenv(
             "JWT_SECRET", "test-secret-key-for-testing-only-not-for-production"
         )
@@ -520,14 +520,14 @@ class TestWhoamiAdvanced:
             "/v1/whoami", headers={"Authorization": f"Bearer {header_token}"}
         )
 
-        # Assert header takes priority over cookie (current implementation)
+        # Assert cookie takes priority over header
         assert response.status_code == 200
         data = response.json()
         assert data["is_authenticated"] is True
         assert (
-            data["user"]["id"] == "header-user"
-        )  # Header takes priority in current implementation
-        assert data["source"] == "header"
+            data["user"]["id"] == "cookie-user"
+        )  # Cookie takes priority
+        assert data["source"] == "cookie"
         assert data["version"] == 1
 
     def test_whoami_invalid_jwt_secret_error(self, monkeypatch):

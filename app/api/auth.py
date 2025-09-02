@@ -322,7 +322,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
     jwt_status = "missing"
 
     # Priority 1: Try access_token cookie first (most secure)
-    # Set source to "cookie" if we have a token cookie, even if invalid
+    # Set source to "cookie" if we have a cookie token, even if invalid
     if token_cookie:
         src = "cookie"  # Cookie has priority over header
         try:
@@ -369,11 +369,54 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 },
             )
 
-    # Priority 2: Try Authorization header only if no cookie present
-    elif token_header and src == "missing":
+    # Priority 2: Try Authorization header if cookie failed or missing
+    if not session_ready and token_header:
         src = "header"
+        try:
+            logger.info(
+                "whoami.header_jwt_decode.start",
+                extra={
+                    "meta": {
+                        "req_id": req_id_var.get(),
+                        "timestamp": time.time(),
+                    }
+                },
+            )
+            # Allow a small clock skew when decoding headers (iat/nbf)
+            claims = jwt_decode(token_header, _jwt_secret(), algorithms=["HS256"], leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60))  # type: ignore[arg-type]
+            session_ready = True
+            effective_uid = (
+                str(claims.get("user_id") or claims.get("sub") or "") or None
+            )
+            jwt_status = "ok"
+            logger.info(
+                "whoami.header_jwt_decode.success",
+                extra={
+                    "meta": {
+                        "req_id": req_id_var.get(),
+                        "user_id": effective_uid,
+                        "claims_keys": list(claims.keys()),
+                        "timestamp": time.time(),
+                    }
+                },
+            )
+        except Exception as e:
+            session_ready = False
+            effective_uid = None
+            jwt_status = "invalid"
+            logger.error(
+                "whoami.header_jwt_decode.failed",
+                extra={
+                    "meta": {
+                        "req_id": req_id_var.get(),
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "timestamp": time.time(),
+                    }
+                },
+            )
 
-    # Priority 2: Try Clerk verification if access_token cookie failed and Clerk is enabled
+    # Priority 3: Try Clerk verification if both header and cookie failed and Clerk is enabled
     if not session_ready and clerk_token and os.getenv("CLERK_ENABLED", "0") == "1":
         try:
             logger.info(
@@ -675,6 +718,12 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
     except Exception:
         pass
 
+    # Return 401 if no authentication method was attempted or all failed
+    has_any_token = bool(token_header or token_cookie or clerk_token)
+    if not has_any_token or (has_any_token and not session_ready):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     return {
         "is_authenticated": bool(is_authenticated),
         "session_ready": bool(session_ready),
@@ -716,7 +765,12 @@ async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONR
     # First, delegate identity resolution to canonical whoami_impl
     try:
         out = await whoami_impl(request)
-    except Exception:
+    except Exception as e:
+        # Allow HTTPException to propagate for proper error responses
+        from fastapi import HTTPException
+        if isinstance(e, HTTPException):
+            raise e
+        # For other exceptions, return unauthenticated response
         out = {
             "is_authenticated": False,
             "session_ready": False,
@@ -1063,7 +1117,7 @@ async def finish_clerk_login(
     import jwt as pyjwt
 
     # Get current time and JWT configuration
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     iss = os.getenv("JWT_ISS")
     aud = os.getenv("JWT_AUD")
 
@@ -1137,7 +1191,7 @@ async def finish_clerk_login(
                     raise HTTPException(status_code=400, detail="missing_csrf")
                 cookie = request.cookies.get("csrf_token")
                 if not tok or not cookie or tok != cookie:
-                    raise HTTPException(status_code=403, detail="invalid_csrf")
+                    raise HTTPException(status_code=400, detail="invalid_csrf")
         except HTTPException:
             raise
         except Exception:
@@ -1643,6 +1697,26 @@ async def login_v1(
     if not password:
         raise HTTPException(status_code=400, detail="missing_password")
 
+    # Apply exponential backoff before authentication to prevent timing attacks
+    import asyncio
+    import random
+    from ..auth import _should_apply_backoff, _backoff_start_ms, _backoff_max_ms
+
+    user_key = f"user:{username.lower()}"
+    if _should_apply_backoff(user_key):
+        delay_ms = random.randint(_backoff_start_ms(), _backoff_max_ms())
+        logger.info(
+            "auth.login_applying_backoff",
+            extra={
+                "meta": {
+                    "username": username.lower(),
+                    "ip": getattr(request.client, 'host', 'unknown') if request.client else 'unknown',
+                    "delay_ms": delay_ms,
+                }
+            },
+        )
+        await asyncio.sleep(delay_ms / 1000.0)
+
     # Validate credentials against users database
     try:
         from ..api.auth_password import _pwd, _db_path
@@ -1655,14 +1729,22 @@ async def login_v1(
                 row = await cur.fetchone()
 
         if not row:
+            from ..auth import _record_attempt
+            _record_attempt(user_key, success=False)
             from ..http_errors import unauthorized
 
             raise unauthorized(code="invalid_credentials", message="invalid credentials", hint="check username/password")
 
         if not _pwd.verify(password, row[0]):
+            from ..auth import _record_attempt
+            _record_attempt(user_key, success=False)
             from ..http_errors import unauthorized
 
             raise unauthorized(code="invalid_credentials", message="invalid credentials", hint="check username/password")
+
+        # Record successful login
+        from ..auth import _record_attempt
+        _record_attempt(user_key, success=True)
     except HTTPException:
         raise
     except Exception as e:
@@ -1905,6 +1987,9 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
     Intent: When COOKIE_SAMESITE=none, require header X-Auth-Intent: refresh.
     CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
     """
+    # Import HTTPException at function level for CSRF validation
+    from fastapi import HTTPException
+
     # Global CSRF enforcement for mutating routes when enabled
     try:
         if os.getenv("CSRF_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}:
@@ -1954,7 +2039,7 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
                 cookie = request.cookies.get("csrf_token")
                 if not tok or not cookie or tok != cookie:
                     logger.info("refresh_flow: csrf_failed=true, reason=invalid_csrf")
-                    raise HTTPException(status_code=403, detail="invalid_csrf")
+                    raise HTTPException(status_code=400, detail="invalid_csrf")
         else:
             # When CSRF is disabled, still require intent header for cross-site requests
             if os.getenv("COOKIE_SAMESITE", "lax").lower() == "none":
@@ -1962,7 +2047,7 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
                     "X-Auth-Intent"
                 )
                 if str(intent or "").strip().lower() != "refresh":
-                    raise HTTPException(status_code=400, detail="missing_intent_header")
+                    raise HTTPException(status_code=400, detail="missing_intent_header_cross_site")
     except HTTPException:
         raise
     except Exception:
@@ -2021,6 +2106,11 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
 
         # Get current user ID for validation
         current_user_id = get_current_user_id(request=request)
+
+        # Return 401 if no valid authentication
+        if current_user_id == "anon":
+            from fastapi import HTTPException
+            raise HTTPException(status_code=401, detail="invalid_refresh")
 
         # Perform rotation with replay protection - use shim for test compatibility
         tokens = await rotate_refresh_cookies(request, response)

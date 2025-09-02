@@ -9,7 +9,7 @@ from .error_envelope import build_error
 def unauthorized(
     *,
     code: str = "unauthorized",
-    message: str = "unauthorized",
+    message: str = "Unauthorized",
     hint: str = "provide a valid bearer token or auth cookies",
     headers: Mapping[str, str] | None = None,
 ) -> HTTPException:

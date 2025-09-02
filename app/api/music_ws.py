@@ -5,7 +5,7 @@ import os
 import time as _t
 from typing import Any
 
-from fastapi import APIRouter, Depends, WebSocket
+from fastapi import APIRouter, Depends, Request, Response, WebSocket
 
 from app.deps.user import get_current_user_id
 from app.security import verify_ws
@@ -173,6 +173,34 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
             _logger.info("ws.music.close", extra={"meta": {"user_id": uid, "duration_s": dur}})
         except Exception:
             pass
+
+
+# Guard: HTTP -> WS error
+@router.get("/ws/music")
+@router.post("/ws/music")
+@router.put("/ws/music")
+@router.patch("/ws/music")
+@router.delete("/ws/music")
+async def websocket_http_handler(request: Request):
+    try:
+        from app.auth_monitoring import record_ws_reconnect_attempt
+
+        record_ws_reconnect_attempt(
+            endpoint="/v1/ws/music",
+            reason="http_request_to_ws_endpoint",
+            user_id="unknown",
+        )
+    except Exception:
+        pass
+    return Response(
+        content="WebSocket endpoint requires WebSocket protocol",
+        status_code=400,
+        media_type="text/plain",
+        headers={
+            "X-WebSocket-Error": "protocol_required",
+            "X-WebSocket-Reason": "HTTP requests not supported on WebSocket endpoints",
+        },
+    )
 
 
 __all__ = ["router"]

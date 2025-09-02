@@ -7,7 +7,7 @@ for comprehensive API endpoint testing without external services.
 
 import os
 from collections.abc import Generator
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt
@@ -219,7 +219,7 @@ def create_auth_cookies(user_id: str = "dev") -> dict[str, str]:
     import os
     jwt_secret = os.getenv("JWT_SECRET", "test-jwt-secret-for-testing")
 
-    now = int(datetime.utcnow().timestamp())
+    now = int(datetime.now(timezone.utc).timestamp())
 
     access_payload = {
         "user_id": user_id,
@@ -253,7 +253,7 @@ def create_auth_headers(user_id: str = "dev") -> dict[str, str]:
     import os
     jwt_secret = os.getenv("JWT_SECRET", "test-jwt-secret-for-testing")
 
-    now = int(datetime.utcnow().timestamp())
+    now = int(datetime.now(timezone.utc).timestamp())
 
     access_payload = {
         "user_id": user_id,
