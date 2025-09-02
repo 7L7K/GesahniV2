@@ -1,21 +1,22 @@
 import json
 import os
-
 import pytest
 
 
 def _openapi():
     from app.main import app
-
     return app.openapi()
 
 
-def _get(client, path: str):
-    return client.get(path, headers={"Authorization": "Bearer test"})
+async def _get(client, path: str):
+    """Helper to make GET requests (calendar endpoints are public, no auth needed)."""
+    response = await client.get(path)
+    return response
 
 
 @pytest.fixture(autouse=True)
 def _calendar_tmpfile(monkeypatch, tmp_path):
+    """Set up temporary calendar file for tests."""
     p = tmp_path / "calendar.json"
     p.write_text(
         json.dumps(
@@ -31,8 +32,9 @@ def _calendar_tmpfile(monkeypatch, tmp_path):
     yield
 
 
-def test_calendar_next_returns_three_sorted(client):
-    res = _get(client, "/v1/calendar/next")
+@pytest.mark.asyncio
+async def test_calendar_next_returns_three_sorted(async_client):
+    res = await _get(async_client, "/v1/calendar/next")
     assert res.status_code == 200
     data = res.json()
     assert "items" in data
@@ -41,15 +43,17 @@ def test_calendar_next_returns_three_sorted(client):
     assert titles[:2] == ["Future A", "Future B"]
 
 
-def test_calendar_list_returns_all_sorted(client):
-    res = _get(client, "/v1/calendar/list")
+@pytest.mark.asyncio
+async def test_calendar_list_returns_all_sorted(async_client):
+    res = await _get(async_client, "/v1/calendar/list")
     assert res.status_code == 200
     items = res.json()["items"]
     # Sorted by date/time; past first
     assert [it["title"] for it in items] == ["Past", "Future A", "Future B"]
 
 
-def test_calendar_today_filters_today_only(client, monkeypatch):
+@pytest.mark.asyncio
+async def test_calendar_today_filters_today_only(async_client, monkeypatch):
     # Freeze today to the past entry
     monkeypatch.setenv("PYTEST_FAKE_TODAY", "1999-01-01")
     # Monkeypatch date.today via environment indirection: override _dt.date.today
@@ -65,7 +69,7 @@ def test_calendar_today_filters_today_only(client, monkeypatch):
             return _d(year=y, month=m, day=d)
 
     cal._dt.date = _FakeDate  # type: ignore
-    res = _get(client, "/v1/calendar/today")
+    res = await _get(async_client, "/v1/calendar/today")
     assert res.status_code == 200
     items = res.json()["items"]
     assert [it["title"] for it in items] == ["Past"]
@@ -95,9 +99,10 @@ def test_calendar_endpoints_tagged_calendar(path, client):
     assert op and "Calendar" in (op.get("tags") or [])
 
 
-def test_calendar_response_shapes(client):
+@pytest.mark.asyncio
+async def test_calendar_response_shapes(async_client):
     for path in ("/v1/calendar/list", "/v1/calendar/next", "/v1/calendar/today"):
-        res = _get(client, f"{path}")
+        res = await _get(async_client, f"{path}")
         assert res.status_code == 200
         body = res.json()
         assert isinstance(body.get("items"), list)

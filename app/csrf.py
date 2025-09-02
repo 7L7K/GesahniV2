@@ -56,8 +56,29 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         # Default disabled globally; enable per app/env via CSRF_ENABLED=1
         if not _truthy(os.getenv("CSRF_ENABLED", "0")):
             return await call_next(request)
+
+        # For safe methods, ensure CSRF token is available and set in response header
         if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
-            return await call_next(request)
+            response = await call_next(request)
+
+            # Ensure CSRF token cookie exists
+            csrf_cookie = request.cookies.get("csrf_token")
+            if not csrf_cookie:
+                csrf_cookie = token_urlsafe(16)
+                # Set secure cookie with proper attributes
+                response.set_cookie(
+                    "csrf_token",
+                    csrf_cookie,
+                    httponly=False,  # Allow JavaScript access for testing
+                    secure=_truthy(os.getenv("COOKIE_SECURE", "auto")),
+                    samesite=os.getenv("COOKIE_SAMESITE", "lax"),
+                    max_age=int(os.getenv("CSRF_TTL_SECONDS", "600"))
+                )
+
+            # Mirror CSRF token in response header for client access
+            response.headers["X-CSRF-Token"] = csrf_cookie
+
+            return response
 
         # Bypass CSRF for Bearer-only auth (Authorization header present, no session cookie)
         auth_header = request.headers.get("Authorization")

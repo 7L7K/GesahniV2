@@ -195,13 +195,14 @@ class CorsPreflightMiddleware(BaseHTTPMiddleware):
                 cors_headers["Access-Control-Allow-Origin"] = origin
                 cors_headers["Access-Control-Allow-Credentials"] = "true"
                 cors_headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-                cors_headers["Access-Control-Allow-Headers"] = "*"
+                cors_headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,X-CSRF-Token"
+                cors_headers["Vary"] = "Origin"
 
                 # Add max-age for caching
                 cors_headers["Access-Control-Max-Age"] = "600"
 
-            # Return 204 No Content for preflight requests
-            return PlainTextResponse("", status_code=204, headers=cors_headers)
+            # Return 200 OK for preflight requests (matches FastAPI CORS middleware behavior)
+            return PlainTextResponse("", status_code=200, headers=cors_headers)
 
         # Continue with normal request processing
         return await call_next(request)

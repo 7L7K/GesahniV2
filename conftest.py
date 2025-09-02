@@ -243,6 +243,191 @@ def app_client(monkeypatch):
 
 
 @pytest.fixture
+def app(monkeypatch):
+    """Provide the FastAPI app instance for tests that need direct access."""
+    # Put app in test mode for routes that relax auth in tests
+    monkeypatch.setenv("PYTEST_MODE", "1")
+    # Allow anonymous requests in tests unless a JWT is explicitly set by a test
+    monkeypatch.delenv("JWT_SECRET", raising=False)
+    monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
+
+    # Ensure test-friendly configuration
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setenv("ENV", "dev")
+    monkeypatch.setenv("ENABLE_RATE_LIMIT_IN_TESTS", "0")
+    monkeypatch.setenv("CSRF_ENABLED", "0")
+    monkeypatch.setenv("WS_DISABLE_ASYNC_LOGGING", "1")
+    monkeypatch.setenv("PROMETHEUS_ENABLED", "0")
+    monkeypatch.setenv("LOG_LEVEL", "WARNING")
+    monkeypatch.setenv("CORS_ALLOW_ORIGINS", "*")
+    monkeypatch.setenv("SESSION_STORE", "memory")
+    monkeypatch.setenv("VECTOR_STORE", "memory")
+
+    # Import the FastAPI `app` after test env vars are set
+    from app.main import app
+    return app
+
+
+@pytest.fixture
+async def async_app(monkeypatch):
+    """Provide the FastAPI app instance for async tests."""
+    # Put app in test mode for routes that relax auth in tests
+    monkeypatch.setenv("PYTEST_MODE", "1")
+    # Allow anonymous requests in tests unless a JWT is explicitly set by a test
+    monkeypatch.delenv("JWT_SECRET", raising=False)
+    monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
+
+    # Ensure test-friendly configuration
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setenv("ENV", "dev")
+    monkeypatch.setenv("ENABLE_RATE_LIMIT_IN_TESTS", "0")
+    monkeypatch.setenv("CSRF_ENABLED", "0")
+    monkeypatch.setenv("WS_DISABLE_ASYNC_LOGGING", "1")
+    monkeypatch.setenv("PROMETHEUS_ENABLED", "0")
+    monkeypatch.setenv("LOG_LEVEL", "WARNING")
+    monkeypatch.setenv("CORS_ALLOW_ORIGINS", "*")
+    monkeypatch.setenv("SESSION_STORE", "memory")
+    monkeypatch.setenv("VECTOR_STORE", "memory")
+
+    # Import the FastAPI `app` after test env vars are set
+    from app.main import app
+    return app
+
+
+@pytest.fixture
+async def async_client(async_app):
+    """Provide an async test client using httpx with ASGITransport."""
+    from httpx import ASGITransport, AsyncClient
+
+    # Create async client with lifespan support (lifespan is handled automatically)
+    transport = ASGITransport(app=async_app)
+    client = AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        timeout=10.0,  # 10 second timeout per request
+        follow_redirects=True
+    )
+
+    try:
+        yield client
+    finally:
+        # Ensure client is properly closed
+        await client.aclose()
+
+
+@pytest.fixture
+async def cors_client(async_app):
+    """Provide an async test client configured for CORS testing."""
+    from httpx import ASGITransport, AsyncClient
+
+    transport = ASGITransport(app=async_app)
+    client = AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        timeout=10.0,
+        follow_redirects=True,
+        headers={"Origin": "http://localhost:3000"}  # Default CORS origin for tests
+    )
+
+    try:
+        yield client
+    finally:
+        await client.aclose()
+
+
+@pytest.fixture
+async def csrf_client(async_app):
+    """Provide an async test client configured for CSRF testing."""
+    from httpx import ASGITransport, AsyncClient
+
+    transport = ASGITransport(app=async_app)
+    client = AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        timeout=10.0,
+        follow_redirects=True,
+        headers={
+            "Origin": "http://localhost:3000",
+            "Referer": "http://localhost:3000"
+        }
+    )
+
+    try:
+        yield client
+    finally:
+        await client.aclose()
+
+
+async def fetch_csrf_token(client):
+    """Helper function to fetch CSRF token from a safe endpoint."""
+    # Try to get CSRF token from /v1/csrf endpoint if it exists
+    try:
+        response = await client.get("/v1/csrf")
+        if response.status_code == 200:
+            data = response.json()
+            token = data.get("csrf_token")
+            if token:
+                return token
+    except Exception:
+        pass
+
+    # Fallback: GET request to a safe endpoint that should set CSRF cookie
+    safe_endpoints = ["/health", "/v1/health", "/"]
+    for endpoint in safe_endpoints:
+        try:
+            response = await client.get(endpoint)
+            if response.status_code == 200:
+                # Check if CSRF token was set in cookie
+                csrf_cookie = response.cookies.get("csrf_token")
+                if csrf_cookie:
+                    return csrf_cookie
+                # Check if token was returned in X-CSRF-Token header
+                csrf_header = response.headers.get("X-CSRF-Token")
+                if csrf_header:
+                    return csrf_header
+        except Exception:
+            continue
+
+    # Last resort: generate a random token for testing
+    import secrets
+    return secrets.token_urlsafe(16)
+
+
+async def prepare_csrf_request(client):
+    """Prepare client for CSRF-protected requests by fetching and setting token."""
+    csrf_token = await fetch_csrf_token(client)
+
+    # Set the CSRF cookie
+    client.cookies.set("csrf_token", csrf_token, domain="testserver")
+
+    # Return the token for use in headers
+    return csrf_token
+
+
+@pytest.fixture
+async def cors_csrf_client(async_app):
+    """Provide an async test client configured for CORS + CSRF testing."""
+    from httpx import ASGITransport, AsyncClient
+
+    transport = ASGITransport(app=async_app)
+    client = AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        timeout=10.0,
+        follow_redirects=True,
+        headers={
+            "Origin": "http://localhost:3000",
+            "Referer": "http://localhost:3000"
+        }
+    )
+
+    try:
+        yield client
+    finally:
+        await client.aclose()
+
+
+@pytest.fixture
 async def seed_spotify_token():
     """Seed a Spotify token for testing."""
     from app.models.third_party_tokens import ThirdPartyToken
@@ -254,7 +439,7 @@ async def seed_spotify_token():
         access_token="test_access_token",
         refresh_token="test_refresh_token",
         expires_at=int(time.time()) + 3600,  # 1 hour from now
-        scope="user-read-private,user-read-email"
+        scopes="user-read-private,user-read-email"
     )
     await upsert_token(token)
     return token

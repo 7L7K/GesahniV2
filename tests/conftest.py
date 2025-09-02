@@ -4,7 +4,12 @@ import os
 import tempfile
 import pytest
 import asyncio
+import json
+import time
+import httpx
+from pathlib import Path
 from starlette.testclient import TestClient as _TestClient
+from httpx import ASGITransport
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -16,6 +21,13 @@ def _setup_test_db_and_init_tables():
     """
     # Mark that we're running tests
     os.environ["PYTEST_RUNNING"] = "1"
+
+    # Set critical test environment variables EARLY to override any defaults from env files
+    os.environ["JWT_SECRET"] = "test_jwt_secret_for_testing_only_must_be_at_least_32_chars_long"
+    os.environ["DEV_MODE"] = "1"
+    os.environ["COOKIE_SAMESITE"] = "Lax"
+    os.environ["COOKIE_SECURE"] = "false"
+    os.environ["SPOTIFY_TEST_MODE"] = "1"
 
     # Set up test database directory - use a dedicated temp directory for tests
     test_db_dir = os.path.join(tempfile.gettempdir(), "gesahni_test_dbs")
@@ -86,3 +98,139 @@ class TestClient(_TestClient):
 def client(app):
     """TestClient fixture with allow_redirects compatibility shim."""
     return TestClient(app)
+
+
+# Async fixtures and auth helpers for modern test support
+
+@pytest.fixture(scope="session")
+async def app():
+    """Async FastAPI app fixture with lifespan management."""
+    from app.main import app as fastapi_app
+    from app.main import lifespan
+
+    # Start the app with lifespan (env vars are set in _setup_test_db_and_init_tables)
+    async with lifespan(fastapi_app):
+        yield fastapi_app
+
+
+@pytest.fixture(scope="session")
+async def async_client(app):
+    """Async HTTP client using httpx with ASGITransport."""
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client
+
+
+@pytest.fixture
+def test_env(monkeypatch):
+    """Set up test environment variables."""
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setenv("COOKIE_SAMESITE", "Lax")
+    monkeypatch.setenv("COOKIE_SECURE", "false")
+    monkeypatch.setenv("JWT_SECRET", "test_jwt_secret_for_testing_only_must_be_at_least_32_chars_long")
+    monkeypatch.setenv("SPOTIFY_TEST_MODE", "1")
+
+
+@pytest.fixture
+async def create_test_user():
+    """Create or reuse a test user in the database."""
+    from app.user_store import user_store
+    from app.models.third_party_tokens import ThirdPartyToken
+    from app.auth_store_tokens import upsert_token
+
+    test_user_id = "test_user_123"
+
+    # Ensure user exists in user store
+    await user_store.ensure_user(test_user_id)
+
+    # Create a valid Spotify token for testing
+    expires_at = int(time.time()) + 3600  # 1 hour from now
+    token_data = ThirdPartyToken(
+        id="spotify_test_token",
+        user_id=test_user_id,
+        provider="spotify",
+        access_token="test_access_token",
+        refresh_token="test_refresh_token",
+        expires_at=expires_at,
+        scope="user-read-private user-read-email"
+    )
+
+    # Upsert the token
+    await upsert_token(token_data)
+
+    return test_user_id
+
+
+@pytest.fixture
+async def seed_spotify_token(create_test_user):
+    """Seed a valid Spotify token for the test user."""
+    # The token is already created in create_test_user fixture
+    return await create_test_user
+
+
+@pytest.fixture
+def seed_calendar_file(tmp_path):
+    """Create a temporary calendar file with test events."""
+    calendar_data = [
+        {
+            "date": "2025-01-15",
+            "time": "10:00",
+            "title": "Test Meeting",
+            "description": "A test calendar event",
+            "location": "Test Room"
+        },
+        {
+            "date": "2025-01-16",
+            "time": "14:30",
+            "title": "Another Test Event",
+            "description": "Second test event",
+            "location": "Office"
+        }
+    ]
+
+    calendar_file = tmp_path / "test_calendar.json"
+    calendar_file.write_text(json.dumps(calendar_data))
+
+    # Set the environment variable to point to our test file
+    os.environ["CALENDAR_FILE"] = str(calendar_file)
+
+    return str(calendar_file)
+
+
+@pytest.fixture
+async def authed_client(async_client, create_test_user):
+    """Async client with authentication cookies set."""
+    from app.cookies import set_auth_cookies
+    from app.tokens import make_access
+    from fastapi.responses import Response
+
+    user_id = await create_test_user
+
+    # Create a mock response to set cookies
+    response = Response()
+
+    # Generate access token
+    access_token = make_access(user_id)
+
+    # Set auth cookies
+    set_auth_cookies(
+        response=response,
+        access_token=access_token,
+        refresh_token=None,  # Not needed for basic auth
+        max_age=3600
+    )
+
+    # Extract cookies from the response
+    cookies = {}
+    for header_name, header_value in response.headers.items():
+        if header_name.lower() == "set-cookie":
+            # Parse the Set-Cookie header
+            cookie_parts = header_value.split(";")[0].split("=", 1)
+            if len(cookie_parts) == 2:
+                cookies[cookie_parts[0]] = cookie_parts[1]
+
+    # Set cookies on the async client
+    for name, value in cookies.items():
+        async_client.cookies.set(name, value, domain="testserver")
+
+    return async_client

@@ -1496,10 +1496,6 @@ def register_middlewares_once(application):
     add_mw(application, RateLimitMiddleware, name="RateLimitMiddleware")
     add_mw(application, SessionAttachMiddleware, name="SessionAttachMiddleware")
 
-    # CSRF before CORS
-    add_mw(application, CSRFMiddleware, name="CSRFMiddleware")
-    logging.info("=== CSRF MIDDLEWARE REGISTERED ===")
-
     # Dev / optional middlewares
     if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}:
         add_mw(application, ReloadEnvMiddleware, name="ReloadEnvMiddleware")
@@ -1509,6 +1505,9 @@ def register_middlewares_once(application):
     # Error boundary
     add_mw(application, ErrorHandlerMiddleware, name="ErrorHandlerMiddleware")
     add_mw(application, EnhancedErrorHandlingMiddleware, name="EnhancedErrorHandlingMiddleware")
+
+    # CSRF middleware (after CORS to allow preflight requests through)
+    add_mw(application, CSRFMiddleware, name="CSRFMiddleware")
 
     # Standard CORS middleware
     application.add_middleware(
@@ -1527,6 +1526,7 @@ def register_middlewares_once(application):
     # CORS preflight middleware (must be outermost to handle OPTIONS before other middleware)
     from .middleware.cors import CorsPreflightMiddleware
     add_mw(application, CorsPreflightMiddleware, name="CorsPreflightMiddleware")
+    logging.info("=== CSRF MIDDLEWARE REGISTERED ===")
 
     try:
         application.state.mw_registered = True
@@ -1563,6 +1563,7 @@ def _assert_middleware_order_dev(app):
         "CorsPreflightMiddleware",
         "SafariCORSCacheFixMiddleware",
         "CORSMiddleware",
+        "CSRFMiddleware",
         "EnhancedErrorHandlingMiddleware",
         "ErrorHandlerMiddleware",
         # Optional dev middleware (in reverse order since they're added later)
@@ -1576,7 +1577,6 @@ def _assert_middleware_order_dev(app):
             if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
             else []
         ),
-        "CSRFMiddleware",
         "SessionAttachMiddleware",  # SessionAttachMiddleware runs after RateLimitMiddleware for metrics
         "RateLimitMiddleware",  # RateLimitMiddleware runs first to collect metrics
         "MetricsMiddleware",  # Clean prometheus metrics
@@ -1606,12 +1606,13 @@ Expected registration order (inner→outer):
 - RateLimitMiddleware (for metrics collection)
 - SessionAttachMiddleware (after RateLimitMiddleware)
 - CSRFMiddleware
+- CORSMiddleware
+- SafariCORSCacheFixMiddleware
+- CorsPreflightMiddleware (outermost)
 - ReloadEnvMiddleware (optional, DEV_MODE={os.getenv('DEV_MODE', '0')})
 - SilentRefreshMiddleware (optional, SILENT_REFRESH_ENABLED={os.getenv('SILENT_REFRESH_ENABLED', '1')})
 - ErrorHandlerMiddleware
 - EnhancedErrorHandlingMiddleware
-- SafariCORSCacheFixMiddleware (outermost)
-- CORSMiddleware
 
 This error indicates middleware registration order is incorrect.
 Check that add_mw() calls are in the correct sequence in main.py.
