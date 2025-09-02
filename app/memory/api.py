@@ -140,18 +140,20 @@ def _get_store() -> VectorStore:
         return MemoryVectorStore()
 
 
-# The singleton store instance used by every helper below.
-_store: VectorStore = _get_store()
+# Lazy initialization of the singleton store instance
+_store: VectorStore | None = None
 
 
 def get_store() -> VectorStore:
     """Factory for obtaining the vector store.
 
+    Uses lazy initialization to avoid import-time failures.
     In production, do not silently fall back; reuse singleton to avoid churn.
     In tests/dev, return the module-level instance.
     """
-    if os.getenv("ENV", "").lower() == "production":
-        return _store
+    global _store
+    if _store is None:
+        _store = _get_store()
     return _store
 
 
@@ -168,7 +170,7 @@ def add_user_memory(user_id: str, memory: str) -> str:
     filesystem level.
     """
     redacted, mapping = redact_pii(memory)
-    mem_id = _store.add_user_memory(user_id, redacted)
+    mem_id = get_store().add_user_memory(user_id, redacted)
     try:
         store_redaction_map("user_memory", mem_id, mapping)
     except Exception:
@@ -208,7 +210,7 @@ def query_user_memories(
         prompt,
         k_int,
     )
-    res = _store.query_user_memories(user_id, prompt, k_int)
+    res = get_store().query_user_memories(user_id, prompt, k_int)
     logger.debug("query_user_memories returned %d items", len(res))
     return res
 
@@ -237,7 +239,7 @@ def cache_answer(prompt: str, answer: str, cache_id: str | None = None) -> None:
     else:
         cid = _normalized_hash(prompt)
         doc = prompt
-    _store.cache_answer(cid, doc, answer)
+    get_store().cache_answer(cid, doc, answer)
 
 
 def cache_answer_legacy(*args) -> None:  # pragma: no cover - shim for callers
@@ -272,19 +274,19 @@ def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> str | None:
     )
     if is_cid:
         try:
-            res = _store.qa_cache.get_items(ids=[prompt], include=["metadatas"])  # type: ignore[attr-defined]
+            res = get_store().qa_cache.get_items(ids=[prompt], include=["metadatas"])  # type: ignore[attr-defined]
             metas = (res.get("metadatas") or [None])[0] or {}
             ts = float(metas.get("timestamp", 0) or 0)
             if ttl_seconds and ts and (time.time() - ts > ttl_seconds):  # type: ignore[name-defined]
                 # best-effort invalidate via collection
                 try:
-                    _store.qa_cache.delete(ids=[prompt])  # type: ignore[attr-defined]
+                    get_store().qa_cache.delete(ids=[prompt])  # type: ignore[attr-defined]
                 except Exception:
                     pass
                 return None
             if metas.get("feedback") == "down":
                 try:
-                    _store.qa_cache.delete(ids=[prompt])  # type: ignore[attr-defined]
+                    get_store().qa_cache.delete(ids=[prompt])  # type: ignore[attr-defined]
                 except Exception:
                     pass
                 return None
@@ -294,7 +296,7 @@ def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> str | None:
             # Fall back to similarity path on any collection mismatch
             pass
 
-    return _store.lookup_cached_answer(prompt, ttl_seconds)
+    return get_store().lookup_cached_answer(prompt, ttl_seconds)
 
 
 def _compose_cache_cid(
@@ -343,17 +345,17 @@ def cache_answer_context(
 
 def record_feedback(prompt: str, feedback: str) -> None:
     """Record human feedback for *prompt*."""
-    return _store.record_feedback(prompt, feedback)
+    return get_store().record_feedback(prompt, feedback)
 
 
 class _QACacheProxy:
     """Thin proxy so callers can treat ``qa_cache`` like a module-level var."""
 
     def __call__(self):  # noqa: D401
-        return _store.qa_cache
+        return get_store().qa_cache
 
     def __getattr__(self, name):  # pragma: no cover - simple delegation
-        return getattr(_store.qa_cache, name)
+        return getattr(get_store().qa_cache, name)
 
 
 qa_cache = _QACacheProxy()

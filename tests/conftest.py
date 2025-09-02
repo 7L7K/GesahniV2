@@ -27,7 +27,21 @@ def _setup_test_db_and_init_tables():
     os.environ["DEV_MODE"] = "1"
     os.environ["COOKIE_SAMESITE"] = "Lax"
     os.environ["COOKIE_SECURE"] = "false"
+    os.environ["CORS_ALLOW_CREDENTIALS"] = "true"  # Required for cookie auth to work with CORS
     os.environ["SPOTIFY_TEST_MODE"] = "1"
+
+    # STANDARDIZED TEST IDENTITY AND TTL CONFIGURATION
+    # =================================================
+    # Use long TTLs to prevent expiry during test execution
+    os.environ.setdefault("JWT_EXPIRE_MINUTES", "60")          # 1 hour access tokens
+    os.environ.setdefault("JWT_REFRESH_EXPIRE_MINUTES", "1440") # 1 day refresh tokens
+    os.environ.setdefault("CSRF_TTL_SECONDS", "3600")           # 1 hour CSRF tokens
+
+    # Disable rate limiting for tests to prevent 429 errors
+    # Force disable globally - cannot be overridden by individual tests
+    os.environ["RATE_LIMIT_MODE"] = "off"
+    # Also set ENABLE_RATE_LIMIT_IN_TESTS to 0 for consistency
+    os.environ["ENABLE_RATE_LIMIT_IN_TESTS"] = "0"
 
     # Set up test database directory - use a dedicated temp directory for tests
     test_db_dir = os.path.join(tempfile.gettempdir(), "gesahni_test_dbs")
@@ -36,22 +50,8 @@ def _setup_test_db_and_init_tables():
     # Ensure the test directory exists
     os.makedirs(test_db_dir, exist_ok=True)
 
-    # Initialize ALL database tables synchronously (since pytest fixtures run in sync context)
-    async def init_tables():
-        from app.db import init_all_tables
-        await init_all_tables()
-
-    # Create event loop if needed and run the initialization
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # If loop is already running (e.g., in pytest-asyncio), schedule the coroutine
-            loop.create_task(init_tables())
-        else:
-            loop.run_until_complete(init_tables())
-    except RuntimeError:
-        # No event loop, create one
-        asyncio.run(init_tables())
+    # Database initialization will be handled by the async app fixture
+    # which properly manages the event loop through pytest-asyncio
 
 
 @pytest.fixture(autouse=True)
@@ -124,21 +124,22 @@ async def async_client(app):
 @pytest.fixture
 def test_env(monkeypatch):
     """Set up test environment variables."""
-    monkeypatch.setenv("DEV_MODE", "1")
-    monkeypatch.setenv("COOKIE_SAMESITE", "Lax")
-    monkeypatch.setenv("COOKIE_SECURE", "false")
-    monkeypatch.setenv("JWT_SECRET", "test_jwt_secret_for_testing_only_must_be_at_least_32_chars_long")
-    monkeypatch.setenv("SPOTIFY_TEST_MODE", "1")
+    # Most environment variables are now set globally in pytest_load_initial_conftests
+    # This fixture can be used for test-specific overrides if needed
+    pass
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def create_test_user():
-    """Create or reuse a test user in the database."""
+    """Create or reuse the standardized test user in the database."""
     from app.user_store import user_store
     from app.models.third_party_tokens import ThirdPartyToken
     from app.auth_store_tokens import upsert_token
 
+    # Use standardized test user identity
     test_user_id = "test_user_123"
+    username = "test_user_123"
+    password = "test_password_123"
 
     # Ensure user exists in user store
     await user_store.ensure_user(test_user_id)
@@ -149,8 +150,8 @@ async def create_test_user():
         id="spotify_test_token",
         user_id=test_user_id,
         provider="spotify",
-        access_token="test_access_token",
-        refresh_token="test_refresh_token",
+        access_token="test_spotify_access_token",
+        refresh_token="test_spotify_refresh_token",
         expires_at=expires_at,
         scope="user-read-private user-read-email"
     )
@@ -158,7 +159,12 @@ async def create_test_user():
     # Upsert the token
     await upsert_token(token_data)
 
-    return test_user_id
+    return {
+        "user_id": test_user_id,
+        "username": username,
+        "password": password,
+        "email": "test@example.com"
+    }
 
 
 @pytest.fixture
@@ -199,12 +205,13 @@ def seed_calendar_file(tmp_path):
 
 @pytest.fixture
 async def authed_client(async_client, create_test_user):
-    """Async client with authentication cookies set."""
+    """Async client with authentication cookies set using standardized test user."""
     from app.cookies import set_auth_cookies
     from app.tokens import make_access
     from fastapi.responses import Response
 
-    user_id = await create_test_user
+    user_data = await create_test_user
+    user_id = user_data["user_id"]
 
     # Create a mock response to set cookies
     response = Response()

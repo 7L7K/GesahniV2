@@ -583,22 +583,46 @@ async def _ask(request: Request, body: dict | None):
             # Auth is enforced via route dependency to ensure verify_token runs before rate_limit
             # rate_limit applied via route dependency; keep explicit header snapshot behavior
             # Lazily import to respect tests that monkeypatch app.main.route_prompt
-            main_mod = import_module("app.main")
-            route_prompt = main_mod.route_prompt
-            params = inspect.signature(route_prompt).parameters
-            if "stream_cb" in params:
-                result = await route_prompt(
-                    prompt_text,
-                    user_id,
-                    model_override=model_override,
-                    stream_cb=_stream_cb,
-                    shape=shape,
-                    normalized_from=normalized_from,
-                    **gen_opts,
+            try:
+                main_mod = import_module("app.main")
+                route_prompt = main_mod.route_prompt
+                params = inspect.signature(route_prompt).parameters
+            except (ImportError, AttributeError) as e:
+                # Router import failed - return 503 Service Unavailable
+                logger.error(f"Router import failed: {e}")
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "service_unavailable",
+                        "message": "Router functionality is not available due to import error",
+                        "cause": str(e)
+                    }
                 )
-            else:  # Compatibility with tests that monkeypatch route_prompt
-                result = await route_prompt(
-                    prompt_text, user_id, model_override=model_override, **gen_opts
+            try:
+                if "stream_cb" in params:
+                    result = await route_prompt(
+                        prompt_text,
+                        user_id,
+                        model_override=model_override,
+                        stream_cb=_stream_cb,
+                        shape=shape,
+                        normalized_from=normalized_from,
+                        **gen_opts,
+                    )
+                else:  # Compatibility with tests that monkeypatch route_prompt
+                    result = await route_prompt(
+                        prompt_text, user_id, model_override=model_override, **gen_opts
+                    )
+            except Exception as e:
+                # Router call failed - return 503 Service Unavailable
+                logger.error(f"Router call failed: {e}")
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "service_unavailable",
+                        "message": "Router call failed",
+                        "cause": str(e)
+                    }
                 )
             if streamed_any:
                 logger.info(

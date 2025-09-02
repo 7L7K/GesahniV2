@@ -64,6 +64,12 @@ def verify_secrets_on_boot() -> dict[str, dict[str, str]]:
     Returns:
         Dict containing verification results for each secret
     """
+    # Skip verification during tests for faster test runs
+    if _in_test_mode():
+        logger.debug("Skipping secret verification in test mode")
+        # Return empty results to indicate no verification was performed
+        return {}
+
     results = {}
 
     for secret_name, config in CRITICAL_SECRETS.items():

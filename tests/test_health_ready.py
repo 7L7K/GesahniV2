@@ -17,7 +17,12 @@ def test_health_ready_ok(monkeypatch):
     c = TestClient(app)
     r = c.get("/healthz/ready")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok"}
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["ok"] is True
+    assert "components" in body
+    assert body["components"]["jwt_secret"]["status"] == "healthy"
+    assert body["components"]["db"]["status"] == "healthy"
 
 
 def test_health_ready_db_fail(monkeypatch):
@@ -29,7 +34,7 @@ def test_health_ready_db_fail(monkeypatch):
     monkeypatch.setattr(hu, "check_db", bad_db)
     c = TestClient(app)
     r = c.get("/healthz/ready")
-    assert r.status_code == 503
+    assert r.status_code == 200  # Readiness probes never return 5xx
     body = r.json()
     assert body.get("status") == "unhealthy"
     assert "db" in set(body.get("failing") or [])
@@ -48,4 +53,8 @@ def test_health_ready_timeout_enforced(monkeypatch):
     r = c.get("/healthz/ready")
     # Should return quickly despite hang (under ~0.8s to be safe)
     assert (time.time() - t0) < 0.8
-    assert r.status_code == 503
+    assert r.status_code == 200  # Readiness probes never return 5xx
+    body = r.json()
+    assert body["status"] == "unhealthy"
+    assert body["ok"] is False
+    assert "db" in body.get("failing", [])

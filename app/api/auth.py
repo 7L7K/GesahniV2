@@ -2104,16 +2104,32 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
 
         t0 = time.time()
 
-        # Get current user ID for validation
-        current_user_id = get_current_user_id(request=request)
+        # For refresh, we need to extract user_id from refresh token itself
+        # since the access token may be expired/missing
+        refresh_token = rt_value
+        extracted_user_id = None
+
+        if refresh_token and refresh_token != "missing":
+            try:
+                # Try to decode the refresh token to get user_id
+                import jwt
+                from ..tokens import SECRET_KEY, ALGORITHM
+                payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+                extracted_user_id = payload.get("user_id") or payload.get("sub")
+            except Exception:
+                # If we can't decode the token, fall back to current user
+                pass
+
+        # Get current user ID for validation (fallback if token decode fails)
+        current_user_id = get_current_user_id(request=request) if not extracted_user_id else extracted_user_id
 
         # Return 401 if no valid authentication
-        if current_user_id == "anon":
+        if current_user_id == "anon" or not current_user_id:
             from fastapi import HTTPException
             raise HTTPException(status_code=401, detail="invalid_refresh")
 
         # Perform rotation with replay protection - use shim for test compatibility
-        tokens = await rotate_refresh_cookies(request, response)
+        tokens = await rotate_refresh_cookies(request, response, current_user_id)
 
         if tokens:
             refresh_rotation_success()
@@ -2284,7 +2300,7 @@ async def mock_set_access_cookie(request: Request, max_age: int = 1) -> Response
 
 
 # Test compatibility shims for legacy test imports
-async def rotate_refresh_cookies(request: Request, response: Response) -> dict[str, Any] | None:
+async def rotate_refresh_cookies(request: Request, response: Response, user_id: str | None = None) -> dict[str, Any] | None:
     """Legacy shim function for tests. Delegates to the actual refresh endpoint logic.
 
     This function maintains backward compatibility for tests that import
@@ -2294,8 +2310,8 @@ async def rotate_refresh_cookies(request: Request, response: Response) -> dict[s
         # Import the actual refresh token rotation logic
         from ..auth_refresh import rotate_refresh_token
 
-        # Get current user ID
-        current_user_id = get_current_user_id(request=request)
+        # Get current user ID (use provided user_id if available)
+        current_user_id = user_id or get_current_user_id(request=request)
 
         # Perform token rotation
         tokens = await rotate_refresh_token(current_user_id, request, response)

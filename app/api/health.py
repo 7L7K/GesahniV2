@@ -4,6 +4,7 @@ import time
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
+from typing import Any, Dict
 import os
 
 from .. import health_utils as hu
@@ -92,7 +93,57 @@ async def health_live() -> JSONResponse:
         return JSONResponse({"status": "error"}, status_code=200)
 
 
-@router.get("/healthz/ready", include_in_schema=False)
+@router.get(
+    "/healthz/ready",
+    responses={
+        200: {
+            "description": "Readiness status (always 200, never 5xx)",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "healthy": {
+                            "summary": "All components healthy",
+                            "value": {
+                                "status": "ok",
+                                "ok": True,
+                                "components": {
+                                    "jwt_secret": {"status": "healthy"},
+                                    "db": {"status": "healthy"},
+                                    "vector_store": {"status": "healthy"}
+                                }
+                            }
+                        },
+                        "degraded": {
+                            "summary": "Some components degraded",
+                            "value": {
+                                "status": "degraded",
+                                "ok": True,
+                                "components": {
+                                    "jwt_secret": {"status": "healthy"},
+                                    "db": {"status": "healthy"},
+                                    "vector_store": {"status": "degraded"}
+                                }
+                            }
+                        },
+                        "unhealthy": {
+                            "summary": "Critical components unhealthy",
+                            "value": {
+                                "status": "unhealthy",
+                                "ok": False,
+                                "components": {
+                                    "jwt_secret": {"status": "unhealthy"},
+                                    "db": {"status": "healthy"},
+                                    "vector_store": {"status": "healthy"}
+                                },
+                                "failing": ["jwt_secret"]
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 async def health_ready() -> JSONResponse:
     """Core readiness with structured component status.
 
@@ -103,6 +154,8 @@ async def health_ready() -> JSONResponse:
 
     Each component returns: healthy | degraded | unhealthy
     Overall status is unhealthy if any required component is unhealthy.
+
+    Always returns HTTP 200 - never 5xx. Degraded status is indicated in response body.
     """
     import datetime
 
@@ -180,8 +233,12 @@ async def health_ready() -> JSONResponse:
     except Exception:
         pass
 
-    # Simple response format for tests - return status and failing components
-    response_data = {"status": overall_status}
+    # Build response with expected fields for tests and consumers
+    response_data = {
+        "status": overall_status,
+        "ok": ok,
+        "components": components
+    }
 
     if unhealthy_components:
         # Legacy key `failing` is expected by some consumers/tests; keep it for
@@ -193,9 +250,9 @@ async def health_ready() -> JSONResponse:
         except Exception:
             pass
 
-    # Return appropriate status code based on overall health
-    status_code = 200 if ok else 503
-    resp = JSONResponse(response_data, status_code=status_code)
+    # Always return 200 for readiness probes, even when degraded
+    # Readiness probes should never return 5xx - they indicate degraded status in response body
+    resp = JSONResponse(response_data, status_code=200)
     resp.headers["Cache-Control"] = "no-store"
     resp.headers["Pragma"] = "no-cache"
     resp.headers.setdefault("Vary", "Accept")
@@ -425,3 +482,73 @@ async def health_vector_store() -> dict:
     }
 
     return out
+
+
+@router.get(
+    "/v1/health/qdrant",
+    responses={
+        200: {
+            "description": "Qdrant health status",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "healthy": {
+                            "summary": "Qdrant is healthy",
+                            "value": {"ok": True, "status": "ok"}
+                        },
+                        "unhealthy": {
+                            "summary": "Qdrant is not responding",
+                            "value": {"ok": False, "status": "error", "error": "Connection timeout"}
+                        },
+                        "skipped": {
+                            "summary": "Qdrant not configured",
+                            "value": {"ok": False, "status": "skipped"}
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
+async def health_qdrant() -> Dict[str, Any]:
+    """Check Qdrant health status."""
+    try:
+        status = await hu.with_timeout(hu.check_qdrant, ms=500)
+        return {"ok": status == "ok", "status": status}
+    except Exception as e:
+        return {"ok": False, "status": "error", "error": str(e)}
+
+
+@router.get(
+    "/v1/health/chroma",
+    responses={
+        200: {
+            "description": "Chroma health status",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "healthy": {
+                            "summary": "Chroma is healthy",
+                            "value": {"ok": True, "status": "ok"}
+                        },
+                        "unhealthy": {
+                            "summary": "Chroma is not responding",
+                            "value": {"ok": False, "status": "error", "error": "Connection timeout"}
+                        },
+                        "skipped": {
+                            "summary": "Chroma not configured as vector store",
+                            "value": {"ok": False, "status": "skipped"}
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
+async def health_chroma() -> Dict[str, Any]:
+    """Check Chroma health status."""
+    try:
+        status = await hu.with_timeout(hu.check_chroma, ms=500)
+        return {"ok": status == "ok", "status": status}
+    except Exception as e:
+        return {"ok": False, "status": "error", "error": str(e)}

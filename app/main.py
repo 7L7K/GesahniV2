@@ -32,18 +32,34 @@ from .settings_cors import (
     validate_cors_origins,
 )
 
-from . import router
+from . import router as router_package
+# Import route_prompt directly from router.py module to avoid circular imports
+import importlib
+import sys
+import os
+
+# Add the current directory to sys.path to import router.py directly
+current_dir = os.path.dirname(__file__)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# Import the router module directly
+router_mod = importlib.import_module('router')
+router_route_prompt = router_mod.route_prompt
+
+# Set route_prompt in the router package for backward compatibility
+router_package.route_prompt = router_route_prompt
 from .deps.scheduler import shutdown as scheduler_shutdown
 from .gpt_client import close_client
 
 async def route_prompt(prompt: str, user_id: str, **kwargs):
     logger.info("⬇️ main.route_prompt prompt='%s...', user_id='%s', kwargs=%s", prompt[:50], user_id, kwargs)
     try:
-        res = await router.route_prompt(prompt, user_id, **kwargs)
+        res = await router_route_prompt(prompt, user_id, **kwargs)
         logger.info("⬆️ main.route_prompt got res=%s", res)
         return res
-    except Exception:  # pragma: no cover - defensive
-        logger.exception("💥 main.route_prompt bubbled exception")
+    except Exception as e:  # pragma: no cover - defensive
+        logger.exception("💥 main.route_prompt bubbled exception: %s", e)
         raise
 
 
@@ -1525,7 +1541,7 @@ def register_middlewares_once(application):
 
     # CORS preflight middleware (must be outermost to handle OPTIONS before other middleware)
     from .middleware.cors import CorsPreflightMiddleware
-    add_mw(application, CorsPreflightMiddleware, name="CorsPreflightMiddleware")
+    application.add_middleware(CorsPreflightMiddleware, allow_origins=origins)
     logging.info("=== CSRF MIDDLEWARE REGISTERED ===")
 
     try:
@@ -1588,7 +1604,13 @@ def _assert_middleware_order_dev(app):
         "RequestIDMiddleware",  # innermost
     ]
 
-    got = [m.cls.__name__ for m in app.user_middleware]
+    got = []
+    for m in app.user_middleware:
+        if hasattr(m.cls, '__name__'):
+            got.append(m.cls.__name__)
+        else:
+            # Handle case where middleware is an instance (not a class)
+            got.append(type(m.cls).__name__)
 
     # Compare the middleware order (excluding any unexpected middleware)
     if got != want_outer_to_inner:

@@ -12,19 +12,32 @@ from app.main import app
 def test_csrf_enforcement_on_login(monkeypatch):
     # Enable CSRF enforcement at runtime
     monkeypatch.setenv("CSRF_ENABLED", "1")
-    client = TestClient(app)
+    # Re-import app after setting CSRF_ENABLED to ensure middleware picks it up
+    import importlib
+    import app.main
+    importlib.reload(app.main)
+    client = TestClient(app.main.app)
 
-    # Ensure user exists (ignore username_taken)
-    client.post("/v1/register", json={"username": "int_demo", "password": "secret123"})
+    # Ensure user exists (ignore username_taken) - provide CSRF tokens
+    client.post(
+        "/v1/register",
+        json={"username": "test_user_123", "password": "test_password_123"},
+        headers={"X-CSRF-Token": "test"},
+        cookies={"csrf_token": "test"},
+    )
 
     # Missing CSRF -> 403
-    r = client.post("/v1/login", json={"username": "int_demo", "password": "secret123"})
-    assert r.status_code == 403
+    from fastapi.exceptions import HTTPException
+    try:
+        r = client.post("/v1/login", json={"username": "test_user_123", "password": "test_password_123"})
+        assert r.status_code == 403
+    except HTTPException as e:
+        assert e.status_code == 403
 
     # With cookie + header -> 200 (or 500 if server error) but expect not 403
     r2 = client.post(
         "/v1/login",
-        json={"username": "int_demo", "password": "secret123"},
+        json={"username": "test_user_123", "password": "test_password_123"},
         headers={"X-CSRF-Token": "test"},
         cookies={"csrf_token": "test"},
     )
@@ -34,9 +47,11 @@ def test_csrf_enforcement_on_login(monkeypatch):
 @pytest.mark.integration
 def test_backoff_sleep_in_login(monkeypatch):
     client = TestClient(app)
-    username = "backoff_demo"
-    # Ensure user exists
-    client.post("/v1/register", json={"username": username, "password": "secret123"})
+    username = "test_user_123"
+    # Ensure user exists (ignore if already exists)
+    register_resp = client.post("/v1/register", json={"username": username, "password": "test_password_123"})
+    # 200 = created, 409 = already exists (both are fine for this test)
+    assert register_resp.status_code in (200, 409)
 
     # Set small backoff window and threshold
     monkeypatch.setenv("LOGIN_BACKOFF_THRESHOLD", "1")
@@ -58,7 +73,7 @@ def test_backoff_sleep_in_login(monkeypatch):
     # Call login; it will trigger backoff path which calls asyncio.sleep
     r = client.post(
         "/v1/login",
-        json={"username": username, "password": "wrong"},
+        json={"username": username, "password": "test_wrong_password"},
         headers={"X-CSRF-Token": "t"},
         cookies={"csrf_token": "t"},
     )

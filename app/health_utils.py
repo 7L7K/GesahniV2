@@ -115,6 +115,33 @@ async def check_qdrant() -> HealthResult:
     return await _http_probe(base.rstrip("/") + "/readyz", method="GET")
 
 
+async def check_chroma() -> HealthResult:
+    # Check if Chroma is configured as the vector store
+    vector_store = (os.getenv("VECTOR_STORE") or "").strip().lower()
+    if vector_store not in {"chroma", "dual"}:
+        return "skipped"
+
+    # For Chroma Cloud, check the API endpoint
+    chroma_url = os.getenv("CHROMA_URL")
+    if chroma_url:
+        return await _http_probe(chroma_url.rstrip("/") + "/api/v1/heartbeat", method="GET")
+
+    # For local Chroma, check if the path exists and is accessible
+    chroma_path = os.getenv("CHROMA_PATH", ".chroma_data")
+    if os.path.exists(chroma_path):
+        try:
+            # Try to initialize Chroma to check if it's working
+            import chromadb
+            client = chromadb.PersistentClient(path=chroma_path)
+            # Simple heartbeat check
+            collections = client.list_collections()
+            return "ok"
+        except Exception:
+            return "error"
+
+    return "error"
+
+
 async def check_spotify() -> HealthResult:
     # Only check when explicitly enabled in env
     raw = (os.getenv("PROVIDER_SPOTIFY") or "").strip().lower()
@@ -131,5 +158,6 @@ __all__ = [
     "check_llama",
     "check_home_assistant",
     "check_qdrant",
+    "check_chroma",
     "check_spotify",
 ]

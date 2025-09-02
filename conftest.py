@@ -76,6 +76,8 @@ def pytest_load_initial_conftests(early_config, parser):
 
         # Rate limiting: Disable for tests by default
         os.environ.setdefault("ENABLE_RATE_LIMIT_IN_TESTS", "0")
+        # Force disable rate limiting globally for tests - cannot be overridden
+        os.environ["RATE_LIMIT_MODE"] = "off"
 
         # CSRF: Disable for tests
         os.environ.setdefault("CSRF_ENABLED", "0")
@@ -98,6 +100,18 @@ def pytest_load_initial_conftests(early_config, parser):
         # Vector store: Use memory backend for tests
         os.environ.setdefault("VECTOR_STORE", "memory")
 
+        # STANDARDIZED TEST IDENTITY AND TTL CONFIGURATION
+        # ==================================================
+        # Use long TTLs to prevent expiry during test execution
+        os.environ.setdefault("JWT_EXPIRE_MINUTES", "60")          # 1 hour access tokens
+        os.environ.setdefault("JWT_REFRESH_EXPIRE_MINUTES", "1440") # 1 day refresh tokens
+        os.environ.setdefault("CSRF_TTL_SECONDS", "3600")           # 1 hour CSRF tokens
+
+        # Cookie configuration for tests
+        os.environ.setdefault("COOKIE_SAMESITE", "Lax")
+        os.environ.setdefault("COOKIE_SECURE", "false")
+        os.environ.setdefault("CORS_ALLOW_CREDENTIALS", "true")
+
     except Exception as e:
         print(f"Warning: Failed to set test configuration: {e}")
         pass
@@ -107,194 +121,47 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="pydantic"
 from fastapi.testclient import TestClient
 
 
-@pytest.fixture
-def client(monkeypatch):
-    # Put app in test mode for routes that relax auth in tests
-    monkeypatch.setenv("PYTEST_MODE", "1")
-    # Allow anonymous requests in tests unless a JWT is explicitly set by a test
-    monkeypatch.delenv("JWT_SECRET", raising=False)
-    monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
+# STANDARDIZED TEST CLIENT FIXTURE
+# ==================================
+# Single source of truth for test client configuration
+@pytest.fixture(scope="session")
+def client():
+    """
+    Standardized test client fixture for all tests.
 
-    # Ensure test-friendly configuration (fallback for tests not using early hook)
-    monkeypatch.setenv("DEV_MODE", "1")
-    monkeypatch.setenv("ENV", "dev")
-    monkeypatch.setenv("ENABLE_RATE_LIMIT_IN_TESTS", "0")
-    monkeypatch.setenv("CSRF_ENABLED", "0")
-    monkeypatch.setenv("WS_DISABLE_ASYNC_LOGGING", "1")
-    monkeypatch.setenv("PROMETHEUS_ENABLED", "0")
-    monkeypatch.setenv("LOG_LEVEL", "WARNING")
-    monkeypatch.setenv("CORS_ALLOW_ORIGINS", "*")
-    monkeypatch.setenv("SESSION_STORE", "memory")
-    monkeypatch.setenv("VECTOR_STORE", "memory")
-
-    # Set database path explicitly to ensure all modules use the same test DB
-    import tempfile
-    import os
-    import subprocess
-    import sys
-
-    test_db_path = tempfile.mktemp(suffix='.db')
-    monkeypatch.setenv("CARE_DB", test_db_path)
-    monkeypatch.setenv("AUTH_DB", test_db_path)
-    monkeypatch.setenv("MUSIC_DB", test_db_path)
-
-    # Set up test database tables using the setup script
-    try:
-        result = subprocess.run([sys.executable, "test_setup_db.py"],
-                              capture_output=True, text=True, cwd=os.getcwd())
-        if result.returncode != 0:
-            print(f"DB setup failed: {result.stderr}")
-    except Exception as e:
-        print(f"DB setup failed: {e}")
-        # Silent fail - DB setup should not break tests
-        pass
-
-    # Import the FastAPI `app` after test env vars are set to ensure
-    # DB path computation and startup logic detect pytest mode.
+    This fixture provides:
+    - Consistent environment configuration
+    - Long TTLs to prevent expiry during test execution
+    - Standardized test user identity
+    - Proper database initialization
+    """
+    # Import the FastAPI app after test env vars are set
     from app.main import app
-
     return TestClient(app)
 
 
-@pytest.fixture
-def app_client(monkeypatch):
-    """Alias for client fixture to match test expectations."""
-    # Put app in test mode for routes that relax auth in tests
-    monkeypatch.setenv("PYTEST_MODE", "1")
-    # Allow anonymous requests in tests unless a JWT is explicitly set by a test
-    monkeypatch.delenv("JWT_SECRET", raising=False)
-    monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
-
-    # Set database path explicitly to ensure all modules use the same test DB
-    import tempfile
-    import os
-    test_db_path = tempfile.mktemp(suffix='.db')
-    monkeypatch.setenv("CARE_DB", test_db_path)
-    monkeypatch.setenv("AUTH_DB", test_db_path)
-    monkeypatch.setenv("MUSIC_DB", test_db_path)
-
-    # Force database schema initialization BEFORE creating TestClient
-    # Note: This approach has issues because modules are imported before fixtures run
-    try:
-        # Simple synchronous approach to ensure tables exist
-        import sqlite3
-
-        # Create tables directly using sqlite3
-        conn = sqlite3.connect(test_db_path)
-        cursor = conn.cursor()
-
-        # Create care_sessions table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS care_sessions (
-                id TEXT PRIMARY KEY,
-                resident_id TEXT,
-                title TEXT,
-                transcript_uri TEXT,
-                created_at REAL,
-                updated_at REAL
-            )
-        """)
-
-        # Create auth_users table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS auth_users (
-                username TEXT PRIMARY KEY,
-                password_hash TEXT NOT NULL
-            )
-        """)
-
-        # Create contacts table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS contacts (
-                id TEXT PRIMARY KEY,
-                resident_id TEXT,
-                name TEXT,
-                phone TEXT,
-                priority INTEGER,
-                quiet_hours TEXT
-            )
-        """)
-
-        # Create tv_config table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tv_config (
-                resident_id TEXT PRIMARY KEY,
-                ambient_rotation INTEGER,
-                rail TEXT,
-                quiet_hours TEXT,
-                default_vibe TEXT,
-                updated_at REAL
-            )
-        """)
-
-        conn.commit()
-        conn.close()
-
-        print(f"DEBUG: Created test DB at {test_db_path}")
-
-    except Exception as e:
-        print(f"DB init failed: {e}")
-        # Silent fail - DB init should not break tests
-        pass
-
-    # Import `app` after envs are configured so startup sees test flags
+@pytest.fixture(scope="session")
+def app_client():
+    """Alias for client fixture to maintain backward compatibility."""
     from app.main import app
     return TestClient(app)
 
 
 @pytest.fixture
-def app(monkeypatch):
+def app():
     """Provide the FastAPI app instance for tests that need direct access."""
-    # Put app in test mode for routes that relax auth in tests
-    monkeypatch.setenv("PYTEST_MODE", "1")
-    # Allow anonymous requests in tests unless a JWT is explicitly set by a test
-    monkeypatch.delenv("JWT_SECRET", raising=False)
-    monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
-
-    # Ensure test-friendly configuration
-    monkeypatch.setenv("DEV_MODE", "1")
-    monkeypatch.setenv("ENV", "dev")
-    monkeypatch.setenv("ENABLE_RATE_LIMIT_IN_TESTS", "0")
-    monkeypatch.setenv("CSRF_ENABLED", "0")
-    monkeypatch.setenv("WS_DISABLE_ASYNC_LOGGING", "1")
-    monkeypatch.setenv("PROMETHEUS_ENABLED", "0")
-    monkeypatch.setenv("LOG_LEVEL", "WARNING")
-    monkeypatch.setenv("CORS_ALLOW_ORIGINS", "*")
-    monkeypatch.setenv("SESSION_STORE", "memory")
-    monkeypatch.setenv("VECTOR_STORE", "memory")
-
-    # Import the FastAPI `app` after test env vars are set
     from app.main import app
     return app
 
 
-@pytest.fixture
-async def async_app(monkeypatch):
+@pytest.fixture(scope="session")
+async def async_app():
     """Provide the FastAPI app instance for async tests."""
-    # Put app in test mode for routes that relax auth in tests
-    monkeypatch.setenv("PYTEST_MODE", "1")
-    # Allow anonymous requests in tests unless a JWT is explicitly set by a test
-    monkeypatch.delenv("JWT_SECRET", raising=False)
-    monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
-
-    # Ensure test-friendly configuration
-    monkeypatch.setenv("DEV_MODE", "1")
-    monkeypatch.setenv("ENV", "dev")
-    monkeypatch.setenv("ENABLE_RATE_LIMIT_IN_TESTS", "0")
-    monkeypatch.setenv("CSRF_ENABLED", "0")
-    monkeypatch.setenv("WS_DISABLE_ASYNC_LOGGING", "1")
-    monkeypatch.setenv("PROMETHEUS_ENABLED", "0")
-    monkeypatch.setenv("LOG_LEVEL", "WARNING")
-    monkeypatch.setenv("CORS_ALLOW_ORIGINS", "*")
-    monkeypatch.setenv("SESSION_STORE", "memory")
-    monkeypatch.setenv("VECTOR_STORE", "memory")
-
-    # Import the FastAPI `app` after test env vars are set
     from app.main import app
     return app
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def async_client(async_app):
     """Provide an async test client using httpx with ASGITransport."""
     from httpx import ASGITransport, AsyncClient
@@ -304,7 +171,7 @@ async def async_client(async_app):
     client = AsyncClient(
         transport=transport,
         base_url="http://testserver",
-        timeout=10.0,  # 10 second timeout per request
+        timeout=30.0,  # Longer timeout for tests
         follow_redirects=True
     )
 
@@ -313,6 +180,54 @@ async def async_client(async_app):
     finally:
         # Ensure client is properly closed
         await client.aclose()
+
+
+# STANDARDIZED TEST USER FIXTURE
+# ===============================
+@pytest.fixture(scope="session")
+async def test_user():
+    """
+    Standardized test user for all tests.
+
+    Creates a consistent test user identity that can be used across all tests:
+    - Username: test_user_123
+    - Password: test_password_123
+    - Email: test@example.com
+    """
+    from app.user_store import user_store
+    from app.auth_store_tokens import ThirdPartyToken, upsert_token
+    import time
+
+    user_id = "test_user_123"
+    username = "test_user_123"
+    password = "test_password_123"
+
+    # Ensure user exists in user store
+    await user_store.ensure_user(user_id)
+
+    # Create a Spotify token for testing (if needed)
+    expires_at = int(time.time()) + 3600  # 1 hour from now
+    spotify_token = ThirdPartyToken(
+        user_id=user_id,
+        provider="spotify",
+        access_token="test_spotify_access_token",
+        refresh_token="test_spotify_refresh_token",
+        expires_at=expires_at,
+        scopes="user-read-private,user-read-email"
+    )
+
+    try:
+        await upsert_token(spotify_token)
+    except Exception:
+        # Token might already exist, ignore
+        pass
+
+    return {
+        "user_id": user_id,
+        "username": username,
+        "password": password,
+        "email": "test@example.com"
+    }
 
 
 @pytest.fixture
@@ -324,7 +239,7 @@ async def cors_client(async_app):
     client = AsyncClient(
         transport=transport,
         base_url="http://testserver",
-        timeout=10.0,
+        timeout=30.0,  # Use longer timeout for consistency
         follow_redirects=True,
         headers={"Origin": "http://localhost:3000"}  # Default CORS origin for tests
     )
@@ -344,7 +259,7 @@ async def csrf_client(async_app):
     client = AsyncClient(
         transport=transport,
         base_url="http://testserver",
-        timeout=10.0,
+        timeout=30.0,  # Use longer timeout for consistency
         follow_redirects=True,
         headers={
             "Origin": "http://localhost:3000",

@@ -59,7 +59,12 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
         # For safe methods, ensure CSRF token is available and set in response header
         if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
-            response = await call_next(request)
+            try:
+                response = await call_next(request)
+            except Exception:
+                # Even on exceptions, we need to ensure CSRF headers are set
+                from fastapi.responses import JSONResponse
+                response = JSONResponse(status_code=500, content={"error": "internal_error"})
 
             # Ensure CSRF token cookie exists
             csrf_cookie = request.cookies.get("csrf_token")
@@ -197,7 +202,26 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     token_cookie[:8] + "...",
                 )
                 raise HTTPException(400, detail="csrf.invalid")
-            return await call_next(request)
+
+            # For unsafe methods, ensure CSRF headers are set even on success
+            try:
+                response = await call_next(request)
+
+                # Ensure CSRF token cookie exists for future requests
+                csrf_cookie = request.cookies.get("csrf_token") or token_cookie
+                if csrf_cookie:
+                    # Mirror CSRF token in response header for client access
+                    response.headers["X-CSRF-Token"] = csrf_cookie
+
+                return response
+            except Exception:
+                # Even on exceptions from downstream middlewares/routes, ensure CSRF headers
+                from fastapi.responses import JSONResponse
+                csrf_cookie = request.cookies.get("csrf_token") or token_cookie
+                response = JSONResponse(status_code=500, content={"error": "internal_error"})
+                if csrf_cookie:
+                    response.headers["X-CSRF-Token"] = csrf_cookie
+                raise HTTPException(500, detail="internal_error") from None
 
 
 async def get_csrf_token() -> str:

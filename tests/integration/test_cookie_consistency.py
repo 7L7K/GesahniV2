@@ -25,13 +25,28 @@ class TestCookieConsistency:
 
     @pytest.fixture
     def client(self):
-        """Create test client."""
-        return TestClient(app)
+        """Create test client with rate limiting disabled."""
+        import os
+        # Disable rate limiting for this test
+        original_rate_limit = os.environ.get("ENABLE_RATE_LIMIT_IN_TESTS", "0")
+        os.environ["ENABLE_RATE_LIMIT_IN_TESTS"] = "0"
+        try:
+            return TestClient(app)
+        finally:
+            # Restore original setting
+            if original_rate_limit:
+                os.environ["ENABLE_RATE_LIMIT_IN_TESTS"] = original_rate_limit
+            else:
+                os.environ.pop("ENABLE_RATE_LIMIT_IN_TESTS", None)
 
     def test_login_cookies_consistency(self, client):
         """Test that login endpoint sets cookies consistently."""
-        # Test login with query parameters
-        response = client.post("/v1/auth/login?username=testuser")
+        # Test login with query parameters and CSRF tokens
+        response = client.post(
+            "/v1/auth/login?username=testuser",
+            headers={"X-CSRF-Token": "test"},
+            cookies={"csrf_token": "test"}
+        )
 
         assert response.status_code == 200
 
@@ -308,7 +323,11 @@ class TestCookieConsistency:
         # Test with dev mode enabled
         with patch.dict("os.environ", {"DEV_MODE": "1"}):
 
-            response = client.post("/v1/auth/login?username=testuser_dev_mode")
+            response = client.post(
+                "/v1/auth/login?username=testuser_dev_mode",
+                headers={"X-CSRF-Token": "test"},
+                cookies={"csrf_token": "test"}
+            )
 
             assert response.status_code == 200
 
@@ -330,7 +349,11 @@ class TestCookieConsistency:
         # Mock HTTPS request
         with patch("app.cookie_config._get_scheme", return_value="https"):
 
-            response = client.post("/v1/auth/login?username=testuser_prod_mode")
+            response = client.post(
+                "/v1/auth/login?username=testuser_prod_mode",
+                headers={"X-CSRF-Token": "test"},
+                cookies={"csrf_token": "test"}
+            )
 
             assert response.status_code == 200
 
@@ -353,11 +376,19 @@ class TestCookieConsistency:
         # by checking that all endpoints use the same configuration source
 
         # Test login endpoint
-        login_response = client.post("/v1/auth/login?username=testuser_centralized")
+        login_response = client.post(
+            "/v1/auth/login?username=testuser_centralized",
+            headers={"X-CSRF-Token": "test"},
+            cookies={"csrf_token": "test"}
+        )
         assert login_response.status_code == 200
 
         # Test device trust endpoint
-        device_response = client.post("/v1/device/trust")
+        device_response = client.post(
+            "/v1/device/trust",
+            headers={"X-CSRF-Token": "test"},
+            cookies={"csrf_token": "test"}
+        )
         assert device_response.status_code == 200
 
         # Both should have consistent cookie attributes

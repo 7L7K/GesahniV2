@@ -182,13 +182,23 @@ class CorsMiddleware(BaseHTTPMiddleware):
 class CorsPreflightMiddleware(BaseHTTPMiddleware):
     """Handle CORS preflight OPTIONS requests before other middleware."""
 
+    def __init__(self, app, allow_origins: List[str] | None = None, **kwargs):
+        super().__init__(app)
+        self.allow_origins = set(allow_origins or [])
+
     async def dispatch(self, request: Request, call_next):
         """Handle CORS preflight OPTIONS requests."""
         # Check if this is an OPTIONS request with Origin header
         if request.method.upper() == "OPTIONS" and request.headers.get("Origin"):
+            origin = request.headers.get("Origin")
+
+            # Validate origin
+            if origin and not self._is_origin_allowed(origin):
+                logger.warning("cors_preflight_rejected origin=<%s>", origin)
+                return Response(status_code=400, content="Invalid origin")
+
             # Create CORS headers
             cors_headers = {}
-            origin = request.headers.get("Origin")
 
             # Add basic CORS headers
             if origin:
@@ -206,6 +216,41 @@ class CorsPreflightMiddleware(BaseHTTPMiddleware):
 
         # Continue with normal request processing
         return await call_next(request)
+
+    def _is_origin_allowed(self, origin: str) -> bool:
+        """Check if the given origin is allowed."""
+        if not self.allow_origins:
+            # If no origins specified, allow localhost variants by default
+            return self._is_localhost_origin(origin)
+
+        # Check exact matches
+        if origin in self.allow_origins:
+            return True
+
+        # Check localhost variants
+        if self._is_localhost_origin(origin):
+            # Allow localhost variants if any localhost origin is configured
+            for allowed_origin in self.allow_origins:
+                if "localhost" in allowed_origin or "127.0.0.1" in allowed_origin:
+                    return True
+
+        return False
+
+    def _is_localhost_origin(self, origin: str) -> bool:
+        """Check if origin is a localhost variant."""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(origin)
+            hostname = parsed.hostname
+
+            # Allow localhost and 127.0.0.1 variants
+            if hostname in ("localhost", "127.0.0.1"):
+                return True
+
+        except Exception:
+            pass
+
+        return False
 
 
 __all__ = ["CorsMiddleware", "CorsPreflightMiddleware"]

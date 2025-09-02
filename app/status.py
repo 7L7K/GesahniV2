@@ -115,7 +115,7 @@ async def health(user_id: str = Depends(get_current_user_id)) -> dict:
 
     return {
         "status": overall,
-        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+        "timestamp": datetime.datetime.now(timezone.utc).isoformat() + "Z",
         "checks": checks,
         "metrics": metrics,
     }

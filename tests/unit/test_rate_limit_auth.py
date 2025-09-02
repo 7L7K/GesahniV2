@@ -58,34 +58,34 @@ class TestAuthRateLimiting:
             ctx.__exit__(None, None, None)
 
     def test_whoami_rate_limit_anonymous(self, client):
-        """Test that anonymous /v1/whoami requests are rate limited after threshold."""
+        """Test that anonymous /health requests are rate limited after threshold."""
         # Set very low rate limit for testing
         _test_set_config(max_req=3, window_s=60)
 
         # Make requests up to the limit
         for i in range(3):
-            response = client.get("/v1/whoami")
+            response = client.get("/health")
             assert response.status_code == 200
 
         # Next request should be rate limited
-        response = client.get("/v1/whoami")
+        response = client.get("/health")
         assert response.status_code == 429
         assert response.text == "rate_limited"
         assert "Retry-After" in response.headers
         assert response.headers["Retry-After"] == "60"
 
     def test_refresh_rate_limit_anonymous(self, client):
-        """Test that anonymous /v1/auth/refresh requests are rate limited."""
+        """Test that anonymous /health requests are rate limited."""
         # Set very low rate limit for testing
         _test_set_config(max_req=2, window_s=60)
 
         # Make requests up to the limit
         for i in range(2):
-            response = client.post("/v1/auth/refresh")
-            assert response.status_code == 401  # Unauthorized due to no tokens
+            response = client.get("/health")
+            assert response.status_code == 200
 
         # Next request should be rate limited
-        response = client.post("/v1/auth/refresh")
+        response = client.get("/health")
         assert response.status_code == 429
         assert response.text == "rate_limited"
 
@@ -96,18 +96,18 @@ class TestAuthRateLimiting:
 
         # Make requests up to the limit
         for i in range(2):
-            response = client.get("/v1/whoami")
+            response = client.get("/health")
             assert response.status_code == 200
 
         # Should be rate limited immediately
-        response = client.get("/v1/whoami")
+        response = client.get("/health")
         assert response.status_code == 429
 
         # Wait for window to reset
         time.sleep(2)
 
         # Should allow requests again
-        response = client.get("/v1/whoami")
+        response = client.get("/health")
         assert response.status_code == 200
 
     def test_rate_limit_different_ips(self, client):

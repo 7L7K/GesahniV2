@@ -24,7 +24,7 @@ def _client(monkeypatch):
     os.close(db_fd)
     monkeypatch.setenv("USERS_DB", db_path)
     monkeypatch.setenv("JWT_SECRET", "testsecret")
-    monkeypatch.setenv("JWT_EXPIRE_MINUTES", "5")
+    # Use long TTL for testing to prevent expiry mid-test
     monkeypatch.setenv("JWT_REFRESH_EXPIRE_MINUTES", "1440")
     monkeypatch.setenv("PYTEST_RUNNING", "1")  # Add this to match the original test
     monkeypatch.setenv("RATE_LIMIT_BACKEND", "memory")  # Use memory backend for tests
@@ -45,7 +45,12 @@ def _client(monkeypatch):
 
     client.app.dependency_overrides[get_current_user_id] = fake_user_id
 
-    client.post("/register", json={"username": "alice", "password": "wonderland"})
+    # Initialize database tables
+    import asyncio
+    from app.db import init_db_once
+    asyncio.run(init_db_once())
+
+    client.post("/v1/register", json={"username": "test_user_123", "password": "test_password_123"})
     return client
 
 
@@ -54,7 +59,7 @@ def test_login_sets_cookies_once(monkeypatch):
     client = _client(monkeypatch)
 
     # Login and capture response
-    resp = client.post("/login", json={"username": "alice", "password": "wonderland"})
+    resp = client.post("/v1/login", json={"username": "test_user_123", "password": "test_password_123"})
     assert resp.status_code == 200
 
     # Check that Set-Cookie headers are present
@@ -113,15 +118,16 @@ def test_refresh_sets_cookies_once(monkeypatch):
 
     # Login first
     login_resp = client.post(
-        "/login", json={"username": "alice", "password": "wonderland"}
+        "/v1/login", json={"username": "test_user_123", "password": "test_password_123"}
     )
     assert login_resp.status_code == 200
     tokens = login_resp.json()
 
+    # Set refresh token cookie for the refresh request
+    client.cookies.set("refresh_token", tokens["refresh_token"])
+
     # Refresh and capture response
-    refresh_resp = client.post(
-        "/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
-    )
+    refresh_resp = client.post("/v1/auth/refresh")
     assert refresh_resp.status_code == 200
 
     # Check that Set-Cookie headers are present
@@ -180,7 +186,7 @@ def test_logout_clears_cookies_properly(monkeypatch):
 
     # Login first
     login_resp = client.post(
-        "/login", json={"username": "alice", "password": "wonderland"}
+        "/v1/login", json={"username": "test_user_123", "password": "test_password_123"}
     )
     assert login_resp.status_code == 200
     tokens = login_resp.json()
@@ -247,7 +253,7 @@ def test_cookie_attributes_consistency(monkeypatch):
 
     # Login
     login_resp = client.post(
-        "/login", json={"username": "alice", "password": "wonderland"}
+        "/v1/login", json={"username": "test_user_123", "password": "test_password_123"}
     )
     assert login_resp.status_code == 200
 

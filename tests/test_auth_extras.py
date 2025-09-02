@@ -13,7 +13,7 @@ def _make_auth_app(monkeypatch, extra_env: dict | None = None):
     os.close(fd)
     monkeypatch.setenv("USERS_DB", db_path)
     monkeypatch.setenv("JWT_SECRET", "secret")
-    monkeypatch.setenv("JWT_EXPIRE_MINUTES", "5")
+    # Use long TTL for testing to prevent expiry mid-test
     monkeypatch.setenv("PYTEST_RUNNING", "1")
     if extra_env:
         for k, v in extra_env.items():
@@ -44,9 +44,9 @@ def test_register_invalid_username(monkeypatch):
 
 def test_register_duplicate_username(monkeypatch):
     _auth, client = _make_auth_app(monkeypatch)
-    r1 = client.post("/register", json={"username": "alice", "password": "secret1"})
+    r1 = client.post("/register", json={"username": "test_user_123", "password": "test_password_123"})
     assert r1.status_code == 200
-    r2 = client.post("/register", json={"username": "alice", "password": "secret1"})
+    r2 = client.post("/register", json={"username": "test_user_123", "password": "test_password_123"})
     assert r2.status_code == 400
     assert r2.json()["detail"] == "username_taken"
 

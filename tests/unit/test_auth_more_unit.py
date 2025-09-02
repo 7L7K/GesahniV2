@@ -12,7 +12,7 @@ def _client(monkeypatch):
     os.close(db_fd)
     monkeypatch.setenv("USERS_DB", db_path)
     monkeypatch.setenv("JWT_SECRET", "testsecret")
-    monkeypatch.setenv("JWT_EXPIRE_MINUTES", "5")
+    # Use long TTL for testing to prevent expiry mid-test
     sys.modules.pop("app.auth", None)
     from importlib import import_module
 
