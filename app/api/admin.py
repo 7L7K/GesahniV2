@@ -259,9 +259,9 @@ async def admin_user_identities(user_id: str):
     """
     try:
         import aiosqlite
-        from ..auth_store import DB_PATH as AUTH_DB
+        from ..auth_store import _db_path as AUTH_DB
 
-        async with aiosqlite.connect(str(AUTH_DB)) as db:
+        async with aiosqlite.connect(str(AUTH_DB())) as db:
             async with db.execute(
                 "SELECT id, provider, provider_iss, provider_sub, email_normalized, email_verified, created_at, updated_at FROM auth_identities WHERE user_id = ?",
                 (user_id,),
@@ -308,9 +308,9 @@ async def admin_unlink_identity(user_id: str, identity_id: str, force: bool | No
     """
     try:
         import aiosqlite
-        from ..auth_store import DB_PATH as AUTH_DB
+        from ..auth_store import _db_path as AUTH_DB
 
-        async with aiosqlite.connect(str(AUTH_DB)) as db:
+        async with aiosqlite.connect(str(AUTH_DB())) as db:
             # Verify identity belongs to user
             async with db.execute("SELECT provider, provider_sub FROM auth_identities WHERE id = ? AND user_id = ?", (identity_id, user_id)) as cur:
                 row = await cur.fetchone()

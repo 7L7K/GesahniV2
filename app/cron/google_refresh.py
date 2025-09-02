@@ -16,13 +16,15 @@ logger = logging.getLogger(__name__)
 # Threshold in seconds before expiry to proactively refresh
 REFRESH_AHEAD_SECONDS = int(os.getenv("GOOGLE_REFRESH_AHEAD_SECONDS", "300"))
 
-# Path to tokens DB
-DB_PATH = os.getenv("THIRD_PARTY_TOKENS_DB", "third_party_tokens.db")
+# Path to tokens DB - lazy resolution
+def _db_path() -> str:
+    from ..db.paths import resolve_db_path
+    return str(resolve_db_path("THIRD_PARTY_TOKENS_DB", "third_party_tokens.db"))
 
 
 def _get_candidates(now: int) -> List[Tuple[str, str, int]]:
     out = []
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(_db_path())
     conn.execute("PRAGMA foreign_keys=ON")
     try:
         cur = conn.cursor()
@@ -54,7 +56,7 @@ async def _refresh_for_user(identity_id: str, provider: str) -> None:
         attempt += 1
         try:
             # Fetch latest token row by identity
-            conn = sqlite3.connect(DB_PATH)
+            conn = sqlite3.connect(_db_path())
     conn.execute("PRAGMA foreign_keys=ON")
             try:
                 cur = conn.cursor()

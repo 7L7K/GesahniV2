@@ -95,7 +95,8 @@ async def test_manual_token_refresh(temp_db, create_test_identity, caplog):
         access_token="B" + "A" * 17,  # Valid format: starts with B, length = 18
         refresh_token="A" + "B" * 17,  # Valid format: starts with A, length = 18
         scopes="user-read-email,user-read-private",
-                        expires_at=now + 301,  # Expires in 301 seconds (passes validation, picked up by refresh job)
+                        # Set expiry to exactly the refresh cutoff so it is both a candidate and passes validation
+                        expires_at=now + 300,
         created_at=now - 3600,  # Created 1 hour ago
         updated_at=now - 3600,
         is_valid=True
@@ -108,7 +109,8 @@ async def test_manual_token_refresh(temp_db, create_test_identity, caplog):
     # Verify token was created
     retrieved = await dao.get_token(user_id, "spotify")
     assert retrieved is not None
-    assert retrieved.expires_at == now + 301
+    # expires_at should match the value we inserted (now + 300)
+    assert retrieved.expires_at == now + 300
     original_expires_at = retrieved.expires_at
 
     print(f"✅ Created expired token with expires_at: {original_expires_at}")

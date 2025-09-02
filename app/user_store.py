@@ -6,8 +6,13 @@ from pathlib import Path
 
 import aiosqlite
 
-DB_PATH = Path(os.getenv("USER_DB", "users.db"))
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+def _db_path() -> Path:
+    import os
+    from pathlib import Path
+    from .db.paths import resolve_db_path
+    p = resolve_db_path("USER_DB", "users.db")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 class UserStore:
@@ -91,6 +96,6 @@ class UserStore:
         }
 
 
-user_store = UserStore(DB_PATH)
+user_store = UserStore(_db_path())
 
 __all__ = ["UserStore", "user_store"]

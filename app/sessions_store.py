@@ -7,7 +7,9 @@ from typing import Any
 
 import aiosqlite
 
-DB_PATH = os.getenv("USER_DB", "users.db")
+def _db_path() -> str:
+    from .db.paths import resolve_db_path
+    return str(resolve_db_path("USER_DB", "users.db"))
 
 
 def _utc_now_iso() -> str:
@@ -141,6 +143,6 @@ class SessionsStore:
             await conn.close()
 
 
-sessions_store = SessionsStore(DB_PATH)
+sessions_store = SessionsStore(_db_path())
 
 __all__ = ["sessions_store", "SessionsStore"]

@@ -17,14 +17,19 @@ logger = logging.getLogger(__name__)
 # Threshold in seconds before expiry to proactively refresh
 REFRESH_AHEAD_SECONDS = int(os.getenv("SPOTIFY_REFRESH_AHEAD_SECONDS", "300"))
 
-# Path to tokens DB
-DB_PATH = os.getenv("THIRD_PARTY_TOKENS_DB", "third_party_tokens.db")
+# Path to tokens DB: prefer env override, otherwise use TokenDAO module default
+from ..auth_store_tokens import TokenDAO, _default_db_path
+
+
+def _resolve_db_path() -> str:
+    """Resolve the tokens DB path at runtime (env overrides class default)."""
+    return os.getenv("THIRD_PARTY_TOKENS_DB") or _default_db_path()
 
 
 def _get_candidates(now: int) -> List[Tuple[str, str, int]]:
     """Return list of (user_id, provider, expires_at) for tokens expiring within window."""
     out = []
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(_resolve_db_path())
     conn.execute("PRAGMA foreign_keys=ON")
     try:
         cur = conn.cursor()
@@ -76,7 +81,7 @@ async def _refresh_for_user(identity_id: str, provider: str) -> None:
 
             # Update last_refresh_at and reset error count for latest token row by identity
             now = int(time.time())
-            conn = sqlite3.connect(DB_PATH)
+            conn = sqlite3.connect(_resolve_db_path())
             conn.execute("PRAGMA foreign_keys=ON")
             try:
                 cur = conn.cursor()
@@ -101,7 +106,7 @@ async def _refresh_for_user(identity_id: str, provider: str) -> None:
         except SpotifyAuthError as e:
             logger.warning("spotify_refresh: exchange failed", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider, "error": str(e), "attempt": attempt})
             # increment error counter on DB
-            conn = sqlite3.connect(DB_PATH)
+            conn = sqlite3.connect(_resolve_db_path())
             conn.execute("PRAGMA foreign_keys=ON")
             try:
                 cur = conn.cursor()

@@ -21,17 +21,11 @@ from .deps.user import get_current_user_id
 from .security import jwt_decode
 from .user_store import user_store
 from .api.auth import _jwt_secret
+from .db.paths import resolve_db_path
 
-# Configuration
-DB_PATH = os.getenv("USERS_DB", "users.db")
-# In tests, default to an isolated temp file per test to avoid collisions
-if "PYTEST_CURRENT_TEST" in os.environ and not os.getenv("USERS_DB"):
-    try:
-        ident = os.environ.get("PYTEST_CURRENT_TEST", "")
-        digest = hashlib.md5(ident.encode()).hexdigest()[:8]
-        DB_PATH = str((Path.cwd() / f".tmp_auth_{digest}.db").resolve())
-    except Exception:
-        DB_PATH = str(Path("test_auth.db").resolve())
+# Configuration - lazy path resolution
+def _db_path() -> Path:
+    return resolve_db_path("USERS_DB", "users.db")
 AUTH_TABLE = os.getenv("AUTH_TABLE", "auth_users")
 ALGORITHM = "HS256"
 SECRET_KEY = os.getenv("JWT_SECRET")
@@ -225,12 +219,12 @@ class ResetPasswordRequest(BaseModel):
 async def _ensure_table() -> None:
     # Ensure directory exists for sqlite file paths like /tmp/dir/users.db
     try:
-        p = Path(DB_PATH)
+        p = _db_path()
         if p.parent and str(p).lower() not in {":memory:", ""}:
             p.parent.mkdir(parents=True, exist_ok=True)
     except Exception:
         pass
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         # Create dedicated auth table to avoid collision with analytics 'users'
         await db.execute(
             f"""
@@ -490,7 +484,7 @@ async def register(req: RegisterRequest, request: Request, response: Response):
     # Normalize and validate
     norm_user = _sanitize_username(req.username)
     # Normalize first and check duplicate username early for desired error precedence
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         # Check dedicated auth table first
         async with db.execute(
             f"SELECT 1 FROM {AUTH_TABLE} WHERE username = ?",
@@ -512,7 +506,7 @@ async def register(req: RegisterRequest, request: Request, response: Response):
     _validate_password(req.password)
     hashed = pwd_context.hash(req.password)
     try:
-        async with aiosqlite.connect(DB_PATH) as db:
+        async with aiosqlite.connect(str(_db_path())) as db:
             # Rely on UNIQUE constraint to guard duplicates; simpler and avoids races
             await db.execute(
                 f"INSERT INTO {AUTH_TABLE} (username, password_hash) VALUES (?, ?)",
@@ -769,12 +763,12 @@ async def login(req: LoginRequest, request: Request, response: Response):
             "meta": {
                 "username": norm_user,
                 "ip": _client_ip(request),
-                "db_path": DB_PATH,
+                "db_path": str(_db_path()),
             }
         },
     )
 
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         # Try both auth table and legacy users table
         hashed = await _fetch_password_hash(db, norm_user)
         logger.info(
@@ -1216,7 +1210,7 @@ _RESET_TTL = int(os.getenv("PASSWORD_RESET_TTL_SECONDS", "900"))
 async def forgot(req: ForgotRequest) -> dict:
     norm_user = _sanitize_username(req.username)
     # best-effort: ensure user exists
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         async with db.execute(
             f"SELECT 1 FROM {AUTH_TABLE} WHERE username=?",
             (norm_user,),
@@ -1246,7 +1240,7 @@ async def reset_password(req: ResetPasswordRequest) -> dict:
     _validate_password(req.new_password)
     hashed = pwd_context.hash(req.new_password)
     try:
-        async with aiosqlite.connect(DB_PATH) as db:
+        async with aiosqlite.connect(str(_db_path())) as db:
             await db.execute(
                 f"UPDATE {AUTH_TABLE} SET password_hash=? WHERE username=?",
                 (hashed, username),

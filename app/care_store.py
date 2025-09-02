@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from app.db.paths import resolve_db_path
 from typing import Any
 
 import aiosqlite
@@ -42,11 +43,8 @@ def _compute_db_path() -> Path:
     return Path("care.db").resolve()
 
 
-DB_PATH = _compute_db_path()
-try:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-except Exception:
-    pass
+def _db_path() -> Path:
+    return resolve_db_path("CARE_DB", "care.db")
 
 
 def _now() -> float:
@@ -54,7 +52,7 @@ def _now() -> float:
 
 
 async def ensure_tables() -> None:
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         await db.execute(
             """
             CREATE TABLE IF NOT EXISTS residents (
@@ -162,7 +160,7 @@ async def ensure_tables() -> None:
 
 
 async def insert_alert(rec: dict[str, Any]) -> None:
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         await db.execute(
             """
             INSERT INTO alerts (id, resident_id, kind, severity, note, created_at, status, ack_at, resolved_at)
@@ -184,7 +182,7 @@ async def insert_alert(rec: dict[str, Any]) -> None:
 
 
 async def get_alert(alert_id: str) -> dict[str, Any] | None:
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         async with db.execute(
             "SELECT id,resident_id,kind,severity,note,created_at,status,ack_at,resolved_at FROM alerts WHERE id=?",
             (alert_id,),
@@ -211,7 +209,7 @@ async def update_alert(alert_id: str, **fields: Any) -> None:
         return
     cols = ",".join(f"{k}=?" for k in fields)
     vals = list(fields.values()) + [alert_id]
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         await db.execute(f"UPDATE alerts SET {cols} WHERE id=?", vals)
         await db.commit()
 
@@ -219,7 +217,7 @@ async def update_alert(alert_id: str, **fields: Any) -> None:
 async def insert_event(
     alert_id: str, type_: str, meta: dict[str, Any] | None = None
 ) -> None:
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         await db.execute(
             "INSERT INTO alert_events (alert_id, t, type, meta) VALUES (?, ?, ?, ?)",
             (alert_id, _now(), type_, json.dumps(meta or {})),
@@ -235,7 +233,7 @@ async def list_alerts(resident_id: str | None = None) -> list[dict[str, Any]]:
         params = (resident_id,)
     q += " ORDER BY created_at DESC"
     out: list[dict[str, Any]] = []
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         async with db.execute(q, params) as cur:
             async for row in cur:
                 out.append(
@@ -258,7 +256,7 @@ async def upsert_device(
     device_id: str, resident_id: str, *, battery_pct: int | None = None
 ) -> dict[str, Any]:
     now = _now()
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         # Fetch current
         async with db.execute(
             "SELECT id,resident_id,last_seen,battery_pct,battery_low_since,battery_notified,offline_since,offline_notified FROM devices WHERE id=?",
@@ -331,7 +329,7 @@ async def upsert_device(
 
 
 async def get_device(device_id: str) -> dict[str, Any] | None:
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         async with db.execute(
             "SELECT id,resident_id,last_seen,battery_pct,battery_low_since,battery_notified,offline_since,offline_notified FROM devices WHERE id=?",
             (device_id,),
@@ -366,14 +364,14 @@ async def set_device_flags(device_id: str, **flags: Any) -> None:
         return
     cols = ",".join(f"{k}=?" for k in flags)
     vals = list(flags.values()) + [device_id]
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         await db.execute(f"UPDATE devices SET {cols} WHERE id=?", vals)
         await db.commit()
 
 
 async def list_devices() -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         async with db.execute(
             "SELECT id,resident_id,last_seen,battery_pct,battery_low_since,battery_notified,offline_since,offline_notified FROM devices"
         ) as cur:
@@ -397,7 +395,7 @@ async def list_devices() -> list[dict[str, Any]]:
 
 
 async def get_tv_config(resident_id: str) -> dict[str, Any] | None:
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         async with db.execute(
             "SELECT resident_id,ambient_rotation,rail,quiet_hours,default_vibe,updated_at FROM tv_config WHERE resident_id=?",
             (resident_id,),
@@ -425,7 +423,7 @@ async def set_tv_config(
 ) -> None:
     now = _now()
     qh = json.dumps(quiet_hours or {})
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         # Upsert semantics
         await db.execute(
             """
@@ -448,7 +446,7 @@ async def set_tv_config(
 
 async def create_session(rec: dict[str, Any]) -> None:
     now = _now()
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         await db.execute(
             "INSERT INTO care_sessions (id,resident_id,title,transcript_uri,created_at,updated_at) VALUES (?,?,?,?,?,?)",
             (
@@ -469,7 +467,7 @@ async def update_session(session_id: str, **fields: Any) -> None:
     fields["updated_at"] = _now()
     cols = ",".join(f"{k}=?" for k in fields)
     vals = list(fields.values()) + [session_id]
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         await db.execute(f"UPDATE care_sessions SET {cols} WHERE id=?", vals)
         await db.commit()
 
@@ -482,7 +480,7 @@ async def list_sessions(resident_id: str | None = None) -> list[dict[str, Any]]:
         params = (resident_id,)
     q += " ORDER BY created_at DESC"
     out: list[dict[str, Any]] = []
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         async with db.execute(q, params) as cur:
             async for row in cur:
                 out.append(
@@ -499,7 +497,7 @@ async def list_sessions(resident_id: str | None = None) -> list[dict[str, Any]]:
 
 
 async def create_contact(rec: dict[str, Any]) -> None:
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         await db.execute(
             "INSERT INTO contacts (id,resident_id,name,phone,priority,quiet_hours) VALUES (?,?,?,?,?,?)",
             (
@@ -516,7 +514,7 @@ async def create_contact(rec: dict[str, Any]) -> None:
 
 async def list_contacts(resident_id: str) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         async with db.execute(
             "SELECT id,resident_id,name,phone,priority,quiet_hours FROM contacts WHERE resident_id=? ORDER BY priority DESC",
             (resident_id,),
@@ -542,12 +540,12 @@ async def update_contact(contact_id: str, **fields: Any) -> None:
         fields["quiet_hours"] = json.dumps(fields["quiet_hours"])
     cols = ",".join(f"{k}=?" for k in fields)
     vals = list(fields.values()) + [contact_id]
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         await db.execute(f"UPDATE contacts SET {cols} WHERE id=?", vals)
         await db.commit()
 
 
 async def delete_contact(contact_id: str) -> None:
-    async with aiosqlite.connect(str(DB_PATH)) as db:
+    async with aiosqlite.connect(str(_db_path())) as db:
         await db.execute("DELETE FROM contacts WHERE id=?", (contact_id,))
         await db.commit()

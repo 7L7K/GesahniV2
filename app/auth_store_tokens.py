@@ -14,15 +14,19 @@ from .metrics import TOKEN_STORE_OPERATIONS, TOKEN_REFRESH_OPERATIONS
 
 logger = logging.getLogger(__name__)
 
-# Database configuration
-DEFAULT_DB_PATH = os.getenv("THIRD_PARTY_TOKENS_DB", "third_party_tokens.db")
+# Database configuration - lazy path resolution
+def _default_db_path() -> str:
+    from .db.paths import resolve_db_path
+    return str(resolve_db_path("THIRD_PARTY_TOKENS_DB", "third_party_tokens.db"))
 
 
 class TokenDAO:
     """Data Access Object for third-party tokens using SQLite."""
+    # Expose module default path as a class attribute for tests and external overrides
+    DEFAULT_DB_PATH = _default_db_path()
 
-    def __init__(self, db_path: str = DEFAULT_DB_PATH):
-        self.db_path = db_path
+    def __init__(self, db_path: str = None):
+        self.db_path = db_path or _default_db_path()
         self._lock = asyncio.Lock()
 
     async def _ensure_table(self) -> None:
@@ -251,6 +255,13 @@ class TokenDAO:
                 "refresh_token_length": len(getattr(token, 'encrypted_refresh_token', getattr(token, 'refresh_token', '')) or '')
             }
         })
+
+        # Ensure the tokens table exists before proceeding with any upsert operations
+        try:
+            await self._ensure_table()
+        except Exception as e:
+            logger.error("🔐 TOKEN STORE: Failed to ensure token table exists", extra={"meta": {"error": str(e)}})
+            raise
 
         # Validate token before attempting storage
         if not self._validate_token_for_storage(token):
@@ -850,10 +861,10 @@ class TokenDAO:
         else:
             # Check if identity_id exists in auth_identities table
             try:
-                from .auth_store import DB_PATH
+                from .auth_store import _db_path
                 import sqlite3
 
-                with sqlite3.connect(str(DB_PATH)) as conn:
+                with sqlite3.connect(str(_db_path())) as conn:
                     cursor = conn.cursor()
                     cursor.execute("SELECT id FROM auth_identities WHERE id = ?", (identity_id,))
                     row = cursor.fetchone()
@@ -1677,7 +1688,7 @@ async def get_token_system_health() -> dict:
         dao = TokenDAO()
 
         # Get database stats
-        with sqlite3.connect(DEFAULT_DB_PATH) as conn:
+        with sqlite3.connect(_default_db_path()) as conn:
             cursor = conn.cursor()
 
             # Count total tokens

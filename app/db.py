@@ -15,13 +15,6 @@ import aiosqlite
 
 logger = logging.getLogger(__name__)
 
-# Import database paths from various modules
-from .auth import DB_PATH as AUTH_DB_PATH
-from .auth_store import DB_PATH as AUTH_STORE_DB_PATH
-from .care_store import DB_PATH as CARE_DB_PATH
-from .music.store import DB_PATH as MUSIC_DB_PATH
-
-
 async def init_db_once() -> None:
     """
     Initialize all database schemas once during application startup.
@@ -30,6 +23,12 @@ async def init_db_once() -> None:
     modules to ensure schemas are created only once at startup rather
     than repeatedly during runtime operations.
     """
+    # Import database paths from various modules (lazy to avoid circular imports)
+    from .auth import _db_path as AUTH_DB_PATH
+    from .auth_store import _db_path as AUTH_STORE_DB_PATH
+    from .care_store import _db_path as CARE_DB_PATH
+    from .music.store import _db_path as MUSIC_DB_PATH
+
     logger.info("Initializing database schemas...")
 
     # Initialize auth database schema
@@ -51,13 +50,13 @@ async def _init_auth_db() -> None:
     """Initialize authentication database schema."""
     # Ensure directory exists for sqlite file paths
     try:
-        p = Path(AUTH_DB_PATH)
+        p = AUTH_DB_PATH()
         if p.parent and str(p).lower() not in {":memory:", ""}:
             p.parent.mkdir(parents=True, exist_ok=True)
     except Exception:
         pass
 
-    async with aiosqlite.connect(AUTH_DB_PATH) as db:
+    async with aiosqlite.connect(str(AUTH_DB_PATH())) as db:
         # Set critical SQLite PRAGMAs once during initialization
         # journal_mode=WAL and synchronous=NORMAL persist in the database file
         await db.execute("PRAGMA journal_mode=WAL")
@@ -90,7 +89,7 @@ async def _init_auth_db() -> None:
 
 async def _init_auth_store_db() -> None:
     """Initialize auth store database schema."""
-    async with aiosqlite.connect(str(AUTH_STORE_DB_PATH)) as db:
+    async with aiosqlite.connect(str(AUTH_STORE_DB_PATH())) as db:
         # Set critical SQLite PRAGMAs once during initialization
         # journal_mode=WAL and synchronous=NORMAL persist in the database file
         await db.execute("PRAGMA journal_mode=WAL")
@@ -204,7 +203,7 @@ async def _init_auth_store_db() -> None:
 
 async def _init_care_db() -> None:
     """Initialize care store database schema."""
-    async with aiosqlite.connect(str(CARE_DB_PATH)) as db:
+    async with aiosqlite.connect(str(CARE_DB_PATH())) as db:
         # Set critical SQLite PRAGMAs once during initialization
         # journal_mode=WAL and synchronous=NORMAL persist in the database file
         await db.execute("PRAGMA journal_mode=WAL")
@@ -306,7 +305,7 @@ async def _init_care_db() -> None:
 
 async def _init_music_db() -> None:
     """Initialize music database schema."""
-    async with aiosqlite.connect(MUSIC_DB_PATH) as db:
+    async with aiosqlite.connect(str(MUSIC_DB_PATH())) as db:
         # Set critical SQLite PRAGMAs once during initialization
         # journal_mode=WAL and synchronous=NORMAL persist in the database file
         await db.execute("PRAGMA journal_mode=WAL")

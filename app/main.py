@@ -837,6 +837,13 @@ app = FastAPI(
     swagger_ui_parameters=_swagger_ui_parameters,
 )
 
+# Wire store providers into middleware (dependency injection)
+# Import stores *after* app exists to avoid import-time cycles
+from .user_store import user_store
+from .middleware.middleware_core import set_store_providers
+
+set_store_providers(user_store_provider=lambda: user_store)
+
 # Unified error contract for HTTP errors
 @app.exception_handler(StarletteHTTPException)
 async def _unified_http_error(request: Request, exc: StarletteHTTPException):

@@ -12,16 +12,27 @@ _TEST_MODE = (
     or os.getenv("ENV", "").lower() == "test"
     or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").lower() in {"1", "true", "yes", "on"}
 )
-DB_PATH = os.getenv("MUSIC_DB") or ("sqlite:///:memory:" if _TEST_MODE else "music.db")
+
+def _db_path() -> str:
+    """Get the database path, using centralized path resolution."""
+    env_path = os.getenv("MUSIC_DB")
+    if env_path:
+        return env_path
+    elif _TEST_MODE:
+        return "sqlite:///:memory:"
+    else:
+        from ..db.paths import resolve_db_path
+        return str(resolve_db_path("MUSIC_DB", "music.db"))
 
 
 def _connect() -> sqlite3.Connection:
-    if DB_PATH.startswith("sqlite://"):
-        path = DB_PATH[len("sqlite://") :]
+    db_path = _db_path()
+    if db_path.startswith("sqlite://"):
+        path = db_path[len("sqlite://") :]
         if path.startswith("/"):
             path = path[1:]
         return sqlite3.connect(path or ":memory:", check_same_thread=False)
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
+    return sqlite3.connect(db_path, check_same_thread=False)
 
 
 _conn = _connect()

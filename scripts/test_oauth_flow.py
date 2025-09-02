@@ -51,7 +51,8 @@ with patch(
     print("\nCalling callback with patched exchange_code...")
     # Use the state value from cookie (the endpoint expects state param)
     params = {"code": "fake-code", "state": state_cookie}
-    r2 = client.get("/v1/google/auth/callback", params=params, allow_redirects=False)
+    # TestClient.get doesn't accept `allow_redirects`; use default behavior
+    r2 = client.get("/v1/google/auth/callback", params=params)
     print("callback status", r2.status_code)
 
     # Show all response headers

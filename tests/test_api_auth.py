@@ -39,8 +39,34 @@ def _mint_token(
 
 
 def _create_test_app():
-    """Create a test FastAPI app with auth router"""
+    """Create a test FastAPI app with auth router and database setup"""
     app = FastAPI()
+
+    # Set up test database before including routers
+    import tempfile
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    # Create temp DB path
+    test_db_path = tempfile.mktemp(suffix='.db')
+    os.environ["CARE_DB"] = test_db_path
+    os.environ["AUTH_DB"] = test_db_path
+    os.environ["MUSIC_DB"] = test_db_path
+
+    # Ensure parent directory exists
+    Path(test_db_path).parent.mkdir(parents=True, exist_ok=True)
+
+    # Set up database tables
+    try:
+        result = subprocess.run([sys.executable, "test_setup_db.py"],
+                              capture_output=True, text=True, cwd=os.getcwd())
+        if result.returncode != 0:
+            print(f"DB setup failed: {result.stderr}")
+    except Exception as e:
+        print(f"DB setup failed: {e}")
+
     app.include_router(auth_router, prefix="/v1")
     return app
 

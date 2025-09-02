@@ -3,6 +3,7 @@ import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import pytest_asyncio
 
 from app.token_store import (
     LocalStorage,
@@ -116,7 +117,7 @@ class TestLocalStorage:
 class TestTokenStoreRedisFallback:
     """Test Redis fallback behavior when Redis is unavailable."""
 
-    @pytest.fixture(autouse=True)
+    @pytest_asyncio.fixture(autouse=True)
     async def setup(self):
         """Clear local storage before each test."""
         await clear_local_storage()
@@ -373,7 +374,7 @@ class TestCleanupTask:
 class TestTokenStoreIntegration:
     """Integration tests for token store functionality."""
 
-    @pytest.fixture(autouse=True)
+    @pytest_asyncio.fixture(autouse=True)
     async def setup(self):
         """Clear local storage before each test."""
         await clear_local_storage()

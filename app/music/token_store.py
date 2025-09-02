@@ -6,9 +6,12 @@ import logging
 from cryptography.fernet import Fernet, InvalidToken
 from typing import Optional
 
+from ..db.paths import resolve_db_path
+
 logger = logging.getLogger(__name__)
 
-DB_PATH = os.getenv("MUSIC_TOKEN_DB", "music_tokens.db")
+def _db_path() -> str:
+    return str(resolve_db_path("MUSIC_TOKEN_DB", "music_tokens.db"))
 TABLE_NAME = os.getenv("MUSIC_TOKEN_TABLE", "music_tokens")
 MASTER_KEY = os.getenv("MUSIC_MASTER_KEY")
 
@@ -23,7 +26,7 @@ class TokenStore:
     """Encrypted token store backed by sqlite + aiosqlite using MUSIC_MASTER_KEY."""
 
     def __init__(self, db_path: str | None = None) -> None:
-        self.db_path = db_path or DB_PATH
+        self.db_path = db_path or _db_path()
 
     async def _ensure_table(self) -> None:
         async with aiosqlite.connect(self.db_path) as db:

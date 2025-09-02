@@ -21,7 +21,7 @@ from app.models.third_party_tokens import ThirdPartyToken
 from app.auth_store import DB_PATH as AUTH_DB_PATH, link_oauth_identity, ensure_tables
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 async def temp_dbs(tmp_path):
     """Create temporary databases for testing."""
     # Create temporary token database
@@ -52,7 +52,7 @@ async def temp_dbs(tmp_path):
     # But that's okay for testing as each test gets its own temp directory
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 async def create_test_identity(temp_dbs):
     """Helper fixture to create a test identity."""
     dao, auth_db = temp_dbs

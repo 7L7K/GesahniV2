@@ -15,6 +15,7 @@ import secrets
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import pytest_asyncio
 
 from app.api.auth import verify_pat_async
 from app.auth_store import create_pat, get_pat_by_hash, list_pats_for_user, revoke_pat
@@ -23,7 +24,7 @@ from app.auth_store import create_pat, get_pat_by_hash, list_pats_for_user, revo
 class TestPATComplete:
     """Test complete PAT functionality."""
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def setup_user(self):
         """Set up test user and clean up after."""
         user_id = f"test_user_{secrets.token_hex(4)}"

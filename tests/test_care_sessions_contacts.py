@@ -1,21 +1,7 @@
-import os
-import sys
 import uuid
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from fastapi.testclient import TestClient
-
-from app.main import app
-
-
-def client():
-    return TestClient(app)
-
-
-def test_sessions_crud(monkeypatch):
-    monkeypatch.setenv("PROMETHEUS_ENABLED", "0")
-    c = client()
+def test_sessions_crud(client):
+    c = client
     sid = uuid.uuid4().hex
     r = c.post(
         "/v1/care/sessions",

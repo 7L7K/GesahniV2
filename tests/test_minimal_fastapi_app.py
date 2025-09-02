@@ -190,7 +190,7 @@ def create_test_client() -> TestClient:
         patch("app.token_store.get_last_used_jti", AsyncMock(return_value=None)),
         patch("app.token_store.set_last_used_jti", AsyncMock()),
         patch("app.token_store.incr_login_counter", AsyncMock(return_value=1)),
-        patch("app.sessions_store.sessions_store", MagicMock()),
+        patch("app.sessions_store.sessions_store", AsyncMock()),
         patch("app.deps.user.resolve_session_id", lambda **kwargs: "session_dev"),
     ]
 

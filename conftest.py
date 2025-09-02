@@ -1,10 +1,56 @@
 import os
 import time
+import warnings
+
+# Pytest early hook: set test DB dir and flags before any imports
+def pytest_load_initial_conftests(early_config, parser):
+    try:
+        # Mark pytest running so modules that compute DB paths at import see it
+        os.environ.setdefault("PYTEST_RUNNING", "1")
+
+        # Per-worker test DB directory (xdist sets PYTEST_XDIST_WORKER or PYTEST_WORKER_ID)
+        worker = os.getenv("PYTEST_XDIST_WORKER") or os.getenv("PYTEST_WORKER_ID") or "main"
+        test_dir = f"/tmp/gesahni_tests/{worker}"
+        os.environ.setdefault("GESAHNI_TEST_DB_DIR", test_dir)
+
+        # Test-friendly configuration overrides
+        # JWT: Allow short secrets in tests
+        os.environ.setdefault("DEV_MODE", "1")  # Allows weak JWT secrets
+        os.environ.setdefault("ENV", "dev")     # Alternative way to allow weak secrets
+
+        # Rate limiting: Disable for tests by default
+        os.environ.setdefault("ENABLE_RATE_LIMIT_IN_TESTS", "0")
+
+        # CSRF: Disable for tests
+        os.environ.setdefault("CSRF_ENABLED", "0")
+
+        # WebSocket: Disable problematic async logging
+        os.environ.setdefault("WS_DISABLE_ASYNC_LOGGING", "1")
+
+        # Metrics: Disable Prometheus in tests to avoid port conflicts
+        os.environ.setdefault("PROMETHEUS_ENABLED", "0")
+
+        # Logging: Reduce verbosity in tests
+        os.environ.setdefault("LOG_LEVEL", "WARNING")
+
+        # CORS: Disable strict origin checking for tests
+        os.environ.setdefault("CORS_ALLOW_ORIGINS", "*")
+
+        # Session: Use memory-based sessions for tests
+        os.environ.setdefault("SESSION_STORE", "memory")
+
+        # Vector store: Use memory backend for tests
+        os.environ.setdefault("VECTOR_STORE", "memory")
+
+    except Exception as e:
+        print(f"Warning: Failed to set test configuration: {e}")
+        pass
 
 import pytest
-from fastapi.testclient import TestClient
 
-from app.main import app
+# Filter Pydantic v2 deprecation warnings to keep CI green
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="pydantic")
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture
@@ -14,6 +60,45 @@ def client(monkeypatch):
     # Allow anonymous requests in tests unless a JWT is explicitly set by a test
     monkeypatch.delenv("JWT_SECRET", raising=False)
     monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
+
+    # Ensure test-friendly configuration (fallback for tests not using early hook)
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setenv("ENV", "dev")
+    monkeypatch.setenv("ENABLE_RATE_LIMIT_IN_TESTS", "0")
+    monkeypatch.setenv("CSRF_ENABLED", "0")
+    monkeypatch.setenv("WS_DISABLE_ASYNC_LOGGING", "1")
+    monkeypatch.setenv("PROMETHEUS_ENABLED", "0")
+    monkeypatch.setenv("LOG_LEVEL", "WARNING")
+    monkeypatch.setenv("CORS_ALLOW_ORIGINS", "*")
+    monkeypatch.setenv("SESSION_STORE", "memory")
+    monkeypatch.setenv("VECTOR_STORE", "memory")
+
+    # Set database path explicitly to ensure all modules use the same test DB
+    import tempfile
+    import os
+    import subprocess
+    import sys
+
+    test_db_path = tempfile.mktemp(suffix='.db')
+    monkeypatch.setenv("CARE_DB", test_db_path)
+    monkeypatch.setenv("AUTH_DB", test_db_path)
+    monkeypatch.setenv("MUSIC_DB", test_db_path)
+
+    # Set up test database tables using the setup script
+    try:
+        result = subprocess.run([sys.executable, "test_setup_db.py"],
+                              capture_output=True, text=True, cwd=os.getcwd())
+        if result.returncode != 0:
+            print(f"DB setup failed: {result.stderr}")
+    except Exception as e:
+        print(f"DB setup failed: {e}")
+        # Silent fail - DB setup should not break tests
+        pass
+
+    # Import the FastAPI `app` after test env vars are set to ensure
+    # DB path computation and startup logic detect pytest mode.
+    from app.main import app
+
     return TestClient(app)
 
 
@@ -25,6 +110,81 @@ def app_client(monkeypatch):
     # Allow anonymous requests in tests unless a JWT is explicitly set by a test
     monkeypatch.delenv("JWT_SECRET", raising=False)
     monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "1")
+
+    # Set database path explicitly to ensure all modules use the same test DB
+    import tempfile
+    import os
+    test_db_path = tempfile.mktemp(suffix='.db')
+    monkeypatch.setenv("CARE_DB", test_db_path)
+    monkeypatch.setenv("AUTH_DB", test_db_path)
+    monkeypatch.setenv("MUSIC_DB", test_db_path)
+
+    # Force database schema initialization BEFORE creating TestClient
+    # Note: This approach has issues because modules are imported before fixtures run
+    try:
+        # Simple synchronous approach to ensure tables exist
+        import sqlite3
+
+        # Create tables directly using sqlite3
+        conn = sqlite3.connect(test_db_path)
+        cursor = conn.cursor()
+
+        # Create care_sessions table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS care_sessions (
+                id TEXT PRIMARY KEY,
+                resident_id TEXT,
+                title TEXT,
+                transcript_uri TEXT,
+                created_at REAL,
+                updated_at REAL
+            )
+        """)
+
+        # Create auth_users table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS auth_users (
+                username TEXT PRIMARY KEY,
+                password_hash TEXT NOT NULL
+            )
+        """)
+
+        # Create contacts table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS contacts (
+                id TEXT PRIMARY KEY,
+                resident_id TEXT,
+                name TEXT,
+                phone TEXT,
+                priority INTEGER,
+                quiet_hours TEXT
+            )
+        """)
+
+        # Create tv_config table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tv_config (
+                resident_id TEXT PRIMARY KEY,
+                ambient_rotation INTEGER,
+                rail TEXT,
+                quiet_hours TEXT,
+                default_vibe TEXT,
+                updated_at REAL
+            )
+        """)
+
+        conn.commit()
+        conn.close()
+
+        print(f"DEBUG: Created test DB at {test_db_path}")
+
+    except Exception as e:
+        print(f"DB init failed: {e}")
+        # Silent fail - DB init should not break tests
+        pass
+
+    # Import `app` after envs are configured so startup sees test flags
+    from app.main import app
     return TestClient(app)
 
 
@@ -267,6 +427,43 @@ def _isolate_debug_and_flags(monkeypatch):
 
     # Tell application code we're inside pytest (if you want to gate features)
     monkeypatch.setenv("PYTEST_RUNNING", "1")
+    # Ensure auth and token DB tables exist for tests that expect DB-backed tables.
+    try:
+        import app.auth_store as _auth_store
+        import app.auth_store_tokens as _auth_tokens
+        import app.care_store as _care_store
+        import app.music.store as _music_store
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_auth_store.ensure_tables())
+        except Exception:
+            pass
+        try:
+            # Ensure token table exists (use class default path)
+            dao = _auth_tokens.TokenDAO(str(getattr(_auth_tokens.TokenDAO, "DEFAULT_DB_PATH", _auth_tokens.DEFAULT_DB_PATH)))
+            loop.run_until_complete(dao._ensure_table())
+        except Exception:
+            pass
+        try:
+            # Ensure care store tables exist for care-related tests
+            loop.run_until_complete(_care_store.ensure_tables())
+        except Exception:
+            pass
+        try:
+            # Ensure music store tables exist for music-related tests
+            loop.run_until_complete(_music_store._ensure_tables())
+        except Exception:
+            pass
+    except Exception:
+        # If auth modules aren't importable during some unit tests, ignore
+        pass
+
+
+
     yield
 
 

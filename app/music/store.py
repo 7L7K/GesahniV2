@@ -7,7 +7,12 @@ import time
 from typing import Any, List, Optional
 from cryptography.fernet import Fernet, InvalidToken
 
-DB_PATH = os.getenv("MUSIC_DB", "music.db")
+from app.db.paths import resolve_db_path
+
+
+
+def _db_path() -> str:
+    return str(resolve_db_path("MUSIC_DB", "music.db"))
 MASTER_KEY = os.getenv("MUSIC_MASTER_KEY")
 
 
@@ -18,7 +23,7 @@ def _fernet() -> Fernet | None:
 
 
 async def _ensure_tables(db_path: str | None = None) -> None:
-    p = db_path or DB_PATH
+    p = db_path or _db_path()
     async with aiosqlite.connect(p) as db:
         await db.execute(
             """
@@ -128,7 +133,7 @@ def _decrypt(b: bytes) -> bytes:
 
 
 async def upsert_token(user_id: str, provider: str, access_token: bytes, refresh_token: bytes | None = None, scope: str | None = None, expires_at: int | None = None, db_path: str | None = None) -> None:
-    p = db_path or DB_PATH
+    p = db_path or _db_path()
     at_enc = _encrypt(access_token)
     rt_enc = _encrypt(refresh_token) if refresh_token else None
     now = int(time.time())
@@ -141,7 +146,7 @@ async def upsert_token(user_id: str, provider: str, access_token: bytes, refresh
 
 
 async def get_token(user_id: str, provider: str, db_path: str | None = None) -> dict | None:
-    p = db_path or DB_PATH
+    p = db_path or _db_path()
     async with aiosqlite.connect(p) as db:
         cur = await db.execute("SELECT access_token, refresh_token, scope, expires_at, updated_at FROM music_tokens WHERE user_id = ? AND provider = ?", (user_id, provider))
         row = await cur.fetchone()
@@ -159,7 +164,7 @@ async def get_token(user_id: str, provider: str, db_path: str | None = None) -> 
 
 async def get_preferences(user_id: str, db_path: str | None = None) -> dict:
     """Return music preferences for a user, falling back to env defaults."""
-    p = db_path or DB_PATH
+    p = db_path or _db_path()
     async with aiosqlite.connect(p) as db:
         cur = await db.execute("SELECT default_provider, quiet_start, quiet_end, quiet_max_volume, allow_explicit FROM music_preferences WHERE user_id = ?", (user_id,))
         row = await cur.fetchone()
@@ -182,7 +187,7 @@ async def get_preferences(user_id: str, db_path: str | None = None) -> dict:
 
 
 async def get_idempotent(key: str, user_id: str, db_path: str | None = None) -> dict | None:
-    p = db_path or DB_PATH
+    p = db_path or _db_path()
     async with aiosqlite.connect(p) as db:
         cur = await db.execute("SELECT response_json FROM music_idempotency WHERE idempotency_key = ? AND user_id = ?", (key, user_id))
         row = await cur.fetchone()
@@ -195,7 +200,7 @@ async def get_idempotent(key: str, user_id: str, db_path: str | None = None) -> 
 
 
 async def set_idempotent(key: str, user_id: str, response: dict, db_path: str | None = None) -> None:
-    p = db_path or DB_PATH
+    p = db_path or _db_path()
     now = int(time.time())
     async with aiosqlite.connect(p) as db:
         await db.execute("INSERT OR REPLACE INTO music_idempotency (idempotency_key, user_id, response_json, created_at) VALUES (?, ?, ?, ?)", (key, user_id, json.dumps(response), now))

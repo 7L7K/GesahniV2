@@ -9,9 +9,12 @@ import aiosqlite
 
 from .base import Skill
 from .ledger import record_action
+from ..db.paths import resolve_db_path
 
-DB_PATH = Path(os.getenv("NOTES_DB", "notes.db"))
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+def _db_path() -> Path:
+    p = resolve_db_path("NOTES_DB", "notes.db")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 class NotesDAO:
@@ -60,7 +63,7 @@ class NotesDAO:
         return [r[0] for r in rows]
 
 
-dao = NotesDAO(DB_PATH)
+dao = NotesDAO(_db_path())
 
 
 class NotesSkill(Skill):

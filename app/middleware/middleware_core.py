@@ -71,7 +71,15 @@ from ..history import append_history
 from ..otel_utils import get_trace_id_hex, observe_with_exemplar, start_span
 from ..security import get_rate_limit_snapshot
 from ..telemetry import LogRecord, log_record_var, utc_now
-from ..user_store import user_store
+# Provider injection pattern - no direct imports of stores
+from typing import Any, Callable, Optional
+
+_user_store_provider: Optional[Callable[[], Any]] = None
+
+def set_store_providers(*, user_store_provider: Callable[[], Any]):
+    """Set store providers for middleware. Called from main.py after app construction."""
+    global _user_store_provider
+    _user_store_provider = user_store_provider
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -297,8 +305,10 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
 
         # Best-effort user accounting (do not affect request latency on failure)
         try:
-            await user_store.ensure_user(rec.user_id)
-            await user_store.increment_request(rec.user_id)
+            if _user_store_provider is not None:
+                user_store = _user_store_provider()
+                await user_store.ensure_user(rec.user_id)
+                await user_store.increment_request(rec.user_id)
         except Exception:
             pass
 
