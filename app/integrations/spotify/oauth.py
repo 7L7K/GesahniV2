@@ -137,11 +137,28 @@ class SpotifyOAuth:
         }
 
         # In test mode, mint deterministic tokens without calling Spotify
-        if os.getenv("SPOTIFY_TEST_MODE", "0") == "1" and code == "fake":
+        test_mode_env = os.getenv("SPOTIFY_TEST_MODE", "0")
+        is_test_mode = test_mode_env == "1"
+        is_fake_code = code == "fake"
+
+        logger.info("🎵 SPOTIFY EXCHANGE: Test mode check", extra={
+            "meta": {
+                "test_mode_env": test_mode_env,
+                "is_test_mode": is_test_mode,
+                "code": code,
+                "is_fake_code": is_fake_code,
+                "condition_met": is_test_mode and is_fake_code
+            }
+        })
+
+        if is_test_mode and is_fake_code:
+            logger.info("🎵 SPOTIFY EXCHANGE: Using test mode - returning fake tokens", extra={
+                "meta": {"code": code}
+            })
             now = int(time.time())
             return {
-                "access_token": f"fake_access_{secrets.token_hex(8)}",
-                "refresh_token": f"fake_refresh_{secrets.token_hex(8)}",
+                "access_token": f"B{secrets.token_hex(16)}",  # Start with 'B' to pass validation
+                "refresh_token": f"A{secrets.token_hex(16)}",  # Start with 'A' and ensure length > 10
                 "scope": self.scopes,
                 "expires_in": 3600,
                 "expires_at": now + 3600,
@@ -367,7 +384,7 @@ async def exchange_code(code: str, code_verifier: str) -> ThirdPartyToken:
         provider="spotify",
         access_token=td.get("access_token", ""),
         refresh_token=td.get("refresh_token"),
-        scope=td.get("scope"),
+        scopes=td.get("scope"),
         expires_at=expires_at,
         created_at=now,
         updated_at=now,

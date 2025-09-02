@@ -29,12 +29,16 @@ function LoginPageInner() {
         const rawNext = sp.get('next');
         if (!rawNext) return;
 
-        // If sessionStorage indicates we've already normalized, skip
+        // If sessionStorage indicates we've already normalized, skip.
+        // Some browsers or extensions block sessionStorage; use URL flag fallback `sanitized=1`.
         try {
             if (window.sessionStorage && window.sessionStorage.getItem('sanitized_next_done')) return;
         } catch {
-            // sessionStorage may be unavailable; continue but be conservative
+            // sessionStorage unavailable — fall through to URL-flag check below
         }
+
+        // If URL already marked sanitized, skip normalization to avoid loops
+        if (sp.get('sanitized') === '1') return;
 
         const sanitized = sanitizeNextPath(rawNext, '/');
 
@@ -42,8 +46,14 @@ function LoginPageInner() {
             // If sanitized equals '/', remove next param from URL without navigation
             if (sanitized === '/') {
                 try { window.sessionStorage && window.sessionStorage.setItem('sanitized_next_done', '1'); } catch { }
+
+                // Prefer in-place URL replace to avoid navigation. If sessionStorage is blocked,
+                // also add a sanitized flag to the URL so other actors don't re-trigger normalization.
                 if (window.history && window.history.replaceState) {
-                    const newUrl = '/login';
+                    const u = new URL(window.location.href);
+                    u.searchParams.delete('next');
+                    u.searchParams.set('sanitized', '1');
+                    const newUrl = u.pathname + u.search;
                     if (window.location.pathname + window.location.search !== newUrl) {
                         window.history.replaceState(null, '', newUrl);
                     }
@@ -59,7 +69,13 @@ function LoginPageInner() {
 
             if (decodedRaw !== sanitized) {
                 try { window.sessionStorage && window.sessionStorage.setItem('sanitized_next_done', '1'); } catch { }
-                const newPath = `/login?next=${encodeURIComponent(sanitized)}`;
+
+                // Build new URL and include sanitized flag to prevent other actors from re-adding
+                // a nested/encoded `next` param when sessionStorage is unavailable.
+                const u = new URL(window.location.href);
+                u.searchParams.set('next', sanitized);
+                u.searchParams.set('sanitized', '1');
+                const newPath = u.pathname + u.search;
                 if (window.history && window.history.replaceState) {
                     // Only replace if it would change the current URL to avoid loops
                     if (window.location.pathname + window.location.search !== newPath) {
@@ -111,7 +127,7 @@ function LoginPageInner() {
                 // Scrub OAuth query params from URL after successful auth
                 try {
                     const url = new URL(window.location.href);
-                    ['code', 'state', 'scope', 'authuser', 'prompt', 'hd'].forEach(p => url.searchParams.delete(p));
+                    ['code', 'state', 'scope', 'authuser', 'prompt', 'hd', 'access_token', 'refresh_token'].forEach(p => url.searchParams.delete(p));
                     window.history.replaceState({}, document.title, url.toString());
                 } catch (err) {
                     // ignore

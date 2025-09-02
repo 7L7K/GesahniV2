@@ -89,7 +89,8 @@ def test_callback_id_token_extraction():
         provider="google",
         access_token="test_token",
         refresh_token="test_refresh",
-        scope="openid email"
+        scopes="openid email",
+        expires_at=2000000000  # Future timestamp
     )
 
     # Add id_token attribute (this is what our fix does)

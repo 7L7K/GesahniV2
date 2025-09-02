@@ -111,7 +111,7 @@ class SpotifyClient:
             provider="spotify",
             access_token=tokens.access_token,
             refresh_token=tokens.refresh_token,
-            scope=tokens.scope,
+            scopes=tokens.scope,
             expires_at=tokens.expires_at
         )
         await upsert_token(token)

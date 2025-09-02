@@ -23,15 +23,17 @@ DB_PATH = os.getenv("THIRD_PARTY_TOKENS_DB", "third_party_tokens.db")
 def _get_candidates(now: int) -> List[Tuple[str, str, int]]:
     out = []
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA foreign_keys=ON")
     try:
         cur = conn.cursor()
         cutoff = now + REFRESH_AHEAD_SECONDS
+        # Select by identity_id (canonical). Only consider rows with identity_id.
         cur.execute(
             """
-            SELECT user_id, provider, expires_at
+            SELECT identity_id, provider, expires_at
             FROM third_party_tokens
-            WHERE is_valid = 1 AND expires_at <= ? AND provider = 'google'
-            GROUP BY user_id, provider
+            WHERE is_valid = 1 AND expires_at <= ? AND provider = 'google' AND identity_id IS NOT NULL
+            GROUP BY identity_id, provider
             """,
             (cutoff,),
         )
@@ -43,7 +45,7 @@ def _get_candidates(now: int) -> List[Tuple[str, str, int]]:
     return out
 
 
-async def _refresh_for_user(user_id: str, provider: str) -> None:
+async def _refresh_for_user(identity_id: str, provider: str) -> None:
     attempt = 0
     max_attempts = 3
     base_delay = 1.0
@@ -51,13 +53,14 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
     while attempt < max_attempts:
         attempt += 1
         try:
-            # Fetch latest token row
+            # Fetch latest token row by identity
             conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA foreign_keys=ON")
             try:
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT id, refresh_token FROM third_party_tokens WHERE user_id = ? AND provider = ? AND is_valid = 1 ORDER BY created_at DESC LIMIT 1",
-                    (user_id, provider),
+                    "SELECT id, refresh_token FROM third_party_tokens WHERE identity_id = ? AND provider = ? AND is_valid = 1 ORDER BY created_at DESC LIMIT 1",
+                    (identity_id, provider),
                 )
                 row = cur.fetchone()
                 if not row:
@@ -72,21 +75,25 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
             td = await refresh_token(refresh_tok)
 
             # Persist new token row using direct DB write to mirror auth_store_tokens.upsert
+            # Persist via canonical upsert using identity_id
+            from ..models.third_party_tokens import ThirdPartyToken
+            from ..auth_store_tokens import upsert_token
+
             now = int(time.time())
             expires_at = int(td.get("expires_at", now + int(td.get("expires_in", 3600))))
-            new_id = f"google:{secrets.token_hex(8)}"
-            conn = sqlite3.connect(DB_PATH)
-            try:
-                cur = conn.cursor()
-                # Mark previous valid tokens invalid
-                cur.execute("UPDATE third_party_tokens SET is_valid = 0, updated_at = ? WHERE user_id = ? AND provider = ? AND is_valid = 1", (now, user_id, provider))
-                cur.execute(
-                    "INSERT INTO third_party_tokens (id, user_id, provider, access_token, refresh_token, scope, expires_at, created_at, updated_at, is_valid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
-                    (new_id, user_id, provider, td.get("access_token", ""), td.get("refresh_token"), td.get("scope"), expires_at, now, now),
-                )
-                conn.commit()
-            finally:
-                conn.close()
+            new_token = ThirdPartyToken(
+                id=f"google:{secrets.token_hex(8)}",
+                user_id="",  # legacy field; identity-driven writes are authoritative
+                identity_id=identity_id,
+                provider="google",
+                access_token=td.get("access_token", ""),
+                refresh_token=td.get("refresh_token"),
+                scopes=td.get("scope"),
+                expires_at=expires_at,
+                created_at=now,
+                updated_at=now,
+            )
+            await upsert_token(new_token)
 
             try:
                 SPOTIFY_REFRESH.inc()
@@ -137,5 +144,4 @@ def main_loop() -> None:
 
 if __name__ == "__main__":
     main_loop()
-
 

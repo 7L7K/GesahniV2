@@ -44,7 +44,11 @@ def test_successful_token_exchange_logging():
         mock_response_obj = MagicMock()
         mock_response_obj.status_code = 200
         mock_response_obj.json.return_value = mock_response
-        mock_instance.post.return_value = mock_response_obj
+
+        # Create an async mock for the post method
+        async def async_post(*args, **kwargs):
+            return mock_response_obj
+        mock_instance.post = async_post
 
         # Call the function (this would normally be async)
         import asyncio

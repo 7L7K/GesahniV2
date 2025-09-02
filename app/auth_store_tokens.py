@@ -79,6 +79,7 @@ class TokenDAO:
 
                 # Define required columns and their SQL definitions for ALTER
                 required_cols = {
+                    "identity_id": "TEXT",
                     "provider_sub": "TEXT",
                     "provider_iss": "TEXT",
                     "access_token_enc": "BLOB",
@@ -130,6 +131,17 @@ class TokenDAO:
                     WHERE is_valid = 1
                 """)
 
+                # Unique constraint for valid tokens by identity (new canonical key)
+                try:
+                    cursor.execute("""
+                        CREATE UNIQUE INDEX IF NOT EXISTS ux_tokens_identity_provider_valid
+                        ON third_party_tokens (identity_id, provider)
+                        WHERE is_valid = 1
+                    """)
+                except Exception:
+                    # Some SQLite versions may not support partial indices in the same way; ignore
+                    pass
+
                 conn.commit()
 
     async def _apply_repo_migration(self) -> None:
@@ -165,7 +177,6 @@ class TokenDAO:
                         shutil.copy2(self.db_path, bkp)
                 except Exception:
                     pass
-            await self._ensure_table()
             # Backfill legacy rows: ensure scope_union_since and provider_iss presence
             try:
                 with sqlite3.connect(self.db_path) as conn:
@@ -222,6 +233,25 @@ class TokenDAO:
         start_time = time.time()
         success = False
 
+        # Generate unique request ID for tracking this operation
+        import secrets
+        req_id = f"upsert_{secrets.token_hex(4)}"
+
+        logger.info("🔐 TOKEN STORE: Starting upsert operation", extra={
+            "meta": {
+                "req_id": req_id,
+                "token_id": token.id,
+                "user_id": token.user_id,
+                "provider": token.provider,
+                "identity_id": getattr(token, 'identity_id', None),
+                "provider_sub": getattr(token, 'provider_sub', None),
+                "expires_at": token.expires_at,
+                "scopes_length": len(getattr(token, 'scopes', getattr(token, 'scope', '')) or ''),
+                "access_token_length": len(getattr(token, 'encrypted_access_token', getattr(token, 'access_token', '')) or ''),
+                "refresh_token_length": len(getattr(token, 'encrypted_refresh_token', getattr(token, 'refresh_token', '')) or '')
+            }
+        })
+
         # Validate token before attempting storage
         if not self._validate_token_for_storage(token):
             logger.warning("🔐 TOKEN STORE: Invalid token rejected", extra={
@@ -240,17 +270,24 @@ class TokenDAO:
                 "token_id": token.id,
                 "user_id": token.user_id,
                 "provider": token.provider,
+                "identity_id": getattr(token, 'identity_id', None),
+                "provider_sub": getattr(token, 'provider_sub', None),
                 "has_access_token": bool(token.access_token),
                 "has_refresh_token": bool(token.refresh_token),
                 "access_token_length": len(token.access_token) if token.access_token else 0,
                 "refresh_token_length": len(token.refresh_token) if token.refresh_token else 0,
                 "expires_at": token.expires_at,
-                "scope": token.scope
+                "scopes": token.scopes
             }
         })
 
+        # Debug: Check if identity_id is set
+        if not getattr(token, 'identity_id', None):
+            logger.warning("🔐 TOKEN STORE: Token has no identity_id - this may cause upsert issues", extra={
+                "meta": {"token_id": token.id, "user_id": token.user_id, "provider": token.provider}
+            })
+
         try:
-            await self._ensure_table()
 
             max_attempts = 4
             attempts = 0
@@ -258,14 +295,18 @@ class TokenDAO:
             while attempts < max_attempts:
                 try:
                     async with self._lock:
-                        # Open connection with a short timeout and use WAL + busy_timeout
+                        # Open connection with a short timeout and use WAL + busy_timeout + foreign keys
                         with sqlite3.connect(self.db_path, isolation_level=None, timeout=2.5) as conn:
                             cursor = conn.cursor()
                             try:
                                 cursor.execute("PRAGMA journal_mode=WAL")
                                 cursor.execute("PRAGMA busy_timeout=2500")
-                            except Exception:
-                                pass
+                                cursor.execute("PRAGMA foreign_keys=ON")
+                                logger.debug("🔐 TOKEN STORE: Foreign keys enabled", extra={"meta": {"req_id": req_id}})
+                            except Exception as e:
+                                logger.warning("🔐 TOKEN STORE: Failed to set PRAGMA", extra={
+                                    "meta": {"req_id": req_id, "error": str(e)}
+                                })
                             # Acquire IMMEDIATE transaction to emulate SELECT ... FOR UPDATE
                             cursor.execute("BEGIN IMMEDIATE")
 
@@ -320,7 +361,7 @@ class TokenDAO:
                                 items = sorted(set(items))
                                 return " ".join(items) if items else None
 
-                            token.scope = _normalize_scope(token.scope)
+                            token.scopes = _normalize_scope(token.scopes)
 
                             # Select previous valid row for this (user,provider,provider_sub)
                             if not existing_row:
@@ -329,10 +370,10 @@ class TokenDAO:
                                 prev_scopes = set()
                             else:
                                 # Use existing_row values fetched above
-                                prev_scopes = set([x.strip().lower() for x in (prev_scope_raw or "").split() if x and x.strip()])
-                                curr_scopes = set([x.strip().lower() for x in (token.scope or "").split() if x and x.strip()])
+                                prev_scopes = set([x.strip().lower() for x in (prev_scope_raw or "").replace(',', ' ').split() if x and x.strip()])
+                                curr_scopes = set([x.strip().lower() for x in (token.scopes or "").replace(',', ' ').split() if x and x.strip()])
                                 merged = prev_scopes | curr_scopes
-                                token.scope = " ".join(sorted(merged)) if merged else None
+                                token.scopes = " ".join(sorted(merged)) if merged else None
                                 token.scope_union_since = int(prev_scope_union_since or token.created_at)
                                 # Record last added from when new scopes arrive
                                 new_added = merged - prev_scopes
@@ -360,6 +401,7 @@ class TokenDAO:
                             insert_tuple = (
                                 token.id,
                                 token.user_id,
+                                token.identity_id,
                                 token.provider,
                                 token.provider_sub,
                                 token.provider_iss,
@@ -370,7 +412,7 @@ class TokenDAO:
                                 envelope_key_version,
                                 last_refresh_at,
                                 refresh_error_count,
-                                token.scope,
+                                token.scopes,
                                 token.service_state,
                                 token.scope_union_since,
                                 token.scope_last_added_from,
@@ -382,64 +424,109 @@ class TokenDAO:
                             )
 
                             try:
-                                cursor.execute(
-                                    """
-                                    INSERT INTO third_party_tokens
-                                    (id, user_id, provider, provider_sub, provider_iss, access_token, access_token_enc, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count,
-                                     scope, service_state, scope_union_since, scope_last_added_from, replaced_by_id, expires_at, created_at, updated_at, is_valid)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                    """,
-                                    insert_tuple,
-                                )
+                                # Use identity-based upsert to avoid UNIQUE violations when
+                                # multiple rows exist for the same logical identity.
+                                # This targets the partial unique index: (identity_id, provider) WHERE is_valid=1
+                                # Fallback for older SQLite builds: If ON CONFLICT doesn't work with partial indices,
+                                # replace with: UPDATE ... SET is_valid=0 WHERE identity_id=? AND provider=? AND is_valid=1
+                                # followed by plain INSERT (no UPSERT).
+                                # Perform test-mode contract validation for Spotify tokens
+                                if token.provider == "spotify":
+                                    logger.debug("🔐 TOKEN STORE: Performing contract validation for Spotify token", extra={
+                                        "meta": {"req_id": req_id, "token_id": token.id}
+                                    })
+                                    contract_valid = await self._validate_spotify_token_contract(token)
+                                    if not contract_valid:
+                                        logger.error("🔐 TOKEN STORE: Contract validation failed for Spotify token", extra={
+                                            "meta": {"req_id": req_id, "token_id": token.id, "user_id": token.user_id}
+                                        })
+                                        return False
+
+                                # Check for existing valid token with same identity_id + provider
+                                if token.identity_id:
+                                    cursor.execute(
+                                        """
+                                        SELECT id FROM third_party_tokens
+                                        WHERE identity_id = ? AND provider = ? AND is_valid = 1
+                                        """,
+                                        (token.identity_id, token.provider)
+                                    )
+                                    existing = cursor.fetchone()
+
+                                    if existing:
+                                        logger.info("🔐 TOKEN STORE: Updating existing token", extra={
+                                            "meta": {"existing_id": existing[0], "new_token_id": token.id}
+                                        })
+                                        # Update existing token
+                                        update_sql = """
+                                            UPDATE third_party_tokens SET
+                                                access_token=?, access_token_enc=?, refresh_token=?, refresh_token_enc=?,
+                                                scope=?, service_state=?, expires_at=?, updated_at=CURRENT_TIMESTAMP
+                                            WHERE id=?
+                                            """
+                                        update_params = (
+                                            token.access_token, access_token_enc,
+                                            None if refresh_token_enc else token.refresh_token, refresh_token_enc,
+                                            token.scopes, token.service_state, token.expires_at,
+                                            existing[0]
+                                        )
+                                        logger.debug("🔐 TOKEN STORE: Executing UPDATE", extra={
+                                            "meta": {"req_id": req_id, "sql": update_sql.strip(), "params": update_params}
+                                        })
+                                        cursor.execute(update_sql, update_params)
+                                    else:
+                                        logger.info("🔐 TOKEN STORE: Inserting new token", extra={
+                                            "meta": {"token_id": token.id, "identity_id": token.identity_id}
+                                        })
+                                        # Insert new token
+                                        insert_sql = """
+                                            INSERT INTO third_party_tokens
+                                            (id, user_id, identity_id, provider, provider_sub, provider_iss, access_token, access_token_enc, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count,
+                                             scope, service_state, scope_union_since, scope_last_added_from, replaced_by_id, expires_at, created_at, updated_at, is_valid)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                            """
+                                        logger.debug("🔐 TOKEN STORE: Executing INSERT", extra={
+                                            "meta": {"req_id": req_id, "sql": insert_sql.strip(), "params": insert_tuple}
+                                        })
+                                        cursor.execute(insert_sql, insert_tuple)
+                                else:
+                                    logger.warning("🔐 TOKEN STORE: No identity_id - skipping upsert", extra={
+                                        "meta": {"token_id": token.id, "user_id": token.user_id, "provider": token.provider}
+                                    })
+                                    # Skip upsert if no identity_id
+                                    return False
+
+                                conn.commit()
+
+                                logger.info("🔐 TOKEN STORE: Token upserted successfully", extra={
+                                    "meta": {
+                                        "req_id": req_id,
+                                        "token_id": token.id,
+                                        "user_id": token.user_id,
+                                        "identity_id": getattr(token, 'identity_id', None),
+                                        "provider": token.provider,
+                                        "operation": "upsert_success",
+                                        "db_path": self.db_path,
+                                        "expires_at": token.expires_at,
+                                        "has_refresh_enc": bool(refresh_token_enc),
+                                        "duration_ms": int((time.time() - start_time) * 1000)
+                                    }
+                                })
+
+                                return True
                             except sqlite3.OperationalError as op_e:
                                 msg = str(op_e).lower()
                                 if "no column" in msg or "has no column" in msg or "no such column" in msg:
                                     logger.warning("Detected schema mismatch, attempting to apply migration", extra={"meta": {"error": str(op_e)}})
                                     try:
                                         await self._apply_repo_migration()
-                                        cursor.execute(
-                                            """
-                                            INSERT INTO third_party_tokens
-                                            (id, user_id, provider, provider_sub, provider_iss, access_token, access_token_enc, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count,
-                                             scope, service_state, scope_union_since, scope_last_added_from, replaced_by_id, expires_at, created_at, updated_at, is_valid)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                            """,
-                                            insert_tuple,
-                                        )
+                                        cursor.execute(insert_sql, insert_tuple)
+                                        conn.commit()
+                                        return True
                                     except Exception:
                                         raise
                                 else:
                                     raise
-
-                            # Invalidate prior row and link lineage in same transaction
-                            try:
-                                if prev_id:
-                                    cursor.execute(
-                                        """
-                                        UPDATE third_party_tokens
-                                        SET is_valid = 0, updated_at = ?, replaced_by_id = ?
-                                        WHERE id = ?
-                                        """,
-                                        (token.updated_at, token.id, prev_id),
-                                    )
-                            except Exception:
-                                pass
-
-                            conn.commit()
-
-                            logger.info("🔐 TOKEN STORE: Token upserted successfully", extra={
-                                "meta": {
-                                    "token_id": token.id,
-                                    "user_id": token.user_id,
-                                    "provider": token.provider,
-                                    "operation": "upsert_success",
-                                    "db_path": self.db_path,
-                                    "expires_at": token.expires_at,
-                                    "has_refresh_enc": bool(refresh_token_enc),
-                                }
-                            })
-
-                            return True
                 except sqlite3.OperationalError as oe:
                     if "database is locked" in str(oe).lower() and attempts < max_attempts - 1:
                         import random
@@ -450,9 +537,27 @@ class TokenDAO:
                         continue
                     raise
 
+        except (sqlite3.IntegrityError, sqlite3.OperationalError) as e:
+            # Do NOT swallow these critical database errors - log with full context and re-raise
+            logger.error("🔐 TOKEN STORE: CRITICAL DATABASE ERROR - NOT SWALLOWED", extra={
+                "meta": {
+                    "req_id": req_id,
+                    "token_id": token.id,
+                    "user_id": token.user_id,
+                    "identity_id": getattr(token, 'identity_id', None),
+                    "provider": token.provider,
+                    "provider_sub": getattr(token, 'provider_sub', None),
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "sql": "See logs above for SQL statements",
+                    "operation": "upsert_critical_error"
+                }
+            })
+            raise
         except Exception as e:
             logger.error("🔐 TOKEN STORE: Token upsert failed", extra={
                 "meta": {
+                    "req_id": req_id,
                     "token_id": token.id,
                     "user_id": token.user_id,
                     "provider": token.provider,
@@ -475,7 +580,6 @@ class TokenDAO:
             Token if found and valid, None otherwise
         """
         try:
-            await self._ensure_table()
 
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -487,6 +591,7 @@ class TokenDAO:
                         SELECT
                             id,
                             user_id,
+                            identity_id,
                             provider,
                             provider_sub,
                             provider_iss,
@@ -519,6 +624,7 @@ class TokenDAO:
                         SELECT
                             id,
                             user_id,
+                            identity_id,
                             provider,
                             provider_sub,
                             provider_iss,
@@ -680,18 +786,239 @@ class TokenDAO:
         except Exception:
             return False
 
+    async def _validate_spotify_token_contract(self, token: ThirdPartyToken) -> bool:
+        """
+        Test-mode contract validation for Spotify tokens.
+        Performs comprehensive validation and logs all failures.
+        """
+        import re
+        import time
+
+        validation_passed = True
+        now = int(time.time())
+
+        # Generate request ID for tracking this validation
+        import secrets
+        req_id = f"contract_{secrets.token_hex(4)}"
+
+        logger.info("🔒 CONTRACT VALIDATION: Starting Spotify token contract checks", extra={
+            "meta": {
+                "req_id": req_id,
+                "token_id": token.id,
+                "user_id": token.user_id,
+                "provider": token.provider,
+                "identity_id": getattr(token, 'identity_id', None)
+            }
+        })
+
+        # 1. provider == 'spotify'
+        if token.provider != 'spotify':
+            logger.error("🔒 CONTRACT VALIDATION: FAILED - provider must be 'spotify'", extra={
+                "meta": {
+                    "req_id": req_id,
+                    "token_id": token.id,
+                    "actual_provider": token.provider,
+                    "expected_provider": "spotify"
+                }
+            })
+            validation_passed = False
+
+        # 2. provider_iss == 'https://accounts.spotify.com'
+        if not token.provider_iss or token.provider_iss != 'https://accounts.spotify.com':
+            logger.error("🔒 CONTRACT VALIDATION: FAILED - provider_iss must be 'https://accounts.spotify.com'", extra={
+                "meta": {
+                    "req_id": req_id,
+                    "token_id": token.id,
+                    "actual_provider_iss": token.provider_iss,
+                    "expected_provider_iss": "https://accounts.spotify.com"
+                }
+            })
+            validation_passed = False
+
+        # 3. identity_id is a non-empty TEXT that exists in auth_identities
+        identity_id = getattr(token, 'identity_id', None)
+        if not identity_id or not isinstance(identity_id, str) or not identity_id.strip():
+            logger.error("🔒 CONTRACT VALIDATION: FAILED - identity_id must be non-empty TEXT", extra={
+                "meta": {
+                    "req_id": req_id,
+                    "token_id": token.id,
+                    "identity_id": identity_id,
+                    "identity_id_type": type(identity_id).__name__
+                }
+            })
+            validation_passed = False
+        else:
+            # Check if identity_id exists in auth_identities table
+            try:
+                from .auth_store import DB_PATH
+                import sqlite3
+
+                with sqlite3.connect(str(DB_PATH)) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT id FROM auth_identities WHERE id = ?", (identity_id,))
+                    row = cursor.fetchone()
+                    if not row:
+                        logger.error("🔒 CONTRACT VALIDATION: FAILED - identity_id not found in auth_identities", extra={
+                            "meta": {
+                                "req_id": req_id,
+                                "token_id": token.id,
+                                "identity_id": identity_id
+                            }
+                        })
+                        validation_passed = False
+            except Exception as e:
+                logger.error("🔒 CONTRACT VALIDATION: FAILED - error checking identity_id in auth_identities", extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "token_id": token.id,
+                        "identity_id": identity_id,
+                        "error": str(e)
+                    }
+                })
+                validation_passed = False
+
+        # 4. access_token matches ^B[A-Za-z0-9] and length ≥ 16+2
+        if not token.access_token:
+            logger.error("🔒 CONTRACT VALIDATION: FAILED - access_token is required", extra={
+                "meta": {"req_id": req_id, "token_id": token.id}
+            })
+            validation_passed = False
+        else:
+            if not re.match(r'^B[A-Za-z0-9]+$', token.access_token):
+                logger.error("🔒 CONTRACT VALIDATION: FAILED - access_token format invalid", extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "token_id": token.id,
+                        "access_token_prefix": token.access_token[:2] if len(token.access_token) >= 2 else token.access_token,
+                        "expected_pattern": "^B[A-Za-z0-9]+$"
+                    }
+                })
+                validation_passed = False
+
+            if len(token.access_token) < 18:  # 16 + 2 prefix
+                logger.error("🔒 CONTRACT VALIDATION: FAILED - access_token too short", extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "token_id": token.id,
+                        "access_token_length": len(token.access_token),
+                        "minimum_length": 18
+                    }
+                })
+                validation_passed = False
+
+        # 5. refresh_token either None or matches ^A[A-Za-z0-9] (length ≥ 16+2)
+        if token.refresh_token is not None:
+            if not re.match(r'^A[A-Za-z0-9]+$', token.refresh_token):
+                logger.error("🔒 CONTRACT VALIDATION: FAILED - refresh_token format invalid", extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "token_id": token.id,
+                        "refresh_token_prefix": token.refresh_token[:2] if len(token.refresh_token) >= 2 else token.refresh_token,
+                        "expected_pattern": "^A[A-Za-z0-9]+$"
+                    }
+                })
+                validation_passed = False
+
+            if len(token.refresh_token) < 18:  # 16 + 2 prefix
+                logger.error("🔒 CONTRACT VALIDATION: FAILED - refresh_token too short", extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "token_id": token.id,
+                        "refresh_token_length": len(token.refresh_token),
+                        "minimum_length": 18
+                    }
+                })
+                validation_passed = False
+
+        # 6. expires_at is int and expires_at - now >= 300
+        if not isinstance(token.expires_at, int):
+            logger.error("🔒 CONTRACT VALIDATION: FAILED - expires_at must be int", extra={
+                "meta": {
+                    "req_id": req_id,
+                    "token_id": token.id,
+                    "expires_at": token.expires_at,
+                    "expires_at_type": type(token.expires_at).__name__
+                }
+            })
+            validation_passed = False
+        else:
+            time_until_expiry = token.expires_at - now
+            if time_until_expiry < 300:
+                logger.error("🔒 CONTRACT VALIDATION: FAILED - expires_at too soon", extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "token_id": token.id,
+                        "expires_at": token.expires_at,
+                        "now": now,
+                        "time_until_expiry": time_until_expiry,
+                        "minimum_seconds": 300
+                    }
+                })
+                validation_passed = False
+
+        # 7. scopes non-empty (store as joined string like user-read-email,user-read-private)
+        scopes = getattr(token, 'scopes', None)
+        if not scopes:
+            logger.error("🔒 CONTRACT VALIDATION: FAILED - scopes is required", extra={
+                "meta": {"req_id": req_id, "token_id": token.id, "scopes": scopes}
+            })
+            validation_passed = False
+        else:
+            # Convert scopes to string format if it's a list
+            if isinstance(scopes, list):
+                scopes_str = ','.join(scopes)
+            elif isinstance(scopes, str):
+                scopes_str = scopes
+            else:
+                scopes_str = str(scopes)
+
+            if not scopes_str.strip():
+                logger.error("🔒 CONTRACT VALIDATION: FAILED - scopes cannot be empty after string conversion", extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "token_id": token.id,
+                        "scopes": scopes,
+                        "scopes_type": type(scopes).__name__,
+                        "scopes_str": scopes_str
+                    }
+                })
+                validation_passed = False
+            else:
+                # Update token.scopes to normalized string format
+                token.scopes = scopes_str
+
+        if validation_passed:
+            logger.info("🔒 CONTRACT VALIDATION: SUCCESS - all checks passed", extra={
+                "meta": {
+                    "req_id": req_id,
+                    "token_id": token.id,
+                    "user_id": token.user_id,
+                    "provider": token.provider
+                }
+            })
+        else:
+            logger.error("🔒 CONTRACT VALIDATION: FAILED - validation failed", extra={
+                "meta": {
+                    "req_id": req_id,
+                    "token_id": token.id,
+                    "user_id": token.user_id,
+                    "provider": token.provider
+                }
+            })
+
+        return validation_passed
+
     async def get_canonical_row(self, user_id: str, provider: str, provider_iss: str, provider_sub: Optional[str]) -> Optional[ThirdPartyToken]:
         """Return the single valid canonical row for (user,provider,provider_iss,provider_sub) or None.
 
         This helper enforces that exactly one valid row exists; returns the latest valid row if present.
         """
         try:
-            await self._ensure_table()
             with sqlite3.connect(self.db_path) as conn:
                 cur = conn.cursor()
                 cur.execute(
                     """
-                    SELECT id, user_id, provider, provider_sub, provider_iss, access_token, access_token_enc, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count, scope, service_state, scope_union_since, scope_last_added_from, replaced_by_id, expires_at, created_at, updated_at, is_valid
+                    SELECT id, user_id, provider, provider_sub, provider_iss, access_token, access_token_enc, refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at, refresh_error_count, scopes, service_state, scope_union_since, scope_last_added_from, replaced_by_id, expires_at, created_at, updated_at, is_valid
                     FROM third_party_tokens
                     WHERE user_id = ? AND provider = ? AND IFNULL(provider_iss,'') = IFNULL(?, '') AND IFNULL(provider_sub,'') = IFNULL(?, '') AND is_valid = 1
                     ORDER BY created_at DESC
@@ -718,7 +1045,6 @@ class TokenDAO:
             List of valid tokens for the user
         """
         try:
-            await self._ensure_table()
 
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -773,7 +1099,6 @@ class TokenDAO:
             True if successful, False otherwise
         """
         try:
-            await self._ensure_table()
 
             async with self._lock:
                 with sqlite3.connect(self.db_path) as conn:
@@ -808,7 +1133,6 @@ class TokenDAO:
             return True
 
         try:
-            await self._ensure_table()
 
             async with self._lock:
                 with sqlite3.connect(self.db_path) as conn:
@@ -826,9 +1150,9 @@ class TokenDAO:
                         update_fields.append("refresh_token = ?")
                         values.append(updates.refresh_token)
 
-                    if updates.scope is not None:
-                        update_fields.append("scope = ?")
-                        values.append(updates.scope)
+                    if updates.scopes is not None:
+                        update_fields.append("scopes = ?")
+                        values.append(updates.scopes)
 
                     if updates.expires_at is not None:
                         update_fields.append("expires_at = ?")
@@ -872,7 +1196,6 @@ class TokenDAO:
             Number of tokens cleaned up
         """
         try:
-            await self._ensure_table()
 
             async with self._lock:
                 with sqlite3.connect(self.db_path) as conn:
@@ -900,7 +1223,6 @@ class TokenDAO:
             Dictionary with token statistics
         """
         try:
-            await self._ensure_table()
 
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -950,7 +1272,6 @@ class TokenDAO:
         Finds the most recent valid row for (user, provider, iss?, sub?) and updates service_state JSON.
         """
         try:
-            await self._ensure_table()
             async with self._lock:
                 with sqlite3.connect(self.db_path) as conn:
                     cur = conn.cursor()
@@ -997,6 +1318,40 @@ token_dao = TokenDAO()
 async def upsert_token(token: ThirdPartyToken) -> bool:
     """Convenience function to upsert a token."""
     return await token_dao.upsert_token(token)
+
+
+async def get_token_by_user_identities(user_id: str, provider: str) -> Optional[ThirdPartyToken]:
+    """Resolve identities for a user and return the newest valid token for the provider.
+
+    This pivots via the `auth_identities` table to avoid relying on token.user_id.
+    """
+    # Simple direct DB query to find tokens by joining identities
+    db_path = token_dao.db_path
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cur = conn.cursor()
+            # Ensure we select identity_id in the canonical position
+            cur.execute(
+                """
+                SELECT
+                    t.id, t.user_id, t.identity_id, t.provider, t.provider_sub, t.provider_iss,
+                    t.access_token, t.access_token_enc, t.refresh_token, t.refresh_token_enc, t.envelope_key_version,
+                    t.last_refresh_at, t.refresh_error_count, t.scopes, t.service_state, t.scope_union_since, t.scope_last_added_from,
+                    t.replaced_by_id, t.expires_at, t.created_at, t.updated_at, t.is_valid
+                FROM third_party_tokens t
+                JOIN auth_identities i ON t.identity_id = i.id
+                WHERE i.user_id = ? AND i.provider = ? AND t.provider = ? AND t.is_valid = 1
+                ORDER BY t.expires_at DESC
+                LIMIT 1
+                """,
+                (user_id, provider, provider),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return ThirdPartyToken.from_db_row(row)
+    except Exception:
+        return None
 
 
 async def get_token(user_id: str, provider: str, provider_sub: Optional[str] = None) -> Optional[ThirdPartyToken]:
@@ -1182,7 +1537,7 @@ class TokenRefreshService:
                 access_token=refreshed_tokens.access_token,
                 refresh_token=refreshed_tokens.refresh_token,
                 expires_at=refreshed_tokens.expires_at,
-                scope=refreshed_tokens.scope,
+                scopes=refreshed_tokens.scopes,
                 provider_iss="https://accounts.spotify.com"
             )
 
@@ -1212,7 +1567,7 @@ class TokenRefreshService:
                 access_token=token_data.get("access_token", ""),
                 refresh_token=token_data.get("refresh_token", token.refresh_token),
                 expires_at=int(token_data.get("expires_at", 0)),
-                scope=token_data.get("scope"),
+                scopes=token_data.get("scopes"),
                 provider_iss="https://accounts.google.com",
                 # provider_sub intentionally omitted; existing provider_sub will be preserved by upsert
             )
@@ -1240,7 +1595,7 @@ class TokenRefreshService:
                         provider="google",
                         access_token="",  # Clear access token
                         refresh_token=None,  # Clear refresh token
-                        scope=None,
+                        scopes=None,
                         expires_at=0,
                         is_valid=False,  # Mark as invalid
                         provider_iss=token.provider_iss,
@@ -1320,7 +1675,6 @@ async def get_token_system_health() -> dict:
     """
     try:
         dao = TokenDAO()
-        await dao._ensure_table()
 
         # Get database stats
         with sqlite3.connect(DEFAULT_DB_PATH) as conn:

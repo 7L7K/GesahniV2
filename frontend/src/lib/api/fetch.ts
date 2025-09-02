@@ -151,7 +151,12 @@ export async function apiFetch(
   const credentials: RequestCredentials = auth ? 'include' : initCreds;
   const isAbsolute = /^(?:https?:)?\/\//i.test(path);
   const isBrowser = typeof window !== "undefined";
-  const base = API_URL || (isBrowser ? "" : "http://localhost:8000");
+  // Honor NEXT_PUBLIC_USE_DEV_PROXY via API_URL resolution: when using the
+  // dev proxy the frontend talks to the same origin ("" base) and the Next dev
+  // server proxies requests to the backend. Otherwise fall back to explicit API_URL.
+  const useDevProxy = (process.env.NEXT_PUBLIC_USE_DEV_PROXY || 'false') === 'true';
+  // API_URL already considers NEXT_PUBLIC_USE_DEV_PROXY in auth.ts; use it directly.
+  const base = API_URL || (isBrowser ? '' : 'http://localhost:8000');
 
   // Add cache-busting parameter for Safari CORS requests
   const separator = path.includes('?') ? '&' : '?';

@@ -427,7 +427,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
                     // Clean up OAuth params from URL to prevent oscillation
                     if (typeof window !== 'undefined' && window.history.replaceState) {
                         const url = new URL(window.location.href);
-                        const oauthParams = ['code', 'state', 'g_state', 'authuser', 'hd', 'prompt', 'scope'];
+                        const oauthParams = ['code', 'state', 'g_state', 'authuser', 'hd', 'prompt', 'scope', 'google', 'spotify'];
                         let cleaned = false;
                         oauthParams.forEach(param => {
                             if (url.searchParams.has(param)) {

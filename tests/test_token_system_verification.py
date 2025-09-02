@@ -30,7 +30,7 @@ class TestTokenSystemVerification:
             provider_iss="https://accounts.spotify.com",  # Correct issuer
             access_token="valid_token_123",
             refresh_token="valid_refresh_456",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -50,7 +50,7 @@ class TestTokenSystemVerification:
             provider_iss="https://wrong.issuer.com",  # Wrong issuer!
             access_token="invalid_token_123",
             refresh_token="invalid_refresh_456",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -80,7 +80,7 @@ class TestTokenSystemVerification:
             provider_iss="https://accounts.spotify.com",
             access_token=original_token,
             refresh_token=original_refresh,
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -115,7 +115,7 @@ class TestTokenSystemVerification:
                 provider_iss="https://accounts.spotify.com",
                 access_token="valid_token_1",
                 refresh_token="refresh_1",
-                scope="user-read-private",
+                scopes="user-read-private",
                 expires_at=now + 3600,
                 created_at=now,
                 updated_at=now,
@@ -128,7 +128,7 @@ class TestTokenSystemVerification:
                 provider_iss="https://accounts.google.com",
                 access_token="expired_token_2",
                 refresh_token="refresh_2",
-                scope="calendar.readonly",
+                scopes="calendar.readonly",
                 expires_at=now - 3600,  # Expired
                 created_at=now - 7200,
                 updated_at=now - 7200,
@@ -174,7 +174,7 @@ class TestTokenSystemVerification:
                 provider_iss=issuer,
                 access_token=f"token_{provider}",
                 refresh_token=f"refresh_{provider}",
-                scope="read",
+                scopes="read",
                 expires_at=now + 3600,
             )
 
@@ -205,7 +205,7 @@ class TestTokenSystemVerification:
                 provider_iss="https://accounts.spotify.com",
                 access_token=f"token_{user}",
                 refresh_token=f"refresh_{user}",
-                scope="user-read-private",
+                scopes="user-read-private",
                 expires_at=now + 3600,
             )
 
@@ -236,7 +236,7 @@ class TestTokenSystemVerification:
             provider_iss="https://accounts.spotify.com",
             access_token="token1",
             refresh_token="refresh1",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -248,7 +248,7 @@ class TestTokenSystemVerification:
             provider_iss="https://accounts.spotify.com",
             access_token="token2",
             refresh_token="refresh2",
-            scope="user-read-email user-modify-playback-state",
+            scopes="user-read-email user-modify-playback-state",
             expires_at=now + 3600,
         )
 
@@ -282,7 +282,7 @@ class TestTokenSystemVerification:
             provider_iss="https://accounts.spotify.com",
             access_token="test_token",
             refresh_token="test_refresh",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -313,7 +313,7 @@ class TestTokenSystemVerification:
             provider_iss="https://accounts.spotify.com",
             access_token="expired_token",
             refresh_token="valid_refresh_token",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now - 3600,  # Expired
             created_at=now - 7200,
             updated_at=now - 7200,
@@ -450,7 +450,7 @@ async def test_full_token_system_integration(tmp_path):
         provider_iss="https://accounts.spotify.com",
         access_token="integration_token_123",
         refresh_token="integration_refresh_456",
-        scope="user-read-private user-read-email",
+        scopes="user-read-private user-read-email",
         expires_at=now + 3600,
     )
 

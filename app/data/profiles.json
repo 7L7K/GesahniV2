@@ -2,7 +2,7 @@
   "anon": {
     "name": {
       "value": "test",
-      "updated_at": 1756561786.83835,
+      "updated_at": 1756781098.870199,
       "source": "api"
     },
     "email": {
@@ -49,17 +49,17 @@
     },
     "calendar_integration": {
       "value": false,
-      "updated_at": 1756561787.573523,
+      "updated_at": 1756781099.457689,
       "source": "api"
     },
     "gmail_integration": {
       "value": false,
-      "updated_at": 1756561787.57484,
+      "updated_at": 1756781099.459409,
       "source": "api"
     },
     "onboarding_completed": {
       "value": false,
-      "updated_at": 1756561787.576006,
+      "updated_at": 1756781099.462846,
       "source": "api"
     },
     "favorite_color": {

@@ -42,7 +42,7 @@ async def test_migration_applies_and_upserts(tmp_path):
         provider="google",
         access_token="at_123",
         refresh_token="rt_456",
-        scope="openid email",
+        scopes="openid email",
         expires_at=9999999999,
         created_at=1,
         updated_at=1,

@@ -20,7 +20,7 @@ async def test_upsert_unions_scopes_and_invalidates_prev(tmp_path):
         provider_iss="https://accounts.google.com",
         access_token="at1",
         refresh_token="rt1",
-        scope="gmail",
+        scopes="gmail",
         expires_at=now + 3600,
         created_at=now,
         updated_at=now,
@@ -38,7 +38,7 @@ async def test_upsert_unions_scopes_and_invalidates_prev(tmp_path):
         provider_iss="https://accounts.google.com",
         access_token="at2",
         refresh_token="rt2",
-        scope="calendar",
+        scopes="calendar",
         expires_at=now + 7200,
     )
     ok = await dao.upsert_token(t2)

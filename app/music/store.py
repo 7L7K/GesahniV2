@@ -128,7 +128,6 @@ def _decrypt(b: bytes) -> bytes:
 
 
 async def upsert_token(user_id: str, provider: str, access_token: bytes, refresh_token: bytes | None = None, scope: str | None = None, expires_at: int | None = None, db_path: str | None = None) -> None:
-    await _ensure_tables(db_path)
     p = db_path or DB_PATH
     at_enc = _encrypt(access_token)
     rt_enc = _encrypt(refresh_token) if refresh_token else None
@@ -142,7 +141,6 @@ async def upsert_token(user_id: str, provider: str, access_token: bytes, refresh
 
 
 async def get_token(user_id: str, provider: str, db_path: str | None = None) -> dict | None:
-    await _ensure_tables(db_path)
     p = db_path or DB_PATH
     async with aiosqlite.connect(p) as db:
         cur = await db.execute("SELECT access_token, refresh_token, scope, expires_at, updated_at FROM music_tokens WHERE user_id = ? AND provider = ?", (user_id, provider))
@@ -161,7 +159,6 @@ async def get_token(user_id: str, provider: str, db_path: str | None = None) -> 
 
 async def get_preferences(user_id: str, db_path: str | None = None) -> dict:
     """Return music preferences for a user, falling back to env defaults."""
-    await _ensure_tables(db_path)
     p = db_path or DB_PATH
     async with aiosqlite.connect(p) as db:
         cur = await db.execute("SELECT default_provider, quiet_start, quiet_end, quiet_max_volume, allow_explicit FROM music_preferences WHERE user_id = ?", (user_id,))
@@ -185,7 +182,6 @@ async def get_preferences(user_id: str, db_path: str | None = None) -> dict:
 
 
 async def get_idempotent(key: str, user_id: str, db_path: str | None = None) -> dict | None:
-    await _ensure_tables(db_path)
     p = db_path or DB_PATH
     async with aiosqlite.connect(p) as db:
         cur = await db.execute("SELECT response_json FROM music_idempotency WHERE idempotency_key = ? AND user_id = ?", (key, user_id))
@@ -199,7 +195,6 @@ async def get_idempotent(key: str, user_id: str, db_path: str | None = None) -> 
 
 
 async def set_idempotent(key: str, user_id: str, response: dict, db_path: str | None = None) -> None:
-    await _ensure_tables(db_path)
     p = db_path or DB_PATH
     now = int(time.time())
     async with aiosqlite.connect(p) as db:

@@ -24,7 +24,7 @@ async def test_enable_service_account_mismatch(tmp_path, monkeypatch):
         provider_iss="https://accounts.google.com",
         access_token="a_at",
         refresh_token="a_rt",
-        scope="openid email profile https://www.googleapis.com/auth/calendar.readonly",
+        scopes="openid email profile https://www.googleapis.com/auth/calendar.readonly",
         expires_at=now + 3600,
     )
     await dao.upsert_token(a)
@@ -39,7 +39,7 @@ async def test_enable_service_account_mismatch(tmp_path, monkeypatch):
         provider_iss="https://accounts.google.com",
         access_token="b_at",
         refresh_token="b_rt",
-        scope="openid email profile https://www.googleapis.com/auth/gmail.readonly",
+        scopes="openid email profile https://www.googleapis.com/auth/gmail.readonly",
         expires_at=now + 7200,
         created_at=now + 100,  # Make it 100 seconds newer to ensure it's definitely more recent
     )

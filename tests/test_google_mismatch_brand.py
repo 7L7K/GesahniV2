@@ -21,7 +21,7 @@ async def test_brand_account_same_email_different_sub(tmp_path, monkeypatch):
         provider_iss="https://accounts.google.com",
         access_token="a_at",
         refresh_token="a_rt",
-        scope="https://www.googleapis.com/auth/calendar.readonly",
+        scopes="https://www.googleapis.com/auth/calendar.readonly",
         expires_at=now + 3600,
     )
     await dao.upsert_token(a)
@@ -35,7 +35,7 @@ async def test_brand_account_same_email_different_sub(tmp_path, monkeypatch):
         provider_iss="https://accounts.google.com",
         access_token="b_at",
         refresh_token="b_rt",
-        scope="https://www.googleapis.com/auth/gmail.readonly",
+        scopes="https://www.googleapis.com/auth/gmail.readonly",
         expires_at=now + 7200,
     )
     await dao.upsert_token(b)

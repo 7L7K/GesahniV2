@@ -44,7 +44,6 @@ class TokenStore:
             await db.commit()
 
     async def upsert_token(self, user_id: str, provider: str, access_token: bytes, refresh_token: bytes | None = None, scope: str | None = None, expires_at: int | None = None) -> None:
-        await self._ensure_table()
         f = _fernet()
         at_blob = f.encrypt(access_token) if f else access_token
         rt_blob = f.encrypt(refresh_token) if (f and refresh_token) else refresh_token
@@ -57,7 +56,6 @@ class TokenStore:
             await db.commit()
 
     async def get_token(self, user_id: str, provider: str) -> dict | None:
-        await self._ensure_table()
         f = _fernet()
         async with aiosqlite.connect(self.db_path) as db:
             cur = await db.execute(f"SELECT access_token, refresh_token, scope, expires_at, updated_at FROM {TABLE_NAME} WHERE user_id = ? AND provider = ?", (user_id, provider))
@@ -79,7 +77,6 @@ class TokenStore:
             return {"access_token": at, "refresh_token": rt, "scope": scope, "expires_at": expires_at, "updated_at": updated_at}
 
     async def delete_token(self, user_id: str, provider: str) -> None:
-        await self._ensure_table()
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(f"DELETE FROM {TABLE_NAME} WHERE user_id = ? AND provider = ?", (user_id, provider))
             await db.commit()

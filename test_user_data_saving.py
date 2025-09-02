@@ -83,10 +83,12 @@ def test_user_data_extraction():
         return False
 
 
-def test_user_data_saving(user_data):
+def test_user_data_saving():
     """Test that user data is saved to the database correctly."""
     print("\n2️⃣ Testing User Data Saving to Database...")
 
+    # First extract user data
+    user_data = test_user_data_extraction()
     if not user_data:
         print("❌ No user data to save")
         return False
@@ -104,7 +106,7 @@ def test_user_data_saving(user_data):
             provider="google",
             access_token=mock_access_token,
             refresh_token=mock_refresh_token,
-            scope="openid https://www.googleapis.com/auth/userinfo.email",
+            scopes="openid https://www.googleapis.com/auth/userinfo.email",
             provider_sub=user_data["provider_sub"],
             provider_iss=user_data["provider_iss"],
             expires_at=int(datetime.now().timestamp()) + 3600
@@ -149,10 +151,17 @@ def test_user_data_saving(user_data):
         return False
 
 
-def test_user_authentication_simulation(token):
+def test_user_authentication_simulation():
     """Test that the user can be authenticated after OAuth."""
     print("\n3️⃣ Testing User Authentication Simulation...")
 
+    # First get user data and create token
+    user_data = test_user_data_extraction()
+    if not user_data:
+        print("❌ No user data available")
+        return False
+
+    token = test_user_data_saving()
     if not token:
         print("❌ No token to test authentication with")
         return False

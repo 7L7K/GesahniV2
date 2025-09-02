@@ -20,7 +20,7 @@ async def test_concurrent_upserts_union_scopes(tmp_path):
         provider_iss="https://accounts.google.com",
         access_token="base_at",
         refresh_token="base_rt",
-        scope="gmail",
+        scopes="gmail",
         expires_at=now + 3600,
     )
     await dao.upsert_token(base)
@@ -33,7 +33,7 @@ async def test_concurrent_upserts_union_scopes(tmp_path):
             provider_iss="https://accounts.google.com",
             access_token=f"at-{suffix}",
             refresh_token=f"rt-{suffix}",
-            scope=suffix,
+            scopes=suffix,
             expires_at=now + 3600,
         )
         return await dao.upsert_token(t)

@@ -150,27 +150,6 @@ export default function GoogleConnectCard({ onManage }: { onManage?: () => void 
                     clearHash();
                 }
 
-                // Compatibility fallback: if backend returned tokens in the query
-                // string (e.g. ?access_token=...&refresh_token=...), detect them and
-                // trigger a status refresh so the UI updates immediately. Also
-                // scrub tokens from the URL to avoid leaking them into history.
-                try {
-                    const sp = new URLSearchParams(window.location.search || '');
-                    const at = sp.get('access_token');
-                    const rt = sp.get('refresh_token');
-                    if ((at && at.length > 0) || (rt && rt.length > 0)) {
-                        console.log('🔗 GoogleCard: detected tokens in query string, running silent refresh');
-                        toast.success('Google connected');
-                        // Remove sensitive query params from URL while preserving hash
-                        const cleanSearch = window.location.search.replace(/([?&])(?:access_token|refresh_token)=[^&]*/g, '').replace(/^\?&?/, '?').replace(/\?$/, '');
-                        const newUrl = window.location.pathname + cleanSearch + (window.location.hash || '');
-                        history.replaceState({}, '', newUrl);
-                        await fetchStatus(true);
-                    }
-                } catch (err) {
-                    console.error('🔗 GoogleCard: error checking query tokens', err);
-                }
-
                 try {
                     const apiUrl = `${process.env.NEXT_PUBLIC_API_ORIGIN || 'http://localhost:8000'}/v1/health/google`;
                     console.log('🔗 GoogleCard: Making health request to:', apiUrl);
@@ -201,7 +180,7 @@ export default function GoogleConnectCard({ onManage }: { onManage?: () => void 
     }, []);
 
     async function handleConnect() {
-        console.log('🔗 GoogleCard: handleConnect called');
+        console.log('🔗 OAUTH_DEBUG: handleConnect called at:', new Date().toISOString());
         setStatus('connecting');
         try {
             console.log('🔗 GoogleCard: Calling connectGoogle...');

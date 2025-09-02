@@ -327,6 +327,7 @@ def set_oauth_state_cookies(
     ttl: int = 600,  # Default 10 minutes
     provider: str = "oauth",  # Provider-specific cookie prefix
     code_verifier: str | None = None,  # PKCE code verifier for enhanced security
+    session_id: str | None = None,
 ) -> None:
     """
     Set OAuth state cookies for Google/Apple OAuth flows.
@@ -388,6 +389,21 @@ def set_oauth_state_cookies(
             domain=cookie_config["domain"],
         )
         resp.headers.append("Set-Cookie", verifier_header)
+    # Optionally bind the initiating session id to the OAuth state so callbacks
+    # can verify the flow originated from the same browser tab/session.
+    if session_id:
+        session_cookie_name = f"{provider}_session"
+        session_header = format_cookie_header(
+            key=session_cookie_name,
+            value=session_id,
+            max_age=ttl,
+            secure=cookie_config["secure"],
+            samesite=cookie_config["samesite"],
+            path=cookie_config["path"],
+            httponly=True,
+            domain=cookie_config["domain"],
+        )
+        resp.headers.append("Set-Cookie", session_header)
 
 
 def clear_oauth_state_cookies(
@@ -408,7 +424,8 @@ def clear_oauth_state_cookies(
     state_cookie_name = f"{provider}_state"
     next_cookie_name = f"{provider}_next"
     verifier_cookie_name = f"{provider}_code_verifier"
-    oauth_cookies = [state_cookie_name, next_cookie_name, verifier_cookie_name]
+    session_cookie_name = f"{provider}_session"
+    oauth_cookies = [state_cookie_name, next_cookie_name, verifier_cookie_name, session_cookie_name]
 
     for cookie_name in oauth_cookies:
         header = format_cookie_header(
@@ -418,7 +435,7 @@ def clear_oauth_state_cookies(
             secure=cookie_config["secure"],
             samesite=cookie_config["samesite"],
             path=cookie_config["path"],
-            httponly=cookie_name in [state_cookie_name, verifier_cookie_name],  # State and verifier are HttpOnly, next is not
+            httponly=cookie_name in [state_cookie_name, verifier_cookie_name, session_cookie_name],  # State, verifier, session are HttpOnly
             domain=cookie_config["domain"],
         )
         resp.headers.append("Set-Cookie", header)

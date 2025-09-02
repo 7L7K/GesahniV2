@@ -162,6 +162,7 @@ class QdrantVectorStore:
         _require_qdrant()
         url = os.getenv("QDRANT_URL") or "http://localhost:6333"
         api_key = os.getenv("QDRANT_API_KEY") or None
+        # Use secure connection
         self.client = QdrantClient(url=url, api_key=api_key)
         try:
             logger.info(

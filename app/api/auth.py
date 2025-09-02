@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse
 
 from ..auth_monitoring import record_finish_call, record_whoami_call, track_auth_event
 from ..auth_store import create_pat as _create_pat
-from ..auth_store import ensure_tables as _ensure_auth
+
 from ..auth_store import get_pat_by_hash as _get_pat_by_hash
 from ..auth_store import list_pats_for_user as _list_pats_for_user
 from ..auth_store import revoke_pat as _revoke_pat
@@ -814,7 +814,6 @@ async def list_pats(
         from ..http_errors import unauthorized
 
         raise unauthorized(message="authentication required", hint="login or include Authorization header")
-    await _ensure_auth()
     return await _list_pats_for_user(user_id)
 
 
@@ -843,7 +842,6 @@ async def create_pat(
         from ..http_errors import unauthorized
 
         raise unauthorized(message="authentication required", hint="login or include Authorization header")
-    await _ensure_auth()
     name = str(body.get("name") or "")
     scopes = body.get("scopes") or []
     exp_at = body.get("exp_at")
@@ -880,7 +878,6 @@ async def revoke_pat(
         from ..http_errors import unauthorized
 
         raise unauthorized(message="authentication required", hint="login or include Authorization header")
-    await _ensure_auth()
 
     # Check if PAT exists and belongs to user
     pat = await _get_pat_by_id(pat_id)

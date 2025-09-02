@@ -14,12 +14,39 @@ import logging
 import time
 import json
 import os
+import pickle
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 # In-memory store for development; use Redis in production
 _store: Dict[str, tuple[Dict[str, Any], float]] = {}
+
+# File-based store for cross-process sharing during testing
+_store_file = os.path.join(os.path.dirname(__file__), '..', '..', 'oauth_store.pkl')
+
+def _load_store():
+    """Load store from file if it exists."""
+    global _store
+    try:
+        if os.path.exists(_store_file):
+            with open(_store_file, 'rb') as f:
+                _store = pickle.load(f)
+                logger.info(f"OAuth store: Loaded {len(_store)} items from file")
+    except Exception as e:
+        logger.warning(f"OAuth store: Failed to load from file: {e}")
+
+def _save_store():
+    """Save store to file."""
+    try:
+        with open(_store_file, 'wb') as f:
+            pickle.dump(_store, f)
+        logger.debug("OAuth store: Saved to file")
+    except Exception as e:
+        logger.warning(f"OAuth store: Failed to save to file: {e}")
+
+# Load store on import
+_load_store()
 
 _redis = None
 
@@ -72,6 +99,7 @@ def put_tx(tx_id: str, data: Dict[str, Any], ttl_seconds: int = 600) -> None:
             _store[tx_id] = (data, expiry_time)
     else:
         _store[tx_id] = (data, expiry_time)
+        _save_store()  # Save to file for cross-process sharing
 
     logger.info("🔐 OAuth TX STORED", extra={
         "meta": {
@@ -147,6 +175,9 @@ def pop_tx(tx_id: str) -> Optional[Dict[str, Any]]:
                 f"OAuth store: Redis pop_tx failed (falling back to memory): {e}"
             )
 
+    # Load from file first (in case another process updated it)
+    _load_store()
+
     row = _store.pop(tx_id, None)
     if not row:
         logger.warning("🔐 OAuth TX NOT FOUND", extra={
@@ -157,6 +188,9 @@ def pop_tx(tx_id: str) -> Optional[Dict[str, Any]]:
             }
         })
         return None
+
+    # Save updated store to file
+    _save_store()
 
     data, exp = row
     current_time = time.time()
@@ -186,6 +220,16 @@ def pop_tx(tx_id: str) -> Optional[Dict[str, Any]]:
 
     return data
 
+
+def debug_store() -> Dict[str, Any]:
+    """Debug function to show current store contents."""
+    _load_store()
+    return {
+        "store_size": len(_store),
+        "tx_ids": list(_store.keys())[:10],  # Show first 10 tx_ids
+        "store_file_exists": os.path.exists(_store_file),
+        "store_file_size": os.path.getsize(_store_file) if os.path.exists(_store_file) else 0
+    }
 
 def get_tx(tx_id: str) -> Optional[Dict[str, Any]]:
     """

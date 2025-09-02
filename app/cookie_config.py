@@ -44,7 +44,8 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
     env_force_insecure = env_secure in {"0", "false", "no", "off"}
 
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
-    dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
+    # Consider USE_DEV_PROXY an explicit signal that we're running local dev
+    dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"} or os.getenv("USE_DEV_PROXY", "0").lower() in {"1", "true", "yes", "on"}
 
     # Development mode detection: on dev + non-HTTPS, ensure cookies are
     # localhost-safe: Secure=False, SameSite=Lax, host-only (no Domain).
@@ -75,6 +76,15 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
     # Ports don't matter for cookies; Domain does. Host-only is the least-surprising choice.
     domain = None
 
+    # In production, allow setting a top-level domain for cookies so subservices
+    # (backend vs frontend) share the same site cookie. Respect APP_DOMAIN env var.
+    app_domain = os.getenv("APP_DOMAIN")
+    if not dev_env_detected and app_domain:
+        domain = app_domain
+        # Ensure production cookies are secure and SameSite=Lax by default
+        cookie_secure = True
+        cookie_samesite = "lax"
+
     return {
         "secure": cookie_secure,
         "samesite": cookie_samesite,
@@ -100,7 +110,7 @@ def _is_dev_environment(request: Request) -> bool:
     # Check request host for localhost/dev patterns
     try:
         host = request.headers.get("host", "").lower()
-        dev_hosts = ["localhost", "0.0.0.0", "dev.", "local."]
+        dev_hosts = ["localhost", "0.0.0.0", "127.0.0.1", "::1", "dev.", "local."]
         if any(dev_host in host for dev_host in dev_hosts):
             return True
     except Exception:

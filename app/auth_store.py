@@ -44,7 +44,6 @@ async def ensure_tables() -> None:
         if os.getenv("PYTEST_CURRENT_TEST"):
             asyncio.set_event_loop(asyncio.new_event_loop())
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         # users
         await db.execute(
             """
@@ -91,17 +90,20 @@ async def ensure_tables() -> None:
             )
             """
         )
-        # oauth_identities
+        # auth_identities
         await db.execute(
             """
-            CREATE TABLE IF NOT EXISTS oauth_identities (
+            CREATE TABLE IF NOT EXISTS auth_identities (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
-                provider TEXT NOT NULL CHECK(provider IN ('google','apple')),
-                provider_user_id TEXT NOT NULL,
-                email TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                provider_iss TEXT,
+                provider_sub TEXT,
+                email_normalized TEXT,
+                email_verified INTEGER DEFAULT 0,
                 created_at REAL NOT NULL,
-                UNIQUE(provider, provider_user_id),
+                updated_at REAL NOT NULL,
+                UNIQUE(provider, provider_iss, provider_sub),
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             )
             """
@@ -156,9 +158,7 @@ async def create_user(
     provided value along with other mutable fields. Created/verified timestamps
     are preserved on upsert.
     """
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         norm_email = (email or "").strip().lower()
         providers_json = json.dumps(auth_providers or [])
         # Transaction with deferred FK checks to allow primary-key update then child updates
@@ -197,7 +197,7 @@ async def create_user(
             for table, col in (
                 ("devices", "user_id"),
                 ("sessions", "user_id"),
-                ("oauth_identities", "user_id"),
+                ("auth_identities", "user_id"),
                 ("pat_tokens", "user_id"),
                 ("audit_log", "user_id"),  # best-effort; nullable
             ):
@@ -215,9 +215,7 @@ async def create_user(
 
 
 async def get_user_by_email(email: str) -> dict[str, Any] | None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         norm_email = (email or "").strip().lower()
         async with db.execute(
             "SELECT id,email,password_hash,name,avatar_url,created_at,verified_at,auth_providers FROM users WHERE email=?",
@@ -240,7 +238,6 @@ async def get_user_by_email(email: str) -> dict[str, Any] | None:
 
 async def verify_user(user_id: str) -> None:
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         await db.execute("UPDATE users SET verified_at=? WHERE id=?", (_now(), user_id))
         await db.commit()
 
@@ -249,9 +246,7 @@ async def verify_user(user_id: str) -> None:
 async def create_device(
     *, id: str, user_id: str, device_name: str | None, ua_hash: str, ip_hash: str
 ) -> None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         await db.execute(
             "INSERT INTO devices(id,user_id,device_name,ua_hash,ip_hash,created_at,last_seen_at) VALUES (?,?,?,?,?,?,?)",
             (id, user_id, device_name, ua_hash, ip_hash, _now(), _now()),
@@ -261,7 +256,6 @@ async def create_device(
 
 async def touch_device(device_id: str) -> None:
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         await db.execute(
             "UPDATE devices SET last_seen_at=? WHERE id=?", (_now(), device_id)
         )
@@ -272,9 +266,7 @@ async def touch_device(device_id: str) -> None:
 async def create_session(
     *, id: str, user_id: str, device_id: str, mfa_passed: bool = False
 ) -> None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         await db.execute(
             "INSERT INTO sessions(id,user_id,device_id,created_at,last_seen_at,revoked_at,mfa_passed) VALUES (?,?,?,?,?,?,?)",
             (id, user_id, device_id, _now(), _now(), None, 1 if mfa_passed else 0),
@@ -284,7 +276,6 @@ async def create_session(
 
 async def touch_session(session_id: str) -> None:
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         await db.execute(
             "UPDATE sessions SET last_seen_at=? WHERE id=?", (_now(), session_id)
         )
@@ -293,7 +284,6 @@ async def touch_session(session_id: str) -> None:
 
 async def revoke_session(session_id: str) -> None:
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         await db.execute(
             "UPDATE sessions SET revoked_at=? WHERE id=?", (_now(), session_id)
         )
@@ -302,19 +292,75 @@ async def revoke_session(session_id: str) -> None:
 
 # ------------------------- oauth identities ----------------------------------
 async def link_oauth_identity(
-    *, id: str, user_id: str, provider: str, provider_user_id: str, email: str
+    *, id: str, user_id: str, provider: str, provider_sub: str, email_normalized: str, provider_iss: str | None = None, email_verified: bool = False
 ) -> None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         await db.execute(
             (
-                "INSERT INTO oauth_identities(id,user_id,provider,provider_user_id,email,created_at) VALUES (?,?,?,?,?,?) "
-                "ON CONFLICT(provider, provider_user_id) DO UPDATE SET user_id=excluded.user_id, email=excluded.email"
+                "INSERT INTO auth_identities(id,user_id,provider,provider_iss,provider_sub,email_normalized,email_verified,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(provider, provider_iss, provider_sub) DO UPDATE SET user_id=excluded.user_id, email_normalized=excluded.email_normalized, email_verified=excluded.email_verified, updated_at=excluded.updated_at"
             ),
-            (id, user_id, provider, provider_user_id, email, _now()),
+            (id, user_id, provider, provider_iss, provider_sub, email_normalized, 1 if email_verified else 0, _now(), _now()),
         )
         await db.commit()
+
+
+async def get_oauth_identity_by_provider(provider: str, provider_iss: str | None, provider_sub: str) -> dict | None:
+    """Return oauth identity row by provider+iss+provider_sub or None."""
+    async with aiosqlite.connect(str(DB_PATH)) as db:
+        async with db.execute(
+            "SELECT id, user_id, provider, provider_iss, provider_sub, email_normalized, email_verified, created_at, updated_at FROM auth_identities WHERE provider=? AND IFNULL(provider_iss,'') = IFNULL(?, '') AND provider_sub=?",
+            (provider, provider_iss or "", provider_sub),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "user_id": row[1],
+        "provider": row[2],
+        "provider_iss": row[3],
+        "provider_sub": row[4],
+        "email_normalized": row[5],
+        "email_verified": bool(row[6]),
+        "created_at": row[7],
+        "updated_at": row[8],
+    }
+
+
+async def get_oauth_identity_by_provider_simple(provider: str, provider_sub: str) -> dict | None:
+    """Return oauth identity row by provider+provider_sub or None."""
+    async with aiosqlite.connect(str(DB_PATH)) as db:
+        async with db.execute(
+            "SELECT id, user_id, provider, provider_sub, email_normalized, email_verified, created_at, updated_at FROM auth_identities WHERE provider=? AND provider_sub=?",
+            (provider, provider_sub),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "user_id": row[1],
+        "provider": row[2],
+        "provider_sub": row[3],
+        "email_normalized": row[4],
+        "email_verified": bool(row[5]),
+        "created_at": row[6],
+        "updated_at": row[7],
+    }
+
+
+async def get_user_id_by_identity_id(identity_id: str) -> str | None:
+    """Return user_id for the given identity_id or None."""
+    async with aiosqlite.connect(str(DB_PATH)) as db:
+        async with db.execute(
+            "SELECT user_id FROM auth_identities WHERE id=?",
+            (identity_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    return row[0]
 
 
 # ---------------------------- PAT tokens -------------------------------------
@@ -327,9 +373,7 @@ async def create_pat(
     scopes: list[str],
     exp_at: float | None = None,
 ) -> None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         await db.execute(
             "INSERT INTO pat_tokens(id,user_id,name,token_hash,scopes,exp_at,created_at,revoked_at) VALUES (?,?,?,?,?,?,?,?)",
             (
@@ -348,7 +392,6 @@ async def create_pat(
 
 async def revoke_pat(pat_id: str) -> None:
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         await db.execute(
             "UPDATE pat_tokens SET revoked_at=? WHERE id=?", (_now(), pat_id)
         )
@@ -356,9 +399,7 @@ async def revoke_pat(pat_id: str) -> None:
 
 
 async def get_pat_by_id(pat_id: str) -> dict[str, Any] | None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         async with db.execute(
             "SELECT id,user_id,name,token_hash,scopes,exp_at,created_at,revoked_at FROM pat_tokens WHERE id=?",
             (pat_id,),
@@ -379,9 +420,7 @@ async def get_pat_by_id(pat_id: str) -> dict[str, Any] | None:
 
 
 async def get_pat_by_hash(token_hash: str) -> dict[str, Any] | None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         async with db.execute(
             "SELECT id,user_id,name,token_hash,scopes,exp_at,created_at,revoked_at FROM pat_tokens WHERE token_hash=?",
             (token_hash,),
@@ -403,9 +442,7 @@ async def get_pat_by_hash(token_hash: str) -> dict[str, Any] | None:
 
 async def list_pats_for_user(user_id: str) -> list[dict[str, Any]]:
     """List all PATs for a user, returning safe fields only (no token hash)."""
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         async with db.execute(
             "SELECT id,name,scopes,created_at,revoked_at FROM pat_tokens WHERE user_id=? ORDER BY created_at DESC",
             (user_id,),
@@ -432,9 +469,7 @@ async def record_audit(
     event_type: str,
     meta: dict[str, Any] | None = None,
 ) -> None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
-        await db.execute("PRAGMA foreign_keys=ON")
         await db.execute(
             "INSERT INTO audit_log(id,user_id,session_id,event_type,meta,created_at) VALUES (?,?,?,?,?,?)",
             (id, user_id, session_id, event_type, json.dumps(meta or {}), _now()),

@@ -441,7 +441,7 @@ export async function putTvConfig(residentId: string, token: string, cfg: TvConf
 
 // Google integration helpers
 export async function getGoogleAuthUrl(next?: string): Promise<string> {
-    console.log('🔗 API: getGoogleAuthUrl called with next:', next);
+    console.log('🔗 OAUTH_DEBUG: getGoogleAuthUrl called with next:', next, 'at:', new Date().toISOString());
 
     // Sanitize the next parameter to prevent open redirects
     const sanitizedNext = next ? sanitizeNextPath(next, '/') : '/';

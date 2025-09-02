@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api';
 import { getGoogleAuthUrl } from '@/lib/api';
+import { api } from '@/lib/api/base';
 import { parseEnvelope } from '@/lib/parseEnvelope';
 import { toast } from '@/lib/toast';
 

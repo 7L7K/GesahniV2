@@ -59,7 +59,9 @@ export function requestKey(method: string, url: string, ctx?: string | string[])
   return `${method.toUpperCase()} ${url} ${authNs}${ctxNorm ? ` ${ctxNorm}` : ''}`;
 }
 
-export const API_URL = process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000"; // canonical API origin for localhost consistency
+// Respect NEXT_PUBLIC_USE_DEV_PROXY so the dev server can proxy `/api/*` to the backend
+const useDevProxy = (process.env.NEXT_PUBLIC_USE_DEV_PROXY || 'false') === 'true';
+export const API_URL = useDevProxy ? '' : (process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000"); // canonical API origin for localhost consistency
 
 // Boot log for observability
 if (typeof console !== 'undefined') {

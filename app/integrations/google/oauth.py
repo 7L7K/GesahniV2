@@ -193,7 +193,7 @@ async def exchange_code(code: str, state: str | None = None, verify_state: bool 
         provider="google",
         access_token=td.get("access_token", ""),
         refresh_token=td.get("refresh_token"),
-        scope=td.get("scope"),
+        scopes=td.get("scope"),
         expires_at=expires_at,
         created_at=now,
         updated_at=now,
@@ -399,7 +399,7 @@ def creds_to_record(creds: Any) -> dict:
             except Exception:
                 expiry_dt = datetime.now(UTC) + timedelta(hours=1)
         return {
-            "access_token": getattr(creds, "token", None),
+            "access_token": getattr(creds, "access_token", None),
             "refresh_token": getattr(creds, "refresh_token", None),
             "token_uri": getattr(
                 creds, "token_uri", "https://oauth2.googleapis.com/token"

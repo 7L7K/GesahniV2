@@ -44,8 +44,8 @@ def test_auth_store_crud(monkeypatch):
             id=oid,
             user_id=uid,
             provider="google",
-            provider_user_id="pg1",
-            email="a@example.com",
+            provider_sub="pg1",
+            email_normalized="a@example.com",
         )
         # pat
         pid = _rid()

@@ -33,7 +33,7 @@ class TestTokenImprovementsDemo:
             provider_iss="https://accounts.spotify.com",  # Correct issuer
             access_token="valid_token_123",
             refresh_token="valid_refresh_456",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -54,7 +54,7 @@ class TestTokenImprovementsDemo:
             provider_iss="https://wrong.issuer.com",  # Wrong issuer!
             access_token="invalid_token_123",
             refresh_token="invalid_refresh_456",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -94,7 +94,7 @@ class TestTokenImprovementsDemo:
                 provider_iss=expected_issuer,
                 access_token=f"token_{provider}",
                 refresh_token=f"refresh_{provider}",
-                scope="read",
+                scopes="read",
                 expires_at=now + 3600,
             )
 
@@ -127,7 +127,7 @@ class TestTokenImprovementsDemo:
             provider_iss="https://accounts.spotify.com",
             access_token="token1",
             refresh_token="refresh1",
-            scope="user-read-private",  # Basic scope
+            scopes="user-read-private",  # Basic scope
             expires_at=now + 3600,
         )
 
@@ -138,7 +138,7 @@ class TestTokenImprovementsDemo:
             provider_iss="https://accounts.spotify.com",
             access_token="token2",
             refresh_token="refresh2",
-            scope="user-read-email user-modify-playback-state",  # Additional scope
+            scopes="user-read-email user-modify-playback-state",  # Additional scope
             expires_at=now + 3600,
         )
 
@@ -180,7 +180,7 @@ class TestTokenImprovementsDemo:
                 provider_iss="https://accounts.spotify.com",
                 access_token=f"token_{user}",
                 refresh_token=f"refresh_{user}",
-                scope="user-read-private",
+                scopes="user-read-private",
                 expires_at=now + 3600,
             )
 
@@ -297,7 +297,7 @@ class TestTokenImprovementsDemo:
             provider_iss="https://accounts.spotify.com",
             access_token="expired_token",
             refresh_token="valid_refresh_token",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now - 3600,  # Expired
             created_at=now - 7200,
             updated_at=now - 7200,
@@ -375,7 +375,7 @@ async def test_token_system_improvements_integration(tmp_path):
         provider_iss="https://accounts.spotify.com",  # Our improvement ensures this is required
         access_token="oauth_access_token",
         refresh_token="oauth_refresh_token",
-        scope="user-read-private user-read-email",
+        scopes="user-read-private user-read-email",
         expires_at=now + 3600,
     )
 
@@ -396,7 +396,7 @@ async def test_token_system_improvements_integration(tmp_path):
         provider_iss="https://malicious.issuer.com",  # Wrong!
         access_token="malicious_token",
         refresh_token="malicious_refresh",
-        scope="malicious_scope",
+        scopes="malicious_scope",
         expires_at=now + 3600,
     )
 

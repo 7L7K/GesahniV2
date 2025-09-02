@@ -37,7 +37,7 @@ describe('LoginPage', () => {
     render(<LoginPage />);
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: '!!' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'abcdefgh' } });
-    fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }));
+    fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }));
     expect(await screen.findByText(/Invalid username/)).toBeInTheDocument();
   });
 
@@ -45,7 +45,7 @@ describe('LoginPage', () => {
     render(<LoginPage />);
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'validuser' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } });
-    fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }));
+    fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }));
     expect(await screen.findByText(/Password is too weak/)).toBeInTheDocument();
   });
 
@@ -54,7 +54,7 @@ describe('LoginPage', () => {
     render(<LoginPage />);
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'john' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'abcdefgh' } });
-    fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }));
+    fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }));
     expect(await screen.findByText('Incorrect username or password.')).toBeInTheDocument();
   });
 
@@ -64,12 +64,12 @@ describe('LoginPage', () => {
     render(<LoginPage />);
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'john' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'abcdefgh' } });
-    fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }));
+    fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }));
     await waitFor(() => expect(setTokens).toHaveBeenCalledWith('a', 'b'));
   });
 
   it('starts Google login flow', async () => {
-    (apiFetch as jest.Mock).mockResolvedValueOnce(new Response(JSON.stringify({ auth_url: 'https://accounts.google.com/...'}), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    (apiFetch as jest.Mock).mockResolvedValueOnce(new Response(JSON.stringify({ auth_url: 'https://accounts.google.com/...' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     const assignSpy = jest.fn();
     Object.defineProperty(window, 'location', {
       value: { href: '', assign: assignSpy },

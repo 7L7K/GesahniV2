@@ -28,7 +28,7 @@ class TestTokenValidation:
             provider_iss="https://accounts.spotify.com",
             access_token="valid_access_token_123",
             refresh_token="valid_refresh_token_456",
-            scope="user-read-private user-read-email",
+            scopes="user-read-private user-read-email",
             expires_at=now + 3600,
             created_at=now,
             updated_at=now,
@@ -60,7 +60,7 @@ class TestTokenValidation:
             provider_iss=None,  # Missing issuer!
             access_token="valid_access_token_123",
             refresh_token="valid_refresh_token_456",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -85,7 +85,7 @@ class TestTokenValidation:
             provider_iss="https://wrong.issuer.com",  # Wrong issuer!
             access_token="valid_access_token_123",
             refresh_token="valid_refresh_token_456",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -110,7 +110,7 @@ class TestTokenValidation:
             provider_iss="https://accounts.spotify.com",
             access_token="expired_token_123",
             refresh_token="valid_refresh_token_456",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now - 3600,  # Already expired!
             created_at=now - 7200,
             updated_at=now - 7200,
@@ -144,7 +144,7 @@ class TestTokenValidation:
             provider_iss="https://accounts.spotify.com",
             access_token="token1",
             refresh_token="refresh1",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -156,7 +156,7 @@ class TestTokenValidation:
             provider_iss="https://accounts.spotify.com",
             access_token="token2",
             refresh_token="refresh2",
-            scope="user-read-email user-modify-playback-state",
+            scopes="user-read-email user-modify-playback-state",
             expires_at=now + 3600,
         )
 
@@ -185,7 +185,7 @@ class TestTokenValidation:
             provider_iss="https://accounts.google.com",
             access_token="google_token_123",
             refresh_token="google_refresh_456",
-            scope="https://www.googleapis.com/auth/calendar.readonly",
+            scopes="https://www.googleapis.com/auth/calendar.readonly",
             expires_at=now + 3600,
         )
 
@@ -214,7 +214,7 @@ class TestTokenValidation:
                 provider_iss="https://accounts.spotify.com",
                 access_token="",  # Empty access token should be rejected
                 refresh_token="refresh_123",
-                scope="user-read-private",
+                scopes="user-read-private",
                 expires_at=now + 3600,
             )
 
@@ -233,7 +233,7 @@ class TestTokenValidation:
             provider_iss="https://accounts.spotify.com",
             access_token=original_token,
             refresh_token="super_secret_refresh_token_67890",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -267,7 +267,7 @@ class TestTokenValidation:
             provider_iss="https://accounts.spotify.com",
             access_token="token_user1",
             refresh_token="refresh_user1",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -279,7 +279,7 @@ class TestTokenValidation:
             provider_iss="https://accounts.spotify.com",
             access_token="token_user2",
             refresh_token="refresh_user2",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -316,7 +316,7 @@ class TestTokenValidation:
             provider_iss="https://accounts.google.com",  # Wrong issuer for Spotify!
             access_token="token_123",
             refresh_token="refresh_456",
-            scope="user-read-private",
+            scopes="user-read-private",
             expires_at=now + 3600,
         )
 
@@ -332,7 +332,7 @@ class TestTokenValidation:
             provider_iss="https://accounts.spotify.com",  # Wrong issuer for Google!
             access_token="token_123",
             refresh_token="refresh_456",
-            scope="https://www.googleapis.com/auth/calendar.readonly",
+            scopes="https://www.googleapis.com/auth/calendar.readonly",
             expires_at=now + 3600,
         )
 

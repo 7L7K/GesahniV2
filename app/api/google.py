@@ -85,7 +85,9 @@ async def google_status(request: Request):
     except Exception:
         return JSONResponse({"error_code": "auth_required"}, status_code=401)
 
-    token = await get_token(current_user, "google")
+    from ..auth_store_tokens import get_token_by_user_identities
+
+    token = await get_token_by_user_identities(current_user, "google")
 
     required_scopes = [
         "openid",
@@ -172,10 +174,11 @@ async def google_status(request: Request):
             new_token = ThirdPartyToken(
                 id=f"google:{secrets.token_hex(8)}",
                 user_id=current_user,
+                identity_id=getattr(token, "identity_id", None),
                 provider="google",
                 access_token=td.get("access_token", ""),
                 refresh_token=td.get("refresh_token"),
-                scope=td.get("scope"),
+                scopes=td.get("scope"),
                 expires_at=expires_at,
                 created_at=now,
                 updated_at=now,

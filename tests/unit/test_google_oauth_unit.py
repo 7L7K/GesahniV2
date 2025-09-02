@@ -11,7 +11,8 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.google_oauth import _generate_signed_state, router
+from app.integrations.google.state import generate_signed_state
+from app.api.google_oauth import router
 
 
 @pytest.fixture
@@ -108,7 +109,7 @@ class TestGoogleOAuthLoginUrl:
     def test_signed_state_generation(self):
         """Test that signed state is generated correctly."""
         with patch.dict(os.environ, {"JWT_SECRET": "test-secret-key"}):
-            state = _generate_signed_state()
+            state = generate_signed_state()
 
             # State should be in format: timestamp:random:sig
             parts = state.split(":")

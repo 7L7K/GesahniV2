@@ -200,16 +200,19 @@ async def google_login_url(request: Request) -> Response:
     req_id = req_id_var.get()
 
     logger.info(
-        "oauth.login_url",
+        "OAUTH_DEBUG: Login URL endpoint called",
         extra={
             "meta": {
                 "req_id": req_id,
                 "component": "google_oauth",
                 "msg": "oauth.login_url",
+                "endpoint": "/auth/google/login_url",
                 "state_set": False,  # Will be set to True when state is generated
                 "next": None,  # Will be set from query params
                 "cookie_http_only": True,
                 "samesite": "Lax",
+                "user_agent": request.headers.get("user-agent", "unknown"),
+                "referer": request.headers.get("referer", "unknown"),
             }
         },
     )
@@ -308,6 +311,10 @@ async def google_login_url(request: Request) -> Response:
         )
 
         # Use centralized cookie surface for OAuth state cookies
+        from ..cookies import read_session_cookie
+
+        current_session = read_session_cookie(request)
+
         set_oauth_state_cookies(
             resp=http_response,
             state=state,
@@ -316,6 +323,7 @@ async def google_login_url(request: Request) -> Response:
             ttl=300,  # 5 minutes
             provider="g",  # Google-specific cookie prefix
             code_verifier=code_verifier,  # Store PKCE verifier for callback
+            session_id=current_session,
         )
 
         duration = (time.time() - start_time) * 1000
@@ -383,12 +391,17 @@ async def google_callback(request: Request) -> Response:
     req_id = req_id_var.get()
 
     logger.info(
-        "Google OAuth callback endpoint hit",
+        "OAUTH_DEBUG: Google OAuth callback endpoint hit",
         extra={
             "meta": {
                 "req_id": req_id,
                 "component": "google_oauth",
                 "msg": "callback_request_started",
+                "endpoint": "/auth/google/callback",
+                "user_agent": request.headers.get("user-agent", "unknown"),
+                "referer": request.headers.get("referer", "unknown"),
+                "origin": request.headers.get("origin", "unknown"),
+                "full_url": str(request.url),
             }
         },
     )
@@ -653,6 +666,63 @@ async def google_callback(request: Request) -> Response:
         },
     )
 
+        # Enforce state -> session binding to prevent cross-tab CSRF/status races.
+    try:
+        from ..cookies import read_session_cookie
+
+        provider_session = request.cookies.get("g_session")
+        current_session = read_session_cookie(request)
+        if provider_session and current_session and provider_session != current_session:
+            duration = (time.time() - start_time) * 1000
+            _log_error(
+                "ValidationError",
+                "OAuth state session mismatch",
+                "OAuth state session id does not match current session",
+            )
+            _log_request_summary(request, 409, duration, error="state_session_mismatch")
+            return _error_response("state_session_mismatch", status=409)
+    except Exception:
+        # Best-effort only; do not fail login if session binding check errors
+        pass
+
+    # After identity resolution, ensure handoff invariant: if an authenticated
+    # cookie user exists and does not match the callback's canonical user, log
+    # a security event and force session rotation.
+    try:
+        from ..deps.user import get_current_user_id
+
+        try:
+            existing_cookie_user = get_current_user_id(request=request)
+        except Exception:
+            existing_cookie_user = "anon"
+
+        if existing_cookie_user and existing_cookie_user != "anon" and existing_cookie_user != uid:
+            # Log invariant violation
+            logger.warning(
+                "SEC_IDENTITY_HANDOFF_MISMATCH",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "existing_cookie_user": existing_cookie_user,
+                        "callback_user": uid,
+                        "provider_sub": provider_sub,
+                        "provider_iss": provider_iss,
+                    }
+                },
+            )
+            # Force session deletion for safety (rotation will occur on cookie write)
+            try:
+                from ..cookies import read_session_cookie
+                from ..auth import _delete_session_id
+
+                old_sess = read_session_cookie(request)
+                if old_sess:
+                    _delete_session_id(old_sess)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     # Perform token exchange and create an application session/redirect.
     try:
         from urllib.parse import urlencode
@@ -665,12 +735,16 @@ async def google_callback(request: Request) -> Response:
 
         # Exchange the authorization code (state already validated by this endpoint)
         logger.info(
-            "Starting Google token exchange",
+            "OAUTH_DEBUG: Starting Google token exchange",
             extra={
                 "meta": {
                     "req_id": req_id,
                     "component": "google_oauth",
                     "msg": "token_exchange_started",
+                    "has_code": bool(code),
+                    "has_code_verifier": bool(code_verifier_cookie),
+                    "code_length": len(code) if code else 0,
+                    "code_verifier_length": len(code_verifier_cookie) if code_verifier_cookie else 0,
                 }
             },
         )
@@ -814,11 +888,121 @@ async def google_callback(request: Request) -> Response:
             # Use provider_sub as email fallback (not ideal but deterministic)
             email = str(provider_sub or uuid4())
 
+        # Determine canonical application user via deterministic identity linking
+        try:
+            from .. import cookies as cookie_helpers
+            from .. import auth_store as auth_store
+            import secrets as _secrets
+
+            # Look up existing identity by provider+sub
+            canonical_user = None
+            identity_id_used = None
+            if provider_sub:
+                try:
+                    ident = await auth_store.get_oauth_identity_by_provider("google", provider_iss, str(provider_sub))
+                except Exception:
+                    ident = None
+                if ident and ident.get("user_id"):
+                    identity_id_used = ident.get("id")
+                    canonical_user = ident.get("user_id")
+
+            # If no identity, try to locate existing user by email
+            if not canonical_user:
+                if email:
+                    existing_user = await auth_store.get_user_by_email(email)
+                else:
+                    existing_user = None
+
+                if existing_user:
+                    # If provider reports email_verified, link identity immediately
+                    if bool(claims.get("email_verified", False)):
+                        new_id = f"g_{_secrets.token_hex(8)}"
+                        try:
+                            await auth_store.link_oauth_identity(
+                                id=new_id,
+                                user_id=existing_user["id"],
+                                provider="google",
+                                provider_iss=provider_iss,
+                                provider_sub=str(provider_sub),
+                                email_normalized=email or "",
+                            )
+                            canonical_user = existing_user["id"]
+                            identity_id_used = new_id
+                        except Exception as e:
+                            # Check if this is a unique constraint violation (race condition)
+                            # Only catch the specific case where another process inserted the same identity
+                            if "UNIQUE constraint failed" in str(e) or "constraint failed" in str(e):
+                                # Race condition: another process inserted the identity concurrently
+                                # Re-select to recover the existing identity instead of failing
+                                try:
+                                    existing_ident = await auth_store.get_oauth_identity_by_provider("google", provider_iss, str(provider_sub))
+                                    if existing_ident:
+                                        identity_id_used = existing_ident.get("id")
+                                        canonical_user = existing_ident.get("user_id")
+                                    else:
+                                        # Cannot determine identity -> fail fast
+                                        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                                        return RedirectResponse(f"{frontend_url}/settings#google?google_error=identity_link_failed", status_code=303)
+                                except Exception:
+                                    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                                    return RedirectResponse(f"{frontend_url}/settings#google?google_error=identity_link_failed", status_code=303)
+                            else:
+                                # Not a race condition - re-raise the original exception
+                                raise
+                    else:
+                        # Email not verified: require user verify their email first
+                        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                        return RedirectResponse(f"{frontend_url}/settings#google?google_error=email_unverified", status_code=303)
+                else:
+                    # No existing user: create one and link identity
+                    try:
+                        new_user_id = f"user_{_secrets.token_hex(8)}"
+                        await auth_store.create_user(id=new_user_id, email=email or str(provider_sub), name=None)
+                        new_id = f"g_{_secrets.token_hex(8)}"
+                        try:
+                            await auth_store.link_oauth_identity(
+                                id=new_id,
+                                user_id=new_user_id,
+                                provider="google",
+                                provider_iss=provider_iss,
+                                provider_sub=str(provider_sub),
+                                email_normalized=email or "",
+                            )
+                            canonical_user = new_user_id
+                            identity_id_used = new_id
+                        except Exception as e:
+                            # Check if this is a unique constraint violation (race condition)
+                            # Only catch the specific case where another process inserted the same identity
+                            if "UNIQUE constraint failed" in str(e) or "constraint failed" in str(e):
+                                # Race condition: another process inserted the identity concurrently
+                                # Re-select to recover the existing identity instead of failing
+                                try:
+                                    existing_ident = await auth_store.get_oauth_identity_by_provider("google", provider_iss, str(provider_sub))
+                                    if existing_ident:
+                                        identity_id_used = existing_ident.get("id")
+                                        canonical_user = existing_ident.get("user_id")
+                                    else:
+                                        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                                        return RedirectResponse(f"{frontend_url}/settings#google?google_error=identity_link_failed", status_code=303)
+                                except Exception:
+                                    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                                    return RedirectResponse(f"{frontend_url}/settings#google?google_error=identity_link_failed", status_code=303)
+                            else:
+                                # Not a race condition - re-raise the original exception
+                                raise
+                    except Exception:
+                        canonical_user = str(email).lower()
+
+            uid = canonical_user or str(email).lower()
+
+        except Exception:
+            # Fallback behavior: use email as uid (legacy)
+            uid = str(email).lower()
+
         # Persist provider record into google_oauth DB (best-effort)
         try:
             init_db()
             rec = go.creds_to_record(creds)
-            uid = str(email).lower()
             with SessionLocal() as s:
                 row = s.get(GoogleToken, uid)
                 if row is None:
@@ -889,7 +1073,7 @@ async def google_callback(request: Request) -> Response:
                 # ensure they match to avoid accidental account mixing
                 if getattr(existing, "provider_sub", None) and provider_sub and str(provider_sub) != str(existing.provider_sub):
                     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-                    return RedirectResponse(f"{frontend_url}/settings#google?google_error=account_mismatch", status_code=302)
+                    return RedirectResponse(f"{frontend_url}/settings#google?google_error=account_mismatch", status_code=303)
         except Exception:
             pass
 
@@ -947,15 +1131,21 @@ async def google_callback(request: Request) -> Response:
             except Exception:
                 expires_at = now + int(rec.get("expires_in", 3600))
 
+            # Require identity to be present; fail fast if we can't associate
+            if not identity_id_used:
+                frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                return RedirectResponse(f"{frontend_url}/settings#google?google_error=identity_link_failed", status_code=303)
+
             token = ThirdPartyToken(
                 id=f"google:{secrets.token_hex(8)}",
                 user_id=uid,
+                identity_id=identity_id_used,
                 provider="google",
                 provider_sub=str(provider_sub) if provider_sub else None,
-                provider_iss=str(provider_iss),
+                provider_iss=str(provider_iss) if provider_iss else None,
                 access_token=rec.get("access_token", ""),
                 refresh_token=rec.get("refresh_token"),
-                scope=rec.get("scopes"),
+                scopes=rec.get("scopes"),
                 expires_at=expires_at,
                 created_at=now,
                 updated_at=now,
@@ -1122,7 +1312,7 @@ async def google_callback(request: Request) -> Response:
         else:
             from starlette.responses import RedirectResponse
 
-            resp = RedirectResponse(url=final_root, status_code=302)
+            resp = RedirectResponse(url=final_root, status_code=303)
 
         session_id = None
         if os.getenv("ENABLE_SESSION_COOKIE", "") in ("1", "true", "yes"):
@@ -1188,6 +1378,26 @@ async def google_callback(request: Request) -> Response:
             # Best-effort only; do not fail the flow if cookie config lookup/logging fails
             pass
 
+        # Rotate session and CSRF on login to prevent replay from old anon sessions
+        try:
+            from ..cookies import read_session_cookie, set_csrf_cookie
+            from ..auth import _delete_session_id
+
+            session_before = read_session_cookie(request)
+        except Exception:
+            session_before = None
+
+        # If there is an existing session, delete it (rotate)
+        try:
+            if session_before:
+                try:
+                    _delete_session_id(session_before)
+                except Exception:
+                    # best-effort cleanup
+                    pass
+        except Exception:
+            pass
+
         # Write cookies using the canonical names
         set_auth_cookies(
             resp,
@@ -1198,6 +1408,34 @@ async def google_callback(request: Request) -> Response:
             refresh_ttl=refresh_ttl,
             request=request,
         )
+
+        # Rotate CSRF token: clear and set a new short-lived token
+        try:
+            import secrets as _secrets
+            csrf_token = _secrets.token_urlsafe(16)
+            # Short TTL for CSRF token (e.g., 1 hour)
+            set_csrf_cookie(resp, token=csrf_token, ttl=3600, request=request)
+        except Exception:
+            pass
+
+        # Telemetry: log canonical handoff details and session rotation info
+        try:
+            logger.info(
+                "oauth.login_telemetry",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "login_user_id": uid,
+                        "identity_id": identity_id_used,
+                        "provider_sub": provider_sub,
+                        "email": email,
+                        "session_before": session_before,
+                        "session_after": session_id,
+                    }
+                },
+            )
+        except Exception:
+            pass
 
         # Emit compact cookie-write observability so ops can verify attributes/names at a glance
         try:

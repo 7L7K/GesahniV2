@@ -9,6 +9,7 @@ import time
 from typing import List, Tuple
 
 from ..integrations.spotify.client import SpotifyClient, SpotifyAuthError
+from ..auth_store import get_user_id_by_identity_id
 from ..metrics import SPOTIFY_REFRESH, SPOTIFY_REFRESH_ERROR
 
 logger = logging.getLogger(__name__)
@@ -24,16 +25,18 @@ def _get_candidates(now: int) -> List[Tuple[str, str, int]]:
     """Return list of (user_id, provider, expires_at) for tokens expiring within window."""
     out = []
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA foreign_keys=ON")
     try:
         cur = conn.cursor()
         cutoff = now + REFRESH_AHEAD_SECONDS
         # Select latest valid token per user/provider that expires before cutoff
+        # Use identity_id as canonical grouping key
         cur.execute(
             """
-            SELECT user_id, provider, expires_at
+            SELECT identity_id, provider, expires_at
             FROM third_party_tokens
-            WHERE is_valid = 1 AND expires_at <= ?
-            GROUP BY user_id, provider
+            WHERE is_valid = 1 AND expires_at <= ? AND identity_id IS NOT NULL
+            GROUP BY identity_id, provider
             """,
             (cutoff,),
         )
@@ -45,7 +48,15 @@ def _get_candidates(now: int) -> List[Tuple[str, str, int]]:
     return out
 
 
-async def _refresh_for_user(user_id: str, provider: str) -> None:
+async def _refresh_for_user(identity_id: str, provider: str) -> None:
+    # Get user_id from identity_id
+    user_id = await get_user_id_by_identity_id(identity_id)
+    if not user_id:
+        logger.error("spotify_refresh: no user_id found for identity_id", extra={"identity_id": identity_id, "provider": provider})
+        return
+
+    logger.info("spotify_refresh: starting refresh", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider})
+
     client = SpotifyClient(user_id)
     attempt = 0
     max_attempts = 3
@@ -54,21 +65,24 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
     while attempt < max_attempts:
         attempt += 1
         try:
+            logger.info("spotify_refresh: attempting token exchange", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider, "attempt": attempt})
             await client._refresh_tokens()
+
             # Mark metrics
             try:
                 SPOTIFY_REFRESH.inc()
             except Exception:
                 pass
 
-            # Update last_refresh_at and reset error count for latest token row
+            # Update last_refresh_at and reset error count for latest token row by identity
             now = int(time.time())
             conn = sqlite3.connect(DB_PATH)
+            conn.execute("PRAGMA foreign_keys=ON")
             try:
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT id FROM third_party_tokens WHERE user_id = ? AND provider = ? AND is_valid = 1 ORDER BY created_at DESC LIMIT 1",
-                    (user_id, provider),
+                    "SELECT id FROM third_party_tokens WHERE identity_id = ? AND provider = ? AND is_valid = 1 ORDER BY created_at DESC LIMIT 1",
+                    (identity_id, provider),
                 )
                 row = cur.fetchone()
                 if row:
@@ -78,20 +92,22 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
                         (now, token_id),
                     )
                     conn.commit()
+                    logger.info("spotify_refresh: token updated successfully", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider, "token_id": token_id, "new_expires_at": "updated"})
             finally:
                 conn.close()
 
-            logger.info("spotify_refresh: success", extra={"user_id": user_id, "provider": provider})
+            logger.info("spotify_refresh: exchange ok", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider})
             return
         except SpotifyAuthError as e:
-            logger.warning("spotify_refresh: auth error", extra={"user_id": user_id, "provider": provider, "error": str(e)})
+            logger.warning("spotify_refresh: exchange failed", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider, "error": str(e), "attempt": attempt})
             # increment error counter on DB
             conn = sqlite3.connect(DB_PATH)
+            conn.execute("PRAGMA foreign_keys=ON")
             try:
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT id, refresh_error_count FROM third_party_tokens WHERE user_id = ? AND provider = ? AND is_valid = 1 ORDER BY created_at DESC LIMIT 1",
-                    (user_id, provider),
+                    "SELECT id, refresh_error_count FROM third_party_tokens WHERE identity_id = ? AND provider = ? AND is_valid = 1 ORDER BY created_at DESC LIMIT 1",
+                    (identity_id, provider),
                 )
                 r = cur.fetchone()
                 if r:
@@ -114,7 +130,7 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
             await asyncio.sleep(delay)
             continue
         except Exception as e:
-            logger.exception("spotify_refresh: unexpected error", exc_info=e)
+            logger.exception("spotify_refresh: unexpected error", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider, "attempt": attempt}, exc_info=e)
             try:
                 SPOTIFY_REFRESH_ERROR.inc()
             except Exception:
@@ -123,7 +139,7 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
             delay = delay + random.random()
             await asyncio.sleep(delay)
 
-    logger.error("spotify_refresh: failed after attempts", extra={"user_id": user_id, "provider": provider})
+    logger.error("spotify_refresh: failed after attempts", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider})
 
 
 async def run_once() -> None:
@@ -154,5 +170,4 @@ def main_loop() -> None:
 
 if __name__ == "__main__":
     main_loop()
-
 

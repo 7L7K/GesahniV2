@@ -162,7 +162,6 @@ async def ensure_tables() -> None:
 
 
 async def insert_alert(rec: dict[str, Any]) -> None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute(
             """
@@ -185,7 +184,6 @@ async def insert_alert(rec: dict[str, Any]) -> None:
 
 
 async def get_alert(alert_id: str) -> dict[str, Any] | None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         async with db.execute(
             "SELECT id,resident_id,kind,severity,note,created_at,status,ack_at,resolved_at FROM alerts WHERE id=?",
@@ -209,7 +207,6 @@ async def get_alert(alert_id: str) -> dict[str, Any] | None:
 
 
 async def update_alert(alert_id: str, **fields: Any) -> None:
-    await ensure_tables()
     if not fields:
         return
     cols = ",".join(f"{k}=?" for k in fields)
@@ -222,7 +219,6 @@ async def update_alert(alert_id: str, **fields: Any) -> None:
 async def insert_event(
     alert_id: str, type_: str, meta: dict[str, Any] | None = None
 ) -> None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute(
             "INSERT INTO alert_events (alert_id, t, type, meta) VALUES (?, ?, ?, ?)",
@@ -232,7 +228,6 @@ async def insert_event(
 
 
 async def list_alerts(resident_id: str | None = None) -> list[dict[str, Any]]:
-    await ensure_tables()
     q = "SELECT id,resident_id,kind,severity,note,created_at,status,ack_at,resolved_at FROM alerts"
     params: tuple = ()
     if resident_id:
@@ -262,7 +257,6 @@ async def list_alerts(resident_id: str | None = None) -> list[dict[str, Any]]:
 async def upsert_device(
     device_id: str, resident_id: str, *, battery_pct: int | None = None
 ) -> dict[str, Any]:
-    await ensure_tables()
     now = _now()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         # Fetch current
@@ -337,7 +331,6 @@ async def upsert_device(
 
 
 async def get_device(device_id: str) -> dict[str, Any] | None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         async with db.execute(
             "SELECT id,resident_id,last_seen,battery_pct,battery_low_since,battery_notified,offline_since,offline_notified FROM devices WHERE id=?",
@@ -369,7 +362,6 @@ async def get_device(device_id: str) -> dict[str, Any] | None:
 
 
 async def set_device_flags(device_id: str, **flags: Any) -> None:
-    await ensure_tables()
     if not flags:
         return
     cols = ",".join(f"{k}=?" for k in flags)
@@ -380,7 +372,6 @@ async def set_device_flags(device_id: str, **flags: Any) -> None:
 
 
 async def list_devices() -> list[dict[str, Any]]:
-    await ensure_tables()
     out: list[dict[str, Any]] = []
     async with aiosqlite.connect(str(DB_PATH)) as db:
         async with db.execute(
@@ -406,7 +397,6 @@ async def list_devices() -> list[dict[str, Any]]:
 
 
 async def get_tv_config(resident_id: str) -> dict[str, Any] | None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         async with db.execute(
             "SELECT resident_id,ambient_rotation,rail,quiet_hours,default_vibe,updated_at FROM tv_config WHERE resident_id=?",
@@ -433,7 +423,6 @@ async def set_tv_config(
     quiet_hours: dict[str, Any] | None,
     default_vibe: str,
 ) -> None:
-    await ensure_tables()
     now = _now()
     qh = json.dumps(quiet_hours or {})
     async with aiosqlite.connect(str(DB_PATH)) as db:
@@ -458,7 +447,6 @@ async def set_tv_config(
 
 
 async def create_session(rec: dict[str, Any]) -> None:
-    await ensure_tables()
     now = _now()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute(
@@ -476,7 +464,6 @@ async def create_session(rec: dict[str, Any]) -> None:
 
 
 async def update_session(session_id: str, **fields: Any) -> None:
-    await ensure_tables()
     if not fields:
         return
     fields["updated_at"] = _now()
@@ -488,7 +475,6 @@ async def update_session(session_id: str, **fields: Any) -> None:
 
 
 async def list_sessions(resident_id: str | None = None) -> list[dict[str, Any]]:
-    await ensure_tables()
     q = "SELECT id,resident_id,title,transcript_uri,created_at,updated_at FROM care_sessions"
     params: tuple = ()
     if resident_id:
@@ -513,7 +499,6 @@ async def list_sessions(resident_id: str | None = None) -> list[dict[str, Any]]:
 
 
 async def create_contact(rec: dict[str, Any]) -> None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute(
             "INSERT INTO contacts (id,resident_id,name,phone,priority,quiet_hours) VALUES (?,?,?,?,?,?)",
@@ -530,7 +515,6 @@ async def create_contact(rec: dict[str, Any]) -> None:
 
 
 async def list_contacts(resident_id: str) -> list[dict[str, Any]]:
-    await ensure_tables()
     out: list[dict[str, Any]] = []
     async with aiosqlite.connect(str(DB_PATH)) as db:
         async with db.execute(
@@ -552,7 +536,6 @@ async def list_contacts(resident_id: str) -> list[dict[str, Any]]:
 
 
 async def update_contact(contact_id: str, **fields: Any) -> None:
-    await ensure_tables()
     if not fields:
         return
     if "quiet_hours" in fields and isinstance(fields["quiet_hours"], (dict, list)):
@@ -565,7 +548,6 @@ async def update_contact(contact_id: str, **fields: Any) -> None:
 
 
 async def delete_contact(contact_id: str) -> None:
-    await ensure_tables()
     async with aiosqlite.connect(str(DB_PATH)) as db:
         await db.execute("DELETE FROM contacts WHERE id=?", (contact_id,))
         await db.commit()

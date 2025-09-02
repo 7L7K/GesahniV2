@@ -10,6 +10,7 @@ from fastapi import APIRouter, Request, Response, HTTPException, Depends
 from ..cookies import set_oauth_state_cookies, clear_oauth_state_cookies, set_named_cookie, clear_named_cookie
 from ..cookie_config import get_cookie_config
 from .oauth_store import put_tx, pop_tx
+from ..api.oauth_store import debug_store
 from ..integrations.spotify.oauth import (
     store_pkce_challenge,
     get_pkce_challenge,
@@ -41,6 +42,94 @@ from ..metrics import OAUTH_START, OAUTH_CALLBACK, OAUTH_IDEMPOTENT
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/spotify")
+
+# New integrations endpoints at /v1/integrations/spotify/
+integrations_router = APIRouter(prefix="/integrations/spotify")
+
+
+@integrations_router.get("/status")
+async def integrations_spotify_status(request: Request, user_id: str = Depends(get_current_user_id)) -> dict:
+    """Get Spotify integration status for frontend polling.
+
+    Returns status information that frontend can use to determine if reconnect is needed.
+    """
+    logger.info("🎵 SPOTIFY INTEGRATIONS STATUS: Request started", extra={
+        "meta": {
+            "user_id": user_id,
+            "endpoint": "/v1/integrations/spotify/status"
+        }
+    })
+
+    now = int(time.time())
+
+    # Get token from store
+    try:
+        from ..auth_store_tokens import get_token
+        token = await get_token(user_id, "spotify")
+        logger.info("🎵 SPOTIFY INTEGRATIONS STATUS: Token retrieved", extra={
+            "meta": {
+                "user_id": user_id,
+                "token_found": token is not None,
+                "token_id": getattr(token, 'id', None) if token else None,
+                "identity_id": getattr(token, 'identity_id', None) if token else None,
+                "expires_at": getattr(token, 'expires_at', None) if token else None,
+                "last_refresh_at": getattr(token, 'last_refresh_at', None) if token else None,
+                "scopes": getattr(token, 'scopes', None) if token else None
+            }
+        })
+    except Exception as e:
+        logger.error("🎵 SPOTIFY INTEGRATIONS STATUS: Failed to get token", extra={
+            "meta": {
+                "user_id": user_id,
+                "error": str(e),
+                "error_type": type(e).__name__
+            }
+        })
+        return {
+            "connected": False,
+            "expires_at": None,
+            "last_refresh_at": None,
+            "refreshed": False,
+            "scopes": []
+        }
+
+    # Check if connected (token exists and expires_at > now)
+    connected = False
+    if token and token.expires_at and token.expires_at > now:
+        connected = True
+
+    # Determine if recently refreshed
+    refreshed = False
+    if token and token.last_refresh_at:
+        # Consider "refreshed" if last_refresh_at is within the last hour
+        refreshed = (now - token.last_refresh_at) < 3600
+
+    # Parse scopes
+    scopes = []
+    if token and token.scopes:
+        scopes = [s.strip() for s in token.scopes.split() if s.strip()]
+
+    result = {
+        "connected": connected,
+        "expires_at": token.expires_at if token else None,
+        "last_refresh_at": token.last_refresh_at if token else None,
+        "refreshed": refreshed,
+        "scopes": scopes
+    }
+
+    logger.info("🎵 SPOTIFY INTEGRATIONS STATUS: Returning status", extra={
+        "meta": {
+            "user_id": user_id,
+            "connected": connected,
+            "expires_at": token.expires_at if token else None,
+            "last_refresh_at": token.last_refresh_at if token else None,
+            "refreshed": refreshed,
+            "scopes_count": len(scopes),
+            "needs_reconnect": not connected
+        }
+    })
+
+    return result
 
 SPOTIFY_AUTH = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN = "https://accounts.spotify.com/api/token"
@@ -141,6 +230,71 @@ async def spotify_debug(request: Request):
 
 from fastapi import Depends
 
+
+@router.get("/debug/store")
+async def debug_oauth_store():
+    """Debug endpoint to check OAuth store contents."""
+    return debug_store()
+
+@router.post("/test/store_tx")
+async def test_store_tx():
+    """Test endpoint to store a transaction for testing."""
+    import uuid
+    import secrets
+    import time
+
+    tx_id = uuid.uuid4().hex
+    tx_data = {
+        "user_id": "testuser",
+        "code_verifier": f"test_verifier_{secrets.token_hex(16)}",
+        "ts": int(time.time())
+    }
+
+    put_tx(tx_id, tx_data, ttl_seconds=600)
+
+    return {
+        "tx_id": tx_id,
+        "stored": True,
+        "user_id": "testuser"
+    }
+
+@router.post("/test/full_flow")
+async def test_full_flow():
+    """Test endpoint that stores a transaction and returns the JWT state."""
+    import uuid
+    import secrets
+    import time
+    import jwt
+    import os
+    from ..api.auth import _jwt_secret
+
+    # Store transaction
+    tx_id = uuid.uuid4().hex
+    tx_data = {
+        "user_id": "testuser",
+        "code_verifier": f"test_verifier_{secrets.token_hex(16)}",
+        "ts": int(time.time())
+    }
+
+    put_tx(tx_id, tx_data, ttl_seconds=600)
+
+    # Generate JWT state
+    secret = _jwt_secret()
+    state_payload = {
+        "tx": tx_id,
+        "uid": "testuser",
+        "exp": int(time.time()) + 600,
+        "iat": int(time.time()),
+    }
+
+    state = jwt.encode(state_payload, secret, algorithm="HS256")
+
+    return {
+        "tx_id": tx_id,
+        "state": state,
+        "stored": True,
+        "callback_url": f"http://127.0.0.1:8000/v1/spotify/callback?code=fake&state={state}"
+    }
 
 @router.get("/connect")
 async def spotify_connect(request: Request, user_id: str = Depends(get_current_user_id)) -> Response:
@@ -405,7 +559,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
     from starlette.responses import RedirectResponse
     from ..api.auth import _jwt_secret
 
-    logger.info("🎵 SPOTIFY CALLBACK: start has_code=%s has_state=%s", bool(code), bool(state))
+    logger.info("🎵 SPOTIFY CALLBACK: start has_code=%s has_state=%s, code='%s'", bool(code), bool(state), code)
     # Pre-decode diagnostics for `state` integrity without leaking secrets
     try:
         raw = state or ""
@@ -500,7 +654,16 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
     # `get_pkce_challenge_by_state`).
     logger.info("🎵 SPOTIFY CALLBACK: Step 2 - Recovering transaction from store...")
     tx = None
-    if tx_id:
+
+    # Special handling for test mode
+    if os.getenv("SPOTIFY_TEST_MODE", "0") == "1" and code == "fake":
+        logger.info("🎵 SPOTIFY CALLBACK: TEST MODE - Using fake transaction data")
+        tx = {
+            "user_id": uid,
+            "code_verifier": "test_verifier_fake_code",
+            "ts": int(time.time())
+        }
+    elif tx_id:
         tx = pop_tx(tx_id)  # atomically fetch & delete
 
     # Fallback: look up PKCE by session id + state (legacy flow). If used, ensure
@@ -571,11 +734,100 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                 provider="spotify",
                 access_token=token_data.get("access_token", ""),
                 refresh_token=token_data.get("refresh_token"),
-                scope=token_data.get("scope"),
+                scopes=token_data.get("scope"),
                 expires_at=expires_at,
                 created_at=now,
                 updated_at=now,
             )
+        else:
+            # If it's already a ThirdPartyToken, update the user_id
+            token_data.user_id = uid
+
+        # Set provider_iss for Spotify tokens (required for validation)
+        if token_data.provider == "spotify":
+            token_data.provider_iss = "https://accounts.spotify.com"
+
+        # Set fake identity_id for test mode tokens
+        if token_data.access_token and token_data.access_token.startswith("B"):
+            token_data.identity_id = f"test_identity_{secrets.token_hex(8)}"
+
+        # Attempt to resolve Spotify profile to obtain provider_sub (spotify user id)
+        provider_sub = None
+        identity_id_used = None
+        try:
+            from .. import auth_store as auth_store
+
+            # Check if this is a test mode token (starts with "fake_")
+            if token_data.access_token and token_data.access_token.startswith("fake_access_"):
+                # Test mode: use fake profile data
+                provider_sub = f"test_user_{secrets.token_hex(4)}"
+                email_norm = f"{provider_sub}@test.spotify.com"
+                logger.info("🎵 SPOTIFY CALLBACK: Using test mode profile data", extra={
+                    "meta": {"provider_sub": provider_sub, "email": email_norm}
+                })
+            else:
+                # Production mode: fetch real profile from Spotify API
+                import httpx
+                async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as cli:
+                    resp = await cli.get("https://api.spotify.com/v1/me", headers={"Authorization": f"Bearer {token_data.access_token}"})
+                if resp.status_code == 200:
+                    profile = resp.json()
+                    provider_sub = profile.get("id")
+                    email_norm = (profile.get("email") or "").lower()
+
+            # Try to find existing identity
+            try:
+                existing_ident = await auth_store.get_oauth_identity_by_provider("spotify", "https://accounts.spotify.com", str(provider_sub)) if provider_sub else None
+            except Exception:
+                existing_ident = None
+            if existing_ident and existing_ident.get("id"):
+                identity_id_used = existing_ident.get("id")
+            elif provider_sub:
+                # Create/link identity
+                try:
+                    new_id = f"s_{secrets.token_hex(8)}"
+                    await auth_store.link_oauth_identity(
+                        id=new_id,
+                        user_id=token_data.user_id,
+                        provider="spotify",
+                        provider_sub=str(provider_sub),
+                        email_normalized=email_norm,
+                        provider_iss="https://accounts.spotify.com",
+                    )
+                    identity_id_used = new_id
+                    logger.info("🎵 SPOTIFY CALLBACK: Created new identity", extra={
+                        "meta": {"identity_id": identity_id_used, "provider_sub": provider_sub}
+                    })
+                except Exception as e_link:
+                    # Race condition: fetch existing identity
+                    try:
+                        re = await auth_store.get_oauth_identity_by_provider("spotify", "https://accounts.spotify.com", str(provider_sub))
+                        if re:
+                            identity_id_used = re.get("id")
+                    except Exception:
+                        identity_id_used = None
+        except Exception as e:
+            # Best-effort only; proceed even if profile lookup/link fails
+            logger.warning("🎵 SPOTIFY CALLBACK: Identity linking failed", extra={
+                "meta": {"error": str(e), "error_type": type(e).__name__}
+            })
+            provider_sub = None
+            identity_id_used = None
+
+        # Populate provider_sub / identity_id if resolved
+        if provider_sub:
+            token_data.provider_sub = str(provider_sub)
+        if identity_id_used:
+            token_data.identity_id = identity_id_used
+
+        logger.info("🎵 SPOTIFY CALLBACK: Identity linking complete", extra={
+            "meta": {
+                "provider_sub": getattr(token_data, 'provider_sub', None),
+                "identity_id": getattr(token_data, 'identity_id', None),
+                "user_id": getattr(token_data, 'user_id', None),
+                "tx_id": tx_id
+            }
+        })
 
         logger.info("🎵 SPOTIFY CALLBACK: token exchange successful tx=%s", tx_id)
     except Exception as e:
@@ -604,23 +856,81 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
 
         logger.debug("🎵 SPOTIFY CALLBACK: persisting tokens tx=%s uid=%s", tx_id, uid)
 
-        # Create a new ThirdPartyToken with the correct user_id
-        token_for_storage = ThirdPartyToken(
-            user_id=uid,
-            provider="spotify",
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_at=expires_at,
-            scope=token_data.scope,
-            provider_iss="https://accounts.spotify.com",  # Spotify OAuth issuer
-        )
+        # Attempt to resolve Spotify profile to obtain provider_sub (spotify user id)
+        provider_sub = None
+        identity_id_used = None
+        try:
+            import httpx
+            from .. import auth_store as auth_store
 
-        persisted = await upsert_token(token_for_storage)
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as cli:
+                resp = await cli.get("https://api.spotify.com/v1/me", headers={"Authorization": f"Bearer {access_token}"})
+            if resp.status_code == 200:
+                profile = resp.json()
+                provider_sub = profile.get("id")
+                email_norm = (profile.get("email") or "").lower()
+                # Try to find existing identity
+                try:
+                    existing_ident = await auth_store.get_oauth_identity_by_provider("spotify", "https://accounts.spotify.com", str(provider_sub)) if provider_sub else None
+                except Exception:
+                    existing_ident = None
+                if existing_ident and existing_ident.get("id"):
+                    identity_id_used = existing_ident.get("id")
+                elif provider_sub:
+                    # Create/link identity
+                    try:
+                        new_id = f"s_{secrets.token_hex(8)}"
+                        await auth_store.link_oauth_identity(
+                            id=new_id,
+                            user_id=uid,
+                            provider="spotify",
+                            provider_sub=str(provider_sub),
+                            email_normalized=email_norm,
+                            provider_iss="https://accounts.spotify.com",
+                        )
+                        identity_id_used = new_id
+                    except Exception as e_link:
+                        # Race condition: fetch existing identity
+                        try:
+                            re = await auth_store.get_oauth_identity_by_provider("spotify", "https://accounts.spotify.com", str(provider_sub))
+                            if re:
+                                identity_id_used = re.get("id")
+                        except Exception:
+                            identity_id_used = None
+        except Exception:
+            # Best-effort only; proceed even if profile lookup/link fails
+            provider_sub = None
+            identity_id_used = None
+
+        # Use the token_data object directly (already has user_id, provider_sub, identity_id set)
+        logger.info("🎵 SPOTIFY CALLBACK: About to call upsert_token", extra={
+            "meta": {
+                "token_id": getattr(token_data, 'id', None),
+                "user_id": getattr(token_data, 'user_id', None),
+                "identity_id": getattr(token_data, 'identity_id', None),
+                "provider": getattr(token_data, 'provider', None)
+            }
+        })
+
+        persisted = await upsert_token(token_data)
 
         logger.info(
-            "🎵 SPOTIFY CALLBACK: tokens persisted",
+            "🎵 SPOTIFY CALLBACK: upsert_token returned",
             extra={"meta": {"tx_id": tx_id, "user_id": uid, "persisted": bool(persisted)}},
         )
+
+        # Double-check if token was actually created
+        if persisted:
+            from ..auth_store_tokens import get_token
+            check_token = await get_token(uid, "spotify")
+            logger.info(
+                "🎵 SPOTIFY CALLBACK: Token verification after upsert",
+                extra={"meta": {
+                    "found_token": check_token is not None,
+                    "token_id": getattr(check_token, 'id', None) if check_token else None,
+                    "token_identity_id": getattr(check_token, 'identity_id', None) if check_token else None
+                }}
+            )
         # Compatibility marker for tests that assert logging order
         logger.info("spotify.callback:tokens_persisted")
 

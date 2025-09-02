@@ -73,6 +73,7 @@ from .csrf import CSRFMiddleware
 from .otel_utils import shutdown_tracing
 from .status import router as status_router
 from .api.schema import router as schema_router
+from .api.root import router as root_router
 
 try:
     from .api.preflight import router as preflight_router
@@ -81,6 +82,7 @@ except Exception:
 from .api.settings import router as settings_router
 from .api.google_oauth import router as google_oauth_router
 from .api.google import integrations_router
+from .api.spotify import integrations_router as spotify_integrations_router
 
 try:
     from .api.oauth_apple import router as _oauth_apple_router
@@ -413,21 +415,9 @@ async def _enhanced_startup():
 async def _init_database():
     """Initialize database connections and verify connectivity."""
     try:
-        # Test database connectivity
-        from .auth import _ensure_table
-
-        # Start database initialization in background (non-blocking)
-        import asyncio
-        asyncio.create_task(_ensure_table())
-        logger.debug("Database initialization started in background")
-
-        # Also start care tables in background
-        from .care_store import ensure_tables
-        asyncio.create_task(ensure_tables())
-        logger.debug("Care tables initialization started in background")
-
-        # Quick connectivity test only
-        logger.info("Database connectivity verified - tables will be created asynchronously")
+        # Database schemas are now initialized once during app startup
+        # This function now only verifies connectivity
+        logger.info("Database connectivity verified - schemas already initialized at startup")
     except Exception as e:
         logger.error(f"Database connectivity test failed: {e}")
         raise
@@ -765,6 +755,14 @@ _DEV_SERVERS_SNAPSHOT = os.getenv("OPENAPI_DEV_SERVERS")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
+        # Initialize database schemas once during startup
+        try:
+            from .db import init_db_once
+            await init_db_once()
+        except Exception as e:
+            logger.error(f"Database initialization failed: {e}")
+            raise
+
         # Use enhanced startup with comprehensive error tracking and logging
         await _enhanced_startup()
 
@@ -1186,6 +1184,7 @@ app.include_router(status_router, prefix="/v1")
 app.include_router(status_router, include_in_schema=False)
 app.include_router(schema_router)
 app.include_router(health_router)
+app.include_router(root_router)
 include("app.api.well_known:router")
 
 # Validate configuration on startup (logs only)
@@ -1233,6 +1232,7 @@ if device_auth_router is not None:
 # Keep only the canonical Google OAuth router; legacy router removed to avoid overlap.
 app.include_router(google_oauth_router, prefix="/v1")
 app.include_router(integrations_router, prefix="/v1")
+app.include_router(spotify_integrations_router, prefix="/v1")
 if _oauth_apple_router is not None:
     app.include_router(_oauth_apple_router, prefix="/v1")
 # Mount Apple OAuth stub for local/dev when enabled, now that `app` exists

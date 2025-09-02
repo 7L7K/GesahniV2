@@ -487,7 +487,6 @@ def _client_ip(request: Request) -> str:
 # Register endpoint: create account and return tokens (plus set cookies)
 @router.post("/register", response_model=dict)
 async def register(req: RegisterRequest, request: Request, response: Response):
-    await _ensure_table()
     # Normalize and validate
     norm_user = _sanitize_username(req.username)
     # Normalize first and check duplicate username early for desired error precedence
@@ -678,7 +677,6 @@ async def login(req: LoginRequest, request: Request, response: Response):
             pass
 
     # Ensure DB table exists and normalize username regardless of logging outcome
-    await _ensure_table()
     norm_user = _sanitize_username(req.username)
 
     logger.info(
@@ -1216,7 +1214,6 @@ _RESET_TTL = int(os.getenv("PASSWORD_RESET_TTL_SECONDS", "900"))
 
 @router.post("/forgot", response_model=dict)
 async def forgot(req: ForgotRequest) -> dict:
-    await _ensure_table()
     norm_user = _sanitize_username(req.username)
     # best-effort: ensure user exists
     async with aiosqlite.connect(DB_PATH) as db:

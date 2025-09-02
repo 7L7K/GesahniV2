@@ -20,6 +20,18 @@ def get_cors_origins() -> List[str]:
     """Get the configured CORS allowed origins."""
     cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 
+    # If the Next dev proxy is enabled, be explicit and allow both localhost
+    # variants so local tooling (127.0.0.1 vs localhost) can work reliably.
+    try:
+        if os.getenv("USE_DEV_PROXY", "").strip().lower() in {"1", "true", "yes", "on"}:
+            # Prepend both canonical frontend origins if not already present
+            if "http://127.0.0.1:3000" not in cors_origins:
+                cors_origins = cors_origins + ",http://127.0.0.1:3000"
+            if "http://localhost:3000" not in cors_origins:
+                cors_origins = cors_origins + ",http://localhost:3000"
+    except Exception:
+        pass
+
     # Parse and normalize entries
     origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
 
@@ -68,7 +80,7 @@ def get_cors_origins() -> List[str]:
             continue
 
     if found_localhost:
-        origins = ["http://localhost:3000"]
+        origins = ["http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:3000", "http://127.0.0.1:8000"]
     else:
         # Deduplicate but preserve order-ish
         seen = set()

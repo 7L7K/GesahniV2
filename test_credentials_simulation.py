@@ -43,7 +43,13 @@ def create_mock_credentials(has_id_token=True, id_token_content=None):
 
 def simulate_oauth_callback_processing(creds):
     """Simulate the OAuth callback ID token processing."""
-    print(f"Simulating OAuth callback with creds.id_token: {getattr(creds, 'id_token', 'MISSING')[:50] if getattr(creds, 'id_token', None) else 'None'}")
+    id_token = getattr(creds, 'id_token', None)
+    if id_token:
+        id_token_str = str(id_token)
+        preview = id_token_str[:50] if len(id_token_str) > 50 else id_token_str
+        print(f"Simulating OAuth callback with creds.id_token: {preview}")
+    else:
+        print(f"Simulating OAuth callback with creds.id_token: None")
 
     # This is the exact logic from google_oauth.py
     provider_sub = None
