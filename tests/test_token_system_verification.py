@@ -197,7 +197,7 @@ class TestTokenSystemVerification:
         # Create tokens for different users
         users = ["alice", "bob", "charlie"]
         for user in users:
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", identity_id="01ccd69d-d31f-4b5d-a267-64d29cd566be",
+            token = ThirdPartyToken(identity_id="01ccd69d-d31f-4b5d-a267-64d29cd566be",
                 user_id=user,
                 provider="spotify",
                 provider_sub=f"{user}_spotify",
