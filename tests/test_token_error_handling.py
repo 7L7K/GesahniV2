@@ -387,7 +387,10 @@ class TestTokenErrorHandling:
                 expires_at=now + 3600,
                 created_at=now,
                 updated_at=now,
-                   # Store all tokens
+            )
+            tokens.append(token)
+
+        # Store all tokens
         for token in tokens:
             await dao.upsert_token(token)
 

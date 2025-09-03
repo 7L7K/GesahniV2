@@ -24,8 +24,10 @@ if response.status_code == 200:
     # Check if token is expired
     import time
     current_time = int(time.time())
-    expires_at = data.get('expires_at', 0)
-    if expires_at < current_time:
+    expires_at = data.get('expires_at')
+    if expires_at is None:
+        print(f"   ⚠️  No token configured (expires_at is None)")
+    elif expires_at < current_time:
         print(f"   ❌ Token expired {current_time - expires_at} seconds ago")
         
         # Check STALE_BUFFER logic
@@ -34,7 +36,7 @@ if response.status_code == 200:
         print(f"   Time diff: {time_diff} seconds")
         print(f"   STALE_BUFFER: {STALE_BUFFER} seconds")
         print(f"   Should refresh: {time_diff < STALE_BUFFER}")
-    else:
+    elif expires_at is not None:
         print(f"   ✅ Token valid for {expires_at - current_time} seconds")
 else:
     print(f"   ❌ Failed to get status: {response.status_code}")

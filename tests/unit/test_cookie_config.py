@@ -200,7 +200,7 @@ class TestCookieConfig:
             samesite="strict",
         )
 
-        assert "refresh_token="ABBBBBBBBBBBBBBBBB" in header
+        assert 'refresh_token="ABBBBBBBBBBBBBBBBB"' in header
         assert "Priority=High" in header
         assert "SameSite=Strict" in header
 

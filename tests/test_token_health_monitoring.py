@@ -266,7 +266,11 @@ class TestTokenHealthMonitoring:
                 expires_at=now + 3600,
                 created_at=now,
                 updated_at=now,
-            ao.upsert_token(token)
+            )
+            tokens.append(token)
+
+        for token in tokens:
+            await dao.upsert_token(token)
 
         import time
         start_time = time.time()

@@ -181,7 +181,9 @@ class TestTokenImprovementsDemo:
                 refresh_token=f"ABBBBBBBBBBBBBBBBB{user}",
                 scopes="user-read-private",
                 expires_at=now + 3600,
-                        assert stored, f"✅ Token for {user} should store successfully"
+            )
+            stored = await dao.upsert_token(token)
+            assert stored, f"✅ Token for {user} should store successfully"
             stored_tokens.append(token)
 
         print(f"   ✅ PASSED: All {len(users)} users' tokens stored successfully")
