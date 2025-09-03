@@ -56,7 +56,7 @@ def set_test_auth_cookies(
     # Create a mock request for cookie configuration
     # This is needed because set_auth_cookies requires request context
     mock_request = Request(
-        scope={
+        scopes={
             "type": "http",
             "method": "GET",
             "path": "/",
@@ -92,7 +92,7 @@ def clear_test_auth_cookies(client: TestClient, response: Response) -> None:
     """
     # Create a mock request for cookie configuration
     mock_request = Request(
-        scope={
+        scopes={
             "type": "http",
             "method": "GET",
             "path": "/",

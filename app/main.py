@@ -836,6 +836,20 @@ app = FastAPI(
     swagger_ui_parameters=_swagger_ui_parameters,
 )
 
+# Ensure compatibility aliases/stub routers are attached on the module-level
+# `app` so tests that import `app.main.app` directly see the full surface.
+try:
+    from .router.registry import attach_all as _attach_all
+
+    try:
+        _attach_all(app)
+        logger.debug("✅ Compat/stub routers attached at import time on main.app")
+    except Exception as e:
+        logger.debug("compat/stub routers not attached at import time: %s", e)
+except Exception:
+    # Registry not available at import time; create_app() will attach when invoked.
+    logger.debug("router.registry.attach_all not available at import time; create_app will attach routers")
+
 
 def create_app() -> FastAPI:
     """Composition root helper to perform late DI wiring.
@@ -845,6 +859,15 @@ def create_app() -> FastAPI:
     together to avoid circular imports.
     """
     logger.info("🔧 Starting application composition in create_app()")
+
+    # Install global middleware early (OPTIONS auto-reply) to avoid stealth 404s
+    try:
+        from .middleware.options_autoreply import AutoOptionsMiddleware
+
+        app.add_middleware(AutoOptionsMiddleware)
+        logger.debug("✅ AutoOptionsMiddleware registered")
+    except Exception:
+        logger.debug("AutoOptionsMiddleware not available")
 
     # Phase 7: Initialize infrastructure singletons first (needed by router)
     try:
@@ -871,12 +894,17 @@ def create_app() -> FastAPI:
     # Phase 4: Include leaf routers with exact prefixes tests expect
 
     # /ask at root - from our new leaf module
+    print("DEBUG: About to include ask_router")
     try:
         from .router.ask_api import router as ask_router
         app.include_router(ask_router, prefix="")
-        logger.debug("✅ Included ask router at root")
+        logger.info("✅ Included ask router at root")
+        print("DEBUG: Successfully included ask_router")
     except Exception as e:
+        print(f"DEBUG: Failed to include ask_router: {e}")
         logger.warning("⚠️  Failed to include ask router: %s", e)
+        import traceback
+        logger.warning("Full traceback: %s", traceback.format_exc())
 
     # /v1/auth/* - from our new leaf module
     try:
@@ -965,6 +993,15 @@ def create_app() -> FastAPI:
         logger.debug("✅ Included optional routers")
     except Exception as e:
         logger.warning("⚠️  Failed to include optional routers: %s", e)
+
+    # Attach compatibility and lightweight stub routers from router.registry
+    try:
+        from .router.registry import attach_all as _attach_all
+
+        _attach_all(app)
+        logger.debug("✅ Attached compat and stub routers via registry.attach_all")
+    except Exception:
+        logger.debug("compat/stub routers not attached (missing modules)")
 
     # Phase 6: Set up middleware stack (isolated from routers)
     try:

@@ -411,7 +411,7 @@ class TestTokenSystemVerification:
                 provider_iss=token_data['provider_iss'],
                 access_token=token_data['access_token'],
                 refresh_token=token_data['refresh_token'],
-                scope=token_data['scope'],
+                scopes=token_data['scope'],
                 expires_at=now + 3600,
             )
 

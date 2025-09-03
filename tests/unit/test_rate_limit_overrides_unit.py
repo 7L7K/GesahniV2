@@ -48,7 +48,7 @@ def test_scope_override_applies_only_with_scope(monkeypatch):
     h = _auth_header()
     for _ in range(3):
         assert client.get("/admin_only", headers=h).status_code == 200
-    # With scope=admin -> long limit=2, so 3rd should block
+    # With scopes=admin -> long limit=2, so 3rd should block
     h2 = _auth_header("admin")
     assert client.get("/admin_only", headers=h2).status_code == 200
     assert client.get("/admin_only", headers=h2).status_code == 200

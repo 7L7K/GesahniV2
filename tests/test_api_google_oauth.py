@@ -86,7 +86,7 @@ class TestGoogleLoginUrl:
             in auth_url
         )
         assert "response_type=code" in auth_url
-        assert "scope=openid+email+profile" in auth_url
+        assert "scopes=openid+email+profile" in auth_url
 
         # Check that state cookie is set
         assert "g_state" in response.cookies

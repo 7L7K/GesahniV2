@@ -315,7 +315,7 @@ class TestTokenHealthMonitoring:
             provider_iss="https://accounts.spotify.com",
             access_token="normal_token",
             refresh_token="normal_refresh",
-            scope="read",
+            scopes="read",
             expires_at=now + 3600,
             created_at=now,
             updated_at=now,

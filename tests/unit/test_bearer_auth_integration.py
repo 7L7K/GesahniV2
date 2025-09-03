@@ -162,7 +162,7 @@ class TestBearerAuthIntegration:
             return {"user_id": user_id, "scopes": scopes}
 
         client = TestClient(app)
-        token = create_test_token("alice", "test_secret", scope=["read", "write"])
+        token = create_test_token("alice", "test_secret", scopes=["read", "write"])
 
         response = client.post("/test", headers={"Authorization": f"Bearer {token}"})
 

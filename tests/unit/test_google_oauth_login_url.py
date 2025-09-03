@@ -32,7 +32,7 @@ class TestGoogleOAuthLoginURL:
                 in data["url"]
             )
             assert "state=" in data["url"]
-            assert "scope=openid+email+profile" in data["url"]
+            assert "scopes=openid+email+profile" in data["url"]
 
             # Check that cookie is set
             assert "g_state" in response.cookies

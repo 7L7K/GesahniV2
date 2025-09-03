@@ -179,7 +179,7 @@ async def create_test_user():
         access_token="test_spotify_access_token",
         refresh_token="test_spotify_refresh_token",
         expires_at=expires_at,
-        scope="user-read-private user-read-email"
+        scopes="user-read-private user-read-email"
     )
 
     # Upsert the token
@@ -236,21 +236,40 @@ async def authed_client(async_client, create_test_user):
     from app.tokens import make_access
     from fastapi.responses import Response
 
-    user_data = await create_test_user
+    user_data = create_test_user
     user_id = user_data["user_id"]
 
     # Create a mock response to set cookies
     response = Response()
 
     # Generate access token
-    access_token = make_access(user_id)
+    access_token = make_access({"user_id": user_id})
+
+    # Get token TTLs
+    from app.cookie_config import get_token_ttls
+    access_ttl, refresh_ttl = get_token_ttls()
+
+    # Create a mock request (needed for set_auth_cookies)
+    from fastapi import Request
+    mock_request = Request(scope={
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "headers": {},
+        "query_string": b"",
+        "server": ("testserver", 80),
+        "client": ("127.0.0.1", 12345),
+    })
 
     # Set auth cookies
     set_auth_cookies(
-        response=response,
-        access_token=access_token,
-        refresh_token=None,  # Not needed for basic auth
-        max_age=3600
+        response,
+        access=access_token,
+        refresh=None,
+        session_id=None,
+        access_ttl=access_ttl,
+        refresh_ttl=refresh_ttl,
+        request=mock_request,
     )
 
     # Extract cookies from the response

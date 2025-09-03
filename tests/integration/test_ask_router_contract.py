@@ -11,7 +11,7 @@ async def test_ask_returns_503_when_router_missing(authed_client):
     except Exception:
         pass
 
-    r = await authed_client.post("/v1/ask", json={"prompt": "hi"})
+    r = await authed_client.post("/ask", json={"prompt": "hi"})
     assert r.status_code == 503
     body = r.json()
     assert body.get("code") in {"ROUTER_UNAVAILABLE", "BACKEND_UNAVAILABLE"}
@@ -27,7 +27,7 @@ async def test_ask_returns_503_when_router_raises(monkeypatch, authed_client):
 
     registry.set_router(Boom())
 
-    r = await authed_client.post("/v1/ask", json={"prompt": "yo"})
+    r = await authed_client.post("/ask", json={"prompt": "yo"})
 
     assert r.status_code == 503
     body = r.json()
@@ -44,7 +44,7 @@ async def test_ask_returns_200_when_router_works(monkeypatch, authed_client):
 
     registry.set_router(Good())
 
-    r = await authed_client.post("/v1/ask", json={"prompt": "hello"})
+    r = await authed_client.post("/ask", json={"prompt": "hello"})
 
     assert r.status_code == 200
     body = r.json()

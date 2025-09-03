@@ -99,7 +99,7 @@ class TestBearerAuthEndToEnd:
         client = TestClient(app)
 
         # Create token with specific scopes
-        token = create_test_token("alice", "test_secret", scope=["read", "write"])
+        token = create_test_token("alice", "test_secret", scopes=["read", "write"])
 
         # Test an endpoint that might use scope enforcement
         response = client.get(

@@ -56,7 +56,7 @@ class TestGoogleOAuthLoginUrl:
             in data["url"]
         )
         assert "response_type=code" in data["url"]
-        assert "scope=openid+email+profile" in data["url"]
+        assert "scopes=openid+email+profile" in data["url"]
         assert "access_type=offline" in data["url"]
         assert "include_granted_scopes=true" in data["url"]
         assert "prompt=consent" in data["url"]

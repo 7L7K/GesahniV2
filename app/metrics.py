@@ -372,7 +372,6 @@ AUTH_REFRESH_OK = Counter(
 AUTH_REFRESH_FAIL = Counter(
     "auth_refresh_fail_total",
     "Failed auth refresh operations",
-    labelnames=("reason",),  # e.g., "replay", "concurrent", "expired", "invalid"
 )
 
 # Whoami operations
@@ -384,7 +383,6 @@ WHOAMI_OK = Counter(
 WHOAMI_FAIL = Counter(
     "whoami_fail_total",
     "Failed whoami operations",
-    labelnames=("reason",),  # e.g., "missing_token", "expired", "invalid"
 )
 
 RBAC_DENY = Counter(
@@ -633,6 +631,15 @@ except Exception:  # pragma: no cover
             return None
 
     ROUTER_FALLBACKS_TOTAL = _C5()  # type: ignore
+
+try:
+    ALIAS_FALLBACK_TOTAL = Counter(
+        "alias_fallback_total",
+        "Count of alias compatibility fallbacks",
+        ["path", "method", "reason"],
+    )
+except Exception:  # pragma: no cover - keep working if registry collides
+    ALIAS_FALLBACK_TOTAL = _MetricStub("alias_fallback_total")
 
 try:
     ROUTER_CIRCUIT_OPEN_TOTAL = Counter(

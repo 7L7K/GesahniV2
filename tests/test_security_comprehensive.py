@@ -304,7 +304,7 @@ class TestNoURLLog:
     def test_authorize_url_not_logged_in_logs(self):
         """Test that full authorize URLs are not logged."""
         # Create a test authorize URL
-        test_url = "https://accounts.spotify.com/authorize?client_id=test&response_type=code&redirect_uri=test&scope=test&state=test_state"
+        test_url = "https://accounts.spotify.com/authorize?client_id=test&response_type=code&redirect_uri=test&scopes=test&state=test_state"
 
         # Test that the full URL is not in log messages
         log_message = f"Built authorize URL with length: {len(test_url)}"

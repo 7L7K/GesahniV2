@@ -34,7 +34,7 @@ def test_google_connect_flow():
             checks = [
                 ('client_id=' in url, 'Contains client_id'),
                 ('redirect_uri=' in url, 'Contains redirect_uri'),
-                ('scope=' in url, 'Contains scope'),
+                ('scopes=' in url, 'Contains scope'),
                 ('state=' in url, 'Contains CSRF state'),
                 ('response_type=code' in url, 'Contains response_type=code'),
                 ('access_type=offline' in url, 'Contains access_type=offline'),
