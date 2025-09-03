@@ -23,25 +23,25 @@ class TestTokenHealthMonitoring:
 
         # Create some valid tokens
         valid_tokens = [
-            ThirdPartyToken(
+            ThirdPartyToken(identity_id="a567a16b-6f2c-44bc-9416-10f7e11474b5", 
                 user_id="user1",
                 provider="spotify",
                 provider_sub="spotify_user1",
                 provider_iss="https://accounts.spotify.com",
-                access_token="valid_token_1",
-                refresh_token="refresh_1",
+                access_token="BAAAAAAAAAAAAAAAAA",
+                refresh_token="ABBBBBBBBBBBBBBBBB",
                 scopes="user-read-private",
                 expires_at=now + 3600,
                 created_at=now,
                 updated_at=now,
             ),
-            ThirdPartyToken(
+            ThirdPartyToken(identity_id="6c505ceb-fb46-4b93-b019-6b18e5354b7d", 
                 user_id="user2",
                 provider="google",
                 provider_sub="google_user2",
                 provider_iss="https://accounts.google.com",
-                access_token="valid_token_2",
-                refresh_token="refresh_2",
+                access_token="BAAAAAAAAAAAAAAAAA",
+                refresh_token="ABBBBBBBBBBBBBBBBB",
                 scopes="calendar.readonly",
                 expires_at=now + 7200,
                 created_at=now,
@@ -75,37 +75,37 @@ class TestTokenHealthMonitoring:
 
         # Create mix of valid and expired tokens
         tokens = [
-            ThirdPartyToken(  # Valid token
+            ThirdPartyToken(identity_id="75abe813-b953-4a78-b4a4-04654d5bde8e",   # Valid token
                 user_id="user1",
                 provider="spotify",
                 provider_sub="spotify_user1",
                 provider_iss="https://accounts.spotify.com",
-                access_token="valid_token_1",
-                refresh_token="refresh_1",
+                access_token="BAAAAAAAAAAAAAAAAA",
+                refresh_token="ABBBBBBBBBBBBBBBBB",
                 scopes="user-read-private",
                 expires_at=now + 3600,
                 created_at=now,
                 updated_at=now,
             ),
-            ThirdPartyToken(  # Expired token
+            ThirdPartyToken(identity_id="ca0f7031-da65-482c-a237-d530e1ec649d",   # Expired token
                 user_id="user2",
                 provider="spotify",
                 provider_sub="spotify_user2",
                 provider_iss="https://accounts.spotify.com",
-                access_token="expired_token_2",
-                refresh_token="refresh_2",
+                access_token="BAAAAAAAAAAAAAAAAA",
+                refresh_token="ABBBBBBBBBBBBBBBBB",
                 scopes="user-read-private",
                 expires_at=now - 3600,  # Expired!
                 created_at=now - 7200,
                 updated_at=now - 7200,
             ),
-            ThirdPartyToken(  # Another expired token
+            ThirdPartyToken(identity_id="531016cc-0086-4eba-8797-053798e5a45a",   # Another expired token
                 user_id="user3",
                 provider="google",
                 provider_sub="google_user3",
                 provider_iss="https://accounts.google.com",
-                access_token="expired_token_3",
-                refresh_token="refresh_3",
+                access_token="BAAAAAAAAAAAAAAAAA",
+                refresh_token="ABBBBBBBBBBBBBBBBB",
                 scopes="calendar.readonly",
                 expires_at=now - 1800,  # Also expired!
                 created_at=now - 3600,
@@ -218,7 +218,7 @@ class TestTokenHealthMonitoring:
         tokens = []
 
         for i, provider in enumerate(providers):
-            token = ThirdPartyToken(
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", 
                 user_id=f"user_{i}",
                 provider=provider,
                 provider_sub=f"{provider}_user_{i}",
@@ -256,7 +256,7 @@ class TestTokenHealthMonitoring:
         tokens = []
 
         for i in range(num_tokens):
-            token = ThirdPartyToken(
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="8ea201c6-cbfd-45d4-aad7-beb3f9473a5a", 
                 user_id=f"user_{i}",
                 provider="spotify" if i % 2 == 0 else "google",
                 provider_sub=f"user_{i}_sub",
@@ -308,13 +308,13 @@ class TestTokenHealthMonitoring:
         now = int(time.time())
 
         # Normal user
-        normal_token = ThirdPartyToken(
+        normal_token = ThirdPartyToken(identity_id="755e481a-79ae-476b-9479-0347e4b8a956", 
             user_id="normal_user",
             provider="spotify",
             provider_sub="normal_sub",
             provider_iss="https://accounts.spotify.com",
-            access_token="normal_token",
-            refresh_token="normal_refresh",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="read",
             expires_at=now + 3600,
             created_at=now,

@@ -23,13 +23,13 @@ class TestTokenSystemVerification:
         now = int(time.time())
 
         # Test 1: Valid Spotify token with correct issuer should work
-        valid_token = ThirdPartyToken(
+        valid_token = ThirdPartyToken(identity_id="3ada0899-7090-4d1e-b45f-50728bb89863", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",  # Correct issuer
-            access_token="valid_token_123",
-            refresh_token="valid_refresh_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
@@ -43,13 +43,13 @@ class TestTokenSystemVerification:
         assert stored, "Valid Spotify token should store successfully"
 
         # Test 2: Invalid Spotify token with wrong issuer should fail
-        invalid_token = ThirdPartyToken(
+        invalid_token = ThirdPartyToken(identity_id="031fc249-968c-4dd7-9319-ed7b07758532", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://wrong.issuer.com",  # Wrong issuer!
-            access_token="invalid_token_123",
-            refresh_token="invalid_refresh_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
@@ -73,7 +73,7 @@ class TestTokenSystemVerification:
         original_token = "super_secret_access_token_12345"
         original_refresh = "super_secret_refresh_token_67890"
 
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="a585a573-f00f-4d0a-8b37-84fabff2599a", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -108,26 +108,26 @@ class TestTokenSystemVerification:
         # Create a mix of valid and expired tokens
         tokens = [
             # Valid Spotify token
-            ThirdPartyToken(
+            ThirdPartyToken(identity_id="2b3fc5e0-f763-4ba6-a850-00e7478d54b2", 
                 user_id="user1",
                 provider="spotify",
                 provider_sub="spotify_user1",
                 provider_iss="https://accounts.spotify.com",
-                access_token="valid_token_1",
-                refresh_token="refresh_1",
+                access_token="BAAAAAAAAAAAAAAAAA",
+                refresh_token="ABBBBBBBBBBBBBBBBB",
                 scopes="user-read-private",
                 expires_at=now + 3600,
                 created_at=now,
                 updated_at=now,
             ),
             # Expired Google token
-            ThirdPartyToken(
+            ThirdPartyToken(identity_id="0a664826-48ea-43e5-b25c-fd8e247a3548", 
                 user_id="user2",
                 provider="google",
                 provider_sub="google_user2",
                 provider_iss="https://accounts.google.com",
-                access_token="expired_token_2",
-                refresh_token="refresh_2",
+                access_token="BAAAAAAAAAAAAAAAAA",
+                refresh_token="ABBBBBBBBBBBBBBBBB",
                 scopes="calendar.readonly",
                 expires_at=now - 3600,  # Expired
                 created_at=now - 7200,
@@ -167,7 +167,7 @@ class TestTokenSystemVerification:
         ]
 
         for provider, issuer in valid_providers:
-            token = ThirdPartyToken(
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", 
                 user_id=f"user_{provider}",
                 provider=provider,
                 provider_sub=f"{provider}_user_123",
@@ -198,7 +198,7 @@ class TestTokenSystemVerification:
         # Create tokens for different users
         users = ["alice", "bob", "charlie"]
         for user in users:
-            token = ThirdPartyToken(
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="01ccd69d-d31f-4b5d-a267-64d29cd566be", 
                 user_id=user,
                 provider="spotify",
                 provider_sub=f"{user}_spotify",
@@ -229,25 +229,25 @@ class TestTokenSystemVerification:
         now = int(time.time())
 
         # First token with basic scope
-        token1 = ThirdPartyToken(
+        token1 = ThirdPartyToken(identity_id="1b811f44-84a9-4b97-a547-3ccfbf4d41ac", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="token1",
-            refresh_token="refresh1",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
 
         # Second token with additional scope (should union)
-        token2 = ThirdPartyToken(
+        token2 = ThirdPartyToken(identity_id="4bbadc73-85fd-4e94-9bb9-43145f98dcf4", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="token2",
-            refresh_token="refresh2",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-email user-modify-playback-state",
             expires_at=now + 3600,
         )
@@ -275,13 +275,13 @@ class TestTokenSystemVerification:
         now = int(time.time())
 
         # Create and store a valid token
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(identity_id="d87c5b99-a452-4b10-82b6-00e5dc99ea7e", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="test_token",
-            refresh_token="test_refresh",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
@@ -306,13 +306,13 @@ class TestTokenSystemVerification:
         now = int(time.time())
 
         # Create an expired token
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="20e433b9-b05b-4651-9ceb-3788e758915e", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token",
-            refresh_token="valid_refresh_token",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,  # Expired
             created_at=now - 7200,
@@ -404,7 +404,7 @@ class TestTokenSystemVerification:
         ]
 
         for description, token_data, should_pass in test_cases:
-            token = ThirdPartyToken(
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", 
                 user_id=f"user_{description.replace(' ', '_').lower()}",
                 provider=token_data['provider'],
                 provider_sub=f"sub_{description.replace(' ', '_').lower()}",
@@ -443,13 +443,13 @@ async def test_full_token_system_integration(tmp_path):
     now = int(time.time())
 
     # Step 1: Store a valid Spotify token
-    spotify_token = ThirdPartyToken(
+    spotify_token = ThirdPartyToken(identity_id="55749983-c1c6-473f-93fc-0064f95067d1", 
         user_id="integration_user",
         provider="spotify",
         provider_sub="spotify_integration_user",
         provider_iss="https://accounts.spotify.com",
-        access_token="integration_token_123",
-        refresh_token="integration_refresh_456",
+        access_token="BAAAAAAAAAAAAAAAAA",
+        refresh_token="ABBBBBBBBBBBBBBBBB",
         scopes="user-read-private user-read-email",
         expires_at=now + 3600,
     )

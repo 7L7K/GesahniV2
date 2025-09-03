@@ -37,11 +37,11 @@ async def test_migration_applies_and_upserts(tmp_path):
 
     dao = TokenDAO(db_path=str(db_file))
 
-    token = ThirdPartyToken(
+    token = ThirdPartyToken(identity_id="0cc892cd-1663-405f-a30f-136c720e0846", 
         user_id="testuser",
         provider="google",
-        access_token="at_123",
-        refresh_token="rt_456",
+        access_token="BAAAAAAAAAAAAAAAAA",
+        refresh_token="ABBBBBBBBBBBBBBBBB",
         scopes="openid email",
         expires_at=9999999999,
         created_at=1,

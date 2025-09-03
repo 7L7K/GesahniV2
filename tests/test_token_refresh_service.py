@@ -35,13 +35,13 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create expired token
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="c3f59397-38d2-475d-a0ef-24d1ec86c908", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token_123",
-            refresh_token="valid_refresh_token_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,  # Already expired
             created_at=now - 7200,
@@ -82,13 +82,13 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create expired token
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="f36694db-e45f-4dbc-ba67-7de5b0896750", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token_123",
-            refresh_token="valid_refresh_token_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,
             created_at=now - 7200,
@@ -128,13 +128,13 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create expired token
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="ba9cfce6-2d9b-49a8-9541-45b37346bcc9", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token_123",
-            refresh_token="valid_refresh_token_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,
             created_at=now - 7200,
@@ -166,13 +166,13 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create expired token
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="5ce21d91-41a1-4c27-8517-eab108392ea0", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token_123",
-            refresh_token="valid_refresh_token_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,
             created_at=now - 7200,
@@ -222,13 +222,13 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create fresh token (not expired)
-        fresh_token = ThirdPartyToken(
+        fresh_token = ThirdPartyToken(identity_id="877720f0-4104-4913-ad4b-c259714a8404", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="original_token_123",
-            refresh_token="refresh_token_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,  # Still fresh
             created_at=now,
@@ -271,13 +271,13 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create expired Google token
-        expired_google = ThirdPartyToken(
+        expired_google = ThirdPartyToken(identity_id="74c7ab61-d396-4ab3-8959-a5c9404bff89", 
             user_id="test_user",
             provider="google",
             provider_sub="google_user_123",
             provider_iss="https://accounts.google.com",
-            access_token="expired_google_token",
-            refresh_token="google_refresh_token",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="https://www.googleapis.com/auth/calendar.readonly",
             expires_at=now - 3600,
             created_at=now - 7200,
@@ -322,13 +322,13 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create token with invalid refresh token
-        broken_token = ThirdPartyToken(
+        broken_token = ThirdPartyToken(identity_id="07afcfef-537a-4ca6-8a3d-f25566ad3e7e", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token_123",
-            refresh_token="invalid_refresh_token",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,
             created_at=now - 7200,

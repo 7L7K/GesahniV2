@@ -13,13 +13,13 @@ async def test_upsert_unions_scopes_and_invalidates_prev(tmp_path):
     dao = TokenDAO(str(db))
 
     now = int(time.time())
-    t1 = ThirdPartyToken(
+    t1 = ThirdPartyToken(identity_id="ec686d62-0dc6-45bf-89cb-eeb970501162", 
         user_id="u1",
         provider="google",
         provider_sub="sub-a",
         provider_iss="https://accounts.google.com",
-        access_token="at1",
-        refresh_token="rt1",
+        access_token="BAAAAAAAAAAAAAAAAA",
+        refresh_token="ABBBBBBBBBBBBBBBBB",
         scopes="gmail",
         expires_at=now + 3600,
         created_at=now,
@@ -31,13 +31,13 @@ async def test_upsert_unions_scopes_and_invalidates_prev(tmp_path):
 
     # Upsert with additional scope
     time.sleep(0.01)
-    t2 = ThirdPartyToken(
+    t2 = ThirdPartyToken(identity_id="70fb00c0-4ae7-45fc-a9a9-ce750c479376", 
         user_id="u1",
         provider="google",
         provider_sub="sub-a",
         provider_iss="https://accounts.google.com",
-        access_token="at2",
-        refresh_token="rt2",
+        access_token="BAAAAAAAAAAAAAAAAA",
+        refresh_token="ABBBBBBBBBBBBBBBBB",
         scopes="calendar",
         expires_at=now + 7200,
     )

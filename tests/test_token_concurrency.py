@@ -13,20 +13,20 @@ async def test_concurrent_upserts_union_scopes(tmp_path):
     dao = TokenDAO(str(db))
 
     now = int(time.time())
-    base = ThirdPartyToken(
+    base = ThirdPartyToken(identity_id="852f19fd-bd5e-4e57-a5cd-8201343a6af7", 
         user_id="u777",
         provider="google",
         provider_sub="sub-conc",
         provider_iss="https://accounts.google.com",
-        access_token="base_at",
-        refresh_token="base_rt",
+        access_token="BAAAAAAAAAAAAAAAAA",
+        refresh_token="ABBBBBBBBBBBBBBBBB",
         scopes="gmail",
         expires_at=now + 3600,
     )
     await dao.upsert_token(base)
 
     async def upsert_with_scope(suffix: str):
-        t = ThirdPartyToken(
+        t = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="b0e0d486-eb72-4320-b2a7-a1565c3c619a", 
             user_id="u777",
             provider="google",
             provider_sub="sub-conc",

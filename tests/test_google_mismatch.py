@@ -17,13 +17,13 @@ async def test_enable_service_account_mismatch(tmp_path, monkeypatch):
 
     now = int(time.time())
     # Old token (account A) with calendar enabled
-    a = ThirdPartyToken(
+    a = ThirdPartyToken(identity_id="a6b8e03b-4082-447f-86b5-78bbec791734", 
         user_id="u42",
         provider="google",
         provider_sub="sub-a",
         provider_iss="https://accounts.google.com",
-        access_token="a_at",
-        refresh_token="a_rt",
+        access_token="BAAAAAAAAAAAAAAAAA",
+        refresh_token="ABBBBBBBBBBBBBBBBB",
         scopes="openid email profile https://www.googleapis.com/auth/calendar.readonly",
         expires_at=now + 3600,
     )
@@ -32,13 +32,13 @@ async def test_enable_service_account_mismatch(tmp_path, monkeypatch):
     await dao.update_service_status(user_id="u42", provider="google", service="calendar", status="enabled", provider_sub="sub-a", provider_iss="https://accounts.google.com")
 
     # New token (account B) more recent - explicitly set created_at to be much newer
-    b = ThirdPartyToken(
+    b = ThirdPartyToken(identity_id="7f45032a-5697-4913-9869-6d471ab20175", 
         user_id="u42",
         provider="google",
         provider_sub="sub-b",
         provider_iss="https://accounts.google.com",
-        access_token="b_at",
-        refresh_token="b_rt",
+        access_token="BAAAAAAAAAAAAAAAAA",
+        refresh_token="ABBBBBBBBBBBBBBBBB",
         scopes="openid email profile https://www.googleapis.com/auth/gmail.readonly",
         expires_at=now + 7200,
         created_at=now + 100,  # Make it 100 seconds newer to ensure it's definitely more recent

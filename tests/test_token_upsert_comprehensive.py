@@ -95,8 +95,8 @@ async def test_upsert_happy_path(temp_dbs, create_test_identity):
         provider_iss="https://accounts.spotify.com",
         provider_sub="spotify_sub_123",
         identity_id=identity_id,
-        access_token="B" + "A" * 17,  # Valid format: starts with B, length = 18
-        refresh_token="A" + "B" * 17,  # Valid format: starts with A, length = 18
+        access_token="BAAAAAAAAAAAAAAAAA" + "A" * 17,  # Valid format: starts with B, length = 18
+        refresh_token="ABBBBBBBBBBBBBBBBB" + "B" * 17,  # Valid format: starts with A, length = 18
         scopes="user-read-email,user-read-private",
         expires_at=now + 3600,  # 1 hour from now
         created_at=now,
@@ -142,8 +142,8 @@ async def test_upsert_conflict_update(temp_dbs, create_test_identity):
         provider_iss="https://accounts.spotify.com",
         provider_sub="spotify_sub_123",
         identity_id=identity_id,
-        access_token="B" + "A" * 17,
-        refresh_token="A" + "B" * 17,
+        access_token="BAAAAAAAAAAAAAAAAA" + "A" * 17,
+        refresh_token="ABBBBBBBBBBBBBBBBB" + "B" * 17,
         scopes="user-read-email",
         expires_at=now + 3600,
         created_at=now,
@@ -170,8 +170,8 @@ async def test_upsert_conflict_update(temp_dbs, create_test_identity):
         provider_iss="https://accounts.spotify.com",
         provider_sub="spotify_sub_123",
         identity_id=identity_id,
-        access_token="B" + "C" * 17,  # Different access token
-        refresh_token="A" + "D" * 17,  # Different refresh token
+        access_token="BAAAAAAAAAAAAAAAAA" + "C" * 17,  # Different access token
+        refresh_token="ABBBBBBBBBBBBBBBBB" + "D" * 17,  # Different refresh token
         scopes="user-read-email,user-read-private",  # Additional scope
         expires_at=now + 7200,  # Different expiry (2 hours)
         created_at=now,
@@ -221,8 +221,8 @@ async def test_fk_violation(temp_dbs):
         provider_iss="https://accounts.spotify.com",
         provider_sub="spotify_sub_123",
         identity_id=random_identity_id,  # This doesn't exist in auth_identities
-        access_token="B" + "A" * 17,
-        refresh_token="A" + "B" * 17,
+        access_token="BAAAAAAAAAAAAAAAAA" + "A" * 17,
+        refresh_token="ABBBBBBBBBBBBBBBBB" + "B" * 17,
         scopes="user-read-email",
         expires_at=now + 3600,
         created_at=now,
@@ -253,14 +253,14 @@ async def test_notnull_violation(temp_dbs, create_test_identity):
 
     # Constructor validation should catch this
     with pytest.raises(ValueError, match="user_id, provider, and access_token are required"):
-        ThirdPartyToken(
+        ThirdPartyToken(access_token="BAAAAAAAAAAAAAAAAA", 
             user_id=user_id,
             provider="spotify",
             provider_iss="https://accounts.spotify.com",
             provider_sub="spotify_sub_123",
             identity_id=identity_id,
             access_token=None,  # This violates constructor validation
-            refresh_token="A" + "B" * 17,
+            refresh_token="ABBBBBBBBBBBBBBBBB" + "B" * 17,
             scopes="user-read-email",
             expires_at=now + 3600,
             created_at=now,
@@ -286,7 +286,7 @@ async def test_concurrent_upserts(temp_dbs, create_test_identity):
 
     async def upsert_coroutine(token_id: str, access_token_suffix: str, expires_offset: int):
         """Coroutine that performs an upsert with specific parameters."""
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(access_token="BAAAAAAAAAAAAAAAAA", 
             id=token_id,
             user_id=user_id,
             provider="spotify",
@@ -294,7 +294,7 @@ async def test_concurrent_upserts(temp_dbs, create_test_identity):
             provider_sub="spotify_sub_123",
             identity_id=identity_id,
             access_token=f"B{'X' * 16}{access_token_suffix}",  # B + 16 X's + suffix
-            refresh_token="A" + "Y" * 17,  # Fixed refresh token
+            refresh_token="ABBBBBBBBBBBBBBBBB" + "Y" * 17,  # Fixed refresh token
             scopes="user-read-email,user-read-private",
             expires_at=now + expires_offset,
             created_at=now,
@@ -342,8 +342,8 @@ async def test_spotify_contract_validation_integration(temp_dbs, create_test_ide
         provider_iss="https://accounts.spotify.com",
         provider_sub="spotify_sub_123",
         identity_id=identity_id,
-        access_token="B" + "A" * 17,  # Valid format and length
-        refresh_token="A" + "B" * 17,  # Valid format and length
+        access_token="BAAAAAAAAAAAAAAAAA" + "A" * 17,  # Valid format and length
+        refresh_token="ABBBBBBBBBBBBBBBBB" + "B" * 17,  # Valid format and length
         scopes="user-read-email,user-read-private",
         expires_at=now + 3600,  # Future expiry
         created_at=now,
@@ -355,13 +355,13 @@ async def test_spotify_contract_validation_integration(temp_dbs, create_test_ide
     assert result is True
 
     # Test 2: Invalid Spotify token should fail contract validation
-    invalid_token = ThirdPartyToken(
+    invalid_token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", 
         user_id=user_id,
         provider="spotify",
         provider_iss="https://accounts.spotify.com",
         provider_sub="spotify_sub_123",
         identity_id=identity_id,
-        access_token="X" + "A" * 17,  # Invalid format (should start with B)
+        access_token="BAAAAAAAAAAAAAAAAA" + "A" * 17,  # Invalid format (should start with B)
         refresh_token="A" + "B" * 17,
         scopes="user-read-email",
         expires_at=now + 3600,

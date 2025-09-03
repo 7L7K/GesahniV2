@@ -26,13 +26,13 @@ class TestTokenImprovementsDemo:
 
         # Test 1: Valid Spotify token with correct issuer
         print("1. Testing valid Spotify token with correct issuer...")
-        valid_token = ThirdPartyToken(
+        valid_token = ThirdPartyToken(identity_id="a2c6d2d0-edeb-4d88-85fd-6aa689f58d14", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",  # Correct issuer
-            access_token="valid_token_123",
-            refresh_token="valid_refresh_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
@@ -47,13 +47,13 @@ class TestTokenImprovementsDemo:
 
         # Test 2: Invalid Spotify token with wrong issuer (our improvement!)
         print("\n2. Testing invalid Spotify token with wrong issuer...")
-        invalid_token = ThirdPartyToken(
+        invalid_token = ThirdPartyToken(identity_id="7967add1-ff6f-4674-9245-259b73791de0", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://wrong.issuer.com",  # Wrong issuer!
-            access_token="invalid_token_123",
-            refresh_token="invalid_refresh_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
@@ -87,7 +87,7 @@ class TestTokenImprovementsDemo:
         for provider, expected_issuer in providers:
             print(f"\nTesting {provider} token with correct issuer...")
 
-            token = ThirdPartyToken(
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", 
                 user_id=f"user_{provider}",
                 provider=provider,
                 provider_sub=f"{provider}_user_123",
@@ -120,24 +120,24 @@ class TestTokenImprovementsDemo:
         # Test that scope unioning logic works in validation/storage
         print("1. Testing scope unioning during storage...")
 
-        token1 = ThirdPartyToken(
+        token1 = ThirdPartyToken(identity_id="9841d890-0a8f-4e5f-81b7-f969981a3c7a", 
             user_id="scope_test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="token1",
-            refresh_token="refresh1",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",  # Basic scope
             expires_at=now + 3600,
         )
 
-        token2 = ThirdPartyToken(
+        token2 = ThirdPartyToken(identity_id="83edf702-8445-4d84-8aa6-99f64b6a4e28", 
             user_id="scope_test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="token2",
-            refresh_token="refresh2",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-email user-modify-playback-state",  # Additional scope
             expires_at=now + 3600,
         )
@@ -173,7 +173,7 @@ class TestTokenImprovementsDemo:
         stored_tokens = []
 
         for user in users:
-            token = ThirdPartyToken(
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="ec48ed65-c170-4f3a-9fd7-1f5bc64f43d4", 
                 user_id=user,
                 provider="spotify",
                 provider_sub=f"{user}_spotify",
@@ -249,7 +249,7 @@ class TestTokenImprovementsDemo:
             print(f"\nTesting: {description}")
 
             try:
-                token = ThirdPartyToken(
+                token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", 
                     user_id=f"user_{description.replace(' ', '_').lower()}",
                     provider=token_data['provider'],
                     provider_sub=f"sub_{description.replace(' ', '_').lower()}",
@@ -290,13 +290,13 @@ class TestTokenImprovementsDemo:
         print("\n=== TESTING REFRESH INTEGRATION CONCEPT ===")
 
         # Create an expired token
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="8c73d5e4-868c-4a73-aa43-fa44359dd9cd", 
             user_id="refresh_test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token",
-            refresh_token="valid_refresh_token",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,  # Expired
             created_at=now - 7200,
@@ -368,13 +368,13 @@ async def test_token_system_improvements_integration(tmp_path):
 
     # Step 1: OAuth callback with correct issuer
     print("\n   Step 1: OAuth callback with correct Spotify issuer...")
-    oauth_token = ThirdPartyToken(
+    oauth_token = ThirdPartyToken(identity_id="61e621cb-63bd-43d9-9cb0-58e223686e6c", 
         user_id="oauth_user",
         provider="spotify",
         provider_sub="spotify_oauth_user",
         provider_iss="https://accounts.spotify.com",  # Our improvement ensures this is required
-        access_token="oauth_access_token",
-        refresh_token="oauth_refresh_token",
+        access_token="BAAAAAAAAAAAAAAAAA",
+        refresh_token="ABBBBBBBBBBBBBBBBB",
         scopes="user-read-private user-read-email",
         expires_at=now + 3600,
     )
@@ -389,13 +389,13 @@ async def test_token_system_improvements_integration(tmp_path):
 
     # Step 2: Wrong issuer would be blocked (our key improvement!)
     print("\n   Step 2: Demonstrating wrong issuer blocking...")
-    wrong_issuer_token = ThirdPartyToken(
+    wrong_issuer_token = ThirdPartyToken(identity_id="88936ec6-fbe7-4bf0-86ec-d9b852c01cab", 
         user_id="wrong_user",
         provider="spotify",
         provider_sub="wrong_sub",
         provider_iss="https://malicious.issuer.com",  # Wrong!
-        access_token="malicious_token",
-        refresh_token="malicious_refresh",
+        access_token="BAAAAAAAAAAAAAAAAA",
+        refresh_token="ABBBBBBBBBBBBBBBBB",
         scopes="malicious_scope",
         expires_at=now + 3600,
     )

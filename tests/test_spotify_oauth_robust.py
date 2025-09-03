@@ -141,13 +141,13 @@ class TestSpotifyOAuthRobust:
         now = int(time.time())
 
         # Create valid token
-        valid_token = ThirdPartyToken(
+        valid_token = ThirdPartyToken(identity_id="b13c2375-dc0b-4c3d-b716-78ddfdcfb2a8", 
             user_id='test_user',
             provider='spotify',
             provider_sub='spotify_user_123',
             provider_iss='https://accounts.spotify.com',
-            access_token='valid_access_token',
-            refresh_token='valid_refresh_token',
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes='user-read-private',
             expires_at=now + 3600,
             created_at=now,
@@ -176,13 +176,13 @@ class TestSpotifyOAuthRobust:
         now = int(time.time())
 
         # Create expired token
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="cbd9a453-3807-4a7d-9295-09b1a30a5213", 
             user_id='test_user',
             provider='spotify',
             provider_sub='spotify_user_123',
             provider_iss='https://accounts.spotify.com',
-            access_token='expired_token',
-            refresh_token='valid_refresh_token',
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes='user-read-private',
             expires_at=now - 3600,  # Expired
             created_at=now - 7200,
@@ -220,13 +220,13 @@ class TestSpotifyOAuthRobust:
         now = int(time.time())
 
         # Create expired token
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="0d21deaf-1863-4f25-a3b0-c1757e368fcc", 
             user_id='test_user',
             provider='spotify',
             provider_sub='spotify_user_123',
             provider_iss='https://accounts.spotify.com',
-            access_token='expired_token',
-            refresh_token='invalid_refresh_token',
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes='user-read-private',
             expires_at=now - 3600,
             created_at=now - 7200,
@@ -257,13 +257,13 @@ class TestSpotifyOAuthRobust:
         now = int(time.time())
 
         # Create token to disconnect
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(identity_id="85606d0a-26b6-410a-bb85-5c59c69c6c2c", 
             user_id='test_user',
             provider='spotify',
             provider_sub='spotify_user_123',
             provider_iss='https://accounts.spotify.com',
-            access_token='token_to_disconnect',
-            refresh_token='refresh_to_disconnect',
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes='user-read-private',
             expires_at=now + 3600,
             created_at=now,
@@ -291,13 +291,13 @@ class TestSpotifyOAuthRobust:
         now = int(time.time())
 
         # Create valid token
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(identity_id="4de17cb2-d14e-47d7-8cc7-f6ecc22e0f53", 
             user_id='test_user',
             provider='spotify',
             provider_sub='spotify_user_123',
             provider_iss='https://accounts.spotify.com',
-            access_token='sdk_access_token',
-            refresh_token='sdk_refresh_token',
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes='user-read-private streaming',
             expires_at=now + 3600,
             created_at=now,
@@ -352,13 +352,13 @@ class TestSpotifyOAuthRobust:
         now = int(time.time())
 
         # Test with minimal required scope
-        token_minimal = ThirdPartyToken(
+        token_minimal = ThirdPartyToken(identity_id="197d007a-c216-413c-af0f-8ebfbc3f6199", 
             user_id='test_user',
             provider='spotify',
             provider_sub='spotify_user_123',
             provider_iss='https://accounts.spotify.com',
-            access_token='minimal_scope_token',
-            refresh_token='minimal_refresh',
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes='user-read-private',  # Minimal scope
             expires_at=now + 3600,
             created_at=now,
@@ -368,13 +368,13 @@ class TestSpotifyOAuthRobust:
         await dao.upsert_token(token_minimal)
 
         # Test with comprehensive scope
-        token_comprehensive = ThirdPartyToken(
+        token_comprehensive = ThirdPartyToken(identity_id="971fc0b4-e879-4e49-a8b4-29ee5f2a67bf", 
             user_id='test_user2',
             provider='spotify',
             provider_sub='spotify_user_456',
             provider_iss='https://accounts.spotify.com',
-            access_token='comprehensive_token',
-            refresh_token='comprehensive_refresh',
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes='user-read-private user-read-email user-modify-playback-state streaming',  # Full scope
             expires_at=now + 3600,
             created_at=now,
@@ -405,7 +405,7 @@ class TestSpotifyOAuthRobust:
 
         async def mock_oauth_flow(user_id):
             # Simulate OAuth callback for different users
-            token = ThirdPartyToken(
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="a4099c24-9296-4fae-87ba-fe1da42c0d9e", 
                 user_id=user_id,
                 provider='spotify',
                 provider_sub=f'{user_id}_sub',

@@ -14,13 +14,13 @@ async def test_brand_account_same_email_different_sub(tmp_path, monkeypatch):
 
     now = int(time.time())
     # Account A (brand) with sub-a, calendar enabled
-    a = ThirdPartyToken(
+    a = ThirdPartyToken(identity_id="349a63c4-0904-47f1-8cb0-a8779f97211e", 
         user_id="u99",
         provider="google",
         provider_sub="sub-a",
         provider_iss="https://accounts.google.com",
-        access_token="a_at",
-        refresh_token="a_rt",
+        access_token="BAAAAAAAAAAAAAAAAA",
+        refresh_token="ABBBBBBBBBBBBBBBBB",
         scopes="https://www.googleapis.com/auth/calendar.readonly",
         expires_at=now + 3600,
     )
@@ -28,13 +28,13 @@ async def test_brand_account_same_email_different_sub(tmp_path, monkeypatch):
     await dao.update_service_status(user_id="u99", provider="google", service="calendar", status="enabled", provider_sub="sub-a")
 
     # Account B (same email string but different sub)
-    b = ThirdPartyToken(
+    b = ThirdPartyToken(identity_id="5b4b6024-6b7e-4af9-91ce-4d1298a1a3cc", 
         user_id="u99",
         provider="google",
         provider_sub="sub-b",
         provider_iss="https://accounts.google.com",
-        access_token="b_at",
-        refresh_token="b_rt",
+        access_token="BAAAAAAAAAAAAAAAAA",
+        refresh_token="ABBBBBBBBBBBBBBBBB",
         scopes="https://www.googleapis.com/auth/gmail.readonly",
         expires_at=now + 7200,
     )

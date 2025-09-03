@@ -21,13 +21,13 @@ class TestTokenValidation:
         dao = TokenDAO(db_path)
 
         now = int(time.time())
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(identity_id="dd6db1e3-8729-4a5e-acb4-a694a14769f2", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="valid_access_token_123",
-            refresh_token="valid_refresh_token_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private user-read-email",
             expires_at=now + 3600,
             created_at=now,
@@ -53,13 +53,13 @@ class TestTokenValidation:
         dao = TokenDAO(db_path)
 
         now = int(time.time())
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(identity_id="f740756a-560c-436a-b33f-ff987c700e90", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss=None,  # Missing issuer!
-            access_token="valid_access_token_123",
-            refresh_token="valid_refresh_token_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
@@ -78,13 +78,13 @@ class TestTokenValidation:
         dao = TokenDAO(db_path)
 
         now = int(time.time())
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(identity_id="e28af140-eebd-446b-bea1-6cd06e549b65", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://wrong.issuer.com",  # Wrong issuer!
-            access_token="valid_access_token_123",
-            refresh_token="valid_refresh_token_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
@@ -103,13 +103,13 @@ class TestTokenValidation:
         dao = TokenDAO(db_path)
 
         now = int(time.time())
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="4cb294f5-de1a-4b2b-87f3-89b4089043ba", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token_123",
-            refresh_token="valid_refresh_token_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,  # Already expired!
             created_at=now - 7200,
@@ -137,25 +137,25 @@ class TestTokenValidation:
         now = int(time.time())
 
         # First token with basic scope
-        token1 = ThirdPartyToken(
+        token1 = ThirdPartyToken(identity_id="095fac11-76f5-45d3-9957-a079f2b37088", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="token1",
-            refresh_token="refresh1",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
 
         # Second token with additional scope
-        token2 = ThirdPartyToken(
+        token2 = ThirdPartyToken(identity_id="064ff90f-9b62-4067-9125-153c557563f8", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="token2",
-            refresh_token="refresh2",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-email user-modify-playback-state",
             expires_at=now + 3600,
         )
@@ -178,13 +178,13 @@ class TestTokenValidation:
         dao = TokenDAO(db_path)
 
         now = int(time.time())
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(identity_id="f9be4404-6a40-47c5-bae7-b2534571bf88", 
             user_id="test_user",
             provider="google",
             provider_sub="google_user_123",
             provider_iss="https://accounts.google.com",
-            access_token="google_token_123",
-            refresh_token="google_refresh_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="https://www.googleapis.com/auth/calendar.readonly",
             expires_at=now + 3600,
         )
@@ -207,13 +207,13 @@ class TestTokenValidation:
         # Test that malformed tokens are rejected during construction
         # The ThirdPartyToken constructor should validate required fields
         with pytest.raises(ValueError):
-            malformed_token = ThirdPartyToken(
+            malformed_token = ThirdPartyToken(identity_id="e51c0c25-a883-4863-a5eb-92bae7889326", 
                 user_id="test_user",
                 provider="spotify",
                 provider_sub="spotify_user_123",
                 provider_iss="https://accounts.spotify.com",
-                access_token="",  # Empty access token should be rejected
-                refresh_token="refresh_123",
+                access_token="BAAAAAAAAAAAAAAAAA",  # Empty access token should be rejected
+                refresh_token="ABBBBBBBBBBBBBBBBB",
                 scopes="user-read-private",
                 expires_at=now + 3600,
             )
@@ -226,13 +226,13 @@ class TestTokenValidation:
         now = int(time.time())
         original_token = "super_secret_access_token_12345"
 
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(access_token="BAAAAAAAAAAAAAAAAA", identity_id="7aed377d-7359-4aea-8134-060a6c80b87b", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
             access_token=original_token,
-            refresh_token="super_secret_refresh_token_67890",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
@@ -260,25 +260,25 @@ class TestTokenValidation:
         now = int(time.time())
 
         # User 1 token
-        token_user1 = ThirdPartyToken(
+        token_user1 = ThirdPartyToken(identity_id="3d2164ab-ea12-40a6-af12-8b558c56cb62", 
             user_id="user1",
             provider="spotify",
             provider_sub="spotify_user1",
             provider_iss="https://accounts.spotify.com",
-            access_token="token_user1",
-            refresh_token="refresh_user1",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
 
         # User 2 token
-        token_user2 = ThirdPartyToken(
+        token_user2 = ThirdPartyToken(identity_id="e0049124-a299-4e70-a9b4-d335424865fb", 
             user_id="user2",
             provider="spotify",
             provider_sub="spotify_user2",
             provider_iss="https://accounts.spotify.com",
-            access_token="token_user2",
-            refresh_token="refresh_user2",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
@@ -309,13 +309,13 @@ class TestTokenValidation:
         now = int(time.time())
 
         # Spotify token with Google issuer should fail
-        invalid_token = ThirdPartyToken(
+        invalid_token = ThirdPartyToken(identity_id="e69c7a12-e363-4ed4-b125-07502c01128f", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.google.com",  # Wrong issuer for Spotify!
-            access_token="token_123",
-            refresh_token="refresh_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
         )
@@ -325,13 +325,13 @@ class TestTokenValidation:
         assert not is_valid
 
         # Google token with Spotify issuer should also fail
-        invalid_google = ThirdPartyToken(
+        invalid_google = ThirdPartyToken(identity_id="f8166d0e-f933-49cd-a54c-b75e0a9bc039", 
             user_id="test_user",
             provider="google",
             provider_sub="google_user_123",
             provider_iss="https://accounts.spotify.com",  # Wrong issuer for Google!
-            access_token="token_123",
-            refresh_token="refresh_456",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="https://www.googleapis.com/auth/calendar.readonly",
             expires_at=now + 3600,
         )

@@ -37,13 +37,13 @@ class TestTokenErrorHandling:
         now = int(time.time())
 
         # Create a token
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(identity_id="06743cc4-b49a-481a-861f-8cf9e5fe1b95", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="test_token",
-            refresh_token="test_refresh",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
             created_at=now,
@@ -66,13 +66,13 @@ class TestTokenErrorHandling:
         """Test handling of network timeouts during token refresh"""
         now = int(time.time())
 
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="998fffcd-fbb1-45d5-93a7-bebf0cf0be50", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token",
-            refresh_token="valid_refresh",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,
             created_at=now - 7200,
@@ -100,13 +100,13 @@ class TestTokenErrorHandling:
         """Test handling of malformed API responses"""
         now = int(time.time())
 
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="99c379e6-d31e-4078-b1c6-521c708b674e", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token",
-            refresh_token="valid_refresh",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,
             created_at=now - 7200,
@@ -146,7 +146,7 @@ class TestTokenErrorHandling:
 
         async def concurrent_update(user_id, token_value):
             """Simulate concurrent token updates"""
-            token = ThirdPartyToken(
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="812c39ba-842d-4147-9dbf-8d11ab024dcb", 
                 user_id=user_id,
                 provider="spotify",
                 provider_sub=f"{user_id}_sub",
@@ -186,13 +186,13 @@ class TestTokenErrorHandling:
 
         original_token = "original_secret_token"
 
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(access_token="BAAAAAAAAAAAAAAAAA", identity_id="ec12fb5b-1be9-4ccb-9281-e44f50a8207a", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
             access_token=original_token,
-            refresh_token="original_refresh",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
             created_at=now,
@@ -216,13 +216,13 @@ class TestTokenErrorHandling:
         now = int(time.time())
 
         # Create valid token
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(identity_id="49229853-259b-490e-9fa0-bcdb80b149d2", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="valid_token",
-            refresh_token="valid_refresh",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
             created_at=now,
@@ -259,13 +259,13 @@ class TestTokenErrorHandling:
         """Test handling of API rate limit exhaustion"""
         now = int(time.time())
 
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="8f854d30-e3a6-4632-85f8-bf85bede4fb0", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token",
-            refresh_token="rate_limited_refresh",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,
             created_at=now - 7200,
@@ -299,13 +299,13 @@ class TestTokenErrorHandling:
         """Test handling of service unavailable scenarios"""
         now = int(time.time())
 
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="a45c82da-0124-4711-a730-1652e61419da", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token",
-            refresh_token="service_down_refresh",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,
             created_at=now - 7200,
@@ -339,13 +339,13 @@ class TestTokenErrorHandling:
         """Test handling of OAuth invalid grant errors (revoked tokens)"""
         now = int(time.time())
 
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="9eaf2c7b-81a2-4614-bddb-6948fb0a0b0f", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token",
-            refresh_token="revoked_refresh",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,
             created_at=now - 7200,
@@ -376,7 +376,7 @@ class TestTokenErrorHandling:
         # Create many tokens to simulate memory pressure
         tokens = []
         for i in range(1000):  # Large number of tokens
-            token = ThirdPartyToken(
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="c019e59f-7a33-4d7f-b8d8-f641c514711d", 
                 user_id=f"user_{i}",
                 provider="spotify",
                 provider_sub=f"sub_{i}",
@@ -405,13 +405,13 @@ class TestTokenErrorHandling:
         # This is harder to test directly, but we can mock the database write failure
 
         now = int(time.time())
-        token = ThirdPartyToken(
+        token = ThirdPartyToken(identity_id="9a96a722-622d-4a62-8423-c069b8cc125d", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="test_token",
-            refresh_token="test_refresh",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now + 3600,
             created_at=now,
@@ -427,13 +427,13 @@ class TestTokenErrorHandling:
         """Test circuit breaker pattern for failing services"""
         now = int(time.time())
 
-        expired_token = ThirdPartyToken(
+        expired_token = ThirdPartyToken(identity_id="4e5a9817-b1c7-4d6a-a4c4-d8ecada84535", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
             provider_iss="https://accounts.spotify.com",
-            access_token="expired_token",
-            refresh_token="circuit_breaker_refresh",
+            access_token="BAAAAAAAAAAAAAAAAA",
+            refresh_token="ABBBBBBBBBBBBBBBBB",
             scopes="user-read-private",
             expires_at=now - 3600,
             created_at=now - 7200,
@@ -467,7 +467,7 @@ class TestTokenErrorHandling:
 
         # Create multiple users with tokens
         for i in range(50):
-            token = ThirdPartyToken(
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="7e91d33e-d446-4311-b533-82e03a9d7f6e", 
                 user_id=f"load_user_{i}",
                 provider="spotify",
                 provider_sub=f"sub_{i}",

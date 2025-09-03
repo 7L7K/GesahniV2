@@ -172,12 +172,12 @@ async def create_test_user():
 
     # Create a valid Spotify token for testing
     expires_at = int(time.time()) + 3600  # 1 hour from now
-    token_data = ThirdPartyToken(
+    token_data = ThirdPartyToken(identity_id="59fd9451-f29e-43ce-a845-e11a3e494759", 
         id="spotify_test_token",
         user_id=test_user_id,
         provider="spotify",
-        access_token="test_spotify_access_token",
-        refresh_token="test_spotify_refresh_token",
+        access_token="BAAAAAAAAAAAAAAAAA",
+        refresh_token="ABBBBBBBBBBBBBBBBB",
         expires_at=expires_at,
         scopes="user-read-private user-read-email"
     )
