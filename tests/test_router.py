@@ -10,6 +10,35 @@ import httpx
 import pytest  # noqa: E402
 from fastapi import HTTPException
 
+# Test for PROMPT_BACKEND guardrails
+def test_prompt_backend_dryrun_guardrails():
+    """Test that PROMPT_BACKEND=dryrun enables safe development guardrails."""
+    import os
+
+    # Set environment variable for this test
+    os.environ["PROMPT_BACKEND"] = "dryrun"
+
+    # Re-import after setting env var
+    import importlib
+    import app.router.policy as router_policy
+    importlib.reload(router_policy)
+
+    # Test that PROMPT_BACKEND setting is properly loaded
+    assert hasattr(router_policy, 'PROMPT_BACKEND')
+
+    # Test that dryrun mode is detected
+    assert router_policy.PROMPT_BACKEND == "dryrun"
+
+    # Test that the setting can be changed and reloaded
+    os.environ["PROMPT_BACKEND"] = "live"
+    importlib.reload(router_policy)
+    assert router_policy.PROMPT_BACKEND == "live"
+
+    # Test default value when not set
+    del os.environ["PROMPT_BACKEND"]
+    importlib.reload(router_policy)
+    assert router_policy.PROMPT_BACKEND == "live"  # default value
+
 # Setup sys.modules mocks for import isolation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.modules.setdefault(

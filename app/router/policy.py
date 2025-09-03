@@ -48,3 +48,6 @@ MODEL_ROUTER_HEAVY_TOKENS = int(os.getenv("MODEL_ROUTER_HEAVY_TOKENS", "1000"))
 
 # Intent detection threshold
 SIM_THRESHOLD = float(os.getenv("SIM_THRESHOLD", "0.24"))
+
+# Prompt backend configuration - for safe development and testing
+PROMPT_BACKEND = os.getenv("PROMPT_BACKEND", "live").lower()

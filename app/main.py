@@ -891,6 +891,31 @@ def create_app() -> FastAPI:
     except Exception as e:
         logger.warning("⚠️  Failed to configure router: %s", e)
 
+    # Register backend factory for swappable, lazy backends (openai/llama/dryrun)
+    try:
+        from app.routers import register_backend_factory
+
+        def _backend_factory(name: str):
+            # Resolve backend callables lazily to avoid heavy imports at import-time
+            if name == "openai":
+                from app.routers.openai_router import openai_router
+
+                return openai_router
+            if name == "llama":
+                from app.routers.llama_router import llama_router
+
+                return llama_router
+            # Dry-run fallback closure
+            async def _dry_run(payload: dict) -> dict:
+                return {"backend": "dryrun", "answer": "(dry-run fallback)"}
+
+            return _dry_run
+
+        register_backend_factory(_backend_factory)
+        logger.debug("✅ Backend factory registered (openai/llama/dryrun)")
+    except Exception as e:
+        logger.warning("⚠️  Failed to register backend factory: %s", e)
+
     # Phase 4: Include leaf routers with exact prefixes tests expect
 
     # /ask at root - from our new leaf module

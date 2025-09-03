@@ -27,6 +27,12 @@ except Exception:  # pragma: no cover - fallback when module missing
     def clamp_prompt(prompt: str, intent: str | None, max_tokens: int | None = None) -> str:
         return prompt
 
+# Import router policy settings
+try:
+    from .router.policy import PROMPT_BACKEND
+except Exception:
+    PROMPT_BACKEND = "live"  # fallback if import fails
+
 
 try:  # pragma: no cover - fall back if circuit flag missing
     from .llama_integration import llama_circuit_open  # type: ignore
@@ -259,9 +265,10 @@ def _get_fallback_model(vendor: str) -> str:
 
 
 def _dry(engine: str, model: str) -> str:
-    """Dry run function for testing."""
+    """Dry run function for testing and safe development."""
     label = model.split(":")[0] if engine == "llama" else model
-    msg = f"[dry-run] would call {engine} {label}"
+    backend_type = "PROMPT_BACKEND=dryrun" if PROMPT_BACKEND == "dryrun" else "DEBUG_MODEL_ROUTING"
+    msg = f"[dry-run] {backend_type}: would call {engine} {label}"
     logger.info(msg)
     return msg
 
@@ -1044,8 +1051,8 @@ async def route_prompt(
     if os.getenv("ENABLE_PROMPT_CLAMP", "1") == "1":
         built_prompt = clamp_prompt(built_prompt, intent, max_tokens=int(os.getenv("MODEL_ROUTER_HEAVY_TOKENS", "4096")))
 
-    # Check for debug mode
-    debug_route = os.getenv("DEBUG_MODEL_ROUTING", "0").lower() in {"1", "true", "yes"}
+    # Check for debug mode or dry run backend
+    debug_route = os.getenv("DEBUG_MODEL_ROUTING", "0").lower() in {"1", "true", "yes"} or PROMPT_BACKEND == "dryrun"
 
     # Early cache lookup short-circuit
     cached_answer = lookup_cached_answer(norm_prompt)

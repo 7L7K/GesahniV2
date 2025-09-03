@@ -100,6 +100,9 @@ def pytest_load_initial_conftests(early_config, parser):
         # Vector store: Use memory backend for tests
         os.environ.setdefault("VECTOR_STORE", "memory")
 
+        # Prompt backend: Use dryrun for safe development and testing
+        os.environ.setdefault("PROMPT_BACKEND", "dryrun")
+
         # STANDARDIZED TEST IDENTITY AND TTL CONFIGURATION
         # ==================================================
         # Use long TTLs to prevent expiry during test execution
