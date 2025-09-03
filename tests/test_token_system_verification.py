@@ -167,8 +167,7 @@ class TestTokenSystemVerification:
         ]
 
         for provider, issuer in valid_providers:
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  
-                user_id=f"user_{provider}",
+            token = ThirdPartyToken(user_id=f"user_{provider}",
                 provider=provider,
                 provider_sub=f"{provider}_user_123",
                 provider_iss=issuer,
@@ -198,7 +197,7 @@ class TestTokenSystemVerification:
         # Create tokens for different users
         users = ["alice", "bob", "charlie"]
         for user in users:
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="01ccd69d-d31f-4b5d-a267-64d29cd566be", 
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="01ccidentity_id="01ccd69d-d31f-4b5d-a267-64d29cd566be", 
                 user_id=user,
                 provider="spotify",
                 provider_sub=f"{user}_spotify",
@@ -207,10 +206,7 @@ class TestTokenSystemVerification:
                 refresh_token=f"ABBBBBBBBBBBBBBBBB{user}",
                 scopes="user-read-private",
                 expires_at=now + 3600,
-            )
-
-            stored = await dao.upsert_token(token)
-            assert stored, f"Token for {user} should store successfully"
+                        assert stored, f"Token for {user} should store successfully"
 
         # Verify each user can only access their own token
         for user in users:

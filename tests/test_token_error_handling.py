@@ -146,7 +146,7 @@ class TestTokenErrorHandling:
 
         async def concurrent_update(user_id, token_value):
             """Simulate concurrent token updates"""
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="812c39ba-842d-4147-9dbf-8d11ab024dcb", 
+            token = ThirdPartyToken(identity_id="812c39ba-842d-4147-9dbf-8d11ab024dcb", 
                 user_id=user_id,
                 provider="spotify",
                 provider_sub=f"{user_id}_sub",
@@ -387,10 +387,7 @@ class TestTokenErrorHandling:
                 expires_at=now + 3600,
                 created_at=now,
                 updated_at=now,
-            )
-            tokens.append(token)
-
-        # Store all tokens
+                   # Store all tokens
         for token in tokens:
             await dao.upsert_token(token)
 
@@ -467,7 +464,7 @@ class TestTokenErrorHandling:
 
         # Create multiple users with tokens
         for i in range(50):
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="7e91d33e-d446-4311-b533-82e03a9d7f6e", 
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="7e91d33e-d446-4311-b533-identity_id="7e91d33e-d446-4311-b533-82e03a9d7f6e", 
                 user_id=f"load_user_{i}",
                 provider="spotify",
                 provider_sub=f"sub_{i}",
@@ -478,10 +475,7 @@ class TestTokenErrorHandling:
                 expires_at=now + 3600,
                 created_at=now,
                 updated_at=now,
-            )
-            await dao.upsert_token(token)
-
-        # Simulate high concurrent load
+            rrent load
         async def concurrent_request(user_id):
             with patch('app.auth_store_tokens.TokenDAO', return_value=dao):
                 response = client.get(

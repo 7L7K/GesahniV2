@@ -87,8 +87,7 @@ class TestTokenImprovementsDemo:
         for provider, expected_issuer in providers:
             print(f"\nTesting {provider} token with correct issuer...")
 
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  
-                user_id=f"user_{provider}",
+            token = ThirdPartyToken(user_id=f"user_{provider}",
                 provider=provider,
                 provider_sub=f"{provider}_user_123",
                 provider_iss=expected_issuer,
@@ -173,7 +172,7 @@ class TestTokenImprovementsDemo:
         stored_tokens = []
 
         for user in users:
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="ec48ed65-c170-4f3a-9fd7-1f5bc64f43d4", 
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="ec48identity_id="ec48ed65-c170-4f3a-9fd7-1f5bc64f43d4", 
                 user_id=user,
                 provider="spotify",
                 provider_sub=f"{user}_spotify",
@@ -182,10 +181,7 @@ class TestTokenImprovementsDemo:
                 refresh_token=f"ABBBBBBBBBBBBBBBBB{user}",
                 scopes="user-read-private",
                 expires_at=now + 3600,
-            )
-
-            stored = await dao.upsert_token(token)
-            assert stored, f"✅ Token for {user} should store successfully"
+                        assert stored, f"✅ Token for {user} should store successfully"
             stored_tokens.append(token)
 
         print(f"   ✅ PASSED: All {len(users)} users' tokens stored successfully")
