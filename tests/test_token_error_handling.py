@@ -464,7 +464,7 @@ class TestTokenErrorHandling:
 
         # Create multiple users with tokens
         for i in range(50):
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="7e91d33e-d446-4311-b533-identity_id="7e91d33e-d446-4311-b533-82e03a9d7f6e", 
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="7e91d33e-d446-4311-b533-82e03a9d7f6e", 
                 user_id=f"load_user_{i}",
                 provider="spotify",
                 provider_sub=f"sub_{i}",
