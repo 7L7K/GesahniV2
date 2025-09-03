@@ -187,7 +187,7 @@ class TestCookieConfig:
             samesite="lax",
         )
 
-        assert "access_token="BAAAAAAAAAAAAAAAAA" in header
+        assert "access_token=BAAAAAAAAAAAAAAAAA" in header
         assert "Priority=High" in header
 
     def test_format_cookie_header_refresh_cookie(self):

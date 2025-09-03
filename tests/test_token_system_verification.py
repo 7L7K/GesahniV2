@@ -73,7 +73,7 @@ class TestTokenSystemVerification:
         original_token = "super_secret_access_token_12345"
         original_refresh = "super_secret_refresh_token_67890"
 
-        token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="a585a573-f00f-4d0a-8b37-84fabff2599a", 
+        token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", identity_id="a585a573-f00f-4d0a-8b37-84fabff2599a",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -197,7 +197,7 @@ class TestTokenSystemVerification:
         # Create tokens for different users
         users = ["alice", "bob", "charlie"]
         for user in users:
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", identity_id="01ccd69d-d31f-4b5d-a267-64d29cd566be", 
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", identity_id="01ccd69d-d31f-4b5d-a267-64d29cd566be",
                 user_id=user,
                 provider="spotify",
                 provider_sub=f"{user}_spotify",

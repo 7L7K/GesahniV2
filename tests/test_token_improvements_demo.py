@@ -172,7 +172,7 @@ class TestTokenImprovementsDemo:
         stored_tokens = []
 
         for user in users:
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="ec48ed65-c170-4f3a-9fd7-1f5bc64f43d4", 
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", identity_id="ec48ed65-c170-4f3a-9fd7-1f5bc64f43d4",
                 user_id=user,
                 provider="spotify",
                 provider_sub=f"{user}_spotify",
