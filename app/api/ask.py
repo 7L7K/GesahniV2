@@ -614,10 +614,46 @@ async def _ask(request: Request, body: dict | None):
                     "shape": shape,
                     "normalized_from": normalized_from,
                 }
+                # Instrument and protect the backend call with timeout/circuit
+                from time import monotonic
+                from app.metrics import PROMPT_ROUTER_CALLS_TOTAL, PROMPT_ROUTER_FAILURES_TOTAL
+
+                backend_label = os.getenv("PROMPT_BACKEND", "dryrun").lower()
+                PROMPT_ROUTER_CALLS_TOTAL.labels(backend_label).inc()
+
+                start = monotonic()
                 try:
-                    result = await prompt_router(payload)
+                    # Timeout fence: don't let backend block for more than 10s
+                    import asyncio
+
+                    result = await asyncio.wait_for(prompt_router(payload), timeout=10.0)
+                except asyncio.TimeoutError as e:
+                    elapsed = monotonic() - start
+                    PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "timeout").inc()
+                    logger.error(
+                        "Prompt backend timeout: backend=%s elapsed=%.3fs",
+                        backend_label,
+                        elapsed,
+                        exc_info=True,
+                    )
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "code": "BACKEND_TIMEOUT",
+                            "message": "Prompt backend timed out",
+                            "cause": "timeout",
+                        },
+                    )
                 except BackendUnavailable as e:
-                    logger.error("Prompt backend unavailable: %s", e, exc_info=True)
+                    elapsed = monotonic() - start
+                    PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "unavailable").inc()
+                    logger.error(
+                        "Prompt backend unavailable: backend=%s elapsed=%.3fs error=%s",
+                        backend_label,
+                        elapsed,
+                        e,
+                        exc_info=True,
+                    )
                     raise HTTPException(
                         status_code=503,
                         detail={
@@ -627,7 +663,13 @@ async def _ask(request: Request, body: dict | None):
                         },
                     )
                 except Exception as e:
-                    logger.error("Prompt backend call failed: %s", e, exc_info=True)
+                    elapsed = monotonic() - start
+                    PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "error").inc()
+                    logger.exception(
+                        "Prompt backend call failed: backend=%s elapsed=%.3fs",
+                        backend_label,
+                        elapsed,
+                    )
                     raise HTTPException(
                         status_code=503,
                         detail={

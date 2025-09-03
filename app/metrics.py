@@ -616,6 +616,21 @@ except Exception:  # pragma: no cover
     ROUTER_REQUESTS_TOTAL = _C4()  # type: ignore
 
 try:
+    PROMPT_ROUTER_CALLS_TOTAL = Counter(
+        "prompt_router_calls_total",
+        "Prompt router calls",
+        ["backend"],
+    )
+    PROMPT_ROUTER_FAILURES_TOTAL = Counter(
+        "prompt_router_failures_total",
+        "Prompt router failures",
+        ["backend", "reason"],
+    )
+except Exception:  # pragma: no cover - registry collisions
+    PROMPT_ROUTER_CALLS_TOTAL = _MetricStub("prompt_router_calls_total")
+    PROMPT_ROUTER_FAILURES_TOTAL = _MetricStub("prompt_router_failures_total")
+
+try:
     ROUTER_FALLBACKS_TOTAL = Counter(
         "gesahni_router_fallbacks_total",
         "Fallbacks between vendors",

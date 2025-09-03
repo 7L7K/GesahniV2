@@ -77,8 +77,10 @@ async def test_router_entrypoint_without_router():
 
     from app.router.entrypoint import route_prompt
 
-    with pytest.raises(RuntimeError, match="Router has not been configured"):
-        await route_prompt({"test": "payload"})
+    # Compatibility: entrypoint now falls back to config/app.state when registry
+    # is not configured. Ensure it does not raise and returns a dict-like result.
+    res = await route_prompt({"test": "payload"})
+    assert isinstance(res, dict)
 
 
 @pytest.mark.asyncio
