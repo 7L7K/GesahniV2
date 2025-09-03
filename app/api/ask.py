@@ -11,6 +11,9 @@ from importlib import import_module
 
 import jwt
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from app.deps.prompt_router import get_prompt_router
+from app.domain.prompt_router import PromptRouter
+from app.errors import BackendUnavailable
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -596,12 +599,12 @@ async def _ask(request: Request, body: dict | None):
             # rate_limit applied via route dependency; keep explicit header snapshot behavior
             # Lazily import to respect tests that monkeypatch app.main.route_prompt
             try:
-                # Prefer an explicit app.state.prompt_router when bound at startup
-                prompt_router = getattr(request.app.state, "prompt_router", None)
+                # Prefer injected prompt router (DI via Depends when called by FastAPI)
+                prompt_router = kwargs.get("route_prompt") if "route_prompt" in kwargs else getattr(request.app.state, "prompt_router", None)
             except Exception:
                 prompt_router = None
 
-            if prompt_router is not None:
+            if prompt_router is not None and not isinstance(prompt_router, Depends):
                 # Build a minimal payload for backend callables
                 payload = {
                     "prompt": prompt_text,
@@ -613,8 +616,8 @@ async def _ask(request: Request, body: dict | None):
                 }
                 try:
                     result = await prompt_router(payload)
-                except RuntimeError as e:
-                    logger.error("Prompt backend not configured: %s", e, exc_info=True)
+                except BackendUnavailable as e:
+                    logger.error("Prompt backend unavailable: %s", e, exc_info=True)
                     raise HTTPException(
                         status_code=503,
                         detail={
