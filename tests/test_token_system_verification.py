@@ -402,13 +402,13 @@ class TestTokenSystemVerification:
         ]
 
         for description, token_data, should_pass in test_cases:
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  
+            token = ThirdPartyToken(
                 user_id=f"user_{description.replace(' ', '_').lower()}",
                 provider=token_data['provider'],
                 provider_sub=f"sub_{description.replace(' ', '_').lower()}",
                 provider_iss=token_data['provider_iss'],
-                access_token="BAAAAAAAAAAAAAAAAA"['access_token'],
-                refresh_token=token_data['refresh_token'],
+                access_token="BAAAAAAAAAAAAAAAAA",
+                refresh_token="ABBBBBBBBBBBBBBBBB",
                 scopes=token_data['scope'],
                 expires_at=now + 3600,
             )
