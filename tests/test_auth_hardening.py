@@ -29,7 +29,9 @@ def test_rbac_ladder_admin_helpers():
     client = TestClient(app)
     # If legacy auth router (with admin endpoints) isn't mounted in this app instance,
     # skip — some test environments disable legacy admin routes via admin_enabled().
-    route_exists = any(r.path == "/v1/auth/admin/rate-limits/{key}" for r in app.router.routes)
+    route_exists = any(
+        r.path == "/v1/auth/admin/rate-limits/{key}" for r in app.router.routes
+    )
     if not route_exists:
         pytest.skip("Legacy auth router not mounted; skipping RBAC ladder test")
 
@@ -42,6 +44,7 @@ def test_rbac_ladder_admin_helpers():
 
     # 401 unauth (override the shared require_scope dependency used by routes)
     from app.deps.scopes import require_scope as _require_scope
+
     app.dependency_overrides[_require_scope] = raise_401
     r = client.get("/v1/auth/admin/rate-limits/user:demo")
     assert r.status_code == 401
@@ -128,7 +131,10 @@ def test_session_binding_and_verify(monkeypatch):
 # and are left as placeholders that can be enabled in an environment that runs the
 # full application stack.
 
-@pytest.mark.skip(reason="Requires full server CSRF + cookie setup; run in integration suite")
+
+@pytest.mark.skip(
+    reason="Requires full server CSRF + cookie setup; run in integration suite"
+)
 def test_csrf_enforcement_on_login():
     pass
 

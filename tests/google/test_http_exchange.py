@@ -39,7 +39,10 @@ async def test_exchange_success(monkeypatch):
     async def _client(*a, **k):
         return DummyAsyncClient(resp)
 
-    monkeypatch.setattr("app.integrations.google.http_exchange.httpx.AsyncClient", lambda timeout: DummyAsyncClient(resp))
+    monkeypatch.setattr(
+        "app.integrations.google.http_exchange.httpx.AsyncClient",
+        lambda timeout: DummyAsyncClient(resp),
+    )
 
     td = await async_token_exchange("code123", code_verifier="v" * 43)
     assert td.get("access_token") == "at"
@@ -47,8 +50,13 @@ async def test_exchange_success(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_exchange_invalid_grant(monkeypatch):
-    resp = DummyResponse(400, {"error": "invalid_grant", "error_description": "expired"})
-    monkeypatch.setattr("app.integrations.google.http_exchange.httpx.AsyncClient", lambda timeout: DummyAsyncClient(resp))
+    resp = DummyResponse(
+        400, {"error": "invalid_grant", "error_description": "expired"}
+    )
+    monkeypatch.setattr(
+        "app.integrations.google.http_exchange.httpx.AsyncClient",
+        lambda timeout: DummyAsyncClient(resp),
+    )
 
     with pytest.raises(OAuthError) as ei:
         await async_token_exchange("code123", code_verifier="v" * 43)
@@ -59,11 +67,12 @@ async def test_exchange_invalid_grant(monkeypatch):
 @pytest.mark.asyncio
 async def test_exchange_timeout(monkeypatch):
     exc = httpx.TimeoutException("timeout")
-    monkeypatch.setattr("app.integrations.google.http_exchange.httpx.AsyncClient", lambda timeout: DummyAsyncClient(raise_exc=exc))
+    monkeypatch.setattr(
+        "app.integrations.google.http_exchange.httpx.AsyncClient",
+        lambda timeout: DummyAsyncClient(raise_exc=exc),
+    )
 
     with pytest.raises(OAuthError) as ei:
         await async_token_exchange("code123", code_verifier="v" * 43, timeout=0.01)
     e = ei.value
     assert e.reason == "timeout"
-
-

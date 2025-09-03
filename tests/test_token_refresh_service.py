@@ -1,6 +1,7 @@
 """
 Tests for the TokenRefreshService - automatic token refresh functionality
 """
+
 import time
 import pytest
 import asyncio
@@ -35,7 +36,8 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create expired token
-        expired_token = ThirdPartyToken(identity_id="c3f59397-38d2-475d-a0ef-24d1ec86c908", 
+        expired_token = ThirdPartyToken(
+            identity_id="c3f59397-38d2-475d-a0ef-24d1ec86c908",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -55,18 +57,18 @@ class TestTokenRefreshService:
         new_access_token = "new_fresh_token_789"
         new_expires_at = now + 3600
 
-        with patch('app.integrations.spotify.client.SpotifyClient._refresh_access_token',
-                   new_callable=AsyncMock) as mock_refresh:
+        with patch(
+            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+            new_callable=AsyncMock,
+        ) as mock_refresh:
             mock_refresh.return_value = {
-                'access_token': new_access_token,
-                'expires_at': new_expires_at
+                "access_token": new_access_token,
+                "expires_at": new_expires_at,
             }
 
             # Try to get valid token (should trigger refresh)
             result = await refresh_service.get_valid_token_with_refresh(
-                user_id="test_user",
-                provider="spotify",
-                force_refresh=False
+                user_id="test_user", provider="spotify", force_refresh=False
             )
 
             # Should have gotten the refreshed token
@@ -82,7 +84,8 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create expired token
-        expired_token = ThirdPartyToken(identity_id="f36694db-e45f-4dbc-ba67-7de5b0896750", 
+        expired_token = ThirdPartyToken(
+            identity_id="f36694db-e45f-4dbc-ba67-7de5b0896750",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -98,27 +101,24 @@ class TestTokenRefreshService:
         await dao.upsert_token(expired_token)
 
         # Mock refresh to fail twice then succeed
-        with patch('app.integrations.spotify.client.SpotifyClient._refresh_access_token',
-                   new_callable=AsyncMock) as mock_refresh:
+        with patch(
+            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+            new_callable=AsyncMock,
+        ) as mock_refresh:
             mock_refresh.side_effect = [
                 Exception("Network error"),
                 Exception("Server error"),
-                {
-                    'access_token': 'final_token_999',
-                    'expires_at': now + 3600
-                }
+                {"access_token": "final_token_999", "expires_at": now + 3600},
             ]
 
             # Try to get valid token
             result = await refresh_service.get_valid_token_with_refresh(
-                user_id="test_user",
-                provider="spotify",
-                force_refresh=False
+                user_id="test_user", provider="spotify", force_refresh=False
             )
 
             # Should eventually succeed
             assert result is not None
-            assert result.access_token == 'final_token_999'
+            assert result.access_token == "final_token_999"
 
             # Should have been called 3 times (initial + 2 retries)
             assert mock_refresh.call_count == 3
@@ -128,7 +128,8 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create expired token
-        expired_token = ThirdPartyToken(identity_id="ba9cfce6-2d9b-49a8-9541-45b37346bcc9", 
+        expired_token = ThirdPartyToken(
+            identity_id="ba9cfce6-2d9b-49a8-9541-45b37346bcc9",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -144,15 +145,15 @@ class TestTokenRefreshService:
         await dao.upsert_token(expired_token)
 
         # Mock refresh to always fail
-        with patch('app.integrations.spotify.client.SpotifyClient._refresh_access_token',
-                   new_callable=AsyncMock) as mock_refresh:
+        with patch(
+            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+            new_callable=AsyncMock,
+        ) as mock_refresh:
             mock_refresh.side_effect = Exception("Persistent failure")
 
             # Try to get valid token
             result = await refresh_service.get_valid_token_with_refresh(
-                user_id="test_user",
-                provider="spotify",
-                force_refresh=False
+                user_id="test_user", provider="spotify", force_refresh=False
             )
 
             # Should return None after exhausting retries
@@ -166,7 +167,8 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create expired token
-        expired_token = ThirdPartyToken(identity_id="5ce21d91-41a1-4c27-8517-eab108392ea0", 
+        expired_token = ThirdPartyToken(
+            identity_id="5ce21d91-41a1-4c27-8517-eab108392ea0",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -188,21 +190,18 @@ class TestTokenRefreshService:
             nonlocal refresh_called
             refresh_called += 1
             await asyncio.sleep(0.1)  # Simulate network delay
-            return {
-                'access_token': f'token_{refresh_called}',
-                'expires_at': now + 3600
-            }
+            return {"access_token": f"token_{refresh_called}", "expires_at": now + 3600}
 
-        with patch('app.integrations.spotify.client.SpotifyClient._refresh_access_token',
-                   side_effect=slow_refresh):
+        with patch(
+            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+            side_effect=slow_refresh,
+        ):
 
             # Start multiple concurrent refresh attempts
             tasks = []
             for i in range(5):
                 task = refresh_service.get_valid_token_with_refresh(
-                    user_id="test_user",
-                    provider="spotify",
-                    force_refresh=False
+                    user_id="test_user", provider="spotify", force_refresh=False
                 )
                 tasks.append(task)
 
@@ -212,7 +211,9 @@ class TestTokenRefreshService:
             # All should get the same result
             for result in results:
                 assert result is not None
-                assert result.access_token == 'token_1'  # Only first refresh should happen
+                assert (
+                    result.access_token == "token_1"
+                )  # Only first refresh should happen
 
             # Refresh should only be called once due to concurrency protection
             assert refresh_called == 1
@@ -222,7 +223,8 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create fresh token (not expired)
-        fresh_token = ThirdPartyToken(identity_id="877720f0-4104-4913-ad4b-c259714a8404", 
+        fresh_token = ThirdPartyToken(
+            identity_id="877720f0-4104-4913-ad4b-c259714a8404",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -237,18 +239,18 @@ class TestTokenRefreshService:
 
         await dao.upsert_token(fresh_token)
 
-        with patch('app.integrations.spotify.client.SpotifyClient._refresh_access_token',
-                   new_callable=AsyncMock) as mock_refresh:
+        with patch(
+            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+            new_callable=AsyncMock,
+        ) as mock_refresh:
             mock_refresh.return_value = {
-                'access_token': 'forced_refresh_token_789',
-                'expires_at': now + 3600
+                "access_token": "forced_refresh_token_789",
+                "expires_at": now + 3600,
             }
 
             # Get token with force_refresh=False (should not refresh)
             result1 = await refresh_service.get_valid_token_with_refresh(
-                user_id="test_user",
-                provider="spotify",
-                force_refresh=False
+                user_id="test_user", provider="spotify", force_refresh=False
             )
 
             # Should get original token
@@ -257,9 +259,7 @@ class TestTokenRefreshService:
 
             # Get token with force_refresh=True (should refresh anyway)
             result2 = await refresh_service.get_valid_token_with_refresh(
-                user_id="test_user",
-                provider="spotify",
-                force_refresh=True
+                user_id="test_user", provider="spotify", force_refresh=True
             )
 
             # Should get refreshed token
@@ -271,7 +271,8 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create expired Google token
-        expired_google = ThirdPartyToken(identity_id="74c7ab61-d396-4ab3-8959-a5c9404bff89", 
+        expired_google = ThirdPartyToken(
+            identity_id="74c7ab61-d396-4ab3-8959-a5c9404bff89",
             user_id="test_user",
             provider="google",
             provider_sub="google_user_123",
@@ -287,21 +288,21 @@ class TestTokenRefreshService:
         await dao.upsert_token(expired_google)
 
         # Mock Google refresh
-        with patch('app.integrations.google.client.GoogleClient._refresh_access_token',
-                   new_callable=AsyncMock) as mock_refresh:
+        with patch(
+            "app.integrations.google.client.GoogleClient._refresh_access_token",
+            new_callable=AsyncMock,
+        ) as mock_refresh:
             mock_refresh.return_value = {
-                'access_token': 'new_google_token_999',
-                'expires_at': now + 3600
+                "access_token": "new_google_token_999",
+                "expires_at": now + 3600,
             }
 
             result = await refresh_service.get_valid_token_with_refresh(
-                user_id="test_user",
-                provider="google",
-                force_refresh=False
+                user_id="test_user", provider="google", force_refresh=False
             )
 
             assert result is not None
-            assert result.access_token == 'new_google_token_999'
+            assert result.access_token == "new_google_token_999"
             assert mock_refresh.called
 
     async def test_no_token_found_handling(self, dao, refresh_service):
@@ -309,9 +310,7 @@ class TestTokenRefreshService:
         # Don't create any tokens
 
         result = await refresh_service.get_valid_token_with_refresh(
-            user_id="nonexistent_user",
-            provider="spotify",
-            force_refresh=False
+            user_id="nonexistent_user", provider="spotify", force_refresh=False
         )
 
         # Should return None gracefully
@@ -322,7 +321,8 @@ class TestTokenRefreshService:
         now = int(time.time())
 
         # Create token with invalid refresh token
-        broken_token = ThirdPartyToken(identity_id="07afcfef-537a-4ca6-8a3d-f25566ad3e7e", 
+        broken_token = ThirdPartyToken(
+            identity_id="07afcfef-537a-4ca6-8a3d-f25566ad3e7e",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -338,14 +338,14 @@ class TestTokenRefreshService:
         await dao.upsert_token(broken_token)
 
         # Mock refresh to fail with invalid token error
-        with patch('app.integrations.spotify.client.SpotifyClient._refresh_access_token',
-                   new_callable=AsyncMock) as mock_refresh:
+        with patch(
+            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+            new_callable=AsyncMock,
+        ) as mock_refresh:
             mock_refresh.side_effect = Exception("Invalid refresh token")
 
             result = await refresh_service.get_valid_token_with_refresh(
-                user_id="test_user",
-                provider="spotify",
-                force_refresh=False
+                user_id="test_user", provider="spotify", force_refresh=False
             )
 
             # Should return None after all retries

@@ -179,39 +179,50 @@ class TestComprehensiveErrors:
 
         # Reset health status and state before test
         import app.llama_integration
+
         app.llama_integration.LLAMA_HEALTHY = True
         # Reset health check state to ensure the check runs
         now = time.monotonic()
-        llama_health_check_state.update({
-            "last_check_ts": now - 100,  # Make it old enough to run
-            "next_check_delay": 1.0,
-            "has_ever_succeeded": False,
-            "consecutive_failures": 0
-        })
+        llama_health_check_state.update(
+            {
+                "last_check_ts": now - 100,  # Make it old enough to run
+                "next_check_delay": 1.0,
+                "has_ever_succeeded": False,
+                "consecutive_failures": 0,
+            }
+        )
 
         # Test when LLaMA is completely unavailable
         with patch("app.llama_integration.json_request") as mock_request:
             mock_request.return_value = (None, "Connection failed")
 
             # Debug: Check initial state
-            print(f"Before health check: LLAMA_HEALTHY = {app.llama_integration.LLAMA_HEALTHY}")
+            print(
+                f"Before health check: LLAMA_HEALTHY = {app.llama_integration.LLAMA_HEALTHY}"
+            )
 
             # This should handle the failure gracefully and set LLAMA_HEALTHY to False
             result = event_loop.run_until_complete(
                 asyncio.wait_for(_check_and_set_flag(), timeout=5.0)
             )
-            print(f"After health check: LLAMA_HEALTHY = {app.llama_integration.LLAMA_HEALTHY}")
+            print(
+                f"After health check: LLAMA_HEALTHY = {app.llama_integration.LLAMA_HEALTHY}"
+            )
             assert result is None  # Function returns None
-            assert app.llama_integration.LLAMA_HEALTHY is False  # Should mark as unhealthy
+            assert (
+                app.llama_integration.LLAMA_HEALTHY is False
+            )  # Should mark as unhealthy
 
         # Reset health status and state for second test
         app.llama_integration.LLAMA_HEALTHY = True
-        llama_health_check_state.update({
-            "last_check_ts": now - 100,
-            "next_check_delay": 1.0,
-            "has_ever_succeeded": False,
-            "consecutive_failures": 0
-        })
+        llama_health_check_state.update(
+            {
+                "last_check_ts": now - 100,
+                "next_check_delay": 1.0,
+                "has_ever_succeeded": False,
+                "consecutive_failures": 0,
+            }
+        )
 
         # Test when LLaMA returns invalid responses
         with patch("app.llama_integration.json_request") as mock_request:
@@ -229,7 +240,9 @@ class TestComprehensiveErrors:
         # Test with invalid API key - should return error response
         with patch.dict(os.environ, {"OPENAI_API_KEY": "invalid-key"}):
             result = event_loop.run_until_complete(
-                asyncio.wait_for(ask_gpt("test prompt", routing_decision=None), timeout=10.0)
+                asyncio.wait_for(
+                    ask_gpt("test prompt", routing_decision=None), timeout=10.0
+                )
             )
             # Should return an error message instead of raising
             assert isinstance(result, str)
@@ -244,7 +257,9 @@ class TestComprehensiveErrors:
             mock_get_client.return_value = mock_client
 
             result = event_loop.run_until_complete(
-                asyncio.wait_for(ask_gpt("test prompt", routing_decision=None), timeout=10.0)
+                asyncio.wait_for(
+                    ask_gpt("test prompt", routing_decision=None), timeout=10.0
+                )
             )
             # Should return an error message instead of raising
             assert isinstance(result, str)
@@ -304,6 +319,7 @@ class TestComprehensiveErrors:
 
         # Test that environment variables are properly mocked
         import os
+
         assert os.environ.get("OPENAI_API_KEY") == "test-key"
         assert os.environ.get("OLLAMA_URL") == "http://localhost:11434"
         assert os.environ.get("JWT_SECRET") == "test-secret-key-for-testing-only"
@@ -315,7 +331,9 @@ class TestComprehensiveErrors:
         # Both should succeed and have different request IDs
         assert response1.status_code == 200
         assert response2.status_code == 200
-        assert response1.headers.get("X-Request-ID") != response2.headers.get("X-Request-ID")
+        assert response1.headers.get("X-Request-ID") != response2.headers.get(
+            "X-Request-ID"
+        )
 
     def test_large_payload_handling(self):
         """Test handling of large payloads."""
@@ -567,7 +585,9 @@ class TestIntegrationFailures:
 
             # Should handle vector store failures gracefully during ask request
             client = TestClient(app)
-            response = client.post("/ask", json={"prompt": "test with vector store failure"})
+            response = client.post(
+                "/ask", json={"prompt": "test with vector store failure"}
+            )
             assert response.status_code in [500, 503]  # Should fail gracefully
 
     def test_configuration_errors(self):

@@ -6,6 +6,7 @@ import requests
 import json
 from urllib.parse import urlparse, parse_qs
 
+
 def test_complete_e2e_spotify_flow():
     """Test the complete end-to-end Spotify OAuth flow."""
     print("🚀 STARTING END-TO-END SPOTIFY OAUTH FLOW TEST")
@@ -16,6 +17,7 @@ def test_complete_e2e_spotify_flow():
 
     # Simulate having a main auth cookie
     from app.cookie_names import GSNH_AT
+
     cookies = {GSNH_AT: "dummy_jwt_token"}
 
     login_response = requests.get(login_url, cookies=cookies)
@@ -24,7 +26,9 @@ def test_complete_e2e_spotify_flow():
     assert login_response.status_code == 200
 
     login_data = login_response.json()
-    auth_url = login_data.get("authorize_url")  # Note: it's "authorize_url", not "auth_url"
+    auth_url = login_data.get(
+        "authorize_url"
+    )  # Note: it's "authorize_url", not "auth_url"
     print(f"Auth URL: {auth_url}")
     assert auth_url
 
@@ -37,7 +41,7 @@ def test_complete_e2e_spotify_flow():
     # Extract the state from auth URL
     parsed_url = urlparse(auth_url)
     query_params = parse_qs(parsed_url.query)
-    state = query_params.get('state', [None])[0]
+    state = query_params.get("state", [None])[0]
     print(f"State: {state}")
     assert state
 
@@ -46,23 +50,30 @@ def test_complete_e2e_spotify_flow():
 
     # Extract the JWT token from the Set-Cookie header
     import re
-    jwt_match = re.search(r'spotify_oauth_jwt=([^;]+)', set_cookie)
+
+    jwt_match = re.search(r"spotify_oauth_jwt=([^;]+)", set_cookie)
     jwt_token = jwt_match.group(1) if jwt_match else "dummy_jwt_token"
     print(f"JWT token: {jwt_token[:20]}...")
 
     callback_cookies = {"spotify_oauth_jwt": jwt_token}
     callback_url = f"http://localhost:8000/v1/spotify/callback?code=simulated_auth_code&state={state}"
 
-    callback_response = requests.get(callback_url, cookies=callback_cookies, follow_redirects=False)
+    callback_response = requests.get(
+        callback_url, cookies=callback_cookies, follow_redirects=False
+    )
 
     print(f"Callback status: {callback_response.status_code}")
-    assert callback_response.status_code == 302, f"Expected 302, got {callback_response.status_code}"
+    assert (
+        callback_response.status_code == 302
+    ), f"Expected 302, got {callback_response.status_code}"
 
     # Check redirect location
     location = callback_response.headers.get("Location")
     print(f"Redirect location: {location}")
     assert location
-    assert "settings?spotify=connected" in location, f"Expected success redirect, got: {location}"
+    assert (
+        "settings?spotify=connected" in location
+    ), f"Expected success redirect, got: {location}"
     print("✅ Success redirect detected")
 
     # Check that temporary cookies are being cleared
@@ -80,6 +91,7 @@ def test_complete_e2e_spotify_flow():
     print("✅ Main auth cookie is preserved")
 
     return True
+
 
 if __name__ == "__main__":
     try:

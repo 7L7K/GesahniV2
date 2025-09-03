@@ -1,5 +1,6 @@
 import uuid
 
+
 def test_sessions_crud(client):
     c = client
     sid = uuid.uuid4().hex

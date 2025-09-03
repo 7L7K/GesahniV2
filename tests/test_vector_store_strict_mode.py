@@ -10,7 +10,7 @@ def test_strict_vector_store_enforced(monkeypatch):
     import sys
 
     # Clear modules to force fresh import
-    modules_to_clear = [k for k in sys.modules.keys() if k.startswith('app.memory')]
+    modules_to_clear = [k for k in sys.modules.keys() if k.startswith("app.memory")]
     for mod in modules_to_clear:
         sys.modules.pop(mod, None)
 

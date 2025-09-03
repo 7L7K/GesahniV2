@@ -9,13 +9,14 @@ from fastapi.testclient import TestClient
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stdout
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    stream=sys.stdout,
 )
 logger = logging.getLogger(__name__)
 
 # Import the app
 from app.main import app
+
 
 def test_complete_spotify_oauth_flow():
     """Test the complete Spotify OAuth flow with detailed logging."""
@@ -47,9 +48,10 @@ def test_complete_spotify_oauth_flow():
 
     # Extract state from auth_url for later use
     from urllib.parse import urlparse, parse_qs
+
     parsed_url = urlparse(auth_url)
     query_params = parse_qs(parsed_url.query)
-    state = query_params.get('state', [None])[0]
+    state = query_params.get("state", [None])[0]
     logger.info(f"Extracted state: {state}")
 
     # Check if temporary cookie was set
@@ -89,6 +91,7 @@ def test_complete_spotify_oauth_flow():
 
     # Check if main auth cookie is still present (use canonical name)
     from app.cookie_names import GSNH_AT
+
     main_cookies = list(client.cookies.keys())
     logger.info(f"Cookies after callback: {main_cookies}")
 
@@ -108,6 +111,7 @@ def test_complete_spotify_oauth_flow():
 
     logger.info("🎉 OAUTH FLOW TEST COMPLETED")
     return True
+
 
 if __name__ == "__main__":
     test_complete_spotify_oauth_flow()

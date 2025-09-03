@@ -6,7 +6,7 @@ import sys
 import os
 
 # Add the app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
 # Set up minimal environment
 os.environ.setdefault("HOME_ASSISTANT_URL", "http://ha")
@@ -15,6 +15,7 @@ os.environ.setdefault("OLLAMA_URL", "http://x")
 os.environ.setdefault("OLLAMA_MODEL", "llama3")
 
 import app.skills.base as base
+
 
 async def test_skills_comprehensive():
     """Test multiple skills that don't require external services."""
@@ -61,6 +62,7 @@ async def test_skills_comprehensive():
         print("✅ MOST SKILLS WORKING - System is functional.")
     else:
         print("⚠️  SOME SKILLS NOT WORKING - May need attention.")
+
 
 if __name__ == "__main__":
     asyncio.run(test_skills_comprehensive())

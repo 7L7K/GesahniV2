@@ -21,10 +21,7 @@ class TestShortPromptFailures:
     def setup_method(self):
         """Set up test client and common test data."""
         self.client = TestClient(app)
-        self.base_payload = {
-            "prompt": "",
-            "stream": False
-        }
+        self.base_payload = {"prompt": "", "stream": False}
 
     def create_mock_request(self):
         """Create a mock request object for testing."""
@@ -35,27 +32,31 @@ class TestShortPromptFailures:
         mock_request.client.host = "127.0.0.1"
         return mock_request
 
-    @pytest.mark.parametrize("short_prompt", [
-        "",  # Empty string
-        " ",  # Single space
-        "?",  # Single question mark
-        "hi",  # Very short greeting
-        "a",  # Single character
-        "\n",  # Just newline
-        "   ",  # Multiple spaces
-        "x",  # Single letter
-        "ok",  # Two letter word
-        "yes",  # Three letter word
-        "no",  # Two letter negative
-    ])
+    @pytest.mark.parametrize(
+        "short_prompt",
+        [
+            "",  # Empty string
+            " ",  # Single space
+            "?",  # Single question mark
+            "hi",  # Very short greeting
+            "a",  # Single character
+            "\n",  # Just newline
+            "   ",  # Multiple spaces
+            "x",  # Single letter
+            "ok",  # Two letter word
+            "yes",  # Three letter word
+            "no",  # Two letter negative
+        ],
+    )
     def test_empty_or_minimal_prompts_rejected(self, short_prompt):
         """Test that empty or very short prompts are properly rejected with 422."""
         payload = self.base_payload.copy()
         payload["prompt"] = short_prompt
 
         # Mock authentication and scope checking since the endpoint requires it
-        with patch("app.deps.user.get_current_user_id", return_value="test_user"), \
-             patch("app.auth_core.require_scope") as mock_scope:
+        with patch(
+            "app.deps.user.get_current_user_id", return_value="test_user"
+        ), patch("app.auth_core.require_scope") as mock_scope:
             # Make the scope check just return without doing anything
             mock_scope.return_value = None
             response = self.client.post("/v1/ask", json=payload)
@@ -68,8 +69,9 @@ class TestShortPromptFailures:
         payload["prompt"] = "   \n\t   "  # Various whitespace characters
 
         # Mock authentication and scope checking since the endpoint requires it
-        with patch("app.deps.user.get_current_user_id", return_value="test_user"), \
-             patch("app.auth_core.require_scope") as mock_scope:
+        with patch(
+            "app.deps.user.get_current_user_id", return_value="test_user"
+        ), patch("app.auth_core.require_scope") as mock_scope:
             # Make the scope check just return without doing anything
             mock_scope.return_value = None
             response = self.client.post("/v1/ask", json=payload)
@@ -83,46 +85,86 @@ class TestShortPromptFailures:
             payload["prompt"] = char
 
             # Mock authentication and scope checking since the endpoint requires it
-            with patch("app.deps.user.get_current_user_id", return_value="test_user"), \
-                 patch("app.auth_core.require_scope") as mock_scope:
+            with patch(
+                "app.deps.user.get_current_user_id", return_value="test_user"
+            ), patch("app.auth_core.require_scope") as mock_scope:
                 # Make the scope check just return without doing anything
                 mock_scope.return_value = None
                 response = self.client.post("/v1/ask", json=payload)
-            assert response.status_code == 422, f"Single char '{char}' should be rejected"
+            assert (
+                response.status_code == 422
+            ), f"Single char '{char}' should be rejected"
             assert "empty_prompt" in response.json().get("detail", "")
 
     def test_very_short_words_rejected(self):
         """Test that very short words are rejected."""
-        short_words = ["a", "an", "I", "is", "at", "on", "in", "it", "hi", "ok", "no", "go", "do"]
+        short_words = [
+            "a",
+            "an",
+            "I",
+            "is",
+            "at",
+            "on",
+            "in",
+            "it",
+            "hi",
+            "ok",
+            "no",
+            "go",
+            "do",
+        ]
 
         for word in short_words:
             payload = self.base_payload.copy()
             payload["prompt"] = word
 
             # Mock authentication and scope checking since the endpoint requires it
-            with patch("app.deps.user.get_current_user_id", return_value="test_user"), \
-                 patch("app.auth_core.require_scope") as mock_scope:
+            with patch(
+                "app.deps.user.get_current_user_id", return_value="test_user"
+            ), patch("app.auth_core.require_scope") as mock_scope:
                 # Make the scope check just return without doing anything
                 mock_scope.return_value = None
                 response = self.client.post("/v1/ask", json=payload)
-            assert response.status_code == 422, f"Very short word '{word}' should be rejected"
+            assert (
+                response.status_code == 422
+            ), f"Very short word '{word}' should be rejected"
             assert "empty_prompt" in response.json().get("detail", "")
 
     def test_prompt_with_only_punctuation_rejected(self):
         """Test that prompts with only punctuation are rejected."""
-        punctuation_prompts = ["?", "!", ".", ",", ";", ":", "-", "_", "+", "=", "*", "&", "%", "$", "#", "@"]
+        punctuation_prompts = [
+            "?",
+            "!",
+            ".",
+            ",",
+            ";",
+            ":",
+            "-",
+            "_",
+            "+",
+            "=",
+            "*",
+            "&",
+            "%",
+            "$",
+            "#",
+            "@",
+        ]
 
         for prompt in punctuation_prompts:
             payload = self.base_payload.copy()
             payload["prompt"] = prompt
 
             # Mock authentication and scope checking since the endpoint requires it
-            with patch("app.deps.user.get_current_user_id", return_value="test_user"), \
-                 patch("app.auth_core.require_scope") as mock_scope:
+            with patch(
+                "app.deps.user.get_current_user_id", return_value="test_user"
+            ), patch("app.auth_core.require_scope") as mock_scope:
                 # Make the scope check just return without doing anything
                 mock_scope.return_value = None
                 response = self.client.post("/v1/ask", json=payload)
-            assert response.status_code == 422, f"Punctuation only prompt '{prompt}' should be rejected"
+            assert (
+                response.status_code == 422
+            ), f"Punctuation only prompt '{prompt}' should be rejected"
 
     def test_req_id_consistency_in_error_responses(self):
         """Test that request IDs are consistently assigned even in error cases."""
@@ -130,8 +172,9 @@ class TestShortPromptFailures:
         payload["prompt"] = "x"  # Very short prompt that will be rejected
 
         # Mock authentication and scope checking since the endpoint requires it
-        with patch("app.deps.user.get_current_user_id", return_value="test_user"), \
-             patch("app.auth_core.require_scope") as mock_scope:
+        with patch(
+            "app.deps.user.get_current_user_id", return_value="test_user"
+        ), patch("app.auth_core.require_scope") as mock_scope:
             # Make the scope check just return without doing anything
             mock_scope.return_value = None
             response = self.client.post("/v1/ask", json=payload)
@@ -166,7 +209,7 @@ class TestShortPromptFailures:
         payload["prompt"] = "test"
 
         # Mock the route_prompt function to raise an exception
-        with patch('app.api.ask.import_module') as mock_import:
+        with patch("app.api.ask.import_module") as mock_import:
             mock_main = AsyncMock()
             mock_import.return_value = mock_main
 
@@ -195,6 +238,7 @@ class TestShortPromptFailures:
         # The function should fail for other reasons but req_id should be available
         try:
             import asyncio
+
             # This will likely fail due to missing body parameter, but req_id should be generated first
             asyncio.run(_ask(mock_request, None))
         except Exception as e:
@@ -217,6 +261,7 @@ class TestShortPromptFailures:
         try:
             # This will likely fail due to missing body, but req_id should be generated first
             import asyncio
+
             asyncio.run(_ask(mock_request, None))
         except Exception:
             pass  # Expected to fail, but req_id should be generated

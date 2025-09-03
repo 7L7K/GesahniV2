@@ -61,7 +61,7 @@ class TestCookiePolicy:
             ttl=600,
             request=mock_request,
             httponly=True,
-            samesite="lax"
+            samesite="lax",
         )
 
         # Check that response has Set-Cookie header
@@ -96,7 +96,7 @@ class TestCookiePolicy:
             ttl=600,
             request=mock_request,
             httponly=True,
-            samesite="lax"
+            samesite="lax",
         )
 
         # Check that response has Set-Cookie header with expected attributes
@@ -223,7 +223,7 @@ class TestStateAndTX:
             "tx": "test_tx_id",
             "uid": "test_user",
             "exp": expired_time,
-            "iat": current_time - 800  # issued before expiration
+            "iat": current_time - 800,  # issued before expiration
         }
 
         with setup_jwt_secret():
@@ -245,7 +245,7 @@ class TestStateAndTX:
         tx_data = {
             "user_id": "different_user",
             "code_verifier": "test_verifier",
-            "ts": int(time.time())
+            "ts": int(time.time()),
         }
         put_tx("test_tx", tx_data, ttl_seconds=600)
 
@@ -265,7 +265,7 @@ class TestStateAndTX:
         tx_data = {
             "user_id": "test_user",
             "code_verifier": "test_verifier",
-            "ts": int(time.time())
+            "ts": int(time.time()),
         }
         put_tx("test_tx", tx_data, ttl_seconds=600)
 
@@ -289,7 +289,7 @@ class TestNoURLLog:
         payload = {
             "tx": "test_tx_id",
             "uid": "test_user",
-            "exp": int(time.time()) + 600
+            "exp": int(time.time()) + 600,
         }
 
         with setup_jwt_secret():
@@ -299,7 +299,9 @@ class TestNoURLLog:
             log_message = f"Processing OAuth callback with state: {state}"
 
             # The state itself should not appear in logs (only metadata like length)
-            assert state not in log_message.replace(f"state: {state}", "state: [JWT_TOKEN]")
+            assert state not in log_message.replace(
+                f"state: {state}", "state: [JWT_TOKEN]"
+            )
 
     def test_authorize_url_not_logged_in_logs(self):
         """Test that full authorize URLs are not logged."""
@@ -321,7 +323,7 @@ class TestNoURLLog:
         tx_data = {
             "user_id": "test_user",
             "code_verifier": "sensitive_code_verifier",
-            "ts": int(time.time())
+            "ts": int(time.time()),
         }
         put_tx("test_tx", tx_data, ttl_seconds=600)
 
@@ -403,10 +405,7 @@ class TestCookieSecurity:
         response = JSONResponse(content={"ok": True})
 
         set_oauth_state_cookies(
-            response,
-            state="test_state",
-            next_url="/redirect",
-            request=mock_request
+            response, state="test_state", next_url="/redirect", request=mock_request
         )
 
         cookie_header = response.headers["Set-Cookie"]
@@ -429,14 +428,14 @@ class TestCookieSecurity:
                 value="sensitive_jwt_value",
                 ttl=600,
                 request=mock_request,
-                httponly=True
+                httponly=True,
             )
 
             # Check that logs don't contain the sensitive JWT value
             for record in caplog.records:
                 message = record.message
                 assert "sensitive_jwt_value" not in message
-                if hasattr(record, 'meta') and isinstance(record.meta, dict):
+                if hasattr(record, "meta") and isinstance(record.meta, dict):
                     for key, value in record.meta.items():
                         assert "sensitive_jwt_value" not in str(value)
 

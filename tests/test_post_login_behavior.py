@@ -10,19 +10,26 @@ import time
 import random
 from typing import Dict, List, Tuple
 
+
 class PostLoginTester:
-    def __init__(self, base_url: str = "http://localhost:8000", frontend_url: str = "http://localhost:3000"):
+    def __init__(
+        self,
+        base_url: str = "http://localhost:8000",
+        frontend_url: str = "http://localhost:3000",
+    ):
         self.base_url = base_url
         self.frontend_url = frontend_url
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+            }
+        )
 
     def simulate_authenticated_session(self) -> bool:
         """Simulate having an authenticated session (like the user who successfully logged in)"""
@@ -48,8 +55,16 @@ class PostLoginTester:
 
         patterns = [
             {"name": "normal_call", "delay": 0, "headers": {}},
-            {"name": "with_cache_buster", "delay": 0, "headers": {"Cache-Control": "no-cache"}},
-            {"name": "with_different_ua", "delay": 0, "headers": {"User-Agent": "Different Browser/1.0"}},
+            {
+                "name": "with_cache_buster",
+                "delay": 0,
+                "headers": {"Cache-Control": "no-cache"},
+            },
+            {
+                "name": "with_different_ua",
+                "delay": 0,
+                "headers": {"User-Agent": "Different Browser/1.0"},
+            },
             {"name": "rapid_calls", "delay": 0.05, "count": 5},
             {"name": "delayed_calls", "delay": 2.0, "count": 3},
         ]
@@ -60,7 +75,9 @@ class PostLoginTester:
             if pattern.get("count"):
                 # Multiple calls
                 for i in range(pattern["count"]):
-                    result = self._make_whoami_call(whoami_url, pattern.get("headers", {}))
+                    result = self._make_whoami_call(
+                        whoami_url, pattern.get("headers", {})
+                    )
                     result["pattern"] = f"{pattern['name']}_{i+1}"
                     results.append(result)
 
@@ -90,18 +107,22 @@ class PostLoginTester:
                 "status_code": response.status_code,
                 "response_time_ms": len(response.content),  # Rough timing proxy
                 "cookies_count": len(self.session.cookies),
-                "has_access_token": any('access_token' in c.name for c in self.session.cookies),
-                "timestamp": time.time()
+                "has_access_token": any(
+                    "access_token" in c.name for c in self.session.cookies
+                ),
+                "timestamp": time.time(),
             }
 
             if response.status_code == 200:
                 data = response.json()
-                result.update({
-                    "is_authenticated": data.get('is_authenticated', False),
-                    "user_id": data.get('user_id'),
-                    "source": data.get('source'),
-                    "session_ready": data.get('session_ready', False)
-                })
+                result.update(
+                    {
+                        "is_authenticated": data.get("is_authenticated", False),
+                        "user_id": data.get("user_id"),
+                        "source": data.get("source"),
+                        "session_ready": data.get("session_ready", False),
+                    }
+                )
             else:
                 result["error"] = response.text[:200]
                 if response.status_code == 401:
@@ -125,7 +146,7 @@ class PostLoginTester:
             "/v1/ha_status",
             "/v1/csrf",
             "/v1/state",  # This one returns 404 in logs
-            "/v1/ask",    # POST endpoint
+            "/v1/ask",  # POST endpoint
         ]
 
         print("🔌 Testing API endpoints...")
@@ -148,7 +169,7 @@ class PostLoginTester:
                     "endpoint": endpoint,
                     "method": method,
                     "status_code": response.status_code,
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
                 }
 
                 if response.status_code == 401:
@@ -162,7 +183,9 @@ class PostLoginTester:
                         print(f"🚨 Confirmed logout after {endpoint}")
 
                 elif response.status_code == 403:
-                    print(f"🚫 403 forbidden on {endpoint} (expected for some endpoints)")
+                    print(
+                        f"🚫 403 forbidden on {endpoint} (expected for some endpoints)"
+                    )
 
                 results.append(result)
 
@@ -170,11 +193,9 @@ class PostLoginTester:
                 time.sleep(0.1)
 
             except Exception as e:
-                results.append({
-                    "endpoint": endpoint,
-                    "error": str(e),
-                    "logout_trigger": False
-                })
+                results.append(
+                    {"endpoint": endpoint, "error": str(e), "logout_trigger": False}
+                )
 
         return results
 
@@ -239,21 +260,23 @@ class PostLoginTester:
             "removed_cookies": list(removed_cookies),
             "whoami_results": whoami_results,
             "cookie_analysis": {
-                "has_csrf_token": any('csrf_token' in name for name in after_names),
-                "has_access_token": any('access_token' in name for name in after_names),
-                "has_refresh_token": any('refresh_token' in name for name in after_names),
-            }
+                "has_csrf_token": any("csrf_token" in name for name in after_names),
+                "has_access_token": any("access_token" in name for name in after_names),
+                "has_refresh_token": any(
+                    "refresh_token" in name for name in after_names
+                ),
+            },
         }
 
     def test_frontend_page_behavior(self) -> List[Dict]:
         """Test frontend pages that might cause logout issues"""
         results = []
         pages = [
-            "/login",      # Should redirect if logged in
+            "/login",  # Should redirect if logged in
             "/settings",
-            "/admin",      # Requires admin scope
+            "/admin",  # Requires admin scope
             "/tv",
-            "/",           # Home page
+            "/",  # Home page
         ]
 
         print("🌐 Testing frontend pages...")
@@ -268,18 +291,20 @@ class PostLoginTester:
                 result = {
                     "page": page,
                     "status_code": response.status_code,
-                    "redirect_location": response.headers.get('Location'),
-                    "timestamp": time.time()
+                    "redirect_location": response.headers.get("Location"),
+                    "timestamp": time.time(),
                 }
 
                 if response.status_code == 302:
-                    redirect_to = response.headers.get('Location', '')
-                    if '/login' in redirect_to:
+                    redirect_to = response.headers.get("Location", "")
+                    if "/login" in redirect_to:
                         print(f"🚨 Redirect to login from {page}")
                         result["logout_redirect"] = True
 
                         # Check if we're actually logged out
-                        whoami_check = self._make_whoami_call(f"{self.base_url}/v1/whoami")
+                        whoami_check = self._make_whoami_call(
+                            f"{self.base_url}/v1/whoami"
+                        )
                         if whoami_check.get("status_code") == 401:
                             result["confirmed_logout"] = True
 
@@ -289,10 +314,7 @@ class PostLoginTester:
                 time.sleep(0.5)
 
             except Exception as e:
-                results.append({
-                    "page": page,
-                    "error": str(e)
-                })
+                results.append({"page": page, "error": str(e)})
 
         return results
 
@@ -346,7 +368,7 @@ class PostLoginTester:
 
         print(f"  Initial cookies: {cookie_analysis['initial_cookies']}")
         print(f"  After cookies: {cookie_analysis['after_cookies']}")
-        if cookie_analysis['cookie_analysis']['has_access_token']:
+        if cookie_analysis["cookie_analysis"]["has_access_token"]:
             print("  ✅ Has access token cookie")
         else:
             print("  ❌ Missing access token cookie")
@@ -370,7 +392,9 @@ class PostLoginTester:
         all_logout_triggers = []
         all_logout_triggers.extend(logout_triggers)
         all_logout_triggers.extend(api_logouts)
-        all_logout_triggers.extend([r for r in page_results if r.get("confirmed_logout")])
+        all_logout_triggers.extend(
+            [r for r in page_results if r.get("confirmed_logout")]
+        )
 
         if all_logout_triggers:
             print(f"🚨 IDENTIFIED {len(all_logout_triggers)} LOGOUT TRIGGERS:")
@@ -378,7 +402,9 @@ class PostLoginTester:
                 if "pattern" in trigger:
                     print(f"  • Whoami pattern: {trigger['pattern']}")
                 elif "endpoint" in trigger:
-                    print(f"  • API endpoint: {trigger['endpoint']} ({trigger['method']})")
+                    print(
+                        f"  • API endpoint: {trigger['endpoint']} ({trigger['method']})"
+                    )
                 elif "page" in trigger:
                     print(f"  • Frontend page: {trigger['page']}")
 
@@ -406,9 +432,11 @@ class PostLoginTester:
         print("   5. Monitor network requests in browser dev tools")
         print("   6. Test with real browser automation")
 
+
 def main():
     tester = PostLoginTester()
     tester.run_comprehensive_test()
+
 
 if __name__ == "__main__":
     main()

@@ -8,8 +8,8 @@ from app.api.music_http import router as music_router
 import os
 
 # Set test environment
-os.environ['TEST_MODE'] = '1'
-os.environ['JWT_OPTIONAL_IN_TESTS'] = '1'
+os.environ["TEST_MODE"] = "1"
+os.environ["JWT_OPTIONAL_IN_TESTS"] = "1"
 
 # Create test app
 app = FastAPI()

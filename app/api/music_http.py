@@ -21,6 +21,7 @@ from app.integrations.spotify.client import SpotifyAuthError, SpotifyClient
 from app.music.orchestrator import MusicOrchestrator
 from app.music.providers.spotify_provider import SpotifyProvider
 from app.models.music_state import MusicVibe, load_state, save_state
+from app.api.music import PROVIDER_SPOTIFY
 from app.deps.scopes import require_scope
 
 

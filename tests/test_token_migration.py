@@ -13,7 +13,8 @@ def create_legacy_db(path: str):
     """Create a legacy third_party_tokens table without the new encrypted columns."""
     with sqlite3.connect(path) as conn:
         cur = conn.cursor()
-        cur.execute("""
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS third_party_tokens (
               id            TEXT PRIMARY KEY,
               user_id       TEXT NOT NULL,
@@ -26,7 +27,8 @@ def create_legacy_db(path: str):
               updated_at    INTEGER NOT NULL,
               is_valid      INTEGER DEFAULT 1
             )
-        """)
+        """
+        )
         conn.commit()
 
 
@@ -37,7 +39,8 @@ async def test_migration_applies_and_upserts(tmp_path):
 
     dao = TokenDAO(db_path=str(db_file))
 
-    token = ThirdPartyToken(identity_id="0cc892cd-1663-405f-a30f-136c720e0846", 
+    token = ThirdPartyToken(
+        identity_id="0cc892cd-1663-405f-a30f-136c720e0846",
         user_id="testuser",
         provider="google",
         access_token="BAAAAAAAAAAAAAAAAA",
@@ -59,9 +62,10 @@ async def test_migration_applies_and_upserts(tmp_path):
         cols = {r[1] for r in cur.fetchall()}
         assert "access_token_enc" in cols
 
-        cur.execute("SELECT user_id, provider, access_token FROM third_party_tokens WHERE user_id = ?", ("testuser",))
+        cur.execute(
+            "SELECT user_id, provider, access_token FROM third_party_tokens WHERE user_id = ?",
+            ("testuser",),
+        )
         row = cur.fetchone()
         assert row is not None
         assert row[0] == "testuser"
-
-

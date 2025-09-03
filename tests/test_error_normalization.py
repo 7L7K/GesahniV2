@@ -16,7 +16,7 @@ from app.http_errors import (
     method_not_allowed,
     payload_too_large,
     validation_error,
-    internal_error
+    internal_error,
 )
 
 
@@ -31,6 +31,7 @@ def test_translate_validation_error():
     """Test ValidationError translation."""
     try:
         from pydantic import BaseModel
+
         class TestModel(BaseModel):
             name: str
 

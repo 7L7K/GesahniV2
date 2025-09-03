@@ -200,7 +200,7 @@ class TestWebSocketIntegration:
         mock_ws = Mock()
         mock_ws.headers = {
             "Authorization": f"Bearer {jwt_token}",
-            "Origin": "http://localhost:3000"
+            "Origin": "http://localhost:3000",
         }
         mock_ws.state = Mock()
         mock_ws.url = Mock()
@@ -213,12 +213,15 @@ class TestWebSocketIntegration:
 
         # Mock the jwt_decode function to return expected payload
         import app.security
+
         original_jwt_decode = app.security.jwt_decode
-        app.security.jwt_decode = Mock(return_value={
-            "sub": "test_user_123",
-            "user_id": "test_user_123",
-            "scopes": ["test:read"]
-        })
+        app.security.jwt_decode = Mock(
+            return_value={
+                "sub": "test_user_123",
+                "user_id": "test_user_123",
+                "scopes": ["test:read"],
+            }
+        )
 
         try:
             await verify_ws(mock_ws)
@@ -287,7 +290,7 @@ class TestWebSocketIntegration:
         mock_ws = Mock()
         mock_ws.headers = {
             "Authorization": f"Bearer {expired_token}",
-            "Origin": "http://localhost:3000"
+            "Origin": "http://localhost:3000",
         }
         mock_ws.state = Mock()
         mock_ws.url = Mock()
@@ -385,7 +388,7 @@ class TestWebSocketIntegration:
             "/v1/ws/transcribe",
             "/v1/ws/music",
             "/v1/ws/care",
-            "/v1/ws/health"
+            "/v1/ws/health",
         ]
 
         methods = ["GET", "POST", "PUT", "PATCH", "DELETE"]
@@ -398,4 +401,7 @@ class TestWebSocketIntegration:
                 assert response.status_code == 400
                 assert "WebSocket endpoint requires WebSocket protocol" in response.text
                 assert response.headers.get("X-WebSocket-Error") == "protocol_required"
-                assert response.headers.get("X-WebSocket-Reason") == "HTTP requests not supported on WebSocket endpoints"
+                assert (
+                    response.headers.get("X-WebSocket-Reason")
+                    == "HTTP requests not supported on WebSocket endpoints"
+                )

@@ -18,9 +18,12 @@ def test_spotify_devices_allows_music_control_scope(monkeypatch):
     async def _fake_get_devices(self):
         return []
 
-    monkeypatch.setattr(sp.SpotifyClient, "get_devices", _fake_get_devices, raising=False)
+    monkeypatch.setattr(
+        sp.SpotifyClient, "get_devices", _fake_get_devices, raising=False
+    )
 
     from app.main import app
+
     client = TestClient(app)
 
     # Mint access token with required scope

@@ -51,6 +51,7 @@ SAMPLE_PROMPTS = {
     "StatusSkill": "what is the system status",
 }
 
+
 async def run_tests():
     print("Verifying registered skills...\n")
     results = []
@@ -66,7 +67,9 @@ async def run_tests():
             ok = resp is not None
             results.append((cls_name, ok, prompt, resp))
             status = "OK" if ok else "NO MATCH"
-            print(f"{cls_name:25s} -> {status} | prompt: '{prompt}' | resp: {repr(resp)})")
+            print(
+                f"{cls_name:25s} -> {status} | prompt: '{prompt}' | resp: {repr(resp)})"
+            )
         except Exception as e:
             results.append((cls_name, False, prompt, f"ERROR: {e}"))
             print(f"{cls_name:25s} -> ERROR | prompt: '{prompt}' | {e}")
@@ -81,6 +84,6 @@ async def run_tests():
         for cls, ok, prompt, resp in failed:
             print(f"    - {cls}: prompt='{prompt}' resp={repr(resp)}")
 
+
 if __name__ == "__main__":
     asyncio.run(run_tests())
-

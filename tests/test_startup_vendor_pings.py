@@ -44,4 +44,3 @@ async def test_unknown_vendor(monkeypatch):
     result = await check_vendor_health_gated("unknown_vendor")
     assert result["status"] == "unknown_vendor"
     assert result["vendor"] == "unknown_vendor"
-

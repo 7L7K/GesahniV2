@@ -9,11 +9,13 @@ def make_app(monkeypatch, **env):
         monkeypatch.setenv(k, str(v))
     # Import after env config
     from app.main import app
+
     return app
 
 
 def mint_token(scopes=None):
     from app.tokens import make_access
+
     claims = {"user_id": "u_test"}
     if scopes is not None:
         claims["scopes"] = scopes
@@ -42,7 +44,10 @@ def test_ask_requires_scope(monkeypatch):
     token = mint_token(scopes=["care:resident"])  # no chat:write
     r = client.post(
         "/v1/ask",
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
         json={"prompt": "hi"},
     )
     assert r.status_code == 403
@@ -87,4 +92,3 @@ def test_ask_with_bearer_and_csrf(monkeypatch):
         cookies={"csrf_token": csrf},
     )
     assert r.status_code == 200
-

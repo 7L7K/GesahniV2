@@ -22,6 +22,7 @@ def _client(monkeypatch):
     # Initialize database tables
     import asyncio
     from app.db import init_db_once
+
     asyncio.run(init_db_once())
 
     sys.modules.pop("app.auth", None)
@@ -29,7 +30,9 @@ def _client(monkeypatch):
     app = FastAPI()
     app.include_router(auth.router)
     client = TestClient(app)
-    client.post("/register", json={"username": "test_user_123", "password": "test_password_123"})
+    client.post(
+        "/register", json={"username": "test_user_123", "password": "test_password_123"}
+    )
     return client
 
 
@@ -42,7 +45,9 @@ def test_login_success(monkeypatch):
 
     client.app.dependency_overrides[get_current_user_id] = fake_user_id
 
-    resp = client.post("/login", json={"username": "test_user_123", "password": "test_password_123"})
+    resp = client.post(
+        "/login", json={"username": "test_user_123", "password": "test_password_123"}
+    )
     assert resp.status_code == 200
     data = resp.json()
 
@@ -60,7 +65,9 @@ def test_login_success(monkeypatch):
 
 def test_login_bad_credentials(monkeypatch):
     client = _client(monkeypatch)
-    resp = client.post("/login", json={"username": "test_user_123", "password": "wrong"})
+    resp = client.post(
+        "/login", json={"username": "test_user_123", "password": "wrong"}
+    )
     assert resp.status_code == 401
 
 
@@ -69,7 +76,9 @@ def test_login_is_public_endpoint(monkeypatch):
     client = _client(monkeypatch)
 
     # Login should work without any authentication
-    resp = client.post("/login", json={"username": "test_user_123", "password": "test_password_123"})
+    resp = client.post(
+        "/login", json={"username": "test_user_123", "password": "test_password_123"}
+    )
     assert resp.status_code == 200
     data = resp.json()
 
@@ -91,7 +100,9 @@ def test_login_is_public_endpoint(monkeypatch):
 
 def test_refresh_and_logout(monkeypatch):
     client = _client(monkeypatch)
-    resp = client.post("/login", json={"username": "test_user_123", "password": "test_password_123"})
+    resp = client.post(
+        "/login", json={"username": "test_user_123", "password": "test_password_123"}
+    )
     tokens = resp.json()
     refresh = tokens["refresh_token"]
 

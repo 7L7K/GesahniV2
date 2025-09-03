@@ -36,6 +36,7 @@ async def temp_dbs(tmp_path):
 
     # Set up auth database using environment variable override
     import os
+
     os.environ["USERS_DB"] = str(auth_db)
 
     # Ensure auth tables exist
@@ -60,7 +61,12 @@ async def create_test_identity(temp_dbs):
     """Helper fixture to create a test identity."""
     dao, auth_db = temp_dbs
 
-    async def _create_identity(user_id: str, provider: str = "spotify", provider_sub: str = None, provider_iss: str = None):
+    async def _create_identity(
+        user_id: str,
+        provider: str = "spotify",
+        provider_sub: str = None,
+        provider_iss: str = None,
+    ):
         identity_id = str(uuid.uuid4())
 
         # Create identity in auth database
@@ -70,7 +76,12 @@ async def create_test_identity(temp_dbs):
             provider=provider,
             provider_sub=provider_sub or f"{provider}_sub_{uuid.uuid4().hex[:8]}",
             email_normalized=f"user_{uuid.uuid4().hex[:8]}@example.com",
-            provider_iss=provider_iss or ("https://accounts.spotify.com" if provider == "spotify" else "https://accounts.google.com")
+            provider_iss=provider_iss
+            or (
+                "https://accounts.spotify.com"
+                if provider == "spotify"
+                else "https://accounts.google.com"
+            ),
         )
 
         return identity_id
@@ -95,13 +106,15 @@ async def test_upsert_happy_path(temp_dbs, create_test_identity):
         provider_iss="https://accounts.spotify.com",
         provider_sub="spotify_sub_123",
         identity_id=identity_id,
-        access_token="BAAAAAAAAAAAAAAAAA" + "A" * 17,  # Valid format: starts with B, length = 18
-        refresh_token="ABBBBBBBBBBBBBBBBB" + "B" * 17,  # Valid format: starts with A, length = 18
+        access_token="BAAAAAAAAAAAAAAAAA"
+        + "A" * 17,  # Valid format: starts with B, length = 18
+        refresh_token="ABBBBBBBBBBBBBBBBB"
+        + "B" * 17,  # Valid format: starts with A, length = 18
         scopes="user-read-email,user-read-private",
         expires_at=now + 3600,  # 1 hour from now
         created_at=now,
         updated_at=now,
-        is_valid=True
+        is_valid=True,
     )
 
     # Perform upsert
@@ -148,7 +161,7 @@ async def test_upsert_conflict_update(temp_dbs, create_test_identity):
         expires_at=now + 3600,
         created_at=now,
         updated_at=now,
-        is_valid=True
+        is_valid=True,
     )
 
     # Insert initial token
@@ -176,7 +189,7 @@ async def test_upsert_conflict_update(temp_dbs, create_test_identity):
         expires_at=now + 7200,  # Different expiry (2 hours)
         created_at=now,
         updated_at=now,
-        is_valid=True
+        is_valid=True,
     )
 
     # Upsert updated token (should update existing row, not create new)
@@ -194,7 +207,9 @@ async def test_upsert_conflict_update(temp_dbs, create_test_identity):
     assert final_retrieved.identity_id == identity_id
     assert final_retrieved.access_token == updated_token.access_token
     assert final_retrieved.refresh_token == updated_token.refresh_token
-    assert final_retrieved.scopes == "user-read-email user-read-private"  # Union of scopes
+    assert (
+        final_retrieved.scopes == "user-read-email user-read-private"
+    )  # Union of scopes
     assert final_retrieved.expires_at == updated_token.expires_at
     # updated_at might be returned as string or int, so compare appropriately
     if isinstance(final_retrieved.updated_at, str):
@@ -227,7 +242,7 @@ async def test_fk_violation(temp_dbs):
         expires_at=now + 3600,
         created_at=now,
         updated_at=now,
-        is_valid=True
+        is_valid=True,
     )
 
     # Contract validation should catch this and reject the token
@@ -252,8 +267,10 @@ async def test_notnull_violation(temp_dbs, create_test_identity):
     now = int(time.time())
 
     # Constructor validation should catch this
-    with pytest.raises(ValueError, match="user_id, provider, and access_token are required"):
-        ThirdPartyToken( 
+    with pytest.raises(
+        ValueError, match="user_id, provider, and access_token are required"
+    ):
+        ThirdPartyToken(
             user_id=user_id,
             provider="spotify",
             provider_iss="https://accounts.spotify.com",
@@ -265,7 +282,7 @@ async def test_notnull_violation(temp_dbs, create_test_identity):
             expires_at=now + 3600,
             created_at=now,
             updated_at=now,
-            is_valid=True
+            is_valid=True,
         )
 
     # Verify no token was created (since constructor failed)
@@ -284,9 +301,11 @@ async def test_concurrent_upserts(temp_dbs, create_test_identity):
 
     now = int(time.time())
 
-    async def upsert_coroutine(token_id: str, access_token_suffix: str, expires_offset: int):
+    async def upsert_coroutine(
+        token_id: str, access_token_suffix: str, expires_offset: int
+    ):
         """Coroutine that performs an upsert with specific parameters."""
-        token = ThirdPartyToken( 
+        token = ThirdPartyToken(
             id=token_id,
             user_id=user_id,
             provider="spotify",
@@ -299,7 +318,7 @@ async def test_concurrent_upserts(temp_dbs, create_test_identity):
             expires_at=now + expires_offset,
             created_at=now,
             updated_at=now,
-            is_valid=True
+            is_valid=True,
         )
         return await dao.upsert_token(token)
 
@@ -348,26 +367,27 @@ async def test_spotify_contract_validation_integration(temp_dbs, create_test_ide
         expires_at=now + 3600,  # Future expiry
         created_at=now,
         updated_at=now,
-        is_valid=True
+        is_valid=True,
     )
 
     result = await dao.upsert_token(valid_token)
     assert result is True
 
     # Test 2: Invalid Spotify token should fail contract validation
-    invalid_token = ThirdPartyToken( 
+    invalid_token = ThirdPartyToken(
         user_id=user_id,
         provider="spotify",
         provider_iss="https://accounts.spotify.com",
         provider_sub="spotify_sub_123",
         identity_id=identity_id,
-        access_token="BAAAAAAAAAAAAAAAAA" + "A" * 17,  # Invalid format (should start with B)
+        access_token="BAAAAAAAAAAAAAAAAA"
+        + "A" * 17,  # Invalid format (should start with B)
         refresh_token="A" + "B" * 17,
         scopes="user-read-email",
         expires_at=now + 3600,
         created_at=now,
         updated_at=now,
-        is_valid=True
+        is_valid=True,
     )
 
     result = await dao.upsert_token(invalid_token)

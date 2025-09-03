@@ -44,9 +44,13 @@ def test_register_invalid_username(monkeypatch):
 
 def test_register_duplicate_username(monkeypatch):
     _auth, client = _make_auth_app(monkeypatch)
-    r1 = client.post("/register", json={"username": "test_user_123", "password": "test_password_123"})
+    r1 = client.post(
+        "/register", json={"username": "test_user_123", "password": "test_password_123"}
+    )
     assert r1.status_code == 200
-    r2 = client.post("/register", json={"username": "test_user_123", "password": "test_password_123"})
+    r2 = client.post(
+        "/register", json={"username": "test_user_123", "password": "test_password_123"}
+    )
     assert r2.status_code == 400
     assert r2.json()["detail"] == "username_taken"
 

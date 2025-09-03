@@ -6,6 +6,7 @@ import requests
 import json
 from urllib.parse import urlparse, parse_qs
 
+
 def test_spotify_flow_with_mocking():
     """Test the complete Spotify OAuth flow with mocking."""
     print("🚀 STARTING SPOTIFY OAUTH FLOW WITH MOCKING")
@@ -20,10 +21,14 @@ def test_spotify_flow_with_mocking():
 
     # Mock JWT decode
     original_jwt_decode = spotify_mod._jwt_decode
-    spotify_mod._jwt_decode = lambda token, key, algorithms=None: {"sub": "test_user_123", "sid": "test_session_456"}
+    spotify_mod._jwt_decode = lambda token, key, algorithms=None: {
+        "sub": "test_user_123",
+        "sid": "test_session_456",
+    }
 
     # Mock token exchange
     original_exchange_code = spotify_mod.exchange_code
+
     async def mock_exchange_code(code, code_verifier):
         return {
             "access_token": "mock_access_token",
@@ -32,19 +37,30 @@ def test_spotify_flow_with_mocking():
             "expires_in": 3600,
             "expires_at": int(time.time()) + 3600,
         }
+
     spotify_mod.exchange_code = mock_exchange_code
 
     # Mock token persistence
     original_upsert_token = spotify_mod.upsert_token
+
     async def mock_upsert_token(token):
         return None
+
     spotify_mod.upsert_token = mock_upsert_token
 
     # Mock PKCE lookup
     original_get_pkce = spotify_mod.get_pkce_challenge_by_state
+
     def mock_get_pkce(sid, state):
         from app.api.spotify import SpotifyPKCE
-        return SpotifyPKCE(verifier="mock_verifier", challenge="mock_challenge", state=state, created_at=time.time())
+
+        return SpotifyPKCE(
+            verifier="mock_verifier",
+            challenge="mock_challenge",
+            state=state,
+            created_at=time.time(),
+        )
+
     spotify_mod.get_pkce_challenge_by_state = mock_get_pkce
 
     try:
@@ -52,6 +68,7 @@ def test_spotify_flow_with_mocking():
         print("\nStep 1: Calling /v1/spotify/login...")
         login_url = "http://localhost:8000/v1/spotify/login?user_id=test_user"
         from app.cookie_names import GSNH_AT
+
         cookies = {GSNH_AT: "dummy_jwt_token"}
 
         login_response = requests.get(login_url, cookies=cookies)
@@ -72,7 +89,7 @@ def test_spotify_flow_with_mocking():
         # Extract state
         parsed_url = urlparse(auth_url)
         query_params = parse_qs(parsed_url.query)
-        state = query_params.get('state', [None])[0]
+        state = query_params.get("state", [None])[0]
         print(f"State: {state}")
         assert state
 
@@ -82,21 +99,29 @@ def test_spotify_flow_with_mocking():
         callback_cookies = {"spotify_oauth_jwt": "dummy_jwt_token"}
         callback_url = f"http://localhost:8000/v1/spotify/callback?code=mock_auth_code&state={state}"
 
-        callback_response = requests.get(callback_url, cookies=callback_cookies, follow_redirects=False)
+        callback_response = requests.get(
+            callback_url, cookies=callback_cookies, follow_redirects=False
+        )
         print(f"Callback status: {callback_response.status_code}")
-        assert callback_response.status_code == 302, f"Expected 302, got {callback_response.status_code}"
+        assert (
+            callback_response.status_code == 302
+        ), f"Expected 302, got {callback_response.status_code}"
 
         # Check redirect location
         location = callback_response.headers.get("Location")
         print(f"Redirect location: {location}")
         assert location
-        assert "settings?spotify=connected" in location, f"Expected success redirect, got: {location}"
+        assert (
+            "settings?spotify=connected" in location
+        ), f"Expected success redirect, got: {location}"
         print("✅ Success redirect detected")
 
         # Check temporary cookies are cleared
         callback_set_cookie = callback_response.headers.get("Set-Cookie", "")
         print(f"Callback Set-Cookie: {callback_set_cookie}")
-        assert "spotify_oauth_jwt=;" in callback_set_cookie, "Temporary cookie not cleared"
+        assert (
+            "spotify_oauth_jwt=;" in callback_set_cookie
+        ), "Temporary cookie not cleared"
         print("✅ Temporary cookie cleared successfully")
 
         print("\n🎉 SPOTIFY OAUTH FLOW WITH MOCKING PASSED!")
@@ -118,6 +143,7 @@ def test_spotify_flow_with_mocking():
         spotify_mod.exchange_code = original_exchange_code
         spotify_mod.upsert_token = original_upsert_token
         spotify_mod.get_pkce_challenge_by_state = original_get_pkce
+
 
 if __name__ == "__main__":
     try:

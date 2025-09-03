@@ -44,5 +44,3 @@ def test_spotify_callback_shape(client: TestClient, monkeypatch):
     # Simulate callback without required params -> should return 400
     r = client.get("/v1/spotify/callback")
     assert r.status_code == 400
-
-

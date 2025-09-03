@@ -12,6 +12,7 @@ ALERTING THRESHOLDS:
 
 import hashlib
 import hmac
+import inspect
 import logging
 import os
 import random
@@ -701,6 +702,12 @@ async def google_callback(request: Request) -> Response:
     # After identity resolution, ensure handoff invariant: if an authenticated
     # cookie user exists and does not match the callback's canonical user, log
     # a security event and force session rotation.
+
+    # Initialize variables for early logging
+    uid = None
+    provider_sub = None
+    provider_iss = None
+
     try:
         from ..deps.user import get_current_user_id
 
@@ -1397,7 +1404,7 @@ async def google_callback(request: Request) -> Response:
             )
 
             # Emit a warning if attributes look unsafe for localhost development
-            if _get_scheme(request) != "https":
+            if cookie_cfg._get_scheme(request) != "https":
                 if bool(resolved_ccfg.get("secure")):
                     logger.warning(
                         "Cookie Secure=True on non-HTTPS request; overriding for dev may be required",

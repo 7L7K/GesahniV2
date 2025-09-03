@@ -10,6 +10,7 @@ import pytest
 # Import the app
 from app.main import app
 
+
 def test_complete_spotify_oauth_flow_with_mocking(monkeypatch):
     """Test the complete Spotify OAuth flow with proper mocking."""
     logger = logging.getLogger(__name__)
@@ -51,7 +52,13 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch):
     def mock_get_pkce_challenge_by_state(sid, state):
         logger.info(f"Mock: PKCE lookup for sid={sid}, state={state}")
         from app.api.spotify import SpotifyPKCE
-        return SpotifyPKCE(verifier="mock_verifier", challenge="mock_challenge", state=state, created_at=time.time())
+
+        return SpotifyPKCE(
+            verifier="mock_verifier",
+            challenge="mock_challenge",
+            state=state,
+            created_at=time.time(),
+        )
 
     # Apply all mocks
     logger.info("Applying mocks...")
@@ -63,7 +70,9 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch):
     monkeypatch.setattr(spotify_mod, "_jwt_secret", mock_jwt_secret)
     monkeypatch.setattr(spotify_mod, "exchange_code", mock_exchange_code)
     monkeypatch.setattr(spotify_mod, "upsert_token", mock_upsert_token)
-    monkeypatch.setattr(spotify_mod, "get_pkce_challenge_by_state", mock_get_pkce_challenge_by_state)
+    monkeypatch.setattr(
+        spotify_mod, "get_pkce_challenge_by_state", mock_get_pkce_challenge_by_state
+    )
 
     # Step 1: Call /v1/spotify/connect
     logger.info("Step 1: Calling /v1/spotify/connect endpoint...")
@@ -82,9 +91,10 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch):
 
     # Extract state from auth_url for later use
     from urllib.parse import urlparse, parse_qs
+
     parsed_url = urlparse(auth_url)
     query_params = parse_qs(parsed_url.query)
-    state = query_params.get('state', [None])[0]
+    state = query_params.get("state", [None])[0]
     logger.info(f"Extracted state: {state}")
 
     # Check if temporary cookie was set
@@ -123,6 +133,7 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch):
 
     # Check cookies
     from app.cookie_names import GSNH_AT
+
     final_cookies = list(client.cookies.keys())
     logger.info(f"Final cookies: {final_cookies}")
 
@@ -143,10 +154,11 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch):
     logger.info("🎉 OAUTH FLOW TEST COMPLETED SUCCESSFULLY")
     return True
 
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        stream=sys.stdout
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        stream=sys.stdout,
     )
     test_complete_spotify_oauth_flow_with_mocking(None)

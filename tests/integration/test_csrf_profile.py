@@ -20,19 +20,19 @@ def test_profile_mutation_requires_csrf(monkeypatch):
     lr = client.post(
         "/v1/login",
         json={"username": "king", "password": "secret123"},
-        headers={"X-CSRF-Token": token}
+        headers={"X-CSRF-Token": token},
     )
     if lr.status_code in (HTTPStatus.BAD_REQUEST, HTTPStatus.UNAUTHORIZED):
         # Try registering with CSRF token
         client.post(
             "/v1/register",
             json={"username": "king", "password": "secret123"},
-            headers={"X-CSRF-Token": token}
+            headers={"X-CSRF-Token": token},
         )
         lr = client.post(
             "/v1/login",
             json={"username": "king", "password": "secret123"},
-            headers={"X-CSRF-Token": token}
+            headers={"X-CSRF-Token": token},
         )
     assert lr.status_code in (HTTPStatus.OK, HTTPStatus.FOUND)
 

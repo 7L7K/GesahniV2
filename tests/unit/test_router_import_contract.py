@@ -4,10 +4,12 @@ This test verifies that the router package can be imported cleanly without pulli
 in heavy dependencies, and that the basic contract (protocol, registry, entrypoint)
 works as expected.
 """
+
 import asyncio
 import pytest
 from typing import Any
 from unittest.mock import AsyncMock
+
 
 # Test that we can import router components without circular imports
 def test_router_contracts_import():
@@ -15,10 +17,10 @@ def test_router_contracts_import():
     from app.router.contracts import Router
 
     # Should be a Protocol
-    assert hasattr(Router, '__protocol_attrs__') or hasattr(Router, '__annotations__')
+    assert hasattr(Router, "__protocol_attrs__") or hasattr(Router, "__annotations__")
 
     # Should have the route_prompt method signature
-    assert hasattr(Router, 'route_prompt')
+    assert hasattr(Router, "route_prompt")
 
     # Should be callable (protocol with async method)
     # The exact signature check would be more complex, but we verify the method exists
@@ -70,6 +72,7 @@ async def test_router_entrypoint_without_router():
 
     # Reset the global router state
     import app.router.registry
+
     app.router.registry._router = None
 
     from app.router.entrypoint import route_prompt
@@ -112,10 +115,10 @@ def test_router_init_empty():
 
     # Should not have Router, set_router, get_router, route_prompt if __init__.py is empty
     # (unless they're imported there, which would violate the "leave empty" requirement)
-    assert 'Router' not in router_attrs
-    assert 'set_router' not in router_attrs
-    assert 'get_router' not in router_attrs
-    assert 'route_prompt' not in router_attrs
+    assert "Router" not in router_attrs
+    assert "set_router" not in router_attrs
+    assert "get_router" not in router_attrs
+    assert "route_prompt" not in router_attrs
 
 
 def test_no_circular_imports():
@@ -129,10 +132,10 @@ def test_no_circular_imports():
 
     # Clear any existing imports
     modules_to_clear = [
-        'app.router.contracts',
-        'app.router.registry',
-        'app.router.entrypoint',
-        'app.router'
+        "app.router.contracts",
+        "app.router.registry",
+        "app.router.entrypoint",
+        "app.router",
     ]
 
     for module in modules_to_clear:
@@ -141,17 +144,21 @@ def test_no_circular_imports():
 
     # Import contracts first
     from app.router.contracts import Router
+
     assert Router is not None
 
     # Import registry
     from app.router.registry import set_router, get_router
+
     assert set_router is not None
     assert get_router is not None
 
     # Import entrypoint
     from app.router.entrypoint import route_prompt
+
     assert route_prompt is not None
 
     # Import the package itself
     import app.router
+
     assert app.router is not None

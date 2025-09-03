@@ -31,11 +31,8 @@ class TestPATComplete:
 
         # Create test user in auth store
         from app.auth_store import create_user
-        await create_user(
-            id=user_id,
-            email=f"{user_id}@test.com",
-            name="Test User"
-        )
+
+        await create_user(id=user_id, email=f"{user_id}@test.com", name="Test User")
 
         yield user_id
 
@@ -55,7 +52,7 @@ class TestPATComplete:
             user_id=user_id,
             name="Test PAT",
             token_hash=token_hash,
-            scopes=["read", "write"]
+            scopes=["read", "write"],
         )
 
         # Verify we can retrieve it by hash
@@ -115,7 +112,7 @@ class TestPATComplete:
                 user_id=user_id,
                 name=f"Test PAT {i}",
                 token_hash=token_hash,
-                scopes=["read", "write"] if i % 2 == 0 else ["read"]
+                scopes=["read", "write"] if i % 2 == 0 else ["read"],
             )
             pats.append((token, pat_id))
 
@@ -152,7 +149,9 @@ class TestPATComplete:
         assert result is None  # Should be None due to revocation
 
         # Verify revoked_at is set
-        pat_record = await get_pat_by_hash(hashlib.sha256(token.encode("utf-8")).hexdigest())
+        pat_record = await get_pat_by_hash(
+            hashlib.sha256(token.encode("utf-8")).hexdigest()
+        )
         assert pat_record is not None
         assert pat_record["revoked_at"] is not None
 
@@ -170,7 +169,7 @@ class TestPATComplete:
             user_id=user_id,
             name="Complete Test PAT",
             token_hash=token_hash,
-            scopes=["read", "write", "admin"]
+            scopes=["read", "write", "admin"],
         )
 
         # 2. List PATs
@@ -222,7 +221,7 @@ if __name__ == "__main__":
     # Run async tests
     async def run_tests():
         # Mock setup for standalone testing
-        with patch('app.auth_store.ensure_tables', AsyncMock()):
+        with patch("app.auth_store.ensure_tables", AsyncMock()):
             test_instance = TestPATComplete()
 
             # Run tests sequentially

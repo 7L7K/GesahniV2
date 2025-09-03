@@ -27,6 +27,7 @@ class TestCookieConsistency:
     def client(self):
         """Create test client with rate limiting disabled."""
         import os
+
         # Disable rate limiting for this test
         original_rate_limit = os.environ.get("ENABLE_RATE_LIMIT_IN_TESTS", "0")
         os.environ["ENABLE_RATE_LIMIT_IN_TESTS"] = "0"
@@ -45,7 +46,7 @@ class TestCookieConsistency:
         response = client.post(
             "/v1/auth/login?username=testuser",
             headers={"X-CSRF-Token": "test"},
-            cookies={"csrf_token": "test"}
+            cookies={"csrf_token": "test"},
         )
 
         assert response.status_code == 200
@@ -326,7 +327,7 @@ class TestCookieConsistency:
             response = client.post(
                 "/v1/auth/login?username=testuser_dev_mode",
                 headers={"X-CSRF-Token": "test"},
-                cookies={"csrf_token": "test"}
+                cookies={"csrf_token": "test"},
             )
 
             assert response.status_code == 200
@@ -352,7 +353,7 @@ class TestCookieConsistency:
             response = client.post(
                 "/v1/auth/login?username=testuser_prod_mode",
                 headers={"X-CSRF-Token": "test"},
-                cookies={"csrf_token": "test"}
+                cookies={"csrf_token": "test"},
             )
 
             assert response.status_code == 200
@@ -379,7 +380,7 @@ class TestCookieConsistency:
         login_response = client.post(
             "/v1/auth/login?username=testuser_centralized",
             headers={"X-CSRF-Token": "test"},
-            cookies={"csrf_token": "test"}
+            cookies={"csrf_token": "test"},
         )
         assert login_response.status_code == 200
 
@@ -387,7 +388,7 @@ class TestCookieConsistency:
         device_response = client.post(
             "/v1/device/trust",
             headers={"X-CSRF-Token": "test"},
-            cookies={"csrf_token": "test"}
+            cookies={"csrf_token": "test"},
         )
         assert device_response.status_code == 200
 

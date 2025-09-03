@@ -28,10 +28,18 @@ def test_callback_clears_temp_cookie(monkeypatch):
 
     # Prepare PKCE and token exchange stubs so callback proceeds
     def fake_get_pkce(sid, state):
-        return spotify_mod.SpotifyPKCE(verifier="v", challenge="c", state=state, created_at=0)
+        return spotify_mod.SpotifyPKCE(
+            verifier="v", challenge="c", state=state, created_at=0
+        )
 
     async def fake_exchange(code, code_verifier):
-        return {"access_token": "at", "refresh_token": "rt", "scope": "", "expires_in": 3600, "expires_at": int(time.time()) + 3600}
+        return {
+            "access_token": "at",
+            "refresh_token": "rt",
+            "scope": "",
+            "expires_in": 3600,
+            "expires_at": int(time.time()) + 3600,
+        }
 
     async def fake_upsert(t):
         return None
@@ -57,5 +65,3 @@ def test_callback_clears_temp_cookie(monkeypatch):
 
     joined = "\n".join(cookies_set)
     assert "spotify_oauth_jwt" in joined or res.status_code in (302, 200)
-
-

@@ -43,4 +43,3 @@ def test_set_named_cookie_enforces_samesite_none_secure(monkeypatch):
     h = cookie_headers[-1]
     assert "SameSite=None" in h
     assert "Secure" in h
-

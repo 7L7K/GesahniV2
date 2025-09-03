@@ -9,13 +9,16 @@ import json
 import time
 from typing import Dict, List, Tuple
 
+
 class LogoutInvestigator:
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15'
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
+            }
+        )
 
     def login_via_google_oauth_flow(self) -> bool:
         """Simulate the Google OAuth login flow"""
@@ -55,8 +58,8 @@ class LogoutInvestigator:
             response = self.session.get(whoami_url)
             data = response.json()
 
-            is_authenticated = data.get('is_authenticated', False)
-            user_id = data.get('user_id', None)
+            is_authenticated = data.get("is_authenticated", False)
+            user_id = data.get("user_id", None)
 
             print(f"📊 Auth Status: {is_authenticated}, User: {user_id}")
 
@@ -66,7 +69,9 @@ class LogoutInvestigator:
             print(f"❌ Auth check failed: {e}")
             return False, {}
 
-    def test_endpoint(self, endpoint: str, method: str = "GET", data: Dict = None) -> Dict:
+    def test_endpoint(
+        self, endpoint: str, method: str = "GET", data: Dict = None
+    ) -> Dict:
         """Test a specific endpoint and check auth status"""
         url = f"{self.base_url}{endpoint}"
         print(f"🧪 Testing {method} {endpoint}")
@@ -86,16 +91,18 @@ class LogoutInvestigator:
 
             # Get CSRF token if available
             csrf_token = None
-            if 'csrf_token' in response.cookies:
-                csrf_token = response.cookies['csrf_token']
+            if "csrf_token" in response.cookies:
+                csrf_token = response.cookies["csrf_token"]
                 print(f"🍪 CSRF token: {csrf_token[:20]}...")
 
             return {
                 "status_code": response.status_code,
-                "redirect": response.is_redirect if hasattr(response, 'is_redirect') else False,
+                "redirect": (
+                    response.is_redirect if hasattr(response, "is_redirect") else False
+                ),
                 "csrf_token": csrf_token,
-                "location": response.headers.get('Location', None),
-                "cookies": dict(response.cookies)
+                "location": response.headers.get("Location", None),
+                "cookies": dict(response.cookies),
             }
 
         except Exception as e:
@@ -137,20 +144,24 @@ class LogoutInvestigator:
             result = self.test_endpoint(endpoint)
 
             if result.get("status_code") in [401, 403]:
-                logout_triggers.append({
-                    "endpoint": endpoint,
-                    "reason": f"Status {result['status_code']}",
-                    "details": result
-                })
+                logout_triggers.append(
+                    {
+                        "endpoint": endpoint,
+                        "reason": f"Status {result['status_code']}",
+                        "details": result,
+                    }
+                )
 
             # Check auth status after each request
             auth_after, _ = self.test_authentication_status()
             if not auth_after:
-                logout_triggers.append({
-                    "endpoint": endpoint,
-                    "reason": "Lost authentication",
-                    "details": result
-                })
+                logout_triggers.append(
+                    {
+                        "endpoint": endpoint,
+                        "reason": "Lost authentication",
+                        "details": result,
+                    }
+                )
                 print("🚨 LOGOUT DETECTED!")
                 break
 
@@ -170,20 +181,24 @@ class LogoutInvestigator:
             result = self.test_endpoint(endpoint)
 
             if result.get("status_code") in [401]:  # 401 would indicate logout
-                logout_triggers.append({
-                    "endpoint": endpoint,
-                    "reason": f"Unexpected logout on protected endpoint: {result['status_code']}",
-                    "details": result
-                })
+                logout_triggers.append(
+                    {
+                        "endpoint": endpoint,
+                        "reason": f"Unexpected logout on protected endpoint: {result['status_code']}",
+                        "details": result,
+                    }
+                )
 
             # Check auth status after each request
             auth_after, _ = self.test_authentication_status()
             if not auth_after:
-                logout_triggers.append({
-                    "endpoint": endpoint,
-                    "reason": "Lost authentication on protected endpoint",
-                    "details": result
-                })
+                logout_triggers.append(
+                    {
+                        "endpoint": endpoint,
+                        "reason": "Lost authentication on protected endpoint",
+                        "details": result,
+                    }
+                )
                 print("🚨 LOGOUT DETECTED!")
                 break
 
@@ -201,22 +216,26 @@ class LogoutInvestigator:
             result = self.test_endpoint(endpoint, "POST", data)
 
             if result.get("status_code") in [401, 403]:
-                logout_triggers.append({
-                    "endpoint": endpoint,
-                    "method": "POST",
-                    "reason": f"Status {result['status_code']}",
-                    "details": result
-                })
+                logout_triggers.append(
+                    {
+                        "endpoint": endpoint,
+                        "method": "POST",
+                        "reason": f"Status {result['status_code']}",
+                        "details": result,
+                    }
+                )
 
             # Check auth status after each request
             auth_after, _ = self.test_authentication_status()
             if not auth_after:
-                logout_triggers.append({
-                    "endpoint": endpoint,
-                    "method": "POST",
-                    "reason": "Lost authentication",
-                    "details": result
-                })
+                logout_triggers.append(
+                    {
+                        "endpoint": endpoint,
+                        "method": "POST",
+                        "reason": "Lost authentication",
+                        "details": result,
+                    }
+                )
                 print("🚨 LOGOUT DETECTED!")
                 break
 
@@ -233,11 +252,13 @@ class LogoutInvestigator:
 
                 auth_after, _ = self.test_authentication_status()
                 if not auth_after:
-                    logout_triggers.append({
-                        "endpoint": endpoint,
-                        "reason": f"Lost authentication on rapid request {i+1}",
-                        "details": result
-                    })
+                    logout_triggers.append(
+                        {
+                            "endpoint": endpoint,
+                            "reason": f"Lost authentication on rapid request {i+1}",
+                            "details": result,
+                        }
+                    )
                     print("🚨 LOGOUT DETECTED!")
                     break
             else:
@@ -250,15 +271,19 @@ class LogoutInvestigator:
         original_headers = self.session.headers.copy()
 
         # Test without User-Agent
-        self.session.headers = {k: v for k, v in original_headers.items() if k != 'User-Agent'}
+        self.session.headers = {
+            k: v for k, v in original_headers.items() if k != "User-Agent"
+        }
         result = self.test_endpoint("/v1/whoami")
         auth_after, _ = self.test_authentication_status()
         if not auth_after:
-            logout_triggers.append({
-                "endpoint": "/v1/whoami",
-                "reason": "Lost authentication without User-Agent",
-                "details": result
-            })
+            logout_triggers.append(
+                {
+                    "endpoint": "/v1/whoami",
+                    "reason": "Lost authentication without User-Agent",
+                    "details": result,
+                }
+            )
 
         # Restore headers
         self.session.headers = original_headers
@@ -282,9 +307,11 @@ class LogoutInvestigator:
         print("   - Verify cookie refresh mechanism")
         print("   - Test with actual browser automation")
 
+
 def main():
     investigator = LogoutInvestigator()
     investigator.run_comprehensive_test()
+
 
 if __name__ == "__main__":
     main()

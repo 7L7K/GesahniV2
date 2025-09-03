@@ -1,6 +1,7 @@
 """
 Tests for comprehensive error handling and recovery in token system
 """
+
 import time
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
@@ -37,7 +38,8 @@ class TestTokenErrorHandling:
         now = int(time.time())
 
         # Create a token
-        token = ThirdPartyToken(identity_id="06743cc4-b49a-481a-861f-8cf9e5fe1b95", 
+        token = ThirdPartyToken(
+            identity_id="06743cc4-b49a-481a-861f-8cf9e5fe1b95",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -55,7 +57,9 @@ class TestTokenErrorHandling:
         assert stored
 
         # Mock database failure
-        with patch.object(dao, 'get_token', side_effect=Exception("Database connection lost")):
+        with patch.object(
+            dao, "get_token", side_effect=Exception("Database connection lost")
+        ):
             # Operation should handle the error gracefully
             result = await dao.get_token("test_user", "spotify")
 
@@ -66,7 +70,8 @@ class TestTokenErrorHandling:
         """Test handling of network timeouts during token refresh"""
         now = int(time.time())
 
-        expired_token = ThirdPartyToken(identity_id="998fffcd-fbb1-45d5-93a7-bebf0cf0be50", 
+        expired_token = ThirdPartyToken(
+            identity_id="998fffcd-fbb1-45d5-93a7-bebf0cf0be50",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -82,14 +87,14 @@ class TestTokenErrorHandling:
         await dao.upsert_token(expired_token)
 
         # Mock network timeout
-        with patch('app.integrations.spotify.client.SpotifyClient._refresh_access_token',
-                   new_callable=AsyncMock) as mock_refresh:
+        with patch(
+            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+            new_callable=AsyncMock,
+        ) as mock_refresh:
             mock_refresh.side_effect = Exception("Network timeout")
 
             result = await refresh_service.get_valid_token_with_refresh(
-                user_id="test_user",
-                provider="spotify",
-                force_refresh=False
+                user_id="test_user", provider="spotify", force_refresh=False
             )
 
             # Should return None after exhausting retries
@@ -100,7 +105,8 @@ class TestTokenErrorHandling:
         """Test handling of malformed API responses"""
         now = int(time.time())
 
-        expired_token = ThirdPartyToken(identity_id="99c379e6-d31e-4078-b1c6-521c708b674e", 
+        expired_token = ThirdPartyToken(
+            identity_id="99c379e6-d31e-4078-b1c6-521c708b674e",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -118,21 +124,21 @@ class TestTokenErrorHandling:
         # Mock malformed responses
         malformed_responses = [
             None,  # Null response
-            {},    # Empty response
+            {},  # Empty response
             {"access_token": None},  # Missing required fields
-            {"access_token": ""},    # Empty token
+            {"access_token": ""},  # Empty token
             "not_a_dict",  # Wrong type
         ]
 
         for malformed_response in malformed_responses:
-            with patch('app.integrations.spotify.client.SpotifyClient._refresh_access_token',
-                       new_callable=AsyncMock) as mock_refresh:
+            with patch(
+                "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+                new_callable=AsyncMock,
+            ) as mock_refresh:
                 mock_refresh.return_value = malformed_response
 
                 result = await refresh_service.get_valid_token_with_refresh(
-                    user_id="test_user",
-                    provider="spotify",
-                    force_refresh=True
+                    user_id="test_user", provider="spotify", force_refresh=True
                 )
 
                 # Should handle gracefully
@@ -146,7 +152,8 @@ class TestTokenErrorHandling:
 
         async def concurrent_update(user_id, token_value):
             """Simulate concurrent token updates"""
-            token = ThirdPartyToken(identity_id="812c39ba-842d-4147-9dbf-8d11ab024dcb", 
+            token = ThirdPartyToken(
+                identity_id="812c39ba-842d-4147-9dbf-8d11ab024dcb",
                 user_id=user_id,
                 provider="spotify",
                 provider_sub=f"{user_id}_sub",
@@ -164,10 +171,7 @@ class TestTokenErrorHandling:
             return await dao.upsert_token(token)
 
         # Launch multiple concurrent updates
-        tasks = [
-            concurrent_update("test_user", i)
-            for i in range(10)
-        ]
+        tasks = [concurrent_update("test_user", i) for i in range(10)]
 
         results = await asyncio.gather(*tasks)
 
@@ -186,7 +190,8 @@ class TestTokenErrorHandling:
 
         original_token = "original_secret_token"
 
-        token = ThirdPartyToken( identity_id="ec12fb5b-1be9-4ccb-9281-e44f50a8207a", 
+        token = ThirdPartyToken(
+            identity_id="ec12fb5b-1be9-4ccb-9281-e44f50a8207a",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -206,7 +211,11 @@ class TestTokenErrorHandling:
         assert retrieved.access_token == original_token
 
         # Simulate encryption key change by mocking decryption failure
-        with patch.object(dao, '_decrypt_token', side_effect=Exception("Decryption failed - key changed?")):
+        with patch.object(
+            dao,
+            "_decrypt_token",
+            side_effect=Exception("Decryption failed - key changed?"),
+        ):
             # Should handle gracefully
             failed_retrieval = await dao.get_token("test_user", "spotify")
             assert failed_retrieval is None
@@ -216,7 +225,8 @@ class TestTokenErrorHandling:
         now = int(time.time())
 
         # Create valid token
-        token = ThirdPartyToken(identity_id="49229853-259b-490e-9fa0-bcdb80b149d2", 
+        token = ThirdPartyToken(
+            identity_id="49229853-259b-490e-9fa0-bcdb80b149d2",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -259,7 +269,8 @@ class TestTokenErrorHandling:
         """Test handling of API rate limit exhaustion"""
         now = int(time.time())
 
-        expired_token = ThirdPartyToken(identity_id="8f854d30-e3a6-4632-85f8-bf85bede4fb0", 
+        expired_token = ThirdPartyToken(
+            identity_id="8f854d30-e3a6-4632-85f8-bf85bede4fb0",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -281,14 +292,14 @@ class TestTokenErrorHandling:
             HTTPException(status_code=429, detail="Rate limited"),
         ]
 
-        with patch('app.integrations.spotify.client.SpotifyClient._refresh_access_token',
-                   new_callable=AsyncMock) as mock_refresh:
+        with patch(
+            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+            new_callable=AsyncMock,
+        ) as mock_refresh:
             mock_refresh.side_effect = rate_limit_errors
 
             result = await refresh_service.get_valid_token_with_refresh(
-                user_id="test_user",
-                provider="spotify",
-                force_refresh=False
+                user_id="test_user", provider="spotify", force_refresh=False
             )
 
             # Should give up after retries
@@ -299,7 +310,8 @@ class TestTokenErrorHandling:
         """Test handling of service unavailable scenarios"""
         now = int(time.time())
 
-        expired_token = ThirdPartyToken(identity_id="a45c82da-0124-4711-a730-1652e61419da", 
+        expired_token = ThirdPartyToken(
+            identity_id="a45c82da-0124-4711-a730-1652e61419da",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -321,14 +333,14 @@ class TestTokenErrorHandling:
             Exception("Connection timeout"),
         ]
 
-        with patch('app.integrations.spotify.client.SpotifyClient._refresh_access_token',
-                   new_callable=AsyncMock) as mock_refresh:
+        with patch(
+            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+            new_callable=AsyncMock,
+        ) as mock_refresh:
             mock_refresh.side_effect = unavailable_errors
 
             result = await refresh_service.get_valid_token_with_refresh(
-                user_id="test_user",
-                provider="spotify",
-                force_refresh=False
+                user_id="test_user", provider="spotify", force_refresh=False
             )
 
             # Should give up after retries
@@ -339,7 +351,8 @@ class TestTokenErrorHandling:
         """Test handling of OAuth invalid grant errors (revoked tokens)"""
         now = int(time.time())
 
-        expired_token = ThirdPartyToken(identity_id="9eaf2c7b-81a2-4614-bddb-6948fb0a0b0f", 
+        expired_token = ThirdPartyToken(
+            identity_id="9eaf2c7b-81a2-4614-bddb-6948fb0a0b0f",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -355,14 +368,14 @@ class TestTokenErrorHandling:
         await dao.upsert_token(expired_token)
 
         # Mock invalid grant error (user revoked the token)
-        with patch('app.integrations.spotify.client.SpotifyClient._refresh_access_token',
-                   new_callable=AsyncMock) as mock_refresh:
+        with patch(
+            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+            new_callable=AsyncMock,
+        ) as mock_refresh:
             mock_refresh.side_effect = Exception("invalid_grant")
 
             result = await refresh_service.get_valid_token_with_refresh(
-                user_id="test_user",
-                provider="spotify",
-                force_refresh=False
+                user_id="test_user", provider="spotify", force_refresh=False
             )
 
             # Should give up immediately for invalid grant
@@ -376,7 +389,8 @@ class TestTokenErrorHandling:
         # Create many tokens to simulate memory pressure
         tokens = []
         for i in range(1000):  # Large number of tokens
-            token = ThirdPartyToken(identity_id="c019e59f-7a33-4d7f-b8d8-f641c514711d",
+            token = ThirdPartyToken(
+                identity_id="c019e59f-7a33-4d7f-b8d8-f641c514711d",
                 user_id=f"user_{i}",
                 provider="spotify",
                 provider_sub=f"sub_{i}",
@@ -405,7 +419,8 @@ class TestTokenErrorHandling:
         # This is harder to test directly, but we can mock the database write failure
 
         now = int(time.time())
-        token = ThirdPartyToken(identity_id="9a96a722-622d-4a62-8423-c069b8cc125d", 
+        token = ThirdPartyToken(
+            identity_id="9a96a722-622d-4a62-8423-c069b8cc125d",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -419,7 +434,7 @@ class TestTokenErrorHandling:
         )
 
         # Mock disk full error during upsert
-        with patch.object(dao, 'upsert_token', side_effect=Exception("Disk full")):
+        with patch.object(dao, "upsert_token", side_effect=Exception("Disk full")):
             result = await dao.upsert_token(token)
             assert not result  # Should fail gracefully
 
@@ -427,7 +442,8 @@ class TestTokenErrorHandling:
         """Test circuit breaker pattern for failing services"""
         now = int(time.time())
 
-        expired_token = ThirdPartyToken(identity_id="4e5a9817-b1c7-4d6a-a4c4-d8ecada84535", 
+        expired_token = ThirdPartyToken(
+            identity_id="4e5a9817-b1c7-4d6a-a4c4-d8ecada84535",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -443,16 +459,16 @@ class TestTokenErrorHandling:
         await dao.upsert_token(expired_token)
 
         # Mock persistent failures
-        with patch('app.integrations.spotify.client.SpotifyClient._refresh_access_token',
-                   new_callable=AsyncMock) as mock_refresh:
+        with patch(
+            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+            new_callable=AsyncMock,
+        ) as mock_refresh:
             mock_refresh.side_effect = Exception("Persistent failure")
 
             # First few attempts should retry
             for attempt in range(3):
                 result = await refresh_service.get_valid_token_with_refresh(
-                    user_id="test_user",
-                    provider="spotify",
-                    force_refresh=True
+                    user_id="test_user", provider="spotify", force_refresh=True
                 )
                 assert result is None
 
@@ -467,7 +483,8 @@ class TestTokenErrorHandling:
 
         # Create multiple users with tokens
         for i in range(50):
-            token = ThirdPartyToken(identity_id="7e91d33e-d446-4311-b533-82e03a9d7f6e",
+            token = ThirdPartyToken(
+                identity_id="7e91d33e-d446-4311-b533-82e03a9d7f6e",
                 user_id=f"load_user_{i}",
                 provider="spotify",
                 provider_sub=f"sub_{i}",
@@ -482,18 +499,14 @@ class TestTokenErrorHandling:
             tokens.append(token)
 
         async def concurrent_request(user_id):
-            with patch('app.auth_store_tokens.TokenDAO', return_value=dao):
+            with patch("app.auth_store_tokens.TokenDAO", return_value=dao):
                 response = client.get(
-                    '/v1/spotify/status',
-                    cookies={'GSNH_AT': f'test_token_{user_id}'}
+                    "/v1/spotify/status", cookies={"GSNH_AT": f"test_token_{user_id}"}
                 )
                 return response.status_code
 
         # Launch many concurrent requests
-        tasks = [
-            concurrent_request(f"load_user_{i}")
-            for i in range(50)
-        ]
+        tasks = [concurrent_request(f"load_user_{i}") for i in range(50)]
 
         results = await asyncio.gather(*tasks)
 

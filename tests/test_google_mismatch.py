@@ -17,7 +17,8 @@ async def test_enable_service_account_mismatch(tmp_path, monkeypatch):
 
     now = int(time.time())
     # Old token (account A) with calendar enabled
-    a = ThirdPartyToken(identity_id="a6b8e03b-4082-447f-86b5-78bbec791734", 
+    a = ThirdPartyToken(
+        identity_id="a6b8e03b-4082-447f-86b5-78bbec791734",
         user_id="u42",
         provider="google",
         provider_sub="sub-a",
@@ -29,10 +30,18 @@ async def test_enable_service_account_mismatch(tmp_path, monkeypatch):
     )
     await dao.upsert_token(a)
     # Enable calendar on account A
-    await dao.update_service_status(user_id="u42", provider="google", service="calendar", status="enabled", provider_sub="sub-a", provider_iss="https://accounts.google.com")
+    await dao.update_service_status(
+        user_id="u42",
+        provider="google",
+        service="calendar",
+        status="enabled",
+        provider_sub="sub-a",
+        provider_iss="https://accounts.google.com",
+    )
 
     # New token (account B) more recent - explicitly set created_at to be much newer
-    b = ThirdPartyToken(identity_id="7f45032a-5697-4913-9869-6d471ab20175", 
+    b = ThirdPartyToken(
+        identity_id="7f45032a-5697-4913-9869-6d471ab20175",
         user_id="u42",
         provider="google",
         provider_sub="sub-b",
@@ -41,7 +50,8 @@ async def test_enable_service_account_mismatch(tmp_path, monkeypatch):
         refresh_token="ABBBBBBBBBBBBBBBBB",
         scopes="openid email profile https://www.googleapis.com/auth/gmail.readonly",
         expires_at=now + 7200,
-        created_at=now + 100,  # Make it 100 seconds newer to ensure it's definitely more recent
+        created_at=now
+        + 100,  # Make it 100 seconds newer to ensure it's definitely more recent
     )
     await dao.upsert_token(b)
 
@@ -66,17 +76,22 @@ async def test_enable_service_account_mismatch(tmp_path, monkeypatch):
     # Check that account B has no services enabled
     account_b = next(t for t in all_tokens if t.provider_sub == "sub-b")
     st_b = parse_state(account_b.service_state)
-    assert not st_b or not any(entry.get("status") == "enabled" for entry in st_b.values())
+    assert not st_b or not any(
+        entry.get("status") == "enabled" for entry in st_b.values()
+    )
 
     # Verify the mismatch condition: different provider_sub and enabled service
     has_mismatch = False
     for other_token in all_tokens:
-        if (other_token.provider_sub and
-            other_token.provider_sub != current_token.provider_sub):
+        if (
+            other_token.provider_sub
+            and other_token.provider_sub != current_token.provider_sub
+        ):
             other_state = parse_state(other_token.service_state)
             if any(entry.get("status") == "enabled" for entry in other_state.values()):
                 has_mismatch = True
                 break
 
-    assert has_mismatch, "Should detect account mismatch between calendar (sub-a) and gmail (sub-b)"
-
+    assert (
+        has_mismatch
+    ), "Should detect account mismatch between calendar (sub-a) and gmail (sub-b)"

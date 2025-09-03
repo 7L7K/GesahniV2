@@ -115,4 +115,8 @@ for _name in (
 if hasattr(_models_mod, "AuditEvent"):
     AuditEvent = _models_mod.AuditEvent
 
+# Make modules available in the namespace for __all__
+models = _models_mod
+store = _store_mod
+
 __all__ = ["models", "store", "AuditEvent"]

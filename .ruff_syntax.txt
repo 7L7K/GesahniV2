@@ -1,0 +1,622 @@
+F821 Undefined name `time`
+   --> app/api/admin.py:346:118
+    |
+344 | …     try:
+345 | …         cur = conn.cursor()
+346 | …         cur.execute("UPDATE third_party_tokens SET is_valid = 0, updated_at = ? WHERE identity_id = ?", (int(time.time()), identity…
+    |                                                                                                                ^^^^
+347 | …         conn.commit()
+348 | …     finally:
+    |
+
+F821 Undefined name `_normalize_payload`
+   --> app/api/ask.py:930:9
+    |
+928 |         shape,
+929 |         normalized_from,
+930 |     ) = _normalize_payload(body)
+    |         ^^^^^^^^^^^^^^^^^^
+931 |
+932 |     # Track shape normalization metrics
+    |
+
+F821 Undefined name `_normalize_payload`
+    --> app/api/ask.py:1081:9
+     |
+1079 |         shape,
+1080 |         normalized_from,
+1081 |     ) = _normalize_payload(body)
+     |         ^^^^^^^^^^^^^^^^^^
+1082 |
+1083 |     # Track shape normalization metrics
+     |
+
+F821 Undefined name `json`
+    --> app/api/ask.py:1124:50
+     |
+1122 |                 else:
+1123 |                     # Unknown model
+1124 |                     yield f"event: error\ndata: {json.dumps({'rid': request_id, 'error': 'unknown_model', 'model': mv})}\n\n"
+     |                                                  ^^^^
+1125 |                     return
+1126 |             else:
+     |
+
+F821 Undefined name `json`
+    --> app/api/ask.py:1164:42
+     |
+1162 |                 route_data["keyword_hit"] = keyword_hit
+1163 |
+1164 |             yield f"event: route\ndata: {json.dumps(route_data)}\n\n"
+     |                                          ^^^^
+1165 |
+1166 |             # Stream the actual response
+     |
+
+F821 Undefined name `json`
+    --> app/api/ask.py:1168:46
+     |
+1166 |             # Stream the actual response
+1167 |             async def stream_callback(token: str):
+1168 |                 yield f"event: delta\ndata: {json.dumps({'content': token})}\n\n"
+     |                                              ^^^^
+1169 |
+1170 |             # Call the appropriate vendor
+     |
+
+F821 Undefined name `json`
+    --> app/api/ask.py:1193:50
+     |
+1191 | …         )
+1192 | …     else:
+1193 | …         yield f"event: error\ndata: {json.dumps({'rid': request_id, 'vendor': chosen_vendor, 'error_class': 'unknown_vendor'})}\n\…
+     |                                        ^^^^
+1194 | …         return
+     |
+
+F821 Undefined name `json`
+    --> app/api/ask.py:1203:45
+     |
+1201 |                     "final_tokens": tokens,  # This would be actual completion tokens
+1202 |                 }
+1203 |                 yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
+     |                                             ^^^^
+1204 |
+1205 |             except Exception as e:
+     |
+
+F821 Undefined name `json`
+    --> app/api/ask.py:1213:46
+     |
+1211 |                     "error": str(e),
+1212 |                 }
+1213 |                 yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
+     |                                              ^^^^
+1214 |
+1215 |         except Exception as e:
+     |
+
+F821 Undefined name `json`
+    --> app/api/ask.py:1222:42
+     |
+1220 |                 "error": str(e),
+1221 |             }
+1222 |             yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
+     |                                          ^^^^
+1223 |
+1224 |     return StreamingResponse(
+     |
+
+F821 Undefined name `_get_pat_by_id`
+   --> app/api/auth.py:937:17
+    |
+936 |     # Check if PAT exists and belongs to user
+937 |     pat = await _get_pat_by_id(pat_id)
+    |                 ^^^^^^^^^^^^^^
+938 |     if not pat:
+939 |         raise HTTPException(status_code=404, detail="PAT not found")
+    |
+
+F821 Undefined name `uid`
+   --> app/api/google_oauth.py:712:96
+    |
+710 |             existing_cookie_user = "anon"
+711 |
+712 |         if existing_cookie_user and existing_cookie_user != "anon" and existing_cookie_user != uid:
+    |                                                                                                ^^^
+713 |             # Log invariant violation
+714 |             logger.warning(
+    |
+
+F821 Undefined name `uid`
+   --> app/api/google_oauth.py:720:42
+    |
+718 |                         "req_id": req_id,
+719 |                         "existing_cookie_user": existing_cookie_user,
+720 |                         "callback_user": uid,
+    |                                          ^^^
+721 |                         "provider_sub": provider_sub,
+722 |                         "provider_iss": provider_iss,
+    |
+
+F821 Undefined name `provider_sub`
+   --> app/api/google_oauth.py:721:41
+    |
+719 |                         "existing_cookie_user": existing_cookie_user,
+720 |                         "callback_user": uid,
+721 |                         "provider_sub": provider_sub,
+    |                                         ^^^^^^^^^^^^
+722 |                         "provider_iss": provider_iss,
+723 |                     }
+    |
+
+F821 Undefined name `provider_iss`
+   --> app/api/google_oauth.py:722:41
+    |
+720 |                         "callback_user": uid,
+721 |                         "provider_sub": provider_sub,
+722 |                         "provider_iss": provider_iss,
+    |                                         ^^^^^^^^^^^^
+723 |                     }
+724 |                 },
+    |
+
+F821 Undefined name `_get_scheme`
+    --> app/api/google_oauth.py:1400:16
+     |
+1399 |             # Emit a warning if attributes look unsafe for localhost development
+1400 |             if _get_scheme(request) != "https":
+     |                ^^^^^^^^^^^
+1401 |                 if bool(resolved_ccfg.get("secure")):
+1402 |                     logger.warning(
+     |
+
+F821 Undefined name `inspect`
+    --> app/api/google_oauth.py:1748:8
+     |
+1747 |     maybe = legacy_oauth_callback(request)
+1748 |     if inspect.isawaitable(maybe):
+     |        ^^^^^^^
+1749 |         return await maybe
+1750 |     return maybe
+     |
+
+F821 Undefined name `PROVIDER_SPOTIFY`
+   --> app/api/music_http.py:237:12
+    |
+236 | async def _provider_pause(user_id: str) -> bool:
+237 |     if not PROVIDER_SPOTIFY:
+    |            ^^^^^^^^^^^^^^^^
+238 |         return False
+239 |     try:
+    |
+
+F821 Undefined name `PROVIDER_SPOTIFY`
+   --> app/api/music_http.py:251:12
+    |
+250 | async def _provider_next(user_id: str) -> bool:
+251 |     if not PROVIDER_SPOTIFY:
+    |            ^^^^^^^^^^^^^^^^
+252 |         return False
+253 |     try:
+    |
+
+F821 Undefined name `PROVIDER_SPOTIFY`
+   --> app/api/music_http.py:265:12
+    |
+264 | async def _provider_previous(user_id: str) -> bool:
+265 |     if not PROVIDER_SPOTIFY:
+    |            ^^^^^^^^^^^^^^^^
+266 |         return False
+267 |     try:
+    |
+
+F821 Undefined name `PROVIDER_SPOTIFY`
+   --> app/api/music_http.py:279:12
+    |
+278 | async def _provider_set_volume(user_id: str, level: int) -> bool:
+279 |     if not PROVIDER_SPOTIFY:
+    |            ^^^^^^^^^^^^^^^^
+280 |         return False
+281 |     try:
+    |
+
+F821 Undefined name `PROVIDER_SPOTIFY`
+   --> app/api/music_http.py:295:12
+    |
+293 |     user_id: str, *, seed_tracks: list[str] | None, vibe: MusicVibe, limit: int
+294 | ) -> list[dict]:
+295 |     if not PROVIDER_SPOTIFY:
+    |            ^^^^^^^^^^^^^^^^
+296 |         return []
+297 |     try:
+    |
+
+F821 Undefined name `PROVIDER_SPOTIFY`
+   --> app/api/music_http.py:703:12
+    |
+701 |             pass
+702 |         return {"status": "ok"}
+703 |     if not PROVIDER_SPOTIFY:
+    |            ^^^^^^^^^^^^^^^^
+704 |         return {"status": "ok"}
+705 |     try:
+    |
+
+F822 Undefined name `models` in `__all__`
+   --> app/audit.py:118:12
+    |
+116 |     AuditEvent = _models_mod.AuditEvent
+117 |
+118 | __all__ = ["models", "store", "AuditEvent"]
+    |            ^^^^^^^^
+    |
+
+F822 Undefined name `store` in `__all__`
+   --> app/audit.py:118:22
+    |
+116 |     AuditEvent = _models_mod.AuditEvent
+117 |
+118 | __all__ = ["models", "store", "AuditEvent"]
+    |                      ^^^^^^^
+    |
+
+F821 Undefined name `logger`
+  --> app/auth_device/__init__.py:81:13
+   |
+79 |     if env in {"prod", "production"}:
+80 |         try:
+81 |             logger.warning("device_trust.cookie_refused prod=true")
+   |             ^^^^^^
+82 |         except Exception:
+83 |             pass
+   |
+
+F821 Undefined name `Path`
+  --> app/auth_store_tokens.py:22:24
+   |
+20 |     try:
+21 |         if globals().get("DEFAULT_DB_PATH"):
+22 |             return str(Path(globals().get("DEFAULT_DB_PATH"))
+   |                        ^^^^
+23 |                        .resolve())
+24 |     except Exception:
+   |
+
+F823 Local variable `ThirdPartyToken` referenced before assignment
+    --> app/auth_store_tokens.py:1631:31
+     |
+1630 |             # Create new token object
+1631 |             refreshed_token = ThirdPartyToken(
+     |                               ^^^^^^^^^^^^^^^
+1632 |                 user_id=token.user_id,
+1633 |                 provider="google",
+     |
+
+F823 Local variable `os` referenced before assignment
+   --> app/cookies.py:178:17
+    |
+176 |             and (cookie_config["domain"] is None)
+177 |             and cookie_config["path"] == "/"
+178 |             and os.getenv("USE_HOST_COOKIE_PREFIX", "1").strip().lower() in {"1", "true", "yes", "on"}
+    |                 ^^
+179 |         ):
+180 |             host_prefix = "__Host-"
+    |
+
+F821 Undefined name `session_cookie_name`
+   --> app/cookies.py:482:57
+    |
+480 |             # may not be defined in this scope when the verifier cookie isn't
+481 |             # being cleared; avoid referencing it to prevent NameError.
+482 |             httponly=cookie_name in [state_cookie_name, session_cookie_name],
+    |                                                         ^^^^^^^^^^^^^^^^^^^
+483 |             domain=cookie_config["domain"],
+484 |         )
+    |
+
+invalid-syntax: Expected `except` or `finally` after `try` block
+  --> app/cron/google_refresh.py:60:5
+   |
+58 |             # Fetch latest token row by identity
+59 |             conn = sqlite3.connect(_db_path())
+60 |     conn.execute("PRAGMA foreign_keys=ON")
+   |     ^
+61 |             try:
+62 |                 cur = conn.cursor()
+   |
+
+invalid-syntax: Unexpected indentation
+  --> app/cron/google_refresh.py:61:1
+   |
+59 |             conn = sqlite3.connect(_db_path())
+60 |     conn.execute("PRAGMA foreign_keys=ON")
+61 |             try:
+   | ^^^^^^^^^^^^
+62 |                 cur = conn.cursor()
+63 |                 cur.execute(
+   |
+
+invalid-syntax: unindent does not match any outer indentation level
+   --> app/cron/google_refresh.py:108:1
+    |
+106 |             logger.info("google_refresh: success", extra={"user_id": user_id, "provider": provider})
+107 |             return
+108 |         except Exception as e:
+    | ^^^^^^^^
+109 |             logger.exception("google_refresh: error", exc_info=e)
+110 |             try:
+    |
+
+invalid-syntax: Expected a statement
+   --> app/cron/google_refresh.py:108:9
+    |
+106 |             logger.info("google_refresh: success", extra={"user_id": user_id, "provider": provider})
+107 |             return
+108 |         except Exception as e:
+    |         ^^^^^^
+109 |             logger.exception("google_refresh: error", exc_info=e)
+110 |             try:
+    |
+
+invalid-syntax: Expected a statement
+   --> app/cron/google_refresh.py:108:26
+    |
+106 |             logger.info("google_refresh: success", extra={"user_id": user_id, "provider": provider})
+107 |             return
+108 |         except Exception as e:
+    |                          ^^
+109 |             logger.exception("google_refresh: error", exc_info=e)
+110 |             try:
+    |
+
+invalid-syntax: Expected an expression
+   --> app/cron/google_refresh.py:108:31
+    |
+106 |             logger.info("google_refresh: success", extra={"user_id": user_id, "provider": provider})
+107 |             return
+108 |         except Exception as e:
+    |                               ^
+109 |             logger.exception("google_refresh: error", exc_info=e)
+110 |             try:
+    |
+
+invalid-syntax: Unexpected indentation
+   --> app/cron/google_refresh.py:109:1
+    |
+107 |             return
+108 |         except Exception as e:
+109 |             logger.exception("google_refresh: error", exc_info=e)
+    | ^^^^^^^^^^^^
+110 |             try:
+111 |                 SPOTIFY_REFRESH_ERROR.inc()
+    |
+
+invalid-syntax: Expected a statement
+   --> app/cron/google_refresh.py:122:1
+    |
+122 | async def run_once() -> None:
+    | ^
+123 |     now = int(time.time())
+124 |     candidates = _get_candidates(now)
+    |
+
+F821 Undefined name `AUTH_DB_PATH`
+  --> app/db.py:53:13
+   |
+51 |     # Ensure directory exists for sqlite file paths
+52 |     try:
+53 |         p = AUTH_DB_PATH()
+   |             ^^^^^^^^^^^^
+54 |         if p.parent and str(p).lower() not in {":memory:", ""}:
+55 |             p.parent.mkdir(parents=True, exist_ok=True)
+   |
+
+F821 Undefined name `AUTH_DB_PATH`
+  --> app/db.py:59:38
+   |
+57 |         pass
+58 |
+59 |     async with aiosqlite.connect(str(AUTH_DB_PATH())) as db:
+   |                                      ^^^^^^^^^^^^
+60 |         # Set critical SQLite PRAGMAs once during initialization
+61 |         # journal_mode=WAL and synchronous=NORMAL persist in the database file
+   |
+
+F821 Undefined name `AUTH_STORE_DB_PATH`
+  --> app/db.py:92:38
+   |
+90 | async def _init_auth_store_db() -> None:
+91 |     """Initialize auth store database schema."""
+92 |     async with aiosqlite.connect(str(AUTH_STORE_DB_PATH())) as db:
+   |                                      ^^^^^^^^^^^^^^^^^^
+93 |         # Set critical SQLite PRAGMAs once during initialization
+94 |         # journal_mode=WAL and synchronous=NORMAL persist in the database file
+   |
+
+F821 Undefined name `CARE_DB_PATH`
+   --> app/db.py:206:38
+    |
+204 | async def _init_care_db() -> None:
+205 |     """Initialize care store database schema."""
+206 |     async with aiosqlite.connect(str(CARE_DB_PATH())) as db:
+    |                                      ^^^^^^^^^^^^
+207 |         # Set critical SQLite PRAGMAs once during initialization
+208 |         # journal_mode=WAL and synchronous=NORMAL persist in the database file
+    |
+
+F821 Undefined name `MUSIC_DB_PATH`
+   --> app/db.py:308:38
+    |
+306 | async def _init_music_db() -> None:
+307 |     """Initialize music database schema."""
+308 |     async with aiosqlite.connect(str(MUSIC_DB_PATH())) as db:
+    |                                      ^^^^^^^^^^^^^
+309 |         # Set critical SQLite PRAGMAs once during initialization
+310 |         # journal_mode=WAL and synchronous=NORMAL persist in the database file
+    |
+
+F821 Undefined name `shutdown_tracing`
+   --> app/main.py:815:13
+    |
+813 |         # Ensure OpenTelemetry worker thread is stopped to avoid atexit noise
+814 |         try:
+815 |             shutdown_tracing()
+    |             ^^^^^^^^^^^^^^^^
+816 |         except Exception:
+817 |             pass
+    |
+
+F821 Undefined name `AUTH_LAZY_REFRESH`
+   --> app/metrics_auth.py:169:9
+    |
+167 |     """Record a lazy refresh operation."""
+168 |     try:
+169 |         AUTH_LAZY_REFRESH.labels(source=source, result=result).inc()
+    |         ^^^^^^^^^^^^^^^^^
+170 |     except Exception:
+171 |         pass  # Silently fail if metrics are disabled
+    |
+
+F821 Undefined name `router`
+  --> app/router/tts_api.py:64:5
+   |
+62 | # Register read route under alias router so /v1/tts/{audio_id} is available
+63 | try:
+64 |     router.get("/tts/{audio_id}")(get_tts_audio)
+   |     ^^^^^^
+65 | except Exception:
+66 |     pass
+   |
+
+F821 Undefined name `time`
+   --> app/skills/lights_skill.py:120:56
+    |
+118 |                 "light", "turn_on", {"entity_id": entity, "brightness_pct": level}
+119 |             )
+120 |             idemp = f"lights:{entity}:set:{level}:{int(time.time()//10)}"
+    |                                                        ^^^^
+121 |             self.skill_why = f"light.set_brightness: {friendly}={level}%"
+122 |             await record_action(
+    |
+
+F821 Undefined name `time`
+   --> app/skills/lights_skill.py:158:50
+    |
+157 |         await ha.call_service("light", service, {"entity_id": entity})
+158 |         idemp = f"lights:{entity}:{service}:{int(time.time()//10)}"
+    |                                                  ^^^^
+159 |         await record_action(
+160 |             "lights.toggle",
+    |
+
+F821 Undefined name `EPS`
+  --> app/skills/math_skill.py:69:64
+   |
+67 |             # a short human-friendly explanation.
+68 |             if detail.startswith("abs("):
+69 |                 return f"{val} — because numbers differ by <= {EPS}"
+   |                                                                ^^^
+70 |             return f"{val} — because {detail}"
+71 |         # If numeric, format reasonably
+   |
+
+F821 Undefined name `time`
+   --> app/skills/notes_skill.py:105:51
+    |
+103 |             text = match.group(1)
+104 |             # idempotency: dedupe within 10s window
+105 |             idemp = f"notes:add:{hash(text)}:{int(time.time()//10)}"
+    |                                                   ^^^^
+106 |             await dao.add(text)
+107 |             await record_action("notes.add", idempotency_key=idemp, metadata={"text_len": len(text)})
+    |
+
+F821 Undefined name `asyncio`
+   --> conftest.py:591:20
+    |
+589 |         import app.music.store as _music_store
+590 |         try:
+591 |             loop = asyncio.get_event_loop()
+    |                    ^^^^^^^
+592 |         except RuntimeError:
+593 |             loop = asyncio.new_event_loop()
+    |
+
+F821 Undefined name `asyncio`
+   --> conftest.py:593:20
+    |
+591 |             loop = asyncio.get_event_loop()
+592 |         except RuntimeError:
+593 |             loop = asyncio.new_event_loop()
+    |                    ^^^^^^^
+594 |             asyncio.set_event_loop(loop)
+595 |         try:
+    |
+
+F821 Undefined name `asyncio`
+   --> conftest.py:594:13
+    |
+592 |         except RuntimeError:
+593 |             loop = asyncio.new_event_loop()
+594 |             asyncio.set_event_loop(loop)
+    |             ^^^^^^^
+595 |         try:
+596 |             loop.run_until_complete(_auth_store.ensure_tables())
+    |
+
+F821 Undefined name `asyncio`
+   --> tests/test_api_endpoints_comprehensive.py:582:59
+    |
+580 |         with patch(
+581 |             "app.main.route_prompt",
+582 |             AsyncMock(side_effect=lambda *args, **kwargs: asyncio.sleep(30)),
+    |                                                           ^^^^^^^
+583 |         ):
+584 |             # This should timeout and return an error
+    |
+
+F821 Undefined name `HTTPException`
+   --> tests/test_token_error_handling.py:281:13
+    |
+279 |             Exception("429 Too Many Requests"),
+280 |             Exception("Rate limit exceeded"),
+281 |             HTTPException(status_code=429, detail="Rate limited"),
+    |             ^^^^^^^^^^^^^
+282 |         ]
+    |
+
+F821 Undefined name `tokens`
+   --> tests/test_token_error_handling.py:482:13
+    |
+480 |                 updated_at=now,
+481 |             )
+482 |             tokens.append(token)
+    |             ^^^^^^
+483 |
+484 |         async def concurrent_request(user_id):
+    |
+
+F821 Undefined name `Mock`
+   --> tests/test_token_health_monitoring.py:153:24
+    |
+151 |         # This should handle the corruption gracefully
+152 |         with patch('app.auth_store_tokens.TokenDAO') as mock_dao_class:
+153 |             mock_dao = Mock()
+    |                        ^^^^
+154 |             mock_dao.get_all_user_tokens.side_effect = Exception("Database corruption")
+155 |             mock_dao_class.return_value = mock_dao
+    |
+
+F823 Local variable `time` referenced before assignment
+   --> tests/test_token_health_monitoring.py:251:19
+    |
+249 |         dao = TokenDAO(db_path)
+250 |
+251 |         now = int(time.time())
+    |                   ^^^^
+252 |
+253 |         # Create many tokens to test performance
+    |
+
+Found 58 errors.

@@ -11,19 +11,26 @@ import random
 from typing import Dict, List, Tuple
 from urllib.parse import urlencode, urljoin
 
+
 class BrowserAuthSimulator:
-    def __init__(self, base_url: str = "http://localhost:8000", frontend_url: str = "http://localhost:3000"):
+    def __init__(
+        self,
+        base_url: str = "http://localhost:8000",
+        frontend_url: str = "http://localhost:3000",
+    ):
         self.base_url = base_url
         self.frontend_url = frontend_url
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+            }
+        )
 
     def simulate_login_flow(self) -> bool:
         """Simulate the complete login flow like a real browser"""
@@ -56,7 +63,7 @@ class BrowserAuthSimulator:
                 return False
 
             oauth_data = response.json()
-            oauth_url = oauth_data.get('url')
+            oauth_url = oauth_data.get("url")
 
             if not oauth_url:
                 print("❌ No OAuth URL in response")
@@ -70,7 +77,7 @@ class BrowserAuthSimulator:
             # Extract state from cookies (this simulates the real flow)
             state_cookie = None
             for cookie in self.session.cookies:
-                if 'oauth_state' in cookie.name or 'state' in cookie.name:
+                if "oauth_state" in cookie.name or "state" in cookie.name:
                     state_cookie = cookie.value
                     break
 
@@ -81,9 +88,9 @@ class BrowserAuthSimulator:
             # Simulate successful OAuth callback
             callback_url = f"{self.base_url}/v1/google/auth/callback"
             callback_params = {
-                'state': state_cookie or 'simulated_state',
-                'code': 'simulated_auth_code',
-                'scope': 'email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.send'
+                "state": state_cookie or "simulated_state",
+                "code": "simulated_auth_code",
+                "scope": "email profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.send",
             }
 
             callback_full_url = f"{callback_url}?{urlencode(callback_params)}"
@@ -92,16 +99,20 @@ class BrowserAuthSimulator:
             response = self.session.get(callback_full_url, follow_redirects=False)
 
             if response.status_code == 302:
-                redirect_location = response.headers.get('Location')
+                redirect_location = response.headers.get("Location")
                 print(f"✅ OAuth callback successful, redirect to: {redirect_location}")
 
                 # Follow the redirect (this sets auth cookies)
                 if redirect_location:
-                    redirect_response = self.session.get(redirect_location, follow_redirects=False)
+                    redirect_response = self.session.get(
+                        redirect_location, follow_redirects=False
+                    )
                     print(f"  Redirect response: {redirect_response.status_code}")
 
                     # Check if auth cookies were set
-                    auth_cookies = [c for c in self.session.cookies if 'access_token' in c.name]
+                    auth_cookies = [
+                        c for c in self.session.cookies if "access_token" in c.name
+                    ]
                     print(f"  Auth cookies set: {len(auth_cookies)}")
 
                     return len(auth_cookies) > 0
@@ -134,11 +145,13 @@ class BrowserAuthSimulator:
                     "url": page_url,
                     "status_code": response.status_code,
                     "duration_ms": round((end_time - start_time) * 1000, 2),
-                    "redirect_location": response.headers.get('Location'),
-                    "cookies_before": dict(self.session.cookies)
+                    "redirect_location": response.headers.get("Location"),
+                    "cookies_before": dict(self.session.cookies),
                 }
 
-                if response.status_code == 302 and '/login' in (response.headers.get('Location') or ''):
+                if response.status_code == 302 and "/login" in (
+                    response.headers.get("Location") or ""
+                ):
                     print(f"🚨 LOGOUT TRIGGER: Redirect to login from {page}")
                     result["logout_triggered"] = True
                 elif response.status_code == 401:
@@ -151,7 +164,10 @@ class BrowserAuthSimulator:
                 whoami_result = self.check_auth_status()
                 result["auth_after"] = whoami_result
 
-                if whoami_result.get("is_authenticated") == False and whoami_result.get("status_code") == 200:
+                if (
+                    whoami_result.get("is_authenticated") == False
+                    and whoami_result.get("status_code") == 200
+                ):
                     print(f"🚨 LOGOUT TRIGGER: Lost authentication on {page}")
                     result["logout_triggered"] = True
 
@@ -161,11 +177,9 @@ class BrowserAuthSimulator:
                 time.sleep(random.uniform(0.5, 2.0))
 
             except Exception as e:
-                results.append({
-                    "page": page,
-                    "error": str(e),
-                    "logout_triggered": False
-                })
+                results.append(
+                    {"page": page, "error": str(e), "logout_triggered": False}
+                )
                 print(f"❌ Error testing {page}: {e}")
 
         return results
@@ -176,19 +190,18 @@ class BrowserAuthSimulator:
 
         try:
             response = self.session.get(whoami_url)
-            result = {
-                "status_code": response.status_code,
-                "timestamp": time.time()
-            }
+            result = {"status_code": response.status_code, "timestamp": time.time()}
 
             if response.status_code == 200:
                 data = response.json()
-                result.update({
-                    "is_authenticated": data.get('is_authenticated', False),
-                    "user_id": data.get('user_id'),
-                    "source": data.get('source'),
-                    "session_ready": data.get('session_ready', False)
-                })
+                result.update(
+                    {
+                        "is_authenticated": data.get("is_authenticated", False),
+                        "user_id": data.get("user_id"),
+                        "source": data.get("source"),
+                        "session_ready": data.get("session_ready", False),
+                    }
+                )
             else:
                 result["error"] = response.text[:200]
 
@@ -207,7 +220,7 @@ class BrowserAuthSimulator:
             "/v1/sessions",
             "/v1/pats",
             "/v1/ha_status",
-            "/v1/csrf"
+            "/v1/csrf",
         ]
 
         results = []
@@ -228,7 +241,7 @@ class BrowserAuthSimulator:
                 result = {
                     "endpoint": endpoint,
                     "status_code": response.status_code,
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
                 }
 
                 if response.status_code == 401:
@@ -248,11 +261,9 @@ class BrowserAuthSimulator:
                 time.sleep(0.1)
 
             except Exception as e:
-                results.append({
-                    "endpoint": endpoint,
-                    "error": str(e),
-                    "logout_triggered": False
-                })
+                results.append(
+                    {"endpoint": endpoint, "error": str(e), "logout_triggered": False}
+                )
 
         return results
 
@@ -271,7 +282,7 @@ class BrowserAuthSimulator:
                 result = {
                     "test": f"rapid_call_{i+1}",
                     "status_code": response.status_code,
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
                 }
 
                 if response.status_code == 401:
@@ -284,11 +295,13 @@ class BrowserAuthSimulator:
                 time.sleep(0.05)  # Very short delay
 
             except Exception as e:
-                results.append({
-                    "test": f"rapid_call_{i+1}",
-                    "error": str(e),
-                    "logout_triggered": False
-                })
+                results.append(
+                    {
+                        "test": f"rapid_call_{i+1}",
+                        "error": str(e),
+                        "logout_triggered": False,
+                    }
+                )
 
         # Test with delays
         print("  Testing with delays...")
@@ -300,7 +313,7 @@ class BrowserAuthSimulator:
                     "test": f"delayed_call_{delay}s",
                     "delay": delay,
                     "status_code": response.status_code,
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
                 }
 
                 if response.status_code == 401:
@@ -312,11 +325,13 @@ class BrowserAuthSimulator:
                 results.append(result)
 
             except Exception as e:
-                results.append({
-                    "test": f"delayed_call_{delay}s",
-                    "error": str(e),
-                    "logout_triggered": False
-                })
+                results.append(
+                    {
+                        "test": f"delayed_call_{delay}s",
+                        "error": str(e),
+                        "logout_triggered": False,
+                    }
+                )
 
         return results
 
@@ -351,7 +366,7 @@ class BrowserAuthSimulator:
         print(f"  User ID: {post_login_auth.get('user_id', 'none')}")
         print(f"  Status: {post_login_auth.get('status_code', 'unknown')}")
 
-        if not post_login_auth.get('is_authenticated'):
+        if not post_login_auth.get("is_authenticated"):
             print("❌ Still not authenticated after login simulation")
             return
 
@@ -366,7 +381,7 @@ class BrowserAuthSimulator:
             "/spotify/callback",
             "/tv",
             "/test-cors",
-            "/login"  # This should redirect if logged in
+            "/login",  # This should redirect if logged in
         ]
 
         page_results = self.test_page_navigation(pages_to_test)
@@ -404,13 +419,19 @@ class BrowserAuthSimulator:
         if logout_triggers:
             print(f"🚨 FOUND {len(logout_triggers)} LOGOUT TRIGGERS:")
             for trigger in logout_triggers:
-                trigger_type = trigger.get("page", trigger.get("endpoint", trigger.get("test", "unknown")))
+                trigger_type = trigger.get(
+                    "page", trigger.get("endpoint", trigger.get("test", "unknown"))
+                )
                 print(f"  • {trigger_type}")
 
             # Analyze patterns
             page_triggers = [r for r in logout_triggers if "page" in r]
             api_triggers = [r for r in logout_triggers if "endpoint" in r]
-            timing_triggers = [r for r in logout_triggers if "test" in r and "rapid" in r.get("test", "")]
+            timing_triggers = [
+                r
+                for r in logout_triggers
+                if "test" in r and "rapid" in r.get("test", "")
+            ]
 
             if page_triggers:
                 print(f"\n📄 Page triggers: {[t['page'] for t in page_triggers]}")
@@ -434,9 +455,11 @@ class BrowserAuthSimulator:
         print("   4. Check if issue occurs on specific browsers")
         print("   5. Verify cookie settings and SameSite attributes")
 
+
 def main():
     simulator = BrowserAuthSimulator()
     simulator.run_comprehensive_test()
+
 
 if __name__ == "__main__":
     main()

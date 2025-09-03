@@ -23,4 +23,3 @@ def test_raise_enveloped_raises_http_exception():
     assert exc.detail.get("code") == "not_allowed"
     # header X-Error-Code should be set on the exception
     assert exc.headers.get("X-Error-Code") == "not_allowed"
-

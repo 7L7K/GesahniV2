@@ -34,5 +34,3 @@ def test_pause_resume_stop_cname_cleaning():
     chosen, top = run_select("pause my timer")
     assert chosen is not None
     assert "TimerSkill" in chosen.get("skill_name")
-
-

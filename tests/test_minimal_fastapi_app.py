@@ -217,6 +217,7 @@ def client() -> Generator[TestClient, None, None]:
 def create_auth_cookies(user_id: str = "dev") -> dict[str, str]:
     """Create test authentication cookies."""
     import os
+
     jwt_secret = os.getenv("JWT_SECRET", "test-jwt-secret-for-testing")
 
     now = int(datetime.now(timezone.utc).timestamp())
@@ -238,12 +239,8 @@ def create_auth_cookies(user_id: str = "dev") -> dict[str, str]:
         "jti": f"refresh_{user_id}_{now}",
     }
 
-    access_token = jwt.encode(
-        access_payload, jwt_secret, algorithm="HS256"
-    )
-    refresh_token = jwt.encode(
-        refresh_payload, jwt_secret, algorithm="HS256"
-    )
+    access_token = jwt.encode(access_payload, jwt_secret, algorithm="HS256")
+    refresh_token = jwt.encode(refresh_payload, jwt_secret, algorithm="HS256")
 
     return {"access_token": access_token, "refresh_token": refresh_token}
 
@@ -251,6 +248,7 @@ def create_auth_cookies(user_id: str = "dev") -> dict[str, str]:
 def create_auth_headers(user_id: str = "dev") -> dict[str, str]:
     """Create test authentication headers."""
     import os
+
     jwt_secret = os.getenv("JWT_SECRET", "test-jwt-secret-for-testing")
 
     now = int(datetime.now(timezone.utc).timestamp())
@@ -263,9 +261,7 @@ def create_auth_headers(user_id: str = "dev") -> dict[str, str]:
         "jti": f"access_{user_id}_{now}",
     }
 
-    access_token = jwt.encode(
-        access_payload, jwt_secret, algorithm="HS256"
-    )
+    access_token = jwt.encode(access_payload, jwt_secret, algorithm="HS256")
     return {"Authorization": f"Bearer {access_token}"}
 
 

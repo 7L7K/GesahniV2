@@ -8,7 +8,10 @@ from app.main import app
 
 
 def test_health_ready_ok(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "test_jwt_secret_that_is_long_enough_for_validation_purposes_123456789")
+    monkeypatch.setenv(
+        "JWT_SECRET",
+        "test_jwt_secret_that_is_long_enough_for_validation_purposes_123456789",
+    )
 
     async def ok_db():
         return "ok"
@@ -26,7 +29,10 @@ def test_health_ready_ok(monkeypatch):
 
 
 def test_health_ready_db_fail(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "test_jwt_secret_that_is_long_enough_for_validation_purposes_123456789")
+    monkeypatch.setenv(
+        "JWT_SECRET",
+        "test_jwt_secret_that_is_long_enough_for_validation_purposes_123456789",
+    )
 
     async def bad_db():
         return "error"
@@ -41,7 +47,10 @@ def test_health_ready_db_fail(monkeypatch):
 
 
 def test_health_ready_timeout_enforced(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "test_jwt_secret_that_is_long_enough_for_validation_purposes_123456789")
+    monkeypatch.setenv(
+        "JWT_SECRET",
+        "test_jwt_secret_that_is_long_enough_for_validation_purposes_123456789",
+    )
 
     async def hang_db():
         await asyncio.sleep(2)

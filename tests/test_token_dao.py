@@ -13,7 +13,8 @@ async def test_upsert_unions_scopes_and_invalidates_prev(tmp_path):
     dao = TokenDAO(str(db))
 
     now = int(time.time())
-    t1 = ThirdPartyToken(identity_id="ec686d62-0dc6-45bf-89cb-eeb970501162", 
+    t1 = ThirdPartyToken(
+        identity_id="ec686d62-0dc6-45bf-89cb-eeb970501162",
         user_id="u1",
         provider="google",
         provider_sub="sub-a",
@@ -31,7 +32,8 @@ async def test_upsert_unions_scopes_and_invalidates_prev(tmp_path):
 
     # Upsert with additional scope
     time.sleep(0.01)
-    t2 = ThirdPartyToken(identity_id="70fb00c0-4ae7-45fc-a9a9-ce750c479376", 
+    t2 = ThirdPartyToken(
+        identity_id="70fb00c0-4ae7-45fc-a9a9-ce750c479376",
         user_id="u1",
         provider="google",
         provider_sub="sub-a",
@@ -53,4 +55,3 @@ async def test_upsert_unions_scopes_and_invalidates_prev(tmp_path):
     # There should be only one valid token returned
     all_valid = await dao.get_all_user_tokens("u1")
     assert len(all_valid) == 1
-

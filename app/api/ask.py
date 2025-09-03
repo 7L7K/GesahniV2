@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import logging
 import os
 import uuid
@@ -301,6 +302,108 @@ def _require_auth_for_ask() -> bool:
     }
 
 
+def _dget(obj: dict | None, path: str):
+    """Helper function to get nested dictionary values by dot-separated path."""
+    cur = obj or {}
+    for part in path.split("."):
+        if not isinstance(cur, dict) or part not in cur:
+            return None
+        cur = cur[part]
+    return cur
+
+
+def _normalize_payload(
+    raw: dict | None,
+) -> tuple[str, str | None, bool, bool, dict, str]:
+    """Normalize various payload shapes into a consistent format."""
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=422, detail="invalid_request")
+
+    # Detect payload shape
+    shape = "text"  # default
+    normalized_from = None
+
+    # Check for chat format: prompt is a list of {role, content}
+    if isinstance(raw.get("prompt"), list):
+        shape = "chat"
+        normalized_from = "prompt_list"
+    # Check for nested format: input.prompt or input.text
+    elif raw.get("input") and isinstance(raw.get("input"), dict):
+        shape = "nested"
+        normalized_from = "input_nested"
+    # Check for other chat-like formats
+    elif raw.get("messages") and isinstance(raw.get("messages"), list):
+        shape = "chat"
+        normalized_from = "messages_list"
+
+    model = raw.get("model") or raw.get("model_override")
+    stream_present = "stream" in raw
+    stream_flag = bool(raw.get("stream", False))
+    # Accept canonical keys and aliases
+    prompt_val = raw.get("prompt")
+    if isinstance(prompt_val, dict):
+        # Some clients send { prompt: { text: "..." } }
+        prompt_val = prompt_val.get("text") or prompt_val.get("content")
+    if prompt_val is None:
+        for key in ("message", "text", "query", "q"):
+            if isinstance(raw.get(key), str):
+                prompt_val = raw.get(key)
+                break
+    if prompt_val is None:
+        inner = raw.get("input") if isinstance(raw.get("input"), dict) else None
+        if inner:
+            for key in ("prompt", "text", "message"):
+                if isinstance(inner.get(key), str):
+                    prompt_val = inner.get(key)
+                    break
+            if prompt_val is None and isinstance(inner.get("messages"), list):
+                prompt_val = inner.get("messages")
+    # messages[] path
+    messages = raw.get("messages")
+    if prompt_val is None and isinstance(messages, list):
+        prompt_val = messages
+    # dotted path input.prompt
+    if prompt_val is None:
+        dotted = _dget(raw, "input.prompt") or _dget(raw, "input.text")
+        if isinstance(dotted, str):
+            prompt_val = dotted
+    # Normalize to text
+    prompt_text: str | None = None
+    if isinstance(prompt_val, str):
+        prompt_text = prompt_val
+    elif isinstance(prompt_val, list):
+        try:
+            parts = []
+            for m in prompt_val:
+                if isinstance(m, dict):
+                    c = str(m.get("content") or "").strip()
+                    if c:
+                        parts.append(c)
+            prompt_text = "\n".join(parts).strip()
+        except Exception:
+            prompt_text = None
+    if (
+        not prompt_text
+        or not isinstance(prompt_text, str)
+        or not prompt_text.strip()
+    ):
+        raise HTTPException(status_code=422, detail="empty_prompt")
+    # Forward select generation options when present
+    gen_opts = {}
+    for k in ("temperature", "top_p", "max_tokens"):
+        if k in raw:
+            gen_opts[k] = raw[k]
+    return (
+        prompt_text,
+        (str(model).strip() if isinstance(model, str) and model.strip() else None),
+        stream_flag,
+        bool(stream_present),
+        gen_opts,
+        shape,
+        normalized_from,
+    )
+
+
 async def _verify_bearer_strict(request: Request) -> None:
     # Skip CORS preflight requests
     if request.method == "OPTIONS":
@@ -423,103 +526,6 @@ async def _ask(request: Request, body: dict | None):
     # Authentication and scope are enforced by dependencies above.
 
     # Liberal parsing: normalize various legacy shapes into (prompt_text, model, opts)
-    def _dget(obj: dict | None, path: str):
-        cur = obj or {}
-        for part in path.split("."):
-            if not isinstance(cur, dict) or part not in cur:
-                return None
-            cur = cur[part]
-        return cur
-
-    def _normalize_payload(
-        raw: dict | None,
-    ) -> tuple[str, str | None, bool, bool, dict, str]:
-        if not isinstance(raw, dict):
-            raise HTTPException(status_code=422, detail="invalid_request")
-
-        # Detect payload shape
-        shape = "text"  # default
-        normalized_from = None
-
-        # Check for chat format: prompt is a list of {role, content}
-        if isinstance(raw.get("prompt"), list):
-            shape = "chat"
-            normalized_from = "prompt_list"
-        # Check for nested format: input.prompt or input.text
-        elif raw.get("input") and isinstance(raw.get("input"), dict):
-            shape = "nested"
-            normalized_from = "input_nested"
-        # Check for other chat-like formats
-        elif raw.get("messages") and isinstance(raw.get("messages"), list):
-            shape = "chat"
-            normalized_from = "messages_list"
-
-        model = raw.get("model") or raw.get("model_override")
-        stream_present = "stream" in raw
-        stream_flag = bool(raw.get("stream", False))
-        # Accept canonical keys and aliases
-        prompt_val = raw.get("prompt")
-        if isinstance(prompt_val, dict):
-            # Some clients send { prompt: { text: "..." } }
-            prompt_val = prompt_val.get("text") or prompt_val.get("content")
-        if prompt_val is None:
-            for key in ("message", "text", "query", "q"):
-                if isinstance(raw.get(key), str):
-                    prompt_val = raw.get(key)
-                    break
-        if prompt_val is None:
-            inner = raw.get("input") if isinstance(raw.get("input"), dict) else None
-            if inner:
-                for key in ("prompt", "text", "message"):
-                    if isinstance(inner.get(key), str):
-                        prompt_val = inner.get(key)
-                        break
-                if prompt_val is None and isinstance(inner.get("messages"), list):
-                    prompt_val = inner.get("messages")
-        # messages[] path
-        messages = raw.get("messages")
-        if prompt_val is None and isinstance(messages, list):
-            prompt_val = messages
-        # dotted path input.prompt
-        if prompt_val is None:
-            dotted = _dget(raw, "input.prompt") or _dget(raw, "input.text")
-            if isinstance(dotted, str):
-                prompt_val = dotted
-        # Normalize to text
-        prompt_text: str | None = None
-        if isinstance(prompt_val, str):
-            prompt_text = prompt_val
-        elif isinstance(prompt_val, list):
-            try:
-                parts = []
-                for m in prompt_val:
-                    if isinstance(m, dict):
-                        c = str(m.get("content") or "").strip()
-                        if c:
-                            parts.append(c)
-                prompt_text = "\n".join(parts).strip()
-            except Exception:
-                prompt_text = None
-        if (
-            not prompt_text
-            or not isinstance(prompt_text, str)
-            or not prompt_text.strip()
-        ):
-            raise HTTPException(status_code=422, detail="empty_prompt")
-        # Forward select generation options when present
-        gen_opts = {}
-        for k in ("temperature", "top_p", "max_tokens"):
-            if k in raw:
-                gen_opts[k] = raw[k]
-        return (
-            prompt_text,
-            (str(model).strip() if isinstance(model, str) and model.strip() else None),
-            stream_flag,
-            bool(stream_present),
-            gen_opts,
-            shape,
-            normalized_from,
-        )
 
     (
         prompt_text,

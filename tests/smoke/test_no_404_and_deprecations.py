@@ -40,7 +40,9 @@ def test_no_404_for_get_and_post_routes():
                 else:
                     # POST with a small JSON body; many legacy endpoints accept this
                     resp = client.post(url, json={"text": "hi", "device_id": "x"})
-                assert resp.status_code != 404, f"{method} {url} unexpectedly returned 404"
+                assert (
+                    resp.status_code != 404
+                ), f"{method} {url} unexpectedly returned 404"
             except Exception:
                 # Some routes may raise during test-time due to missing external
                 # deps (DB, providers). Treat raised exceptions as non-404
@@ -76,7 +78,10 @@ def test_deprecated_routes_emit_deprecation_header():
 
         # Alias handlers attach a Deprecation header with literal "true"
         dep = resp.headers.get("Deprecation") or resp.headers.get("deprecation")
-        assert dep is not None, f"Deprecated route {path} did not include Deprecation header"
-        assert str(dep).lower() in {"true", "1"}, f"Deprecation header for {path} not set to true: {dep}"
-
-
+        assert (
+            dep is not None
+        ), f"Deprecated route {path} did not include Deprecation header"
+        assert str(dep).lower() in {
+            "true",
+            "1",
+        }, f"Deprecation header for {path} not set to true: {dep}"

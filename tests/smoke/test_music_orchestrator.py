@@ -12,9 +12,20 @@ class _FakeProvider:
         self.calls = []
 
     async def list_devices(self):
-        return [Device(id="dev1", name="Living Room", type="speaker", volume=50, active=True)]
+        return [
+            Device(
+                id="dev1", name="Living Room", type="speaker", volume=50, active=True
+            )
+        ]
 
-    async def play(self, entity_id: str, entity_type: str, *, device_id: str | None = None, position_ms: int | None = None):
+    async def play(
+        self,
+        entity_id: str,
+        entity_type: str,
+        *,
+        device_id: str | None = None,
+        position_ms: int | None = None
+    ):
         self.calls.append(("play", entity_id, entity_type, device_id))
 
     async def pause(self):
@@ -54,4 +65,3 @@ async def test_basic_commands_route_to_provider():
     assert ("next",) in p.calls
     assert ("previous",) in p.calls
     assert ("set_volume", 30) in p.calls
-

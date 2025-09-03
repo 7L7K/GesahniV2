@@ -74,7 +74,9 @@ def test_ws_auth_with_legacy_session_cookie(client: TestClient):
         assert msg == "healthy"
 
 
-def test_store_outage_session_only_503_but_header_passes(client: TestClient, monkeypatch):
+def test_store_outage_session_only_503_but_header_passes(
+    client: TestClient, monkeypatch
+):
     cookies = _login_and_get_cookies(client, username="bob")
 
     # Monkeypatch Redis client to simulate outage for session identity reads
@@ -98,9 +100,7 @@ def test_store_outage_session_only_503_but_header_passes(client: TestClient, mon
 
     # With valid Authorization header, request should pass auth layer (even if upstream may fail for other reasons)
     at = cookies["GSNH_AT"]
-    r2 = client.get(
-        "/v1/spotify/devices", headers={"Authorization": f"Bearer {at}"}
-    )
+    r2 = client.get("/v1/spotify/devices", headers={"Authorization": f"Bearer {at}"})
     # Auth passes; endpoint may still return 502/401 due to provider, accept non-401/503 here
     assert r2.status_code not in (401, 503)
 
@@ -113,9 +113,15 @@ def test_lazy_refresh_sets_new_access_token_cookie(client: TestClient):
     r = client.get("/v1/me", cookies=jar)
     assert r.status_code == 200
     # Verify Set-Cookie includes a fresh GSNH_AT
-    set_cookie_headers = r.headers.get_all("set-cookie") if hasattr(r.headers, "get_all") else r.headers.get("set-cookie", "")
+    set_cookie_headers = (
+        r.headers.get_all("set-cookie")
+        if hasattr(r.headers, "get_all")
+        else r.headers.get("set-cookie", "")
+    )
     if isinstance(set_cookie_headers, list):
         hdrs = set_cookie_headers
     else:
         hdrs = [set_cookie_headers] if set_cookie_headers else []
-    assert any("GSNH_AT=" in h and "Max-Age" in h for h in hdrs), f"Set-Cookie did not include GSNH_AT: {hdrs}"
+    assert any(
+        "GSNH_AT=" in h and "Max-Age" in h for h in hdrs
+    ), f"Set-Cookie did not include GSNH_AT: {hdrs}"

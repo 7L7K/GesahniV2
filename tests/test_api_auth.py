@@ -50,7 +50,7 @@ def _create_test_app():
     from pathlib import Path
 
     # Create temp DB path
-    test_db_path = tempfile.mktemp(suffix='.db')
+    test_db_path = tempfile.mktemp(suffix=".db")
     os.environ["CARE_DB"] = test_db_path
     os.environ["AUTH_DB"] = test_db_path
     os.environ["MUSIC_DB"] = test_db_path
@@ -60,8 +60,12 @@ def _create_test_app():
 
     # Set up database tables
     try:
-        result = subprocess.run([sys.executable, "test_setup_db.py"],
-                              capture_output=True, text=True, cwd=os.getcwd())
+        result = subprocess.run(
+            [sys.executable, "test_setup_db.py"],
+            capture_output=True,
+            text=True,
+            cwd=os.getcwd(),
+        )
         if result.returncode != 0:
             print(f"DB setup failed: {result.stderr}")
     except Exception as e:
@@ -524,9 +528,7 @@ class TestWhoamiAdvanced:
         assert response.status_code == 200
         data = response.json()
         assert data["is_authenticated"] is True
-        assert (
-            data["user"]["id"] == "cookie-user"
-        )  # Cookie takes priority
+        assert data["user"]["id"] == "cookie-user"  # Cookie takes priority
         assert data["source"] == "cookie"
         assert data["version"] == 1
 

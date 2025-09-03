@@ -5,8 +5,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 # Set test environment
-os.environ['TEST_MODE'] = '1'
-os.environ['JWT_OPTIONAL_IN_TESTS'] = '1'
+os.environ["TEST_MODE"] = "1"
+os.environ["JWT_OPTIONAL_IN_TESTS"] = "1"
 
 client = TestClient(app)
 
@@ -18,11 +18,11 @@ print("\n1. Direct Google Status (/v1/google/status):")
 response = client.get("/v1/google/status")
 if response.status_code == 200:
     data = response.json()
-    connected = data.get('connected', False)
-    linked = data.get('linked', False)
+    connected = data.get("connected", False)
+    linked = data.get("linked", False)
     print(f"   Connected: {connected}")
     print(f"   Linked: {linked}")
-    
+
     if not connected and not linked:
         print("   ✅ CORRECT: Shows not connected (no expired tokens)")
     else:
@@ -35,10 +35,10 @@ print("\n2. Integrations Status (/v1/integrations/status):")
 response = client.get("/v1/integrations/status")
 if response.status_code == 200:
     data = response.json()
-    google_status = data.get('google', {}).get('status', 'unknown')
+    google_status = data.get("google", {}).get("status", "unknown")
     print(f"   Google Status: {google_status}")
-    
-    if google_status == 'not_connected':
+
+    if google_status == "not_connected":
         print("   ✅ CORRECT: Shows not connected")
     else:
         print(f"   ❌ ISSUE: Shows {google_status}")
@@ -50,8 +50,8 @@ print("\n3. OAuth URL Generation:")
 response = client.get("/v1/google/auth/login_url?next=/settings")
 if response.status_code == 200:
     data = response.json()
-    url = data.get('url', '')
-    if url and 'client_id=' in url:
+    url = data.get("url", "")
+    if url and "client_id=" in url:
         print("   ✅ OAuth URL generated successfully")
     else:
         print("   ❌ OAuth URL generation failed")

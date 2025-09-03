@@ -16,7 +16,9 @@ class DummyOAuth:
 @pytest.mark.asyncio
 async def test_refresh_dedup_concurrency(monkeypatch):
     dummy = {"access_token": "at", "expires_in": 3600}
-    monkeypatch.setattr("app.integrations.google.refresh.GoogleOAuth", lambda: DummyOAuth(dummy))
+    monkeypatch.setattr(
+        "app.integrations.google.refresh.GoogleOAuth", lambda: DummyOAuth(dummy)
+    )
 
     async def do_refresh(i):
         r = await refresh_dedup("user1", "rt")
@@ -26,5 +28,3 @@ async def test_refresh_dedup_concurrency(monkeypatch):
     results = await asyncio.gather(*tasks)
     assert all(r[0] is True for r in results)
     assert all(r[1]["access_token"] == "at" for r in results)
-
-

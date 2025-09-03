@@ -23,4 +23,3 @@ def test_jwt_decode_respects_leeway(monkeypatch):
         assert False, "expected ExpiredSignatureError"
     except jwt.ExpiredSignatureError:
         pass
-

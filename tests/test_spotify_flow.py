@@ -6,6 +6,7 @@ import requests
 import json
 import time
 
+
 def test_spotify_flow():
     print("=== Spotify OAuth Flow Test ===")
 
@@ -15,7 +16,7 @@ def test_spotify_flow():
         response = requests.get(
             "http://localhost:8000/v1/spotify/login",
             params={"user_id": "demo"},
-            cookies={"GSNH_AT": "test_token"}
+            cookies={"GSNH_AT": "test_token"},
         )
         print(f"   Status: {response.status_code}")
 
@@ -43,7 +44,7 @@ def test_spotify_flow():
     frontend_urls = [
         "http://localhost:3000/",
         "http://localhost:3000/integrations",
-        "http://localhost:3000/spotify/connect"
+        "http://localhost:3000/spotify/connect",
     ]
 
     for url in frontend_urls:
@@ -62,6 +63,7 @@ def test_spotify_flow():
     print("   - JavaScript errors in browser")
     print("   - Authentication/cookie issues")
     print("   - Network connectivity between frontend and backend")
+
 
 if __name__ == "__main__":
     test_spotify_flow()

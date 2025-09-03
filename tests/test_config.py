@@ -48,6 +48,7 @@ def test_config_forbidden(monkeypatch):
 
     # Mock the request state to have no scopes (unauthenticated)
     from app.deps import scopes
+
     original_get_scopes = scopes._get_scopes_from_request
     original_get_user_id = scopes._get_user_id_from_request
 
@@ -74,6 +75,7 @@ def test_config_allowed(monkeypatch):
 
     # Mock the request state by patching the _get_scopes_from_request function
     from app.deps import scopes
+
     original_get_scopes = scopes._get_scopes_from_request
     original_get_user_id = scopes._get_user_id_from_request
 
@@ -104,6 +106,7 @@ def test_config_allowed(monkeypatch):
 def test_config_env_reload(monkeypatch):
     # Mock RBAC for this test
     from app.deps import scopes
+
     original_get_scopes = scopes._get_scopes_from_request
     original_get_user_id = scopes._get_user_id_from_request
 

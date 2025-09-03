@@ -21,8 +21,9 @@ from spotify_debugger import (
     debug_log_spotify_response,
     debug_track_spotify_operation,
     create_debug_routes,
-    debug_spotify_integration
+    debug_spotify_integration,
 )
+
 
 async def test_spotify_status_endpoint():
     """Test the Spotify status endpoint with debugging."""
@@ -33,15 +34,16 @@ async def test_spotify_status_endpoint():
         operation="test_spotify_status",
         user_id="test_user",
         endpoint="/v1/spotify/status",
-        test_mode=True
+        test_mode=True,
     )
 
     # Set up test environment
-    os.environ['TEST_MODE'] = '1'
-    os.environ['JWT_OPTIONAL_IN_TESTS'] = '1'
+    os.environ["TEST_MODE"] = "1"
+    os.environ["JWT_OPTIONAL_IN_TESTS"] = "1"
 
     try:
         from app.main import app
+
         client = TestClient(app)
 
         # Track the operation with timing
@@ -56,7 +58,7 @@ async def test_spotify_status_endpoint():
                     operation="test_spotify_status",
                     user_id="test_user",
                     status="success",
-                    response_data=data
+                    response_data=data,
                 )
             else:
                 print(f"  Error: {response.text}")
@@ -64,7 +66,7 @@ async def test_spotify_status_endpoint():
                     operation="test_spotify_status",
                     user_id="test_user",
                     status="error",
-                    error=f"HTTP {response.status_code}: {response.text}"
+                    error=f"HTTP {response.status_code}: {response.text}",
                 )
 
     except Exception as e:
@@ -73,32 +75,39 @@ async def test_spotify_status_endpoint():
             operation="test_spotify_status",
             user_id="test_user",
             status="error",
-            error=str(e)
+            error=str(e),
         )
+
 
 async def test_spotify_auth_flow():
     """Test Spotify authentication flow."""
     print("\n🔐 Testing Spotify Auth Flow")
 
-    os.environ['TEST_MODE'] = '1'
-    os.environ['JWT_OPTIONAL_IN_TESTS'] = '1'
+    os.environ["TEST_MODE"] = "1"
+    os.environ["JWT_OPTIONAL_IN_TESTS"] = "1"
 
     try:
         from app.main import app
+
         client = TestClient(app)
 
         # Test login endpoint (should return 422 for missing user_id)
         async with debug_track_spotify_operation("spotify_login_test", "test_user"):
             response = client.get("/v1/spotify/login")
-            print(f"  Login endpoint: {response.status_code} (expected: 422 - validation error)")
+            print(
+                f"  Login endpoint: {response.status_code} (expected: 422 - validation error)"
+            )
 
         # Test callback endpoint (should return 400 for missing params)
         async with debug_track_spotify_operation("spotify_callback_test", "test_user"):
             response = client.get("/v1/spotify/callback")
-            print(f"  Callback endpoint: {response.status_code} (expected: 400 - missing params)")
+            print(
+                f"  Callback endpoint: {response.status_code} (expected: 400 - missing params)"
+            )
 
     except Exception as e:
         print(f"  Exception: {e}")
+
 
 async def test_spotify_debug_routes():
     """Test the Spotify debug routes."""
@@ -128,6 +137,7 @@ async def test_spotify_debug_routes():
         events = response.json()
         print(f"  Recent events: {len(events)}")
 
+
 async def demonstrate_debugging_workflow():
     """Demonstrate the complete debugging workflow."""
     print("🚀 Spotify Integration Debugging Workflow")
@@ -150,12 +160,13 @@ async def demonstrate_debugging_workflow():
     print("\n📈 Step 4: Final Debug Report")
     await debug_spotify_integration()
 
+
 def demonstrate_code_integration():
     """Show how to integrate debugging into actual Spotify code."""
     print("\n💻 Code Integration Examples")
     print("=" * 30)
 
-    example_code = '''
+    example_code = """
 # Instead of this (random logging):
 def old_way():
     print("Starting Spotify operation...")
@@ -183,9 +194,10 @@ create_debug_routes(app)
 # GET /debug/spotify/health
 # GET /debug/spotify/events
 # GET /debug/spotify/stats
-'''
+"""
 
     print(example_code)
+
 
 async def main():
     """Run all Spotify integration tests."""
@@ -207,6 +219,6 @@ async def main():
     print("  • Clean separation from business logic")
     print("  • No need for random print statements!")
 
+
 if __name__ == "__main__":
     asyncio.run(main())
-

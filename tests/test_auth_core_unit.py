@@ -17,7 +17,9 @@ class FakeTarget:
 
 
 def test_extract_token_precedence_header_over_cookie():
-    t = FakeTarget(headers={"Authorization": "Bearer abc"}, cookies={"GSNH_AT": "cookie"})
+    t = FakeTarget(
+        headers={"Authorization": "Bearer abc"}, cookies={"GSNH_AT": "cookie"}
+    )
     src, tok = extract_token(t)
     assert src == "authorization"
     assert tok == "abc"
@@ -57,4 +59,3 @@ def test_has_scope_and_require_scope(monkeypatch):
     payload = {"scopes": ["music:control", "care:resident"]}
     assert has_scope(payload, "music:control") is True
     assert has_scope(payload, "admin:write") is False
-

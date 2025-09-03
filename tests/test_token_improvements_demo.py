@@ -2,6 +2,7 @@
 Demonstration of token system improvements
 This test shows that our core improvements are working correctly
 """
+
 import time
 import pytest
 import tempfile
@@ -26,7 +27,8 @@ class TestTokenImprovementsDemo:
 
         # Test 1: Valid Spotify token with correct issuer
         print("1. Testing valid Spotify token with correct issuer...")
-        valid_token = ThirdPartyToken(identity_id="a2c6d2d0-edeb-4d88-85fd-6aa689f58d14", 
+        valid_token = ThirdPartyToken(
+            identity_id="a2c6d2d0-edeb-4d88-85fd-6aa689f58d14",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -38,7 +40,9 @@ class TestTokenImprovementsDemo:
         )
 
         is_valid = dao._validate_token_for_storage(valid_token)
-        assert is_valid, "✅ Valid Spotify token with correct issuer should pass validation"
+        assert (
+            is_valid
+        ), "✅ Valid Spotify token with correct issuer should pass validation"
         print("   ✅ PASSED: Valid token validation")
 
         stored = await dao.upsert_token(valid_token)
@@ -47,7 +51,8 @@ class TestTokenImprovementsDemo:
 
         # Test 2: Invalid Spotify token with wrong issuer (our improvement!)
         print("\n2. Testing invalid Spotify token with wrong issuer...")
-        invalid_token = ThirdPartyToken(identity_id="7967add1-ff6f-4674-9245-259b73791de0", 
+        invalid_token = ThirdPartyToken(
+            identity_id="7967add1-ff6f-4674-9245-259b73791de0",
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -59,7 +64,9 @@ class TestTokenImprovementsDemo:
         )
 
         is_invalid = dao._validate_token_for_storage(invalid_token)
-        assert not is_invalid, "✅ Invalid Spotify token with wrong issuer should fail validation (this is our improvement!)"
+        assert (
+            not is_invalid
+        ), "✅ Invalid Spotify token with wrong issuer should fail validation (this is our improvement!)"
         print("   ✅ PASSED: Invalid token validation (blocked by our improvement)")
 
         not_stored = await dao.upsert_token(invalid_token)
@@ -87,7 +94,8 @@ class TestTokenImprovementsDemo:
         for provider, expected_issuer in providers:
             print(f"\nTesting {provider} token with correct issuer...")
 
-            token = ThirdPartyToken(user_id=f"user_{provider}",
+            token = ThirdPartyToken(
+                user_id=f"user_{provider}",
                 provider=provider,
                 provider_sub=f"{provider}_user_123",
                 provider_iss=expected_issuer,
@@ -119,7 +127,8 @@ class TestTokenImprovementsDemo:
         # Test that scope unioning logic works in validation/storage
         print("1. Testing scope unioning during storage...")
 
-        token1 = ThirdPartyToken(identity_id="9841d890-0a8f-4e5f-81b7-f969981a3c7a", 
+        token1 = ThirdPartyToken(
+            identity_id="9841d890-0a8f-4e5f-81b7-f969981a3c7a",
             user_id="scope_test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -130,7 +139,8 @@ class TestTokenImprovementsDemo:
             expires_at=now + 3600,
         )
 
-        token2 = ThirdPartyToken(identity_id="83edf702-8445-4d84-8aa6-99f64b6a4e28", 
+        token2 = ThirdPartyToken(
+            identity_id="83edf702-8445-4d84-8aa6-99f64b6a4e28",
             user_id="scope_test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -172,7 +182,8 @@ class TestTokenImprovementsDemo:
         stored_tokens = []
 
         for user in users:
-            token = ThirdPartyToken(identity_id="ec48ed65-c170-4f3a-9fd7-1f5bc64f43d4",
+            token = ThirdPartyToken(
+                identity_id="ec48ed65-c170-4f3a-9fd7-1f5bc64f43d4",
                 user_id=user,
                 provider="spotify",
                 provider_sub=f"{user}_spotify",
@@ -205,42 +216,55 @@ class TestTokenImprovementsDemo:
 
         test_cases = [
             # Valid cases
-            ("Valid Spotify token", {
-                'provider': 'spotify',
-                'provider_iss': 'https://accounts.spotify.com',
-                'access_token': 'valid_token',
-                'refresh_token': 'valid_refresh',
-                'scope': 'user-read-private',
-                'should_pass': True
-            }, True),
-
-            ("Valid Google token", {
-                'provider': 'google',
-                'provider_iss': 'https://accounts.google.com',
-                'access_token': 'valid_google_token',
-                'refresh_token': 'valid_google_refresh',
-                'scope': 'calendar.readonly',
-                'should_pass': True
-            }, True),
-
+            (
+                "Valid Spotify token",
+                {
+                    "provider": "spotify",
+                    "provider_iss": "https://accounts.spotify.com",
+                    "access_token": "valid_token",
+                    "refresh_token": "valid_refresh",
+                    "scope": "user-read-private",
+                    "should_pass": True,
+                },
+                True,
+            ),
+            (
+                "Valid Google token",
+                {
+                    "provider": "google",
+                    "provider_iss": "https://accounts.google.com",
+                    "access_token": "valid_google_token",
+                    "refresh_token": "valid_google_refresh",
+                    "scope": "calendar.readonly",
+                    "should_pass": True,
+                },
+                True,
+            ),
             # Invalid cases
-            ("Spotify wrong issuer", {
-                'provider': 'spotify',
-                'provider_iss': 'https://wrong.issuer.com',
-                'access_token': 'token',
-                'refresh_token': 'refresh',
-                'scope': 'user-read-private',
-                'should_pass': False
-            }, False),
-
-            ("Google wrong issuer", {
-                'provider': 'google',
-                'provider_iss': 'https://wrong.issuer.com',
-                'access_token': 'token',
-                'refresh_token': 'refresh',
-                'scope': 'calendar.readonly',
-                'should_pass': False
-            }, False),
+            (
+                "Spotify wrong issuer",
+                {
+                    "provider": "spotify",
+                    "provider_iss": "https://wrong.issuer.com",
+                    "access_token": "token",
+                    "refresh_token": "refresh",
+                    "scope": "user-read-private",
+                    "should_pass": False,
+                },
+                False,
+            ),
+            (
+                "Google wrong issuer",
+                {
+                    "provider": "google",
+                    "provider_iss": "https://wrong.issuer.com",
+                    "access_token": "token",
+                    "refresh_token": "refresh",
+                    "scope": "calendar.readonly",
+                    "should_pass": False,
+                },
+                False,
+            ),
         ]
 
         for description, token_data, should_pass in test_cases:
@@ -249,12 +273,12 @@ class TestTokenImprovementsDemo:
             try:
                 token = ThirdPartyToken(
                     user_id=f"user_{description.replace(' ', '_').lower()}",
-                    provider=token_data['provider'],
+                    provider=token_data["provider"],
                     provider_sub=f"sub_{description.replace(' ', '_').lower()}",
-                    provider_iss=token_data['provider_iss'],
+                    provider_iss=token_data["provider_iss"],
                     access_token="BAAAAAAAAAAAAAAAAA",
                     refresh_token="ABBBBBBBBBBBBBBBBB",
-                    scopes=token_data['scope'],
+                    scopes=token_data["scope"],
                     expires_at=now + 3600,
                 )
 
@@ -288,7 +312,8 @@ class TestTokenImprovementsDemo:
         print("\n=== TESTING REFRESH INTEGRATION CONCEPT ===")
 
         # Create an expired token
-        expired_token = ThirdPartyToken(identity_id="8c73d5e4-868c-4a73-aa43-fa44359dd9cd", 
+        expired_token = ThirdPartyToken(
+            identity_id="8c73d5e4-868c-4a73-aa43-fa44359dd9cd",
             user_id="refresh_test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -307,20 +332,22 @@ class TestTokenImprovementsDemo:
         print("   ✅ PASSED: Expired token storage")
 
         # Mock successful refresh (this demonstrates the integration works)
-        with patch('app.integrations.spotify.client.SpotifyClient._refresh_tokens',
-                   new_callable=AsyncMock) as mock_refresh:
+        with patch(
+            "app.integrations.spotify.client.SpotifyClient._refresh_tokens",
+            new_callable=AsyncMock,
+        ) as mock_refresh:
             mock_refresh.return_value = {
-                'access_token': 'refreshed_token_123',
-                'expires_at': now + 3600,
-                'refresh_token': 'new_refresh_token',
-                'scope': 'user-read-private'
+                "access_token": "refreshed_token_123",
+                "expires_at": now + 3600,
+                "refresh_token": "new_refresh_token",
+                "scope": "user-read-private",
             }
 
             # This would normally trigger the refresh logic
             print("   ✅ PASSED: Refresh mock setup works")
 
             # Verify the refresh service exists and is callable
-            assert hasattr(refresh_service, 'get_valid_token_with_refresh')
+            assert hasattr(refresh_service, "get_valid_token_with_refresh")
             print("   ✅ PASSED: Refresh service method exists")
 
         print("\n🎉 REFRESH INTEGRATION CONCEPT IS WORKING!")
@@ -343,9 +370,9 @@ class TestTokenImprovementsDemo:
 @pytest.mark.asyncio
 async def test_token_system_improvements_integration(tmp_path):
     """Integration test showing all improvements work together"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🎉 TOKEN SYSTEM IMPROVEMENTS - FINAL INTEGRATION TEST")
-    print("="*60)
+    print("=" * 60)
 
     db_path = str(tmp_path / "final_integration.db")
     dao = TokenDAO(db_path)
@@ -366,7 +393,8 @@ async def test_token_system_improvements_integration(tmp_path):
 
     # Step 1: OAuth callback with correct issuer
     print("\n   Step 1: OAuth callback with correct Spotify issuer...")
-    oauth_token = ThirdPartyToken(identity_id="61e621cb-63bd-43d9-9cb0-58e223686e6c", 
+    oauth_token = ThirdPartyToken(
+        identity_id="61e621cb-63bd-43d9-9cb0-58e223686e6c",
         user_id="oauth_user",
         provider="spotify",
         provider_sub="spotify_oauth_user",
@@ -387,7 +415,8 @@ async def test_token_system_improvements_integration(tmp_path):
 
     # Step 2: Wrong issuer would be blocked (our key improvement!)
     print("\n   Step 2: Demonstrating wrong issuer blocking...")
-    wrong_issuer_token = ThirdPartyToken(identity_id="88936ec6-fbe7-4bf0-86ec-d9b852c01cab", 
+    wrong_issuer_token = ThirdPartyToken(
+        identity_id="88936ec6-fbe7-4bf0-86ec-d9b852c01cab",
         user_id="wrong_user",
         provider="spotify",
         provider_sub="wrong_sub",
@@ -409,6 +438,6 @@ async def test_token_system_improvements_integration(tmp_path):
     print("🔄 Automation: Automatic token refresh")
     print("🧪 Testability: Full test coverage of improvements")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("✅ TOKEN SYSTEM IS PRODUCTION-READY!")
-    print("="*60)
+    print("=" * 60)

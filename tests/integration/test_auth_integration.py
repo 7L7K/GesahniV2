@@ -15,6 +15,7 @@ def test_csrf_enforcement_on_login(monkeypatch):
     # Re-import app after setting CSRF_ENABLED to ensure middleware picks it up
     import importlib
     import app.main
+
     importlib.reload(app.main)
     client = TestClient(app.main.app)
 
@@ -28,8 +29,12 @@ def test_csrf_enforcement_on_login(monkeypatch):
 
     # Missing CSRF -> 403
     from fastapi.exceptions import HTTPException
+
     try:
-        r = client.post("/v1/login", json={"username": "test_user_123", "password": "test_password_123"})
+        r = client.post(
+            "/v1/login",
+            json={"username": "test_user_123", "password": "test_password_123"},
+        )
         assert r.status_code == 403
     except HTTPException as e:
         assert e.status_code == 403
@@ -49,7 +54,9 @@ def test_backoff_sleep_in_login(monkeypatch):
     client = TestClient(app)
     username = "test_user_123"
     # Ensure user exists (ignore if already exists)
-    register_resp = client.post("/v1/register", json={"username": username, "password": "test_password_123"})
+    register_resp = client.post(
+        "/v1/register", json={"username": username, "password": "test_password_123"}
+    )
     # 200 = created, 409 = already exists (both are fine for this test)
     assert register_resp.status_code in (200, 409)
 

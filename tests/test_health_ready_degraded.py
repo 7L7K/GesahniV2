@@ -7,7 +7,10 @@ def test_health_ready_degraded(monkeypatch):
     """Test health readiness endpoint returns degraded status when component is unhealthy."""
 
     # Set a proper JWT_SECRET for tests
-    monkeypatch.setenv("JWT_SECRET", "test_jwt_secret_that_is_long_enough_for_validation_purposes_123456789")
+    monkeypatch.setenv(
+        "JWT_SECRET",
+        "test_jwt_secret_that_is_long_enough_for_validation_purposes_123456789",
+    )
 
     with TestClient(app) as client:
         # Mock the vector store to appear unhealthy

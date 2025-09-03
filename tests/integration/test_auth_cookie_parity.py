@@ -7,19 +7,17 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-COOKIE_RE = re.compile(r"(GSNH_AT|GSNH_RT|GSNH_SESS|did|g_state|g_next|access_token|refresh_token|__session)=[^;]*; .*")
+COOKIE_RE = re.compile(
+    r"(GSNH_AT|GSNH_RT|GSNH_SESS|did|g_state|g_next|access_token|refresh_token|__session)=[^;]*; .*"
+)
 
 
 def _assert_auth_cookies(
     set_cookie_headers, *, expect_samesite=None, expect_secure=None
 ):
     names = [h.split("=", 1)[0] for h in set_cookie_headers]
-    assert any(
-        h.startswith("GSNH_AT=") for h in set_cookie_headers
-    ), "GSNH_AT not set"
-    assert any(
-        h.startswith("GSNH_RT=") for h in set_cookie_headers
-    ), "GSNH_RT not set"
+    assert any(h.startswith("GSNH_AT=") for h in set_cookie_headers), "GSNH_AT not set"
+    assert any(h.startswith("GSNH_RT=") for h in set_cookie_headers), "GSNH_RT not set"
     for h in set_cookie_headers:
         assert COOKIE_RE.search(h), f"bad cookie format: {h}"
         if expect_secure is not None:
@@ -64,7 +62,7 @@ def test_oauth_callback_sets_cookies_on_callback_response_single_hop(monkeypatch
         "email_verified": True,
         "aud": "test-client-id",
         "iat": int(__import__("time").time()),
-        "exp": int(__import__("time").time()) + 3600
+        "exp": int(__import__("time").time()) + 3600,
     }
     mock_id_token = jwt.encode(mock_id_token_payload, "test-secret", algorithm="HS256")
 

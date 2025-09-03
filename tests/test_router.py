@@ -89,7 +89,9 @@ def patch_memgpt_and_vector(monkeypatch):
     # Only patch if the attribute exists
     if hasattr(router, "memgpt"):
         monkeypatch.setattr(
-            router, "memgpt", types.SimpleNamespace(store_interaction=lambda *a, **k: None)
+            router,
+            "memgpt",
+            types.SimpleNamespace(store_interaction=lambda *a, **k: None),
         )
     if hasattr(router, "add_user_memory"):
         monkeypatch.setattr(router, "add_user_memory", lambda *a, **k: None)
@@ -156,7 +158,9 @@ def test_gpt_override(monkeypatch):
 
     monkeypatch.setattr(router, "ask_gpt", fake_gpt)
     monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
-    result = asyncio.run(router.route_prompt("hello world", user_id="u", model_override="gpt-4"))
+    result = asyncio.run(
+        router.route_prompt("hello world", user_id="u", model_override="gpt-4")
+    )
     assert result == "gpt-4"
 
 
@@ -169,7 +173,9 @@ def test_gpt_override_invalid(monkeypatch):
 
     monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4"})
     with pytest.raises(HTTPException):
-        asyncio.run(router.route_prompt("hello world", user_id="u", model_override="gpt-3"))
+        asyncio.run(
+            router.route_prompt("hello world", user_id="u", model_override="gpt-3")
+        )
 
 
 def test_gpt_override_http_error_falls_back(monkeypatch):
@@ -399,6 +405,7 @@ def test_undefined_var_guard_debug_model_routing_disabled():
     # can be called with appropriate mocks without NameError
 
     import os
+
     os.environ["DEBUG_MODEL_ROUTING"] = "0"
 
     # If this import and basic function access works without NameError,
@@ -406,7 +413,7 @@ def test_undefined_var_guard_debug_model_routing_disabled():
     from app import router
 
     # Verify that the function exists and can be inspected
-    assert hasattr(router, 'route_prompt')
+    assert hasattr(router, "route_prompt")
     assert callable(router.route_prompt)
 
     # The test passes if we get here without NameError
@@ -423,7 +430,9 @@ def test_override_happy_path_openai_healthy(monkeypatch):
     from app import router
 
     # Mock OpenAI as healthy
-    monkeypatch.setattr(router, "_check_vendor_health", lambda vendor: vendor == "openai")
+    monkeypatch.setattr(
+        router, "_check_vendor_health", lambda vendor: vendor == "openai"
+    )
 
     async def fake_gpt(prompt, model=None, system=None, **kwargs):
         return "gpt_response", 10, 20, 0.001
@@ -432,7 +441,9 @@ def test_override_happy_path_openai_healthy(monkeypatch):
     monkeypatch.setattr(router, "ALLOWED_GPT_MODELS", {"gpt-4o"})
 
     # Should not raise unknown_model error
-    result = asyncio.run(router.route_prompt("hello world", user_id="u", model_override="gpt-4o"))
+    result = asyncio.run(
+        router.route_prompt("hello world", user_id="u", model_override="gpt-4o")
+    )
     assert result == "gpt_response"
 
 
@@ -447,7 +458,9 @@ def test_budget_enforcement_timeout(monkeypatch):
     from app import router
 
     # Mock LLaMA as healthy, OpenAI as unhealthy to force LLaMA usage
-    monkeypatch.setattr(router, "_check_vendor_health", lambda vendor: vendor == "ollama")
+    monkeypatch.setattr(
+        router, "_check_vendor_health", lambda vendor: vendor == "ollama"
+    )
 
     async def slow_llama(prompt, model=None, **opts):
         await asyncio.sleep(2)  # Sleep longer than budget
@@ -484,7 +497,9 @@ def test_req_id_propagation_both_vendors(monkeypatch):
     monkeypatch.setattr(router, "PostCallData", track_postcall_data)
 
     # Test with OpenAI vendor
-    monkeypatch.setattr(router, "_check_vendor_health", lambda vendor: vendor == "openai")
+    monkeypatch.setattr(
+        router, "_check_vendor_health", lambda vendor: vendor == "openai"
+    )
 
     async def fake_gpt(prompt, model=None, system=None, **kwargs):
         return "gpt_response", 10, 20, 0.001
@@ -496,7 +511,9 @@ def test_req_id_propagation_both_vendors(monkeypatch):
     postcall_data_instances.clear()
 
     # Call with OpenAI
-    result = asyncio.run(router.route_prompt("hello world", user_id="u", model_override="gpt-4o"))
+    result = asyncio.run(
+        router.route_prompt("hello world", user_id="u", model_override="gpt-4o")
+    )
 
     # Should have created PostCallData with non-null request_id
     assert len(postcall_data_instances) == 1

@@ -5,6 +5,7 @@ import pytest
 
 def _openapi():
     from app.main import app
+
     return app.openapi()
 
 

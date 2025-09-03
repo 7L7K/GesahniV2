@@ -116,10 +116,12 @@ class TestAuthRateLimiting:
 
         # Mock different IPs by modifying the client
         def make_request_with_ip(ip):
-            with patch.object(client, 'get') as mock_get:
+            with patch.object(client, "get") as mock_get:
                 mock_get.return_value.status_code = 200
                 # Simulate request with different client IP
-                return mock_get(f"http://testserver/v1/whoami", headers={"X-Forwarded-For": ip})
+                return mock_get(
+                    f"http://testserver/v1/whoami", headers={"X-Forwarded-For": ip}
+                )
 
         # Make requests from different IPs - should not interfere
         for ip in ["192.168.1.1", "192.168.1.2"]:
@@ -142,7 +144,10 @@ class TestAuthRateLimiting:
                     assert response.status_code == 200
                 else:
                     response = client.get(endpoint)
-                    assert response.status_code in [200, 401]  # 401 for auth endpoints without tokens
+                    assert response.status_code in [
+                        200,
+                        401,
+                    ]  # 401 for auth endpoints without tokens
 
     def test_rate_limit_metrics_recording(self, client):
         """Test that rate limiting properly records metrics."""
@@ -166,7 +171,7 @@ class TestAuthRateLimiting:
         _test_set_config(max_req=1, window_s=60, bypass_scopes="admin,service")
 
         # Mock a request with admin scope
-        with patch.object(client.app, 'middleware') as mock_middleware:
+        with patch.object(client.app, "middleware") as mock_middleware:
             # Simulate middleware setting scopes on request state
             def mock_dispatch(request, call_next):
                 request.state.scopes = {"admin"}
@@ -296,7 +301,9 @@ class TestAuthRateLimiting:
         _test_set_config(max_req=0, window_s=60)
 
         # With PYTEST_CURRENT_TEST set, rate limiting should be bypassed
-        with patch.dict(os.environ, {"PYTEST_CURRENT_TEST": "test_rate_limit_pytest_bypass"}):
+        with patch.dict(
+            os.environ, {"PYTEST_CURRENT_TEST": "test_rate_limit_pytest_bypass"}
+        ):
             # Even with max_req=0, requests should succeed during pytest
             response = client.get("/v1/whoami")
             assert response.status_code == 200

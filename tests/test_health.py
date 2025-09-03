@@ -28,4 +28,3 @@ async def test_health_never_500(monkeypatch, async_client):
     # When forced failure, ok should likely be False or degraded
     # Accept either but ensure the shape is present
     assert "components" in body
-

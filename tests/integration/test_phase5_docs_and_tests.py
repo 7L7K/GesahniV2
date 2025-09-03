@@ -12,7 +12,9 @@ from app.tokens import create_access_token
 class TestPhase5DocsAndTests:
     """Integration tests for Phase 5 requirements."""
 
-    def create_test_token(self, user_id: str = "test_user", secret: str = "test_secret"):
+    def create_test_token(
+        self, user_id: str = "test_user", secret: str = "test_secret"
+    ):
         """Create a test JWT token."""
         payload = {"user_id": user_id}
         return create_access_token(payload)
@@ -48,33 +50,39 @@ class TestPhase5DocsAndTests:
                 "text_input": {"prompt": "Hello world", "model": "test-model"},
                 "messages_input": {
                     "prompt": [{"role": "user", "content": "Hello world"}],
-                    "model": "test-model"
-                }
+                    "model": "test-model",
+                },
             },
             {
                 "name": "multi_message",
-                "text_input": {"prompt": "System prompt\nUser message", "model": "test-model"},
+                "text_input": {
+                    "prompt": "System prompt\nUser message",
+                    "model": "test-model",
+                },
                 "messages_input": {
                     "prompt": [
                         {"role": "system", "content": "System prompt"},
-                        {"role": "user", "content": "User message"}
+                        {"role": "user", "content": "User message"},
                     ],
-                    "model": "test-model"
-                }
+                    "model": "test-model",
+                },
             },
             {
                 "name": "complex_conversation",
-                "text_input": {"prompt": "You are helpful.\nHello\nHi there!\nHow can I help?", "model": "test-model"},
+                "text_input": {
+                    "prompt": "You are helpful.\nHello\nHi there!\nHow can I help?",
+                    "model": "test-model",
+                },
                 "messages_input": {
                     "prompt": [
                         {"role": "system", "content": "You are helpful."},
                         {"role": "user", "content": "Hello"},
                         {"role": "assistant", "content": "Hi there!"},
-                        {"role": "user", "content": "How can I help?"}
+                        {"role": "user", "content": "How can I help?"},
                     ],
-                    "model": "test-model"
-                }
-            }
+                    "model": "test-model",
+                },
+            },
         ]
 
         for test_case in test_cases:
@@ -83,12 +91,16 @@ class TestPhase5DocsAndTests:
                 headers["Authorization"] = f"Bearer {self.create_test_token()}"
 
             # Test text input
-            response_text = client.post("/v1/ask", json=test_case["text_input"], headers=headers)
+            response_text = client.post(
+                "/v1/ask", json=test_case["text_input"], headers=headers
+            )
             assert response_text.status_code == 200
             text_data = response_text.json()
 
             # Test messages input
-            response_messages = client.post("/v1/ask", json=test_case["messages_input"], headers=headers)
+            response_messages = client.post(
+                "/v1/ask", json=test_case["messages_input"], headers=headers
+            )
             assert response_messages.status_code == 200
             messages_data = response_messages.json()
 
@@ -115,12 +127,16 @@ class TestPhase5DocsAndTests:
 
             async def stream_response():
                 # Route event
-                yield "data: " + json.dumps({"event": "route", "data": {"vendor": "openai", "model": "gpt-4o"}}) + "\n\n"
+                yield "data: " + json.dumps(
+                    {"event": "route", "data": {"vendor": "openai", "model": "gpt-4o"}}
+                ) + "\n\n"
 
                 # Delta events
                 deltas = ["Hello", " world", " from", " AI!"]
                 for delta in deltas:
-                    yield "data: " + json.dumps({"event": "delta", "data": {"text": delta}}) + "\n\n"
+                    yield "data: " + json.dumps(
+                        {"event": "delta", "data": {"text": delta}}
+                    ) + "\n\n"
                     await asyncio.sleep(0.01)
 
                 # Done event
@@ -140,7 +156,7 @@ class TestPhase5DocsAndTests:
         response = client.post(
             "/v1/ask",
             json={"prompt": "Test streaming", "stream": True},
-            headers={"Accept": "text/event-stream"}
+            headers={"Accept": "text/event-stream"},
         )
 
         assert response.status_code == 200
@@ -194,6 +210,7 @@ class TestPhase5DocsAndTests:
         # Test 2: Rate limit error (mock)
         def mock_rate_limit_error(*args, **kwargs):
             from fastapi import HTTPException
+
             raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
         monkeypatch.setattr("app.main.route_prompt", mock_rate_limit_error)
@@ -208,6 +225,7 @@ class TestPhase5DocsAndTests:
         # Test 3: 5xx error (mock)
         def mock_5xx_error(*args, **kwargs):
             from fastapi import HTTPException
+
             raise HTTPException(status_code=500, detail="Internal server error")
 
         monkeypatch.setattr("app.main.route_prompt", mock_5xx_error)
@@ -227,11 +245,9 @@ class TestPhase5DocsAndTests:
         routing_calls = []
 
         async def mock_route_prompt(prompt, user_id, model_override=None, **kwargs):
-            routing_calls.append({
-                "prompt": prompt,
-                "model_override": model_override,
-                "user_id": user_id
-            })
+            routing_calls.append(
+                {"prompt": prompt, "model_override": model_override, "user_id": user_id}
+            )
             return {"response": f"Mocked for model: {model_override}"}
 
         monkeypatch.setattr("app.main.route_prompt", mock_route_prompt)
@@ -291,7 +307,7 @@ class TestPhase5DocsAndTests:
         response = client.post(
             "/v1/ask",
             json={"prompt": "test"},
-            headers={"Authorization": f"Bearer {token}"}
+            headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 200
         assert response.headers.get("X-Request-ID") is not None
@@ -300,7 +316,7 @@ class TestPhase5DocsAndTests:
         response = client.post(
             "/v1/ask",
             json={"prompt": "test"},
-            headers={"Authorization": "Bearer invalid-token"}
+            headers={"Authorization": "Bearer invalid-token"},
         )
         assert response.status_code == 401
 
@@ -315,19 +331,13 @@ class TestPhase5DocsAndTests:
 
         client = TestClient(app)
 
-        test_cases = [
-            "/v1/ask",
-            "/v1/ask/dry-explain",
-            "/v1/ask/stream"
-        ]
+        test_cases = ["/v1/ask", "/v1/ask/dry-explain", "/v1/ask/stream"]
 
         for endpoint in test_cases:
             # Test with provided X-Request-ID
             custom_rid = "custom123"
             response = client.post(
-                endpoint,
-                json={"prompt": "test"},
-                headers={"X-Request-ID": custom_rid}
+                endpoint, json={"prompt": "test"}, headers={"X-Request-ID": custom_rid}
             )
 
             assert response.status_code == 200
@@ -360,7 +370,9 @@ class TestPhase5DocsAndTests:
         assert response.status_code == 200
 
         # Check logs for redaction
-        log_messages = [record.message for record in caplog.records if "ask.entry" in record.message]
+        log_messages = [
+            record.message for record in caplog.records if "ask.entry" in record.message
+        ]
         for log_msg in log_messages:
             assert "<redacted-prompt>" in log_msg or "secret information" not in log_msg
 
@@ -371,5 +383,7 @@ class TestPhase5DocsAndTests:
         assert response.status_code == 200
 
         # Check logs for no redaction
-        log_messages = [record.message for record in caplog.records if "ask.entry" in record.message]
+        log_messages = [
+            record.message for record in caplog.records if "ask.entry" in record.message
+        ]
         assert any("secret information" in log_msg for log_msg in log_messages)

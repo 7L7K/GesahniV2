@@ -12,13 +12,18 @@ def test_vector_store_selection_env(monkeypatch):
 
     # Reload the qdrant module to pick up the ALLOW_QDRANT_IN_TESTS setting
     import app.memory.vector_store.qdrant as qdrant_mod
+
     reload(qdrant_mod)
 
     # Patch QdrantClient before importing memory api
     with monkeypatch.context() as m:
-        m.setattr("app.memory.vector_store.qdrant.QdrantClient", lambda *args, **kwargs: mock_client)
+        m.setattr(
+            "app.memory.vector_store.qdrant.QdrantClient",
+            lambda *args, **kwargs: mock_client,
+        )
 
         import app.memory.api as mem
+
         reload(mem)
         store = mem.get_store()
         # Test Qdrant selection when enabled
@@ -44,13 +49,18 @@ def test_dual_mode_logs(monkeypatch, caplog):
 
     # Reload the qdrant module to pick up the ALLOW_QDRANT_IN_TESTS setting
     import app.memory.vector_store.qdrant as qdrant_mod
+
     reload(qdrant_mod)
 
     # Patch QdrantClient before importing memory api
     with monkeypatch.context() as m:
-        m.setattr("app.memory.vector_store.qdrant.QdrantClient", lambda *args, **kwargs: mock_client)
+        m.setattr(
+            "app.memory.vector_store.qdrant.QdrantClient",
+            lambda *args, **kwargs: mock_client,
+        )
 
         import app.memory.api as mem
+
         reload(mem)
         store = mem.get_store()
         # Should initialize a DualReadVectorStore

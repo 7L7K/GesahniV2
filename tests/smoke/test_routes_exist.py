@@ -39,5 +39,3 @@ def test_expected_routes_present(app: FastAPI):
 
     for method, path in expected:
         assert (method, path) in available, f"Missing route {method} {path}"
-
-

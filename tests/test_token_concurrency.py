@@ -13,7 +13,8 @@ async def test_concurrent_upserts_union_scopes(tmp_path):
     dao = TokenDAO(str(db))
 
     now = int(time.time())
-    base = ThirdPartyToken(identity_id="852f19fd-bd5e-4e57-a5cd-8201343a6af7", 
+    base = ThirdPartyToken(
+        identity_id="852f19fd-bd5e-4e57-a5cd-8201343a6af7",
         user_id="u777",
         provider="google",
         provider_sub="sub-conc",
@@ -26,7 +27,8 @@ async def test_concurrent_upserts_union_scopes(tmp_path):
     await dao.upsert_token(base)
 
     async def upsert_with_scope(suffix: str):
-        t = ThirdPartyToken(identity_id="b0e0d486-eb72-4320-b2a7-a1565c3c619a", 
+        t = ThirdPartyToken(
+            identity_id="b0e0d486-eb72-4320-b2a7-a1565c3c619a",
             user_id="u777",
             provider="google",
             provider_sub="sub-conc",
@@ -39,7 +41,11 @@ async def test_concurrent_upserts_union_scopes(tmp_path):
         return await dao.upsert_token(t)
 
     # Run concurrent upserts adding different scopes
-    tasks = [upsert_with_scope("calendar"), upsert_with_scope("drive"), upsert_with_scope("gmail")]
+    tasks = [
+        upsert_with_scope("calendar"),
+        upsert_with_scope("drive"),
+        upsert_with_scope("gmail"),
+    ]
     res = await asyncio.gather(*tasks)
     assert all(res)
 
@@ -47,4 +53,3 @@ async def test_concurrent_upserts_union_scopes(tmp_path):
     assert latest is not None
     scopes = set((latest.scope or "").split())
     assert {"gmail", "calendar", "drive"}.issubset(scopes)
-

@@ -43,5 +43,3 @@ def test_funcs():
     assert "4" in out
     out = run_handle("sin(pi/2) = 1")
     assert "True" in out
-
-

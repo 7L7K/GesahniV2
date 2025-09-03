@@ -7,6 +7,7 @@ async def test_ask_returns_503_when_router_missing(authed_client):
     # Ensure router is unset
     try:
         from app.router import registry
+
         registry._router = None
     except Exception:
         pass
@@ -49,5 +50,3 @@ async def test_ask_returns_200_when_router_works(monkeypatch, authed_client):
     assert r.status_code == 200
     body = r.json()
     assert body.get("response") == "ok"
-
-

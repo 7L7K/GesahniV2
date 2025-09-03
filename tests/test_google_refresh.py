@@ -4,8 +4,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 # Set test environment
-os.environ['TEST_MODE'] = '1'
-os.environ['JWT_OPTIONAL_IN_TESTS'] = '1'
+os.environ["TEST_MODE"] = "1"
+os.environ["JWT_OPTIONAL_IN_TESTS"] = "1"
 
 client = TestClient(app)
 
@@ -20,16 +20,17 @@ if response.status_code == 200:
     print(f"   Connected: {data.get('connected')}")
     print(f"   Expires at: {data.get('expires_at')}")
     print(f"   Scopes: {data.get('scopes', [])}")
-    
+
     # Check if token is expired
     import time
+
     current_time = int(time.time())
-    expires_at = data.get('expires_at')
+    expires_at = data.get("expires_at")
     if expires_at is None:
         print(f"   ⚠️  No token configured (expires_at is None)")
     elif expires_at < current_time:
         print(f"   ❌ Token expired {current_time - expires_at} seconds ago")
-        
+
         # Check STALE_BUFFER logic
         STALE_BUFFER = 300  # 5 minutes
         time_diff = expires_at - current_time  # This will be negative

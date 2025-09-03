@@ -25,6 +25,7 @@ from ..auth_monitoring import record_finish_call, record_whoami_call, track_auth
 from ..auth_store import create_pat as _create_pat
 
 from ..auth_store import get_pat_by_hash as _get_pat_by_hash
+from ..auth_store import get_pat_by_id as _get_pat_by_id
 from ..auth_store import list_pats_for_user as _list_pats_for_user
 from ..auth_store import revoke_pat as _revoke_pat
 from ..metrics import AUTH_REFRESH_OK, AUTH_REFRESH_FAIL, WHOAMI_OK, WHOAMI_FAIL

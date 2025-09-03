@@ -48,9 +48,13 @@ def _client(monkeypatch):
     # Initialize database tables
     import asyncio
     from app.db import init_db_once
+
     asyncio.run(init_db_once())
 
-    client.post("/v1/register", json={"username": "test_user_123", "password": "test_password_123"})
+    client.post(
+        "/v1/register",
+        json={"username": "test_user_123", "password": "test_password_123"},
+    )
     return client
 
 
@@ -59,7 +63,9 @@ def test_login_sets_cookies_once(monkeypatch):
     client = _client(monkeypatch)
 
     # Login and capture response
-    resp = client.post("/v1/login", json={"username": "test_user_123", "password": "test_password_123"})
+    resp = client.post(
+        "/v1/login", json={"username": "test_user_123", "password": "test_password_123"}
+    )
     assert resp.status_code == 200
 
     # Check that Set-Cookie headers are present

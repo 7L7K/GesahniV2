@@ -10,13 +10,16 @@ import time
 import random
 from typing import Dict, List, Tuple
 
+
 class CSRFInvestigator:
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15'
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
+            }
+        )
 
     def simulate_browser_behavior(self) -> bool:
         """Simulate realistic browser behavior that might trigger issues"""
@@ -33,7 +36,7 @@ class CSRFInvestigator:
                 return False
 
             csrf_data = response.json()
-            csrf_token = csrf_data.get('csrf_token')
+            csrf_token = csrf_data.get("csrf_token")
             if not csrf_token:
                 print("❌ No CSRF token in response")
                 return False
@@ -58,7 +61,9 @@ class CSRFInvestigator:
             try:
                 # Simulate browser timing patterns
                 if i > 0:
-                    delay = random.uniform(0.1, 1.0)  # Random delay like browser requests
+                    delay = random.uniform(
+                        0.1, 1.0
+                    )  # Random delay like browser requests
                     time.sleep(delay)
 
                 start_time = time.time()
@@ -71,22 +76,26 @@ class CSRFInvestigator:
                     "duration_ms": round((end_time - start_time) * 1000, 2),
                     "cookies_before": dict(self.session.cookies),
                     "response_headers": dict(response.headers),
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
                 }
 
                 if response.status_code == 200:
                     data = response.json()
-                    result.update({
-                        "is_authenticated": data.get('is_authenticated', False),
-                        "user_id": data.get('user_id'),
-                        "source": data.get('source'),
-                        "session_ready": data.get('session_ready', False)
-                    })
+                    result.update(
+                        {
+                            "is_authenticated": data.get("is_authenticated", False),
+                            "user_id": data.get("user_id"),
+                            "source": data.get("source"),
+                            "session_ready": data.get("session_ready", False),
+                        }
+                    )
                 else:
                     result["error"] = response.text[:200]
 
                 results.append(result)
-                print(f"  Call {i+1}: {response.status_code} ({result.get('duration_ms')}ms)")
+                print(
+                    f"  Call {i+1}: {response.status_code} ({result.get('duration_ms')}ms)"
+                )
 
                 # Check for logout triggers
                 if response.status_code == 401:
@@ -94,11 +103,9 @@ class CSRFInvestigator:
                     break
 
             except Exception as e:
-                results.append({
-                    "call": i + 1,
-                    "error": str(e),
-                    "timestamp": time.time()
-                })
+                results.append(
+                    {"call": i + 1, "error": str(e), "timestamp": time.time()}
+                )
                 print(f"  Call {i+1}: ERROR - {e}")
 
         return results
@@ -118,26 +125,26 @@ class CSRFInvestigator:
                 result = {
                     "thread": thread_id,
                     "status_code": response.status_code,
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
                 }
 
                 if response.status_code == 200:
                     data = response.json()
-                    result.update({
-                        "is_authenticated": data.get('is_authenticated', False),
-                        "user_id": data.get('user_id'),
-                        "source": data.get('source')
-                    })
+                    result.update(
+                        {
+                            "is_authenticated": data.get("is_authenticated", False),
+                            "user_id": data.get("user_id"),
+                            "source": data.get("source"),
+                        }
+                    )
 
                 results.append(result)
                 print(f"  Thread {thread_id}: {response.status_code}")
 
             except Exception as e:
-                results.append({
-                    "thread": thread_id,
-                    "error": str(e),
-                    "timestamp": time.time()
-                })
+                results.append(
+                    {"thread": thread_id, "error": str(e), "timestamp": time.time()}
+                )
 
         # Start multiple threads simultaneously
         threads = []
@@ -162,31 +169,29 @@ class CSRFInvestigator:
         print("🛡️ Testing CSRF-protected endpoint...")
 
         # First, ensure we have a CSRF token
-        if not hasattr(self, 'csrf_token') or not self.csrf_token:
+        if not hasattr(self, "csrf_token") or not self.csrf_token:
             csrf_response = self.session.get(f"{self.base_url}/v1/csrf")
             if csrf_response.status_code == 200:
                 csrf_data = csrf_response.json()
-                self.csrf_token = csrf_data.get('csrf_token')
+                self.csrf_token = csrf_data.get("csrf_token")
             else:
                 return {"error": "Failed to get CSRF token"}
 
         try:
             # Make a POST request with CSRF token
             headers = {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': self.csrf_token
+                "Content-Type": "application/json",
+                "X-CSRF-Token": self.csrf_token,
             }
 
             response = self.session.post(
-                ask_url,
-                json={"prompt": "hello"},
-                headers=headers
+                ask_url, json={"prompt": "hello"}, headers=headers
             )
 
             result = {
                 "status_code": response.status_code,
                 "has_csrf_token": bool(self.csrf_token),
-                "cookies_after": dict(self.session.cookies)
+                "cookies_after": dict(self.session.cookies),
             }
 
             if response.status_code == 200:
@@ -227,7 +232,7 @@ class CSRFInvestigator:
             "initial_cookies": initial_cookies,
             "after_cookies": after_cookies,
             "cookies_changed": initial_cookies != after_cookies,
-            "whoami_result": whoami_result
+            "whoami_result": whoami_result,
         }
 
     def run_comprehensive_test(self):
@@ -248,7 +253,11 @@ class CSRFInvestigator:
 
         # Analyze results
         status_codes = [r.get("status_code", 0) for r in whoami_results]
-        auth_statuses = [r.get("is_authenticated", False) for r in whoami_results if "is_authenticated" in r]
+        auth_statuses = [
+            r.get("is_authenticated", False)
+            for r in whoami_results
+            if "is_authenticated" in r
+        ]
 
         print("\n📊 Whoami Analysis:")
         print(f"  Status codes: {status_codes}")
@@ -266,7 +275,9 @@ class CSRFInvestigator:
         concurrent_results = self.test_concurrent_requests()
 
         # Analyze concurrent results
-        concurrent_statuses = [r.get("status_code", 0) for r in concurrent_results if "status_code" in r]
+        concurrent_statuses = [
+            r.get("status_code", 0) for r in concurrent_results if "status_code" in r
+        ]
         print(f"  Concurrent status codes: {concurrent_statuses}")
         if 401 in concurrent_statuses:
             print("🚨 FOUND LOGOUT TRIGGER: 401 in concurrent requests")
@@ -292,7 +303,9 @@ class CSRFInvestigator:
         issues_found = []
 
         if 401 in status_codes:
-            issues_found.append(f"401 errors in {status_codes.count(401)}/{len(status_codes)} whoami calls")
+            issues_found.append(
+                f"401 errors in {status_codes.count(401)}/{len(status_codes)} whoami calls"
+            )
 
         if 401 in concurrent_statuses:
             issues_found.append("401 errors in concurrent requests")
@@ -316,9 +329,11 @@ class CSRFInvestigator:
         print("   - Test with actual browser automation")
         print("   - Check server-side rate limiting")
 
+
 def main():
     investigator = CSRFInvestigator()
     investigator.run_comprehensive_test()
+
 
 if __name__ == "__main__":
     main()

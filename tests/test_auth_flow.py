@@ -117,10 +117,18 @@ def test_401_handling():
         if response.status_code == 401:
             print_result("protected_endpoint_returns_401", True)
         elif response.status_code == 404:
-            print_result("protected_endpoint_returns_401", False, f"404 suggests music router not mounted. Check main.py imports.")
+            print_result(
+                "protected_endpoint_returns_401",
+                False,
+                f"404 suggests music router not mounted. Check main.py imports.",
+            )
             return  # Don't continue if endpoint not found
         else:
-            print_result("protected_endpoint_returns_401", False, f"Expected 401, got {response.status_code}")
+            print_result(
+                "protected_endpoint_returns_401",
+                False,
+                f"Expected 401, got {response.status_code}",
+            )
             return  # Don't continue if status is not 401
 
             # Check response headers for CORS
@@ -216,7 +224,9 @@ def test_login_flow():
     # Test login endpoint
     try:
         # Use the correct endpoint path
-        response = requests.post(f"{BASE_URL}/v1/auth/login?username=testuser", timeout=5)
+        response = requests.post(
+            f"{BASE_URL}/v1/auth/login?username=testuser", timeout=5
+        )
         print(f"POST /v1/auth/login - Status: {response.status_code}")
 
         if response.status_code == 200:
@@ -245,7 +255,9 @@ def test_login_flow():
 
         else:
             print_result(
-                "login_endpoint_works", False, f"Status: {response.status_code} - Expected 200"
+                "login_endpoint_works",
+                False,
+                f"Status: {response.status_code} - Expected 200",
             )
 
     except Exception as e:

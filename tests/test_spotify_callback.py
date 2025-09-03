@@ -23,7 +23,9 @@ def test_callback_success_flow(monkeypatch, caplog):
     def fake_get_pkce_challenge_by_state(sid, state):
         # Use the real SpotifyPKCE class if available
         try:
-            return spotify_mod.SpotifyPKCE(verifier="ver", challenge="ch", state=state, created_at=time.time())
+            return spotify_mod.SpotifyPKCE(
+                verifier="ver", challenge="ch", state=state, created_at=time.time()
+            )
         except Exception:
             # Minimal fallback object
             return type("P", (), {"verifier": "ver", "created_at": time.time()})()
@@ -36,18 +38,24 @@ def test_callback_success_flow(monkeypatch, caplog):
         return {"sub": "u_123", "sid": "s_456"}
 
     monkeypatch.setattr(spotify_mod, "_jwt_decode", fake_jwt_decode)
-    monkeypatch.setattr(spotify_mod, "get_pkce_challenge_by_state", fake_get_pkce_challenge_by_state)
+    monkeypatch.setattr(
+        spotify_mod, "get_pkce_challenge_by_state", fake_get_pkce_challenge_by_state
+    )
     monkeypatch.setattr(spotify_mod, "exchange_code", fake_exchange_code)
     monkeypatch.setattr(spotify_mod, "upsert_token", fake_upsert_token)
 
     # Make the callback request with cookie set (as connect would)
     from app.cookie_names import GSNH_AT
+
     cookies = {GSNH_AT: "dummy-token"}
     res = client.get("/v1/spotify/callback?code=abc&state=state123", cookies=cookies)
 
     # Expect initial redirect to connected (TestClient may follow it). Check history
     histories = getattr(res, "history", []) or []
-    assert any("/settings?spotify=connected" in (h.headers.get("Location") or "") for h in histories) or "/settings?spotify=connected" in (res.headers.get("Location") or "")
+    assert any(
+        "/settings?spotify=connected" in (h.headers.get("Location") or "")
+        for h in histories
+    ) or "/settings?spotify=connected" in (res.headers.get("Location") or "")
 
     # Check logging order: start -> jwt_ok -> tokens_persisted
     text = caplog.text
@@ -84,13 +92,16 @@ def test_callback_missing_code_redirects_no_code(monkeypatch, caplog):
         return {"sub": "u_789", "sid": "s_789"}
 
     def fake_get_pkce_challenge_by_state(sid, state):
-        return spotify_mod.SpotifyPKCE(verifier="ver", challenge="ch", state=state, created_at=time.time())
+        return spotify_mod.SpotifyPKCE(
+            verifier="ver", challenge="ch", state=state, created_at=time.time()
+        )
 
     monkeypatch.setattr(spotify_mod, "_jwt_decode", fake_jwt_decode)
-    monkeypatch.setattr(spotify_mod, "get_pkce_challenge_by_state", fake_get_pkce_challenge_by_state)
+    monkeypatch.setattr(
+        spotify_mod, "get_pkce_challenge_by_state", fake_get_pkce_challenge_by_state
+    )
 
     from app.cookie_names import GSNH_AT
+
     client.get("/v1/spotify/callback?state=state123", cookies={GSNH_AT: "t"})
     assert "Missing authorization code" in caplog.text
-
-

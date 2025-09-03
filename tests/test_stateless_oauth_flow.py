@@ -39,18 +39,14 @@ async def test_stateless_oauth_flow():
     tx_data = {
         "user_id": user_id,
         "code_verifier": code_verifier,
-        "ts": int(time.time())
+        "ts": int(time.time()),
     }
     put_tx(tx_id, tx_data, ttl_seconds=600)
     print()
 
     # Create JWT state
     print("Creating JWT state...")
-    state_payload = {
-        "tx": tx_id,
-        "uid": user_id,
-        "exp": int(time.time()) + 600
-    }
+    state_payload = {"tx": tx_id, "uid": user_id, "exp": int(time.time()) + 600}
 
     secret = _jwt_secret()
     state = jwt.encode(state_payload, secret, algorithm="HS256")

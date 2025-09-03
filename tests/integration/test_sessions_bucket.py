@@ -36,6 +36,7 @@ def _register_and_login(
 ) -> dict[str, Any]:
     import time
     import random
+
     if username is None:
         username = f"user_{int(time.time())}_{random.randint(1000, 9999)}"
     # Register

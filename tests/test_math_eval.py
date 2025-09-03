@@ -19,5 +19,3 @@ def test_sqrt_and_pow_and_approx():
     assert b is True
     b, e = evaluate_expr("10/3 != 3")
     assert b is True
-
-

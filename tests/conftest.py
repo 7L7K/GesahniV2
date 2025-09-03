@@ -23,18 +23,22 @@ def _setup_test_db_and_init_tables():
     os.environ["PYTEST_RUNNING"] = "1"
 
     # Set critical test environment variables EARLY to override any defaults from env files
-    os.environ["JWT_SECRET"] = "test_jwt_secret_for_testing_only_must_be_at_least_32_chars_long"
+    os.environ["JWT_SECRET"] = (
+        "test_jwt_secret_for_testing_only_must_be_at_least_32_chars_long"
+    )
     os.environ["DEV_MODE"] = "1"
     os.environ["COOKIE_SAMESITE"] = "Lax"
     os.environ["COOKIE_SECURE"] = "false"
     os.environ["COOKIE_DOMAIN"] = ""  # Empty string = host-only cookies for tests
-    os.environ["CORS_ALLOW_CREDENTIALS"] = "true"  # Required for cookie auth to work with CORS
+    os.environ["CORS_ALLOW_CREDENTIALS"] = (
+        "true"  # Required for cookie auth to work with CORS
+    )
     os.environ["CORS_ALLOW_ORIGINS"] = "http://localhost:3000,http://127.0.0.1:3000"
     os.environ["SPOTIFY_TEST_MODE"] = "1"
 
     # Additional rate limiting variables for predictable test behavior
     os.environ["RATE_LIMIT_PER_MIN"] = "1000"  # High limit to prevent interference
-    os.environ["RATE_LIMIT_BURST"] = "100"     # High burst limit
+    os.environ["RATE_LIMIT_BURST"] = "100"  # High burst limit
     os.environ["RATE_LIMIT_WINDOW_S"] = "60"
     os.environ["RATE_LIMIT_BURST_WINDOW_S"] = "10"
     os.environ["RATE_LIMIT_BYPASS_SCOPES"] = "admin,test"
@@ -44,19 +48,19 @@ def _setup_test_db_and_init_tables():
     # STANDARDIZED TEST IDENTITY AND TTL CONFIGURATION
     # =================================================
     # Use long TTLs to prevent expiry during test execution
-    os.environ.setdefault("JWT_EXPIRE_MINUTES", "60")          # 1 hour access tokens
-    os.environ.setdefault("JWT_REFRESH_EXPIRE_MINUTES", "1440") # 1 day refresh tokens
-    os.environ.setdefault("CSRF_TTL_SECONDS", "3600")           # 1 hour CSRF tokens
+    os.environ.setdefault("JWT_EXPIRE_MINUTES", "60")  # 1 hour access tokens
+    os.environ.setdefault("JWT_REFRESH_EXPIRE_MINUTES", "1440")  # 1 day refresh tokens
+    os.environ.setdefault("CSRF_TTL_SECONDS", "3600")  # 1 hour CSRF tokens
 
     # Additional test environment variables for predictable behavior
-    os.environ.setdefault("JWT_CLOCK_SKEW_S", "60")             # Allow 1 minute clock skew
-    os.environ.setdefault("ENV", "test")                        # Explicit test environment
-    os.environ.setdefault("USE_DEV_PROXY", "0")                # Disable dev proxy for tests
-    os.environ.setdefault("AUTH_DEV_BYPASS", "0")              # Disable auth bypass
-    os.environ.setdefault("CLERK_ENABLED", "0")                # Disable Clerk integration
-    os.environ.setdefault("OAUTH_TEST_MODE", "1")              # Enable OAuth test mode
-    os.environ.setdefault("LOG_LEVEL", "WARNING")              # Reduce log noise during tests
-    os.environ.setdefault("DISABLE_REQUEST_LOGGING", "1")      # Disable request logging
+    os.environ.setdefault("JWT_CLOCK_SKEW_S", "60")  # Allow 1 minute clock skew
+    os.environ.setdefault("ENV", "test")  # Explicit test environment
+    os.environ.setdefault("USE_DEV_PROXY", "0")  # Disable dev proxy for tests
+    os.environ.setdefault("AUTH_DEV_BYPASS", "0")  # Disable auth bypass
+    os.environ.setdefault("CLERK_ENABLED", "0")  # Disable Clerk integration
+    os.environ.setdefault("OAUTH_TEST_MODE", "1")  # Enable OAuth test mode
+    os.environ.setdefault("LOG_LEVEL", "WARNING")  # Reduce log noise during tests
+    os.environ.setdefault("DISABLE_REQUEST_LOGGING", "1")  # Disable request logging
 
     # Disable rate limiting for tests to prevent 429 errors
     # Force disable globally - cannot be overridden by individual tests
@@ -128,6 +132,7 @@ def client(app):
 
 # Async fixtures and auth helpers for modern test support
 
+
 @pytest.fixture(scope="session")
 async def app():
     """Async FastAPI app fixture with lifespan management."""
@@ -143,7 +148,9 @@ async def app():
 async def async_client(app):
     """Async HTTP client using httpx with ASGITransport."""
     transport = ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
         yield client
 
 
@@ -172,14 +179,15 @@ async def create_test_user():
 
     # Create a valid Spotify token for testing
     expires_at = int(time.time()) + 3600  # 1 hour from now
-    token_data = ThirdPartyToken(identity_id="59fd9451-f29e-43ce-a845-e11a3e494759", 
+    token_data = ThirdPartyToken(
+        identity_id="59fd9451-f29e-43ce-a845-e11a3e494759",
         id="spotify_test_token",
         user_id=test_user_id,
         provider="spotify",
         access_token="BAAAAAAAAAAAAAAAAA",
         refresh_token="ABBBBBBBBBBBBBBBBB",
         expires_at=expires_at,
-        scopes="user-read-private user-read-email"
+        scopes="user-read-private user-read-email",
     )
 
     # Upsert the token
@@ -189,7 +197,7 @@ async def create_test_user():
         "user_id": test_user_id,
         "username": username,
         "password": password,
-        "email": "test@example.com"
+        "email": "test@example.com",
     }
 
 
@@ -209,15 +217,15 @@ def seed_calendar_file(tmp_path):
             "time": "10:00",
             "title": "Test Meeting",
             "description": "A test calendar event",
-            "location": "Test Room"
+            "location": "Test Room",
         },
         {
             "date": "2025-01-16",
             "time": "14:30",
             "title": "Another Test Event",
             "description": "Second test event",
-            "location": "Office"
-        }
+            "location": "Office",
+        },
     ]
 
     calendar_file = tmp_path / "test_calendar.json"
@@ -247,19 +255,23 @@ async def authed_client(async_client, create_test_user):
 
     # Get token TTLs
     from app.cookie_config import get_token_ttls
+
     access_ttl, refresh_ttl = get_token_ttls()
 
     # Create a mock request (needed for set_auth_cookies)
     from fastapi import Request
-    mock_request = Request(scope={
-        "type": "http",
-        "method": "GET",
-        "path": "/",
-        "headers": {},
-        "query_string": b"",
-        "server": ("testserver", 80),
-        "client": ("127.0.0.1", 12345),
-    })
+
+    mock_request = Request(
+        scope={
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": {},
+            "query_string": b"",
+            "server": ("testserver", 80),
+            "client": ("127.0.0.1", 12345),
+        }
+    )
 
     # Set auth cookies
     set_auth_cookies(

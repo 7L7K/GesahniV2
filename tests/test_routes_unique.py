@@ -19,4 +19,3 @@ def test_no_duplicate_auth_routes_prefix():
 
     counts = C(auth_routes)
     assert all(v == 1 for v in counts.values())
-

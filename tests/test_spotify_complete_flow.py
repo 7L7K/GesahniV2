@@ -51,8 +51,13 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch, caplog):
     def mock_get_pkce_challenge_by_state(sid, state):
         logger.info(f"Mock: PKCE lookup for sid={sid}, state={state}")
         from app.api.spotify import SpotifyPKCE
-        return SpotifyPKCE(verifier="mock_verifier", challenge="mock_challenge", state=state, created_at=time.time())
 
+        return SpotifyPKCE(
+            verifier="mock_verifier",
+            challenge="mock_challenge",
+            state=state,
+            created_at=time.time(),
+        )
 
     # Apply all mocks
     logger.info("Applying mocks...")
@@ -61,14 +66,18 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch, caplog):
     monkeypatch.setattr(spotify_mod, "_jwt_secret", mock_jwt_secret)
     monkeypatch.setattr(spotify_mod, "exchange_code", mock_exchange_code)
     monkeypatch.setattr(spotify_mod, "upsert_token", mock_upsert_token)
-    monkeypatch.setattr(spotify_mod, "get_pkce_challenge_by_state", mock_get_pkce_challenge_by_state)
+    monkeypatch.setattr(
+        spotify_mod, "get_pkce_challenge_by_state", mock_get_pkce_challenge_by_state
+    )
 
     # Step 1: Call /v1/spotify/connect with Authorization header
     logger.info("Step 1: Calling /v1/spotify/connect endpoint...")
     headers = {"Authorization": "Bearer mock_jwt_token_for_test"}
     connect_response = client.get("/v1/spotify/connect", headers=headers)
 
-    assert connect_response.status_code == 200, f"Connect failed with body: {connect_response.text}"
+    assert (
+        connect_response.status_code == 200
+    ), f"Connect failed with body: {connect_response.text}"
 
     connect_data = connect_response.json()
     auth_url = connect_data.get("auth_url")
@@ -81,9 +90,10 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch, caplog):
 
     # Extract state from auth_url for later use
     from urllib.parse import urlparse, parse_qs
+
     parsed_url = urlparse(auth_url)
     query_params = parse_qs(parsed_url.query)
-    state = query_params.get('state', [None])[0]
+    state = query_params.get("state", [None])[0]
     assert state, "No state in auth URL"
     logger.info(f"✅ Extracted state: {state}")
 
@@ -109,13 +119,19 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch, caplog):
     callback_response = client.get(callback_url, follow_redirects=False)
 
     logger.info(f"Callback response status: {callback_response.status_code}")
-    assert callback_response.status_code == 302, f"Expected 302, got {callback_response.status_code}"
+    assert (
+        callback_response.status_code == 302
+    ), f"Expected 302, got {callback_response.status_code}"
 
     # Check redirect location
-    assert "Location" in callback_response.headers, "No Location header in callback response"
+    assert (
+        "Location" in callback_response.headers
+    ), "No Location header in callback response"
     location = callback_response.headers["Location"]
     logger.info(f"Redirect location: {location}")
-    assert "spotify=connected" in location, f"Expected success redirect, got: {location}"
+    assert (
+        "spotify=connected" in location
+    ), f"Expected success redirect, got: {location}"
     logger.info("✅ Success redirect detected")
 
     # Check cookies
@@ -136,7 +152,9 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch, caplog):
     log_text = caplog.text
     assert "spotify.callback:start" in log_text, "Missing start log event"
     assert "spotify.callback:jwt_ok" in log_text, "Missing jwt_ok log event"
-    assert "spotify.callback:tokens_persisted" in log_text, "Missing tokens_persisted log event"
+    assert (
+        "spotify.callback:tokens_persisted" in log_text
+    ), "Missing tokens_persisted log event"
     assert "spotify.callback:redirect" in log_text, "Missing redirect log event"
 
     logger.info("🎉 OAUTH FLOW TEST COMPLETED SUCCESSFULLY")
