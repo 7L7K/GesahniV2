@@ -255,7 +255,7 @@ class TestTokenHealthMonitoring:
         tokens = []
 
         for i in range(num_tokens):
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", identity_id="8ea201c6-cbfd-45d4-aad7-beb3f9473a5a",
+            token = ThirdPartyToken(identity_id="8ea201c6-cbfd-45d4-aad7-beb3f9473a5a",
                 user_id=f"user_{i}",
                 provider="spotify" if i % 2 == 0 else "google",
                 provider_sub=f"user_{i}_sub",
