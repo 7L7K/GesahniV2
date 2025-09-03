@@ -181,16 +181,15 @@ class Phase3Validator:
         try:
             from app.router.entrypoint import route_prompt
 
-            # Test that route_prompt raises error when no router configured
+            # Compatibility: entrypoint now resolves to config-based fallback when
+            # registry is not configured. Ensure it returns a dict-like result
+            # instead of raising.
             try:
-                # This should fail since no router is configured
-                asyncio.run(route_prompt({"prompt": "test"}))
-                self.log_failure(test_name, "Expected RuntimeError when no router configured")
-            except RuntimeError as e:
-                if "not been configured" in str(e):
+                res = asyncio.run(route_prompt({"prompt": "test"}))
+                if isinstance(res, dict):
                     self.log_success(test_name)
                 else:
-                    self.log_failure(test_name, f"Unexpected RuntimeError: {e}")
+                    self.log_failure(test_name, "Expected dict result from compat bridge")
             except Exception as e:
                 self.log_failure(test_name, f"Unexpected error: {e}")
 

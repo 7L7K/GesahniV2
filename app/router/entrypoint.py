@@ -26,6 +26,18 @@ async def route_prompt(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     # 1) Try to use the running FastAPI app instance if present
     try:
+        # Prefer registry-configured router when available (keeps legacy behavior)
+        try:
+            from .registry import get_router
+
+            router = get_router()
+            if router is not None:
+                logger.info("compat.route_prompt: using registry router")
+                return await router.route_prompt(payload)
+        except Exception:
+            # registry not configured or unavailable, continue
+            pass
+
         from app.main import app as main_app
 
         prompt_router = getattr(main_app.state, "prompt_router", None)

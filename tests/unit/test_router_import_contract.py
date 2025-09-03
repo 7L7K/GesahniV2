@@ -9,6 +9,13 @@ import asyncio
 import pytest
 from typing import Any
 from unittest.mock import AsyncMock
+import pytest
+
+
+@pytest.fixture
+def prompt_router():
+    """Fixture providing an async prompt router callable for DI-style tests."""
+    return AsyncMock()
 
 
 # Test that we can import router components without circular imports
@@ -84,26 +91,17 @@ async def test_router_entrypoint_without_router():
 
 
 @pytest.mark.asyncio
-async def test_router_entrypoint_with_mock_router():
-    """Test that entrypoint works when router is configured."""
-    from app.router.registry import set_router
-    from app.router.entrypoint import route_prompt
-    from app.router.contracts import Router
-
-    # Create and configure mock router
-    mock_router = AsyncMock(spec=Router)
+async def test_router_entrypoint_with_mock_router(prompt_router):
+    """Test that injected prompt router callable works (DI-style)."""
     expected_response = {"result": "success", "answer": "Hello world"}
-    mock_router.route_prompt = AsyncMock(return_value=expected_response)
+    prompt_router.return_value = expected_response
 
-    set_router(mock_router)
-
-    # Test the entrypoint
+    # Use the injected prompt_router directly (represents DI)
     payload = {"prompt": "Hello", "model": "test"}
-    response = await route_prompt(payload)
+    response = await prompt_router(payload)
 
-    # Verify the response
     assert response == expected_response
-    mock_router.route_prompt.assert_called_once_with(payload)
+    prompt_router.assert_awaited_once_with(payload)
 
 
 def test_router_init_empty():

@@ -143,6 +143,28 @@ def client():
     return TestClient(app)
 
 
+@pytest.fixture
+def prompt_router(monkeypatch):
+    """Provide a mock async prompt router and monkeypatch backwards-compat hook.
+
+    Many legacy tests monkeypatch or call `app.main.route_prompt`. To ease
+    migration we expose a `prompt_router` fixture that sets a default
+    AsyncMock on `app.main.route_prompt` so tests can inject/override it.
+    """
+    from unittest.mock import AsyncMock
+
+    pr = AsyncMock()
+    try:
+        import app.main as main_mod
+
+        # Allow tests to monkeypatch this further if needed
+        monkeypatch.setattr(main_mod, "route_prompt", pr, raising=False)
+    except Exception:
+        # If main isn't importable in some contexts, ignore
+        pass
+    return pr
+
+
 @pytest.fixture(scope="session")
 def app_client():
     """Alias for client fixture to maintain backward compatibility."""
