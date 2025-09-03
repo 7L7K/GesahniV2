@@ -475,7 +475,6 @@ class TestTokenErrorHandling:
                 expires_at=now + 3600,
                 created_at=now,
                 updated_at=now,
-            rrent load
         async def concurrent_request(user_id):
             with patch('app.auth_store_tokens.TokenDAO', return_value=dao):
                 response = client.get(
