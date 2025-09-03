@@ -1,0 +1,81 @@
+
+----------------------------- live log collection ------------------------------
+INFO     app.env_utils:env_utils.py:238 env_loader: applied .env=0 (override), .env.example filled=11, alt filled=67, dev filled=0, staging filled=0, prod filled=0, localhost filled=0 | mtimes env=-1.000000 example=1756220076.422203 alt=1756357893.945961 dev=-1.000000 staging=-1.000000 prod=-1.000000 localhost=-1.000000 force=False test=False
+INFO     app.api.oauth_store:oauth_store.py:35 OAuth store: Loaded 13 items from file
+INFO     app.session_store:session_store.py:72 Session store using in-memory backend (no REDIS_URL)
+
+==================================== ERRORS ====================================
+_____________ ERROR collecting tests/test_remaining_budget_fix.py ______________
+tests/test_remaining_budget_fix.py:17: in <module>
+    from app.router import get_remaining_budget
+<frozen importlib._bootstrap>:1412: in _handle_fromlist
+    ???
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+_________________ ERROR collecting tests/test_sessions_api.py __________________
+tests/test_sessions_api.py:18: in <module>
+    import app.tasks as tasks
+app/tasks.py:17: in <module>
+    from .router import OPENAI_TIMEOUT_MS
+<frozen importlib._bootstrap>:1412: in _handle_fromlist
+    ???
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+_____________________ ERROR collecting tests/test_tasks.py _____________________
+tests/test_tasks.py:1: in <module>
+    from app import tasks
+app/tasks.py:17: in <module>
+    from .router import OPENAI_TIMEOUT_MS
+<frozen importlib._bootstrap>:1412: in _handle_fromlist
+    ???
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals & position)
+____________ ERROR collecting tests/unit/test_extracted_modules.py _____________
+ImportError while importing test module '/Users/kingal/2025/GesahniV2/tests/unit/test_extracted_modules.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/unit/test_extracted_modules.py:17: in <module>
+    from app.router_policy import (
+app/router_policy.py:27: in <module>
+    from app.router import ALLOWED_GPT_MODELS, ALLOWED_LLAMA_MODELS
+E   ImportError: cannot import name 'ALLOWED_GPT_MODELS' from 'app.router' (/Users/kingal/2025/GesahniV2/app/router/__init__.py)
+------------------------------- Captured stderr --------------------------------
+{"timestamp": "2025-09-03T00:26:58Z", "req_id": "-", "level": "INFO", "component": "app.memory.write_policy", "msg": "Memory write policy initialized", "env": "", "build_sha": "", "version": "", "meta": {"min_response_length": 50, "min_profile_response_length": 20, "enable_memory_policy": true, "enable_profile_policy": true}}
+- generated xml file: /Users/kingal/2025/GesahniV2/artifacts/test_baseline/full.xml -
+=========================== short test summary info ============================
+ERROR tests/test_remaining_budget_fix.py - RecursionError: maximum recursion ...
+ERROR tests/test_sessions_api.py - RecursionError: maximum recursion depth ex...
+ERROR tests/test_tasks.py - RecursionError: maximum recursion depth exceeded
+ERROR tests/unit/test_extracted_modules.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 4 errors during collection !!!!!!!!!!!!!!!!!!!!
+============================== 4 errors in 8.67s ===============================

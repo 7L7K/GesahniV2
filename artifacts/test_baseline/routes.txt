@@ -1,0 +1,1470 @@
+FastAPI Routes Dump
+==================================================
+
+Path: /
+Methods: GET
+Name: root
+Endpoint: root
+------------------------------
+Path: /.well-known/jwks.json
+Methods: GET
+Name: jwks
+Endpoint: jwks
+------------------------------
+Path: /api
+Methods: GET
+Name: api_info
+Endpoint: api_info
+------------------------------
+Path: /ask
+Methods: POST
+Name: _ask
+Endpoint: _ask
+------------------------------
+Path: /ask/dry-explain
+Methods: POST
+Name: ask_dry_explain
+Endpoint: ask_dry_explain
+------------------------------
+Path: /ask/replay/{rid}
+Methods: GET
+Name: ask_replay
+Endpoint: ask_replay
+------------------------------
+Path: /ask/stream
+Methods: POST
+Name: ask_stream
+Endpoint: ask_stream
+------------------------------
+Path: /budget
+Methods: GET
+Name: budget_status
+Endpoint: budget_status
+------------------------------
+Path: /config
+Methods: GET
+Name: config
+Endpoint: config
+------------------------------
+Path: /docs
+Methods: HEAD, GET
+Name: swagger_ui_html
+Endpoint: swagger_ui_html
+------------------------------
+Path: /docs/oauth2-redirect
+Methods: HEAD, GET
+Name: swagger_ui_redirect
+Endpoint: swagger_ui_redirect
+------------------------------
+Path: /google
+Methods: GET
+Name: _google_root_redirect
+Endpoint: _google_root_redirect
+------------------------------
+Path: /google/
+Methods: GET
+Name: _google_root_redirect_slash
+Endpoint: _google_root_redirect_slash
+------------------------------
+Path: /google/oauth/callback
+Methods: GET
+Name: _legacy_google_oauth_callback_root
+Endpoint: _legacy_google_oauth_callback_root
+------------------------------
+Path: /ha_status
+Methods: GET
+Name: ha_status
+Endpoint: ha_status
+------------------------------
+Path: /health
+Methods: GET
+Name: health
+Endpoint: health
+------------------------------
+Path: /health
+Methods: GET
+Name: health_simple
+Endpoint: health_simple
+------------------------------
+Path: /health/vector_store
+Methods: GET
+Name: health_vector_store
+Endpoint: health_vector_store
+------------------------------
+Path: /healthz
+Methods: GET
+Name: healthz
+Endpoint: healthz
+------------------------------
+Path: /healthz
+Methods: GET
+Name: healthz_root
+Endpoint: healthz_root
+------------------------------
+Path: /healthz/deps
+Methods: GET
+Name: health_deps
+Endpoint: health_deps
+------------------------------
+Path: /healthz/live
+Methods: GET
+Name: health_live
+Endpoint: health_live
+------------------------------
+Path: /healthz/ready
+Methods: GET
+Name: health_ready
+Endpoint: health_ready
+------------------------------
+Path: /llama_status
+Methods: GET
+Name: llama_status
+Endpoint: llama_status
+------------------------------
+Path: /metrics
+Methods: GET
+Name: _metrics_route
+Endpoint: _metrics_route
+------------------------------
+Path: /openapi.json
+Methods: HEAD, GET
+Name: openapi
+Endpoint: openapi
+------------------------------
+Path: /rate_limit_status
+Methods: GET
+Name: rate_limit_status
+Endpoint: rate_limit_status
+------------------------------
+Path: /redoc
+Methods: HEAD, GET
+Name: redoc_html
+Endpoint: redoc_html
+------------------------------
+Path: /settings/
+Methods: GET
+Name: get_settings
+Endpoint: get_settings
+------------------------------
+Path: /status
+Methods: GET
+Name: full_status
+Endpoint: full_status
+------------------------------
+Path: /status/budget
+Methods: GET
+Name: budget_status_alias
+Endpoint: budget_status_alias
+------------------------------
+Path: /v1/_schema/error-envelope.json
+Methods: GET
+Name: error_envelope_schema
+Endpoint: error_envelope_schema
+------------------------------
+Path: /v1/_selftest
+Methods: GET
+Name: selftest
+Endpoint: selftest
+------------------------------
+Path: /v1/admin/admin/collections
+Methods: GET
+Name: list_collections
+Endpoint: list_collections
+------------------------------
+Path: /v1/admin/admin/collections
+Methods: GET
+Name: list_collections
+Endpoint: list_collections
+------------------------------
+Path: /v1/admin/admin/feature_flags
+Methods: GET
+Name: feature_flags
+Endpoint: feature_flags
+------------------------------
+Path: /v1/admin/admin/feature_flags
+Methods: GET
+Name: feature_flags
+Endpoint: feature_flags
+------------------------------
+Path: /v1/admin/admin/flags
+Methods: POST
+Name: admin_flags
+Endpoint: admin_flags
+------------------------------
+Path: /v1/admin/admin/reload_env
+Methods: POST
+Name: admin_reload_env
+Endpoint: admin_reload_env
+------------------------------
+Path: /v1/admin/admin/retrieval/trace
+Methods: GET
+Name: retrieval_trace
+Endpoint: retrieval_trace
+------------------------------
+Path: /v1/admin/admin/retrieval/trace
+Methods: GET
+Name: retrieval_trace
+Endpoint: retrieval_trace
+------------------------------
+Path: /v1/admin/admin/ui
+Methods: GET
+Name: admin_ui_home
+Endpoint: admin_ui_home
+------------------------------
+Path: /v1/admin/admin/ui/config
+Methods: GET
+Name: admin_ui_config
+Endpoint: admin_ui_config
+------------------------------
+Path: /v1/admin/admin/ui/retrieval
+Methods: GET
+Name: admin_ui_retrieval
+Endpoint: admin_ui_retrieval
+------------------------------
+Path: /v1/admin/backup
+Methods: POST
+Name: admin_backup
+Endpoint: admin_backup
+------------------------------
+Path: /v1/admin/config
+Methods: GET
+Name: admin_config
+Endpoint: admin_config
+------------------------------
+Path: /v1/admin/config
+Methods: POST
+Name: admin_config_post
+Endpoint: admin_config_post
+------------------------------
+Path: /v1/admin/config/test
+Methods: POST
+Name: admin_config_test
+Endpoint: admin_config_test
+------------------------------
+Path: /v1/admin/decisions/explain
+Methods: GET
+Name: explain_decision
+Endpoint: explain_decision
+------------------------------
+Path: /v1/admin/diagnostics/requests
+Methods: GET
+Name: admin_diagnostics_requests
+Endpoint: admin_diagnostics_requests
+------------------------------
+Path: /v1/admin/errors
+Methods: GET
+Name: admin_errors
+Endpoint: admin_errors
+------------------------------
+Path: /v1/admin/flags
+Methods: GET
+Name: admin_list_flags
+Endpoint: admin_list_flags
+------------------------------
+Path: /v1/admin/health/router_retrieval
+Methods: GET
+Name: admin_health_router_retrieval
+Endpoint: admin_health_router_retrieval
+------------------------------
+Path: /v1/admin/metrics
+Methods: GET
+Name: admin_metrics
+Endpoint: admin_metrics
+------------------------------
+Path: /v1/admin/ping
+Methods: GET
+Name: admin_ping
+Endpoint: admin_ping
+------------------------------
+Path: /v1/admin/qdrant/collections
+Methods: GET
+Name: admin_qdrant_collections
+Endpoint: admin_qdrant_collections
+------------------------------
+Path: /v1/admin/rate-limits/{key}
+Methods: GET
+Name: get_rate_limit_stats
+Endpoint: get_rate_limit_stats
+------------------------------
+Path: /v1/admin/rate-limits/{key}
+Methods: DELETE
+Name: clear_rate_limit_data
+Endpoint: clear_rate_limit_data
+------------------------------
+Path: /v1/admin/rbac/info
+Methods: GET
+Name: admin_rbac_info
+Endpoint: admin_rbac_info
+------------------------------
+Path: /v1/admin/retrieval/last
+Methods: GET
+Name: admin_retrieval_last
+Endpoint: admin_retrieval_last
+------------------------------
+Path: /v1/admin/router/decisions
+Methods: GET
+Name: admin_router_decisions
+Endpoint: admin_router_decisions
+------------------------------
+Path: /v1/admin/router/decisions.ndjson
+Methods: GET
+Name: admin_router_decisions_ndjson
+Endpoint: admin_router_decisions_ndjson
+------------------------------
+Path: /v1/admin/self_review
+Methods: GET
+Name: admin_self_review
+Endpoint: admin_self_review
+------------------------------
+Path: /v1/admin/surface/index
+Methods: GET
+Name: admin_surface_index
+Endpoint: admin_surface_index
+------------------------------
+Path: /v1/admin/system/status
+Methods: GET
+Name: admin_system_status
+Endpoint: admin_system_status
+------------------------------
+Path: /v1/admin/token_store/stats
+Methods: GET
+Name: admin_token_store_stats
+Endpoint: admin_token_store_stats
+------------------------------
+Path: /v1/admin/tokens/google
+Methods: GET
+Name: admin_tokens_google
+Endpoint: admin_tokens_google
+------------------------------
+Path: /v1/admin/tv/config
+Methods: GET
+Name: admin_tv_get_config
+Endpoint: admin_tv_get_config
+------------------------------
+Path: /v1/admin/tv/config
+Methods: PUT
+Name: admin_tv_put_config
+Endpoint: admin_tv_put_config
+------------------------------
+Path: /v1/admin/users/me
+Methods: GET
+Name: admin_user_profile
+Endpoint: admin_user_profile
+------------------------------
+Path: /v1/admin/users/{user_id}/identities
+Methods: GET
+Name: admin_user_identities
+Endpoint: admin_user_identities
+------------------------------
+Path: /v1/admin/users/{user_id}/identities/{identity_id}/unlink
+Methods: POST
+Name: admin_unlink_identity
+Endpoint: admin_unlink_identity
+------------------------------
+Path: /v1/admin/vector_store/bootstrap
+Methods: POST
+Name: admin_vs_bootstrap
+Endpoint: admin_vs_bootstrap
+------------------------------
+Path: /v1/admin/vector_store/bootstrap/stream
+Methods: GET
+Name: admin_vs_bootstrap_stream
+Endpoint: admin_vs_bootstrap_stream
+------------------------------
+Path: /v1/admin/vector_store/migrate
+Methods: POST
+Name: admin_vs_migrate
+Endpoint: admin_vs_migrate
+------------------------------
+Path: /v1/admin/vector_store/migrate/stream
+Methods: GET
+Name: admin_vs_migrate_stream
+Endpoint: admin_vs_migrate_stream
+------------------------------
+Path: /v1/admin/vector_store/stats
+Methods: GET
+Name: admin_vs_stats
+Endpoint: admin_vs_stats
+------------------------------
+Path: /v1/ask
+Methods: POST
+Name: _compat_v1_ask
+Endpoint: _compat_v1_ask
+------------------------------
+Path: /v1/auth/apple/callback
+Methods: OPTIONS
+Name: apple_auth_callback_options
+Endpoint: apple_auth_callback_options
+------------------------------
+Path: /v1/auth/apple/callback
+Methods: POST
+Name: apple_callback
+Endpoint: apple_callback
+------------------------------
+Path: /v1/auth/apple/start
+Methods: OPTIONS
+Name: apple_auth_start_options
+Endpoint: apple_auth_start_options
+------------------------------
+Path: /v1/auth/apple/start
+Methods: GET
+Name: apple_start
+Endpoint: apple_start
+------------------------------
+Path: /v1/auth/auth/clerk/finish
+Methods: POST
+Name: clerk_finish
+Endpoint: clerk_finish
+------------------------------
+Path: /v1/auth/auth/clerk/finish
+Methods: GET
+Name: clerk_finish
+Endpoint: clerk_finish
+------------------------------
+Path: /v1/auth/auth/examples
+Methods: GET
+Name: token_examples
+Endpoint: token_examples
+------------------------------
+Path: /v1/auth/auth/finish
+Methods: POST
+Name: finish_clerk_login
+Endpoint: finish_clerk_login
+------------------------------
+Path: /v1/auth/auth/finish
+Methods: GET
+Name: finish_clerk_login
+Endpoint: finish_clerk_login
+------------------------------
+Path: /v1/auth/auth/login
+Methods: POST
+Name: login
+Endpoint: login
+------------------------------
+Path: /v1/auth/auth/logout
+Methods: POST
+Name: logout
+Endpoint: logout
+------------------------------
+Path: /v1/auth/auth/logout_all
+Methods: POST
+Name: logout_all
+Endpoint: logout_all
+------------------------------
+Path: /v1/auth/auth/refresh
+Methods: POST
+Name: refresh
+Endpoint: refresh
+------------------------------
+Path: /v1/auth/auth/token
+Methods: POST
+Name: issue_token
+Endpoint: issue_token
+------------------------------
+Path: /v1/auth/login
+Methods: POST
+Name: login_v1
+Endpoint: login_v1
+------------------------------
+Path: /v1/auth/login_pw
+Methods: POST
+Name: login_pw
+Endpoint: login_pw
+------------------------------
+Path: /v1/auth/mock/set_access_cookie
+Methods: GET
+Name: mock_set_access_cookie
+Endpoint: mock_set_access_cookie
+------------------------------
+Path: /v1/auth/pats
+Methods: GET
+Name: list_pats
+Endpoint: list_pats
+------------------------------
+Path: /v1/auth/pats
+Methods: POST
+Name: create_pat
+Endpoint: create_pat
+------------------------------
+Path: /v1/auth/pats/{pat_id}
+Methods: DELETE
+Name: revoke_pat
+Endpoint: revoke_pat
+------------------------------
+Path: /v1/auth/register
+Methods: POST
+Name: register_v1
+Endpoint: register_v1
+------------------------------
+Path: /v1/auth/register_pw
+Methods: POST
+Name: register_pw
+Endpoint: register_pw
+------------------------------
+Path: /v1/auth/token
+Methods: OPTIONS
+Name: auth_token_options
+Endpoint: auth_token_options
+------------------------------
+Path: /v1/auth/whoami
+Methods: GET
+Name: whoami
+Endpoint: whoami
+------------------------------
+Path: /v1/budget
+Methods: GET
+Name: budget_status
+Endpoint: budget_status
+------------------------------
+Path: /v1/calendar/list
+Methods: GET
+Name: list_all
+Endpoint: list_all
+------------------------------
+Path: /v1/calendar/next
+Methods: GET
+Name: next_three
+Endpoint: next_three
+------------------------------
+Path: /v1/calendar/today
+Methods: GET
+Name: list_today
+Endpoint: list_today
+------------------------------
+Path: /v1/capture/save
+Methods: POST
+Name: capture_save
+Endpoint: capture_save
+------------------------------
+Path: /v1/capture/sessions
+Methods: GET
+Name: list_sessions_capture
+Endpoint: list_sessions_capture
+------------------------------
+Path: /v1/capture/start
+Methods: POST
+Name: capture_start
+Endpoint: capture_start
+------------------------------
+Path: /v1/capture/status/{session_id}
+Methods: GET
+Name: capture_status
+Endpoint: capture_status
+------------------------------
+Path: /v1/capture/tags
+Methods: POST
+Name: capture_tags
+Endpoint: capture_tags
+------------------------------
+Path: /v1/care/ack_token
+Methods: GET
+Name: create_ack_token
+Endpoint: create_ack_token
+------------------------------
+Path: /v1/care/alerts
+Methods: POST
+Name: create_alert
+Endpoint: create_alert
+------------------------------
+Path: /v1/care/alerts
+Methods: GET
+Name: list_alerts
+Endpoint: list_alerts
+------------------------------
+Path: /v1/care/alerts/ack_via_link
+Methods: POST
+Name: ack_via_link
+Endpoint: ack_via_link
+------------------------------
+Path: /v1/care/alerts/{alert_id}/ack
+Methods: POST
+Name: ack_alert
+Endpoint: ack_alert
+------------------------------
+Path: /v1/care/alerts/{alert_id}/resolve
+Methods: POST
+Name: resolve_alert
+Endpoint: resolve_alert
+------------------------------
+Path: /v1/care/contacts
+Methods: POST
+Name: create_contact_api
+Endpoint: create_contact_api
+------------------------------
+Path: /v1/care/contacts
+Methods: GET
+Name: list_contacts_api
+Endpoint: list_contacts_api
+------------------------------
+Path: /v1/care/contacts/{contact_id}
+Methods: PATCH
+Name: update_contact_api
+Endpoint: update_contact_api
+------------------------------
+Path: /v1/care/contacts/{contact_id}
+Methods: DELETE
+Name: delete_contact_api
+Endpoint: delete_contact_api
+------------------------------
+Path: /v1/care/device_status
+Methods: GET
+Name: device_status
+Endpoint: device_status
+------------------------------
+Path: /v1/care/devices/{device_id}/heartbeat
+Methods: POST
+Name: heartbeat
+Endpoint: heartbeat
+------------------------------
+Path: /v1/care/sessions
+Methods: POST
+Name: create_care_session
+Endpoint: create_care_session
+------------------------------
+Path: /v1/care/sessions
+Methods: GET
+Name: list_care_sessions
+Endpoint: list_care_sessions
+------------------------------
+Path: /v1/care/sessions/{session_id}
+Methods: PATCH
+Name: patch_care_session
+Endpoint: patch_care_session
+------------------------------
+Path: /v1/caregiver/alert
+Methods: POST
+Name: raise_alert
+Endpoint: raise_alert
+------------------------------
+Path: /v1/caregiver/device_status
+Methods: GET
+Name: device_status
+Endpoint: device_status
+------------------------------
+Path: /v1/caregiver/sessions
+Methods: GET
+Name: list_sessions
+Endpoint: list_sessions
+------------------------------
+Path: /v1/client-crypto-policy
+Methods: GET
+Name: client_crypto_policy
+Endpoint: client_crypto_policy
+------------------------------
+Path: /v1/config
+Methods: GET
+Name: config
+Endpoint: config
+------------------------------
+Path: /v1/csrf
+Methods: OPTIONS
+Name: csrf_options
+Endpoint: csrf_options
+------------------------------
+Path: /v1/csrf
+Methods: GET
+Name: get_csrf
+Endpoint: get_csrf
+------------------------------
+Path: /v1/debug/config
+Methods: GET
+Name: debug_config
+Endpoint: debug_config
+------------------------------
+Path: /v1/debug/oauth
+Methods: GET
+Name: debug_oauth_page
+Endpoint: debug_oauth_page
+------------------------------
+Path: /v1/debug/oauth/config
+Methods: GET
+Name: debug_oauth_config
+Endpoint: debug_oauth_config
+------------------------------
+Path: /v1/debug/oauth/routes
+Methods: GET
+Name: debug_oauth_routes
+Endpoint: debug_oauth_routes
+------------------------------
+Path: /v1/debug/token-health
+Methods: GET
+Name: token_health
+Endpoint: token_health
+------------------------------
+Path: /v1/device/session
+Methods: GET
+Name: get_device_session
+Endpoint: get_device_session
+------------------------------
+Path: /v1/device/trust
+Methods: POST
+Name: trust_device
+Endpoint: trust_device
+------------------------------
+Path: /v1/devices/pair/complete
+Methods: POST
+Name: pair_complete
+Endpoint: pair_complete
+------------------------------
+Path: /v1/devices/pair/start
+Methods: POST
+Name: pair_start
+Endpoint: pair_start
+------------------------------
+Path: /v1/devices/{device_id}/revoke
+Methods: POST
+Name: device_revoke
+Endpoint: device_revoke
+------------------------------
+Path: /v1/diag/health/all
+Methods: GET
+Name: get_all_health_status
+Endpoint: get_all_health_status
+------------------------------
+Path: /v1/diag/health/cache
+Methods: GET
+Name: get_health_cache_info
+Endpoint: get_health_cache_info
+------------------------------
+Path: /v1/diag/health/database
+Methods: GET
+Name: get_database_health
+Endpoint: get_database_health
+------------------------------
+Path: /v1/diag/health/home_assistant
+Methods: GET
+Name: get_home_assistant_health
+Endpoint: get_home_assistant_health
+------------------------------
+Path: /v1/diag/health/ollama
+Methods: GET
+Name: get_ollama_health
+Endpoint: get_ollama_health
+------------------------------
+Path: /v1/diag/health/openai
+Methods: GET
+Name: get_openai_health
+Endpoint: get_openai_health
+------------------------------
+Path: /v1/diag/health/refresh
+Methods: POST
+Name: refresh_health_cache
+Endpoint: refresh_health_cache
+------------------------------
+Path: /v1/diag/health/vector_store
+Methods: GET
+Name: get_vector_store_health
+Endpoint: get_vector_store_health
+------------------------------
+Path: /v1/diag/health/vendors
+Methods: GET
+Name: get_vendor_health_status
+Endpoint: get_vendor_health_status
+------------------------------
+Path: /v1/docs/ws
+Methods: GET
+Name: ws_helper_page
+Endpoint: ws_helper_page
+------------------------------
+Path: /v1/explain_route
+Methods: GET
+Name: explain_route
+Endpoint: explain_route
+------------------------------
+Path: /v1/forgot
+Methods: POST
+Name: forgot
+Endpoint: forgot
+------------------------------
+Path: /v1/google/auth/callback
+Methods: GET
+Name: google_callback
+Endpoint: google_callback
+------------------------------
+Path: /v1/google/auth/login_url
+Methods: GET
+Name: google_login_url
+Endpoint: google_login_url
+------------------------------
+Path: /v1/google/google/oauth/callback
+Methods: GET
+Name: google_callback_root
+Endpoint: google_callback_root
+------------------------------
+Path: /v1/ha/aliases
+Methods: GET
+Name: list_aliases
+Endpoint: list_aliases
+------------------------------
+Path: /v1/ha/aliases
+Methods: POST
+Name: create_alias
+Endpoint: create_alias
+------------------------------
+Path: /v1/ha/aliases
+Methods: DELETE
+Name: delete_alias
+Endpoint: delete_alias
+------------------------------
+Path: /v1/ha/entities
+Methods: GET
+Name: ha_entities
+Endpoint: ha_entities
+------------------------------
+Path: /v1/ha/entities
+Methods: GET
+Name: ha_entities
+Endpoint: ha_entities
+------------------------------
+Path: /v1/ha/health
+Methods: GET
+Name: ha_health
+Endpoint: ha_health
+------------------------------
+Path: /v1/ha/resolve
+Methods: GET
+Name: ha_resolve
+Endpoint: ha_resolve
+------------------------------
+Path: /v1/ha/resolve
+Methods: GET
+Name: ha_resolve
+Endpoint: ha_resolve
+------------------------------
+Path: /v1/ha/service
+Methods: POST
+Name: ha_service
+Endpoint: ha_service
+------------------------------
+Path: /v1/ha/service
+Methods: POST
+Name: ha_service
+Endpoint: ha_service
+------------------------------
+Path: /v1/ha/webhook
+Methods: POST
+Name: ha_webhook
+Endpoint: ha_webhook
+------------------------------
+Path: /v1/ha/webhook
+Methods: POST
+Name: ha_webhook
+Endpoint: ha_webhook
+------------------------------
+Path: /v1/ha_status
+Methods: GET
+Name: ha_status
+Endpoint: ha_status
+------------------------------
+Path: /v1/health
+Methods: OPTIONS
+Name: health_options
+Endpoint: health_options
+------------------------------
+Path: /v1/health
+Methods: GET
+Name: health
+Endpoint: health
+------------------------------
+Path: /v1/health
+Methods: GET
+Name: health_combined
+Endpoint: health_combined
+------------------------------
+Path: /v1/health/chroma
+Methods: GET
+Name: health_chroma
+Endpoint: health_chroma
+------------------------------
+Path: /v1/health/qdrant
+Methods: GET
+Name: health_qdrant
+Endpoint: health_qdrant
+------------------------------
+Path: /v1/health/vector_store
+Methods: GET
+Name: health_vector_store
+Endpoint: health_vector_store
+------------------------------
+Path: /v1/healthz
+Methods: GET
+Name: healthz
+Endpoint: healthz
+------------------------------
+Path: /v1/history/pin
+Methods: POST
+Name: pin_interaction
+Endpoint: pin_interaction
+------------------------------
+Path: /v1/history/recent
+Methods: GET
+Name: recent_history
+Endpoint: recent_history
+------------------------------
+Path: /v1/integrations/google/disconnect
+Methods: POST
+Name: integrations_google_disconnect
+Endpoint: integrations_google_disconnect
+------------------------------
+Path: /v1/integrations/google/status
+Methods: GET
+Name: integrations_google_status
+Endpoint: integrations_google_status
+------------------------------
+Path: /v1/integrations/status
+Methods: GET
+Name: integrations_status
+Endpoint: integrations_status
+------------------------------
+Path: /v1/intent-test
+Methods: POST
+Name: intent_test
+Endpoint: intent_test
+------------------------------
+Path: /v1/llama_status
+Methods: GET
+Name: llama_status
+Endpoint: llama_status
+------------------------------
+Path: /v1/login
+Methods: POST
+Name: login
+Endpoint: login
+------------------------------
+Path: /v1/logout
+Methods: POST
+Name: logout
+Endpoint: logout
+------------------------------
+Path: /v1/logs
+Methods: GET
+Name: logs
+Endpoint: logs
+------------------------------
+Path: /v1/me
+Methods: GET
+Name: me
+Endpoint: me
+------------------------------
+Path: /v1/memories/export
+Methods: GET
+Name: export_memories
+Endpoint: export_memories
+------------------------------
+Path: /v1/memories/{mem_id}
+Methods: DELETE
+Name: delete_memory
+Endpoint: delete_memory
+------------------------------
+Path: /v1/memory/ingest
+Methods: POST
+Name: ingest_memory
+Endpoint: ingest_memory
+------------------------------
+Path: /v1/metrics
+Methods: OPTIONS
+Name: metrics_options
+Endpoint: metrics_options
+------------------------------
+Path: /v1/models
+Methods: GET
+Name: list_models
+Endpoint: list_models
+------------------------------
+Path: /v1/music
+Methods: POST
+Name: music_command
+Endpoint: music_command
+------------------------------
+Path: /v1/music
+Methods: POST
+Name: music_command
+Endpoint: music_command
+------------------------------
+Path: /v1/music/device
+Methods: POST
+Name: set_device
+Endpoint: set_device
+------------------------------
+Path: /v1/music/device
+Methods: POST
+Name: transfer_playback_device
+Endpoint: transfer_playback_device
+------------------------------
+Path: /v1/music/devices
+Methods: GET
+Name: list_devices
+Endpoint: list_devices
+------------------------------
+Path: /v1/music/devices
+Methods: GET
+Name: list_devices
+Endpoint: list_devices
+------------------------------
+Path: /v1/music/restore
+Methods: POST
+Name: restore_volume
+Endpoint: restore_volume
+------------------------------
+Path: /v1/onboarding/complete
+Methods: POST
+Name: complete_onboarding
+Endpoint: complete_onboarding
+------------------------------
+Path: /v1/onboarding/status
+Methods: GET
+Name: get_onboarding_status
+Endpoint: get_onboarding_status
+------------------------------
+Path: /v1/ping
+Methods: GET
+Name: ping
+Endpoint: ping
+------------------------------
+Path: /v1/ping
+Methods: GET
+Name: ping_vendor_health
+Endpoint: ping_vendor_health
+------------------------------
+Path: /v1/profile
+Methods: GET
+Name: get_profile
+Endpoint: get_profile
+------------------------------
+Path: /v1/profile
+Methods: POST
+Name: update_profile
+Endpoint: update_profile
+------------------------------
+Path: /v1/queue
+Methods: GET
+Name: get_queue
+Endpoint: get_queue
+------------------------------
+Path: /v1/queue
+Methods: GET
+Name: get_queue
+Endpoint: get_queue
+------------------------------
+Path: /v1/rag/search
+Methods: GET
+Name: rag_search
+Endpoint: rag_search
+------------------------------
+Path: /v1/rate_limit_status
+Methods: GET
+Name: rate_limit_status
+Endpoint: rate_limit_status
+------------------------------
+Path: /v1/recommendations
+Methods: GET
+Name: get_recommendations
+Endpoint: get_recommendations
+------------------------------
+Path: /v1/recommendations
+Methods: GET
+Name: recommendations
+Endpoint: recommendations
+------------------------------
+Path: /v1/refresh
+Methods: POST
+Name: refresh
+Endpoint: refresh
+------------------------------
+Path: /v1/register
+Methods: POST
+Name: register
+Endpoint: register
+------------------------------
+Path: /v1/reminders
+Methods: GET
+Name: list_reminders
+Endpoint: list_reminders
+------------------------------
+Path: /v1/reminders
+Methods: POST
+Name: add_reminder
+Endpoint: add_reminder
+------------------------------
+Path: /v1/reminders
+Methods: DELETE
+Name: clear_reminders
+Endpoint: clear_reminders
+------------------------------
+Path: /v1/reset_password
+Methods: POST
+Name: reset_password
+Endpoint: reset_password
+------------------------------
+Path: /v1/restore_volume
+Methods: POST
+Name: restore_volume
+Endpoint: restore_volume
+------------------------------
+Path: /v1/search/sessions
+Methods: GET
+Name: search_sessions
+Endpoint: search_sessions
+------------------------------
+Path: /v1/sessions
+Methods: GET
+Name: sessions
+Endpoint: sessions
+------------------------------
+Path: /v1/sessions/paginated
+Methods: GET
+Name: sessions_paginated
+Endpoint: sessions_paginated
+------------------------------
+Path: /v1/sessions/{session_id}/summarize
+Methods: POST
+Name: trigger_summary_endpoint
+Endpoint: trigger_summary_endpoint
+------------------------------
+Path: /v1/sessions/{session_id}/transcribe
+Methods: POST
+Name: trigger_transcription_endpoint
+Endpoint: trigger_transcription_endpoint
+------------------------------
+Path: /v1/sessions/{sid}/revoke
+Methods: POST
+Name: revoke_session
+Endpoint: revoke_session
+------------------------------
+Path: /v1/settings/
+Methods: GET
+Name: get_settings
+Endpoint: get_settings
+------------------------------
+Path: /v1/skills/list
+Methods: GET
+Name: skills_list
+Endpoint: skills_list
+------------------------------
+Path: /v1/spotify/callback
+Methods: GET
+Name: spotify_callback
+Endpoint: spotify_callback
+------------------------------
+Path: /v1/spotify/callback-test
+Methods: GET
+Name: spotify_callback_test
+Endpoint: spotify_callback_test
+------------------------------
+Path: /v1/spotify/connect
+Methods: GET
+Name: spotify_connect
+Endpoint: spotify_connect
+------------------------------
+Path: /v1/spotify/debug
+Methods: GET
+Name: spotify_debug
+Endpoint: spotify_debug
+------------------------------
+Path: /v1/spotify/debug-cookie
+Methods: GET
+Name: spotify_debug_cookie
+Endpoint: spotify_debug_cookie
+------------------------------
+Path: /v1/spotify/debug/store
+Methods: GET
+Name: debug_oauth_store
+Endpoint: debug_oauth_store
+------------------------------
+Path: /v1/spotify/devices
+Methods: GET
+Name: devices
+Endpoint: devices
+------------------------------
+Path: /v1/spotify/disconnect
+Methods: DELETE
+Name: spotify_disconnect
+Endpoint: spotify_disconnect
+------------------------------
+Path: /v1/spotify/health
+Methods: GET
+Name: spotify_health
+Endpoint: spotify_health
+------------------------------
+Path: /v1/spotify/play
+Methods: POST
+Name: play
+Endpoint: play
+------------------------------
+Path: /v1/spotify/status
+Methods: GET
+Name: spotify_status
+Endpoint: spotify_status
+------------------------------
+Path: /v1/spotify/test/full_flow
+Methods: POST
+Name: test_full_flow
+Endpoint: test_full_flow
+------------------------------
+Path: /v1/spotify/test/store_tx
+Methods: POST
+Name: test_store_tx
+Endpoint: test_store_tx
+------------------------------
+Path: /v1/spotify/token-for-sdk
+Methods: GET
+Name: token_for_sdk
+Endpoint: token_for_sdk
+------------------------------
+Path: /v1/state
+Methods: GET
+Name: get_state
+Endpoint: get_state
+------------------------------
+Path: /v1/state
+Methods: GET
+Name: get_state_root
+Endpoint: get_state_root
+------------------------------
+Path: /v1/state
+Methods: GET
+Name: music_state
+Endpoint: music_state
+------------------------------
+Path: /v1/status
+Methods: GET
+Name: full_status
+Endpoint: full_status
+------------------------------
+Path: /v1/status/budget
+Methods: GET
+Name: budget_status_alias
+Endpoint: budget_status_alias
+------------------------------
+Path: /v1/status/features
+Methods: GET
+Name: features
+Endpoint: features
+------------------------------
+Path: /v1/status/preflight
+Methods: GET
+Name: preflight
+Endpoint: preflight
+------------------------------
+Path: /v1/status/vector_store
+Methods: GET
+Name: status_vector_store
+Endpoint: status_vector_store
+------------------------------
+Path: /v1/transcribe/{session_id}
+Methods: POST
+Name: start_transcription
+Endpoint: start_transcription
+------------------------------
+Path: /v1/transcribe/{session_id}
+Methods: GET
+Name: get_transcription
+Endpoint: get_transcription
+------------------------------
+Path: /v1/tts/speak
+Methods: POST
+Name: speak
+Endpoint: speak
+------------------------------
+Path: /v1/tv/alert
+Methods: POST
+Name: tv_alert
+Endpoint: tv_alert
+------------------------------
+Path: /v1/tv/calendar/next
+Methods: GET
+Name: tv_calendar_next_alias
+Endpoint: tv_calendar_next_alias
+------------------------------
+Path: /v1/tv/config
+Methods: GET
+Name: tv_get_config
+Endpoint: tv_get_config
+------------------------------
+Path: /v1/tv/config
+Methods: PUT
+Name: tv_put_config
+Endpoint: tv_put_config
+------------------------------
+Path: /v1/tv/contacts
+Methods: GET
+Name: list_tv_contacts
+Endpoint: list_tv_contacts
+------------------------------
+Path: /v1/tv/contacts/call
+Methods: POST
+Name: start_call
+Endpoint: start_call
+------------------------------
+Path: /v1/tv/music/play
+Methods: POST
+Name: tv_music_play
+Endpoint: tv_music_play
+------------------------------
+Path: /v1/tv/photos
+Methods: GET
+Name: tv_photos
+Endpoint: tv_photos
+------------------------------
+Path: /v1/tv/photos
+Methods: GET
+Name: list_photos
+Endpoint: list_photos
+------------------------------
+Path: /v1/tv/photos/favorite
+Methods: POST
+Name: tv_photos_favorite
+Endpoint: tv_photos_favorite
+------------------------------
+Path: /v1/tv/photos/favorite
+Methods: POST
+Name: TvPhotoOkResponse
+Endpoint: TvPhotoOkResponse
+------------------------------
+Path: /v1/tv/photos/favorite
+Methods: POST
+Name: mark_favorite
+Endpoint: mark_favorite
+------------------------------
+Path: /v1/tv/prefs
+Methods: GET
+Name: tv_get_prefs
+Endpoint: tv_get_prefs
+------------------------------
+Path: /v1/tv/prefs
+Methods: POST
+Name: tv_set_prefs
+Endpoint: tv_set_prefs
+------------------------------
+Path: /v1/tv/stage2
+Methods: POST
+Name: tv_stage2
+Endpoint: tv_stage2
+------------------------------
+Path: /v1/tv/tips
+Methods: GET
+Name: tv_ambient_tips
+Endpoint: tv_ambient_tips
+------------------------------
+Path: /v1/tv/weather
+Methods: GET
+Name: tv_weather
+Endpoint: tv_weather
+------------------------------
+Path: /v1/ui/duck
+Methods: POST
+Name: ui_duck
+Endpoint: ui_duck
+------------------------------
+Path: /v1/ui/restore
+Methods: POST
+Name: ui_restore
+Endpoint: ui_restore
+------------------------------
+Path: /v1/v1/{path:path}
+Methods: OPTIONS
+Name: v1_options_handler
+Endpoint: v1_options_handler
+------------------------------
+Path: /v1/vendor-health
+Methods: GET
+Name: get_vendor_health_status
+Endpoint: get_vendor_health_status
+------------------------------
+Path: /v1/vibe
+Methods: POST
+Name: set_vibe
+Endpoint: set_vibe
+------------------------------
+Path: /v1/vibe
+Methods: POST
+Name: set_vibe
+Endpoint: set_vibe
+------------------------------
+Path: /v1/voices/catalog
+Methods: GET
+Name: catalog
+Endpoint: catalog
+------------------------------
+Path: /v1/ws/care
+Methods: DELETE
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/care
+Methods: PATCH
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/care
+Methods: PUT
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/care
+Methods: POST
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/care
+Methods: GET
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/care/docs
+Methods: GET
+Name: ws_care_docs
+Endpoint: ws_care_docs
+------------------------------
+Path: /v1/ws/music
+Methods: DELETE
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/music
+Methods: PATCH
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/music
+Methods: PUT
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/music
+Methods: POST
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/music
+Methods: GET
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/{path:path}
+Methods: DELETE
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/{path:path}
+Methods: PATCH
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/{path:path}
+Methods: PUT
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/{path:path}
+Methods: POST
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+Path: /v1/ws/{path:path}
+Methods: GET
+Name: websocket_http_handler
+Endpoint: websocket_http_handler
+------------------------------
+
+Total routes: 293

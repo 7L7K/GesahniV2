@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Request, Body
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -43,12 +43,26 @@ current_dir = os.path.dirname(__file__)
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-# Import the router module directly
-router_mod = importlib.import_module('router')
-router_route_prompt = router_mod.route_prompt
+# Import the router module directly. Historically this project exposed a
+# top-level ``router.py`` module; newer refactors introduced an
+# `app.router` package. Try both forms and fall back gracefully.
+router_route_prompt = None
+try:
+    router_mod = importlib.import_module("router")
+    router_route_prompt = getattr(router_mod, "route_prompt")
+except Exception:
+    try:
+        router_mod = importlib.import_module("app.router.entrypoint")
+        router_route_prompt = getattr(router_mod, "route_prompt")
+    except Exception:
+        router_route_prompt = None
 
-# Set route_prompt in the router package for backward compatibility
-router_package.route_prompt = router_route_prompt
+# Set route_prompt in the router package for backward compatibility when available
+try:
+    if router_route_prompt is not None:
+        router_package.route_prompt = router_route_prompt
+except Exception:
+    pass
 from .deps.scheduler import shutdown as scheduler_shutdown
 from .gpt_client import close_client
 
@@ -240,6 +254,24 @@ def _anon_user_id(auth_header: str | None) -> str:
 # Configure logging first
 configure_logging()
 logger = logging.getLogger(__name__)
+
+# Ensure a concrete router is registered at import time to avoid router-unavailable
+try:
+    from .router.registry import set_router, get_router
+    from .router.model_router import model_router as _module_model_router
+
+    try:
+        # Only set if not already configured
+        _ = get_router()
+    except Exception:
+        try:
+            set_router(_module_model_router)
+            logger.debug("Router registry set to model_router at import time")
+        except Exception:
+            logger.debug("Failed to set router registry at import time; will rely on create_app()")
+except Exception:
+    # Best-effort only; do not fail import if registry or model_router unavailable
+    pass
 
 
 # Import helper: prefer importlib over exec for safety/readability.
@@ -853,6 +885,39 @@ app = FastAPI(
     swagger_ui_parameters=_swagger_ui_parameters,
 )
 
+
+def create_app() -> FastAPI:
+    """Composition root helper to perform late DI wiring.
+
+    Callers (tests or bootstrappers) may call this to ensure light-weight
+    dependencies are composed without importing heavy modules at import time.
+    """
+    # Lazily attempt to warm up GPT client to fail fast for misconfiguration.
+    try:
+        from .gpt_client import get_client
+
+        try:
+            # This may raise RuntimeError when OPENAI_API_KEY isn't set; tolerate it
+            # and continue — the router/model router will handle vendor fallbacks.
+            get_client()
+        except Exception as e:  # pragma: no cover - best effort
+            logger.debug("GPT client not available at create_app(): %s", e)
+    except Exception:
+        # If gpt_client cannot be imported (very rare), continue without failing
+        logger.debug("gpt_client import failed during create_app() wiring")
+
+    # Configure the router registry with a concrete router instance BEFORE including routes.
+    try:
+        from .router.registry import set_router
+        from .router.model_router import model_router as concrete_router
+
+        set_router(concrete_router)
+        logger.debug("Router registry set to model_router during create_app()")
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning("Failed to set router during create_app(): %s", e)
+
+    return app
+
 # Wire store providers into middleware (dependency injection)
 # Import stores *after* app exists to avoid import-time cycles
 from .user_store import user_store
@@ -1245,7 +1310,7 @@ except Exception:
     pass
 
 # Include modern auth API router first to avoid route shadowing
-include("app.api.auth:router", prefix="/v1")
+include("app.api.auth:router", prefix="/v1/auth")
 
 # Include legacy auth router for backward compatibility (/v1/refresh, /v1/logout)
 include("app.auth:router", prefix="/v1")
@@ -1279,7 +1344,7 @@ if preflight_router is not None:
 if device_auth_router is not None:
     app.include_router(device_auth_router, prefix="/v1")
 # Keep only the canonical Google OAuth router; legacy router removed to avoid overlap.
-app.include_router(google_oauth_router, prefix="/v1")
+app.include_router(google_oauth_router, prefix="/v1/google")
 app.include_router(integrations_router, prefix="/v1")
 if os.getenv("TEST_MODE") == "1":
     app.include_router(spotify_integrations_router, prefix="/v1")
@@ -1395,8 +1460,8 @@ else:
 
 # Conditionally mount all admin-related routers
 if admin_enabled():
-    include("app.api.admin_ui:router", prefix="/v1")
-    include("app.admin.routes:router", prefix="/v1")
+    include("app.api.admin_ui:router", prefix="/v1/admin")
+    include("app.admin.routes:router", prefix="/v1/admin")
     logging.info("Admin UI and extras routers processed (admin_enabled=%s)", True)
 else:
     logging.info("Admin UI and extras routers disabled (admin_enabled=%s)", False)
@@ -1452,7 +1517,24 @@ include("app.api.voices:router", prefix="/v1")
 
 include("app.api.memory_ingest:router", prefix="/v1")
 
-include("app.api.ask:router", prefix="/v1")
+include("app.api.ask:router", prefix="")
+# Compatibility: lightweight shim for legacy /v1/ask that delegates to internal handler
+try:
+    from fastapi import Body as _Body  # local alias to avoid top-level change
+
+    async def _compat_v1_ask(request: Request, body: dict | None = _Body(default=None)):
+        try:
+            from app.api.ask import _ask as _internal_ask
+        except Exception:
+            # If internal handler not available, return 404 to avoid breaking startup
+            raise StarletteHTTPException(status_code=404)
+
+        return await _internal_ask(request, body)
+
+    app.add_api_route("/v1/ask", _compat_v1_ask, methods=["POST"])
+except Exception:
+    # Best-effort only; do not crash if compatibility route can't be mounted
+    pass
 
 # Optional diagnostic/auxiliary routers -------------------------------------
 try:

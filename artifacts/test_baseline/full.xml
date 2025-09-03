@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="4" failures="0" skipped="0" tests="4" time="8.670" timestamp="2025-09-02T20:26:50.247403-04:00" hostname="MacBook-Pro-2.local"><testcase classname="" name="tests.test_remaining_budget_fix" time="0.000"><error message="collection failure">tests/test_remaining_budget_fix.py:17: in &lt;module&gt;
+    from app.router import get_remaining_budget
+&lt;frozen importlib._bootstrap&gt;:1412: in _handle_fromlist
+    ???
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals &amp; position)</error></testcase><testcase classname="" name="tests.test_sessions_api" time="0.000"><error message="collection failure">tests/test_sessions_api.py:18: in &lt;module&gt;
+    import app.tasks as tasks
+app/tasks.py:17: in &lt;module&gt;
+    from .router import OPENAI_TIMEOUT_MS
+&lt;frozen importlib._bootstrap&gt;:1412: in _handle_fromlist
+    ???
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals &amp; position)</error></testcase><testcase classname="" name="tests.test_tasks" time="0.000"><error message="collection failure">tests/test_tasks.py:1: in &lt;module&gt;
+    from app import tasks
+app/tasks.py:17: in &lt;module&gt;
+    from .router import OPENAI_TIMEOUT_MS
+&lt;frozen importlib._bootstrap&gt;:1412: in _handle_fromlist
+    ???
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals &amp; position)</error></testcase><testcase classname="" name="tests.unit.test_extracted_modules" time="0.000"><error message="collection failure">ImportError while importing test module '/Users/kingal/2025/GesahniV2/tests/unit/test_extracted_modules.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/unit/test_extracted_modules.py:17: in &lt;module&gt;
+    from app.router_policy import (
+app/router_policy.py:27: in &lt;module&gt;
+    from app.router import ALLOWED_GPT_MODELS, ALLOWED_LLAMA_MODELS
+E   ImportError: cannot import name 'ALLOWED_GPT_MODELS' from 'app.router' (/Users/kingal/2025/GesahniV2/app/router/__init__.py)</error></testcase></testsuite></testsuites>

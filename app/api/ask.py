@@ -17,8 +17,14 @@ from app.auth_core import csrf_validate, require_scope as require_scope_core
 from app.deps.user import get_current_user_id, require_user
 from app.otel_utils import get_trace_id_hex, start_span
 from app.policy import moderation_precheck
-from app.router import OPENAI_TIMEOUT_MS
-from app.router import OLLAMA_TIMEOUT_MS
+# OPENAI/OLLAMA timeouts are provided by the legacy router module in some
+# configurations. Import them lazily with safe fallbacks to avoid hard
+# import-time coupling to `app.router` (which may be a lightweight package).
+try:
+    from app.router import OPENAI_TIMEOUT_MS, OLLAMA_TIMEOUT_MS
+except Exception:
+    OPENAI_TIMEOUT_MS = 6000
+    OLLAMA_TIMEOUT_MS = 4500
 from app.security import verify_token
 from app.telemetry import hash_user_id
 
@@ -584,19 +590,20 @@ async def _ask(request: Request, body: dict | None):
             # rate_limit applied via route dependency; keep explicit header snapshot behavior
             # Lazily import to respect tests that monkeypatch app.main.route_prompt
             try:
-                main_mod = import_module("app.main")
-                route_prompt = main_mod.route_prompt
+                # Prefer the lightweight router entrypoint to avoid importing heavy modules
+                entry_mod = import_module("app.router.entrypoint")
+                route_prompt = entry_mod.route_prompt
                 params = inspect.signature(route_prompt).parameters
-            except (ImportError, AttributeError) as e:
-                # Router import failed - return 503 Service Unavailable
-                logger.error(f"Router import failed: {e}")
+            except (ImportError, AttributeError, RuntimeError) as e:
+                # Router import/wiring failed - return 503 Service Unavailable
+                logger.error("Router import/wiring failed: %s", e, exc_info=True)
                 raise HTTPException(
                     status_code=503,
                     detail={
-                        "error": "service_unavailable",
-                        "message": "Router functionality is not available due to import error",
-                        "cause": str(e)
-                    }
+                        "code": "ROUTER_UNAVAILABLE",
+                        "message": "Router is unavailable",
+                        "cause": str(e),
+                    },
                 )
             try:
                 if "stream_cb" in params:
@@ -613,16 +620,27 @@ async def _ask(request: Request, body: dict | None):
                     result = await route_prompt(
                         prompt_text, user_id, model_override=model_override, **gen_opts
                     )
-            except Exception as e:
-                # Router call failed - return 503 Service Unavailable
-                logger.error(f"Router call failed: {e}")
+            except RuntimeError as e:
+                # Router explicitly indicates it hasn't been configured; translate to 503
+                logger.error("Router not configured: %s", e, exc_info=True)
                 raise HTTPException(
                     status_code=503,
                     detail={
-                        "error": "service_unavailable",
+                        "code": "ROUTER_UNAVAILABLE",
+                        "message": "Router not configured",
+                        "cause": str(e),
+                    },
+                )
+            except Exception as e:
+                # Router call failed - return 503 Service Unavailable
+                logger.error("Router call failed: %s", e, exc_info=True)
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "code": "BACKEND_UNAVAILABLE",
                         "message": "Router call failed",
-                        "cause": str(e)
-                    }
+                        "cause": str(e),
+                    },
                 )
             if streamed_any:
                 logger.info(

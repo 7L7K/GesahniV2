@@ -188,7 +188,7 @@ class LoginUrlResponse(BaseModel):
 
 
 
-@router.get("/auth/google/login_url")
+@router.get("/auth/login_url")
 async def google_login_url(request: Request) -> Response:
     """
     Generate a Google OAuth login URL with CSRF protection.
@@ -378,7 +378,7 @@ async def google_login_url(request: Request) -> Response:
 
 
 
-@router.get("/auth/google/callback")
+@router.get("/auth/callback")
 async def google_callback(request: Request) -> Response:
     """
     Handle Google OAuth callback with strict state validation.

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="0" skipped="0" tests="1" time="7.253" timestamp="2025-09-02T20:26:34.062441-04:00" hostname="MacBook-Pro-2.local"><testcase classname="" name="tests.test_remaining_budget_fix" time="0.000"><error message="collection failure">tests/test_remaining_budget_fix.py:17: in &lt;module&gt;
+    from app.router import get_remaining_budget
+&lt;frozen importlib._bootstrap&gt;:1412: in _handle_fromlist
+    ???
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/router/__init__.py:32: in __getattr__
+    return getattr(router_module, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   RecursionError: maximum recursion depth exceeded
+!!! Recursion detected (same locals &amp; position)</error></testcase></testsuite></testsuites>
