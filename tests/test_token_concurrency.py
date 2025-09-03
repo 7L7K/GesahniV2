@@ -26,7 +26,7 @@ async def test_concurrent_upserts_union_scopes(tmp_path):
     await dao.upsert_token(base)
 
     async def upsert_with_scope(suffix: str):
-        t = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="b0e0d486-eb72-4320-b2a7-a1565c3c619a", 
+        t = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="b0e0d486-eb72-4320-b2a7-a1565c3c619a", 
             user_id="u777",
             provider="google",
             provider_sub="sub-conc",

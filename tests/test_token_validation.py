@@ -226,7 +226,7 @@ class TestTokenValidation:
         now = int(time.time())
         original_token = "super_secret_access_token_12345"
 
-        token = ThirdPartyToken(access_token="BAAAAAAAAAAAAAAAAA", identity_id="7aed377d-7359-4aea-8134-060a6c80b87b", 
+        token = ThirdPartyToken( identity_id="7aed377d-7359-4aea-8134-060a6c80b87b", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",

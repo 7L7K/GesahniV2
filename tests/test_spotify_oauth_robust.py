@@ -405,7 +405,7 @@ class TestSpotifyOAuthRobust:
 
         async def mock_oauth_flow(user_id):
             # Simulate OAuth callback for different users
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="a4099c24-9296-4fae-87ba-fe1da42c0d9e", 
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="a4099c24-9296-4fae-87ba-fe1da42c0d9e", 
                 user_id=user_id,
                 provider='spotify',
                 provider_sub=f'{user_id}_sub',

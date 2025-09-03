@@ -146,7 +146,7 @@ class TestTokenErrorHandling:
 
         async def concurrent_update(user_id, token_value):
             """Simulate concurrent token updates"""
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="812c39ba-842d-4147-9dbf-8d11ab024dcb", 
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="812c39ba-842d-4147-9dbf-8d11ab024dcb", 
                 user_id=user_id,
                 provider="spotify",
                 provider_sub=f"{user_id}_sub",
@@ -186,7 +186,7 @@ class TestTokenErrorHandling:
 
         original_token = "original_secret_token"
 
-        token = ThirdPartyToken(access_token="BAAAAAAAAAAAAAAAAA", identity_id="ec12fb5b-1be9-4ccb-9281-e44f50a8207a", 
+        token = ThirdPartyToken( identity_id="ec12fb5b-1be9-4ccb-9281-e44f50a8207a", 
             user_id="test_user",
             provider="spotify",
             provider_sub="spotify_user_123",
@@ -376,7 +376,7 @@ class TestTokenErrorHandling:
         # Create many tokens to simulate memory pressure
         tokens = []
         for i in range(1000):  # Large number of tokens
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="c019e59f-7a33-4d7f-b8d8-f641c514711d", 
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="c019e59f-7a33-4d7f-b8d8-f641c514711d", 
                 user_id=f"user_{i}",
                 provider="spotify",
                 provider_sub=f"sub_{i}",
@@ -467,7 +467,7 @@ class TestTokenErrorHandling:
 
         # Create multiple users with tokens
         for i in range(50):
-            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", access_token="BAAAAAAAAAAAAAAAAA", identity_id="7e91d33e-d446-4311-b533-82e03a9d7f6e", 
+            token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB",  identity_id="7e91d33e-d446-4311-b533-82e03a9d7f6e", 
                 user_id=f"load_user_{i}",
                 provider="spotify",
                 provider_sub=f"sub_{i}",

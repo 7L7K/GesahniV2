@@ -253,7 +253,7 @@ async def test_notnull_violation(temp_dbs, create_test_identity):
 
     # Constructor validation should catch this
     with pytest.raises(ValueError, match="user_id, provider, and access_token are required"):
-        ThirdPartyToken(access_token="BAAAAAAAAAAAAAAAAA", 
+        ThirdPartyToken( 
             user_id=user_id,
             provider="spotify",
             provider_iss="https://accounts.spotify.com",
@@ -286,7 +286,7 @@ async def test_concurrent_upserts(temp_dbs, create_test_identity):
 
     async def upsert_coroutine(token_id: str, access_token_suffix: str, expires_offset: int):
         """Coroutine that performs an upsert with specific parameters."""
-        token = ThirdPartyToken(access_token="BAAAAAAAAAAAAAAAAA", 
+        token = ThirdPartyToken( 
             id=token_id,
             user_id=user_id,
             provider="spotify",
@@ -355,7 +355,7 @@ async def test_spotify_contract_validation_integration(temp_dbs, create_test_ide
     assert result is True
 
     # Test 2: Invalid Spotify token should fail contract validation
-    invalid_token = ThirdPartyToken(refresh_token="ABBBBBBBBBBBBBBBBB", 
+    invalid_token = ThirdPartyToken( 
         user_id=user_id,
         provider="spotify",
         provider_iss="https://accounts.spotify.com",
