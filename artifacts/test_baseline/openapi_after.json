@@ -1,0 +1,1754 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GesahniV2 API",
+    "description": "GesahniV2 API",
+    "version": "v0.5.0-42-g216aef7"
+  },
+  "paths": {
+    "/google/oauth/callback": {
+      "get": {
+        "summary": " Legacy Google Oauth Callback Root",
+        "operationId": "_legacy_google_oauth_callback_root_google_oauth_callback_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ask": {
+      "post": {
+        "tags": [
+          "Care"
+        ],
+        "summary": "Ask Endpoint",
+        "description": "Main ask endpoint that routes prompts to appropriate LLM backends.\n\nThis endpoint:\n1. Validates authentication and scope\n2. Processes the prompt through the routing system\n3. Returns streaming or non-streaming responses\n4. Handles errors with appropriate HTTP status codes",
+        "operationId": "ask_endpoint_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ask Endpoint Ask Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/login_url": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Google Login Url",
+        "description": "Generate Google OAuth login URL with CSRF protection.",
+        "operationId": "google_login_url_v1_auth_login_url_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/callback": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Google Oauth Callback",
+        "description": "Handle Google OAuth callback.",
+        "operationId": "google_oauth_callback_v1_auth_callback_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ping": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Admin Ping",
+        "description": "Simple admin ping endpoint.",
+        "operationId": "admin_ping_v1_ping_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/rbac/info": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Admin Rbac Info",
+        "description": "Get RBAC information.",
+        "operationId": "admin_rbac_info_v1_rbac_info_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/system/status": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Admin System Status",
+        "description": "Get system status information.",
+        "operationId": "admin_system_status_v1_system_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tokens/google": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Admin Google Tokens",
+        "description": "Get Google OAuth tokens for debugging.",
+        "operationId": "admin_google_tokens_v1_tokens_google_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/metrics": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Admin Metrics",
+        "description": "Get application metrics.",
+        "operationId": "admin_metrics_v1_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/router/decisions": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Admin Router Decisions",
+        "description": "Get recent router decisions.",
+        "operationId": "admin_router_decisions_v1_router_decisions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/config": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Config",
+        "operationId": "config_v1_config_get",
+        "security": [
+          {
+            "OAuth2": [
+              "admin:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Config V1 Config Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/errors": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Admin Errors",
+        "description": "Get recent application errors.",
+        "operationId": "admin_errors_v1_errors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/flags": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Admin Flags",
+        "description": "Get feature flags.",
+        "operationId": "admin_flags_v1_flags_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Health Combined",
+        "description": "Unified health snapshot that always returns HTTP 200.\n\nShape: { status: 'ok'|'degraded'|'fail', checks: { backend, jwt, database, vector_store, llama, ha, qdrant, spotify } }",
+        "operationId": "health_combined_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/healthz": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Healthz",
+        "description": "Report backend and LLaMA health for probes.",
+        "operationId": "healthz_v1_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Healthz V1 Healthz Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2": [
+              "admin:write"
+            ]
+          }
+        ]
+      }
+    },
+    "/v1/rate_limit_status": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Rate Limit Status",
+        "description": "Return current rate-limit backend configuration and health.",
+        "operationId": "rate_limit_status_v1_rate_limit_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Rate Limit Status V1 Rate Limit Status Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2": [
+              "admin:write"
+            ]
+          }
+        ]
+      }
+    },
+    "/v1/budget": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Budget Status",
+        "operationId": "budget_status_v1_budget_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Budget Status V1 Budget Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2": [
+              "admin:write"
+            ]
+          }
+        ]
+      }
+    },
+    "/v1/status/budget": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Budget Status Alias",
+        "operationId": "budget_status_alias_v1_status_budget_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Budget Status Alias V1 Status Budget Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2": [
+              "admin:write"
+            ]
+          }
+        ]
+      }
+    },
+    "/v1/ha_status": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Ha Status",
+        "operationId": "ha_status_v1_ha_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ha Status V1 Ha Status Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2": [
+              "admin:write"
+            ]
+          }
+        ]
+      }
+    },
+    "/v1/llama_status": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Llama Status",
+        "description": "Report LLaMA health by attempting a minimal generation.",
+        "operationId": "llama_status_v1_llama_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Llama Status V1 Llama Status Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2": [
+              "admin:write"
+            ]
+          }
+        ]
+      }
+    },
+    "/v1/status": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Full Status",
+        "operationId": "full_status_v1_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Full Status V1 Status Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2": [
+              "admin:write"
+            ]
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Health Simple",
+        "description": "Boring, unbreakable health endpoint.\n\nAlways returns HTTP 200 with a minimal shape and short\u2011budget checks:\n{\"status\": \"ok|degraded\", \"services\": {\"api\": \"up\", \"llama\": \"up|down\", \"ha\": \"up|down\"}}",
+        "operationId": "health_simple_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Healthz Root",
+        "description": "Simple health check endpoint for probes - root level for compatibility.",
+        "operationId": "healthz_root_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz/ready": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Health Ready",
+        "description": "Core readiness with structured component status.\n\nRequired checks (all must pass):\n- JWT secret present\n- DB/session store basic open\n- Vector store connectivity (read-only)\n\nEach component returns: healthy | degraded | unhealthy\nOverall status is unhealthy if any required component is unhealthy.\n\nAlways returns HTTP 200 - never 5xx. Degraded status is indicated in response body.",
+        "operationId": "health_ready_healthz_ready_get",
+        "responses": {
+          "200": {
+            "description": "Readiness status (always 200, never 5xx)",
+            "content": {
+              "application/json": {
+                "schema": {},
+                "examples": {
+                  "healthy": {
+                    "summary": "All components healthy",
+                    "value": {
+                      "status": "ok",
+                      "ok": true,
+                      "components": {
+                        "jwt_secret": {
+                          "status": "healthy"
+                        },
+                        "db": {
+                          "status": "healthy"
+                        },
+                        "vector_store": {
+                          "status": "healthy"
+                        }
+                      }
+                    }
+                  },
+                  "degraded": {
+                    "summary": "Some components degraded",
+                    "value": {
+                      "status": "degraded",
+                      "ok": true,
+                      "components": {
+                        "jwt_secret": {
+                          "status": "healthy"
+                        },
+                        "db": {
+                          "status": "healthy"
+                        },
+                        "vector_store": {
+                          "status": "degraded"
+                        }
+                      }
+                    }
+                  },
+                  "unhealthy": {
+                    "summary": "Critical components unhealthy",
+                    "value": {
+                      "status": "unhealthy",
+                      "ok": false,
+                      "components": {
+                        "jwt_secret": {
+                          "status": "unhealthy"
+                        },
+                        "db": {
+                          "status": "healthy"
+                        },
+                        "vector_store": {
+                          "status": "healthy"
+                        }
+                      },
+                      "failing": [
+                        "jwt_secret"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health/vector_store": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Health Vector Store",
+        "description": "Return a small diagnostic summary for the configured vector store.\n\nIntended for automated smoke tests: returns `ok` + store_type + config\nand a minimal write/read smoke check when possible.",
+        "operationId": "health_vector_store_v1_health_vector_store_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Vector Store V1 Health Vector Store Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/vector_store": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Health Vector Store",
+        "description": "Return a small diagnostic summary for the configured vector store.\n\nIntended for automated smoke tests: returns `ok` + store_type + config\nand a minimal write/read smoke check when possible.",
+        "operationId": "health_vector_store_health_vector_store_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Vector Store Health Vector Store Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health/qdrant": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Health Qdrant",
+        "description": "Check Qdrant health status.",
+        "operationId": "health_qdrant_v1_health_qdrant_get",
+        "responses": {
+          "200": {
+            "description": "Qdrant health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Qdrant V1 Health Qdrant Get"
+                },
+                "examples": {
+                  "healthy": {
+                    "summary": "Qdrant is healthy",
+                    "value": {
+                      "ok": true,
+                      "status": "ok"
+                    }
+                  },
+                  "unhealthy": {
+                    "summary": "Qdrant is not responding",
+                    "value": {
+                      "ok": false,
+                      "status": "error",
+                      "error": "Connection timeout"
+                    }
+                  },
+                  "skipped": {
+                    "summary": "Qdrant not configured",
+                    "value": {
+                      "ok": false,
+                      "status": "skipped"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health/chroma": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Health Chroma",
+        "description": "Check Chroma health status.",
+        "operationId": "health_chroma_v1_health_chroma_get",
+        "responses": {
+          "200": {
+            "description": "Chroma health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Chroma V1 Health Chroma Get"
+                },
+                "examples": {
+                  "healthy": {
+                    "summary": "Chroma is healthy",
+                    "value": {
+                      "ok": true,
+                      "status": "ok"
+                    }
+                  },
+                  "unhealthy": {
+                    "summary": "Chroma is not responding",
+                    "value": {
+                      "ok": false,
+                      "status": "error",
+                      "error": "Connection timeout"
+                    }
+                  },
+                  "skipped": {
+                    "summary": "Chroma not configured as vector store",
+                    "value": {
+                      "ok": false,
+                      "status": "skipped"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/google/auth/login_url": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Google Login Url",
+        "description": "Generate a Google OAuth login URL with CSRF protection.\n\nReturns a Google OAuth URL and sets a short-lived state cookie\nfor CSRF protection. If Google OAuth is not configured, returns 503.",
+        "operationId": "google_login_url_v1_google_auth_login_url_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/google/auth/callback": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Google Callback",
+        "description": "Handle Google OAuth callback with strict state validation.\n\nValidates the signed state parameter and processes the OAuth code.\nRejects requests with missing, expired, or invalid state.\nClears the state cookie after validation and proceeds with session logic.",
+        "operationId": "google_callback_v1_google_auth_callback_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/google/google/oauth/callback": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Google Callback Root",
+        "operationId": "google_callback_root_v1_google_google_oauth_callback_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/integrations/google/status": {
+      "get": {
+        "summary": "Integrations Google Status",
+        "description": "Canonical Google status endpoint at /v1/integrations/google/status",
+        "operationId": "integrations_google_status_v1_integrations_google_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/integrations/google/disconnect": {
+      "post": {
+        "summary": "Integrations Google Disconnect",
+        "description": "Canonical Google disconnect endpoint at /v1/integrations/google/disconnect",
+        "operationId": "integrations_google_disconnect_v1_integrations_google_disconnect_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register",
+        "operationId": "register_v1_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Register V1 Register Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/rate-limits/{key}": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Get Rate Limit Stats",
+        "description": "Get rate limiting statistics for a specific key (admin only).",
+        "operationId": "get_rate_limit_stats_v1_admin_rate_limits__key__get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Clear Rate Limit Data",
+        "description": "Clear rate limiting data for a specific key or all keys (admin only).",
+        "operationId": "clear_rate_limit_data_v1_admin_rate_limits__key__delete",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login",
+        "description": "Password login for local accounts.\n\nCSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.",
+        "operationId": "login_v1_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Refresh",
+        "operationId": "refresh_v1_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest",
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RefreshRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Req"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Logout",
+        "description": "Legacy logout endpoint - delegates to /v1/auth/logout.",
+        "operationId": "logout_v1_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/forgot": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Forgot",
+        "operationId": "forgot_v1_forgot_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Forgot V1 Forgot Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reset_password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Reset Password",
+        "operationId": "reset_password_v1_reset_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Reset Password V1 Reset Password Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/integrations/spotify/status": {
+      "get": {
+        "summary": "Integrations Spotify Status",
+        "description": "Get Spotify integration status for frontend polling.\n\nReturns status information that frontend can use to determine if reconnect is needed.",
+        "operationId": "integrations_spotify_status_v1_integrations_spotify_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Integrations Spotify Status V1 Integrations Spotify Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/integrations/spotify/integrations/spotify/status": {
+      "get": {
+        "summary": "Integrations Spotify Status",
+        "description": "Get Spotify integration status for frontend polling.\n\nReturns status information that frontend can use to determine if reconnect is needed.",
+        "operationId": "integrations_spotify_status_v1_integrations_spotify_integrations_spotify_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Integrations Spotify Status V1 Integrations Spotify Integrations Spotify Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/device/session": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Get Device Session",
+        "operationId": "get_device_session_v1_device_session_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Device Session V1 Device Session Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/device/trust": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Trust Device",
+        "description": "Issue a device-trusted session.\n\nIf JWT_SECRET is configured, set an access_token cookie with a long TTL.\nOtherwise, set a lightweight marker cookie so the UI can behave consistently\nin test/dev environments. The silent refresh middleware rotates as needed.",
+        "operationId": "trust_device_v1_device_trust_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Trust Device V1 Device Trust Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/status/preflight": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Preflight",
+        "operationId": "preflight_v1_status_preflight_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Preflight V1 Status Preflight Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AskRequest": {
+        "properties": {
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Message"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Prompt",
+            "description": "Prompt text or chat-style message array",
+            "examples": [
+              "Hello, how are you?",
+              [
+                {
+                  "content": "Hello",
+                  "role": "user"
+                }
+              ]
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "Force specific model (gpt-4o, llama3, etc.)",
+            "examples": [
+              "gpt-4o",
+              "llama3"
+            ]
+          },
+          "stream": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream",
+            "description": "Force SSE when true; otherwise negotiated via Accept",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "AskRequest",
+        "examples": [
+          {
+            "prompt": "Hello, how are you?"
+          },
+          {
+            "prompt": [
+              {
+                "content": "Hello",
+                "role": "user"
+              }
+            ],
+            "stream": true
+          },
+          {
+            "model": "llama3",
+            "prompt": "Translate to French"
+          }
+        ]
+      },
+      "ForgotRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username"
+        ],
+        "title": "ForgotRequest",
+        "example": {
+          "username": "demo"
+        }
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "example": {
+          "password": "secret123",
+          "username": "demo"
+        }
+      },
+      "Message": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "description": "Message role: system|user|assistant"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content",
+            "description": "Message text content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "Message"
+      },
+      "RefreshRequest": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest",
+        "example": {
+          "refresh_token": "<jwt-refresh>"
+        }
+      },
+      "RegisterRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "RegisterRequest",
+        "example": {
+          "password": "secret123",
+          "username": "demo"
+        }
+      },
+      "ResetPasswordRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "new_password": {
+            "type": "string",
+            "title": "New Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "title": "ResetPasswordRequest",
+        "example": {
+          "new_password": "NewPass123",
+          "token": "abcd1234"
+        }
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "stats": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "refresh_token"
+        ],
+        "title": "TokenResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {
+              "care:resident": "Resident-level care features (presence, sessions, HA actions)",
+              "care:caregiver": "Caregiver portal and actions",
+              "music:control": "Control music playback and devices",
+              "admin:write": "Administrative endpoints: flags, metrics, backups"
+            },
+            "tokenUrl": "/v1/auth/token"
+          }
+        }
+      },
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Care",
+      "description": "Care features, contacts, sessions, and Home Assistant actions."
+    },
+    {
+      "name": "Music",
+      "description": "Music playback, voices, and TTS."
+    },
+    {
+      "name": "Calendar",
+      "description": "Calendar and reminders."
+    },
+    {
+      "name": "TV",
+      "description": "TV UI and related endpoints."
+    },
+    {
+      "name": "Admin",
+      "description": "Admin, status, models, diagnostics, and tools."
+    },
+    {
+      "name": "Auth",
+      "description": "Authentication and authorization."
+    }
+  ],
+  "security": [],
+  "servers": [
+    {
+      "url": "http://localhost:8000"
+    }
+  ]
+}

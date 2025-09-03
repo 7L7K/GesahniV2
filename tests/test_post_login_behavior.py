@@ -263,7 +263,7 @@ class PostLoginTester:
             print(f"  Testing page: {page}")
 
             try:
-                response = self.session.get(page_url, allow_redirects=False)
+                response = self.session.get(page_url, follow_redirects=False)
 
                 result = {
                     "page": page,

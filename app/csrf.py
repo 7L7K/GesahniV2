@@ -160,7 +160,10 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     "deny: csrf_missing_header_cross_site header=<%s>",
                     token_hdr[:8] + "..." if token_hdr else "None",
                 )
-                raise HTTPException(400, detail="csrf.missing")
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "csrf.missing"}
+                )
 
             # Basic validation for cross-site tokens
             if len(token_hdr) < 16:
@@ -168,7 +171,10 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     "deny: csrf_invalid_format_cross_site header=<%s>",
                     token_hdr[:8] + "..." if token_hdr else "None",
                 )
-                raise HTTPException(400, detail="csrf.invalid")
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "csrf.invalid"}
+                )
 
             # For cross-site, we accept any properly formatted token
             # (server-side validation is optional for basic functionality)
@@ -186,7 +192,10 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     "deny: csrf_legacy_header_disabled header=<%s>",
                     token_hdr[:8] + "..." if token_hdr else "None",
                 )
-                raise HTTPException(400, detail="csrf.missing")
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "csrf.missing"}
+                )
             # Require both header and cookie, and match
             if not token_hdr or not token_cookie:
                 logger.warning(
@@ -194,14 +203,20 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     token_hdr[:8] + "..." if token_hdr else "None",
                     token_cookie[:8] + "..." if token_cookie else "None",
                 )
-                raise HTTPException(403, detail="csrf.missing")
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "csrf.missing"}
+                )
             if token_hdr != token_cookie:
                 logger.warning(
                     "deny: csrf_mismatch header=<%s> cookie=<%s>",
                     token_hdr[:8] + "...",
                     token_cookie[:8] + "...",
                 )
-                raise HTTPException(400, detail="csrf.invalid")
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "csrf.invalid"}
+                )
 
             # For unsafe methods, ensure CSRF headers are set even on success
             try:
@@ -221,7 +236,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 response = JSONResponse(status_code=500, content={"error": "internal_error"})
                 if csrf_cookie:
                     response.headers["X-CSRF-Token"] = csrf_cookie
-                raise HTTPException(500, detail="internal_error") from None
+                return response
 
 
 async def get_csrf_token() -> str:

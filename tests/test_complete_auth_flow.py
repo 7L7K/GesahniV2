@@ -274,7 +274,7 @@ def test_no_html_redirects():
         print(f"\nTesting {endpoint}:")
         try:
             response = session.get(
-                f"{BASE_URL}{endpoint}", timeout=5, allow_redirects=False
+                f"{BASE_URL}{endpoint}", timeout=5, follow_redirects=False
             )
             print(f"  GET {endpoint} - Status: {response.status_code}")
 

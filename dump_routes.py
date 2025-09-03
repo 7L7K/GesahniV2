@@ -10,8 +10,11 @@ import os
 # Add the project root to sys.path
 sys.path.insert(0, os.path.dirname(__file__))
 
-# Import the app from main.py
-from app.main import app
+# Import and create the app properly
+from app.main import create_app
+
+# Create the app with all routers properly mounted
+app = create_app()
 
 def dump_routes():
     """Dump all routes from the FastAPI app to JSON and text formats."""
@@ -45,18 +48,9 @@ def dump_routes():
 
     # Write text format
     with open('artifacts/test_baseline/routes.txt', 'w') as f:
-        f.write("FastAPI Routes Dump\n")
-        f.write("=" * 50 + "\n\n")
-
         for route in routes_data:
-            methods_str = ', '.join(route['methods'])
-            f.write(f"Path: {route['path']}\n")
-            f.write(f"Methods: {methods_str}\n")
-            if route['name']:
-                f.write(f"Name: {route['name']}\n")
-            if route['endpoint']:
-                f.write(f"Endpoint: {route['endpoint']}\n")
-            f.write("-" * 30 + "\n")
+            methods_str = ','.join(route['methods'])
+            f.write(f"{methods_str},{route['path']} -> {route['endpoint']}\n")
 
         f.write(f"\nTotal routes: {len(routes_data)}\n")
 

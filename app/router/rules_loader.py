@@ -25,13 +25,11 @@ def get_router_rules() -> Dict[str, Any]:
         return {}
 
 
-# Cache the rules to avoid repeated file reads
-_router_rules_cache = None
+# Cache moved to app/infra/router_rules.py
+# Use infra.get_router_rules_cache() instead
 
 
 def get_cached_router_rules() -> Dict[str, Any]:
     """Get cached router rules, loading from file if not cached."""
-    global _router_rules_cache
-    if _router_rules_cache is None:
-        _router_rules_cache = get_router_rules()
-    return _router_rules_cache
+    from ..infra.router_rules import get_router_rules_cache
+    return get_router_rules_cache()

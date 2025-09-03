@@ -1,0 +1,317 @@
+Phase 4 Route Dump
+==================================================
+
+Path: /
+Methods: GET
+Name: root
+------------------------------
+Path: /api
+Methods: GET
+Name: api_info
+------------------------------
+Path: /ask
+Methods: POST
+Name: ask_endpoint
+------------------------------
+Path: /ask/replay/{rid}
+Methods: GET
+Name: ask_replay
+------------------------------
+Path: /budget
+Methods: GET
+Name: budget_status
+------------------------------
+Path: /config
+Methods: GET
+Name: config
+------------------------------
+Path: /docs
+Methods: HEAD, GET
+Name: swagger_ui_html
+------------------------------
+Path: /docs/oauth2-redirect
+Methods: HEAD, GET
+Name: swagger_ui_redirect
+------------------------------
+Path: /google/oauth/callback
+Methods: GET
+Name: _legacy_google_oauth_callback_root
+------------------------------
+Path: /ha_status
+Methods: GET
+Name: ha_status
+------------------------------
+Path: /health
+Methods: GET
+Name: health
+------------------------------
+Path: /health
+Methods: GET
+Name: health_simple
+------------------------------
+Path: /health/vector_store
+Methods: GET
+Name: health_vector_store
+------------------------------
+Path: /healthz
+Methods: GET
+Name: healthz
+------------------------------
+Path: /healthz
+Methods: GET
+Name: healthz_root
+------------------------------
+Path: /healthz/deps
+Methods: GET
+Name: health_deps
+------------------------------
+Path: /healthz/live
+Methods: GET
+Name: health_live
+------------------------------
+Path: /healthz/ready
+Methods: GET
+Name: health_ready
+------------------------------
+Path: /llama_status
+Methods: GET
+Name: llama_status
+------------------------------
+Path: /openapi.json
+Methods: HEAD, GET
+Name: openapi
+------------------------------
+Path: /rate_limit_status
+Methods: GET
+Name: rate_limit_status
+------------------------------
+Path: /redoc
+Methods: HEAD, GET
+Name: redoc_html
+------------------------------
+Path: /status
+Methods: GET
+Name: full_status
+------------------------------
+Path: /status/budget
+Methods: GET
+Name: budget_status_alias
+------------------------------
+Path: /v1/_schema/error-envelope.json
+Methods: GET
+Name: error_envelope_schema
+------------------------------
+Path: /v1/admin/rate-limits/{key}
+Methods: GET
+Name: get_rate_limit_stats
+------------------------------
+Path: /v1/admin/rate-limits/{key}
+Methods: DELETE
+Name: clear_rate_limit_data
+------------------------------
+Path: /v1/auth/apple/callback
+Methods: POST
+Name: apple_callback
+------------------------------
+Path: /v1/auth/apple/start
+Methods: GET
+Name: apple_start
+------------------------------
+Path: /v1/auth/callback
+Methods: GET
+Name: google_oauth_callback
+------------------------------
+Path: /v1/auth/examples
+Methods: GET
+Name: auth_examples
+------------------------------
+Path: /v1/auth/finish
+Methods: GET
+Name: auth_finish_get
+------------------------------
+Path: /v1/auth/finish
+Methods: POST
+Name: auth_finish_post
+------------------------------
+Path: /v1/auth/login_url
+Methods: GET
+Name: google_login_url
+------------------------------
+Path: /v1/auth/logout
+Methods: POST
+Name: logout
+------------------------------
+Path: /v1/auth/refresh
+Methods: POST
+Name: refresh_token
+------------------------------
+Path: /v1/auth/whoami
+Methods: GET
+Name: whoami
+------------------------------
+Path: /v1/budget
+Methods: GET
+Name: budget_status
+------------------------------
+Path: /v1/config
+Methods: GET
+Name: admin_config
+------------------------------
+Path: /v1/config
+Methods: GET
+Name: config
+------------------------------
+Path: /v1/device/session
+Methods: GET
+Name: get_device_session
+------------------------------
+Path: /v1/device/trust
+Methods: POST
+Name: trust_device
+------------------------------
+Path: /v1/errors
+Methods: GET
+Name: admin_errors
+------------------------------
+Path: /v1/flags
+Methods: GET
+Name: admin_flags
+------------------------------
+Path: /v1/forgot
+Methods: POST
+Name: forgot
+------------------------------
+Path: /v1/google/auth/callback
+Methods: GET
+Name: google_callback
+------------------------------
+Path: /v1/google/auth/login_url
+Methods: GET
+Name: google_login_url
+------------------------------
+Path: /v1/google/google/oauth/callback
+Methods: GET
+Name: google_callback_root
+------------------------------
+Path: /v1/google/oauth/callback
+Methods: GET
+Name: legacy_google_callback
+------------------------------
+Path: /v1/ha_status
+Methods: GET
+Name: ha_status
+------------------------------
+Path: /v1/health
+Methods: GET
+Name: health
+------------------------------
+Path: /v1/health
+Methods: GET
+Name: health_combined
+------------------------------
+Path: /v1/health/chroma
+Methods: GET
+Name: health_chroma
+------------------------------
+Path: /v1/health/qdrant
+Methods: GET
+Name: health_qdrant
+------------------------------
+Path: /v1/health/vector_store
+Methods: GET
+Name: health_vector_store
+------------------------------
+Path: /v1/healthz
+Methods: GET
+Name: healthz
+------------------------------
+Path: /v1/integrations/google/disconnect
+Methods: POST
+Name: integrations_google_disconnect
+------------------------------
+Path: /v1/integrations/google/status
+Methods: GET
+Name: integrations_google_status
+------------------------------
+Path: /v1/integrations/spotify/integrations/spotify/status
+Methods: GET
+Name: integrations_spotify_status
+------------------------------
+Path: /v1/integrations/spotify/status
+Methods: GET
+Name: integrations_spotify_status
+------------------------------
+Path: /v1/llama_status
+Methods: GET
+Name: llama_status
+------------------------------
+Path: /v1/login
+Methods: POST
+Name: login
+------------------------------
+Path: /v1/logout
+Methods: POST
+Name: logout
+------------------------------
+Path: /v1/metrics
+Methods: GET
+Name: admin_metrics
+------------------------------
+Path: /v1/ping
+Methods: GET
+Name: admin_ping
+------------------------------
+Path: /v1/ping
+Methods: GET
+Name: ping_vendor_health
+------------------------------
+Path: /v1/rate_limit_status
+Methods: GET
+Name: rate_limit_status
+------------------------------
+Path: /v1/rbac/info
+Methods: GET
+Name: admin_rbac_info
+------------------------------
+Path: /v1/refresh
+Methods: POST
+Name: refresh
+------------------------------
+Path: /v1/register
+Methods: POST
+Name: register
+------------------------------
+Path: /v1/reset_password
+Methods: POST
+Name: reset_password
+------------------------------
+Path: /v1/router/decisions
+Methods: GET
+Name: admin_router_decisions
+------------------------------
+Path: /v1/status
+Methods: GET
+Name: full_status
+------------------------------
+Path: /v1/status/budget
+Methods: GET
+Name: budget_status_alias
+------------------------------
+Path: /v1/status/preflight
+Methods: GET
+Name: preflight
+------------------------------
+Path: /v1/system/status
+Methods: GET
+Name: admin_system_status
+------------------------------
+Path: /v1/tokens/google
+Methods: GET
+Name: admin_google_tokens
+------------------------------
+Path: /v1/vendor-health
+Methods: GET
+Name: get_vendor_health_status
+------------------------------
+
+Total routes: 78

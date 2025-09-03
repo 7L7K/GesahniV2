@@ -264,7 +264,7 @@ class TestGoogleCallback:
         # Make callback request
         response = client.get(
             f"/v1/google/auth/callback?code=test_code&state={valid_state}",
-            allow_redirects=False,
+            follow_redirects=False,
         )
 
         # Assert redirect response

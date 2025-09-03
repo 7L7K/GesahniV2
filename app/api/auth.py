@@ -2137,19 +2137,31 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
             dt = int((time.time() - t0) * 1000)
             record_refresh_latency("rotation", dt)
 
-            # Return tokens for header-mode clients
+            # Return tokens for header-mode clients - ALWAYS include both tokens
             body: dict[str, Any] = {"status": "ok", "user_id": tokens.get("user_id", "anon")}
             if isinstance(tokens, dict):
-                body["access_token"] = tokens.get("access_token")
-                body["refresh_token"] = tokens.get("refresh_token")
+                body["access_token"] = tokens.get("access_token", "")
+                body["refresh_token"] = tokens.get("refresh_token", "")
             return body
         else:
-            # No rotation needed (token still valid)
+            # No rotation needed (token still valid) - but we still need to return current tokens
             refresh_rotation_success()
             logger.info("refresh_flow: rotated=false, reason=token_still_valid")
             dt = int((time.time() - t0) * 1000)
             record_refresh_latency("no_rotation", dt)
-            return {"status": "ok", "user_id": current_user_id}
+
+            # Always return both access_token and refresh_token, even when no rotation occurs
+            # Get the current valid tokens from cookies
+            from ..cookies import read_access_cookie, read_refresh_cookie
+            current_access_token = read_access_cookie(request) or ""
+            current_refresh_token = read_refresh_cookie(request) or ""
+
+            return {
+                "status": "ok",
+                "user_id": current_user_id,
+                "access_token": current_access_token,
+                "refresh_token": current_refresh_token
+            }
 
     except HTTPException:
         # Re-raise HTTP exceptions (like 401 for replay protection)
@@ -2318,13 +2330,21 @@ async def rotate_refresh_cookies(request: Request, response: Response, user_id: 
 
         if tokens:
             return {
-                "access_token": tokens.get("access_token"),
-                "refresh_token": tokens.get("refresh_token"),
+                "access_token": tokens.get("access_token", ""),
+                "refresh_token": tokens.get("refresh_token", ""),
                 "user_id": tokens.get("user_id", current_user_id),
             }
         else:
-            # Token still valid, no rotation needed
-            return {"user_id": current_user_id}
+            # Token still valid, no rotation needed - but always return both tokens
+            from ..cookies import read_access_cookie, read_refresh_cookie
+            current_access_token = read_access_cookie(request) or ""
+            current_refresh_token = read_refresh_cookie(request) or ""
+
+            return {
+                "access_token": current_access_token,
+                "refresh_token": current_refresh_token,
+                "user_id": current_user_id
+            }
 
     except Exception as e:
         logger.warning("rotate_refresh_cookies shim failed: %s", e)

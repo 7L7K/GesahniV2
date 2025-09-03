@@ -1,0 +1,552 @@
+[
+  {
+    "path": "/",
+    "methods": [
+      "GET"
+    ],
+    "name": "root"
+  },
+  {
+    "path": "/api",
+    "methods": [
+      "GET"
+    ],
+    "name": "api_info"
+  },
+  {
+    "path": "/ask",
+    "methods": [
+      "POST"
+    ],
+    "name": "ask_endpoint"
+  },
+  {
+    "path": "/ask/replay/{rid}",
+    "methods": [
+      "GET"
+    ],
+    "name": "ask_replay"
+  },
+  {
+    "path": "/budget",
+    "methods": [
+      "GET"
+    ],
+    "name": "budget_status"
+  },
+  {
+    "path": "/config",
+    "methods": [
+      "GET"
+    ],
+    "name": "config"
+  },
+  {
+    "path": "/docs",
+    "methods": [
+      "HEAD",
+      "GET"
+    ],
+    "name": "swagger_ui_html"
+  },
+  {
+    "path": "/docs/oauth2-redirect",
+    "methods": [
+      "HEAD",
+      "GET"
+    ],
+    "name": "swagger_ui_redirect"
+  },
+  {
+    "path": "/google/oauth/callback",
+    "methods": [
+      "GET"
+    ],
+    "name": "_legacy_google_oauth_callback_root"
+  },
+  {
+    "path": "/ha_status",
+    "methods": [
+      "GET"
+    ],
+    "name": "ha_status"
+  },
+  {
+    "path": "/health",
+    "methods": [
+      "GET"
+    ],
+    "name": "health"
+  },
+  {
+    "path": "/health",
+    "methods": [
+      "GET"
+    ],
+    "name": "health_simple"
+  },
+  {
+    "path": "/health/vector_store",
+    "methods": [
+      "GET"
+    ],
+    "name": "health_vector_store"
+  },
+  {
+    "path": "/healthz",
+    "methods": [
+      "GET"
+    ],
+    "name": "healthz"
+  },
+  {
+    "path": "/healthz",
+    "methods": [
+      "GET"
+    ],
+    "name": "healthz_root"
+  },
+  {
+    "path": "/healthz/deps",
+    "methods": [
+      "GET"
+    ],
+    "name": "health_deps"
+  },
+  {
+    "path": "/healthz/live",
+    "methods": [
+      "GET"
+    ],
+    "name": "health_live"
+  },
+  {
+    "path": "/healthz/ready",
+    "methods": [
+      "GET"
+    ],
+    "name": "health_ready"
+  },
+  {
+    "path": "/llama_status",
+    "methods": [
+      "GET"
+    ],
+    "name": "llama_status"
+  },
+  {
+    "path": "/openapi.json",
+    "methods": [
+      "HEAD",
+      "GET"
+    ],
+    "name": "openapi"
+  },
+  {
+    "path": "/rate_limit_status",
+    "methods": [
+      "GET"
+    ],
+    "name": "rate_limit_status"
+  },
+  {
+    "path": "/redoc",
+    "methods": [
+      "HEAD",
+      "GET"
+    ],
+    "name": "redoc_html"
+  },
+  {
+    "path": "/status",
+    "methods": [
+      "GET"
+    ],
+    "name": "full_status"
+  },
+  {
+    "path": "/status/budget",
+    "methods": [
+      "GET"
+    ],
+    "name": "budget_status_alias"
+  },
+  {
+    "path": "/v1/_schema/error-envelope.json",
+    "methods": [
+      "GET"
+    ],
+    "name": "error_envelope_schema"
+  },
+  {
+    "path": "/v1/admin/rate-limits/{key}",
+    "methods": [
+      "GET"
+    ],
+    "name": "get_rate_limit_stats"
+  },
+  {
+    "path": "/v1/admin/rate-limits/{key}",
+    "methods": [
+      "DELETE"
+    ],
+    "name": "clear_rate_limit_data"
+  },
+  {
+    "path": "/v1/auth/apple/callback",
+    "methods": [
+      "POST"
+    ],
+    "name": "apple_callback"
+  },
+  {
+    "path": "/v1/auth/apple/start",
+    "methods": [
+      "GET"
+    ],
+    "name": "apple_start"
+  },
+  {
+    "path": "/v1/auth/callback",
+    "methods": [
+      "GET"
+    ],
+    "name": "google_oauth_callback"
+  },
+  {
+    "path": "/v1/auth/examples",
+    "methods": [
+      "GET"
+    ],
+    "name": "auth_examples"
+  },
+  {
+    "path": "/v1/auth/finish",
+    "methods": [
+      "GET"
+    ],
+    "name": "auth_finish_get"
+  },
+  {
+    "path": "/v1/auth/finish",
+    "methods": [
+      "POST"
+    ],
+    "name": "auth_finish_post"
+  },
+  {
+    "path": "/v1/auth/login_url",
+    "methods": [
+      "GET"
+    ],
+    "name": "google_login_url"
+  },
+  {
+    "path": "/v1/auth/logout",
+    "methods": [
+      "POST"
+    ],
+    "name": "logout"
+  },
+  {
+    "path": "/v1/auth/refresh",
+    "methods": [
+      "POST"
+    ],
+    "name": "refresh_token"
+  },
+  {
+    "path": "/v1/auth/whoami",
+    "methods": [
+      "GET"
+    ],
+    "name": "whoami"
+  },
+  {
+    "path": "/v1/budget",
+    "methods": [
+      "GET"
+    ],
+    "name": "budget_status"
+  },
+  {
+    "path": "/v1/config",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_config"
+  },
+  {
+    "path": "/v1/config",
+    "methods": [
+      "GET"
+    ],
+    "name": "config"
+  },
+  {
+    "path": "/v1/device/session",
+    "methods": [
+      "GET"
+    ],
+    "name": "get_device_session"
+  },
+  {
+    "path": "/v1/device/trust",
+    "methods": [
+      "POST"
+    ],
+    "name": "trust_device"
+  },
+  {
+    "path": "/v1/errors",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_errors"
+  },
+  {
+    "path": "/v1/flags",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_flags"
+  },
+  {
+    "path": "/v1/forgot",
+    "methods": [
+      "POST"
+    ],
+    "name": "forgot"
+  },
+  {
+    "path": "/v1/google/auth/callback",
+    "methods": [
+      "GET"
+    ],
+    "name": "google_callback"
+  },
+  {
+    "path": "/v1/google/auth/login_url",
+    "methods": [
+      "GET"
+    ],
+    "name": "google_login_url"
+  },
+  {
+    "path": "/v1/google/google/oauth/callback",
+    "methods": [
+      "GET"
+    ],
+    "name": "google_callback_root"
+  },
+  {
+    "path": "/v1/google/oauth/callback",
+    "methods": [
+      "GET"
+    ],
+    "name": "legacy_google_callback"
+  },
+  {
+    "path": "/v1/ha_status",
+    "methods": [
+      "GET"
+    ],
+    "name": "ha_status"
+  },
+  {
+    "path": "/v1/health",
+    "methods": [
+      "GET"
+    ],
+    "name": "health"
+  },
+  {
+    "path": "/v1/health",
+    "methods": [
+      "GET"
+    ],
+    "name": "health_combined"
+  },
+  {
+    "path": "/v1/health/chroma",
+    "methods": [
+      "GET"
+    ],
+    "name": "health_chroma"
+  },
+  {
+    "path": "/v1/health/qdrant",
+    "methods": [
+      "GET"
+    ],
+    "name": "health_qdrant"
+  },
+  {
+    "path": "/v1/health/vector_store",
+    "methods": [
+      "GET"
+    ],
+    "name": "health_vector_store"
+  },
+  {
+    "path": "/v1/healthz",
+    "methods": [
+      "GET"
+    ],
+    "name": "healthz"
+  },
+  {
+    "path": "/v1/integrations/google/disconnect",
+    "methods": [
+      "POST"
+    ],
+    "name": "integrations_google_disconnect"
+  },
+  {
+    "path": "/v1/integrations/google/status",
+    "methods": [
+      "GET"
+    ],
+    "name": "integrations_google_status"
+  },
+  {
+    "path": "/v1/integrations/spotify/integrations/spotify/status",
+    "methods": [
+      "GET"
+    ],
+    "name": "integrations_spotify_status"
+  },
+  {
+    "path": "/v1/integrations/spotify/status",
+    "methods": [
+      "GET"
+    ],
+    "name": "integrations_spotify_status"
+  },
+  {
+    "path": "/v1/llama_status",
+    "methods": [
+      "GET"
+    ],
+    "name": "llama_status"
+  },
+  {
+    "path": "/v1/login",
+    "methods": [
+      "POST"
+    ],
+    "name": "login"
+  },
+  {
+    "path": "/v1/logout",
+    "methods": [
+      "POST"
+    ],
+    "name": "logout"
+  },
+  {
+    "path": "/v1/metrics",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_metrics"
+  },
+  {
+    "path": "/v1/ping",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_ping"
+  },
+  {
+    "path": "/v1/ping",
+    "methods": [
+      "GET"
+    ],
+    "name": "ping_vendor_health"
+  },
+  {
+    "path": "/v1/rate_limit_status",
+    "methods": [
+      "GET"
+    ],
+    "name": "rate_limit_status"
+  },
+  {
+    "path": "/v1/rbac/info",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_rbac_info"
+  },
+  {
+    "path": "/v1/refresh",
+    "methods": [
+      "POST"
+    ],
+    "name": "refresh"
+  },
+  {
+    "path": "/v1/register",
+    "methods": [
+      "POST"
+    ],
+    "name": "register"
+  },
+  {
+    "path": "/v1/reset_password",
+    "methods": [
+      "POST"
+    ],
+    "name": "reset_password"
+  },
+  {
+    "path": "/v1/router/decisions",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_router_decisions"
+  },
+  {
+    "path": "/v1/status",
+    "methods": [
+      "GET"
+    ],
+    "name": "full_status"
+  },
+  {
+    "path": "/v1/status/budget",
+    "methods": [
+      "GET"
+    ],
+    "name": "budget_status_alias"
+  },
+  {
+    "path": "/v1/status/preflight",
+    "methods": [
+      "GET"
+    ],
+    "name": "preflight"
+  },
+  {
+    "path": "/v1/system/status",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_system_status"
+  },
+  {
+    "path": "/v1/tokens/google",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_google_tokens"
+  },
+  {
+    "path": "/v1/vendor-health",
+    "methods": [
+      "GET"
+    ],
+    "name": "get_vendor_health_status"
+  }
+]

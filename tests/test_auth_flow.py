@@ -262,7 +262,7 @@ def test_no_html_redirects():
     for endpoint in endpoints:
         try:
             response = requests.get(
-                f"{BASE_URL}{endpoint}", timeout=5, allow_redirects=False
+                f"{BASE_URL}{endpoint}", timeout=5, follow_redirects=False
             )
             print(f"GET {endpoint} - Status: {response.status_code}")
 

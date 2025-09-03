@@ -1,0 +1,25 @@
+Router Package Import DAG Analysis
+========================================
+
+Modules analyzed: 13
+Import relationships: 10
+Issues found: 0
+
+IMPORT RELATIONSHIPS:
+app.router.ask_api:
+  -> app.router.entrypoint
+  -> app.router.policy
+app.router.compat:
+  -> app.router.entrypoint
+  -> app.router.policy
+  -> app.router.budget
+  -> app.router.policy
+app.router.budget:
+  -> app.router.policy
+app.router.entrypoint:
+  -> app.router.registry
+app.router.model_router:
+  -> app.router.debug_flags
+  -> app.router.rules_loader
+
+RESULT: ✅ NO CYCLES - Clean DAG structure

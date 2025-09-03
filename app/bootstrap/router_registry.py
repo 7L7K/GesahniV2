@@ -39,7 +39,8 @@ def create_model_router_adapter() -> Router:
     import-time circular dependencies.
     """
     # Import inside function to avoid circular imports
-    from app.router.model_router import model_router as model_router_instance
+    from app.infra.model_router import get_model_router
+    model_router_instance = get_model_router()
 
     class ModelRouterAdapter:
         """Adapter to make ModelRouter implement the Router protocol."""

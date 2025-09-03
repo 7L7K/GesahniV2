@@ -12,12 +12,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request, Body
-from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
-from starlette.middleware.cors import CORSMiddleware
-from .middleware import SafariCORSCacheFixMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -32,56 +29,15 @@ from .settings_cors import (
     validate_cors_origins,
 )
 
-from . import router as router_package
-# Import route_prompt directly from router.py module to avoid circular imports
-import importlib
-import sys
-import os
-
-# Add the current directory to sys.path to import router.py directly
-current_dir = os.path.dirname(__file__)
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-
-# Import the router module directly. Historically this project exposed a
-# top-level ``router.py`` module; newer refactors introduced an
-# `app.router` package. Try both forms and fall back gracefully.
-router_route_prompt = None
-try:
-    router_mod = importlib.import_module("router")
-    router_route_prompt = getattr(router_mod, "route_prompt")
-except Exception:
-    try:
-        router_mod = importlib.import_module("app.router.entrypoint")
-        router_route_prompt = getattr(router_mod, "route_prompt")
-    except Exception:
-        router_route_prompt = None
-
-# Set route_prompt in the router package for backward compatibility when available
-try:
-    if router_route_prompt is not None:
-        router_package.route_prompt = router_route_prompt
-except Exception:
-    pass
-from .deps.scheduler import shutdown as scheduler_shutdown
-from .gpt_client import close_client
-
-async def route_prompt(prompt: str, user_id: str, **kwargs):
-    logger.info("⬇️ main.route_prompt prompt='%s...', user_id='%s', kwargs=%s", prompt[:50], user_id, kwargs)
-    try:
-        res = await router_route_prompt(prompt, user_id, **kwargs)
-        logger.info("⬆️ main.route_prompt got res=%s", res)
-        return res
-    except Exception as e:  # pragma: no cover - defensive
-        logger.exception("💥 main.route_prompt bubbled exception: %s", e)
-        raise
-
+# Router setup moved to create_app() to avoid import-time cycles
 
 import app.skills  # populate SKILLS
 
 from .logging_config import configure_logging, req_id_var
 from .error_envelope import build_error, shape_from_status
 from .otel_utils import get_trace_id_hex
+from .deps.scheduler import shutdown as scheduler_shutdown
+from .gpt_client import close_client
 
 # Backward-compat shims: some tests expect these names on app.main
 try:  # optional import for tests/monkeypatching
@@ -98,12 +54,7 @@ except Exception:  # pragma: no cover - optional
 
 # Central note: Do NOT monkey‑patch PyJWT globally.
 # All JWT decoding is centralized in app.security.jwt_decode.
-from .api.health import router as health_router
-from .csrf import CSRFMiddleware
-from .otel_utils import shutdown_tracing
-from .status import router as status_router
-from .api.schema import router as schema_router
-from .api.root import router as root_router
+# Router imports moved to create_app() to avoid import-time cycles
 
 try:
     from .api.preflight import router as preflight_router
@@ -889,33 +840,163 @@ app = FastAPI(
 def create_app() -> FastAPI:
     """Composition root helper to perform late DI wiring.
 
-    Callers (tests or bootstrappers) may call this to ensure light-weight
-    dependencies are composed without importing heavy modules at import time.
+    This function assembles the complete FastAPI application from leaf routers
+    via the bootstrap registry. Only this function should wire the application
+    together to avoid circular imports.
     """
-    # Lazily attempt to warm up GPT client to fail fast for misconfiguration.
+    logger.info("🔧 Starting application composition in create_app()")
+
+    # Phase 7: Initialize infrastructure singletons first (needed by router)
     try:
-        from .gpt_client import get_client
+        from .infra.model_router import init_model_router
+        from .infra.router_rules import init_router_rules_cache
+        from .infra.oauth_monitor import init_oauth_monitor
+
+        init_model_router()
+        init_router_rules_cache()
+        init_oauth_monitor()
+
+        logger.debug("✅ Infrastructure singletons initialized")
+    except Exception as e:
+        logger.warning("⚠️  Failed to initialize infrastructure singletons: %s", e)
+
+    # Phase 4: Wire router using bootstrap registry (now infrastructure is ready)
+    try:
+        from .bootstrap.router_registry import configure_default_router
+        configure_default_router()
+        logger.debug("✅ Router configured via bootstrap registry")
+    except Exception as e:
+        logger.warning("⚠️  Failed to configure router: %s", e)
+
+    # Phase 4: Include leaf routers with exact prefixes tests expect
+
+    # /ask at root - from our new leaf module
+    try:
+        from .router.ask_api import router as ask_router
+        app.include_router(ask_router, prefix="")
+        logger.debug("✅ Included ask router at root")
+    except Exception as e:
+        logger.warning("⚠️  Failed to include ask router: %s", e)
+
+    # /v1/auth/* - from our new leaf module
+    try:
+        from .router.auth_api import router as auth_router
+        app.include_router(auth_router, prefix="/v1/auth")
+        logger.debug("✅ Included auth router at /v1/auth")
+    except Exception as e:
+        logger.warning("⚠️  Failed to include auth router: %s", e)
+
+    # /v1/google/auth/* - from our new leaf module
+    try:
+        from .router.google_api import router as google_router
+        app.include_router(google_router, prefix="/v1/google")
+        logger.debug("✅ Included google router at /v1/google")
+    except Exception as e:
+        logger.warning("⚠️  Failed to include google router: %s", e)
+
+    # /v1/admin/* - from our new leaf module
+    try:
+        from .router.admin_api import router as admin_router
+        app.include_router(admin_router, prefix="/v1/admin")
+        logger.debug("✅ Included admin router at /v1/admin")
+    except Exception as e:
+        logger.warning("⚠️  Failed to include admin router: %s", e)
+
+    # Legacy router includes (keeping for backward compatibility)
+    # These are moved inside create_app() to avoid import-time cycles
+
+    # Core routers
+    try:
+        from .api.health import router as health_router
+        from .api.root import router as root_router
+        from .status import router as status_router
+        from .api.schema import router as schema_router
+
+        app.include_router(status_router, prefix="/v1")
+        app.include_router(status_router, include_in_schema=False)
+        app.include_router(schema_router)
+        app.include_router(health_router)
+        app.include_router(root_router)
+        logger.debug("✅ Included core routers")
+    except Exception as e:
+        logger.warning("⚠️  Failed to include core routers: %s", e)
+
+    # Authentication and OAuth routers
+    try:
+        from .api.google_oauth import router as google_oauth_router
+        from .api.google import integrations_router
+        from .auth import router as legacy_auth_router
+
+        app.include_router(google_oauth_router, prefix="/v1/google")
+        app.include_router(integrations_router, prefix="/v1")
+        app.include_router(legacy_auth_router, prefix="/v1")
+        logger.debug("✅ Included auth/oauth routers")
+    except Exception as e:
+        logger.warning("⚠️  Failed to include auth/oauth routers: %s", e)
+
+    # Optional routers (Spotify, Apple, etc.)
+    try:
+        # Import optional routers only if they exist
+        try:
+            from .api.spotify import integrations_router as spotify_integrations_router
+            app.include_router(spotify_integrations_router, prefix="/v1")
+            app.include_router(spotify_integrations_router, prefix="/v1/integrations/spotify")
+        except ImportError:
+            pass
 
         try:
-            # This may raise RuntimeError when OPENAI_API_KEY isn't set; tolerate it
-            # and continue — the router/model router will handle vendor fallbacks.
-            get_client()
-        except Exception as e:  # pragma: no cover - best effort
-            logger.debug("GPT client not available at create_app(): %s", e)
-    except Exception:
-        # If gpt_client cannot be imported (very rare), continue without failing
-        logger.debug("gpt_client import failed during create_app() wiring")
+            from .api.oauth_apple import router as oauth_apple_router
+            app.include_router(oauth_apple_router, prefix="/v1")
+        except ImportError:
+            pass
 
-    # Configure the router registry with a concrete router instance BEFORE including routes.
+        try:
+            from .auth_device import router as device_auth_router
+            app.include_router(device_auth_router, prefix="/v1")
+        except ImportError:
+            pass
+
+        try:
+            from .api.preflight import router as preflight_router
+            app.include_router(preflight_router, prefix="/v1")
+        except ImportError:
+            pass
+
+        logger.debug("✅ Included optional routers")
+    except Exception as e:
+        logger.warning("⚠️  Failed to include optional routers: %s", e)
+
+    # Phase 6: Set up middleware stack (isolated from routers)
     try:
-        from .router.registry import set_router
-        from .router.model_router import model_router as concrete_router
+        from .middleware.stack import setup_middleware_stack, validate_middleware_order
+        setup_middleware_stack(app)
+        validate_middleware_order(app)
+        logger.debug("✅ Middleware stack configured")
+    except Exception as e:
+        logger.warning("⚠️  Failed to set up middleware stack: %s", e)
 
-        set_router(concrete_router)
-        logger.debug("Router registry set to model_router during create_app()")
-    except Exception as e:  # pragma: no cover - defensive
-        logger.warning("Failed to set router during create_app(): %s", e)
+    # Phase 7: Register test router for error normalization testing (dev only)
+    try:
+        logger.debug("Attempting to register test error normalization router...")
+        from .test_error_normalization import router as test_router
+        app.include_router(test_router, prefix="/test-errors", tags=["test-errors"])
+        logger.info("✅ Test error normalization router registered at /test-errors")
+    except ImportError as e:
+        logger.warning("⚠️  Failed to import test router: %s", e)
+    except Exception as e:
+        logger.warning("⚠️  Failed to register test router: %s", e)
 
+    # Phase 6: Set up OpenAPI generation (isolated from routers)
+    try:
+        from .openapi.generator import setup_openapi_for_app
+        setup_openapi_for_app(app)
+        logger.debug("✅ OpenAPI generation configured")
+    except Exception as e:
+        logger.warning("⚠️  Failed to set up OpenAPI generation: %s", e)
+
+# Infrastructure initialization moved to beginning of create_app()
+
+    logger.info("🎉 Application composition complete in create_app()")
     return app
 
 # Wire store providers into middleware (dependency injection)
@@ -928,6 +1009,45 @@ set_store_providers(user_store_provider=lambda: user_store)
 
 
 # Unified error contract for HTTP errors
+
+# Handle Pydantic validation errors with standardized format
+@app.exception_handler(RequestValidationError)
+async def _validation_error_handler(request: Request, exc: RequestValidationError):
+    """Handle Pydantic validation errors with consistent format."""
+    from .http_errors import translate_validation_error
+    from .logging_config import req_id_var
+
+    try:
+        translated_exc = translate_validation_error(exc)
+        # Re-raise to be handled by the middleware
+        raise translated_exc
+    except Exception:
+        # Fallback if translation fails
+        req_id = req_id_var.get() or "-"
+        from .error_envelope import build_error
+        from fastapi.responses import JSONResponse
+
+        errors = []
+        for error in exc.errors():
+            errors.append({
+                "field": ".".join(str(loc) for loc in error["loc"]),
+                "message": error["msg"],
+                "type": error["type"],
+            })
+
+        envelope = build_error(
+            code="validation_error",
+            message="Validation Error",
+            hint="check your request data and try again",
+            details={
+                "status_code": 422,
+                "errors": errors,
+                "req_id": req_id,
+            }
+        )
+
+        return JSONResponse(status_code=422, content=envelope, headers={"X-Error-Code": "validation_error"})
+
 @app.exception_handler(StarletteHTTPException)
 async def _unified_http_error(request: Request, exc: StarletteHTTPException):
     # Let CORS preflight go untouched
@@ -1113,31 +1233,7 @@ async def _unified_validation_error(request: Request, exc: RequestValidationErro
     return JSONResponse(combined, status_code=422, headers=hdrs)
 
 
-def _custom_openapi():
-    if app.openapi_schema:
-        return app.openapi_schema
-
-    from .openapi import generate_custom_openapi
-    from .config_docs import should_show_servers, get_dev_servers
-
-    schema = generate_custom_openapi(
-        title=app.title,
-        version=app.version,
-        routes=app.routes,
-        tags=tags_metadata,
-    )
-
-    # Provide developer-friendly servers list in dev
-    if should_show_servers():
-        servers = get_dev_servers()
-        if servers:
-            schema["servers"] = [{"url": url} for url in servers]
-
-    app.openapi_schema = schema
-    return app.openapi_schema
-
-
-app.openapi = _custom_openapi  # type: ignore[assignment]
+# OpenAPI setup moved to create_app() to avoid import-time cycles
 
 # CORS configuration will be set up later after all imports
 
@@ -1241,504 +1337,28 @@ def include(router_spec: str, *, prefix: str = "") -> None:
     except Exception as e:
         logging.warning("Router include failed for %s: %s", router_spec, e)
 
-# CORS configuration using settings module
-origins = get_cors_origins()
-allow_credentials = get_cors_allow_credentials()
-allow_methods = get_cors_allow_methods()
-allow_headers = get_cors_allow_headers()
-expose_headers = get_cors_expose_headers()
-max_age = get_cors_max_age()
+# CORS configuration moved to middleware/stack.py to avoid import-time cycles
 
-# Validate CORS origins
-validate_cors_origins(origins)
+# All router includes moved to create_app() to avoid import-time cycles
 
-# Store as single source of truth for HTTP+WS origin validation
-app.state.allowed_origins = origins
+# All router includes moved to create_app() to avoid import-time cycles
 
-# Log CORS configuration - clear INFO log for debugging origin issues
-logging.info(
-    "CORS resolved origins=%s | allow_credentials=%s | allow_methods=%s | allow_headers=%s | expose_headers=%s",
-    origins,
-    allow_credentials,
-    allow_methods,
-    allow_headers,
-    expose_headers,
-)
+# All router includes moved to create_app() to avoid import-time cycles
 
-# Core, sessions, utilities
-include("app.api.capture:router", prefix="/v1")
-include("app.api.sessions_http:router", prefix="/v1")
-include("app.api.sessions_ws:router", prefix="/v1")
-include("app.api.transcribe:router", prefix="/v1")
-include("app.api.ha_local:router", prefix="/v1")
-include("app.api.memories:router", prefix="/v1")
-include("app.api.util:router", prefix="/v1")
-include("app.api.debug:router", prefix="/v1")
-include("app.api.core_misc:router", prefix="/v1")
+# All router includes moved to create_app() to avoid import-time cycles
 
-# Prefer the root metrics router; fall back to simple metrics when unavailable
-_metrics_root = _import_router(".api.metrics_root")
-if _metrics_root is not None:
-    app.include_router(_metrics_root)  # keep /metrics at root
-else:
-    _metrics_simple = _import_router(".api.metrics")
-    if _metrics_simple is not None:
-        app.include_router(_metrics_simple)
+# All router includes moved to create_app() to avoid import-time cycles
 
-include("app.health:router", prefix="/v1/diag")
+# All router includes moved to create_app() to avoid import-time cycles
 
-# Simple logs endpoint for UI issue tray
-include("app.api.logs_simple:router", prefix="/v1")
 
-# =============================================================================
-# EXISTING EXTERNAL ROUTERS - Keep in modern-first order
-# =============================================================================
-# Mount status router at both /v1/status and /status for compatibility
-app.include_router(status_router, prefix="/v1")
-app.include_router(status_router, include_in_schema=False)
-app.include_router(schema_router)
-app.include_router(health_router)
-app.include_router(root_router)
-include("app.api.well_known:router")
 
-# Validate configuration on startup (logs only)
-try:
-    from .config_validator import run_config_validation
 
-    run_config_validation()
-except Exception:
-    pass
 
-# Include modern auth API router first to avoid route shadowing
-include("app.api.auth:router", prefix="/v1/auth")
+# Middleware setup moved to create_app() to avoid import-time cycles
 
-# Include legacy auth router for backward compatibility (/v1/refresh, /v1/logout)
-include("app.auth:router", prefix="/v1")
 
-# Legacy auth router split into focused modules. Mount conditionally based on env.
-from .auth_providers import admin_enabled
-
-# Mount refresh router (kept separate)
-# TEMPORARILY DISABLED: Testing original auth router
-# if _safe_import_router("from .api.auth_router_refresh import router as auth_refresh_router", "auth_refresh"):
-#     app.include_router(auth_refresh_router, prefix="/v1")
-
-# Mount PATs router
-# TEMPORARILY DISABLED: Testing original auth router
-# if _safe_import_router("from .api.auth_router_pats import router as auth_pats_router", "auth_pats"):
-#     app.include_router(auth_pats_router, prefix="/v1")
-
-# Dev-only auth helpers
-# TEMPORARILY DISABLED: Testing original auth router
-# if os.getenv("ENV", "dev").strip().lower() in {"dev", "development"}:
-#     if _safe_import_router("from .api.auth_router_dev import router as auth_dev_router", "auth_dev"):
-#         app.include_router(auth_dev_router, prefix="/v1")
-
-try:
-    logging.info("Auth routers processed (admin_enabled=%s)", bool(admin_enabled()))
-except Exception:
-    # Fallback to a simple log if admin_enabled() import fails
-    logging.info("Auth routers processed (admin_enabled=unknown)")
-if preflight_router is not None:
-    app.include_router(preflight_router, prefix="/v1")
-if device_auth_router is not None:
-    app.include_router(device_auth_router, prefix="/v1")
-# Keep only the canonical Google OAuth router; legacy router removed to avoid overlap.
-app.include_router(google_oauth_router, prefix="/v1/google")
-app.include_router(integrations_router, prefix="/v1")
-if os.getenv("TEST_MODE") == "1":
-    app.include_router(spotify_integrations_router, prefix="/v1")
-    app.include_router(spotify_integrations_router, prefix="/v1/integrations/spotify")
-if _oauth_apple_router is not None:
-    app.include_router(_oauth_apple_router, prefix="/v1")
-# Mount Apple OAuth stub for local/dev when enabled, now that `app` exists
-try:
-    if apple_enabled() and apple_stub_router is not None:  # type: ignore[name-defined]
-        # Unversioned for convenience and versioned for tests/clients
-        app.include_router(apple_stub_router)  # type: ignore[arg-type]
-        app.include_router(apple_stub_router, prefix="/v1")  # type: ignore[arg-type]
-except Exception:
-    # Non-fatal if unavailable
-    pass
-if auth_password_router is not None:
-    app.include_router(auth_password_router, prefix="/v1")
-
-# Settings router (both versioned and unversioned for compatibility)
-app.include_router(settings_router, prefix="/v1")
-app.include_router(settings_router, prefix="", include_in_schema=False)
-
-# Google integration (optional)
-# Provide both versioned and unversioned, under /google to match redirect defaults
-# Mount compatibility endpoints for OAuth routers when in test mode or dev routers enabled
-try:
-    from app.env_utils import IS_TEST
-    test_mode_or_dev_routers = IS_TEST or os.getenv("ALLOW_DEV_ROUTERS") == "1"
-except ImportError:
-    # Fallback to environment variables if env_utils not available
-    test_mode_or_dev_routers = (os.getenv("TEST_MODE") == "1" or
-                               os.getenv("PYTEST_RUNNING") == "1" or
-                               os.getenv("ALLOW_DEV_ROUTERS") == "1")
-
-if test_mode_or_dev_routers:
-    # Google OAuth compatibility routes
-    app.include_router(google_router, prefix="/v1/integrations/google")
-    app.include_router(google_router, prefix="/v1/google")
-    app.include_router(google_router, prefix="/google", include_in_schema=False)
-    # Additional OAuth compatibility routes for tests
-    app.include_router(google_oauth_router, prefix="/v1")
-    app.include_router(google_oauth_router, prefix="", include_in_schema=False)
-    # Mount a small compatibility router that exposes legacy root-level paths
-    try:
-        from app.api.google_compat import router as google_compat_router
-
-        app.include_router(google_compat_router, prefix="", include_in_schema=False)
-    except Exception:
-        pass
-    # Google services for test/dev compatibility
-    include("app.api.google_services:router", prefix="/v1/google")
-    include("app.api.health_google:router", prefix="/v1/health")
-
-    # Compatibility shim: map legacy root-level callback path to integration handler
-    try:
-        from app.integrations.google.routes import legacy_oauth_callback as _legacy_google_callback
-
-        # Mount explicit route for tests that call /google/oauth/callback directly
-        app.add_api_route("/google/oauth/callback", _legacy_google_callback, methods=["GET"])
-    except Exception:
-        # Best-effort only; do not crash app initialization if route can't be mounted
-        pass
-
-    # Also map the canonical google oauth callback handler for root-level tests
-    try:
-        from .api.google_oauth import google_callback as _google_callback
-
-        app.add_api_route("/google/oauth/callback", _google_callback, methods=["GET"])
-    except Exception:
-        pass
-
-# New modular routers for HA and profile/admin
-try:
-    from .api.ha import router as ha_api_router
-    app.include_router(
-        ha_api_router,
-        prefix="/v1",
-        dependencies=[
-            Depends(verify_token),
-            Depends(require_any_scopes(["care:resident", "care:caregiver"])),
-            Depends(docs_security_with(["care:resident"])),
-        ],
-    )
-except Exception as e:
-    logging.warning("Router include failed for app.api.ha:router: %s", e)
-
-include("app.api.reminders:router", prefix="/v1")
-
-# Cosmetic redirect for legacy OAuth redirect URIs that point to the unversioned
-# `/google` prefix. Some clients and env defaults may hit `/google` (no subpath)
-# which previously returned 404 — provide a harmless redirect to the canonical
-# `/v1/google` prefix to avoid noisy 404s in the browser/network tab.
-@app.get("/google", include_in_schema=False)
-async def _google_root_redirect():
-    return RedirectResponse(url="/v1/google", status_code=307)
-
-@app.get("/google/", include_in_schema=False)
-async def _google_root_redirect_slash():
-    return RedirectResponse(url="/v1/google", status_code=307)
-
-include("app.api.profile:router", prefix="/v1")
-
-# Conditionally mount admin router based on environment
-if admin_enabled():
-    try:
-        from .api.admin import router as admin_api_router
-        app.include_router(admin_api_router, prefix="/v1")
-        logging.info("Admin routes mounted (admin_enabled=%s)", True)
-    except Exception:
-        logging.info("Admin routes disabled (import failed)")
-else:
-    logging.info("Admin routes disabled (admin_enabled=%s)", False)
-
-# Conditionally mount all admin-related routers
-if admin_enabled():
-    include("app.api.admin_ui:router", prefix="/v1/admin")
-    include("app.admin.routes:router", prefix="/v1/admin")
-    logging.info("Admin UI and extras routers processed (admin_enabled=%s)", True)
-else:
-    logging.info("Admin UI and extras routers disabled (admin_enabled=%s)", False)
-
-include("app.api.me:router", prefix="/v1")
-include("app.api.devices:router", prefix="/v1")
-
-# Spotify SDK short-lived token router
-include("app.api.spotify_sdk:router")
-include("app.api.spotify:router", prefix="/v1")
-include("app.api.spotify_player:router")
-
-# Integrations status endpoint (aggregate third-party connection states)
-include("app.api.integrations_status:router", prefix="/v1")
-
-# Selftest router
-include("app.api.selftest:router", prefix="/v1")
-
-# Canonical whoami route provided by app.api.auth; do not mount alternate handlers
-
-include("app.api.models:router", prefix="/v1")
-
-include("app.api.history:router", prefix="/v1")
-
-if admin_enabled():
-    try:
-        from .api.status_plus import router as status_plus_router
-        app.include_router(status_plus_router, prefix="/v1", dependencies=[Depends(docs_security_with(["admin:write"]))])
-        logging.info("Status plus router mounted (admin_enabled=%s)", True)
-    except Exception:
-        logging.info("Status plus router disabled (import failed)")
-else:
-    logging.info("Status plus router disabled (admin_enabled=%s)", False)
-
-include("app.api.rag:router", prefix="/v1")
-
-include("app.api.skills:router", prefix="/v1")
-
-include("app.api.tv:router", prefix="/v1")
-
-include("app.api.tts:router", prefix="/v1")
-
-# Additional feature routers used by TV/companion UIs
-include("app.api.contacts:router", prefix="/v1")
-
-include("app.api.caregiver_auth:router", prefix="/v1")
-
-include("app.api.photos:router", prefix="/v1")
-
-include("app.api.calendar:router", prefix="/v1")
-
-include("app.api.voices:router", prefix="/v1")
-
-include("app.api.memory_ingest:router", prefix="/v1")
-
-include("app.api.ask:router", prefix="")
-# Compatibility: lightweight shim for legacy /v1/ask that delegates to internal handler
-try:
-    from fastapi import Body as _Body  # local alias to avoid top-level change
-
-    async def _compat_v1_ask(request: Request, body: dict | None = _Body(default=None)):
-        try:
-            from app.api.ask import _ask as _internal_ask
-        except Exception:
-            # If internal handler not available, return 404 to avoid breaking startup
-            raise StarletteHTTPException(status_code=404)
-
-        return await _internal_ask(request, body)
-
-    app.add_api_route("/v1/ask", _compat_v1_ask, methods=["POST"])
-except Exception:
-    # Best-effort only; do not crash if compatibility route can't be mounted
-    pass
-
-# Optional diagnostic/auxiliary routers -------------------------------------
-try:
-    from .api.care import router as care_router
-    app.include_router(
-        care_router,
-        prefix="/v1",
-        dependencies=[Depends(docs_security_with(["care:resident"]))],
-    )
-except Exception as e:
-    logging.warning("Router include failed for app.api.care:router: %s", e)
-
-include("app.api.care_ws:router", prefix="/v1")
-include("app.api.ws_endpoints:router", prefix="/v1")
-
-try:
-    from .caregiver import router as caregiver_router
-    app.include_router(
-        caregiver_router,
-        prefix="/v1",
-        dependencies=[
-            Depends(verify_token),
-            Depends(optional_require_any_scope(["care:caregiver"])),
-            Depends(docs_security_with(["care:caregiver"])),
-        ],
-    )
-except Exception as e:
-    logging.warning("Router include failed for app.caregiver:router: %s", e)
-
-include("app.api.music:router", prefix="/v1")
-include("app.api.music:root_router", prefix="/v1")
-include("app.api.music_http:router", prefix="/v1")
-include("app.api.music_ws:router", prefix="/v1")
-include("app.api.tv_music_sim:router", prefix="/v1")
-
-
-
-
-
-# Idempotent middleware registration helper
-def register_middlewares_once(application):
-    try:
-        if getattr(application.state, "mw_registered", False):
-            logging.debug("Middlewares already registered; skipping")
-            return
-    except Exception:
-        pass
-
-    # Core middlewares (inner → outer)
-    add_mw(application, RequestIDMiddleware, name="RequestIDMiddleware")
-    add_mw(application, DedupMiddleware, name="DedupMiddleware")
-    add_mw(application, HealthCheckFilterMiddleware, name="HealthCheckFilterMiddleware")
-    add_mw(application, TraceRequestMiddleware, name="TraceRequestMiddleware")
-    add_mw(application, AuditMiddleware, name="AuditMiddleware")
-    add_mw(application, RedactHashMiddleware, name="RedactHashMiddleware")
-    add_mw(application, MetricsMiddleware, name="MetricsMiddleware")
-    add_mw(application, RateLimitMiddleware, name="RateLimitMiddleware")
-    add_mw(application, SessionAttachMiddleware, name="SessionAttachMiddleware")
-
-    # Dev / optional middlewares
-    if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}:
-        add_mw(application, ReloadEnvMiddleware, name="ReloadEnvMiddleware")
-    if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1", "true", "yes", "on"}:
-        add_mw(application, SilentRefreshMiddleware, name="SilentRefreshMiddleware")
-
-    # Error boundary
-    add_mw(application, ErrorHandlerMiddleware, name="ErrorHandlerMiddleware")
-    add_mw(application, EnhancedErrorHandlingMiddleware, name="EnhancedErrorHandlingMiddleware")
-
-    # CSRF middleware (after CORS to allow preflight requests through)
-    add_mw(application, CSRFMiddleware, name="CSRFMiddleware")
-
-    # Standard CORS middleware
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_credentials=allow_credentials,
-        allow_methods=allow_methods,
-        allow_headers=allow_headers,
-        expose_headers=expose_headers,
-        max_age=max_age,
-    )
-
-    # Safari CORS cache fix - adds no-cache headers to prevent Safari caching issues
-    application.add_middleware(SafariCORSCacheFixMiddleware)
-
-    # CORS preflight middleware (must be outermost to handle OPTIONS before other middleware)
-    from .middleware.cors import CorsPreflightMiddleware
-    application.add_middleware(CorsPreflightMiddleware, allow_origins=origins)
-    logging.info("=== CSRF MIDDLEWARE REGISTERED ===")
-
-    try:
-        application.state.mw_registered = True
-    except Exception:
-        logging.debug("Failed to set application.state.mw_registered flag")
-
-# Register middlewares once (idempotent)
-register_middlewares_once(app)
-
-
-# DEV-only middleware order assertion
-def _current_mw_names() -> list[str]:
-    try:
-        return [m.cls.__name__ for m in getattr(app, "user_middleware", [])]
-    except Exception:
-        return []
-
-
-def _assert_middleware_order_dev(app):
-    """
-    Assert middleware order is correct in development.
-
-    This ensures middleware is registered in the proper order and no middleware
-    has been accidentally added out of order or removed.
-    """
-    # Temporarily always run this assertion for debugging
-    # if os.getenv("ENV", "dev").lower() != "dev":
-    #     return  # only assert in dev environment
-
-    # Starlette lists middleware in outer→inner order (opposite of registration order)
-    # So the actual order we see is the reverse of what we registered
-    want_outer_to_inner = [
-        # outer → inner (as reported by Starlette)
-        "CorsPreflightMiddleware",
-        "SafariCORSCacheFixMiddleware",
-        "CORSMiddleware",
-        "CSRFMiddleware",
-        "EnhancedErrorHandlingMiddleware",
-        "ErrorHandlerMiddleware",
-        # Optional dev middleware (in reverse order since they're added later)
-        *(
-            ["SilentRefreshMiddleware"]
-            if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1", "true", "yes", "on"}
-            else []
-        ),
-        *(
-            ["ReloadEnvMiddleware"]
-            if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
-            else []
-        ),
-        "SessionAttachMiddleware",  # SessionAttachMiddleware runs after RateLimitMiddleware for metrics
-        "RateLimitMiddleware",  # RateLimitMiddleware runs first to collect metrics
-        "MetricsMiddleware",  # Clean prometheus metrics
-        "RedactHashMiddleware",
-        "AuditMiddleware",  # Append-only audit trail
-        "TraceRequestMiddleware",
-        "HealthCheckFilterMiddleware",
-        "DedupMiddleware",
-        "RequestIDMiddleware",  # innermost
-    ]
-
-    got = []
-    for m in app.user_middleware:
-        if hasattr(m.cls, '__name__'):
-            got.append(m.cls.__name__)
-        else:
-            # Handle case where middleware is an instance (not a class)
-            got.append(type(m.cls).__name__)
-
-    # Compare the middleware order (excluding any unexpected middleware)
-    if got != want_outer_to_inner:
-        error_msg = f"""Middleware order mismatch.
-
-Expected (outer→inner): {want_outer_to_inner}
-Actual   (outer→inner): {got}
-
-Expected registration order (inner→outer):
-- RequestIDMiddleware (innermost)
-- DedupMiddleware
-- HealthCheckFilterMiddleware
-- TraceRequestMiddleware
-- RedactHashMiddleware
-- RateLimitMiddleware (for metrics collection)
-- SessionAttachMiddleware (after RateLimitMiddleware)
-- CSRFMiddleware
-- CORSMiddleware
-- SafariCORSCacheFixMiddleware
-- CorsPreflightMiddleware (outermost)
-- ReloadEnvMiddleware (optional, DEV_MODE={os.getenv('DEV_MODE', '0')})
-- SilentRefreshMiddleware (optional, SILENT_REFRESH_ENABLED={os.getenv('SILENT_REFRESH_ENABLED', '1')})
-- ErrorHandlerMiddleware
-- EnhancedErrorHandlingMiddleware
-
-This error indicates middleware registration order is incorrect.
-Check that add_mw() calls are in the correct sequence in main.py.
-"""
-        raise RuntimeError(error_msg)
-
-
-# Call right after last add_middleware(...)
-if os.getenv("ENV", "dev").lower() == "dev":
-    _assert_middleware_order_dev(app)
-
-
-# Debug middleware order dump
-def _dump_mw_stack(app):
-    try:
-        # Log once at INFO using our current name helper
-        logging.info("MW-ORDER (inner→outer): %s", _current_mw_names())
-    except Exception as e:
-        logging.warning("MW-ORDER dump failed: %r", e)
-
-
-_dump_mw_stack(app)
+# Middleware order validation moved to middleware/stack.py
 
 
 # Compatibility: ensure legacy root-level Google OAuth callback is reachable

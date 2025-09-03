@@ -27,8 +27,19 @@ def _setup_test_db_and_init_tables():
     os.environ["DEV_MODE"] = "1"
     os.environ["COOKIE_SAMESITE"] = "Lax"
     os.environ["COOKIE_SECURE"] = "false"
+    os.environ["COOKIE_DOMAIN"] = ""  # Empty string = host-only cookies for tests
     os.environ["CORS_ALLOW_CREDENTIALS"] = "true"  # Required for cookie auth to work with CORS
+    os.environ["CORS_ALLOW_ORIGINS"] = "http://localhost:3000,http://127.0.0.1:3000"
     os.environ["SPOTIFY_TEST_MODE"] = "1"
+
+    # Additional rate limiting variables for predictable test behavior
+    os.environ["RATE_LIMIT_PER_MIN"] = "1000"  # High limit to prevent interference
+    os.environ["RATE_LIMIT_BURST"] = "100"     # High burst limit
+    os.environ["RATE_LIMIT_WINDOW_S"] = "60"
+    os.environ["RATE_LIMIT_BURST_WINDOW_S"] = "10"
+    os.environ["RATE_LIMIT_BYPASS_SCOPES"] = "admin,test"
+    os.environ["RATE_LIMIT_KEY_SCOPE"] = "global"
+    os.environ["RATE_LIMIT_BACKEND"] = "memory"
 
     # STANDARDIZED TEST IDENTITY AND TTL CONFIGURATION
     # =================================================
@@ -36,6 +47,16 @@ def _setup_test_db_and_init_tables():
     os.environ.setdefault("JWT_EXPIRE_MINUTES", "60")          # 1 hour access tokens
     os.environ.setdefault("JWT_REFRESH_EXPIRE_MINUTES", "1440") # 1 day refresh tokens
     os.environ.setdefault("CSRF_TTL_SECONDS", "3600")           # 1 hour CSRF tokens
+
+    # Additional test environment variables for predictable behavior
+    os.environ.setdefault("JWT_CLOCK_SKEW_S", "60")             # Allow 1 minute clock skew
+    os.environ.setdefault("ENV", "test")                        # Explicit test environment
+    os.environ.setdefault("USE_DEV_PROXY", "0")                # Disable dev proxy for tests
+    os.environ.setdefault("AUTH_DEV_BYPASS", "0")              # Disable auth bypass
+    os.environ.setdefault("CLERK_ENABLED", "0")                # Disable Clerk integration
+    os.environ.setdefault("OAUTH_TEST_MODE", "1")              # Enable OAuth test mode
+    os.environ.setdefault("LOG_LEVEL", "WARNING")              # Reduce log noise during tests
+    os.environ.setdefault("DISABLE_REQUEST_LOGGING", "1")      # Disable request logging
 
     # Disable rate limiting for tests to prevent 429 errors
     # Force disable globally - cannot be overridden by individual tests
@@ -64,39 +85,44 @@ def _reset_llama_health(monkeypatch):
     monkeypatch.setenv("OTEL_ENABLED", "0")
 
 
-# TestClient shim to handle allow_redirects parameter compatibility
+# TestClient shim to handle parameter name compatibility
 class TestClient(_TestClient):
-    """Extended TestClient that handles allow_redirects parameter for compatibility."""
+    """Extended TestClient that handles parameter name compatibility."""
 
     def get(self, *args, **kwargs):
-        # Remove allow_redirects if present to avoid "unexpected keyword argument" errors
-        kwargs.pop("allow_redirects", None)
+        # Convert allow_redirects to follow_redirects for compatibility
+        if "allow_redirects" in kwargs:
+            kwargs["follow_redirects"] = kwargs.pop("allow_redirects")
         return super().get(*args, **kwargs)
 
     def post(self, *args, **kwargs):
-        # Remove allow_redirects if present to avoid "unexpected keyword argument" errors
-        kwargs.pop("allow_redirects", None)
+        # Convert allow_redirects to follow_redirects for compatibility
+        if "allow_redirects" in kwargs:
+            kwargs["follow_redirects"] = kwargs.pop("allow_redirects")
         return super().post(*args, **kwargs)
 
     def put(self, *args, **kwargs):
-        # Remove allow_redirects if present to avoid "unexpected keyword argument" errors
-        kwargs.pop("allow_redirects", None)
+        # Convert allow_redirects to follow_redirects for compatibility
+        if "allow_redirects" in kwargs:
+            kwargs["follow_redirects"] = kwargs.pop("allow_redirects")
         return super().put(*args, **kwargs)
 
     def patch(self, *args, **kwargs):
-        # Remove allow_redirects if present to avoid "unexpected keyword argument" errors
-        kwargs.pop("allow_redirects", None)
+        # Convert allow_redirects to follow_redirects for compatibility
+        if "allow_redirects" in kwargs:
+            kwargs["follow_redirects"] = kwargs.pop("allow_redirects")
         return super().patch(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        # Remove allow_redirects if present to avoid "unexpected keyword argument" errors
-        kwargs.pop("allow_redirects", None)
+        # Convert allow_redirects to follow_redirects for compatibility
+        if "allow_redirects" in kwargs:
+            kwargs["follow_redirects"] = kwargs.pop("allow_redirects")
         return super().delete(*args, **kwargs)
 
 
 @pytest.fixture(scope="session")
 def client(app):
-    """TestClient fixture with allow_redirects compatibility shim."""
+    """TestClient fixture with parameter name compatibility shim."""
     return TestClient(app)
 
 

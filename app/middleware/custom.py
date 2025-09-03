@@ -174,8 +174,28 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
                 # Re-raise HTTPException to preserve its status code
                 raise e
 
-            # Generate error code for server errors
-            error_code = _generate_error_code(500, type(e).__name__)
+            # Use the new error translator for consistent error handling
+            try:
+                from ..http_errors import translate_common_exception
+                translated_exc = translate_common_exception(e)
+
+                # Extract details from the translated exception
+                status_code = translated_exc.status_code
+                detail = getattr(translated_exc, "detail", {})
+                code = detail.get("code", "internal_error") if isinstance(detail, dict) else "internal_error"
+                message = detail.get("message", "Internal error") if isinstance(detail, dict) else "Internal error"
+                hint = detail.get("hint") if isinstance(detail, dict) else "try again shortly"
+
+            except Exception as translation_error:
+                # Fallback if translation fails
+                logger.warning(f"Error translation failed: {translation_error}, falling back to generic error")
+                status_code = 500
+                code = "internal_error"
+                message = "Internal server error"
+                hint = "try again shortly"
+
+            # Generate error code for server errors (fallback)
+            error_code = _generate_error_code(status_code, type(e).__name__)
 
             # ERROR sampling
             import os, random
@@ -200,7 +220,7 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
             from fastapi.responses import JSONResponse
 
             details = {
-                "status_code": 500,
+                "status_code": status_code,
                 "error_code": error_code,
                 "route": route_name,
             }
@@ -211,11 +231,11 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
             except Exception:
                 pass
             return JSONResponse(
-                status_code=500,
+                status_code=status_code,
                 content=build_error(
-                    code="server_error",
-                    message="internal error",
-                    hint="try again shortly",
+                    code=code,
+                    message=message,
+                    hint=hint,
                     details=details,
                 ),
             )

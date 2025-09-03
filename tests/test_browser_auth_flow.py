@@ -34,7 +34,7 @@ class BrowserAuthSimulator:
         print(f"📄 Visiting login page: {login_page_url}")
 
         try:
-            response = self.session.get(login_page_url, allow_redirects=False)
+            response = self.session.get(login_page_url, follow_redirects=False)
             print(f"  Login page response: {response.status_code}")
 
             if response.status_code not in [200, 302]:
@@ -89,7 +89,7 @@ class BrowserAuthSimulator:
             callback_full_url = f"{callback_url}?{urlencode(callback_params)}"
             print(f"📞 Simulating callback: {callback_full_url}")
 
-            response = self.session.get(callback_full_url, allow_redirects=False)
+            response = self.session.get(callback_full_url, follow_redirects=False)
 
             if response.status_code == 302:
                 redirect_location = response.headers.get('Location')
@@ -97,7 +97,7 @@ class BrowserAuthSimulator:
 
                 # Follow the redirect (this sets auth cookies)
                 if redirect_location:
-                    redirect_response = self.session.get(redirect_location, allow_redirects=False)
+                    redirect_response = self.session.get(redirect_location, follow_redirects=False)
                     print(f"  Redirect response: {redirect_response.status_code}")
 
                     # Check if auth cookies were set
@@ -126,7 +126,7 @@ class BrowserAuthSimulator:
             try:
                 # Simulate page visit
                 start_time = time.time()
-                response = self.session.get(page_url, allow_redirects=False)
+                response = self.session.get(page_url, follow_redirects=False)
                 end_time = time.time()
 
                 result = {

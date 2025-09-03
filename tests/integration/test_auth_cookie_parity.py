@@ -133,7 +133,7 @@ def test_oauth_cross_site_uses_finisher_then_redirects(monkeypatch):
     else:
         # If Location is a finisher, assert it sets cookies
         assert "/auth/finish" in (r1.headers.get("location") or "")
-        r2 = client.get(r1.headers["location"], allow_redirects=False)
+        r2 = client.get(r1.headers["location"], follow_redirects=False)
         assert r2.status_code == HTTPStatus.FOUND
         set_cookies_2 = r2.headers.get_list("set-cookie")
         assert set_cookies_2, "Finisher must set cookies"

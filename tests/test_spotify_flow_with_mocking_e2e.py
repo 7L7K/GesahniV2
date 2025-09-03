@@ -82,7 +82,7 @@ def test_spotify_flow_with_mocking():
         callback_cookies = {"spotify_oauth_jwt": "dummy_jwt_token"}
         callback_url = f"http://localhost:8000/v1/spotify/callback?code=mock_auth_code&state={state}"
 
-        callback_response = requests.get(callback_url, cookies=callback_cookies, allow_redirects=False)
+        callback_response = requests.get(callback_url, cookies=callback_cookies, follow_redirects=False)
         print(f"Callback status: {callback_response.status_code}")
         assert callback_response.status_code == 302, f"Expected 302, got {callback_response.status_code}"
 

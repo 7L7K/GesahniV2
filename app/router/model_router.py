@@ -276,4 +276,5 @@ class ModelRouter:
 
 
 # Global instance for easy access
-model_router = ModelRouter()
+# Global singleton moved to app/infra/model_router.py
+# Use infra.get_model_router() instead

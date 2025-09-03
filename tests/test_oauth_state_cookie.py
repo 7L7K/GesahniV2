@@ -142,7 +142,7 @@ def test_apple_oauth_state_verification():
     os.environ["APPLE_REDIRECT_URI"] = "http://localhost:8000/v1/auth/apple/callback"
 
     # Start OAuth flow
-    r1 = c.get("/v1/auth/apple/start", allow_redirects=False)
+    r1 = c.get("/v1/auth/apple/start", follow_redirects=False)
     # Accept 302 (redirect to Apple or stub) or 404 if route not wired in this env
     assert r1.status_code in (
         302,
@@ -183,7 +183,7 @@ def test_apple_oauth_state_mismatch():
     os.environ["APPLE_REDIRECT_URI"] = "http://localhost:8000/v1/auth/apple/callback"
 
     # Start OAuth flow
-    r1 = c.get("/v1/auth/apple/start", allow_redirects=False)
+    r1 = c.get("/v1/auth/apple/start", follow_redirects=False)
     # Accept 302 (redirect to Apple or stub) or 404 (not configured in this env)
     assert r1.status_code in (
         302,
@@ -215,7 +215,7 @@ def test_oauth_state_cookie_clearing():
     os.environ["APPLE_REDIRECT_URI"] = "http://localhost:8000/v1/auth/apple/callback"
 
     # Start OAuth flow
-    r1 = c.get("/v1/auth/apple/start", allow_redirects=False)
+    r1 = c.get("/v1/auth/apple/start", follow_redirects=False)
     assert r1.status_code == 302
 
     # Extract state from Location header

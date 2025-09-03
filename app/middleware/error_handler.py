@@ -5,9 +5,11 @@ from typing import Any
 
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
+from pydantic import ValidationError
 
 from ..error_envelope import build_error, shape_from_status
 from ..logging_config import req_id_var
+from ..http_errors import translate_common_exception, translate_validation_error
 
 try:  # best-effort import
     from ..otel_utils import get_trace_id_hex
@@ -47,48 +49,25 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
                 exc.headers = headers
                 raise exc
 
-        # Convert other exceptions to standardized envelope
-        status_code = 500
-        code = "internal"
-        message = "internal error"
-        hint = "try again shortly"
+        # Use the new error translator for common exceptions
+        try:
+            # Translate the exception using our new translator
+            translated_exc = translate_common_exception(exc)
 
-        if isinstance(exc, HTTPException):
-            status_code = exc.status_code
-            code, message, hint = shape_from_status(status_code, default_message=exc.detail)
-        elif isinstance(exc, ValueError):
-            status_code = 400
-            code = "invalid_input"
-            message = str(exc) or "invalid input"
-            hint = "check your request data"
-        elif isinstance(exc, KeyError):
-            status_code = 400
-            code = "missing_required_field"
-            message = f"missing required field: {str(exc)}"
-            hint = "ensure all required fields are provided"
-        elif isinstance(exc, TypeError):
-            status_code = 400
-            code = "invalid_type"
-            message = str(exc) or "type error"
-            hint = "check data types in your request"
-        elif isinstance(exc, PermissionError):
-            status_code = 403
-            code = "permission_denied"
-            message = "permission denied"
-            hint = "you don't have permission for this action"
-        elif isinstance(exc, TimeoutError):
-            status_code = 504
-            code = "timeout"
-            message = "request timeout"
-            hint = "try again later"
-        elif isinstance(exc, ConnectionError):
-            status_code = 503
-            code = "service_unavailable"
-            message = "service temporarily unavailable"
+            # Extract details from the translated exception
+            status_code = translated_exc.status_code
+            detail = getattr(translated_exc, "detail", {})
+            code = detail.get("code", "internal_error") if isinstance(detail, dict) else "internal_error"
+            message = detail.get("message", "Internal error") if isinstance(detail, dict) else "Internal error"
+            hint = detail.get("hint") if isinstance(detail, dict) else None
+
+        except Exception as translation_error:
+            # Fallback if translation fails
+            logger.warning(f"Error translation failed: {translation_error}, falling back to generic error")
+            status_code = 500
+            code = "internal_error"
+            message = "Internal server error"
             hint = "try again shortly"
-        else:
-            # Generic internal error
-            pass
 
         # Build envelope with enhanced details
         details = {
