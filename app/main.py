@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request, Body
+from .errors import BackendUnavailable
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
@@ -890,6 +891,37 @@ def create_app() -> FastAPI:
         logger.debug("✅ Router configured via bootstrap registry")
     except Exception as e:
         logger.warning("⚠️  Failed to configure router: %s", e)
+
+    # Bind a single source of truth for the prompt backend onto app.state
+    @app.on_event("startup")
+    async def _bind_prompt_backend():
+        try:
+            # Defer settings import to avoid side-effects at module import
+            from app.settings import settings
+
+            backend = getattr(settings, "PROMPT_BACKEND", os.getenv("PROMPT_BACKEND", "dryrun")).lower()
+        except Exception:
+            backend = os.getenv("PROMPT_BACKEND", "dryrun").lower()
+
+        if backend == "openai":
+            from app.routers.openai_router import openai_router
+
+            app.state.prompt_router = openai_router
+            logger.info("prompt backend bound: openai")
+        elif backend == "llama":
+            from app.routers.llama_router import llama_router
+
+            app.state.prompt_router = llama_router
+            logger.info("prompt backend bound: llama")
+        elif backend == "dryrun":
+            async def dryrun_router(payload: dict) -> dict:
+                return {"dry_run": True, "echo": payload}
+
+            app.state.prompt_router = dryrun_router
+            logger.info("prompt backend bound: dryrun (safe default)")
+        else:
+            # Fail closed; endpoints will map this to 503
+            raise BackendUnavailable(f"Unknown PROMPT_BACKEND={backend!r}")
 
     # Register backend factory for swappable, lazy backends (openai/llama/dryrun)
     try:
