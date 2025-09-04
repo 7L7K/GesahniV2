@@ -344,18 +344,18 @@ def set_named_cookie(
     if cookie_samesite == "none":
         cookie_secure = True
 
-    # Format the cookie header
-    header = format_cookie_header(
-        key=name,
+    from .web.cookies import set_named_cookie as _set_named_cookie
+    _set_named_cookie(
+        resp,
+        name=name,
         value=value,
-        max_age=ttl,
-        secure=cookie_secure,
-        samesite=cookie_samesite,
-        path=cookie_path,
-        httponly=httponly,
+        ttl=ttl,
+        http_only=httponly,
+        same_site=cookie_samesite,
         domain=cookie_domain,
+        path=cookie_path,
+        secure=cookie_secure,
     )
-    resp.headers.append("Set-Cookie", header)
 
 
 def clear_named_cookie(
@@ -389,18 +389,16 @@ def clear_named_cookie(
     cookie_secure = secure if secure is not None else cookie_config["secure"]
     cookie_samesite = samesite or cookie_config["samesite"]
 
-    # Clear cookie with Max-Age=0
-    header = format_cookie_header(
-        key=name,
-        value="",  # Empty value
-        max_age=0,  # Max-Age=0 for immediate expiration
-        secure=cookie_secure,
-        samesite=cookie_samesite,
-        path=cookie_path,
-        httponly=True,  # Default to HttpOnly for security
+    from .web.cookies import clear_named_cookie as _clear_named_cookie
+    _clear_named_cookie(
+        resp,
+        name=name,
+        http_only=True,  # Default to HttpOnly for security
+        same_site=cookie_samesite,
         domain=cookie_domain,
+        path=cookie_path,
+        secure=cookie_secure,
     )
-    resp.headers.append("Set-Cookie", header)
 
 
 

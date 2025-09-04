@@ -110,6 +110,18 @@ def clear_device_cookie(resp, *, name: str, http_only=False):
     """
     set_cookie(resp, name, "", max_age=0, http_only=http_only)
 
+def set_named_cookie(resp, *, name: str, value: str, ttl: int, http_only=True, same_site="Lax", domain=None, path="/", secure=None):
+    """
+    Set a generic named cookie.
+    """
+    set_cookie(resp, name, value, max_age=ttl, http_only=http_only, same_site=same_site, domain=domain, path=path, secure=secure)
+
+def clear_named_cookie(resp, *, name: str, http_only=True, same_site="Lax", domain=None, path="/", secure=None):
+    """
+    Clear a generic named cookie from the response.
+    """
+    set_cookie(resp, name, "", max_age=0, http_only=http_only, same_site=same_site, domain=domain, path=path, secure=secure)
+
 def read(req):
     c = req.cookies
     return {"access": c.get(NAMES.access), "refresh": c.get(NAMES.refresh), "session": c.get(NAMES.session), "csrf": c.get(NAMES.csrf)}
