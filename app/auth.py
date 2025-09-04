@@ -1122,7 +1122,6 @@ async def login(req: LoginRequest, request: Request, response: Response):
                 "ip": _client_ip(request),
                 "has_access_token": bool(access_token),
                 "has_refresh_token": bool(refresh_token),
-                "stats_keys": list(stats.keys()) if stats else [],
             }
         },
     )
@@ -1133,7 +1132,6 @@ async def login(req: LoginRequest, request: Request, response: Response):
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token": access_token,
-            "stats": stats,
         },
     )
 

@@ -305,7 +305,7 @@ async def google_login_url(request: Request) -> Response:
         # Create a Response object to set the cookie
         import json
 
-        from ..cookies import set_oauth_state_cookies
+        from ..web.cookies import set_oauth_state_cookies
 
         http_response = Response(
             content=json.dumps(response_data), media_type="application/json"

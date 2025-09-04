@@ -177,7 +177,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
     # Use centralized cookie functions
-    from ..cookies import clear_oauth_state_cookies, set_auth_cookies
+    from ..web.cookies import clear_oauth_state_cookies, set_auth_cookies
 
     set_auth_cookies(
         response,

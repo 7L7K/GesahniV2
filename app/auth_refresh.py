@@ -392,7 +392,7 @@ async def perform_lazy_refresh(
         # Keep RT unchanged; pass current session id for identity store continuity
         sid = resolve_session_id(request=request, user_id=uid)
 
-        from .cookies import set_auth_cookies
+        from .web.cookies import set_auth_cookies
         set_auth_cookies(
             response,
             access=new_at,

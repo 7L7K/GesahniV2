@@ -1269,7 +1269,7 @@ async def finish_clerk_login(
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
         # Use centralized cookie functions
-        from ..cookies import set_auth_cookies
+        from ..web.cookies import set_auth_cookies
 
         set_auth_cookies(
             resp,
@@ -1326,7 +1326,7 @@ async def finish_clerk_login(
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
     # Use centralized cookie functions
-    from ..cookies import set_auth_cookies
+    from ..web.cookies import set_auth_cookies
 
     set_auth_cookies(
         resp,
@@ -1462,7 +1462,7 @@ async def register_v1(request: Request, response: Response):
 
     # Map session id and set cookies
     try:
-        from ..cookies import set_auth_cookies
+        from ..web.cookies import set_auth_cookies
         from ..auth import _create_session_id
         from .auth import _jwt_secret as _secret_fn  # dynamic secret
 
@@ -1604,7 +1604,7 @@ async def login(
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
         # Use centralized cookie functions
-        from ..cookies import set_auth_cookies
+        from ..web.cookies import set_auth_cookies
 
         set_auth_cookies(
             response,
@@ -1825,7 +1825,7 @@ async def login_v1(
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
         # Use centralized cookie functions
-        from ..cookies import set_auth_cookies
+        from ..web.cookies import set_auth_cookies
 
         set_auth_cookies(
             response,
@@ -2296,7 +2296,7 @@ async def mock_set_access_cookie(request: Request, max_age: int = 1) -> Response
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
     # Use centralized cookie functions
-    from ..cookies import set_auth_cookies
+    from ..web.cookies import set_auth_cookies
 
     # For testing, use the same token for both access and refresh
     set_auth_cookies(

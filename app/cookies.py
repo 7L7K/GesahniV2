@@ -102,76 +102,6 @@ def set_auth_cookie(resp: Response, name: str, value: str, max_age: int):
     set_cookie(resp, name, value, max_age=max_age, http_only=True, secure=False, same_site="lax")
 
 
-def set_auth_cookies(
-    resp: Response,
-    *,
-    access: str,
-    refresh: str | None = None,
-    session_id: str | None = None,
-    access_ttl: int,
-    refresh_ttl: int,
-    request: Request,
-    identity: dict | None = None,
-) -> None:
-    """
-    Set authentication cookies on the response using the canonical web.cookies helpers.
-
-    This function is now a thin wrapper around web.cookies.set_auth for backward compatibility.
-    """
-    from .web.cookies import set_auth
-
-    # Set the canonical cookies
-    if session_id:
-        set_auth(resp, access, refresh or "", session_id, access_ttl=access_ttl, refresh_ttl=refresh_ttl)
-    else:
-        # Set access and refresh cookies only
-        from .web.cookies import set_cookie, NAMES
-        set_cookie(resp, NAMES.access, access, max_age=access_ttl)
-        if refresh and refresh.strip():
-            set_cookie(resp, NAMES.refresh, refresh, max_age=refresh_ttl)
-
-    # Handle session store persistence for backward compatibility
-    if session_id:
-        try:
-            from .session_store import get_session_store
-            store = get_session_store()
-
-            # Prefer provided identity payload (caller-side mint payload)
-            ident = identity
-            exp_s: int | None = None
-
-            if not ident:
-                # Fallback: safe decode of freshly-minted access token to extract identity
-                try:
-                    import os
-                    from .security import jwt_decode as _decode
-
-                    leeway = int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60)
-                    secret = os.getenv("JWT_SECRET")
-                    if secret:
-                        claims = _decode(access, secret, algorithms=["HS256"], leeway=leeway)
-                        ident = dict(claims) if isinstance(claims, dict) else None
-                except Exception:
-                    ident = None
-
-            # Extract exp for TTL
-            try:
-                if ident and isinstance(ident, dict):
-                    exp_s = int(ident.get("exp")) if ident.get("exp") else None
-            except Exception:
-                exp_s = None
-
-            if ident and exp_s:
-                # Never fail login if store write fails; best-effort only
-                try:
-                    store.set_session_identity(session_id, ident, exp_s)
-                except Exception:
-                    pass
-        except Exception:
-            # Never block cookie writes on identity persistence errors
-            pass
-
-
 def clear_auth_cookies(resp: Response, request: Request) -> None:
     """
     Clear all authentication cookies from the response using canonical web.cookies helpers.
@@ -184,35 +114,6 @@ def clear_auth_cookies(resp: Response, request: Request) -> None:
     set_cookie(resp, NAMES.access, "", max_age=0)
     set_cookie(resp, NAMES.refresh, "", max_age=0)
     set_cookie(resp, NAMES.session, "", max_age=0)
-
-
-def set_oauth_state_cookies(
-    resp: Response,
-    *,
-    state: str,
-    next_url: str,
-    request: Request,
-    ttl: int = 600,  # Default 10 minutes
-    provider: str = "oauth",  # Provider-specific cookie prefix
-    code_verifier: str | None = None,  # PKCE code verifier for enhanced security
-    session_id: str | None = None,
-) -> None:
-    """
-    Set OAuth state cookies for Google/Apple OAuth flows using canonical web.cookies helpers.
-
-    This function is now a wrapper around web.cookies.set_oauth_state_cookies for backward compatibility.
-    """
-    from .web.cookies import set_oauth_state_cookies as _set_oauth_state_cookies
-
-    _set_oauth_state_cookies(
-        resp,
-        state=state,
-        next_url=next_url,
-        ttl=ttl,
-        provider=provider,
-        code_verifier=code_verifier,
-        session_id=session_id,
-    )
 
 
 def clear_oauth_state_cookies(
@@ -297,65 +198,6 @@ def clear_device_cookie(
     """
     from .web.cookies import clear_device_cookie as _clear_device_cookie
     _clear_device_cookie(resp, name=cookie_name, http_only=False)
-
-
-def set_named_cookie(
-    resp: Response,
-    *,
-    name: str,
-    value: str,
-    ttl: int,
-    request: Request,
-    path: str = "/",
-    httponly: bool = True,
-    samesite: str | None = None,
-    secure: bool | None = None,
-    domain: str | None = None,
-) -> None:
-    """
-    Set a generic named cookie with centralized configuration.
-
-    This function provides a generic interface for setting any cookie that doesn't
-    fit the specific auth/OAuth/CSRF patterns. It uses centralized configuration
-    but allows override of specific attributes when needed.
-
-    Args:
-        resp: FastAPI Response object
-        name: Cookie name
-        value: Cookie value
-        ttl: Time to live in seconds
-        request: FastAPI Request object for cookie configuration
-        httponly: Whether cookie is HttpOnly (default: True)
-        path: Cookie path (default: from config)
-        domain: Cookie domain (default: from config)
-        secure: Whether cookie is secure (default: from config)
-        samesite: SameSite attribute (default: from config)
-    """
-    # Get cookie configuration from request context
-    cookie_config = get_cookie_config(request)
-
-    # Use provided values or fall back to config defaults
-    cookie_path = path or cookie_config["path"]
-    cookie_domain = domain if domain is not None else cookie_config["domain"]
-    cookie_samesite = (samesite or cookie_config["samesite"]).lower()
-    cookie_secure = cookie_config["secure"] if secure is None else bool(secure)
-
-    # Enforce policy: SameSite=None is only valid with Secure=True
-    if cookie_samesite == "none":
-        cookie_secure = True
-
-    from .web.cookies import set_named_cookie as _set_named_cookie
-    _set_named_cookie(
-        resp,
-        name=name,
-        value=value,
-        ttl=ttl,
-        http_only=httponly,
-        same_site=cookie_samesite,
-        domain=cookie_domain,
-        path=cookie_path,
-        secure=cookie_secure,
-    )
 
 
 def clear_named_cookie(
