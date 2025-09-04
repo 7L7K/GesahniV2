@@ -14,7 +14,7 @@ except Exception:  # pragma: no cover - optional dependency
 from .analytics import record_transcription
 from .gpt_client import ask_gpt
 from .memory.vector_store import add_user_memory
-from .router import OPENAI_TIMEOUT_MS
+from .router.compat import OPENAI_TIMEOUT_MS
 from .session_manager import SESSIONS_DIR, extract_tags_from_text
 from .session_store import SessionStatus, append_error
 from .session_store import load_meta as _load_meta

@@ -274,7 +274,7 @@ async def rotate_refresh_token(
     """
     from .tokens import make_access, make_refresh
     from .cookie_config import get_token_ttls
-    from .cookies import set_auth_cookies, read_refresh_cookie
+    from .web.cookies import set_auth_cookies, read_refresh_cookie
 
     # Get the refresh token
     rtok = refresh_token or read_refresh_cookie(request)

@@ -182,6 +182,8 @@ class TokenDAO:
     async def ensure_schema_migrated(self) -> None:
         """Ensure schema is up to date with a simple backup + migrate step."""
         try:
+            # First ensure the table exists
+            await self._ensure_table()
             # Backup once per process start if file exists
             if os.path.exists(self.db_path):
                 bkp = f"{self.db_path}.bak"
@@ -1108,6 +1110,73 @@ class TokenDAO:
         except Exception as e:
             logger.error(f"Failed to get tokens for user {user_id}: {e}")
             return []
+
+    async def get_by_id(self, token_id: str) -> Optional[ThirdPartyToken]:
+        """
+        Retrieve a token by its unique ID.
+
+        Args:
+            token_id: Unique token identifier
+
+        Returns:
+            Token if found, None otherwise
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+
+                cursor.execute(
+                    """
+                    SELECT
+                        id, user_id, provider, provider_sub, access_token,
+                        access_token_enc, refresh_token, refresh_token_enc,
+                        envelope_key_version, last_refresh_at, refresh_error_count,
+                        scope, service_state, expires_at, created_at, updated_at,
+                        is_valid, identity_id, provider_iss, scope_union_since,
+                        scope_last_added_from, replaced_by_id
+                    FROM third_party_tokens
+                    WHERE id = ?
+                    """,
+                    (token_id,),
+                )
+
+                row = cursor.fetchone()
+                if not row:
+                    return None
+
+                return ThirdPartyToken.from_db_row(row)
+
+        except Exception as e:
+            logger.error(f"Failed to get token by ID {token_id}: {e}")
+            return None
+
+    async def persist(self, token: ThirdPartyToken) -> bool:
+        """
+        Persist a token to the database (alias for upsert_token).
+
+        Args:
+            token: Token to persist
+
+        Returns:
+            True if successful, False otherwise
+        """
+        return await self.upsert_token(token)
+
+    async def revoke_family(self, user_id: str, provider: str) -> bool:
+        """
+        Revoke all tokens for a user-provider combination (mark as invalid).
+
+        This is equivalent to mark_invalid but with a more descriptive name
+        that matches the DAO interface contract.
+
+        Args:
+            user_id: User identifier
+            provider: Provider name
+
+        Returns:
+            True if successful, False otherwise
+        """
+        return await self.mark_invalid(user_id, provider)
 
     async def mark_invalid(self, user_id: str, provider: str) -> bool:
         """

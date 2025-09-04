@@ -27,10 +27,17 @@ def _init_client():
 
 
 async def openai_router(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Call OpenAI backend (lazy client init).
+    """Call OpenAI backend with standardized response format.
 
-    - Avoid heavy imports at module import time
-    - Raise an error if backend not configured
+    Frozen response contract:
+    {
+      "backend": "openai",
+      "model": "string",
+      "answer": "string",
+      "usage": {"input_tokens": 0, "output_tokens": 0}
+    }
+
+    Raises RuntimeError if backend unavailable (will be caught as 503).
     """
     # Ensure client exists (synchronous init allowed here)
     try:
@@ -39,7 +46,18 @@ async def openai_router(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise RuntimeError("OpenAI backend unavailable: %s" % e)
 
     # TODO: perform real async call using the cached client
+    # For now, return standardized dry-run response
     await asyncio.sleep(0)  # keep function truly async
-    return {"backend": "openai", "answer": "(dry-run)"}
+
+    model = payload.get("model", "gpt-4o")
+    return {
+        "backend": "openai",
+        "model": model,
+        "answer": "(dry-run OpenAI response)",
+        "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+        }
+    }
 
 

@@ -1,6 +1,6 @@
 from fastapi import Response
 
-from app.cookies import clear_csrf_cookie
+from app.web.cookies import clear_csrf_cookie
 
 
 def test_clear_csrf_cookie_sets_max_age_zero_and_same_path():

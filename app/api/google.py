@@ -12,7 +12,7 @@ from ..api.auth import _jwt_secret
 from ..deps.user import get_current_user_id, resolve_session_id
 from ..auth_store_tokens import upsert_token, mark_invalid, get_token
 from ..integrations.google.oauth import build_auth_url, exchange_code, creds_to_record, refresh_if_needed
-from ..cookies import set_oauth_state_cookies, clear_oauth_state_cookies
+from ..web.cookies import set_oauth_state_cookies, clear_oauth_state_cookies
 from ..metrics import (
     GOOGLE_CONNECT_STARTED,
     GOOGLE_CONNECT_AUTHORIZE_URL_ISSUED,

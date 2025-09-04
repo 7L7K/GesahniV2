@@ -7,7 +7,7 @@ import time
 
 from fastapi import APIRouter, Request, Response, HTTPException, Depends
 
-from ..cookies import set_oauth_state_cookies, clear_oauth_state_cookies, set_named_cookie, clear_named_cookie
+from ..web.cookies import set_oauth_state_cookies, clear_oauth_state_cookies, set_named_cookie, clear_named_cookie
 from ..cookie_config import get_cookie_config
 from .oauth_store import put_tx, pop_tx
 from ..api.oauth_store import debug_store

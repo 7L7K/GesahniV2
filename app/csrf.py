@@ -63,22 +63,15 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 response = await call_next(request)
             except Exception:
                 # Even on exceptions, we need to ensure CSRF headers are set
-                from fastapi.responses import JSONResponse
                 response = JSONResponse(status_code=500, content={"error": "internal_error"})
 
             # Ensure CSRF token cookie exists
             csrf_cookie = request.cookies.get("csrf_token")
             if not csrf_cookie:
                 csrf_cookie = token_urlsafe(16)
-                # Set secure cookie with proper attributes
-                response.set_cookie(
-                    "csrf_token",
-                    csrf_cookie,
-                    httponly=False,  # Allow JavaScript access for testing
-                    secure=_truthy(os.getenv("COOKIE_SECURE", "auto")),
-                    samesite=os.getenv("COOKIE_SAMESITE", "lax"),
-                    max_age=int(os.getenv("CSRF_TTL_SECONDS", "600"))
-                )
+                # Use centralized CSRF cookie helper
+                from app.web.cookies import set_csrf_cookie
+                set_csrf_cookie(resp=response, token=csrf_cookie, ttl=int(os.getenv("CSRF_TTL_SECONDS", "600")), request=request)
 
             # Mirror CSRF token in response header for client access
             response.headers["X-CSRF-Token"] = csrf_cookie
@@ -231,7 +224,6 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 return response
             except Exception:
                 # Even on exceptions from downstream middlewares/routes, ensure CSRF headers
-                from fastapi.responses import JSONResponse
                 csrf_cookie = request.cookies.get("csrf_token") or token_cookie
                 response = JSONResponse(status_code=500, content={"error": "internal_error"})
                 if csrf_cookie:

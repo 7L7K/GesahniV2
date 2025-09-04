@@ -354,6 +354,7 @@ async def _enhanced_startup():
 
             components = [
                 ("Database", init_database),
+                ("Database Migrations", init_database_migrations),
                 ("Token Store Schema", init_token_store_schema),
                 ("OpenAI Health Check", init_openai_health_check),
                 ("Vector Store", init_vector_store),
@@ -873,17 +874,19 @@ def create_app() -> FastAPI:
             # Resolve backend callables lazily to avoid heavy imports at import-time
             if name == "openai":
                 from app.routers.openai_router import openai_router
-
                 return openai_router
             if name == "llama":
                 from app.routers.llama_router import llama_router
-
                 return llama_router
-            # Dry-run fallback closure
-            async def _dry_run(payload: dict) -> dict:
-                return {"backend": "dryrun", "answer": "(dry-run fallback)"}
+            if name == "dryrun":
+                from app.routers.dryrun_router import dryrun_router
+                return dryrun_router
 
-            return _dry_run
+            # Fallback for unknown backends - should not happen in frozen contract
+            async def _unknown_backend(payload: dict) -> dict:
+                raise RuntimeError(f"Unknown backend: {name}")
+
+            return _unknown_backend
 
         register_backend_factory(_backend_factory)
         logger.debug("✅ Backend factory registered (openai/llama/dryrun)")
@@ -922,6 +925,28 @@ def create_app() -> FastAPI:
         logger.warning("⚠️  Failed to import test router: %s", e)
     except Exception as e:
         logger.warning("⚠️  Failed to register test router: %s", e)
+
+    # Phase 8: Register status router for health and observability endpoints
+    try:
+        logger.debug("Attempting to register status router...")
+        from .status import router as status_router
+        app.include_router(status_router, tags=["Admin"])
+        logger.info("✅ Status router registered")
+    except ImportError as e:
+        logger.warning("⚠️  Failed to import status router: %s", e)
+    except Exception as e:
+        logger.warning("⚠️  Failed to register status router: %s", e)
+
+    # Phase 9: Register public observability router (no auth required)
+    try:
+        logger.debug("Attempting to register public observability router...")
+        from .status import public_router
+        app.include_router(public_router)
+        logger.info("✅ Public observability router registered")
+    except ImportError as e:
+        logger.warning("⚠️  Failed to import public router: %s", e)
+    except Exception as e:
+        logger.warning("⚠️  Failed to register public router: %s", e)
 
     # Phase 6: Set up OpenAPI generation (isolated from routers)
     try:

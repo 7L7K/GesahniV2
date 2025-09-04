@@ -69,27 +69,36 @@ class ThirdPartyToken:
         identity_id = None
         # Detect whether identity_id is present (new canonical schema)
         if len(row) >= 22:
-            identity_id = row[2]
-            provider = row[3]
-            provider_sub = row[4] if len(row) > 4 else None
-            provider_iss = row[5] if len(row) > 5 else None
-            access_token = row[6]
-            access_token_enc = row[7] if len(row) > 7 else None
-            refresh_token = row[8] if len(row) > 8 else None
-            refresh_token_enc = row[9] if len(row) > 9 else None
-            envelope_key_version = int(row[10]) if len(row) > 10 and row[10] is not None else 1
-            last_refresh_at = int(row[11]) if len(row) > 11 and row[11] is not None else 0
-            refresh_error_count = int(row[12]) if len(row) > 12 and row[12] is not None else 0
-            scope = row[13] if len(row) > 13 else None
-            service_state = row[14] if len(row) > 14 else None
-            scope_union_since = int(row[15]) if len(row) > 15 and row[15] is not None else 0
-            scope_last_added_from = row[16] if len(row) > 16 else None
-            replaced_by_id = row[17] if len(row) > 17 else None
-            expires_at = row[18] if len(row) > 18 else 0
-            created_at = row[19] if len(row) > 19 else 0
-            updated_at = row[20] if len(row) > 20 else 0
-            is_valid = bool(row[21]) if len(row) > 21 else True
+            # Column order from get_by_id SELECT query:
+            # id, user_id, provider, provider_sub, access_token, access_token_enc,
+            # refresh_token, refresh_token_enc, envelope_key_version, last_refresh_at,
+            # refresh_error_count, scope, service_state, expires_at, created_at,
+            # updated_at, is_valid, identity_id, provider_iss, scope_union_since,
+            # scope_last_added_from, replaced_by_id
+            id = row[0]
+            user_id = row[1]
+            provider = row[2]
+            provider_sub = row[3]
+            access_token = row[4]
+            access_token_enc = row[5]
+            refresh_token = row[6]
+            refresh_token_enc = row[7]
+            envelope_key_version = int(row[8]) if row[8] is not None else 1
+            last_refresh_at = int(row[9]) if row[9] is not None else 0
+            refresh_error_count = int(row[10]) if row[10] is not None else 0
+            scope = row[11]  # This is the scope field
+            service_state = row[12]
+            expires_at = int(row[13]) if row[13] is not None else 0
+            created_at = int(row[14]) if row[14] is not None else 0
+            updated_at = int(row[15]) if row[15] is not None else 0
+            is_valid = bool(row[16]) if row[16] is not None else True
+            identity_id = row[17]
+            provider_iss = row[18]
+            scope_union_since = int(row[19]) if row[19] is not None else 0
+            scope_last_added_from = row[20]
+            replaced_by_id = row[21]
         else:
+            # Legacy branch for older schemas without identity_id
             provider = row[2]
             provider_sub = row[3] if len(row) > 3 else None
             provider_iss = row[4] if len(row) > 4 else None

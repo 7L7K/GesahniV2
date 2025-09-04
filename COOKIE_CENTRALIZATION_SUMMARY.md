@@ -96,7 +96,7 @@ The comprehensive test (`test_cookie_centralization.py`) confirms:
 
 ### Setting Authentication Cookies
 ```python
-from app.cookies import set_auth_cookies
+from app.web.cookies import set_auth_cookies
 
 set_auth_cookies(
     resp=response,
@@ -111,7 +111,7 @@ set_auth_cookies(
 
 ### Setting OAuth State Cookies
 ```python
-from app.cookies import set_oauth_state_cookies
+from app.web.cookies import set_oauth_state_cookies
 
 set_oauth_state_cookies(
     resp=response,
@@ -125,7 +125,7 @@ set_oauth_state_cookies(
 
 ### Setting Generic Cookies
 ```python
-from app.cookies import set_named_cookie
+from app.web.cookies import set_named_cookie
 
 set_named_cookie(
     resp=response,

@@ -1080,7 +1080,7 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
                     from .cookie_names import GSNH_RT, GSNH_AT, GSNH_SESS
                     from .tokens import make_access
                     from .cookie_config import get_token_ttls
-                    from .cookies import set_auth_cookies
+                    from .web.cookies import set_auth_cookies
                     import time as _t
 
                     now = int(_t.time())

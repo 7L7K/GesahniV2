@@ -19,21 +19,21 @@ router = APIRouter(tags=["Admin"])
 # Admin scope requirement - proper implementation with 403 responses
 def require_admin():
     """Require admin scope - raises 403 for unauthorized access."""
-    async def dependency():
-        # Check if user has admin privileges
-        # For now, we'll simulate unauthorized access to test 403 behavior
-        # In a real implementation, this would check JWT tokens, scopes, etc.
-        raise HTTPException(status_code=403, detail="Admin access required")
+    async def dependency(request: Request):
+        # Use new auth contract helper for consistent 401/403 handling
+        from app.security.auth_contract import require_auth
+        await require_auth(request, required_scopes=["admin:read"])
+        return request
     return dependency
 
 
 def require_scope(scope: str):
     """Require specific scope - raises 403 for unauthorized access."""
-    async def dependency():
-        # Check if user has the required scope
-        # For now, we'll simulate unauthorized access to test 403 behavior
-        # In a real implementation, this would validate JWT scopes
-        raise HTTPException(status_code=403, detail=f"Scope '{scope}' required")
+    async def dependency(request: Request):
+        # Use new auth contract helper for consistent 401/403 handling
+        from app.security.auth_contract import require_auth
+        await require_auth(request, required_scopes=[scope])
+        return request
     return dependency
 
 

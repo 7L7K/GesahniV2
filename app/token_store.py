@@ -158,12 +158,18 @@ async def start_cleanup_task() -> None:
         """Background task to periodically clean up expired entries."""
         while _cleanup_running:
             try:
-                # Clean up all local storage instances
-                _local_used_refresh._maybe_cleanup()
-                _local_counters._maybe_cleanup()
-                _local_last_used_jti._maybe_cleanup()
-                _local_revoked_families._maybe_cleanup()
-                _local_revoked_access._maybe_cleanup()
+                # Chaos injection for token cleanup failures
+                from app.chaos import chaos_token_cleanup_operation
+
+                async def perform_cleanup():
+                    # Clean up all local storage instances
+                    _local_used_refresh._maybe_cleanup()
+                    _local_counters._maybe_cleanup()
+                    _local_last_used_jti._maybe_cleanup()
+                    _local_revoked_families._maybe_cleanup()
+                    _local_revoked_access._maybe_cleanup()
+
+                await chaos_token_cleanup_operation("local_storage_cleanup", perform_cleanup)
 
                 # Log memory usage for monitoring
                 total_entries = (

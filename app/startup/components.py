@@ -44,6 +44,22 @@ async def init_database():
     logger.info("Database connectivity verified - schemas already initialized")
 
 
+async def init_database_migrations():
+    """Run all database migrations during startup.
+
+    This ensures all database schemas are properly migrated before the
+    application starts accepting requests.
+    """
+    try:
+        from app.db.migrate import ensure_all_schemas_migrated
+        await ensure_all_schemas_migrated()
+        logger.info("All database migrations completed successfully")
+    except Exception as e:
+        logger.error("Database migration failed during startup: %s", e)
+        # Re-raise to fail startup if migrations are critical
+        raise
+
+
 async def init_token_store_schema():
     """Start token store schema migration in the background.
 
@@ -135,6 +151,17 @@ async def init_home_assistant():
     from app.home_assistant import get_states
     await get_states()
     logger.debug("Home Assistant integration OK")
+
+
+async def init_chaos_mode():
+    """Initialize chaos mode for resilience testing.
+
+    Only runs in development when CHAOS_MODE=1 is set.
+    Logs chaos configuration for monitoring.
+    """
+    from app.chaos import log_chaos_status
+    log_chaos_status()
+    logger.info("🎭 Chaos mode initialization completed")
 
 
 async def init_memory_store():

@@ -91,7 +91,7 @@ def get_current_user_id(
     # Cookie fallback so browser sessions persist without sending headers
     if token is None and request is not None:
         try:
-            from ..cookies import read_access_cookie
+            from ..web.cookies import read_access_cookie
 
             token = read_access_cookie(request)
             if token:
@@ -115,7 +115,7 @@ def get_current_user_id(
     # 3) Try session cookie if access_token failed (contains opaque session ID only)
     if not token and request is not None:
         try:
-            from ..cookies import read_session_cookie
+            from ..web.cookies import read_session_cookie
 
             session_token = read_session_cookie(request)
         except Exception:

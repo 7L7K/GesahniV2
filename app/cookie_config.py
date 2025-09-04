@@ -218,19 +218,10 @@ def format_cookie_header(
 
     # Add Priority=High for critical auth cookies (legacy + canonical names)
     try:
-        from .cookie_names import ACCESS_TOKEN, REFRESH_TOKEN, SESSION, GSNH_AT, GSNH_RT, GSNH_SESS
+        # Prefer centralized web cookie names when available
+        from .web.cookies import NAMES as WEB_COOKIE_NAMES
 
-        priority_names = {
-            ACCESS_TOKEN,
-            REFRESH_TOKEN,
-            SESSION,
-            GSNH_AT,
-            GSNH_RT,
-            GSNH_SESS,
-            "access_token",
-            "refresh_token",
-            "__session",
-        }
+        priority_names = {WEB_COOKIE_NAMES.access, WEB_COOKIE_NAMES.refresh, WEB_COOKIE_NAMES.session, "access_token", "refresh_token", "__session", "GSNH_AT", "GSNH_RT", "GSNH_SESS"}
     except Exception:
         priority_names = {"access_token", "refresh_token", "__session", "GSNH_AT", "GSNH_RT", "GSNH_SESS"}
     if key in priority_names:

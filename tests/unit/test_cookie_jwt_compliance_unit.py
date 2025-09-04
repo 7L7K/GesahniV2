@@ -323,7 +323,7 @@ class TestCookieJWTComplianceIntegration:
         """Test that centralized functions can be imported."""
         try:
             from app.cookie_config import get_cookie_config, get_token_ttls
-            from app.cookies import set_auth_cookies, set_oauth_state_cookies
+            from app.web.cookies import set_auth_cookies, set_oauth_state_cookies
             from app.tokens import make_access, make_refresh
         except ImportError as e:
             pytest.fail(f"Failed to import centralized functions: {e}")

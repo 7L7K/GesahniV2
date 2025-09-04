@@ -6,9 +6,11 @@ immediately rewrite them using the new names.
 """
 
 # Canonical cookie names (single source of truth)
-GSNH_AT = "GSNH_AT"  # access token
-GSNH_RT = "GSNH_RT"  # refresh token
-GSNH_SESS = "GSNH_SESS"  # opaque app session id
+# Use contract-stable lowercase names for cookies that will be frozen in contracts.
+# Keep legacy constants for compatibility elsewhere in the codebase.
+GSNH_AT = "gsn_access"  # access token (canonical)
+GSNH_RT = "gsn_refresh"  # refresh token (canonical)
+GSNH_SESS = "gsn_session"  # opaque app session id
 
 # Backward-compatible canonical constants expected by other modules.
 # These map to the standard cookie names used across the app.

@@ -317,13 +317,14 @@
   "info": {
     "description": "GesahniV2 API",
     "title": "GesahniV2 API",
-    "version": "v0.5.0-67-g920f15f"
+    "version": "v0.5.0-68-g9a2830c"
   },
   "openapi": "3.1.0",
   "paths": {
     "/google/oauth/callback": {
       "get": {
-        "operationId": "_legacy_google_oauth_callback_root_google_oauth_callback_get",
+        "deprecated": true,
+        "operationId": "compat_google_oauth_callback_google_oauth_callback_get",
         "responses": {
           "200": {
             "content": {
@@ -334,7 +335,28 @@
             "description": "Successful Response"
           }
         },
-        "summary": " Legacy Google Oauth Callback Root"
+        "summary": "Compat Google Oauth Callback"
+      }
+    },
+    "/google/status": {
+      "get": {
+        "deprecated": true,
+        "description": "Call into Google integration status if available, else normalized 200.",
+        "operationId": "google_status_compat_google_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Google Status Compat",
+        "tags": [
+          "Compat"
+        ]
       }
     },
     "/health": {
@@ -477,6 +499,27 @@
         "summary": "Health Ready",
         "tags": [
           "Admin"
+        ]
+      }
+    },
+    "/spotify/status": {
+      "get": {
+        "deprecated": true,
+        "description": "Call into Spotify integration status if available, else normalized 200.",
+        "operationId": "spotify_status_compat_spotify_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Spotify Status Compat",
+        "tags": [
+          "Compat"
         ]
       }
     },
@@ -854,6 +897,26 @@
           }
         },
         "summary": "Admin Config",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/v1/admin/config-check": {
+      "get": {
+        "description": "Get a redacted configuration summary for operational visibility.\n\nReturns environment and feature flags without exposing sensitive values.\nUseful for debugging configuration issues and verifying deployments.",
+        "operationId": "config_check_v1_admin_config_check_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Config Check",
         "tags": [
           "Admin"
         ]
@@ -1513,6 +1576,7 @@
     },
     "/v1/google/status": {
       "get": {
+        "deprecated": true,
         "description": "Call into Google integration status if available, else normalized 200.",
         "operationId": "google_status_compat_v1_google_status_get",
         "responses": {
@@ -2256,6 +2320,7 @@
     },
     "/v1/spotify/status": {
       "get": {
+        "deprecated": true,
         "description": "Call into Spotify integration status if available, else normalized 200.",
         "operationId": "spotify_status_compat_v1_spotify_status_get",
         "responses": {
@@ -2419,8 +2484,30 @@
     },
     "/v1/whoami": {
       "get": {
+        "deprecated": true,
         "description": "Call into app.router.auth_api.whoami if available, else return 401 fallback.",
         "operationId": "whoami_compat_v1_whoami_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whoami Compat",
+        "tags": [
+          "Compat"
+        ]
+      }
+    },
+    "/whoami": {
+      "get": {
+        "deprecated": true,
+        "description": "Call into app.router.auth_api.whoami if available, else return 401 fallback.",
+        "operationId": "whoami_compat_whoami_get",
         "responses": {
           "200": {
             "content": {

@@ -92,7 +92,7 @@ The centralized cookie management system is **fully implemented and operational*
 
 ### Authentication Cookies
 ```python
-from app.cookies import set_auth_cookies, clear_auth_cookies
+from app.web.cookies import set_auth_cookies, clear_auth_cookies
 
 # Set auth cookies
 set_auth_cookies(
@@ -111,7 +111,7 @@ clear_auth_cookies(resp=response, request=request)
 
 ### OAuth State Cookies
 ```python
-from app.cookies import set_oauth_state_cookies, clear_oauth_state_cookies
+from app.web.cookies import set_oauth_state_cookies, clear_oauth_state_cookies
 
 set_oauth_state_cookies(
     resp=response,

@@ -17,7 +17,7 @@ def test_set_named_cookie_enforces_samesite_none_secure(monkeypatch):
 
     monkeypatch.setattr(cookie_config, "get_cookie_config", fake_cfg)
 
-    from app.cookies import set_named_cookie
+    from app.web.cookies import set_named_cookie
 
     class DummyReq:
         # minimal placeholder; cookie_config was monkeypatched above

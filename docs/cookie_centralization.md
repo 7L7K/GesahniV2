@@ -38,7 +38,7 @@ The cookie centralization system ensures all cookie operations go through a sing
 ### Authentication Cookies
 
 ```python
-from app.cookies import set_auth_cookies, clear_auth_cookies
+from app.web.cookies import set_auth_cookies, clear_auth_cookies
 
 # Set auth cookies
 set_auth_cookies(
@@ -58,7 +58,7 @@ clear_auth_cookies(resp=response, request=request)
 ### OAuth State Cookies
 
 ```python
-from app.cookies import set_oauth_state_cookies, clear_oauth_state_cookies
+from app.web.cookies import set_oauth_state_cookies, clear_oauth_state_cookies
 
 # Set OAuth state cookies
 set_oauth_state_cookies(
@@ -76,7 +76,7 @@ clear_oauth_state_cookies(resp=response, request=request, provider="g")
 ### CSRF Protection
 
 ```python
-from app.cookies import set_csrf_cookie, clear_csrf_cookie
+from app.web.cookies import set_csrf_cookie, clear_csrf_cookie
 
 # Set CSRF token
 set_csrf_cookie(
@@ -93,7 +93,7 @@ clear_csrf_cookie(resp=response, request=request)
 ### Device Trust Cookies
 
 ```python
-from app.cookies import set_device_cookie, clear_device_cookie
+from app.web.cookies import set_device_cookie, clear_device_cookie
 
 # Set device trust cookie
 set_device_cookie(
@@ -159,7 +159,7 @@ response.set_cookie(
 
 ```python
 # ✅ Do this
-from app.cookies import set_auth_cookies
+from app.web.cookies import set_auth_cookies
 
 set_auth_cookies(
     resp=response,

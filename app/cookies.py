@@ -15,7 +15,7 @@ Available Facades:
 - set_named_cookie() / clear_named_cookie() - Generic cookies
 
 Usage:
-    from app.cookies import set_auth_cookies, clear_auth_cookies
+    from app.web.cookies import set_auth_cookies, clear_auth_cookies
 
     # Set auth cookies
     set_auth_cookies(
