@@ -28,6 +28,7 @@ from fastapi import FastAPI
 
 from app.startup.config import detect_profile
 from app.startup import components as C
+from app.startup.config_guard import assert_strict_prod
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,14 @@ async def _init_db_once():
 
 
 async def _run_components():
+    # 1) Strict production configuration guardrails (fails fast)
+    try:
+        assert_strict_prod()
+    except Exception as e:
+        logger.error("❌ Production configuration validation failed: %s", e)
+        raise
+
+    # 2) Environment-aware component startup
     profile = detect_profile()
     logger.info("Startup profile: %s", profile.name)
 

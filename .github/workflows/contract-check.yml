@@ -16,3 +16,104 @@ jobs:
         env:
           CSRF_ENABLED: '1'
         run: pytest -q
+
+  error-handler-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Import check
+        run: |
+          python -c "import app.main; print('✅ app.main imports successfully')"
+
+      - name: Launch ephemeral server
+        run: |
+          python -c "
+          import subprocess
+          import time
+          import sys
+
+          # Start server in background
+          proc = subprocess.Popen([
+              sys.executable, '-m', 'uvicorn',
+              'app.main:create_app',
+              '--host', '127.0.0.1',
+              '--port', '8000'
+          ])
+
+          # Wait for server to start
+          time.sleep(5)
+
+          try:
+              # Test 1: 404 error
+              print('Testing 404 error...')
+              result = subprocess.run([
+                  'curl', '-si', 'http://127.0.0.1:8000/nope'
+              ], capture_output=True, text=True, timeout=10)
+
+              # Check for required elements
+              if 'x-error-code: not_found' not in result.stdout.lower():
+                  print('❌ Missing X-Error-Code header in 404 response')
+                  sys.exit(1)
+
+              if '404' not in result.stdout:
+                  print('❌ Wrong status code in 404 response')
+                  sys.exit(1)
+
+              print('✅ 404 error test passed')
+
+              # Test 2: 422 validation error
+              print('Testing 422 validation error...')
+              result = subprocess.run([
+                  'curl', '-si', '-X', 'POST', 'http://127.0.0.1:8000/v1/ask',
+                  '-H', 'Content-Type: application/json',
+                  '-d', '{\"bad\":\"shape\"}'
+              ], capture_output=True, text=True, timeout=10)
+
+              if 'x-error-code: invalid_input' not in result.stdout.lower():
+                  print('❌ Missing X-Error-Code: invalid_input header')
+                  sys.exit(1)
+
+              if '422' not in result.stdout:
+                  print('❌ Wrong status code in 422 response')
+                  sys.exit(1)
+
+              if '\"code\":\"invalid_input\"' not in result.stdout:
+                  print('❌ Missing code field in 422 response')
+                  sys.exit(1)
+
+              if '\"detail\":\"Validation error\"' not in result.stdout:
+                  print('❌ Missing legacy detail field in 422 response')
+                  sys.exit(1)
+
+              print('✅ 422 validation error test passed')
+
+              # Test 3: Auth error (401/403)
+              print('Testing auth error...')
+              result = subprocess.run([
+                  'curl', '-si', '-X', 'POST', 'http://127.0.0.1:8000/v1/ask',
+                  '-H', 'Content-Type: application/json',
+                  '-d', '{\"prompt\":\"hi\"}'
+              ], capture_output=True, text=True, timeout=10)
+
+              # Should get either 401 or 403 depending on PROMPT_BACKEND setting
+              if '401' in result.stdout or '403' in result.stdout:
+                  print('✅ Auth error test passed (got 401 or 403)')
+              else:
+                  print('❌ Expected 401 or 403 status code for auth error')
+                  sys.exit(1)
+
+              print('🎉 All error handler contract tests passed!')
+
+          finally:
+              # Clean up server
+              proc.terminate()
+              proc.wait(timeout=5)
+          "

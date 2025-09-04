@@ -6,7 +6,7 @@ from app.integrations.google.routes import legacy_oauth_callback
 router = APIRouter()
 
 
-@router.get("/google/oauth/callback")
+@router.get("/google/oauth/callback", deprecated=True)
 async def compat_google_oauth_callback(request: Request):
     try:
         maybe = legacy_oauth_callback(request)

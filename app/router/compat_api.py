@@ -13,7 +13,7 @@ import inspect
 router = APIRouter(tags=["Compat"])
 
 
-@router.get("/whoami")
+@router.get("/whoami", deprecated=True)
 async def whoami_compat(request: Request):
     """Call into app.router.auth_api.whoami if available, else return 401 fallback.
     """
@@ -28,7 +28,7 @@ async def whoami_compat(request: Request):
     return maybe
 
 
-@router.get("/spotify/status")
+@router.get("/spotify/status", deprecated=True)
 async def spotify_status_compat():
     """Call into Spotify integration status if available, else normalized 200."""
     try:
@@ -42,7 +42,7 @@ async def spotify_status_compat():
         return JSONResponse({"status": "ok"}, status_code=200)
 
 
-@router.get("/google/status")
+@router.get("/google/status", deprecated=True)
 async def google_status_compat():
     """Call into Google integration status if available, else normalized 200."""
     try:
