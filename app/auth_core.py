@@ -12,7 +12,7 @@ from .security import jwt_decode
 from fastapi import Request
 from starlette.websockets import WebSocket
 
-from .cookie_names import GSNH_AT, GSNH_SESS, SESSION, ACCESS_TOKEN
+from .web.cookies import NAMES
 from .session_store import get_session_store, SessionStoreUnavailable
 
 logger = logging.getLogger(__name__)
@@ -288,18 +288,18 @@ def extract_token(target: Request | WebSocket) -> tuple[str, Optional[str]]:
     try:
         if isinstance(target, Request):
             # Check canonical names first, then legacy names
-            tok = (target.cookies.get(f"__Host-{GSNH_AT}") or
-                   target.cookies.get(GSNH_AT) or
-                   target.cookies.get(ACCESS_TOKEN))
+            tok = (target.cookies.get(f"__Host-{NAMES.access}") or
+                   target.cookies.get(NAMES.access) or
+                   target.cookies.get("access_token"))
             if tok:
                 return ("access_cookie", tok)
         else:
             raw = target.headers.get("Cookie") or ""
             parts = [p.strip() for p in raw.split(";") if p.strip()]
             for p in parts:
-                if (p.startswith(f"__Host-{GSNH_AT}=") or
-                    p.startswith(f"{GSNH_AT}=") or
-                    p.startswith(f"{ACCESS_TOKEN}=")):
+                if (p.startswith(f"__Host-{NAMES.access}=") or
+                    p.startswith(f"{NAMES.access}=") or
+                    p.startswith("access_token=")):
                     return ("access_cookie", p.split("=", 1)[1])
     except Exception:
         pass
@@ -313,16 +313,16 @@ def extract_token(target: Request | WebSocket) -> tuple[str, Optional[str]]:
     # 3) Session cookie (canonical first; legacy optional)
     try:
         if isinstance(target, Request):
-            sid = target.cookies.get(f"__Host-{GSNH_SESS}") or target.cookies.get(GSNH_SESS)
+            sid = target.cookies.get(f"__Host-{NAMES.session}") or target.cookies.get(NAMES.session)
             if not sid and CFG.legacy_names:
-                sid = target.cookies.get(SESSION) or target.cookies.get("session")
+                sid = target.cookies.get("__session") or target.cookies.get("session")
             if sid:
                 return ("session", sid)
         else:
             raw = target.headers.get("Cookie") or ""
             parts = [p.strip() for p in raw.split(";") if p.strip()]
             for p in parts:
-                if p.startswith(f"__Host-{GSNH_SESS}=") or p.startswith(f"{GSNH_SESS}="):
+                if p.startswith(f"__Host-{NAMES.session}=") or p.startswith(f"{NAMES.session}="):
                     return ("session", p.split("=", 1)[1])
             if CFG.legacy_names:
                 for p in parts:

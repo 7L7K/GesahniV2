@@ -1486,9 +1486,8 @@ async def google_callback(request: Request) -> Response:
         try:
             # Report canonical names in logs
             try:
-                from ..cookie_names import ACCESS_TOKEN, REFRESH_TOKEN
-
-                cookie_names_written = [ACCESS_TOKEN, REFRESH_TOKEN]
+                from ..web.cookies import NAMES
+                cookie_names_written = [NAMES.access, NAMES.refresh]
             except Exception:
                 cookie_names_written = ["access_token", "refresh_token"]
             # Use previously resolved cookie config when available

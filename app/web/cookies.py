@@ -27,8 +27,88 @@ def set_auth(resp, access: str, refresh: str, session_id: str, *, access_ttl: in
     set_cookie(resp, NAMES.refresh, refresh, max_age=refresh_ttl, same_site=same_site, domain=domain, path=path)
     set_cookie(resp, NAMES.session, session_id, max_age=refresh_ttl, same_site=same_site, domain=domain, path=path)
 
-def set_csrf(resp, token: str, *, ttl: int = 1800, same_site="Lax", domain=None, path="/"):
-    set_cookie(resp, NAMES.csrf, token, max_age=ttl, http_only=False, same_site=same_site, domain=domain, path=path)
+def set_csrf(resp, token: str, *, ttl: int = 1800, same_site="Lax", domain=None, path="/", secure=None):
+    """
+    Set CSRF token cookie with special handling for cross-site scenarios.
+    CSRF tokens need to be accessible to JavaScript so they're not HttpOnly.
+    When SameSite=None, they must also be Secure=True.
+    """
+    # CSRF cookies need special handling for cross-site scenarios
+    if same_site == "none":
+        # Ensure Secure=True when SameSite=None
+        secure = True
+    elif secure is None:
+        # For same-origin scenarios, use default secure behavior
+        secure = True
+
+    set_cookie(resp, NAMES.csrf, token, max_age=ttl, http_only=False, same_site=same_site, domain=domain, path=path, secure=secure)
+
+def set_oauth_state_cookies(resp, *, state: str, next_url: str, ttl: int = 600, provider: str = "oauth", code_verifier: str | None = None, session_id: str | None = None):
+    """
+    Set OAuth state cookies for OAuth flows.
+
+    Sets state, next_url, and optionally code_verifier cookies for CSRF protection and redirect handling.
+    """
+    # Set OAuth state cookie (HttpOnly for security)
+    state_cookie_name = f"{provider}_state"
+    set_cookie(resp, state_cookie_name, state, max_age=ttl, http_only=True)
+
+    # Set OAuth next URL cookie (not HttpOnly so client can read it)
+    next_cookie_name = f"{provider}_next"
+    set_cookie(resp, next_cookie_name, next_url, max_age=ttl, http_only=False)
+
+    # Set code verifier if provided (PKCE)
+    if code_verifier:
+        verifier_cookie_name = f"{provider}_code_verifier"
+        set_cookie(resp, verifier_cookie_name, code_verifier, max_age=ttl, http_only=True)
+
+    # Set session ID if provided
+    if session_id:
+        session_cookie_name = f"{provider}_session"
+        set_cookie(resp, session_cookie_name, session_id, max_age=ttl, http_only=True)
+
+def clear_oauth_state_cookies(resp, *, provider: str = "oauth"):
+    """
+    Clear OAuth state cookies from the response.
+    """
+    # Clear OAuth state cookies with Max-Age=0
+    state_cookie_name = f"{provider}_state"
+    next_cookie_name = f"{provider}_next"
+    verifier_cookie_name = f"{provider}_code_verifier"
+    session_cookie_name = f"{provider}_session"
+
+    # Clear the main OAuth cookies
+    set_cookie(resp, state_cookie_name, "", max_age=0, http_only=True)
+    set_cookie(resp, next_cookie_name, "", max_age=0, http_only=False)
+    set_cookie(resp, verifier_cookie_name, "", max_age=0, http_only=True)
+    set_cookie(resp, session_cookie_name, "", max_age=0, http_only=True)
+
+def clear_csrf(resp, *, same_site="Lax", domain=None, path="/", secure=None):
+    """
+    Clear CSRF token cookie from the response.
+    """
+    # CSRF cookies need special handling for cross-site scenarios
+    if same_site == "none":
+        # Ensure Secure=True when SameSite=None
+        secure = True
+    elif secure is None:
+        # For same-origin scenarios, use default secure behavior
+        secure = True
+
+    set_cookie(resp, NAMES.csrf, "", max_age=0, http_only=False, same_site=same_site, domain=domain, path=path, secure=secure)
+
+def set_device_cookie(resp, *, name: str, value: str, ttl: int, http_only=False):
+    """
+    Set a device trust/pairing cookie.
+    Device cookies are typically not HttpOnly so they can be read by JavaScript.
+    """
+    set_cookie(resp, name, value, max_age=ttl, http_only=http_only)
+
+def clear_device_cookie(resp, *, name: str, http_only=False):
+    """
+    Clear a device trust/pairing cookie from the response.
+    """
+    set_cookie(resp, name, "", max_age=0, http_only=http_only)
 
 def read(req):
     c = req.cookies

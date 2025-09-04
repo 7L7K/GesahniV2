@@ -291,9 +291,7 @@ def get_current_user_id(
                 access_token = None
                 if request is not None:
                     try:
-                        from ..cookie_names import GSNH_AT
-
-                        from ..cookies import read_access_cookie
+                        from ..web.cookies import read_access_cookie
                         access_token = read_access_cookie(request)
                     except Exception:
                         access_token = None
@@ -302,7 +300,7 @@ def get_current_user_id(
                         raw_cookie = websocket.headers.get("Cookie") or ""
                         parts = [p.strip() for p in raw_cookie.split(";") if p.strip()]
                         for p in parts:
-                            if p.startswith("GSNH_AT="):
+                            if p.startswith("access_token="):
                                 access_token = p.split("=", 1)[1]
                                 break
                         if not access_token:
@@ -610,15 +608,13 @@ def resolve_session_id_strict(
     target = request or websocket
     try:
         if isinstance(request, Request):
-            from ..cookie_names import GSNH_SESS
-
-            from ..cookies import read_session_cookie
+            from ..web.cookies import read_session_cookie
             sid = read_session_cookie(request)
         elif websocket is not None:
             raw = websocket.headers.get("Cookie") or ""
             parts = [p.strip() for p in raw.split(";") if p.strip()]
             for p in parts:
-                if p.startswith("__Host-GSNH_SESS=") or p.startswith("GSNH_SESS="):
+                if p.startswith("__Host-__session=") or p.startswith("__session="):
                     sid = p.split("=", 1)[1]
                     break
     except Exception:

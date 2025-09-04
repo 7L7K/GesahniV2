@@ -1201,9 +1201,8 @@ async def finish_clerk_login(
         # Idempotent: Check if we already have valid cookies for this user
         # If so, just return 204 without setting new cookies
         try:
-            from ..cookie_names import ACCESS_TOKEN
-
-            existing_access = request.cookies.get(ACCESS_TOKEN)
+            from ..web.cookies import NAMES
+            existing_access = request.cookies.get(NAMES.access)
             if existing_access:
                 try:
                     claims = jwt_decode(
