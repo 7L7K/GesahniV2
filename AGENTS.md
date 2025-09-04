@@ -174,6 +174,22 @@ Skills are tried in the order defined in `app/skills/__init__.py`; first match w
    uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
    ```
 4. **Start frontend**
+### Startup overview
+
+Startup behavior has been extracted into `app/startup/` for clarity and
+testability. Files of interest:
+
+- `app/startup/config.py`: profile detection (`dev`/`prod`/`ci`) and component lists.
+- `app/startup/components.py`: small async initializers for DB, token schema,
+  OpenAI health check, vector store, LLaMA, Home Assistant, memory store, and
+  scheduler.
+- `app/startup/vendor.py`: gated vendor health checks for OpenAI and Ollama.
+- `app/startup/__init__.py`: exports `lifespan` used by FastAPI (`lifespan=app.startup.lifespan`).
+
+Contributors adding new startup components should update `config.py`, add an
+initializer to `components.py`, and document changes in `README.md` and the
+PR description.
+
    ```bash
    cd frontend && npm run dev
    ```

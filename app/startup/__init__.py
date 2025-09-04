@@ -1,5 +1,21 @@
-# app/startup/__init__.py
+"""Startup package orchestrator.
+
+This module exposes the canonical ``lifespan`` context manager used by the
+application to perform environment-first startup and orderly shutdown. It
+delegates to small initializer functions in ``app.startup.components`` and
+uses ``app.startup.config.detect_profile`` to decide which components to run
+for a given runtime profile (`dev`/`prod`/`ci`).
+
+Design goals:
+
+- Keep initializers minimal and idempotent so they can be exercised in tests
+  and locally without side-effects.
+- Gate expensive vendor probes behind environment flags.
+- Log and continue on optional external failures to keep boot resilient.
+"""
+
 from __future__ import annotations
+
 import asyncio
 import logging
 import os
@@ -15,9 +31,17 @@ from app.startup import components as C
 
 logger = logging.getLogger(__name__)
 
-# Exported lifespan for main.create_app
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """FastAPI lifespan manager used by the app instance.
+
+    Responsibilities:
+    - Ensure DB schemas are created once via ``init_db_once``.
+    - Run environment-aware startup components with per-step timeouts.
+    - Launch optional background daemons (best-effort).
+    - Perform graceful shutdown/cleanup.
+    """
     # 1) DB schema once, before component inits
     await _init_db_once()
 
@@ -32,13 +56,16 @@ async def lifespan(app: FastAPI):
     finally:
         await _shutdown(app)
 
+
 async def _init_db_once():
     try:
         from app.db import init_db_once
+
         await init_db_once()
     except Exception as e:
         logger.error("Database initialization failed: %s", e)
         raise
+
 
 async def _run_components():
     profile = detect_profile()
@@ -66,30 +93,36 @@ async def _run_components():
         except Exception as e:
             logger.warning("⚠️ %s failed: %s; continuing", comp_name, e)
 
+
 def _start_daemons():
     # These are best-effort; never fatal
     try:
         from app.care_daemons import heartbeat_monitor_loop
+
         asyncio.create_task(heartbeat_monitor_loop())
     except Exception:
         logger.debug("heartbeat_monitor_loop not started", exc_info=True)
 
     try:
         from app.api.sms_queue import sms_worker
+
         asyncio.create_task(sms_worker())
     except Exception:
         logger.debug("sms_worker not started", exc_info=True)
 
     try:
         from app.router import start_openai_health_background_loop
+
         start_openai_health_background_loop()
     except Exception:
         logger.debug("OpenAI health background loop not started", exc_info=True)
+
 
 async def _shutdown(app: FastAPI):
     # Mark offline for health
     try:
         from app.main import _HEALTH_LAST  # temporary until we relocate health cache
+
         if _HEALTH_LAST.get("online", True):
             logger.info("healthz status=offline")
         _HEALTH_LAST["online"] = False
@@ -111,36 +144,43 @@ async def _shutdown(app: FastAPI):
     # Scheduler shutdown (sync/async tolerant)
     try:
         from app.deps.scheduler import shutdown as scheduler_shutdown  # type: ignore
-        if inspect.iscoroutinefunction(scheduler_shutdown):  # type: ignore[attr-defined]
+
+        if asyncio.iscoroutinefunction(scheduler_shutdown):  # type: ignore[attr-defined]
             await scheduler_shutdown()  # type: ignore[misc]
         else:
-            scheduler_shutdown()        # type: ignore[misc]
+            scheduler_shutdown()  # type: ignore[misc]
     except Exception:
         logger.debug("scheduler shutdown failed", exc_info=True)
 
     # Token store cleanup
     try:
         from app.token_store import stop_cleanup_task
+
         await stop_cleanup_task()
     except Exception:
         logger.debug("token store cleanup stop failed", exc_info=True)
 
+
 # util used by components.init_openai_health_check
 async def util_check_vendor(vendor: str):
-    from app.startup import vendor_health  # type: ignore
-    await vendor_health(vendor)
+    from app.startup.vendor import check_vendor_health_gated
 
-# Stubbed vendor health so components can import; reuses your existing logic
+    await check_vendor_health_gated(vendor)
+
+
+# Re-exported helper for components that want a stricter vendor probe
 async def vendor_health(vendor: str):
     try:
-        from app.startup import check_vendor_health_gated  # if you already have it in app.startup module
-    except Exception:
-        from app.startup import check_vendor_health_gated as _missing  # fallback alias
-    try:
-        from app.startup import check_vendor_health_gated
+        from app.startup.vendor import check_vendor_health_gated
+
         res = await check_vendor_health_gated(vendor)
         if res.get("status") not in {"healthy", "skipped", "missing_config"}:
             msg = res.get("error") or res.get("reason") or f"vendor {vendor} unhealthy"
             raise RuntimeError(msg)
-    except Exception as e:
+    except Exception:
         raise
+
+
+__all__ = ["lifespan", "util_check_vendor", "vendor_health", "detect_profile"]
+
+ 

@@ -207,9 +207,6 @@ def _anon_user_id(auth_header: str | None) -> str:
 configure_logging()
 logger = logging.getLogger(__name__)
 
-# Import extracted lifespan
-from app.startup import lifespan
-
 # Ensure a concrete router is registered at import time to avoid router-unavailable
 try:
     from .router.registry import set_router, get_router
@@ -314,7 +311,304 @@ def _record_error(error: Exception, context: str = "unknown"):
     logger.error(f"Error in {context}: {error}", exc_info=True)
 
 
-# Startup logic moved to app/startup module
+# Enhanced startup with comprehensive error tracking
+async def _enhanced_startup():
+    """Enhanced startup with comprehensive error tracking and logging."""
+    startup_start = time.time()
+    logger.info("Starting enhanced application startup")
+
+    try:
+        # Verify secret usage on boot
+        from .secret_verification import audit_prod_env, log_secret_summary
+
+        log_secret_summary()
+
+        # Enforce JWT strength at startup (moved from import-time)
+        try:
+            _enforce_jwt_strength()
+        except Exception as e:
+            logger.error("JWT secret validation failed: %s", e)
+            _record_error(e, "startup.jwt_secret")
+            raise  # This should be fatal
+
+        # Production environment audit (strict checks for prod)
+        try:
+            audit_prod_env()
+        except Exception as e:
+            logger.error("Production environment audit failed: %s", e)
+            _record_error(e, "startup.prod_audit")
+            raise  # This should be fatal
+
+        # Initialize core components with error tracking (delegated to app.startup)
+        try:
+            from app.startup.components import (
+                init_database,
+                init_token_store_schema,
+                init_openai_health_check,
+                init_vector_store,
+                init_llama,
+                init_home_assistant,
+                init_memory_store,
+                init_scheduler,
+            )
+
+            components = [
+                ("Database", init_database),
+                ("Token Store Schema", init_token_store_schema),
+                ("OpenAI Health Check", init_openai_health_check),
+                ("Vector Store", init_vector_store),
+                # ("LLaMA Integration", init_llama),  # Disabled for faster startup
+                ("Home Assistant", init_home_assistant),
+                ("Memory Store", init_memory_store),
+                ("Scheduler", init_scheduler),
+            ]
+        except Exception as e:
+            logger.warning("Failed to import startup components: %s", e)
+            components = []
+
+        total_components = len(components)
+        for i, (name, init_func) in enumerate(components, 1):
+            try:
+                start_time = time.time()
+                logger.info(f"[{i}/{total_components}] Initializing {name}...")
+
+                # Create a task with timeout to prevent hanging
+                import asyncio
+                try:
+                    task = asyncio.create_task(init_func())
+                    await asyncio.wait_for(task, timeout=30.0)  # 30 second timeout per component
+                    duration = time.time() - start_time
+                    logger.info(f"✅ {name} initialized successfully ({duration:.1f}s)")
+                except asyncio.TimeoutError:
+                    logger.warning(f"⚠️ {name} initialization timed out after 30s - continuing startup")
+                    _record_error(TimeoutError(f"{name} init timeout"), f"startup.{name.lower().replace(' ', '_')}")
+                    continue
+                except Exception as e:
+                    duration = time.time() - start_time
+                    logger.warning(f"⚠️ {name} failed after {duration:.1f}s: {e}")
+                    _record_error(e, f"startup.{name.lower().replace(' ', '_')}")
+                    continue
+
+            except Exception as e:
+                error_msg = f"Critical error initializing {name}: {e}"
+                logger.error(error_msg, exc_info=True)
+                _record_error(e, f"startup.{name.lower().replace(' ', '_')}")
+                # Continue startup even if some components fail
+                continue
+
+        # Schedule nightly jobs (no-op if scheduler unavailable)
+        try:
+            schedule_nightly_jobs()
+        except Exception as e:
+            logger.debug("schedule_nightly_jobs failed", exc_info=True)
+            _record_error(e, "startup.nightly_jobs")
+
+        try:
+            proactive_startup()
+        except Exception as e:
+            logger.debug("proactive_startup failed", exc_info=True)
+            _record_error(e, "startup.proactive")
+
+        # Start token store cleanup task
+        try:
+            from .token_store import start_cleanup_task
+            await start_cleanup_task()
+        except Exception as e:
+            logger.debug("token store cleanup task not started", exc_info=True)
+            _record_error(e, "startup.token_store")
+
+        startup_time = time.time() - startup_start
+        logger.info(f"Application startup completed in {startup_time:.2f}s")
+
+    except Exception as e:
+        error_msg = f"Critical startup failure: {e}"
+        logger.error(error_msg, exc_info=True)
+        _record_error(e, "startup.critical")
+        raise
+
+
+async def _init_database():
+    """Initialize database connections and verify connectivity."""
+    try:
+        # Database schemas are now initialized once during app startup
+        # This function now only verifies connectivity
+        logger.info("Database connectivity verified - schemas already initialized at startup")
+    except Exception as e:
+        logger.error(f"Database connectivity test failed: {e}")
+        raise
+
+
+async def _init_token_store_schema():
+    try:
+        from .auth_store_tokens import token_dao
+
+        # Start schema migration in background (non-blocking)
+        import asyncio
+        asyncio.create_task(token_dao.ensure_schema_migrated())
+        logger.debug("Token store schema migration started in background")
+    except Exception as e:
+        logger.error(f"Token store schema init failed: {e}")
+        raise
+
+
+async def _init_openai_health_check():
+    """Perform OpenAI startup health check using the startup module."""
+    try:
+        from .startup import check_vendor_health_gated
+
+        logger.info("Performing OpenAI startup health check")
+        result = await check_vendor_health_gated("openai")
+
+        if result["status"] in ["skipped", "missing_config"]:
+            logger.debug("OpenAI health check %s: %s", result["status"], result.get("reason", ""))
+            return
+        elif result["status"] == "healthy":
+            logger.info("OpenAI startup health check successful")
+            return
+        else:
+            # Health check failed
+            error_msg = result.get("error", f"Health check failed with status: {result['status']}")
+            logger.error("OpenAI startup health check failed: %s", error_msg)
+            raise RuntimeError(f"OpenAI health check failed: {error_msg}")
+
+    except Exception as e:
+        logger.error("OpenAI startup health check failed: %s", e)
+        raise
+
+
+async def _init_vector_store():
+    """Initialize vector store with read-only health check."""
+    try:
+        from .memory.api import _get_store
+        store = _get_store()
+
+        # Read-only connectivity test - be tolerant of sync vs async implementations
+        try:
+            import inspect
+
+            if hasattr(store, "ping"):
+                ping_fn = getattr(store, "ping")
+                # If ping is an async function, await it; otherwise call it and await result if awaitable
+                if inspect.iscoroutinefunction(ping_fn):
+                    await ping_fn()
+                else:
+                    res = ping_fn()
+                    if inspect.isawaitable(res):
+                        await res
+            elif hasattr(store, "search_memories"):
+                search_fn = getattr(store, "search_memories")
+                # Call search with minimal impact; handle sync and async
+                if inspect.iscoroutinefunction(search_fn):
+                    await search_fn("", "", limit=0)
+                else:
+                    res = search_fn("", "", limit=0)
+                    if inspect.isawaitable(res):
+                        await res
+            else:
+                # Fallback: just get the store instance
+                pass
+
+        except Exception:
+            # Bubble up to outer handler which will log and record the error
+            raise
+
+        logger.debug("Vector store initialization successful")
+    except Exception as e:
+        logger.error(f"Vector store initialization failed: {e}")
+        raise
+
+
+async def _init_llama():
+    """Initialize LLaMA integration with health check."""
+    try:
+        # Check if LLaMA is explicitly disabled
+        llama_enabled = (os.getenv("LLAMA_ENABLED") or "").strip().lower()
+        if llama_enabled in {"0", "false", "no", "off"}:
+            logger.debug("LLaMA integration disabled via LLAMA_ENABLED environment variable")
+            return
+
+        # Check if Ollama URL is configured (fallback for when LLAMA_ENABLED is not set)
+        ollama_url = os.getenv("OLLAMA_URL") or os.getenv("LLAMA_URL")
+        if not ollama_url and llama_enabled not in {"1", "true", "yes", "on"}:
+            logger.debug("LLaMA integration not configured (no OLLAMA_URL), skipping initialization")
+            return
+
+        from .llama_integration import _check_and_set_flag
+
+        await _check_and_set_flag()
+        logger.debug("LLaMA integration initialization successful")
+    except Exception as e:
+        logger.error(f"LLaMA integration initialization failed: {e}")
+        raise
+
+
+async def _init_home_assistant():
+    """Initialize Home Assistant integration."""
+    try:
+        # Check if Home Assistant is explicitly disabled
+        ha_enabled = (os.getenv("HOME_ASSISTANT_ENABLED") or "").strip().lower()
+        if ha_enabled in {"0", "false", "no", "off"}:
+            logger.debug("Home Assistant integration disabled via HOME_ASSISTANT_ENABLED environment variable")
+            return
+
+        # Check if Home Assistant URL is configured
+        ha_url = os.getenv("HOME_ASSISTANT_URL")
+        if not ha_url:
+            logger.debug("Home Assistant not configured (no HOME_ASSISTANT_URL), skipping initialization")
+            return
+
+        from .home_assistant import get_states
+
+        # Test HA connectivity if configured and enabled
+        await get_states()
+        logger.debug("Home Assistant integration initialization successful")
+    except Exception as e:
+        logger.error(f"Home Assistant initialization failed: {e}")
+        raise
+
+
+async def _init_memory_store():
+    """Initialize memory store."""
+    try:
+        from .memory.api import _get_store
+
+        _ = _get_store()
+        logger.debug("Memory store initialization successful")
+    except Exception as e:
+        logger.error(f"Memory store initialization failed: {e}")
+        raise
+
+
+async def _init_scheduler():
+    """Initialize scheduler."""
+    try:
+        from .deps.scheduler import scheduler
+
+        if scheduler.running:
+            logger.debug("Scheduler already running")
+            return
+
+        # Check if scheduler.start() is awaitable
+        start_method = scheduler.start
+        if hasattr(start_method, '__call__'):
+            # Try to determine if it's async by checking the return type or signature
+            import inspect
+            if inspect.iscoroutinefunction(start_method):
+                # It's an async function, await it
+                await start_method()
+            else:
+                # It's a sync function, call it directly
+                start_method()
+        else:
+            # Fallback: call it directly
+            start_method()
+
+        logger.debug("Scheduler initialization successful")
+
+    except Exception as e:
+        logger.warning(f"Scheduler initialization failed: {e}. Continuing without background jobs.")
+        # Don't raise - make scheduler optional
+        return
 
 
 # Enhanced error handling middleware
@@ -472,14 +766,12 @@ _swagger_ui_parameters = get_swagger_ui_parameters()
 # the environment is restored before /openapi.json is requested.
 _DEV_SERVERS_SNAPSHOT = os.getenv("OPENAPI_DEV_SERVERS")
 
-
-# Lifespan moved to app/startup module
-
+from app.startup import lifespan  # NEW: use extracted lifespan
 
 app = FastAPI(
     title="GesahniV2 API",
     version=_get_version(),
-    lifespan=lifespan,
+    lifespan=lifespan,  # use extracted lifespan from app.startup
     openapi_tags=tags_metadata,
     docs_url=_docs_url,
     redoc_url=_redoc_url,

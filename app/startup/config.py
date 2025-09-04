@@ -1,4 +1,3 @@
-# app/startup/config.py
 from __future__ import annotations
 import os
 from dataclasses import dataclass
@@ -42,3 +41,5 @@ def detect_profile() -> StartupProfile:
     extra = (() if not want_llama else llama) + (() if not want_ha else ha)
 
     return StartupProfile("dev", base + extra)
+
+
