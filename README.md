@@ -149,6 +149,41 @@ npm install
 npm run dev  # http://localhost:3000
 ```
 
+### ⚙️ Startup & Initialization (developer reference)
+
+This project centralizes application boot-time logic in `app/startup/` so the
+FastAPI application can rely on an environment-first, test-friendly startup
+sequence. Key points:
+
+- `app/startup/config.py` — Detects the runtime profile (`dev`, `prod`, `ci`) and
+  returns a `StartupProfile` describing which components to run and in which
+  order.
+- `app/startup/components.py` — Concrete, small async initializers (DB, token
+  schema, OpenAI health, vector store, LLaMA, Home Assistant, memory, scheduler).
+  Each initializer is tolerant of missing configuration and logs warnings
+  instead of raising for optional externals.
+- `app/startup/vendor.py` — Lightweight vendor health checks (OpenAI, Ollama)
+  gated by `STARTUP_VENDOR_PINGS` and configurable timeouts.
+- `app/startup/__init__.py` — Exports a `lifespan` asynccontextmanager used by
+  FastAPI (`lifespan=app.startup.lifespan`) to orchestrate startup and shutdown.
+
+Developer tips:
+
+- Run the acceptance checks after editing startup logic:
+  ```bash
+  python -c "import importlib; importlib.import_module('app.main')"
+  uvicorn app.main:app --reload
+  CI=1 uvicorn app.main:app --reload
+  curl -s localhost:8000/health | jq .
+  curl -s localhost:8000/v1/status | jq .
+  ```
+- Keep initializers small and idempotent: they may be called in tests and in
+  production; prefer logging and non-fatal failures for optional dependencies
+  (Home Assistant, Ollama).
+- Document any new startup component in `app/startup/components.py` and list
+  it in `app/startup/config.py` if it should be part of profiles.
+
+
 ### 🎥 Record a Session
 
 Record interaction sessions for later review:

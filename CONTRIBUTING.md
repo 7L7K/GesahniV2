@@ -78,6 +78,28 @@ locust -f locustfile.py --host=http://127.0.0.1:8000
 - [ ] Added/updated `.env.example` if new env vars were introduced
 - [ ] Backwards compatibility considered (tests, API surface)
 
+## Startup changes
+
+When adding or modifying application startup behavior, follow these rules:
+
+- Add any new component initializer as a small async function in
+  `app/startup/components.py`. Keep initializers idempotent and tolerant of
+  missing configuration (log and continue for optional externals).
+- Add the initializer's name to `app/startup/config.py` if it should be part of
+  the runtime `StartupProfile`s. Keep order deterministic — DB and token
+  migrations should run early.
+- Update `README.md` with a short developer note describing the new component
+  and any environment variables required to enable it.
+- Keep expensive or blocking checks gated behind environment flags such as
+  `STARTUP_VENDOR_PINGS` to avoid slow CI runs.
+
+When submitting a PR that touches startup logic, include the following in the
+PR description:
+
+- Which profile(s) were affected (`dev`/`prod`/`ci`).
+- Any new environment variables and their defaults.
+- A smoke test checklist (import, dev run, CI run, health endpoints).
+
 ## Adding a New Skill
 1. Create `app/skills/<name>_skill.py` implementing a `Skill` subclass with `PATTERNS` and `run()`.
 2. Register it in `app/skills/__init__.py` to set execution order.

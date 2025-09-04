@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request, Body
+from .errors import BackendUnavailable
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
@@ -338,17 +339,32 @@ async def _enhanced_startup():
             _record_error(e, "startup.prod_audit")
             raise  # This should be fatal
 
-        # Initialize core components with error tracking
-        components = [
-            ("Database", _init_database),
-            ("Token Store Schema", _init_token_store_schema),
-            ("OpenAI Health Check", _init_openai_health_check),
-            ("Vector Store", _init_vector_store),
-            # ("LLaMA Integration", _init_llama),  # Disabled for faster startup
-            ("Home Assistant", _init_home_assistant),
-            ("Memory Store", _init_memory_store),
-            ("Scheduler", _init_scheduler),
-        ]
+        # Initialize core components with error tracking (delegated to app.startup)
+        try:
+            from app.startup.components import (
+                init_database,
+                init_token_store_schema,
+                init_openai_health_check,
+                init_vector_store,
+                init_llama,
+                init_home_assistant,
+                init_memory_store,
+                init_scheduler,
+            )
+
+            components = [
+                ("Database", init_database),
+                ("Token Store Schema", init_token_store_schema),
+                ("OpenAI Health Check", init_openai_health_check),
+                ("Vector Store", init_vector_store),
+                # ("LLaMA Integration", init_llama),  # Disabled for faster startup
+                ("Home Assistant", init_home_assistant),
+                ("Memory Store", init_memory_store),
+                ("Scheduler", init_scheduler),
+            ]
+        except Exception as e:
+            logger.warning("Failed to import startup components: %s", e)
+            components = []
 
         total_components = len(components)
         for i, (name, init_func) in enumerate(components, 1):
@@ -750,85 +766,12 @@ _swagger_ui_parameters = get_swagger_ui_parameters()
 # the environment is restored before /openapi.json is requested.
 _DEV_SERVERS_SNAPSHOT = os.getenv("OPENAPI_DEV_SERVERS")
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    try:
-        # Initialize database schemas once during startup
-        try:
-            from .db import init_db_once
-            await init_db_once()
-        except Exception as e:
-            logger.error(f"Database initialization failed: {e}")
-            raise
-
-        # Use enhanced startup with comprehensive error tracking and logging
-        await _enhanced_startup()
-
-        # Additional startup tasks that aren't part of the core enhanced startup
-        # Start care daemons
-        try:
-            from .care_daemons import heartbeat_monitor_loop
-            asyncio.create_task(heartbeat_monitor_loop())
-        except Exception:
-            logger.debug("heartbeat_monitor_loop not started", exc_info=True)
-
-        # Start SMS worker
-        try:
-            from .api.sms_queue import sms_worker
-            asyncio.create_task(sms_worker())
-        except Exception:
-            logger.debug("sms_worker not started", exc_info=True)
-
-        # Start OpenAI health background probe
-        try:
-            from .router import start_openai_health_background_loop
-            start_openai_health_background_loop()
-        except Exception:
-            logger.debug("OpenAI health background loop not started", exc_info=True)
-
-        yield
-    finally:
-        # Log health flip to offline on shutdown
-        try:
-            if _HEALTH_LAST.get("online", True):
-                logger.info("healthz status=offline")
-            _HEALTH_LAST["online"] = False
-        except Exception:
-            pass
-        for func in (close_client, close_whisper_client):
-            try:
-                await func()
-            except Exception as e:  # pragma: no cover - best effort
-                logger.debug("shutdown cleanup failed: %s", e)
-        try:
-            # Check if scheduler_shutdown is awaitable
-            import inspect
-            if inspect.iscoroutinefunction(scheduler_shutdown):
-                await scheduler_shutdown()
-            else:
-                scheduler_shutdown()
-        except Exception as e:  # pragma: no cover - best effort
-            logger.debug("scheduler shutdown failed: %s", e)
-        # Ensure OpenTelemetry worker thread is stopped to avoid atexit noise
-        try:
-            shutdown_tracing()
-        except Exception:
-            pass
-
-        # Stop token store cleanup task
-        try:
-            from .token_store import stop_cleanup_task
-
-            await stop_cleanup_task()
-        except Exception:
-            logger.debug("token store cleanup task shutdown failed", exc_info=True)
-
+from app.startup import lifespan  # NEW: use extracted lifespan
 
 app = FastAPI(
     title="GesahniV2 API",
     version=_get_version(),
-    lifespan=lifespan,
+    lifespan=lifespan,  # use extracted lifespan from app.startup
     openapi_tags=tags_metadata,
     docs_url=_docs_url,
     redoc_url=_redoc_url,
@@ -891,20 +834,71 @@ def create_app() -> FastAPI:
     except Exception as e:
         logger.warning("⚠️  Failed to configure router: %s", e)
 
+    # Bind a single source of truth for the prompt backend onto app.state
+    @app.on_event("startup")
+    async def _bind_prompt_backend():
+        try:
+            # Defer settings import to avoid side-effects at module import
+            from app.settings import settings
+
+            backend = getattr(settings, "PROMPT_BACKEND", os.getenv("PROMPT_BACKEND", "dryrun")).lower()
+        except Exception:
+            backend = os.getenv("PROMPT_BACKEND", "dryrun").lower()
+
+        if backend == "openai":
+            from app.routers.openai_router import openai_router
+
+            app.state.prompt_router = openai_router
+            logger.info("prompt backend bound: openai")
+        elif backend == "llama":
+            from app.routers.llama_router import llama_router
+
+            app.state.prompt_router = llama_router
+            logger.info("prompt backend bound: llama")
+        elif backend == "dryrun":
+            async def dryrun_router(payload: dict) -> dict:
+                return {"dry_run": True, "echo": payload}
+
+            app.state.prompt_router = dryrun_router
+            logger.info("prompt backend bound: dryrun (safe default)")
+        else:
+            # Fail closed; endpoints will map this to 503
+            raise BackendUnavailable(f"Unknown PROMPT_BACKEND={backend!r}")
+
+    # Register backend factory for swappable, lazy backends (openai/llama/dryrun)
+    try:
+        from app.routers import register_backend_factory
+
+        def _backend_factory(name: str):
+            # Resolve backend callables lazily to avoid heavy imports at import-time
+            if name == "openai":
+                from app.routers.openai_router import openai_router
+
+                return openai_router
+            if name == "llama":
+                from app.routers.llama_router import llama_router
+
+                return llama_router
+            # Dry-run fallback closure
+            async def _dry_run(payload: dict) -> dict:
+                return {"backend": "dryrun", "answer": "(dry-run fallback)"}
+
+            return _dry_run
+
+        register_backend_factory(_backend_factory)
+        logger.debug("✅ Backend factory registered (openai/llama/dryrun)")
+    except Exception as e:
+        logger.warning("⚠️  Failed to register backend factory: %s", e)
+
     # Phase 4: Include leaf routers with exact prefixes tests expect
 
-    # /ask at root - from our new leaf module
-    print("DEBUG: About to include ask_router")
+    # /v1/ask - mount ask router under /v1 for a consistent API surface
     try:
         from .router.ask_api import router as ask_router
-        app.include_router(ask_router, prefix="")
-        logger.info("✅ Included ask router at root")
-        print("DEBUG: Successfully included ask_router")
+        app.include_router(ask_router, prefix="/v1")
+        logger.info("✅ Included ask router at /v1")
     except Exception as e:
-        print(f"DEBUG: Failed to include ask_router: {e}")
         logger.warning("⚠️  Failed to include ask router: %s", e)
-        import traceback
-        logger.warning("Full traceback: %s", traceback.format_exc())
 
     # /v1/auth/* - from our new leaf module
     try:

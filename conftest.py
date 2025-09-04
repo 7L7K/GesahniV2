@@ -100,6 +100,9 @@ def pytest_load_initial_conftests(early_config, parser):
         # Vector store: Use memory backend for tests
         os.environ.setdefault("VECTOR_STORE", "memory")
 
+        # Prompt backend: Use dryrun for safe development and testing
+        os.environ.setdefault("PROMPT_BACKEND", "dryrun")
+
         # STANDARDIZED TEST IDENTITY AND TTL CONFIGURATION
         # ==================================================
         # Use long TTLs to prevent expiry during test execution
@@ -138,6 +141,28 @@ def client():
     # Import the FastAPI app after test env vars are set
     from app.main import app
     return TestClient(app)
+
+
+@pytest.fixture
+def prompt_router(monkeypatch):
+    """Provide a mock async prompt router and monkeypatch backwards-compat hook.
+
+    Many legacy tests monkeypatch or call `app.main.route_prompt`. To ease
+    migration we expose a `prompt_router` fixture that sets a default
+    AsyncMock on `app.main.route_prompt` so tests can inject/override it.
+    """
+    from unittest.mock import AsyncMock
+
+    pr = AsyncMock()
+    try:
+        import app.main as main_mod
+
+        # Allow tests to monkeypatch this further if needed
+        monkeypatch.setattr(main_mod, "route_prompt", pr, raising=False)
+    except Exception:
+        # If main isn't importable in some contexts, ignore
+        pass
+    return pr
 
 
 @pytest.fixture(scope="session")

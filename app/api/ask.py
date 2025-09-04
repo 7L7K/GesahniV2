@@ -11,6 +11,9 @@ from importlib import import_module
 
 import jwt
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from app.deps.prompt_router import get_prompt_router
+from app.domain.prompt_router import PromptRouter
+from app.errors import BackendUnavailable
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -596,58 +599,139 @@ async def _ask(request: Request, body: dict | None):
             # rate_limit applied via route dependency; keep explicit header snapshot behavior
             # Lazily import to respect tests that monkeypatch app.main.route_prompt
             try:
-                # Prefer the lightweight router entrypoint to avoid importing heavy modules
-                entry_mod = import_module("app.router.entrypoint")
-                route_prompt = entry_mod.route_prompt
-                params = inspect.signature(route_prompt).parameters
-            except (ImportError, AttributeError, RuntimeError) as e:
-                # Router import/wiring failed - return 503 Service Unavailable
-                logger.error("Router import/wiring failed: %s", e, exc_info=True)
-                raise HTTPException(
-                    status_code=503,
-                    detail={
-                        "code": "ROUTER_UNAVAILABLE",
-                        "message": "Router is unavailable",
-                        "cause": str(e),
-                    },
-                )
-            try:
-                if "stream_cb" in params:
-                    result = await route_prompt(
-                        prompt_text,
-                        user_id,
-                        model_override=model_override,
-                        stream_cb=_stream_cb,
-                        shape=shape,
-                        normalized_from=normalized_from,
-                        **gen_opts,
+                # Prefer injected prompt router (DI via Depends when called by FastAPI)
+                prompt_router = kwargs.get("route_prompt") if "route_prompt" in kwargs else getattr(request.app.state, "prompt_router", None)
+            except Exception:
+                prompt_router = None
+
+            if prompt_router is not None and not isinstance(prompt_router, Depends):
+                # Build a minimal payload for backend callables
+                payload = {
+                    "prompt": prompt_text,
+                    "user_id": user_id,
+                    "model_override": model_override,
+                    "gen_opts": gen_opts,
+                    "shape": shape,
+                    "normalized_from": normalized_from,
+                }
+                # Instrument and protect the backend call with timeout/circuit
+                from time import monotonic
+                from app.metrics import PROMPT_ROUTER_CALLS_TOTAL, PROMPT_ROUTER_FAILURES_TOTAL
+
+                backend_label = os.getenv("PROMPT_BACKEND", "dryrun").lower()
+                PROMPT_ROUTER_CALLS_TOTAL.labels(backend_label).inc()
+
+                start = monotonic()
+                try:
+                    # Timeout fence: don't let backend block for more than 10s
+                    import asyncio
+
+                    result = await asyncio.wait_for(prompt_router(payload), timeout=10.0)
+                except asyncio.TimeoutError as e:
+                    elapsed = monotonic() - start
+                    PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "timeout").inc()
+                    logger.error(
+                        "Prompt backend timeout: backend=%s elapsed=%.3fs",
+                        backend_label,
+                        elapsed,
+                        exc_info=True,
                     )
-                else:  # Compatibility with tests that monkeypatch route_prompt
-                    result = await route_prompt(
-                        prompt_text, user_id, model_override=model_override, **gen_opts
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "code": "BACKEND_TIMEOUT",
+                            "message": "Prompt backend timed out",
+                            "cause": "timeout",
+                        },
                     )
-            except RuntimeError as e:
-                # Router explicitly indicates it hasn't been configured; translate to 503
-                logger.error("Router not configured: %s", e, exc_info=True)
-                raise HTTPException(
-                    status_code=503,
-                    detail={
-                        "code": "ROUTER_UNAVAILABLE",
-                        "message": "Router not configured",
-                        "cause": str(e),
-                    },
-                )
-            except Exception as e:
-                # Router call failed - return 503 Service Unavailable
-                logger.error("Router call failed: %s", e, exc_info=True)
-                raise HTTPException(
-                    status_code=503,
-                    detail={
-                        "code": "BACKEND_UNAVAILABLE",
-                        "message": "Router call failed",
-                        "cause": str(e),
-                    },
-                )
+                except BackendUnavailable as e:
+                    elapsed = monotonic() - start
+                    PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "unavailable").inc()
+                    logger.error(
+                        "Prompt backend unavailable: backend=%s elapsed=%.3fs error=%s",
+                        backend_label,
+                        elapsed,
+                        e,
+                        exc_info=True,
+                    )
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "code": "ROUTER_UNAVAILABLE",
+                            "message": "Prompt backend not configured",
+                            "cause": str(e),
+                        },
+                    )
+                except Exception as e:
+                    elapsed = monotonic() - start
+                    PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "error").inc()
+                    logger.exception(
+                        "Prompt backend call failed: backend=%s elapsed=%.3fs",
+                        backend_label,
+                        elapsed,
+                    )
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "code": "BACKEND_UNAVAILABLE",
+                            "message": "Prompt backend call failed",
+                            "cause": str(e),
+                        },
+                    )
+            else:
+                try:
+                    # Prefer the lightweight router entrypoint to avoid importing heavy modules
+                    entry_mod = import_module("app.router.entrypoint")
+                    route_prompt = entry_mod.route_prompt
+                    params = inspect.signature(route_prompt).parameters
+                except (ImportError, AttributeError, RuntimeError) as e:
+                    # Router import/wiring failed - return 503 Service Unavailable
+                    logger.error("Router import/wiring failed: %s", e, exc_info=True)
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "code": "ROUTER_UNAVAILABLE",
+                            "message": "Router is unavailable",
+                            "cause": str(e),
+                        },
+                    )
+                try:
+                    if "stream_cb" in params:
+                        result = await route_prompt(
+                            prompt_text,
+                            user_id,
+                            model_override=model_override,
+                            stream_cb=_stream_cb,
+                            shape=shape,
+                            normalized_from=normalized_from,
+                            **gen_opts,
+                        )
+                    else:  # Compatibility with tests that monkeypatch route_prompt
+                        result = await route_prompt(
+                            prompt_text, user_id, model_override=model_override, **gen_opts
+                        )
+                except RuntimeError as e:
+                    # Router explicitly indicates it hasn't been configured; translate to 503
+                    logger.error("Router not configured: %s", e, exc_info=True)
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "code": "ROUTER_UNAVAILABLE",
+                            "message": "Router not configured",
+                            "cause": str(e),
+                        },
+                    )
+                except Exception as e:
+                    # Router call failed - return 503 Service Unavailable
+                    logger.error("Router call failed: %s", e, exc_info=True)
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "code": "BACKEND_UNAVAILABLE",
+                            "message": "Router call failed",
+                            "cause": str(e),
+                        },
+                    )
             if streamed_any:
                 logger.info(
                     "ask.success",

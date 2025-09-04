@@ -14,6 +14,12 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from app.deps.prompt_router import get_prompt_router
+from app.domain.prompt_router import PromptRouter
+from app.errors import BackendUnavailable
+from app.metrics import PROMPT_ROUTER_CALLS_TOTAL, PROMPT_ROUTER_FAILURES_TOTAL
+import asyncio
+from time import monotonic
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -137,17 +143,20 @@ def _require_auth_dep():
 
 
 # Create the router
+_deps_for_ask = _require_auth_dep() if os.getenv("PROMPT_BACKEND", "dryrun").lower() != "dryrun" else []
+
 router = APIRouter(tags=["Care"])  # dependency added per-route to allow env gate
 
 
 @router.post(
     "/ask",
-    dependencies=_require_auth_dep(),
+    dependencies=_deps_for_ask,
     response_model=dict,
 )
 async def ask_endpoint(
     request: Request,
     body: AskRequest = Body(...),
+    prompt_router: PromptRouter = Depends(get_prompt_router),
 ):
     """Main ask endpoint that routes prompts to appropriate LLM backends.
 
@@ -183,8 +192,36 @@ async def ask_endpoint(
                 },
             )
 
-            # Route the prompt
-            response = await route_prompt(**prompt_data)
+            # Route the prompt via DI-bound prompt router when available
+            payload = dict(prompt_data)
+
+            backend_label = payload.get("backend") or os.getenv("PROMPT_BACKEND", "dryrun").lower()
+            PROMPT_ROUTER_CALLS_TOTAL.labels(backend_label).inc()
+            start = monotonic()
+            try:
+                # Prefer the injected DI prompt router when present
+                prompt_callable = prompt_router if prompt_router is not None else getattr(request.app.state, "prompt_router", None)
+                if prompt_callable is None:
+                    # Fallback to legacy entrypoint
+                    prompt_callable = route_prompt
+
+                try:
+                    response = await asyncio.wait_for(prompt_callable(payload), timeout=10.0)
+                except BackendUnavailable:
+                    # Map BackendUnavailable to 503 for callers
+                    raise HTTPException(status_code=503, detail="router_unavailable")
+            except asyncio.TimeoutError:
+                elapsed = monotonic() - start
+                PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "timeout").inc()
+                logger.error("ask_endpoint: prompt backend timeout backend=%s elapsed=%.3fs", backend_label, elapsed, exc_info=True)
+                raise HTTPException(status_code=503, detail="backend_timeout")
+            except Exception as e:
+                elapsed = monotonic() - start
+                PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "error").inc()
+                logger.exception("ask_endpoint: prompt backend error backend=%s elapsed=%.3fs", backend_label, elapsed)
+                if isinstance(e, HTTPException):
+                    raise
+                raise HTTPException(status_code=503, detail="backend_error")
 
             # Log success
             duration = asyncio.get_event_loop().time() - start_time

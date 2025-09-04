@@ -1,40 +1,77 @@
-"""Thin entrypoint for routing prompts.
+"""Temporary compatibility bridge for prompt routing.
 
-This module provides a lightweight `route_prompt` coroutine that other parts
-of the application can call without importing the concrete router type.
+This shim forwards to the DI-bound prompt router when possible (the one
+bound on ``app.state.prompt_router`` by startup). When running outside a
+FastAPI request/app context it falls back to a light-weight config-based
+resolver that mirrors the startup logic.  Log usage so we can track legacy
+calls and remove this bridge after migration.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Dict, Any
+import logging
+import os
 
-from .registry import get_router
+from app.errors import BackendUnavailable
+
+logger = logging.getLogger(__name__)
 
 
-async def route_prompt(*args: Any, **kwargs: Any) -> Any:
-    """Thin compatibility entrypoint that delegates to the configured Router.
+async def route_prompt(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Compatibility entrypoint used by older callers.
 
-    This function accepts either a single `payload: dict` argument or the
-    traditional positional style used elsewhere in the codebase
-    `(prompt, user_id, **kwargs)`. It builds a payload dictionary when
-    necessary and calls the registered router's async `route_prompt` method.
-
-    Raises RuntimeError if no router has been configured.
+    Prefer the DI-bound router on ``app.main.app.state.prompt_router`` when
+    available. Otherwise, resolve by configuration (mirrors startup) and
+    call the concrete backend module directly.
     """
-    router = get_router()
+    # 1) Try to use the running FastAPI app instance if present
+    try:
+        # Prefer registry-configured router when available (keeps legacy behavior)
+        try:
+            from .registry import get_router
 
-    # If caller passed a single dict-like payload, forward directly
-    if len(args) == 1 and isinstance(args[0], dict) and not kwargs:
-        return await router.route_prompt(args[0])
+            router = get_router()
+            if router is not None:
+                logger.info("compat.route_prompt: using registry router")
+                return await router.route_prompt(payload)
+        except Exception:
+            # registry not configured or unavailable, continue
+            pass
 
-    # Otherwise, construct a payload from positional args and kwargs
-    payload: dict[str, Any] = {}
-    if len(args) >= 1:
-        payload["prompt"] = args[0]
-    if len(args) >= 2:
-        payload["user_id"] = args[1]
-    # Merge other kwargs into payload (model_override, stream_cb, etc.)
-    payload.update(kwargs)
+        from app.main import app as main_app
 
-    return await router.route_prompt(payload)
+        prompt_router = getattr(main_app.state, "prompt_router", None)
+        if prompt_router:
+            logger.info("compat.route_prompt: using app.state.prompt_router")
+            return await prompt_router(payload)
+    except Exception as e:  # pragma: no cover - best-effort compatibility
+        logger.debug("compat.route_prompt: failed to use app.state (%s)", e)
 
+    # 2) Fallback: light-weight config-based resolver (mirrors startup binding)
+    try:
+        from app.settings import settings
+
+        backend = getattr(settings, "PROMPT_BACKEND", os.getenv("PROMPT_BACKEND", "dryrun")).lower()
+    except Exception:
+        backend = os.getenv("PROMPT_BACKEND", "dryrun").lower()
+
+    logger.info("compat.route_prompt: falling back to config resolver backend=%s", backend)
+
+    try:
+        if backend == "openai":
+            from app.routers.openai_router import openai_router
+
+            logger.warning("compat.route_prompt: calling OpenAI backend via bridge (legacy path)")
+            return await openai_router(payload)
+        elif backend == "llama":
+            from app.routers.llama_router import llama_router
+
+            logger.warning("compat.route_prompt: calling LLaMA backend via bridge (legacy path)")
+            return await llama_router(payload)
+        else:
+            logger.warning("compat.route_prompt: dryrun fallback used (legacy path)")
+            return {"dry_run": True, "echo": payload}
+    except Exception as e:
+        logger.exception("compat.route_prompt: backend call failed: %s", e)
+        raise BackendUnavailable(str(e))
 
