@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # Import allowlist constants from router.py (single source of truth)
-from app.router import ALLOWED_GPT_MODELS, ALLOWED_LLAMA_MODELS
+from app.router.compat import ALLOWED_GPT_MODELS, ALLOWED_LLAMA_MODELS
 
 # Environment variables for routing configuration
 ROUTER_BUDGET_MS = int(os.getenv("ROUTER_BUDGET_MS", "7000"))

@@ -561,7 +561,7 @@ async def register(req: RegisterRequest, request: Request, response: Response):
     # Set HttpOnly cookies for browser clients and create opaque session id
     try:
         from .cookie_config import get_cookie_config, get_token_ttls
-        from .cookies import set_auth_cookies
+        from .web.cookies import set_auth_cookies
         # Decode access token to extract JTI for session mapping
         cookie_config = get_cookie_config(request)
         access_ttl, refresh_ttl = get_token_ttls()
@@ -951,7 +951,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
         # Use centralized cookie functions
-        from .cookies import set_auth_cookies
+        from .web.cookies import set_auth_cookies
 
         set_auth_cookies(
             response,
@@ -1035,7 +1035,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
                 session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
             # Use centralized cookie functions
-            from .cookies import set_auth_cookies
+            from .web.cookies import set_auth_cookies
 
             set_auth_cookies(
                 response,
@@ -1122,7 +1122,6 @@ async def login(req: LoginRequest, request: Request, response: Response):
                 "ip": _client_ip(request),
                 "has_access_token": bool(access_token),
                 "has_refresh_token": bool(refresh_token),
-                "stats_keys": list(stats.keys()) if stats else [],
             }
         },
     )
@@ -1133,7 +1132,6 @@ async def login(req: LoginRequest, request: Request, response: Response):
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token": access_token,
-            "stats": stats,
         },
     )
 

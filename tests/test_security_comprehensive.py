@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 import jwt
 
 from app.main import app
-from app.cookies import set_named_cookie
+from app.web.cookies import set_named_cookie
 from app.cookie_config import get_cookie_config
 from app.security import rate_limit, _apply_rate_limit, _http_requests, http_burst
 from app.api.spotify import router as spotify_router
@@ -396,7 +396,7 @@ class TestCookieSecurity:
 
     def test_oauth_state_cookies_httponly(self):
         """Test that OAuth state cookies are HttpOnly."""
-        from app.cookies import set_oauth_state_cookies
+        from app.web.cookies import set_oauth_state_cookies
         from fastapi import Request, Response
         from unittest.mock import MagicMock
 
@@ -414,7 +414,7 @@ class TestCookieSecurity:
     def test_temp_cookie_no_preview_in_logs(self, caplog):
         """Test that temporary cookies don't leak sensitive data in logs."""
         with caplog.at_level(logging.DEBUG):
-            from app.cookies import set_named_cookie
+            from app.web.cookies import set_named_cookie
             from fastapi import Request, Response
             from unittest.mock import MagicMock
 

@@ -125,16 +125,17 @@ async def auth_examples():
 async def whoami(request: Request):
     """Get current user information."""
     try:
-        user_id = await get_current_user_id(request)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Not authenticated")
+        # Use new auth contract helper for consistent 401 handling
+        from app.security.auth_contract import require_auth
+        ident = await require_auth(request)
 
         await record_whoami_call(request)
         WHOAMI_OK.inc()
 
         return {
-            "user_id": user_id,
+            "user_id": ident.get("user_id"),
             "authenticated": True,
+            "source": ident.get("source"),
         }
     except Exception as e:
         WHOAMI_FAIL.inc()

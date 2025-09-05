@@ -68,7 +68,7 @@ def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
     # Use centralized cookie functions
-    from app.cookies import set_auth_cookies
+    from app.web.cookies import set_auth_cookies
 
     set_auth_cookies(
         resp,
@@ -154,13 +154,13 @@ def connect_endpoint(request: Request):
         media_type="application/json"
     )
 
-    # Set a simple state cookie for the test
-    http_response.set_cookie(
-        key="oauth_state",
-        value=state,
-        httponly=True,
-        samesite="Lax",  # Capital L as expected by tests
-        max_age=300  # 5 minutes
+    # Use centralized OAuth state cookie helper
+    from app.web.cookies import set_oauth_state_cookies
+    set_oauth_state_cookies(
+        resp=http_response,
+        state=state,
+        ttl=300,  # 5 minutes
+        request=request
     )
 
     return http_response

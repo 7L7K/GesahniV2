@@ -3,8 +3,11 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 import aiosqlite
+
+from .models.user_stats import UserStats
 
 def _db_path() -> Path:
     import os
@@ -15,9 +18,11 @@ def _db_path() -> Path:
     return p
 
 
-class UserStore:
-    def __init__(self, path: Path):
-        self._path = path
+class UserDAO:
+    """Data Access Object for user statistics using SQLite."""
+
+    def __init__(self, path: Path | None = None):
+        self._path = path or _db_path()
         self._conn: aiosqlite.Connection | None = None
 
     async def _get_conn(self) -> aiosqlite.Connection:
@@ -51,6 +56,10 @@ class UserStore:
             await self._conn.commit()
         return self._conn
 
+    async def ensure_schema_migrated(self) -> None:
+        """Ensure the database schema is migrated."""
+        await self._get_conn()  # This triggers table creation
+
     async def ensure_user(self, user_id: str) -> None:
         conn = await self._get_conn()
         await conn.execute(
@@ -80,7 +89,8 @@ class UserStore:
         )
         await conn.commit()
 
-    async def get_stats(self, user_id: str) -> dict | None:
+    async def get_stats(self, user_id: str) -> Optional[UserStats]:
+        """Get user statistics by user ID."""
         conn = await self._get_conn()
         async with conn.execute(
             "SELECT login_count, last_login, request_count FROM user_stats WHERE user_id = ?",
@@ -89,13 +99,45 @@ class UserStore:
             row = await cur.fetchone()
         if not row:
             return None
-        return {
-            "login_count": row[0],
-            "last_login": row[1],
-            "request_count": row[2],
-        }
+        return UserStats(
+            user_id=user_id,
+            login_count=row[0],
+            last_login=row[1],
+            request_count=row[2],
+        )
+
+    async def get_by_id(self, user_id: str) -> Optional[UserStats]:
+        """Get user statistics by user ID (alias for get_stats)."""
+        return await self.get_stats(user_id)
+
+    async def persist(self, stats: UserStats) -> bool:
+        """Persist user statistics to the database."""
+        try:
+            conn = await self._get_conn()
+            await conn.execute(
+                """
+                INSERT OR REPLACE INTO user_stats
+                (user_id, login_count, last_login, request_count)
+                VALUES (?, ?, ?, ?)
+                """,
+                (stats.user_id, stats.login_count, stats.last_login, stats.request_count),
+            )
+            await conn.commit()
+            return True
+        except Exception:
+            return False
+
+    async def revoke_family(self, user_id: str) -> bool:
+        """Revoke/reset user statistics (not applicable for user stats)."""
+        # User statistics don't have a concept of "revocation" like tokens
+        # This method exists for interface consistency
+        return True
 
 
-user_store = UserStore(_db_path())
+user_dao = UserDAO(_db_path())
 
-__all__ = ["UserStore", "user_store"]
+# Backward compatibility
+UserStore = UserDAO
+user_store = user_dao
+
+__all__ = ["UserDAO", "UserStore", "user_dao", "user_store"]

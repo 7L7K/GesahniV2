@@ -87,7 +87,7 @@ def test_csrf_blocks_post_without_token():
     c = TestClient(_app())
     r = c.post("/post")
     assert r.status_code == 403
-    assert "invalid_csrf" in r.json()["detail"]
+    assert "csrf.missing" in r.json()["detail"]
 
 
 def test_csrf_blocks_put_without_token():
@@ -122,8 +122,8 @@ def test_csrf_token_mismatch():
     c = TestClient(_app())
     c.cookies.set("csrf_token", "cookie_token")
     r = c.post("/post", headers={"X-CSRF-Token": "header_token"})
-    assert r.status_code == 403
-    assert "invalid_csrf" in r.json()["detail"]
+    assert r.status_code == 400
+    assert "csrf.invalid" in r.json()["detail"]
 
 
 def test_csrf_missing_header_with_cookie():
@@ -131,14 +131,14 @@ def test_csrf_missing_header_with_cookie():
     c.cookies.set("csrf_token", "some_token")
     r = c.post("/post")  # No header
     assert r.status_code == 403
-    assert "invalid_csrf" in r.json()["detail"]
+    assert "csrf.missing" in r.json()["detail"]
 
 
 def test_csrf_missing_cookie_with_header():
     c = TestClient(_app())
     r = c.post("/post", headers={"X-CSRF-Token": "some_token"})  # No cookie
     assert r.status_code == 403
-    assert "invalid_csrf" in r.json()["detail"]
+    assert "csrf.missing" in r.json()["detail"]
 
 
 # Test legacy header support
@@ -157,7 +157,7 @@ def test_csrf_legacy_header_disabled():
         c.cookies.set("csrf_token", "some_token")
         r = c.post("/post", headers={"X-CSRF": "some_token"})  # Legacy header
         assert r.status_code == 400
-        assert "missing_csrf" in r.json()["detail"]
+        assert "csrf.missing" in r.json()["detail"]
 
 
 # Test cross-site vs same-site scenarios
@@ -169,7 +169,7 @@ def test_csrf_cross_site_validation():
         # Missing header in cross-site scenario
         r = c.post("/post")
         assert r.status_code == 400
-        assert "missing_csrf_cross_site" in r.json()["detail"]
+        assert "csrf.missing" in r.json()["detail"]
 
         # Valid cross-site token
         t = "cross_site_token_16_chars"  # Must be >= 16 chars
@@ -178,8 +178,8 @@ def test_csrf_cross_site_validation():
 
         # Invalid format (too short)
         r = c.post("/post", headers={"X-CSRF-Token": "short"})
-        assert r.status_code == 403
-        assert "invalid_csrf_format" in r.json()["detail"]
+        assert r.status_code == 400
+        assert "csrf.invalid" in r.json()["detail"]
 
 
 def test_csrf_same_site_validation():
@@ -189,7 +189,7 @@ def test_csrf_same_site_validation():
     # Missing both header and cookie
     r = c.post("/post")
     assert r.status_code == 403
-    assert "invalid_csrf" in r.json()["detail"]
+    assert "csrf.missing" in r.json()["detail"]
 
     # Valid same-site tokens
     t = "same_site_token"

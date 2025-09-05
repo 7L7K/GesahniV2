@@ -39,7 +39,7 @@ async def get_csrf(request: Request):
     """
     import os
 
-    from app.cookies import set_csrf_cookie
+    from app.web.cookies import set_csrf_cookie
     from app.csrf import get_csrf_token, _csrf_token_store
 
     token = await get_csrf_token()

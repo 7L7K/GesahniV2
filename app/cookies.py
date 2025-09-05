@@ -15,7 +15,7 @@ Available Facades:
 - set_named_cookie() / clear_named_cookie() - Generic cookies
 
 Usage:
-    from app.cookies import set_auth_cookies, clear_auth_cookies
+    from app.web.cookies import set_auth_cookies, clear_auth_cookies
 
     # Set auth cookies
     set_auth_cookies(
@@ -38,17 +38,7 @@ import os
 
 from . import cookie_config as cookie_cfg
 from .cookie_config import format_cookie_header, get_cookie_config
-from .cookie_names import (
-    ACCESS_TOKEN,
-    ACCESS_TOKEN_LEGACY,
-    GSNH_AT,
-    GSNH_RT,
-    GSNH_SESS,
-    REFRESH_TOKEN,
-    REFRESH_TOKEN_LEGACY,
-    SESSION,
-    SESSION_LEGACY,
-)
+# Cookie name constants moved to web.cookies.NAMES
 
 log = logging.getLogger(__name__)
 
@@ -84,475 +74,101 @@ def _warn_legacy_cookie_used(found_name: str, canonical: str) -> None:
         pass
 
 def read_access_cookie(request: Request) -> str | None:
-    """Read access token cookie, accepting both canonical (GSNH_AT) and legacy (access_token).
-
-    Logs a warning if a legacy cookie name was used.
-    """
-    val, name = _read_first_cookie(request, [GSNH_AT, ACCESS_TOKEN])
-    if name:
-        _warn_legacy_cookie_used(name, GSNH_AT)
-    return val
+    """Read access token cookie using canonical names from web.cookies.NAMES."""
+    from .web.cookies import read
+    cookies = read(request)
+    return cookies.get("access")
 
 def read_refresh_cookie(request: Request) -> str | None:
-    """Read refresh token cookie, accepting both canonical (GSNH_RT) and legacy (refresh_token)."""
-    val, name = _read_first_cookie(request, [GSNH_RT, REFRESH_TOKEN])
-    if name:
-        _warn_legacy_cookie_used(name, GSNH_RT)
-    return val
+    """Read refresh token cookie using canonical names from web.cookies.NAMES."""
+    from .web.cookies import read
+    cookies = read(request)
+    return cookies.get("refresh")
 
 def read_session_cookie(request: Request) -> str | None:
-    """Read session cookie, accepting both canonical (GSNH_SESS) and legacy (__session/session)."""
-    val, name = _read_first_cookie(request, [GSNH_SESS, SESSION, "session"])  # final fallback "session"
-    if name:
-        _warn_legacy_cookie_used(name, GSNH_SESS)
-    return val
+    """Read session cookie using canonical names from web.cookies.NAMES."""
+    from .web.cookies import read
+    cookies = read(request)
+    return cookies.get("session")
 
 
 def set_auth_cookie(resp: Response, name: str, value: str, max_age: int):
     """
-    Set a single auth cookie with dev-friendly attributes for cross-site redirects.
+    Set a single auth cookie using web.cookies.set_cookie helper.
 
-    Host-only cookie (no Domain=), Path=/, SameSite=Lax, Secure=False for dev,
-    HttpOnly=True. Lax is enough for top-level redirects like OAuth.
-
-    Args:
-        resp: FastAPI Response object
-        name: Cookie name
-        value: Cookie value
-        max_age: Max age in seconds
+    This function is now a wrapper around web.cookies.set_cookie for backward compatibility.
     """
-    # Host-only cookie: omit Domain=
-    resp.set_cookie(
-        key=name,
-        value=value,
-        max_age=max_age,
-        expires=max_age,
-        path="/",
-        httponly=True,
-        secure=False,  # dev only; prod True
-        samesite="lax",  # allows top-level OAuth redirect to send cookie
-    )
-
-
-def set_auth_cookies(
-    resp: Response,
-    *,
-    access: str,
-    refresh: str | None = None,
-    session_id: str | None = None,
-    access_ttl: int,
-    refresh_ttl: int,
-    request: Request,
-    identity: dict | None = None,
-) -> None:
-    """
-    Set authentication cookies on the response.
-
-    Sets access_token, refresh_token, and optionally __session cookies with
-    consistent attributes from centralized configuration.
-
-    Args:
-        resp: FastAPI Response object
-        access: Access token string
-        refresh: Refresh token string
-        session_id: Optional session ID string (must be opaque, never JWT)
-        access_ttl: Access token TTL in seconds
-        refresh_ttl: Refresh token TTL in seconds
-        request: FastAPI Request object for cookie configuration
-
-    Note:
-        The __session cookie TTL is automatically aligned to the access token TTL
-        to ensure consistent session lifecycle management. Call sites cannot override
-        this alignment to prevent divergence.
-    """
-    # Get cookie configuration from request context
-    cookie_config = cookie_cfg.get_cookie_config(request)
-
-    # Compute __Host- prefix for secure, host-only cookies in production
-    host_prefix = ""
-    try:
-        if (
-            cookie_config["secure"]
-            and (cookie_config["domain"] is None)
-            and cookie_config["path"] == "/"
-            and os.getenv("USE_HOST_COOKIE_PREFIX", "1").strip().lower() in {"1", "true", "yes", "on"}
-        ):
-            host_prefix = "__Host-"
-    except Exception:
-        host_prefix = ""
-
-    # Set access token cookies (both canonical and abstract names for test compatibility)
-    # Canonical name (GSNH_AT)
-    access_header = format_cookie_header(
-        key=f"{host_prefix}{GSNH_AT}",
-        value=access,
-        max_age=access_ttl,
-        secure=cookie_config["secure"],
-        samesite=cookie_config["samesite"],
-        path=cookie_config["path"],
-        httponly=cookie_config["httponly"],
-        domain=cookie_config["domain"],
-    )
-    resp.headers.append("Set-Cookie", access_header)
-
-    # Abstract name (access_token) for test compatibility
-    access_abstract_header = format_cookie_header(
-        key=ACCESS_TOKEN,
-        value=access,
-        max_age=access_ttl,
-        secure=cookie_config["secure"],
-        samesite=cookie_config["samesite"],
-        path=cookie_config["path"],
-        httponly=cookie_config["httponly"],
-        domain=cookie_config["domain"],
-    )
-    resp.headers.append("Set-Cookie", access_abstract_header)
-
-    # Set/rotate refresh token cookies only when explicitly provided (None or empty means leave as-is)
-    if refresh and refresh.strip():
-        # Canonical name (GSNH_RT)
-        refresh_header = format_cookie_header(
-            key=f"{host_prefix}{GSNH_RT}",
-            value=refresh,
-            max_age=refresh_ttl,
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            httponly=cookie_config["httponly"],
-            domain=cookie_config["domain"],
-        )
-        resp.headers.append("Set-Cookie", refresh_header)
-
-        # Abstract name (refresh_token) for test compatibility
-        refresh_abstract_header = format_cookie_header(
-            key=REFRESH_TOKEN,
-            value=refresh,
-            max_age=refresh_ttl,
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            httponly=cookie_config["httponly"],
-            domain=cookie_config["domain"],
-        )
-        resp.headers.append("Set-Cookie", refresh_abstract_header)
-
-    # Set session cookies if provided (both canonical and abstract names for test compatibility)
-    # CRITICAL: __session TTL must always align with access token TTL
-    # This prevents call sites from diverging and ensures consistent session lifecycle
-    if session_id:
-        # Canonical name (GSNH_SESS)
-        session_header = format_cookie_header(
-            key=f"{host_prefix}{GSNH_SESS}",
-            value=session_id,
-            max_age=access_ttl,  # Always use access_ttl for session alignment
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            httponly=cookie_config["httponly"],
-            domain=cookie_config["domain"],
-        )
-        resp.headers.append("Set-Cookie", session_header)
-
-        # Abstract name (__session) for test compatibility
-        session_abstract_header = format_cookie_header(
-            key=SESSION,
-            value=session_id,
-            max_age=access_ttl,  # Always use access_ttl for session alignment
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            httponly=cookie_config["httponly"],
-            domain=cookie_config["domain"],
-        )
-        resp.headers.append("Set-Cookie", session_abstract_header)
-
-        # Phase 1: Write session identity to the store using mint payload when available
-        try:
-            from .session_store import get_session_store
-
-            store = get_session_store()
-
-            # Prefer provided identity payload (caller-side mint payload)
-            ident = identity
-            exp_s: int | None = None
-
-            if not ident:
-                # Fallback: safe decode of freshly-minted access token to extract identity
-                try:
-                    import os
-                    from .security import jwt_decode as _decode
-
-                    leeway = int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60)
-                    secret = os.getenv("JWT_SECRET")
-                    if secret:
-                        claims = _decode(access, secret, algorithms=["HS256"], leeway=leeway)
-                        ident = dict(claims) if isinstance(claims, dict) else None
-                except Exception:
-                    ident = None
-
-            # Extract exp for TTL
-            try:
-                if ident and isinstance(ident, dict):
-                    exp_s = int(ident.get("exp")) if ident.get("exp") else None
-            except Exception:
-                exp_s = None
-
-            if ident and exp_s:
-                # Never fail login if store write fails; best-effort only
-                try:
-                    store.set_session_identity(session_id, ident, exp_s)
-                except Exception:
-                    pass
-        except Exception:
-            # Never block cookie writes on identity persistence errors
-            pass
-
-    # No legacy cookie clears — writes only touch canonical names
+    from .web.cookies import set_cookie
+    set_cookie(resp, name, value, max_age=max_age, http_only=True, secure=False, same_site="lax")
 
 
 def clear_auth_cookies(resp: Response, request: Request) -> None:
     """
-    Clear all authentication cookies from the response.
+    Clear all authentication cookies from the response using canonical web.cookies helpers.
 
-    Clears access_token, refresh_token, and __session cookies by setting
-    Max-Age=0 with identical attributes to ensure proper deletion.
-
-    Args:
-        resp: FastAPI Response object
-        request: FastAPI Request object for cookie configuration
+    This function is now a wrapper around web.cookies.set_cookie with max_age=0 for backward compatibility.
     """
-    # Get cookie configuration from request context
-    cookie_config = cookie_cfg.get_cookie_config(request)
+    from .web.cookies import set_cookie, NAMES
 
-    # Clear both canonical GSNH_* names and legacy names to
-    # ensure interoperability during migrations and for clients using either.
-    cookies_to_clear = [
-        GSNH_AT,
-        GSNH_RT,
-        GSNH_SESS,
-        ACCESS_TOKEN,
-        REFRESH_TOKEN,
-        SESSION,
-        ACCESS_TOKEN_LEGACY,
-        REFRESH_TOKEN_LEGACY,
-        SESSION_LEGACY,
-    ]
-    # Deduplicate while preserving order
-    seen = set()
-    deduped = []
-    for n in cookies_to_clear:
-        if n not in seen:
-            seen.add(n)
-            deduped.append(n)
-    for cookie_name in deduped:
-        # Set cookie with Max-Age=0 to clear it immediately
-        header = format_cookie_header(
-            key=cookie_name,
-            value="",  # Empty value
-            max_age=0,  # Max-Age=0 for immediate expiration
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            httponly=cookie_config["httponly"],
-            domain=cookie_config["domain"],
-        )
-        resp.headers.append("Set-Cookie", header)
-
-
-def set_oauth_state_cookies(
-    resp: Response,
-    *,
-    state: str,
-    next_url: str,
-    request: Request,
-    ttl: int = 600,  # Default 10 minutes
-    provider: str = "oauth",  # Provider-specific cookie prefix
-    code_verifier: str | None = None,  # PKCE code verifier for enhanced security
-    session_id: str | None = None,
-) -> None:
-    """
-    Set OAuth state cookies for Google/Apple OAuth flows.
-
-    Sets both state and next_url cookies for CSRF protection and redirect handling.
-    These cookies are separate from auth tokens and are cleared after OAuth callback.
-
-    Args:
-        resp: FastAPI Response object
-        state: OAuth state parameter for CSRF protection
-        next_url: URL to redirect to after OAuth completion
-        request: FastAPI Request object for cookie configuration
-        ttl: Time to live in seconds (default: 600 = 10 minutes)
-        provider: Provider prefix for cookie names (e.g., "g" for Google, "oauth" for Apple)
-        code_verifier: PKCE code verifier for enhanced security (optional)
-    """
-    # Get cookie configuration from request context
-    cookie_config = get_cookie_config(request)
-
-    # Set OAuth state cookie (HttpOnly for security)
-    state_cookie_name = f"{provider}_state"
-    state_header = format_cookie_header(
-        key=state_cookie_name,
-        value=state,
-        max_age=ttl,
-        secure=cookie_config["secure"],
-        samesite=cookie_config["samesite"],
-        path=cookie_config["path"],
-        httponly=True,  # State should be HttpOnly for security
-        domain=cookie_config["domain"],
-    )
-    resp.headers.append("Set-Cookie", state_header)
-
-    # Set OAuth next URL cookie (not HttpOnly so client can read it)
-    next_cookie_name = f"{provider}_next"
-    next_header = format_cookie_header(
-        key=next_cookie_name,
-        value=next_url,
-        max_age=ttl,
-        secure=cookie_config["secure"],
-        samesite=cookie_config["samesite"],
-        path=cookie_config["path"],
-        httponly=False,  # Next URL needs to be accessible to client
-        domain=cookie_config["domain"],
-    )
-    resp.headers.append("Set-Cookie", next_header)
-
-    # Set PKCE code verifier cookie if provided (HttpOnly for security)
-    if code_verifier:
-        verifier_cookie_name = f"{provider}_code_verifier"
-        verifier_header = format_cookie_header(
-            key=verifier_cookie_name,
-            value=code_verifier,
-            max_age=ttl,
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            httponly=True,  # Code verifier should be HttpOnly for security
-            domain=cookie_config["domain"],
-        )
-        resp.headers.append("Set-Cookie", verifier_header)
-    # Optionally bind the initiating session id to the OAuth state so callbacks
-    # can verify the flow originated from the same browser tab/session.
-    if session_id:
-        session_cookie_name = f"{provider}_session"
-        session_header = format_cookie_header(
-            key=session_cookie_name,
-            value=session_id,
-            max_age=ttl,
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            httponly=True,
-            domain=cookie_config["domain"],
-        )
-        resp.headers.append("Set-Cookie", session_header)
+    # Clear the canonical cookies
+    set_cookie(resp, NAMES.access, "", max_age=0)
+    set_cookie(resp, NAMES.refresh, "", max_age=0)
+    set_cookie(resp, NAMES.session, "", max_age=0)
 
 
 def clear_oauth_state_cookies(
     resp: Response, request: Request, provider: str = "oauth"
 ) -> None:
     """
-    Clear OAuth state cookies from the response.
+    Clear OAuth state cookies from the response using canonical web.cookies helpers.
 
-    Args:
-        resp: FastAPI Response object
-        request: FastAPI Request object for cookie configuration
-        provider: Provider prefix for cookie names (e.g., "g" for Google, "oauth" for Apple)
+    This function is now a wrapper around web.cookies.clear_oauth_state_cookies for backward compatibility.
     """
-    # Get cookie configuration from request context
-    cookie_config = get_cookie_config(request)
+    from .web.cookies import clear_oauth_state_cookies as _clear_oauth_state_cookies
 
-    # Clear OAuth state cookies with Max-Age=0
-    state_cookie_name = f"{provider}_state"
-    next_cookie_name = f"{provider}_next"
-    # Intentionally do NOT clear the provider_session cookie here; some clients/tests
-    # expect only state and next to be cleared while leaving any session binding intact.
-    oauth_cookies = [state_cookie_name, next_cookie_name]
-
-    for cookie_name in oauth_cookies:
-        header = format_cookie_header(
-            key=cookie_name,
-            value="",  # Empty value
-            max_age=0,  # Max-Age=0 for immediate expiration
-            secure=cookie_config["secure"],
-            samesite=cookie_config["samesite"],
-            path=cookie_config["path"],
-            # State and session cookies are HttpOnly. The verifier_cookie_name
-            # may not be defined in this scope when the verifier cookie isn't
-            # being cleared; avoid referencing it to prevent NameError.
-            httponly=cookie_name in [state_cookie_name, session_cookie_name],
-            domain=cookie_config["domain"],
-        )
-        resp.headers.append("Set-Cookie", header)
+    _clear_oauth_state_cookies(resp, provider=provider)
 
 
 def set_csrf_cookie(resp: Response, *, token: str, ttl: int, request: Request) -> None:
     """
-    Set CSRF token cookie for double-submit protection.
+    Set CSRF token cookie for double-submit protection using canonical web.cookies helpers.
 
-    Args:
-        resp: FastAPI Response object
-        token: CSRF token string
-        ttl: Time to live in seconds
-        request: FastAPI Request object for cookie configuration
+    This function is now a wrapper around web.cookies.set_csrf for backward compatibility.
     """
+    from .web.cookies import set_csrf as _set_csrf
+
     # Get cookie configuration from request context
     cookie_config = get_cookie_config(request)
 
-    # CSRF cookies need special handling for cross-site scenarios
-    csrf_samesite = cookie_config["samesite"]
-    if csrf_samesite == "none":
-        # Ensure Secure=True when SameSite=None
-        csrf_secure = True
-    else:
-        # For same-origin scenarios, use standard configuration
-        csrf_secure = cookie_config["secure"]
-
-    # Set CSRF token cookie (not HttpOnly so client can echo it back)
-    csrf_header = format_cookie_header(
-        key="csrf_token",
-        value=token,
-        max_age=ttl,
-        secure=csrf_secure,
-        samesite=csrf_samesite,
-        path=cookie_config["path"],
-        httponly=False,  # CSRF tokens need to be accessible to JavaScript
+    _set_csrf(
+        resp,
+        token=token,
+        ttl=ttl,
+        same_site=cookie_config["samesite"],
         domain=cookie_config["domain"],
+        path=cookie_config["path"],
+        secure=cookie_config["secure"],
     )
-    resp.headers.append("Set-Cookie", csrf_header)
 
 
 def clear_csrf_cookie(resp: Response, request: Request) -> None:
     """
-    Clear CSRF token cookie from the response.
+    Clear CSRF token cookie from the response using canonical web.cookies helpers.
 
-    Args:
-        resp: FastAPI Response object
-        request: FastAPI Request object for cookie configuration
+    This function is now a wrapper around web.cookies.clear_csrf for backward compatibility.
     """
+    from .web.cookies import clear_csrf as _clear_csrf
+
     # Get cookie configuration from request context
     cookie_config = get_cookie_config(request)
 
-    # CSRF cookies need special handling for cross-site scenarios
-    csrf_samesite = cookie_config["samesite"]
-    if csrf_samesite == "none":
-        # Ensure Secure=True when SameSite=None
-        csrf_secure = True
-    else:
-        # For same-origin scenarios, use standard configuration
-        csrf_secure = cookie_config["secure"]
-
-    # Clear CSRF token cookie with Max-Age=0
-    csrf_header = format_cookie_header(
-        key="csrf_token",
-        value="",  # Empty value
-        max_age=0,  # Max-Age=0 for immediate expiration
-        secure=csrf_secure,
-        samesite=csrf_samesite,
-        path=cookie_config["path"],
-        httponly=False,  # CSRF tokens need to be accessible to JavaScript
+    _clear_csrf(
+        resp,
+        same_site=cookie_config["samesite"],
         domain=cookie_config["domain"],
+        path=cookie_config["path"],
+        secure=cookie_config["secure"],
     )
-    resp.headers.append("Set-Cookie", csrf_header)
 
 
 def set_device_cookie(
@@ -564,117 +180,24 @@ def set_device_cookie(
     cookie_name: str = "device_trust",
 ) -> None:
     """
-    Set device trust/pairing cookie.
+    Set device trust/pairing cookie using web.cookies.set_device_cookie.
 
-    Args:
-        resp: FastAPI Response object
-        value: Device trust value string
-        ttl: Time to live in seconds
-        request: FastAPI Request object for cookie configuration
-        cookie_name: Name of the device cookie (default: "device_trust")
+    This function is now a wrapper around web.cookies.set_device_cookie for backward compatibility.
     """
-    # Get cookie configuration from request context
-    cookie_config = get_cookie_config(request)
-
-    # Device cookies are not HttpOnly so client can access them
-    device_header = format_cookie_header(
-        key=cookie_name,
-        value=value,
-        max_age=ttl,
-        secure=cookie_config["secure"],
-        samesite=cookie_config["samesite"],
-        path=cookie_config["path"],
-        httponly=False,  # Device cookies need to be accessible to JavaScript
-        domain=cookie_config["domain"],
-    )
-    resp.headers.append("Set-Cookie", device_header)
+    from .web.cookies import set_device_cookie as _set_device_cookie
+    _set_device_cookie(resp, name=cookie_name, value=value, ttl=ttl, http_only=False)
 
 
 def clear_device_cookie(
     resp: Response, request: Request, cookie_name: str = "device_trust"
 ) -> None:
     """
-    Clear device trust/pairing cookie from the response.
+    Clear device trust/pairing cookie using web.cookies.clear_device_cookie.
 
-    Args:
-        resp: FastAPI Response object
-        request: FastAPI Request object for cookie configuration
-        cookie_name: Name of the device cookie to clear (default: "device_trust")
+    This function is now a wrapper around web.cookies.clear_device_cookie for backward compatibility.
     """
-    # Get cookie configuration from request context
-    cookie_config = get_cookie_config(request)
-
-    # Clear device cookie with Max-Age=0
-    device_header = format_cookie_header(
-        key=cookie_name,
-        value="",  # Empty value
-        max_age=0,  # Max-Age=0 for immediate expiration
-        secure=cookie_config["secure"],
-        samesite=cookie_config["samesite"],
-        path=cookie_config["path"],
-        httponly=False,  # Device cookies need to be accessible to JavaScript
-        domain=cookie_config["domain"],
-    )
-    resp.headers.append("Set-Cookie", device_header)
-
-
-def set_named_cookie(
-    resp: Response,
-    *,
-    name: str,
-    value: str,
-    ttl: int,
-    request: Request,
-    path: str = "/",
-    httponly: bool = True,
-    samesite: str | None = None,
-    secure: bool | None = None,
-    domain: str | None = None,
-) -> None:
-    """
-    Set a generic named cookie with centralized configuration.
-
-    This function provides a generic interface for setting any cookie that doesn't
-    fit the specific auth/OAuth/CSRF patterns. It uses centralized configuration
-    but allows override of specific attributes when needed.
-
-    Args:
-        resp: FastAPI Response object
-        name: Cookie name
-        value: Cookie value
-        ttl: Time to live in seconds
-        request: FastAPI Request object for cookie configuration
-        httponly: Whether cookie is HttpOnly (default: True)
-        path: Cookie path (default: from config)
-        domain: Cookie domain (default: from config)
-        secure: Whether cookie is secure (default: from config)
-        samesite: SameSite attribute (default: from config)
-    """
-    # Get cookie configuration from request context
-    cookie_config = get_cookie_config(request)
-
-    # Use provided values or fall back to config defaults
-    cookie_path = path or cookie_config["path"]
-    cookie_domain = domain if domain is not None else cookie_config["domain"]
-    cookie_samesite = (samesite or cookie_config["samesite"]).lower()
-    cookie_secure = cookie_config["secure"] if secure is None else bool(secure)
-
-    # Enforce policy: SameSite=None is only valid with Secure=True
-    if cookie_samesite == "none":
-        cookie_secure = True
-
-    # Format the cookie header
-    header = format_cookie_header(
-        key=name,
-        value=value,
-        max_age=ttl,
-        secure=cookie_secure,
-        samesite=cookie_samesite,
-        path=cookie_path,
-        httponly=httponly,
-        domain=cookie_domain,
-    )
-    resp.headers.append("Set-Cookie", header)
+    from .web.cookies import clear_device_cookie as _clear_device_cookie
+    _clear_device_cookie(resp, name=cookie_name, http_only=False)
 
 
 def clear_named_cookie(
@@ -708,18 +231,16 @@ def clear_named_cookie(
     cookie_secure = secure if secure is not None else cookie_config["secure"]
     cookie_samesite = samesite or cookie_config["samesite"]
 
-    # Clear cookie with Max-Age=0
-    header = format_cookie_header(
-        key=name,
-        value="",  # Empty value
-        max_age=0,  # Max-Age=0 for immediate expiration
-        secure=cookie_secure,
-        samesite=cookie_samesite,
-        path=cookie_path,
-        httponly=True,  # Default to HttpOnly for security
+    from .web.cookies import clear_named_cookie as _clear_named_cookie
+    _clear_named_cookie(
+        resp,
+        name=name,
+        http_only=True,  # Default to HttpOnly for security
+        same_site=cookie_samesite,
         domain=cookie_domain,
+        path=cookie_path,
+        secure=cookie_secure,
     )
-    resp.headers.append("Set-Cookie", header)
 
 
 

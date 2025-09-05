@@ -14,7 +14,7 @@ os.environ["HOME_ASSISTANT_URL"] = "http://ha"
 os.environ["HOME_ASSISTANT_TOKEN"] = "token"
 os.environ["ROUTER_BUDGET_MS"] = "1000"  # Short budget for testing
 
-from app.router import get_remaining_budget
+from app.router.budget import get_remaining_budget
 
 
 def test_get_remaining_budget():

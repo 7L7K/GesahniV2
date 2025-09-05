@@ -240,7 +240,7 @@ def seed_calendar_file(tmp_path):
 @pytest.fixture
 async def authed_client(async_client, create_test_user):
     """Async client with authentication cookies set using standardized test user."""
-    from app.cookies import set_auth_cookies
+    from app.web.cookies import set_auth_cookies
     from app.tokens import make_access
     from fastapi.responses import Response
 

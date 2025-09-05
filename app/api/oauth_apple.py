@@ -79,16 +79,9 @@ async def apple_start(request: Request) -> Response:
     cookie_config = get_cookie_config(request)
 
     # Set OAuth state cookies using centralized cookie surface
-    from ..cookies import set_oauth_state_cookies
+    from ..web.cookies import set_oauth_state_cookies
 
-    set_oauth_state_cookies(
-        resp=resp,
-        state=state,
-        next_url=next_url,
-        request=request,
-        ttl=600,  # 10 minutes
-        provider="oauth",  # Apple uses default oauth prefix
-    )
+    set_oauth_state_cookies(resp=resp, state=state, next_url=next_url, request=request, ttl=600, provider="oauth")
     return resp
 
 
@@ -184,7 +177,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
     # Use centralized cookie functions
-    from ..cookies import clear_oauth_state_cookies, set_auth_cookies
+    from ..web.cookies import clear_oauth_state_cookies, set_auth_cookies
 
     set_auth_cookies(
         response,

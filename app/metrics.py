@@ -102,6 +102,24 @@ TOKEN_REFRESH_OPERATIONS = Counter(
     ["provider", "result", "attempt"]
 )
 
+try:
+    # Chaos mode metrics
+    CHAOS_EVENTS_TOTAL = Counter(
+        "chaos_events_total",
+        "Chaos mode events injected",
+        ["event_type", "operation", "result"]
+    )
+
+    CHAOS_LATENCY_SECONDS = Histogram(
+        "chaos_latency_seconds",
+        "Latency injected by chaos mode",
+        ["event_type", "operation"],
+        buckets=[0.1, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0]
+    )
+except Exception:  # pragma: no cover - registry collisions
+    CHAOS_EVENTS_TOTAL = _MetricStub("chaos_events_total")
+    CHAOS_LATENCY_SECONDS = _MetricStub("chaos_latency_seconds")
+
 # Google OAuth specific metrics
 GOOGLE_CONNECT_STARTED = Counter(
     "google_connect_started_total",
@@ -626,9 +644,25 @@ try:
         "Prompt router failures",
         ["backend", "reason"],
     )
+
+    # Observability budgets - latency and error metrics
+    ASK_LATENCY_MS = Histogram(
+        "ask_latency_ms",
+        "Latency of /v1/ask requests in milliseconds",
+        ["backend"],
+        buckets=[10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000],
+    )
+    ASK_ERRORS_TOTAL = Counter(
+        "ask_errors_total",
+        "Total errors for /v1/ask requests",
+        ["backend", "error_type"],
+    )
+
 except Exception:  # pragma: no cover - registry collisions
     PROMPT_ROUTER_CALLS_TOTAL = _MetricStub("prompt_router_calls_total")
     PROMPT_ROUTER_FAILURES_TOTAL = _MetricStub("prompt_router_failures_total")
+    ASK_LATENCY_MS = _MetricStub("ask_latency_ms")
+    ASK_ERRORS_TOTAL = _MetricStub("ask_errors_total")
 
 try:
     ROUTER_FALLBACKS_TOTAL = Counter(

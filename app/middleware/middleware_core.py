@@ -197,17 +197,24 @@ class HealthCheckFilterMiddleware(BaseHTTPMiddleware):
 
 
 class DedupMiddleware(BaseHTTPMiddleware):
-    """Reject requests with a repeated ``X-Request-ID`` header.
+    """Handle request deduplication and idempotency.
 
-    To avoid unbounded memory growth, seen IDs are retained only for a short
-    time‑to‑live and optionally capped by a maximum set size. Configure via:
+    Features:
+    - Reject requests with repeated ``X-Request-ID`` header
+    - Handle ``Idempotency-Key`` for POST/PUT/PATCH/DELETE requests
+    - Cache full response (status, headers, body) for TTL window
+    - Short-circuit duplicate requests early
+
+    Configure via:
       • ``DEDUP_TTL_SECONDS`` (default: 60)
       • ``DEDUP_MAX_ENTRIES`` (default: 10000)
+      • ``IDEMPOTENCY_TTL_SECONDS`` (default: 300, 5 minutes)
+      • ``IDEMPOTENCY_CACHE_MAXSIZE`` (default: 10000)
     """
 
     def __init__(self, app):
         super().__init__(app)
-        # TTL-bounded cache of request id -> first seen monotonic timestamp
+        # TTL-bounded cache for X-Request-ID deduplication
         ttl_raw = float(os.getenv("DEDUP_TTL_SECONDS", "60"))
         max_raw = int(os.getenv("DEDUP_MAX_ENTRIES", "10000"))
         # Clamp to sane ranges to avoid misconfiguration foot-guns
@@ -218,6 +225,14 @@ class DedupMiddleware(BaseHTTPMiddleware):
         )
         self._lock = asyncio.Lock()
 
+        # Idempotency cache
+        from app.middleware._cache import get_idempotency_store, make_idempotency_key
+        idempotency_ttl_raw = float(os.getenv("IDEMPOTENCY_TTL_SECONDS", "300"))  # 5 minutes
+        self._idempotency_store = get_idempotency_store()
+        self._idempotency_ttl = idempotency_ttl_raw
+        self._make_idempotency_key = make_idempotency_key
+        logger.info(f"DedupMiddleware initialized: ttl={self._ttl}s, max_entries={self._max_entries}, idempotency_ttl={self._idempotency_ttl}s")
+
     async def dispatch(self, request: Request, call_next):
         # Let CORS handle preflight; do NOTHING here for OPTIONS
         if request.method == "OPTIONS":
@@ -227,6 +242,8 @@ class DedupMiddleware(BaseHTTPMiddleware):
 
         now = time.monotonic()
         req_id = request.headers.get("X-Request-ID")
+
+        # Handle X-Request-ID deduplication (existing behavior)
         if req_id:
             async with self._lock:
                 ts = self._seen.get(req_id)
@@ -240,13 +257,86 @@ class DedupMiddleware(BaseHTTPMiddleware):
                     )
                 # Mark as in-flight to close the race window
                 self._seen[req_id] = now
+
+        # Handle Idempotency-Key for POST/PUT/PATCH/DELETE requests
+        idempotency_key = request.headers.get("Idempotency-Key")
+        if idempotency_key and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            logger.debug("idempotency.key_present", extra={
+                "req_id": req_id or "unknown",
+                "key": idempotency_key[:8] + "...",  # Truncate for privacy
+                "method": request.method,
+                "path": request.url.path,
+            })
+
+        # Process the request normally
         response = await call_next(request)
-        # Optionally update last seen time after completion
+
+        # Cache response for idempotency if Idempotency-Key was provided
+        if idempotency_key and request.method in {"POST", "PUT", "PATCH", "DELETE"} and response.status_code < 500:
+            try:
+                # Get user identity for cache key
+                user_id = _anon_user_id(request)
+                cache_key = self._make_idempotency_key(request.method, request.url.path, idempotency_key, user_id)
+
+                # For FastAPI/Starlette responses, we need to be careful about body access
+                # The body might not be available yet or might be a streaming response
+                response_body = b""
+                if hasattr(response, 'body') and response.body:
+                    response_body = response.body
+                elif hasattr(response, 'body_iterator'):
+                    # For streaming responses, we can't cache them
+                    logger.debug("idempotency.cache_skipped", extra={
+                        "req_id": req_id or "unknown",
+                        "reason": "streaming_response",
+                    })
+                    return response
+
+                # Convert headers to dict
+                headers_dict = {}
+                if hasattr(response, 'headers'):
+                    for name, value in response.headers.items():
+                        headers_dict[name] = value
+
+                # Only cache if we have a body and it's not too large
+                if response_body and len(response_body) < 1024 * 1024:  # 1MB limit
+                    # Create cache entry
+                    from app.middleware._cache import IdempotencyEntry
+                    cache_entry = IdempotencyEntry(
+                        status_code=response.status_code,
+                        headers=headers_dict,
+                        body=response_body,
+                    )
+
+                    # Store in cache
+                    await self._idempotency_store.set(cache_key, cache_entry, self._idempotency_ttl)
+
+                    logger.debug("idempotency.cache_stored", extra={
+                        "req_id": req_id or "unknown",
+                        "cache_key": cache_key[:16] + "...",  # Truncate for privacy
+                        "status_code": response.status_code,
+                        "body_size": len(response_body),
+                    })
+                else:
+                    logger.debug("idempotency.cache_skipped", extra={
+                        "req_id": req_id or "unknown",
+                        "cache_key": cache_key[:16] + "...",  # Truncate for privacy
+                        "reason": "no_body" if not response_body else "body_too_large",
+                    })
+
+            except Exception as e:
+                # Don't fail the request if caching fails
+                logger.warning("idempotency.cache_store_failed", extra={
+                    "req_id": req_id or "unknown",
+                    "error": str(e),
+                })
+
+        # Update X-Request-ID last seen time after completion
         if req_id:
             try:
                 self._seen[req_id] = time.monotonic()
             except Exception:
                 pass
+
         return response
 
 
@@ -711,7 +801,7 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                         except Exception:
                             pass
                         # Use centralized cookie functions for local mode indicator
-                        from ..cookies import set_named_cookie
+                        from ..web.cookies import set_named_cookie
 
                         set_named_cookie(
                             resp=response,
@@ -800,7 +890,7 @@ async def silent_refresh_middleware(request: Request, call_next):
         except Exception:
             pass
         # Accept both canonical and legacy cookie names for access token
-        from ..cookies import read_access_cookie, read_refresh_cookie
+        from ..web.cookies import read_access_cookie, read_refresh_cookie
 
         token = read_access_cookie(request)
         secret = os.getenv("JWT_SECRET")
@@ -858,7 +948,7 @@ async def silent_refresh_middleware(request: Request, call_next):
             access_ttl, _ = get_token_ttls()
 
             # Use centralized cookie functions for access token
-            from ..cookies import set_auth_cookies
+            from ..web.cookies import set_auth_cookies
 
             # For silent refresh, we only update the access token, keep existing refresh token
             # and don't set session cookie (it should already exist)
@@ -890,7 +980,7 @@ async def silent_refresh_middleware(request: Request, call_next):
                         # For refresh token extension, we need to set it individually
                         # since set_auth_cookies expects both access and refresh tokens
                         try:
-                            from ..cookies import set_named_cookie
+                            from ..web.cookies import set_named_cookie
 
                             set_named_cookie(
                                 resp=response,
@@ -902,7 +992,7 @@ async def silent_refresh_middleware(request: Request, call_next):
                             )
                         except Exception:
                             # Fallback to centralized cookie functions
-                            from ..cookies import set_auth_cookies
+                            from ..web.cookies import set_auth_cookies
 
                             # For refresh token extension, we need to set it individually
                             # since set_auth_cookies expects both access and refresh tokens

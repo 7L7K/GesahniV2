@@ -22,6 +22,9 @@ router = APIRouter(
     tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))]
 )
 
+# Public router for observability endpoints (no auth required)
+public_router = APIRouter(tags=["Observability"])
+
 
 def _admin_token() -> str | None:
     """Return current admin token from environment (evaluated dynamically)."""
@@ -361,6 +364,27 @@ async def full_status(user_id: str = Depends(get_current_user_id)) -> dict:
         out["budget_today"] = {"tokens": 0.0, "minutes": 0.0}
         out["limits"] = {"max_tokens": 0, "max_minutes": 0.0}
     return out
+
+
+@public_router.get("/observability")
+async def observability_metrics() -> dict:
+    """Observability metrics for /v1/ask requests.
+
+    Returns golden queries for monitoring:
+    - p95 latency by backend
+    - error rate by backend and error type
+    """
+    from .observability import get_ask_latency_p95_by_backend, get_ask_error_rate_by_backend, log_ask_observability_summary
+
+    # Log summary for monitoring
+    log_ask_observability_summary()
+
+    return {
+        "latency_p95_by_backend": get_ask_latency_p95_by_backend(),
+        "error_rate_by_backend": get_ask_error_rate_by_backend(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "description": "Golden queries for ASK observability budgets"
+    }
 
 
 # Admin endpoints have moved to app.api.admin. This module intentionally

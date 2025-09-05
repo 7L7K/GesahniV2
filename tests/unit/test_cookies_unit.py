@@ -13,7 +13,7 @@ Verifies correct attributes, Max-Age=0 on clear, HttpOnly, Path=/, SameSite=Lax 
 
 from unittest.mock import Mock, patch
 
-from app.cookies import (
+from app.web.cookies import (
     clear_auth_cookies,
     clear_csrf_cookie,
     clear_device_cookie,

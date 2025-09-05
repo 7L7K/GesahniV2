@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 
 from app.auth_providers import apple_enabled
-from app.cookies import set_oauth_state_cookie
+from app.web.cookies import set_oauth_state_cookie
 
 router = APIRouter(tags=["Auth"], prefix="")
 
@@ -72,7 +72,7 @@ async def apple_callback(
         raise HTTPException(status_code=400, detail="oauth_state_mismatch")
 
     # Clear state cookie (best-effort) using centralized cookie facade
-    from app.cookies import clear_oauth_state_cookies
+    from app.web.cookies import clear_oauth_state_cookies
 
     resp = Response(status_code=200, media_type="application/json")
     try:

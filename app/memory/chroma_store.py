@@ -381,7 +381,13 @@ class ChromaVectorStore(VectorStore):
             "include": include,
         }
         try:
-            res = self._user_memories.query(**self_query)
+            # Chaos injection for vector store failures
+            from app.chaos import chaos_vector_operation_sync
+
+            def perform_query():
+                return self._user_memories.query(**self_query)
+
+            res = chaos_vector_operation_sync("query_user_memories", perform_query)
         except Exception:
             # Fallback: when query fails (older client quirks), approximate by scanning
             # the user's docs and computing distances locally using the selected metric.

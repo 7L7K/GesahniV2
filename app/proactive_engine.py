@@ -179,9 +179,15 @@ def startup() -> None:
         return
 
     try:
+        # Chaos injection for scheduler failures
+        from .chaos import chaos_scheduler_operation
+
+        async def chaotic_update_ha_snapshot():
+            await chaos_scheduler_operation("update_ha_snapshot", _update_ha_snapshot)
+
         # Poll HA snapshot every 60s
         scheduler.add_job(
-            lambda: asyncio.create_task(_update_ha_snapshot()),
+            lambda: asyncio.create_task(chaotic_update_ha_snapshot()),
             trigger="interval",
             seconds=60,
             id="proactive_ha_snapshot",

@@ -7,7 +7,7 @@ import time
 
 from fastapi import APIRouter, Request, Response, HTTPException, Depends
 
-from ..cookies import set_oauth_state_cookies, clear_oauth_state_cookies, set_named_cookie, clear_named_cookie
+from ..web.cookies import set_oauth_state_cookies, clear_oauth_state_cookies, set_named_cookie, clear_named_cookie
 from ..cookie_config import get_cookie_config
 from .oauth_store import put_tx, pop_tx
 from ..api.oauth_store import debug_store
@@ -26,7 +26,7 @@ from ..integrations.spotify.oauth import (
 )
 from ..integrations.spotify.client import SpotifyClient
 from ..auth_store_tokens import upsert_token
-from ..cookie_names import GSNH_AT
+# Cookie names moved to web.cookies.NAMES
 from ..tokens import make_access, make_refresh, get_default_access_ttl, get_default_refresh_ttl
 from ..models.third_party_tokens import ThirdPartyToken
 from ..deps.user import get_current_user_id, resolve_session_id
@@ -193,10 +193,9 @@ if os.getenv("SPOTIFY_LOGIN_LEGACY", "0") == "1":
 
         # NOTE: legacy route sets a temporary cookie from bearer/header; retain behavior
         # only when explicitly enabled via the SPOTIFY_LOGIN_LEGACY flag.
-        # Use canonical access cookie name `GSNH_AT` only; do not consult legacy
+        # Use canonical access cookie name only; do not consult legacy
         # `auth_token` cookie to reduce confusion and surface area.
-        from ..cookie_names import GSNH_AT
-        from ..cookies import read_access_cookie
+        from ..web.cookies import read_access_cookie
 
         jwt_token = read_access_cookie(request)
 
@@ -310,7 +309,7 @@ async def spotify_connect(request: Request, user_id: str = Depends(get_current_u
         "meta": {
             "user_id": user_id,
             "cookies_count": len(request.cookies),
-            "has_gsnh_at": bool(request.cookies.get(GSNH_AT)),
+            "has_access_token": bool(request.cookies.get("access_token")),
             "authorization_header": bool(request.headers.get("Authorization")),
             "host": request.headers.get("host"),
             "origin": request.headers.get("origin")

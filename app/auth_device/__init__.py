@@ -60,7 +60,7 @@ async def trust_device(request: Request, response: Response) -> dict:
             session_id = f"device_{int(time.time())}_{os.getpid()}"
 
         # Use centralized cookie functions
-        from ..cookies import set_auth_cookies
+        from ..web.cookies import set_auth_cookies
 
         # For device trust, we set both access token and session cookie
         set_auth_cookies(

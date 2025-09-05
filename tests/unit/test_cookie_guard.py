@@ -147,7 +147,7 @@ def test_cookies_module_exists():
     This ensures the cookie facade is available for tests to use.
     """
     try:
-        from app.cookies import clear_auth_cookies, set_auth_cookies
+        from app.web.cookies import clear_auth_cookies, set_auth_cookies
 
         # If we can import these functions, the test passes
         assert callable(set_auth_cookies)

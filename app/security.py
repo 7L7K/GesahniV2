@@ -1077,10 +1077,10 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
             # Lazy refresh: if RT exists and AT missing/expiring soon, mint a new AT
             try:
                 if response is not None:
-                    from .cookie_names import GSNH_RT, GSNH_AT, GSNH_SESS
+                    from .web.cookies import NAMES
                     from .tokens import make_access
                     from .cookie_config import get_token_ttls
-                    from .cookies import set_auth_cookies
+                    from .web.cookies import set_auth_cookies
                     import time as _t
 
                     now = int(_t.time())

@@ -305,7 +305,7 @@ async def google_login_url(request: Request) -> Response:
         # Create a Response object to set the cookie
         import json
 
-        from ..cookies import set_oauth_state_cookies
+        from ..web.cookies import set_oauth_state_cookies
 
         http_response = Response(
             content=json.dumps(response_data), media_type="application/json"
@@ -1383,7 +1383,7 @@ async def google_callback(request: Request) -> Response:
                 session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
         # Use centralized cookie functions
-        from ..cookies import set_auth_cookies
+        from ..web.cookies import set_auth_cookies
 
         # Confirm resolved cookie attributes are localhost-safe for dev
         try:
@@ -1421,7 +1421,7 @@ async def google_callback(request: Request) -> Response:
 
         # Rotate session and CSRF on login to prevent replay from old anon sessions
         try:
-            from ..cookies import read_session_cookie, set_csrf_cookie
+            from ..web.cookies import read_session_cookie, set_csrf_cookie
             from ..auth import _delete_session_id
 
             session_before = read_session_cookie(request)
@@ -1457,6 +1457,8 @@ async def google_callback(request: Request) -> Response:
 
                 csrf_token = _secrets.token_urlsafe(16)
                 # Short TTL for CSRF token (e.g., 1 hour)
+                from ..web.cookies import set_csrf_cookie
+
                 set_csrf_cookie(resp, token=csrf_token, ttl=3600, request=request)
         except Exception:
             pass
@@ -1484,9 +1486,8 @@ async def google_callback(request: Request) -> Response:
         try:
             # Report canonical names in logs
             try:
-                from ..cookie_names import ACCESS_TOKEN, REFRESH_TOKEN
-
-                cookie_names_written = [ACCESS_TOKEN, REFRESH_TOKEN]
+                from ..web.cookies import NAMES
+                cookie_names_written = [NAMES.access, NAMES.refresh]
             except Exception:
                 cookie_names_written = ["access_token", "refresh_token"]
             # Use previously resolved cookie config when available

@@ -58,7 +58,7 @@ async def debug_login():
         response = MockResponse()
 
         from app.cookie_config import get_cookie_config, get_token_ttls
-        from app.cookies import set_auth_cookies
+        from app.web.cookies import set_auth_cookies
 
         cookie_config = get_cookie_config(request)
         access_ttl, refresh_ttl = get_token_ttls()

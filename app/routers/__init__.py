@@ -1,14 +1,20 @@
-"""Lightweight backend router registry.
+"""Lightweight backend router registry with model routing.
 
-This module exposes a tiny registration API so application startup can
-wire backend callables (lazy, import-light). Backends themselves live in
-`app.routers.openai_router` and `app.routers.llama_router` to keep heavy
-imports out of the critical import path.
+This module provides:
+1. Backend registration API for lazy loading
+2. Model-to-backend routing logic
+3. Standardized backend resolution
 
-The registered factory should be a callable `fn(name: str) -> AsyncCallable`.
+Backend routing rules (frozen contract):
+- If PROMPT_BACKEND env var is set → use it directly
+- Else route by model prefix:
+  - gpt-4o*, gpt-4*, gpt-3.5* → openai
+  - llama3*, llama2*, llama* → llama
+  - Default fallback → dryrun
 """
 
-from typing import Callable, Awaitable, Any
+from typing import Callable, Awaitable, Any, Optional
+import os
 
 
 _factory: Callable[[str], Callable[[dict], Awaitable[dict]]] | None = None
@@ -31,5 +37,59 @@ def get_backend_callable(name: str) -> Callable[[dict], Awaitable[dict]]:
     if _factory is None:
         raise RuntimeError("Backend factory not registered")
     return _factory(name)
+
+
+def resolve_backend(model_override: Optional[str] = None, default_backend: str = "dryrun") -> str:
+    """Resolve backend name from model or environment.
+
+    Frozen routing contract:
+    1. If PROMPT_BACKEND env var is set → use it directly
+    2. Else route by model prefix:
+       - gpt-4o*, gpt-4*, gpt-3.5* → openai
+       - llama3*, llama2*, llama* → llama
+       - Default → dryrun
+
+    Args:
+        model_override: Model name from request (optional)
+        default_backend: Fallback backend if no routing matches
+
+    Returns:
+        Backend name string
+    """
+    # Priority 1: Explicit PROMPT_BACKEND environment override
+    env_backend = os.getenv("PROMPT_BACKEND", "").strip().lower()
+    if env_backend:
+        return env_backend
+
+    # Priority 2: Route by model prefix
+    if model_override:
+        model_lower = model_override.lower().strip()
+
+        # OpenAI models
+        if model_lower.startswith(("gpt-4o", "gpt-4", "gpt-3.5")):
+            return "openai"
+
+        # LLaMA models
+        if model_lower.startswith(("llama3", "llama2", "llama")):
+            return "llama"
+
+    # Default fallback
+    return default_backend
+
+
+def get_backend_for_request(model_override: Optional[str] = None) -> Callable[[dict], Awaitable[dict]]:
+    """Get backend callable for a request with automatic model routing.
+
+    Args:
+        model_override: Model name from request
+
+    Returns:
+        Backend callable
+
+    Raises:
+        RuntimeError: If backend factory not registered
+    """
+    backend_name = resolve_backend(model_override)
+    return get_backend_callable(backend_name)
 
 
