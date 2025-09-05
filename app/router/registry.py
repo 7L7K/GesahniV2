@@ -30,32 +30,4 @@ def get_router() -> "Router":
     return _router
 
 
-def attach_all(app) -> None:
-    """Attach compatibility and lightweight stub routers under the `/v1` prefix.
-
-    Each import is best-effort: missing modules are skipped to avoid import-time
-    failures in test environments.
-    """
-    # Alias router for many small compatibility shims (include first so it
-    # can override one-off compat handlers when present).
-    try:
-        from .alias_api import router as alias_router
-
-        app.include_router(alias_router, prefix="/v1")
-    except Exception:
-        pass
-
-    # Compatibility router (whoami, spotify/google status)
-    try:
-        from .compat_api import router as compat_router
-
-        app.include_router(compat_router, prefix="/v1")
-    except Exception:
-        # Best-effort: do not fail if compat router unavailable
-        pass
-
-    # Stub routers replaced by alias router entries; individual stub modules
-    # removed to reduce maintenance. Specific integrations should be imported
-    # lazily from `alias_api` when available.
-
 

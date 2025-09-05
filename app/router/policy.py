@@ -3,24 +3,15 @@
 This module contains all router-related constants and policy settings.
 Leaf modules should import from here instead of defining their own constants.
 """
-import os
 from typing import Set
+from app import settings
 
 
 # Model allow-lists (single source of truth)
 def _get_allowed_models() -> tuple[Set[str], Set[str]]:
-    """Get allowed models from environment variables as sets."""
-    gpt_models = set(
-        filter(
-            None,
-            os.getenv("ALLOWED_GPT_MODELS", "gpt-4o,gpt-4,gpt-3.5-turbo").split(","),
-        )
-    )
-    llama_models = set(
-        filter(
-            None, os.getenv("ALLOWED_LLAMA_MODELS", "llama3:latest,llama3").split(",")
-        )
-    )
+    """Get allowed models from centralized settings."""
+    gpt_models = set(settings.allowed_gpt_models())
+    llama_models = set(settings.allowed_llama_models())
     return gpt_models, llama_models
 
 
@@ -28,26 +19,26 @@ ALLOWED_GPT_MODELS, ALLOWED_LLAMA_MODELS = _get_allowed_models()
 
 
 # Timeout configurations
-OPENAI_TIMEOUT_MS = int(os.getenv("OPENAI_TIMEOUT_MS", "6000"))
-OLLAMA_TIMEOUT_MS = int(os.getenv("OLLAMA_TIMEOUT_MS", "4500"))
+OPENAI_TIMEOUT_MS = settings.openai_timeout_ms()
+OLLAMA_TIMEOUT_MS = settings.ollama_timeout_ms()
 
 
 # Budget configurations
-ROUTER_BUDGET_MS = int(os.getenv("ROUTER_BUDGET_MS", "7000"))
+ROUTER_BUDGET_MS = settings.router_budget_ms()
 
 
 # Circuit breaker thresholds
-LLAMA_USER_CB_THRESHOLD = int(os.getenv("LLAMA_USER_CB_THRESHOLD", "3"))
-LLAMA_USER_CB_COOLDOWN = float(os.getenv("LLAMA_USER_CB_COOLDOWN", "120"))
+LLAMA_USER_CB_THRESHOLD = settings.llama_user_cb_threshold()
+LLAMA_USER_CB_COOLDOWN = settings.llama_user_cb_cooldown()
 
 
 # Model routing configurations
-MODEL_ROUTER_HEAVY_WORDS = int(os.getenv("MODEL_ROUTER_HEAVY_WORDS", "30"))
-MODEL_ROUTER_HEAVY_TOKENS = int(os.getenv("MODEL_ROUTER_HEAVY_TOKENS", "1000"))
+MODEL_ROUTER_HEAVY_WORDS = settings.model_router_heavy_words()
+MODEL_ROUTER_HEAVY_TOKENS = settings.model_router_heavy_tokens()
 
 
 # Intent detection threshold
-SIM_THRESHOLD = float(os.getenv("SIM_THRESHOLD", "0.24"))
+SIM_THRESHOLD = settings.sim_threshold()
 
 # Prompt backend configuration - for safe development and testing
-PROMPT_BACKEND = os.getenv("PROMPT_BACKEND", "live").lower()
+PROMPT_BACKEND = settings.prompt_backend()

@@ -50,12 +50,15 @@ def build_plan() -> list[RouterSpec]:
         RouterSpec("app.router.compat_api:router", ""),  # Deprecated compatibility routes
         RouterSpec("app.api.health:router", ""),
         RouterSpec("app.api.root:router", ""),
+        RouterSpec("app.api.me:router", "/v1"),  # User profile endpoint
         RouterSpec("app.status:router", "/v1"),
         RouterSpec("app.api.schema:router", ""),
         RouterSpec("app.api.google_oauth:router", "/v1/google"),
         RouterSpec("app.api.google_compat:router", ""),  # Deprecated Google OAuth compatibility
         RouterSpec("app.api.google:integrations_router", "/v1"),
         RouterSpec("app.auth:router", "/v1"),
+        RouterSpec("app.api.util:router", ""),  # Utility endpoints including CSRF
+        RouterSpec("app.api.debug:router", "/v1"),  # Debug endpoints
     ])
 
     enable_spotify = _is_truthy(os.getenv("SPOTIFY_ENABLED")) and not in_ci

@@ -12,7 +12,7 @@ from .. import metrics as _m
 from ..health import VendorHealthTracker
 from ..metrics import HEALTH_OK, HEALTH_DEPS_OK
 
-router = APIRouter(tags=["Admin"])  # unauthenticated health; not privileged
+router = APIRouter(tags=["Health"])  # unauthenticated health; not privileged
 
 
 @router.get("/health")

@@ -110,6 +110,15 @@ export function buildCanonicalWebSocketUrl(apiOrigin: string, path: string): str
 }
 
 /**
+ * Safe next path helper: allow only relative paths not matching /login|/signup; if invalid, return '/'
+ * @param raw - Raw next parameter
+ * @returns Sanitized path or '/'
+ */
+export function safeNext(raw: string | null | undefined): string {
+    return sanitizeNextPath(raw, '/');
+}
+
+/**
  * Sanitize a next parameter to prevent open redirects
  * @param raw - Raw next parameter
  * @param fallback - Fallback path if invalid
@@ -121,7 +130,7 @@ export function sanitizeNextPath(raw: string | null | undefined, fallback: strin
 
     // URL-decode the input multiple times to handle nested encoding
     let decodedInput: string = input;
-    let previousDecoded: string;
+    let previousDecoded: string = input;
 
     try {
         // Decode up to 5 levels deep to prevent infinite loops from malicious input

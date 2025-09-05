@@ -1,0 +1,367 @@
+{
+    "endpoints": [
+        {
+            "path": "/v1/whoami",
+            "method": "GET",
+            "handler": "app.router.auth_api:whoami",
+            "router_file": "app/router/auth_api.py:124-143",
+            "dependencies": [
+                {
+                    "type": "route_level",
+                    "callable": "app.security.auth_contract.require_auth",
+                    "file": "app/security/auth_contract.py:114-142",
+                    "line": 129,
+                    "purpose": "Require authenticated identity for request"
+                }
+            ],
+            "middleware": [
+                {
+                    "name": "CORSMiddleware",
+                    "purpose": "Handle CORS preflight and headers",
+                    "order": "outermost"
+                },
+                {
+                    "name": "RequestIDMiddleware",
+                    "purpose": "Add request ID for tracing",
+                    "order": 1
+                },
+                {
+                    "name": "TraceRequestMiddleware",
+                    "purpose": "Add tracing headers",
+                    "order": 2
+                },
+                {
+                    "name": "RateLimitMiddleware",
+                    "purpose": "Rate limiting by IP",
+                    "order": 3
+                },
+                {
+                    "name": "SessionAttachMiddleware",
+                    "purpose": "Attach session data to request",
+                    "order": 4
+                },
+                {
+                    "name": "SilentRefreshMiddleware",
+                    "purpose": "Handle token refresh",
+                    "order": 5
+                },
+                {
+                    "name": "DedupMiddleware",
+                    "purpose": "Prevent duplicate requests",
+                    "order": 6
+                },
+                {
+                    "name": "AuditMiddleware",
+                    "purpose": "Log security events",
+                    "order": 7
+                },
+                {
+                    "name": "MetricsMiddleware",
+                    "purpose": "Collect request metrics",
+                    "order": 8
+                },
+                {
+                    "name": "CSRFMiddleware",
+                    "purpose": "CSRF protection (GET exempt)",
+                    "order": 9
+                }
+            ],
+            "models_in": [],
+            "models_out": [
+                {
+                    "type": "dict",
+                    "schema": {
+                        "user_id": "string",
+                        "authenticated": "boolean",
+                        "source": "string (cookie|bearer|session)"
+                    }
+                }
+            ],
+            "scopes_required": [],
+            "status_codes": [
+                200,
+                401
+            ],
+            "db_calls": [],
+            "http_calls": [],
+            "response_schema": {
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "string"
+                    },
+                    "authenticated": {
+                        "type": "boolean"
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": [
+                            "cookie",
+                            "bearer",
+                            "session"
+                        ]
+                    }
+                },
+                "required": [
+                    "user_id",
+                    "authenticated",
+                    "source"
+                ]
+            }
+        },
+        {
+            "path": "/v1/me",
+            "method": "GET",
+            "handler": "app.api.me:me",
+            "router_file": "app/api/me.py:16-53",
+            "dependencies": [
+                {
+                    "type": "parameter",
+                    "param_name": "user_id",
+                    "callable": "app.deps.user.get_current_user_id",
+                    "file": "app/deps/user.py:22-416",
+                    "line": 23,
+                    "purpose": "Extract and validate user identity from request"
+                }
+            ],
+            "middleware": [
+                {
+                    "name": "CORSMiddleware",
+                    "purpose": "Handle CORS preflight and headers",
+                    "order": "outermost"
+                },
+                {
+                    "name": "RequestIDMiddleware",
+                    "purpose": "Add request ID for tracing",
+                    "order": 1
+                },
+                {
+                    "name": "TraceRequestMiddleware",
+                    "purpose": "Add tracing headers",
+                    "order": 2
+                },
+                {
+                    "name": "RateLimitMiddleware",
+                    "purpose": "Rate limiting by IP",
+                    "order": 3
+                },
+                {
+                    "name": "SessionAttachMiddleware",
+                    "purpose": "Attach session data to request",
+                    "order": 4
+                },
+                {
+                    "name": "SilentRefreshMiddleware",
+                    "purpose": "Handle token refresh",
+                    "order": 5
+                },
+                {
+                    "name": "DedupMiddleware",
+                    "purpose": "Prevent duplicate requests",
+                    "order": 6
+                },
+                {
+                    "name": "AuditMiddleware",
+                    "purpose": "Log security events",
+                    "order": 7
+                },
+                {
+                    "name": "MetricsMiddleware",
+                    "purpose": "Collect request metrics",
+                    "order": 8
+                },
+                {
+                    "name": "CSRFMiddleware",
+                    "purpose": "CSRF protection (GET exempt)",
+                    "order": 9
+                }
+            ],
+            "models_in": [],
+            "models_out": [
+                {
+                    "type": "dict",
+                    "schema": {
+                        "is_authenticated": "boolean",
+                        "session_ready": "boolean",
+                        "user_id": "string|null",
+                        "user": "object|null",
+                        "source": "string",
+                        "version": "number",
+                        "profile": "object",
+                        "flags": "object"
+                    }
+                }
+            ],
+            "scopes_required": [],
+            "status_codes": [
+                200
+            ],
+            "db_calls": [
+                {
+                    "function": "app.user_store.get_stats",
+                    "purpose": "Fetch user statistics and login history",
+                    "file": "app/user_store.py"
+                }
+            ],
+            "http_calls": [],
+            "response_schema": {
+                "type": "object",
+                "properties": {
+                    "is_authenticated": {
+                        "type": "boolean"
+                    },
+                    "session_ready": {
+                        "type": "boolean"
+                    },
+                    "user_id": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "user": {
+                        "type": [
+                            "object",
+                            "null"
+                        ],
+                        "properties": {
+                            "id": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "email": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            }
+                        }
+                    },
+                    "source": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "number"
+                    },
+                    "profile": {
+                        "type": "object",
+                        "properties": {
+                            "user_id": {
+                                "type": "string"
+                            },
+                            "login_count": {
+                                "type": "number"
+                            },
+                            "last_login": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "request_count": {
+                                "type": "number"
+                            }
+                        }
+                    },
+                    "flags": {
+                        "type": "object",
+                        "properties": {
+                            "retrieval_pipeline": {
+                                "type": "boolean"
+                            },
+                            "use_hosted_rerank": {
+                                "type": "boolean"
+                            },
+                            "debug_model_routing": {
+                                "type": "boolean"
+                            },
+                            "ablation_flags": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "trace_sample_rate": {
+                                "type": "number"
+                            }
+                        }
+                    }
+                },
+                "required": [
+                    "is_authenticated",
+                    "session_ready",
+                    "source",
+                    "version",
+                    "profile",
+                    "flags"
+                ]
+            }
+        }
+    ],
+    "middleware_order": [
+        "CORSMiddleware",
+        "RequestIDMiddleware",
+        "TraceRequestMiddleware",
+        "RateLimitMiddleware",
+        "SessionAttachMiddleware",
+        "SilentRefreshMiddleware",
+        "DedupMiddleware",
+        "AuditMiddleware",
+        "MetricsMiddleware",
+        "CSRFMiddleware"
+    ],
+    "shared_dependencies": [
+        {
+            "name": "get_current_user_id",
+            "file": "app/deps/user.py:22-416",
+            "purpose": "Central user identity resolution from JWT/cookies/sessions"
+        },
+        {
+            "name": "require_auth",
+            "file": "app/security/auth_contract.py:114-142",
+            "purpose": "Require authenticated identity, return 401/403 as needed"
+        }
+    ],
+    "pydantic_models": {},
+    "auth_token_resolution": {
+        "priority_order": [
+            "Authorization: Bearer <token>",
+            "access_token cookie (gsn_access)",
+            "websocket query param (access_token)",
+            "session cookie (__session) -> resolve via session store",
+            "fallback to anon"
+        ],
+        "jwt_validation": {
+            "algorithm": "HS256",
+            "required_claims": [
+                "user_id|sub"
+            ],
+            "optional_claims": [
+                "scope",
+                "scopes",
+                "iss",
+                "aud",
+                "exp"
+            ],
+            "clock_skew": "60s"
+        },
+        "session_resolution": {
+            "store_type": "redis|memory",
+            "identity_mapping": "session_id -> JWT payload",
+            "fallback_mode": "legacy JTI mapping"
+        }
+    },
+    "csrf_behavior": {
+        "get_exempt": true,
+        "post_required": "X-CSRF-Token header matches csrf_token cookie",
+        "bearer_bypass": "Authorization header present + no session cookie",
+        "oauth_bypass": [
+            "/v1/auth/*/callback"
+        ],
+        "webhook_bypass": [
+            "/v1/ha/webhook with signature"
+        ]
+    }
+}

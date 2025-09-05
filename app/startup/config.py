@@ -40,7 +40,7 @@ def detect_profile() -> StartupProfile:
     # Dev: no HA/LLAMA by default, unless explicitly enabled
     want_llama = _is_truthy(os.getenv("LLAMA_ENABLED"))
     want_ha = _is_truthy(os.getenv("HOME_ASSISTANT_ENABLED"))
-    extra = (() if not want_llama else llama) + (() if not want_ha else ha)
+    extra = (() if not want_llama else llama) + (() if not want_ha else ha) + ("init_dev_user",)
 
     # Add chaos mode component if enabled
     if chaos_mode and env == "dev":

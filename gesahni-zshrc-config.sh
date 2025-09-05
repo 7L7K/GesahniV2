@@ -126,8 +126,7 @@ gesahni-test() {
 # Function to start only backend
 gesahni-back() {
     cd "$GESAHNI_DIR"
-    source .venv/bin/activate
-    uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+    ./scripts/backend-only.sh
 }
 
 # Function to start only frontend
@@ -135,12 +134,6 @@ gesahni-front() {
     cd "$GESAHNI_DIR/frontend"
     unset PORT
     npm run dev
-}
-
-# Function to start only backend
-gesahni-back() {
-    cd "$GESAHNI_DIR"
-    ./scripts/backend-only.sh
 }
 
 # Function to start only Qdrant vector store

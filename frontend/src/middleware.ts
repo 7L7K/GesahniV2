@@ -1,4 +1,5 @@
 import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
+import { sanitizeNextPath } from '@/lib/urls'
 
 export default function middleware(req: NextRequest, ev: NextFetchEvent) {
     const { pathname } = req.nextUrl
@@ -7,6 +8,18 @@ export default function middleware(req: NextRequest, ev: NextFetchEvent) {
     if (pathname.startsWith('/healthz/') || pathname === '/metrics') {
         return NextResponse.next()
     }
+
+    // Exclude auth-related paths from auth guard
+    if (pathname.startsWith('/login') ||
+        pathname.startsWith('/sign-in') ||
+        pathname.startsWith('/sign-up') ||
+        pathname.startsWith('/api/') ||
+        pathname.startsWith('/_next/') ||
+        pathname.startsWith('/assets/') ||
+        pathname === '/favicon.ico') {
+        return NextResponse.next()
+    }
+
     return NextResponse.next()
 }
 

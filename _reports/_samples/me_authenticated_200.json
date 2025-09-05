@@ -1,0 +1,24 @@
+{
+    "is_authenticated": true,
+    "session_ready": true,
+    "user_id": "user123",
+    "user": {
+        "id": "user123",
+        "email": null
+    },
+    "source": "cookie",
+    "version": 1,
+    "profile": {
+        "user_id": "user123",
+        "login_count": 5,
+        "last_login": "2024-01-15T10:30:00Z",
+        "request_count": 150
+    },
+    "flags": {
+        "retrieval_pipeline": false,
+        "use_hosted_rerank": false,
+        "debug_model_routing": false,
+        "ablation_flags": [],
+        "trace_sample_rate": 0.1
+    }
+}

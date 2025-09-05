@@ -33,6 +33,27 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Rate-limited failure logging for dev
+_failure_timestamps = {}
+
+
+def _log_failure_dev(service: str, error: Exception):
+    """Log service connection failures with rate limiting in dev."""
+    env = os.getenv("ENV", "dev").strip().lower()
+    if env not in {"dev", "local"}:
+        logger.warning("%s connection failed: %s", service, error)
+        return
+
+    import time
+    now = time.time()
+    last = _failure_timestamps.get(service, 0)
+
+    if now - last > 60:  # First failure or >60s since last
+        logger.warning("%s connection failed: %s", service, error)
+        _failure_timestamps[service] = now
+    else:
+        logger.info("%s connection failed (suppressed warning): %s", service, error)
+
 
 async def init_database():
     """Verify database connectivity.
@@ -110,7 +131,7 @@ async def init_vector_store():
                 if inspect.isawaitable(res):
                     await res
     except Exception as e:
-        logger.error("Vector store initialization failed: %s", e)
+        _log_failure_dev("Vector store", e)
         raise
 
 
@@ -131,8 +152,12 @@ async def init_llama():
         logger.debug("LLaMA not configured (no OLLAMA_URL); skipping")
         return
     from app.llama_integration import _check_and_set_flag
-    await _check_and_set_flag()
-    logger.debug("LLaMA integration OK")
+    try:
+        await _check_and_set_flag()
+        logger.debug("LLaMA integration OK")
+    except Exception as e:
+        _log_failure_dev("Ollama", e)
+        raise
 
 
 async def init_home_assistant():
@@ -149,8 +174,12 @@ async def init_home_assistant():
         logger.debug("HA not configured (no HOME_ASSISTANT_URL); skipping")
         return
     from app.home_assistant import get_states
-    await get_states()
-    logger.debug("Home Assistant integration OK")
+    try:
+        await get_states()
+        logger.debug("Home Assistant integration OK")
+    except Exception as e:
+        _log_failure_dev("Home Assistant", e)
+        raise
 
 
 async def init_chaos_mode():
@@ -184,6 +213,35 @@ async def init_scheduler():
     else:
         start()
     logger.debug("Scheduler started (or already running)")
+
+
+async def init_dev_user():
+    """Create a dev user 'dev_user' with password 'devpass123!' in dev environment only.
+
+    Gated by ENV=dev to avoid running in production.
+    """
+    env = os.getenv("ENV", "dev").strip().lower()
+    if env != "dev":
+        logger.debug("Dev user seeding skipped (ENV != dev)")
+        return
+
+    try:
+        from app.auth import pwd_context
+        from app.auth_store import create_user
+
+        # Hash the password
+        password_hash = pwd_context.hash("devpass123!")
+
+        # Create the user
+        await create_user(
+            id="dev_user",
+            email="dev@example.com",  # Dummy email
+            password_hash=password_hash,
+            name="Dev User",
+        )
+        logger.info("Dev user 'dev_user' created successfully")
+    except Exception as e:
+        logger.warning("Failed to create dev user: %s", e)
 
 
  

@@ -11,6 +11,7 @@ import os
 import logging
 
 from fastapi import Request
+from app import settings
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
@@ -79,8 +80,8 @@ async def bootstrap_vector_store(request: Request) -> JSONResponse:
         logger.warning("admin.bootstrap_vector_store: admin check failed: %s", e)
         return JSONResponse({"detail": "forbidden"}, status_code=403)
 
-    coll = request.query_params.get("name") or os.getenv("QDRANT_COLLECTION", "kb:default")
-    strict = os.getenv("STRICT_VECTOR_STORE", "0").strip().lower() in {"1", "true", "yes", "on"}
+    coll = request.query_params.get("name") or settings.qdrant_collection()
+    strict = settings.strict_vector_store()
     try:
         from app.memory.api import _get_store  # type: ignore
 
@@ -97,7 +98,7 @@ async def bootstrap_vector_store(request: Request) -> JSONResponse:
         try:
             from app.api.admin import _q_bootstrap  # type: ignore
 
-            _q_bootstrap(coll, int(os.getenv("EMBED_DIM", "1536")))
+            _q_bootstrap(coll, settings.embed_dim())
         except Exception:
             logger.info("admin.bootstrap_vector_store: bootstrap helper missing or failed; returning accepted")
     except Exception as e:
@@ -107,5 +108,4 @@ async def bootstrap_vector_store(request: Request) -> JSONResponse:
         return JSONResponse({"status": "accepted", "collection": coll}, status_code=202)
 
     return JSONResponse({"status": "accepted", "collection": coll}, status_code=202)
-
 

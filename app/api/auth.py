@@ -722,10 +722,35 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
     # Return 401 if no authentication method was attempted or all failed
     has_any_token = bool(token_header or token_cookie or clerk_token)
     if not has_any_token or (has_any_token and not session_ready):
-        from fastapi import HTTPException
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        # Structured 401 for contract
+        from fastapi.responses import JSONResponse as _JSON
+        from ..logging_config import req_id_var as _rid
+        body = {
+            "code": "auth.not_authenticated",
+            "detail": "not_authenticated",
+            "request_id": _rid.get(),
+        }
+        resp = _JSON(body, status_code=401)
+        resp.headers.setdefault("Cache-Control", "no-store, max-age=0")
+        resp.headers.setdefault("Pragma", "no-cache")
+        if _rid.get():
+            resp.headers.setdefault("X-Request-ID", _rid.get())
+        return resp
 
-    return {
+    # Prefer Bearer when both header and cookies are present; detect conflict
+    try:
+        from ..deps.user import resolve_auth_source_conflict as _resolve_src
+        src2, conflict = _resolve_src(request)
+    except Exception:
+        src2, conflict = src, False
+    if src2:
+        src = src2
+
+    from ..logging_config import req_id_var as _rid
+    body = {
+        "schema_version": 1,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "request_id": _rid.get(),
         "is_authenticated": bool(is_authenticated),
         "session_ready": bool(session_ready),
         "user_id": effective_uid if effective_uid else None,
@@ -736,6 +761,42 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         "source": src,
         "version": 1,
     }
+    dbg = (os.getenv("DEBUG") or "").strip().lower() in {"1", "true", "yes", "on"}
+    legacy = (os.getenv("CSRF_LEGACY_GRACE") or "").strip().lower() in {"1", "true", "yes", "on"}
+    if conflict and (dbg or legacy):
+        body["auth_source_conflict"] = True
+    # Log conflict warning always
+    if conflict:
+        try:
+            logger.warning(
+                "auth.source_conflict user_id=%s request_id=%s",
+                body.get("user_id"),
+                _rid.get(),
+            )
+        except Exception:
+            pass
+
+    # Observability log
+    try:
+        latency_ms = int((time.time() - t0) * 1000)
+        logger.info(
+            "evt=identity_check route=/v1/whoami user_id=%s source=%s is_authenticated=%s request_id=%s latency_ms=%d",
+            body.get("user_id"),
+            src,
+            body.get("is_authenticated"),
+            _rid.get(),
+            latency_ms,
+        )
+    except Exception:
+        pass
+
+    from fastapi.responses import JSONResponse as _JSON
+    resp = _JSON(body, status_code=200)
+    resp.headers.setdefault("Cache-Control", "no-store, max-age=0")
+    resp.headers.setdefault("Pragma", "no-cache")
+    if _rid.get():
+        resp.headers.setdefault("X-Request-ID", _rid.get())
+    return resp
 
 
 @router.get("/whoami")
@@ -781,8 +842,13 @@ async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONR
             "version": 1,
         }
 
-    # If already authenticated, return immediately
-    if out.get("is_authenticated"):
+    # If whoami_impl returned a Response, pass it through
+    from fastapi.responses import Response as _RespType
+    if isinstance(out, _RespType):  # type: ignore[arg-type]
+        return out  # type: ignore[return-value]
+
+    # If already authenticated (dict), return immediately
+    if isinstance(out, dict) and out.get("is_authenticated"):
         try:
             duration = int((time.time() - start_time) * 1000)
             logger.info(
@@ -802,7 +868,8 @@ async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONR
             content=out,
             headers={
                 "Vary": "Origin",
-                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Cache-Control": "no-store, max-age=0",
+                "Pragma": "no-cache",
             },
         )
 
@@ -845,7 +912,8 @@ async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONR
         content=out,
         headers={
             "Vary": "Origin",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Cache-Control": "no-store, max-age=0",
+            "Pragma": "no-cache",
         },
     )
 

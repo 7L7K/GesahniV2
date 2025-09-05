@@ -1,6 +1,6 @@
 """Router rules loader for YAML-based configuration."""
 
-import os
+from app import settings
 import yaml
 from typing import Dict, Any
 
@@ -11,7 +11,7 @@ def get_router_rules() -> Dict[str, Any]:
     Returns:
         Dict containing router configuration rules
     """
-    rules_path = os.getenv("ROUTER_RULES_PATH", "router_rules.yaml")
+    rules_path = settings.router_rules_path()
 
     try:
         with open(rules_path, 'r') as f:

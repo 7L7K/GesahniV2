@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { setTokens, apiFetch, bumpAuthEpoch } from '@/lib/api';
 import { sanitizeNextPath } from '@/lib/utils';
+import { safeNext } from '@/lib/urls';
 import { Button } from '@/components/ui/button';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
@@ -118,12 +119,8 @@ function LoginPageInner() {
                 console.info('LOGIN oauth.orchestrator.refresh.complete', {
                     timestamp: new Date().toISOString(),
                 });
-                // Prevent redirect loops by not redirecting to login-related pages
-                if (!next.includes('/login') && !next.includes('/sign-in') && !next.includes('/sign-up')) {
-                    router.replace(next);
-                } else {
-                    router.replace('/');
-                }
+                // Use safeNext to prevent redirect loops
+                router.replace(safeNext(params?.get('next')) || '/');
                 // Scrub OAuth query params from URL after successful auth
                 try {
                     const url = new URL(window.location.href);
@@ -244,12 +241,8 @@ function LoginPageInner() {
                     timestamp: new Date().toISOString(),
                 });
 
-                // Prevent redirect loops by not redirecting to login-related pages
-                if (!next.includes('/login') && !next.includes('/sign-in') && !next.includes('/sign-up')) {
-                    router.replace(next);
-                } else {
-                    router.replace('/');
-                }
+                // Use safeNext to prevent redirect loops
+                router.replace(safeNext(params?.get('next')) || '/');
 
                 console.info('LOGIN complete.success', {
                     timestamp: new Date().toISOString(),

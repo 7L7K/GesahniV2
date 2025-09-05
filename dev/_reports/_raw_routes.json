@@ -1,0 +1,82 @@
+{
+  "endpoints": {
+    "/Users/kingal/2025/GesahniV2/app/api/me.py": {
+      "file": "/Users/kingal/2025/GesahniV2/app/api/me.py",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/me",
+          "line": 16
+        }
+      ],
+      "dependencies": [
+        {
+          "line": 17,
+          "content": "async def me(user_id: str = Depends(get_current_user_id)) -> dict[str, Any]:"
+        },
+        {
+          "line": 81,
+          "content": "user_id: str = Depends(get_current_user_id),"
+        },
+        {
+          "line": 104,
+          "content": "user_id: str = Depends(get_current_user_id),"
+        },
+        {
+          "line": 127,
+          "content": "sid: str, user_id: str = Depends(get_current_user_id)"
+        }
+      ],
+      "models": [],
+      "imports": []
+    },
+    "/Users/kingal/2025/GesahniV2/app/router/auth_api.py": {
+      "file": "/Users/kingal/2025/GesahniV2/app/router/auth_api.py",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/whoami\", include_in_schema=False",
+          "line": 124
+        }
+      ],
+      "dependencies": [
+        {
+          "line": 70,
+          "content": "dependencies=[Depends(log_request_meta)],"
+        },
+        {
+          "line": 92,
+          "content": "dependencies=[Depends(log_request_meta)],"
+        }
+      ],
+      "models": [],
+      "imports": []
+    },
+    "/Users/kingal/2025/GesahniV2/app/security/auth_contract.py": {
+      "file": "/Users/kingal/2025/GesahniV2/app/security/auth_contract.py",
+      "endpoints": [],
+      "dependencies": [],
+      "models": [],
+      "imports": []
+    },
+    "/Users/kingal/2025/GesahniV2/app/deps/user.py": {
+      "file": "/Users/kingal/2025/GesahniV2/app/deps/user.py",
+      "endpoints": [],
+      "dependencies": [],
+      "models": [],
+      "imports": []
+    },
+    "/Users/kingal/2025/GesahniV2/app/middleware/stack.py": {
+      "file": "/Users/kingal/2025/GesahniV2/app/middleware/stack.py",
+      "endpoints": [],
+      "dependencies": [],
+      "models": [],
+      "imports": []
+    }
+  },
+  "middleware": {
+    "error": "Middleware stack file not found"
+  },
+  "dependencies": {},
+  "timestamp": "posix.times_result(user=0.06, system=0.02, children_user=0.0, children_system=0.0, elapsed=1757038422.57)"
+}

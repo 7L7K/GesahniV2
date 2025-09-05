@@ -15,7 +15,7 @@ export function sanitizeNextPath(input: string | null | undefined, fallback: str
 
   // URL-decode the input multiple times to handle nested encoding
   let decodedInput: string = raw;
-  let previousDecoded: string;
+  let previousDecoded: string = raw;
 
   try {
     // Decode up to 5 levels deep to prevent infinite loops from malicious input

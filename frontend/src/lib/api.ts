@@ -9,6 +9,25 @@ import { getToken, getAuthNamespace } from './api/auth';
 import { getAuthOrchestrator } from '../services/authOrchestrator';
 import { sanitizeNextPath } from './urls';
 
+// Simple API function for cookie mode
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
+
+export async function api(path: string, init: RequestInit = {}) {
+    const res = await fetch(`${API_BASE}${path}`, {
+        credentials: 'include',
+        headers: {
+            'content-type': 'application/json',
+            ...(init.headers || {}),
+        },
+        ...init,
+    });
+    if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status} ${res.statusText}: ${body}`);
+    }
+    return res;
+}
+
 // Re-export everything from the modular API structure
 export * from './api/auth';
 export * from './api/websocket';

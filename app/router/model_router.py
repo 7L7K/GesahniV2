@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 from ..model_config import GPT_BASELINE_MODEL, GPT_HEAVY_MODEL, GPT_MID_MODEL
 from ..model_picker import pick_model
+from app import settings
 from .debug_flags import is_debug_routing_enabled, is_dry_run_mode
 from .rules_loader import get_router_rules
 
@@ -36,19 +37,9 @@ class ModelRouter:
     def _get_allowed_models(self, vendor: str) -> set[str]:
         """Get allowed models from environment variables as sets."""
         if vendor == "gpt":
-            return set(
-                filter(
-                    None,
-                    os.getenv("ALLOWED_GPT_MODELS", "gpt-4o,gpt-4,gpt-3.5-turbo").split(","),
-                )
-            )
+            return set(settings.allowed_gpt_models())
         elif vendor == "llama":
-            return set(
-                filter(
-                    None,
-                    os.getenv("ALLOWED_LLAMA_MODELS", "llama3:latest,llama3").split(",")
-                )
-            )
+            return set(settings.allowed_llama_models())
         return set()
 
     def _validate_model_allowlist(self, model: str, vendor: str) -> None:

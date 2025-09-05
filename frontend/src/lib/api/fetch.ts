@@ -29,6 +29,10 @@ const PUBLIC_PATHS = new Set([
   '/metrics',
   '/v1/auth/finish',
   '/v1/auth/google/login_url',
+  '/v1/auth/login',
+  '/v1/auth/logout',
+  '/v1/auth/refresh',
+  '/v1/auth/whoami',
 ]);
 
 // CSRF token management
@@ -112,33 +116,8 @@ export async function apiFetch(
   path: string,
   init: (RequestInit & { auth?: boolean; dedupe?: boolean; shortCacheMs?: number; contextKey?: string | string[]; credentials?: RequestCredentials }) = {}
 ): Promise<Response> {
-  // Determine the default credentials based on auth mode and endpoint type
+  // For cookie mode, always use credentials: 'include' as specified
   const isHeaderMode = process.env.NEXT_PUBLIC_HEADER_AUTH_MODE === '1';
-  const isOAuthEndpoint = path.includes('/google/auth/login_url') || path.includes('/google/auth/callback');
-  const isWhoamiEndpoint = path.includes('/whoami');
-  const isAskEndpoint = path.includes('/v1/ask');
-  const isAuthEndpoint = (
-    path.includes('/login') ||
-    path.includes('/register') ||
-    path.includes('/logout') ||
-    path.includes('/refresh') ||
-    isWhoamiEndpoint ||
-    isAskEndpoint
-  );
-
-  // For OAuth endpoints and whoami, always use credentials: 'include' for cookie mode
-  // For header mode, use credentials: 'omit' by default, but allow override
-  let defaultCredentials: RequestCredentials;
-  if (isOAuthEndpoint || isAuthEndpoint) {
-    // Auth flows (login/register/logout/whoami/refresh) and OAuth should include cookies
-    defaultCredentials = 'include';
-  } else if (isHeaderMode) {
-    // Header mode defaults to omit credentials for non-auth endpoints
-    defaultCredentials = 'omit';
-  } else {
-    // Cookie mode defaults to include credentials
-    defaultCredentials = 'include';
-  }
 
   // Determine if this is a public endpoint
   const isPublic = PUBLIC_PATHS.has(path);
@@ -146,9 +125,9 @@ export async function apiFetch(
   // For public endpoints, default to no auth unless explicitly specified
   const defaultAuth = isPublic ? false : true;
 
-  const { auth = defaultAuth, headers, dedupe = true, shortCacheMs, contextKey, credentials: initCreds = defaultCredentials, ...rest } = init as any;
-  // Always include credentials for authenticated/protected endpoints
-  const credentials: RequestCredentials = auth ? 'include' : initCreds;
+  const { auth = defaultAuth, headers, dedupe = true, shortCacheMs, contextKey, credentials: initCreds = 'include', ...rest } = init as any;
+  // For cookie mode, always use credentials: 'include'
+  const credentials: RequestCredentials = 'include';
   const isAbsolute = /^(?:https?:)?\/\//i.test(path);
   const isBrowser = typeof window !== "undefined";
   // Honor NEXT_PUBLIC_USE_DEV_PROXY via API_URL resolution: when using the
@@ -162,6 +141,18 @@ export async function apiFetch(
   const separator = path.includes('?') ? '&' : '?';
   const cacheBustParam = `cors_cache_bust=${Date.now()}`;
   const url = isAbsolute ? path : `${base}${path}${separator}${cacheBustParam}`;
+
+  // Define endpoint type checks
+  const isWhoamiEndpoint = path.includes('/whoami');
+  const isAskEndpoint = path.includes('/v1/ask');
+  const isAuthEndpoint = (
+    path.includes('/login') ||
+    path.includes('/register') ||
+    path.includes('/logout') ||
+    path.includes('/refresh') ||
+    isWhoamiEndpoint ||
+    isAskEndpoint
+  );
 
   // Enhanced logging for auth-related requests
   const isAuthRequest = isAuthEndpoint;
@@ -398,7 +389,28 @@ export async function apiFetch(
     if (isAuthCheckEndpoint) {
       console.warn('API_FETCH auth.401_auth_endpoint - redirecting to login (tokens preserved)', { path, errorCode, errorMessage, timestamp: new Date().toISOString() });
       if (typeof document !== "undefined") {
-        try { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search); } catch { }
+        // Prevent redirect loops by checking if we're already on login-related pages
+        const currentPath = window.location.pathname;
+        const isOnLoginPage = currentPath === '/login' || currentPath === '/sign-in' || currentPath === '/sign-up' || currentPath.startsWith('/sign-in/') || currentPath.startsWith('/sign-up/');
+
+        if (!isOnLoginPage) {
+          // Import sanitizeNextPath dynamically to avoid circular dependencies
+          import('@/lib/utils').then(({ sanitizeNextPath }) => {
+            const currentUrl = window.location.pathname + window.location.search;
+            const sanitizedNext = sanitizeNextPath(currentUrl, '/');
+
+            // Prevent recursive next parameters that could cause loops
+            const nextParam = encodeURIComponent(sanitizedNext);
+            const redirectUrl = `/login?next=${nextParam}`;
+
+            try {
+              window.location.href = redirectUrl;
+            } catch { }
+          }).catch(() => {
+            // Fallback if import fails
+            try { window.location.href = '/login'; } catch { }
+          });
+        }
       }
       // Fall through to let caller handle the 401 response as well
     } else {

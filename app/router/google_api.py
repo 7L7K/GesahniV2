@@ -6,7 +6,7 @@ Leaf module - no imports from app/router/__init__.py.
 import hashlib
 import hmac
 import logging
-import os
+from app import settings
 import random
 import secrets
 import time
@@ -81,8 +81,8 @@ async def google_login_url(request: Request):
 
         # Build OAuth URL
         params = {
-            "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
-            "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI", ""),
+            "client_id": settings.google_client_id(),
+            "redirect_uri": settings.google_redirect_uri(),
             "scope": "openid email profile",
             "response_type": "code",
             "state": state,

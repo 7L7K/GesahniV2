@@ -1,13 +1,13 @@
 import os
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 router = APIRouter(tags=["Admin"])
 
 
 def _is_dev():
-    return os.getenv("ENV", "dev").lower() == "dev" or os.getenv(
+    return os.getenv("ENV", "dev").lower() in {"dev", "local"} or os.getenv(
         "DEV_MODE", "0"
     ).lower() in {"1", "true", "yes", "on"}
 
@@ -116,6 +116,33 @@ async def debug_oauth_config(request):
     }
 
     return cfg
+
+
+@router.get("/_diag/auth", include_in_schema=False)
+async def diag_auth(request: Request):
+    """Diagnostic endpoint for authentication state and cookies."""
+    if not _is_dev():
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    from ..web.cookies import read_access_cookie, read_refresh_cookie, read_session_cookie
+
+    return {
+        "cookies": {
+            "access_token": read_access_cookie(request),
+            "refresh_token": read_refresh_cookie(request),
+            "session": read_session_cookie(request),
+            "csrf_token": request.cookies.get("csrf_token"),
+            "all_cookies": dict(request.cookies),
+        },
+        "headers": {
+            "authorization": request.headers.get("authorization"),
+            "x-csrf-token": request.headers.get("x-csrf-token"),
+            "origin": request.headers.get("origin"),
+            "referer": request.headers.get("referer"),
+        },
+        "user_id": getattr(request.state, "user_id", None),
+        "jwt_payload": getattr(request.state, "jwt_payload", None),
+    }
 
 
 @router.get("/debug/oauth", include_in_schema=False)

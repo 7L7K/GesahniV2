@@ -2,54 +2,104 @@ from __future__ import annotations
 
 import os
 from typing import Any
+from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+import hashlib
+import json
+from datetime import UTC, datetime
+from email.utils import format_datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel
 
 from ..config_runtime import get_config
-from ..deps.user import get_current_user_id
+from ..deps.user import get_current_user_id, resolve_auth_source_conflict
 from ..sessions_store import sessions_store
 from ..user_store import user_store
+from ..logging_config import req_id_var
+from ..utils.cache_async import AsyncTTLCache, CachedError
+
+try:
+    from jose import jwt as jose_jwt
+except ImportError:
+    jose_jwt = None
 
 router = APIRouter(tags=["Auth"])
 
 
+def _to_dict(x) -> dict:
+    """Convert various types to dict for safe access."""
+    if x is None:
+        return {}
+    if isinstance(x, dict):
+        return x
+    if isinstance(x, BaseModel):
+        return x.model_dump()
+    if hasattr(x, '__dataclass_fields__'):  # dataclass
+        return asdict(x)
+    if hasattr(x, '__dict__'):
+        return {k: v for k, v in vars(x).items() if not k.startswith('_')}
+    return {"value": x}
+
+
+_STATS_CACHE = AsyncTTLCache(ttl_seconds=5)
+
+
+def _truthy(v: str | None) -> bool:
+    return (v or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 @router.get("/me")
-async def me(user_id: str = Depends(get_current_user_id)) -> dict[str, Any]:
+async def me(request: Request, response: Response, user_id: str = Depends(get_current_user_id)) -> dict:
     is_auth = user_id != "anon"
-    stats = await user_store.get_stats(user_id) if is_auth else None
 
-    cfg = get_config()
-    flags = {
-        "retrieval_pipeline": os.getenv("RETRIEVAL_PIPELINE", "0").lower()
-        in {"1", "true", "yes"},
-        "use_hosted_rerank": os.getenv("RETRIEVE_USE_HOSTED_CE", "0").lower()
-        in {"1", "true", "yes"},
-        "debug_model_routing": os.getenv("DEBUG_MODEL_ROUTING", "0").lower()
-        in {"1", "true", "yes"},
-        "ablation_flags": sorted(list(cfg.obs.ablation_flags)),
-        "trace_sample_rate": cfg.obs.trace_sample_rate,
+    # Contract compliance: return 401 for anonymous users
+    if not is_auth:
+        from ..http_errors import unauthorized
+        raise unauthorized(message="unauthorized")
+
+    # Await user_store.get_stats(user_id)
+    stats = None
+    if is_auth:
+        try:
+            stats = await _STATS_CACHE.get(user_id, lambda: user_store.get_stats(user_id))
+        except Exception:
+            stats = None
+
+    # Pass through _to_dict to get stats_dict
+    stats_dict = _to_dict(stats)
+
+    # Replace with safe dict access
+    stats_result = {
+        "login_count": stats_dict.get("login_count", 0),
+        "request_count": stats_dict.get("request_count", 0),
+        "last_login": stats_dict.get("last_login")
     }
 
-    profile = {
-        "user_id": user_id,
-        "login_count": (stats or {}).get("login_count", 0),
-        "last_login": (stats or {}).get("last_login"),
-        "request_count": (stats or {}).get("request_count", 0),
-    }
+    # Mixed auth source handling
+    source, conflicted = resolve_auth_source_conflict(request)
 
-    # Return format compatible with frontend auth orchestrator expectations
+    # Read access_token cookie and extract sub
+    sub = None
+    if jose_jwt is not None:
+        access_token = request.cookies.get("access_token")
+        if access_token:
+            try:
+                # Prefer unverified claims
+                claims = jose_jwt.get_unverified_claims(access_token)
+                sub = claims.get("sub")
+            except Exception:
+                try:
+                    # Fallback: decode with ignore signature
+                    payload = jose_jwt.decode(access_token, "ignore", options={"verify_signature": False})
+                    sub = payload.get("sub")
+                except Exception:
+                    sub = None
+
     return {
-        "is_authenticated": is_auth,
-        "session_ready": is_auth,  # For authenticated users, session is ready
-        "user_id": user_id if is_auth else None,
-        "user": {
-            "id": user_id if is_auth else None,
-            "email": None,  # Email not available in this endpoint
-        } if is_auth else None,
-        "source": "cookie" if is_auth else "missing",
-        "version": 1,
-        "profile": profile,
-        "flags": flags
+        "user": {"id": user_id, "auth_source": source, "auth_conflict": conflicted},
+        "stats": stats_result,
+        "sub": sub
     }
 
 

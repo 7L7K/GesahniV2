@@ -1,0 +1,68 @@
+graph TD
+    %% /v1/whoami flow
+    subgraph "/v1/whoami"
+        ClientWhoAmI[Client] -->|GET /v1/whoami| CORSWhoAmI[CORS Middleware]
+        CORSWhoAmI --> RequestIDWhoAmI[RequestID Middleware]
+        RequestIDWhoAmI --> TraceWhoAmI[TraceRequest Middleware]
+        TraceWhoAmI --> RateLimitWhoAmI[RateLimit Middleware]
+        RateLimitWhoAmI --> SessionWhoAmI[SessionAttach Middleware]
+        SessionWhoAmI --> SilentRefreshWhoAmI[SilentRefresh Middleware]
+        SilentRefreshWhoAmI --> DedupWhoAmI[Dedup Middleware]
+        DedupWhoAmI --> AuditWhoAmI[Audit Middleware]
+        AuditWhoAmI --> MetricsWhoAmI[Metrics Middleware]
+        MetricsWhoAmI --> CSRFWhoAmI[CSRF Middleware<br/>GET exempt]
+        CSRFWhoAmI --> AuthContractWhoAmI[require_auth dependency<br/>app/security/auth_contract.py:129]
+        AuthContractWhoAmI --> HandlerWhoAmI[whoami handler<br/>app/router/auth_api.py:124-143]
+
+        AuthContractWhoAmI -->|No valid auth| Error401WhoAmI[401 Unauthorized]
+        HandlerWhoAmI -->|Success| Response200WhoAmI[200 OK<br/>user_id, authenticated, source]
+    end
+
+    %% /v1/me flow
+    subgraph "/v1/me"
+        ClientMe[Client] -->|GET /v1/me| CORSMe[CORS Middleware]
+        CORSMe --> RequestIDMe[RequestID Middleware]
+        RequestIDMe --> TraceMe[TraceRequest Middleware]
+        TraceMe --> RateLimitMe[RateLimit Middleware]
+        RateLimitMe --> SessionMe[SessionAttach Middleware]
+        SessionMe --> SilentRefreshMe[SilentRefresh Middleware]
+        SilentRefreshMe --> DedupMe[Dedup Middleware]
+        DedupMe --> AuditMe[Audit Middleware]
+        AuditMe --> MetricsMe[Metrics Middleware]
+        MetricsMe --> CSRFMe[CSRF Middleware<br/>GET exempt]
+        CSRFMe --> UserDepMe[get_current_user_id dependency<br/>app/deps/user.py:23]
+        UserDepMe --> HandlerMe[me handler<br/>app/api/me.py:16-53]
+        HandlerMe --> UserStoreMe[user_store.get_stats<br/>app/user_store.py]
+        UserStoreMe --> Response200Me[200 OK<br/>profile, flags, user data]
+    end
+
+    %% Auth token resolution details
+    subgraph "Token Resolution Priority"
+        Bearer[Authorization: Bearer] --> Cookie[access_token cookie]
+        Cookie --> WSP[W S query param]
+        WSP --> Session[__session cookie]
+        Session --> Anon[fallback to 'anon']
+    end
+
+    %% CSRF behavior
+    subgraph "CSRF Protection"
+        GET[GET/HEAD/OPTIONS<br/>Always allowed] --> SetToken[Set csrf_token cookie<br/>Return X-CSRF-Token header]
+        POST[POST/PUT/PATCH/DELETE] --> CheckHeader{X-CSRF-Token header<br/>matches csrf_token cookie?}
+        CheckHeader -->|No| CSRF400[400 Bad Request]
+        CheckHeader -->|Yes| Allow[Allow request]
+        POST --> BearerBypass{Bearer auth +<br/>no session cookie?}
+        BearerBypass -->|Yes| BypassCSRF[Bypass CSRF]
+        POST --> OAuthPath{OAuth callback path?}
+        OAuthPath -->|Yes| BypassCSRF
+    end
+
+    %% Styling
+    classDef middlewareClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef handlerClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef errorClass fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+    classDef successClass fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+
+    class CORSWhoAmI,CORSMe,RequestIDWhoAmI,RequestIDMe,TraceWhoAmI,TraceMe,RateLimitWhoAmI,RateLimitMe,SessionWhoAmI,SessionMe,SilentRefreshWhoAmI,SilentRefreshMe,DedupWhoAmI,DedupMe,AuditWhoAmI,AuditMe,MetricsWhoAmI,MetricsMe,CSRFWhoAmI,CSRFMe middlewareClass
+    class AuthContractWhoAmI,UserDepMe,HandlerWhoAmI,HandlerMe,UserStoreMe handlerClass
+    class Error401WhoAmI,CSRF400 errorClass
+    class Response200WhoAmI,Response200Me successClass

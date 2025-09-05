@@ -49,21 +49,6 @@ def setup_middleware_stack(app: FastAPI) -> None:
     log.info("mw.flags env=%s dev_mode=%s in_ci=%s rate_limit_enabled_env=%s -> rate_limit_enabled=%s",
              env, dev_mode, in_ci, rate_limit_enabled_env, rate_limit_enabled)
 
-    # 0) CORS — preflight should bypass everything else
-    try:
-        origins = get_cors_origins()
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=origins,
-            allow_credentials=get_cors_allow_credentials(),
-            allow_methods=get_cors_allow_methods(),
-            allow_headers=get_cors_allow_headers(),
-            expose_headers=get_cors_expose_headers(),
-            max_age=get_cors_max_age(),
-        )
-        log.debug("CORS middleware configured (origins=%s)", origins)
-    except Exception as e:
-        log.warning("CORS config failed: %s", e)
 
     # 1) Request ID + tracing come first for observability
     add_mw(app, RequestIDMiddleware)
@@ -362,7 +347,25 @@ def setup_middleware_stack(app: Any) -> None:
     """
     logging.info("🔧 Setting up middleware stack...")
 
-    # Set up CORS first (affects other middleware)
+    # Set up CORS preflight middleware first (short-circuits OPTIONS)
+    try:
+        from ..middleware.cors import CorsPreflightMiddleware
+        from ..settings_cors import get_cors_origins
+        origins = get_cors_origins()
+        app.add_middleware(CorsPreflightMiddleware, allow_origins=origins)
+        logging.debug("CorsPreflightMiddleware added")
+    except Exception as e:
+        logging.warning("Failed to set up CorsPreflightMiddleware: %s", e)
+
+    # Set up Safari CORS cache fix
+    try:
+        from ..middleware import SafariCORSCacheFixMiddleware
+        app.add_middleware(SafariCORSCacheFixMiddleware)
+        logging.debug("SafariCORSCacheFixMiddleware added")
+    except ImportError:
+        pass
+
+    # Set up CORS middleware (after preflight)
     setup_cors_middleware(app)
 
     # Set up core middlewares
@@ -371,12 +374,15 @@ def setup_middleware_stack(app: Any) -> None:
     # Set up optional middlewares
     setup_optional_middlewares(app)
 
-    # Set up browser-specific middlewares
-    setup_browser_specific_middlewares(app)
-
     # Mark middleware as registered
     try:
         app.state.mw_registered = True
+
+        # Log final middleware order in dev
+        if os.getenv("ENV", "dev").lower() in {"dev", "local"}:
+            names = [m.cls.__name__ for m in getattr(app, "user_middleware", [])]
+            logging.info("MW (outer→inner) = %s", names)
+
         logging.info("=== MIDDLEWARE STACK COMPLETE ===")
     except Exception:
         logging.debug("Failed to set middleware registered flag")
@@ -408,17 +414,8 @@ def validate_middleware_order(app: Any) -> None:
             "CSRFMiddleware",
             "EnhancedErrorHandlingMiddleware",
             "ErrorHandlerMiddleware",
-        ]
-
-        # Add optional middlewares
-        if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1", "true", "yes", "on"}:
-            expected_outer_to_inner.append("SilentRefreshMiddleware")
-
-        if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}:
-            expected_outer_to_inner.append("ReloadEnvMiddleware")
-
-        # Add core middlewares
-        expected_outer_to_inner.extend([
+            "SilentRefreshMiddleware",
+            "ReloadEnvMiddleware",
             "SessionAttachMiddleware",
             "RateLimitMiddleware",
             "MetricsMiddleware",
@@ -428,7 +425,7 @@ def validate_middleware_order(app: Any) -> None:
             "HealthCheckFilterMiddleware",
             "DedupMiddleware",
             "RequestIDMiddleware",  # innermost
-        ])
+        ]
 
         if got != expected_outer_to_inner:
             logging.warning(

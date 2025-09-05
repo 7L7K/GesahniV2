@@ -49,6 +49,8 @@ async def lifespan(app: FastAPI):
     # 2) Environment-aware component startup with timeouts + error capture
     await _run_components()
 
+    # Router registration lives in create_app(); no HTTP mounts here.
+
     # 3) Fire-and-forget daemons that are optional
     _start_daemons()
 
@@ -82,6 +84,7 @@ async def _run_components():
 
     name_to_callable: dict[str, Callable[[], Awaitable[None]]] = {
         "init_database": C.init_database,
+        "init_database_migrations": C.init_database_migrations,
         "init_token_store_schema": C.init_token_store_schema,
         "init_openai_health_check": C.init_openai_health_check,
         "init_vector_store": C.init_vector_store,
@@ -89,6 +92,8 @@ async def _run_components():
         "init_home_assistant": C.init_home_assistant,
         "init_memory_store": C.init_memory_store,
         "init_scheduler": C.init_scheduler,
+        "init_dev_user": C.init_dev_user,
+        "init_chaos_mode": C.init_chaos_mode,
     }
 
     for idx, comp_name in enumerate(profile.components, 1):

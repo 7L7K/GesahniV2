@@ -4,8 +4,12 @@ import logging
 import os
 from uuid import uuid4
 
-import jwt
 from fastapi import HTTPException, Request, WebSocket, Response
+
+try:
+    from jose import jwt as jose_jwt
+except Exception:
+    jose_jwt = None
 
 from ..security import jwt_decode
 from ..telemetry import LogRecord, hash_user_id, log_record_var
@@ -13,6 +17,17 @@ from ..telemetry import LogRecord, hash_user_id, log_record_var
 JWT_SECRET: str | None = None  # overridden in tests; env used when None
 
 logger = logging.getLogger(__name__)
+
+
+def _decode_unverified(token: str) -> dict | None:
+    if not token or not jose_jwt:
+        return None
+    try:
+        if hasattr(jose_jwt, "get_unverified_claims"):
+            return jose_jwt.get_unverified_claims(token)
+        return jose_jwt.decode(token, "ignore", options={"verify_signature": False})
+    except Exception:
+        return None
 
 
 def _is_clerk_enabled() -> bool:
@@ -332,7 +347,7 @@ def get_current_user_id(
                                     store.set_session_identity(token, payload, exp_s)
                                 except Exception:
                                     pass
-                    except jwt.PyJWTError:
+                    except jose_jwt.JWTError:
                         pass
 
     # Try traditional JWT first (same secret/issuer checks for both access_token and __session)
@@ -362,7 +377,7 @@ def get_current_user_id(
             # Store JWT payload in request state for scope enforcement
             if target and isinstance(payload, dict):
                 target.state.jwt_payload = payload
-        except jwt.PyJWTError:
+        except jose_jwt.JWTError:
             # For WebSocket handshakes, proceed as anonymous on invalid token to avoid
             # closing the connection before it's established. HTTP requests still fail.
             if websocket is None:
@@ -394,7 +409,48 @@ def get_current_user_id(
     # Clerk validation removed
 
     if not user_id:
-        user_id = "anon"
+        # Try lazy refresh if we have a refresh cookie but no valid access token
+        if request is not None and response is not None:
+            try:
+                from ..cookies import read_refresh_cookie
+                refresh_token = read_refresh_cookie(request)
+                if refresh_token:
+                    from ..auth_refresh import perform_lazy_refresh
+                    from ..metrics_auth import lazy_refresh_minted, lazy_refresh_skipped, lazy_refresh_failed
+
+                    # Extract user_id from refresh token for lazy refresh
+                    try:
+                        from ..tokens import SECRET_KEY, ALGORITHM
+                        rt_payload = jose_jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+                        lazy_user_id = str(rt_payload.get("sub") or rt_payload.get("user_id") or "")
+                    except Exception:
+                        lazy_user_id = ""
+
+                    if lazy_user_id and perform_lazy_refresh(request, response, lazy_user_id, None):
+                        lazy_refresh_minted("deps_fallback")
+                        # After lazy refresh, try to authenticate with the new access token
+                        try:
+                            from ..cookies import read_access_cookie
+                            new_access_token = read_access_cookie(request)
+                            if new_access_token:
+                                from ..tokens import SECRET_KEY, ALGORITHM
+                                at_payload = jose_jwt.decode(new_access_token, SECRET_KEY, algorithms=[ALGORITHM])
+                                user_id = str(at_payload.get("user_id") or at_payload.get("sub") or "")
+                                if target and isinstance(at_payload, dict):
+                                    target.state.jwt_payload = at_payload
+                        except Exception:
+                            pass
+                    else:
+                        lazy_refresh_skipped("deps_fallback")
+            except Exception as e:
+                try:
+                    from ..metrics_auth import lazy_refresh_failed
+                    lazy_refresh_failed("deps_fallback")
+                except Exception:
+                    pass
+
+        if not user_id:
+            user_id = "anon"
 
         # Record metrics for missing/invalid tokens if we had a token but couldn't authenticate
         if (
@@ -622,10 +678,58 @@ def resolve_session_id_strict(
     return sid
 
 
+def resolve_auth_source_conflict(request: Request) -> tuple[str, bool]:
+    """Resolve auth source with explicit Bearer-over-cookie precedence and detect conflicts.
+
+    Returns a tuple (source, conflict) where source is one of:
+    - "header" when Authorization: Bearer is present
+    - "cookie" when an access token cookie is present
+    - "session" when only a session cookie is present
+    - "missing" when no auth material present
+
+    Conflict is True when both Authorization header and any auth cookie are present.
+    """
+    try:
+        from ..web.cookies import NAMES as _COOKIE_NAMES
+    except Exception:
+        _COOKIE_NAMES = None  # type: ignore
+
+    has_bearer = False
+    try:
+        auth = request.headers.get("Authorization") or ""
+        has_bearer = auth.startswith("Bearer ")
+    except Exception:
+        has_bearer = False
+
+    has_access_cookie = False
+    has_session_cookie = False
+    try:
+        if _COOKIE_NAMES is not None:
+            has_access_cookie = bool(request.cookies.get(_COOKIE_NAMES.access))
+            has_session_cookie = bool(request.cookies.get(_COOKIE_NAMES.session))
+        else:
+            has_access_cookie = bool(request.cookies.get("access_token"))
+            has_session_cookie = bool(request.cookies.get("__session"))
+    except Exception:
+        pass
+
+    any_cookie = has_access_cookie or has_session_cookie
+    conflict = bool(has_bearer and any_cookie)
+
+    if has_bearer:
+        return ("header", conflict)
+    if has_access_cookie:
+        return ("cookie", conflict)
+    if has_session_cookie:
+        return ("session", conflict)
+    return ("missing", conflict)
+
+
 __all__ = [
     "get_current_user_id",
     "get_current_session_device",
     "resolve_session_id",
     "require_user",
     "resolve_user_id",
+    "resolve_auth_source_conflict",
 ]

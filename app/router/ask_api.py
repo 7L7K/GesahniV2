@@ -14,6 +14,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from app import settings
 from app.deps.prompt_router import get_prompt_router
 from app.domain.prompt_router import PromptRouter
 from app.errors import BackendUnavailable
@@ -61,7 +62,10 @@ def _get_trace_id() -> str | None:
 
 def _should_log_verbose() -> bool:
     """Check if verbose payload logging is enabled for local dev."""
-    return os.getenv("DEBUG_VERBOSE_PAYLOADS", "0").strip() in {"1", "true", "yes", "on"}
+    try:
+        return settings.debug_model_routing()  # reuse debug flag for simplicity
+    except Exception:
+        return False
 
 
 def _redact_sensitive_data(data: dict) -> dict:
@@ -145,7 +149,7 @@ def _require_auth_dep():
 
 
 # Create the router
-_deps_for_ask = _require_auth_dep() if os.getenv("PROMPT_BACKEND", "dryrun").lower() != "dryrun" else []
+_deps_for_ask = _require_auth_dep() if settings.prompt_backend() != "dryrun" else []
 
 router = APIRouter(tags=["Care"])  # dependency added per-route to allow env gate
 

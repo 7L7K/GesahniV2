@@ -30,6 +30,7 @@ except Exception:
     OPENAI_TIMEOUT_MS = 6000
     OLLAMA_TIMEOUT_MS = 4500
 from app.security import verify_token
+from app.security.auth_contract import require_auth
 from app.telemetry import hash_user_id
 
 from ..security import jwt_decode
@@ -491,6 +492,8 @@ async def _require_auth_dep(request: Request) -> None:
 )
 async def _ask(request: Request, body: dict | None):
     """Internal ask function that accepts resolved user_id parameter."""
+    # Enforce auth parity even in DRY_RUN mode
+    require_auth(request)
     # Resolve user_id from request
     user_id = get_current_user_id(request)
     # Step 1: Log entry point and payload details
@@ -961,6 +964,7 @@ async def ask_dry_explain(
     user_id: str = Depends(get_current_user_id),
 ):
     """Shadow routing endpoint that returns routing decision without making model calls."""
+    require_auth(request)
     # Step 1: Log entry point and payload details
     logger.info(
         "🔍 ASK DRY-EXPLAIN: /v1/ask/dry-explain hit with payload=%s",
@@ -1112,6 +1116,7 @@ async def ask_stream(
     user_id: str = Depends(get_current_user_id),
 ):
     """Streaming endpoint with Server-Sent Events (SSE) support."""
+    require_auth(request)
     # Step 1: Log entry point and payload details
     logger.info(
         "🔍 ASK STREAM: /v1/ask/stream hit with payload=%s",
@@ -1187,6 +1192,12 @@ async def ask_stream(
     request_id = str(uuid.uuid4())[:8]
 
     async def stream_generator():
+        import asyncio
+        import time
+
+        def sse(event_type: str, data: dict) -> str:
+            return f"data: {json.dumps({'type': event_type, 'data': data})}\n\n"
+
         try:
             # Get routing decision first
             from ..intent import detect_intent
@@ -1194,8 +1205,7 @@ async def ask_stream(
             from ..tokenizer import count_tokens
 
             # Detect intent and count tokens
-            norm_prompt = prompt_text.lower().strip()
-            intent, priority = detect_intent(prompt_text)
+            intent, _priority = detect_intent(prompt_text)
             tokens = count_tokens(prompt_text)
 
             # Determine routing decision
@@ -1204,112 +1214,135 @@ async def ask_stream(
                 if mv.startswith("gpt"):
                     chosen_vendor = "openai"
                     chosen_model = mv
-                    picker_reason = "explicit_override"
                 elif mv.startswith("llama"):
                     chosen_vendor = "ollama"
                     chosen_model = mv
-                    picker_reason = "explicit_override"
                 else:
-                    # Unknown model
-                    yield f"event: error\ndata: {json.dumps({'rid': request_id, 'error': 'unknown_model', 'model': mv})}\n\n"
+                    yield sse("error", {"rid": request_id, "code": "unknown_model", "model": mv})
                     return
             else:
-                engine, model_name, picker_reason, keyword_hit = pick_model(
+                engine, model_name, _picker_reason, _keyword_hit = pick_model(
                     prompt_text, intent, tokens
                 )
                 chosen_vendor = "openai" if engine == "gpt" else "ollama"
                 chosen_model = model_name
 
-            # Check circuit breakers
-            from ..llama_integration import llama_circuit_open
-            from ..router import _user_circuit_open
+            # Helpers -----------------------------------------------------
+            def _fallback_vendor(vendor: str) -> str:
+                return "openai" if vendor == "ollama" else "ollama"
 
-            cb_global_open = llama_circuit_open
-            cb_user_open = await _user_circuit_open(user_id) if user_id else False
+            def _fallback_model(vendor: str) -> str:
+                return "gpt-4o" if vendor == "openai" else "llama3:latest"
 
-            # Emit route event
-            route_data = {
-                "ts": datetime.now(UTC).isoformat(),
-                "rid": request_id,
-                "uid": user_id,
-                "path": "/v1/ask/stream",
-                "shape": shape,
-                "normalized_from": normalized_from,
-                "override_in": model_override,
-                "intent": intent,
-                "tokens_est": tokens,
-                "picker_reason": picker_reason,
-                "chosen_vendor": chosen_vendor,
-                "chosen_model": chosen_model,
-                "dry_run": False,
-                "cb_user_open": cb_user_open,
-                "cb_global_open": cb_global_open,
-                "allow_fallback": True,
-                "stream": True,
-            }
+            stall_ms = int(os.getenv("STREAM_STALL_MS", "15000") or 15000)
+            stall_s = max(1.0, stall_ms / 1000.0)
+            ping_interval_s = 8.0
 
-            if "keyword_hit" in locals() and keyword_hit:
-                route_data["keyword_hit"] = keyword_hit
+            current_queue: asyncio.Queue[str] = asyncio.Queue()
 
-            yield f"event: route\ndata: {json.dumps(route_data)}\n\n"
+            async def _run_vendor(vendor: str, model: str) -> dict:
+                async def _cb(tok: str):
+                    await current_queue.put(tok)
 
-            # Stream the actual response
-            async def stream_callback(token: str):
-                yield f"event: delta\ndata: {json.dumps({'content': token})}\n\n"
-
-            # Call the appropriate vendor
-            try:
-                if chosen_vendor == "openai":
+                if vendor == "openai":
                     from ..gpt_client import ask_gpt
 
-                    result = await ask_gpt(
+                    return await ask_gpt(
                         prompt_text,
-                        model=chosen_model,
+                        model=model,
                         timeout=OPENAI_TIMEOUT_MS / 1000,
-                        stream_cb=stream_callback,
+                        stream_cb=_cb,
                         **gen_opts,
                     )
-                elif chosen_vendor == "ollama":
+                elif vendor == "ollama":
                     from ..llama_integration import ask_llama
 
-                    result = await ask_llama(
+                    return await ask_llama(
                         prompt_text,
-                        model=chosen_model,
+                        model=model,
                         timeout=OLLAMA_TIMEOUT_MS / 1000,
-                        stream_cb=stream_callback,
+                        stream_cb=_cb,
                         **gen_opts,
                     )
                 else:
-                    yield f"event: error\ndata: {json.dumps({'rid': request_id, 'vendor': chosen_vendor, 'error_class': 'unknown_vendor'})}\n\n"
-                    return
+                    raise RuntimeError(f"unknown_vendor:{vendor}")
 
-                # Emit done event
-                done_data = {
-                    "rid": request_id,
-                    "vendor": chosen_vendor,
-                    "model": chosen_model,
-                    "final_tokens": tokens,  # This would be actual completion tokens
-                }
-                yield f"event: done\ndata: {json.dumps(done_data)}\n\n"
+            async def _start(vendor: str, model: str) -> asyncio.Task:
+                return asyncio.create_task(_run_vendor(vendor, model))
 
-            except Exception as e:
-                # Emit error event
-                error_data = {
-                    "rid": request_id,
-                    "vendor": chosen_vendor,
-                    "error_class": type(e).__name__,
-                    "error": str(e),
-                }
-                yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
+            task = await _start(chosen_vendor, chosen_model)
+            last_token_ts = time.monotonic()
+            next_ping_ts = last_token_ts + ping_interval_s
+            final_or_error_sent = False
+            tried_fallback = False
+            active_vendor = chosen_vendor
+            active_model = chosen_model
+
+            while True:
+                # Drain tokens with short wait to interleave pings and stall detection
+                try:
+                    tok = await asyncio.wait_for(current_queue.get(), timeout=0.5)
+                    last_token_ts = time.monotonic()
+                    next_ping_ts = last_token_ts + ping_interval_s
+                    yield sse("delta", {"content": tok})
+                except asyncio.TimeoutError:
+                    pass
+
+                now = time.monotonic()
+                if now >= next_ping_ts and not final_or_error_sent:
+                    yield sse("ping", {"ts": now})
+                    next_ping_ts = now + ping_interval_s
+
+                if task.done():
+                    try:
+                        result = task.result()
+                    except Exception as e:
+                        if tried_fallback:
+                            yield sse("error", {"rid": request_id, "code": "upstream_error", "error": str(e)})
+                            final_or_error_sent = True
+                            break
+                        # attempt fallback once on error
+                        tried_fallback = True
+                        active_vendor = _fallback_vendor(active_vendor)
+                        active_model = _fallback_model(active_vendor)
+                        current_queue = asyncio.Queue()
+                        task = await _start(active_vendor, active_model)
+                        last_token_ts = time.monotonic()
+                        next_ping_ts = last_token_ts + ping_interval_s
+                        continue
+
+                    # Completed successfully
+                    yield sse("final", {"rid": request_id, "vendor": active_vendor, "model": active_model, "usage": result.get("usage", {})})
+                    final_or_error_sent = True
+                    break
+
+                # Stall detection
+                if (now - last_token_ts) >= stall_s and not tried_fallback:
+                    # Cancel primary and switch to fallback
+                    tried_fallback = True
+                    try:
+                        task.cancel()
+                    except Exception:
+                        pass
+                    active_vendor = _fallback_vendor(active_vendor)
+                    active_model = _fallback_model(active_vendor)
+                    current_queue = asyncio.Queue()
+                    task = await _start(active_vendor, active_model)
+                    last_token_ts = time.monotonic()
+                    next_ping_ts = last_token_ts + ping_interval_s
+                elif (now - last_token_ts) >= stall_s and tried_fallback:
+                    # Fallback also stalled/fails
+                    try:
+                        task.cancel()
+                    except Exception:
+                        pass
+                    if not final_or_error_sent:
+                        yield sse("error", {"rid": request_id, "code": "upstream_stall"})
+                        final_or_error_sent = True
+                    break
 
         except Exception as e:
-            # Emit error event for any other errors
-            error_data = {
-                "rid": request_id,
-                "error_class": type(e).__name__,
-                "error": str(e),
-            }
-            yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
+            yield sse("error", {"rid": request_id, "code": "internal_error", "error": str(e)})
 
     return StreamingResponse(
         stream_generator(),

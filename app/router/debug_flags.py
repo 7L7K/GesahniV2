@@ -1,12 +1,14 @@
 """Debug flags for model routing and dry-run functionality."""
 
-import os
-from typing import Optional
+from app import settings
 
 
 def is_debug_routing_enabled() -> bool:
-    """Check if debug model routing is enabled."""
-    return os.getenv("DEBUG_MODEL_ROUTING", "0").lower() in {"1", "true", "yes"}
+    """Check if debug model routing is enabled (via settings)."""
+    try:
+        return settings.debug_model_routing()
+    except Exception:
+        return False
 
 
 def is_dry_run_mode() -> bool:

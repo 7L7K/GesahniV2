@@ -1,0 +1,21 @@
+{
+    "is_authenticated": false,
+    "session_ready": false,
+    "user_id": null,
+    "user": null,
+    "source": "missing",
+    "version": 1,
+    "profile": {
+        "user_id": "anon",
+        "login_count": 0,
+        "last_login": null,
+        "request_count": 0
+    },
+    "flags": {
+        "retrieval_pipeline": false,
+        "use_hosted_rerank": false,
+        "debug_model_routing": false,
+        "ablation_flags": [],
+        "trace_sample_rate": 0.1
+    }
+}

@@ -23,7 +23,7 @@ from app.auth_store import create_pat as _create_pat
 from app.auth_store import get_pat_by_hash as _get_pat_by_hash
 from app.auth_store import list_pats_for_user as _list_pats_for_user
 from app.auth_store import revoke_pat as _revoke_pat
-from app.deps.user import get_current_user_id, require_user, resolve_session_id
+from app.deps.user import get_current_user_id, require_user, resolve_session_id, resolve_auth_source_conflict
 from app.logging_config import req_id_var
 from app.metrics import AUTH_REFRESH_OK, AUTH_REFRESH_FAIL, WHOAMI_OK, WHOAMI_FAIL
 from app.security import jwt_decode
@@ -123,24 +123,95 @@ async def auth_examples():
 
 @router.get("/whoami", include_in_schema=False)
 async def whoami(request: Request):
-    """Get current user information."""
+    """Get current user information (production-grade contract)."""
+    t0 = time.time()
+    req_id = req_id_var.get() or request.headers.get("X-Request-ID") or ""
+    # Default headers required by contract
+    cache_headers = {
+        "Cache-Control": "no-store, max-age=0",
+        "Pragma": "no-cache",
+    }
     try:
-        # Use new auth contract helper for consistent 401 handling
+        # Auth resolution with project contract helper
         from app.security.auth_contract import require_auth
+
         ident = await require_auth(request)
 
-        await record_whoami_call(request)
-        WHOAMI_OK.inc()
+        # Determine source and conflict (prefer Bearer on conflict)
+        source, conflict = resolve_auth_source_conflict(request)
 
-        return {
+        body = {
+            "schema_version": 1,
+            "generated_at": datetime.now(UTC).isoformat(),
+            "request_id": req_id,
             "user_id": ident.get("user_id"),
             "authenticated": True,
-            "source": ident.get("source"),
+            "source": source,
         }
-    except Exception as e:
+        # Only expose auth_source_conflict when DEBUG or CSRF_LEGACY_GRACE are enabled
+        dbg = (os.getenv("DEBUG") or "").strip().lower() in {"1", "true", "yes", "on"}
+        legacy = (os.getenv("CSRF_LEGACY_GRACE") or "").strip().lower() in {"1", "true", "yes", "on"}
+        if conflict and (dbg or legacy):
+            body["auth_source_conflict"] = True
+        # Log conflict warning always
+        if conflict:
+            try:
+                logger.warning(
+                    "auth.source_conflict user_id=%s request_id=%s",
+                    body.get("user_id"),
+                    req_id,
+                )
+            except Exception:
+                pass
+
+        # Observability log
+        latency_ms = int((time.time() - t0) * 1000)
+        logger.info(
+            "evt=identity_check route=/v1/whoami user_id=%s source=%s is_authenticated=%s request_id=%s latency_ms=%d",
+            body.get("user_id"),
+            source,
+            True,
+            req_id,
+            latency_ms,
+        )
+
+        # Record monitoring signal
+        try:
+            await record_whoami_call(request)
+            WHOAMI_OK.inc()
+        except Exception:
+            pass
+
+        resp = JSONResponse(content=body, status_code=200, headers=cache_headers)
+        # Echo request id
+        if req_id:
+            resp.headers.setdefault("X-Request-ID", req_id)
+        return resp
+    except HTTPException:
         WHOAMI_FAIL.inc()
         logger.error("whoami.failed", exc_info=True)
-        raise HTTPException(status_code=401, detail="Authentication failed")
+        # Structured 401 body per contract
+        body = {
+            "code": "auth.not_authenticated",
+            "detail": "not_authenticated",
+            "request_id": req_id,
+        }
+        resp = JSONResponse(content=body, status_code=401, headers=cache_headers)
+        if req_id:
+            resp.headers.setdefault("X-Request-ID", req_id)
+        return resp
+    except Exception:
+        WHOAMI_FAIL.inc()
+        logger.error("whoami.failed", exc_info=True)
+        body = {
+            "code": "auth.not_authenticated",
+            "detail": "not_authenticated",
+            "request_id": req_id,
+        }
+        resp = JSONResponse(content=body, status_code=401, headers=cache_headers)
+        if req_id:
+            resp.headers.setdefault("X-Request-ID", req_id)
+        return resp
 
 
 @router.post("/refresh", include_in_schema=False)

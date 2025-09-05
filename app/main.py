@@ -769,31 +769,6 @@ _DEV_SERVERS_SNAPSHOT = os.getenv("OPENAPI_DEV_SERVERS")
 
 from app.startup import lifespan  # NEW: use extracted lifespan
 
-app = FastAPI(
-    title="GesahniV2 API",
-    version=_get_version(),
-    lifespan=lifespan,  # use extracted lifespan from app.startup
-    openapi_tags=tags_metadata,
-    docs_url=_docs_url,
-    redoc_url=_redoc_url,
-    openapi_url=_openapi_url,
-    swagger_ui_parameters=_swagger_ui_parameters,
-)
-
-# Ensure compatibility aliases/stub routers are attached on the module-level
-# `app` so tests that import `app.main.app` directly see the full surface.
-try:
-    from .router.registry import attach_all as _attach_all
-
-    try:
-        _attach_all(app)
-        logger.debug("✅ Compat/stub routers attached at import time on main.app")
-    except Exception as e:
-        logger.debug("compat/stub routers not attached at import time: %s", e)
-except Exception:
-    # Registry not available at import time; create_app() will attach when invoked.
-    logger.debug("router.registry.attach_all not available at import time; create_app will attach routers")
-
 
 def create_app() -> FastAPI:
     """Composition root helper to perform late DI wiring.
@@ -804,14 +779,42 @@ def create_app() -> FastAPI:
     """
     logger.info("🔧 Starting application composition in create_app()")
 
-    # Install global middleware early (OPTIONS auto-reply) to avoid stealth 404s
-    try:
-        from .middleware.options_autoreply import AutoOptionsMiddleware
+    # Construct app with single composition root + lifespan
+    app = FastAPI(
+        title="GesahniV2",
+        # Ensure OpenAPI has a non-empty version (FastAPI requires this)
+        # Invariant: prefer _get_version() with fallback to APP_VERSION env
+        version=_get_version() or os.getenv("APP_VERSION", ""),
+        lifespan=lifespan,
+        # Optional but nice: keep tags if defined
+        openapi_tags=tags_metadata,
+    )
 
-        app.add_middleware(AutoOptionsMiddleware)
-        logger.debug("✅ AutoOptionsMiddleware registered")
-    except Exception:
-        logger.debug("AutoOptionsMiddleware not available")
+    # Register routers once via registry with dev/prod handling
+    from app.routers.config import register_routers
+    DEV = os.getenv("ENV", "dev") == "dev"
+    try:
+        register_routers(app)
+    except Exception as e:
+        if DEV:
+            raise
+        # Invariant: canonical error handling for router registration
+        logger.exception("Router registration failed; continuing (prod): %s", e)
+
+    # Include dev-only router
+    if os.getenv("ENV", "dev").lower() in {"dev", "local"}:
+        try:
+            from app.api.dev import router as dev_router
+            app.include_router(dev_router, prefix="/dev", tags=["Dev"])
+        except Exception as e:
+            logger.warning("Failed to include dev router: %s", e)
+
+    # Dev self-check to guarantee health endpoints mounted
+    if DEV:
+        paths = {getattr(r, "path", None) for r in app.routes}
+        assert "/healthz" in paths, "healthz missing after registration"
+
+    # AutoOptionsMiddleware removed - CorsPreflightMiddleware handles OPTIONS
 
     # Phase 7: Initialize infrastructure singletons first (needed by router)
     try:
@@ -893,19 +896,19 @@ def create_app() -> FastAPI:
     except Exception as e:
         logger.warning("⚠️  Failed to register backend factory: %s", e)
 
-    # Routers (env-aware, single source of truth)
-    try:
-        from app.routers.config import register_routers
-        register_routers(app)
-        logger.debug("✅ Routers registered via app.routers.config.register_routers")
-    except Exception as e:
-        logger.warning("⚠️  Failed to register routers via config: %s", e)
+    # Routers are already registered above; do not re-register or include temporary health router
+
+    # Test syntax error to see if this code path is executed
+    # This will cause a startup failure if this code is reached
+    # raise RuntimeError("TEST: This should cause startup failure")
 
     # Error handlers (single registration point) - MUST happen before middleware setup
     from app.error_handlers import register_error_handlers
     register_error_handlers(app)
 
-    # Phase 6: Set up middleware stack (isolated from routers)
+    # CORS middleware moved to middleware/stack.py to avoid duplicates
+
+    # Phase 6.1: Set up middleware stack (isolated from routers)
     # Note: middleware setup is intentionally executed after registering error handlers
     try:
         from .middleware.stack import setup_middleware_stack, validate_middleware_order
@@ -926,27 +929,8 @@ def create_app() -> FastAPI:
     except Exception as e:
         logger.warning("⚠️  Failed to register test router: %s", e)
 
-    # Phase 8: Register status router for health and observability endpoints
-    try:
-        logger.debug("Attempting to register status router...")
-        from .status import router as status_router
-        app.include_router(status_router, tags=["Admin"])
-        logger.info("✅ Status router registered")
-    except ImportError as e:
-        logger.warning("⚠️  Failed to import status router: %s", e)
-    except Exception as e:
-        logger.warning("⚠️  Failed to register status router: %s", e)
-
-    # Phase 9: Register public observability router (no auth required)
-    try:
-        logger.debug("Attempting to register public observability router...")
-        from .status import public_router
-        app.include_router(public_router)
-        logger.info("✅ Public observability router registered")
-    except ImportError as e:
-        logger.warning("⚠️  Failed to import public router: %s", e)
-    except Exception as e:
-        logger.warning("⚠️  Failed to register public router: %s", e)
+    # Status and health routers are included via the canonical registry.
+    # Do not include them manually to avoid duplicates.
 
     # Phase 6: Set up OpenAPI generation (isolated from routers)
     try:
@@ -955,6 +939,43 @@ def create_app() -> FastAPI:
         logger.debug("✅ OpenAPI generation configured")
     except Exception as e:
         logger.warning("⚠️  Failed to set up OpenAPI generation: %s", e)
+
+    # Optional static mounts
+    try:
+        _tv_dir = os.getenv("TV_PHOTOS_DIR", "data/shared_photos")
+        if _tv_dir:
+            app.mount("/shared_photos", StaticFiles(directory=_tv_dir), name="shared_photos")
+    except Exception:
+        pass
+
+    try:
+        _album_dir = os.getenv("ALBUM_ART_DIR", "data/album_art")
+        if _album_dir:
+            Path(_album_dir).mkdir(parents=True, exist_ok=True)
+            app.mount("/album_art", StaticFiles(directory=_album_dir), name="album_art")
+    except Exception:
+        pass
+
+    # Compatibility: ensure legacy root-level Google OAuth callback is reachable
+    try:
+        from fastapi import Request, HTTPException
+        import inspect
+
+        async def _legacy_google_oauth_callback_root(request: Request):
+            try:
+                from app.integrations.google.routes import legacy_oauth_callback
+            except Exception:
+                raise HTTPException(status_code=404)
+
+            maybe = legacy_oauth_callback(request)
+            if inspect.isawaitable(maybe):
+                return await maybe
+            return maybe
+
+        app.add_api_route("/google/oauth/callback", _legacy_google_oauth_callback_root, methods=["GET"])
+    except Exception:
+        # Best-effort compatibility shim; do not fail startup if unavailable
+        pass
 
 # Infrastructure initialization moved to beginning of create_app()
 
@@ -980,29 +1001,6 @@ set_store_providers(user_store_provider=lambda: user_store)
 # These were removed from the main module to keep `app/main.py` minimal.
 
 # Removed legacy unversioned /whoami to ensure a single canonical /v1/whoami
-
-# Optional static mount for TV shared photos
-try:
-    _tv_dir = os.getenv("TV_PHOTOS_DIR", "data/shared_photos")
-    if _tv_dir:
-        app.mount(
-            "/shared_photos", StaticFiles(directory=_tv_dir), name="shared_photos"
-        )
-except Exception:
-    pass
-
-    # Album art cache mount for music UI
-    try:
-        _album_dir = os.getenv("ALBUM_ART_DIR", "data/album_art")
-        if _album_dir:
-            Path(_album_dir).mkdir(parents=True, exist_ok=True)
-            app.mount("/album_art", StaticFiles(directory=_album_dir), name="album_art")
-    except Exception:
-        pass
-
-# Metrics endpoint moved to `app/api/metrics_root.py` and is included from there.
-# The local /metrics handlers were removed to avoid duplicate definitions.
-
 
 _HEALTH_LAST: dict[str, bool] = {"online": True}
 
@@ -1064,16 +1062,6 @@ class ServiceRequest(BaseModel):
 # Canonical router mounts (explicit prefixes)
 # =============================================================================
 
-def include(router_spec: str, *, prefix: str = "") -> None:
-    try:
-        mod, name = router_spec.split(":", 1)
-        module = __import__(mod, fromlist=[name])
-        r = getattr(module, name, None)
-        if r is not None:
-            app.include_router(r, prefix=prefix)
-    except Exception as e:
-        logging.warning("Router include failed for %s: %s", router_spec, e)
-
 # CORS configuration moved to middleware/stack.py to avoid import-time cycles
 
 # All router includes moved to create_app() to avoid import-time cycles
@@ -1098,27 +1086,6 @@ def include(router_spec: str, *, prefix: str = "") -> None:
 # Middleware order validation moved to middleware/stack.py
 
 
-# Compatibility: ensure legacy root-level Google OAuth callback is reachable
-try:
-    from fastapi import Request, HTTPException
-    import inspect
-
-    async def _legacy_google_oauth_callback_root(request: Request):
-        try:
-            from app.integrations.google.routes import legacy_oauth_callback
-        except Exception:
-            raise HTTPException(status_code=404)
-
-        maybe = legacy_oauth_callback(request)
-        if inspect.isawaitable(maybe):
-            return await maybe
-        return maybe
-
-    app.add_api_route("/google/oauth/callback", _legacy_google_oauth_callback_root, methods=["GET"])
-except Exception:
-    # Best-effort compatibility shim; do not fail startup if unavailable
-    pass
-
 # Final startup logging - simplified
 logging.info(
     f"Server starting on {os.getenv('HOST', '0.0.0.0')}:{os.getenv('PORT', '8000')}"
@@ -1135,3 +1102,8 @@ if __name__ == "__main__":
     # Use create_app() for full application setup
     full_app = create_app()
     uvicorn.run(full_app, host=host, port=port)
+
+# Create the FastAPI app instance for uvicorn
+app = create_app()
+
+__all__ = ["create_app", "app"]

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Protocol
+
+try:  # Avoid hard import failures at type-check/runtime
+    from app.api.ask_contract import AskRequest  # type: ignore
+except Exception:  # pragma: no cover - fallback for import cycles
+    AskRequest = Any  # type: ignore
 
 
 @dataclass
@@ -77,3 +82,31 @@ Notes on usage and contract guarantees:
   suitable for admin debugging only.
 
 """
+
+
+class Skill(Protocol):
+    """Lightweight Skill protocol used by the registry and router.
+
+    Implementations should be import-light and side-effect free at import time.
+    """
+
+    @property
+    def name(self) -> str:
+        """Canonical skill name used in observability and selection."""
+        ...
+
+    def can_handle(self, text: str, intent_hint: Optional[str] = None) -> bool:
+        """Return True if this skill can handle the text prompt."""
+        ...
+
+    def confidence(self, text: str, intent_hint: Optional[str] = None) -> float:
+        """Confidence in [0,1] that this skill is appropriate for the prompt."""
+        ...
+
+    def cost_estimate(self, text: str) -> float:
+        """Relative cost estimate (>0.0) used to trade off against confidence."""
+        ...
+
+    async def run(self, request: "AskRequest") -> Dict[str, Any]:
+        """Execute the skill and return a response dict compatible with AskResponse shaping."""
+        ...

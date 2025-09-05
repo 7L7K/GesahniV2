@@ -61,7 +61,7 @@ export function requestKey(method: string, url: string, ctx?: string | string[])
 
 // Respect NEXT_PUBLIC_USE_DEV_PROXY so the dev server can proxy `/api/*` to the backend
 const useDevProxy = (process.env.NEXT_PUBLIC_USE_DEV_PROXY || 'false') === 'true';
-export const API_URL = useDevProxy ? '' : (process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000"); // canonical API origin for localhost consistency
+export const API_URL = useDevProxy ? '' : (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000"); // canonical API origin for localhost consistency
 
 // Boot log for observability
 if (typeof console !== 'undefined') {
@@ -172,7 +172,7 @@ export function useSessionState() {
   return useQuery({
     queryKey: buildQueryKey('session'),
     queryFn: async () => {
-      const res = await apiFetch('/v1/me', { auth: true });
+      const res = await apiFetch('/v1/auth/whoami', { auth: true });
       if (!res.ok) throw new Error('Failed to fetch session');
       return await res.json();
     },
@@ -181,6 +181,15 @@ export function useSessionState() {
     enabled: isAuthed(),
   });
 }
+
+// Auth API endpoints for cookie mode
+export const AuthAPI = {
+  whoami: () => apiFetch('/v1/auth/whoami').then(r => r.json()),
+  login: (body: any) => apiFetch('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  refresh: () => apiFetch('/v1/auth/refresh', { method: 'POST' }),
+  logout: () => apiFetch('/v1/auth/logout', { method: 'POST' }),
+  csrf: () => apiFetch('/v1/csrf').then(r => r.json()),
+};
 
 // Import required dependencies at the end to avoid circular imports
 import { getLocalStorage, setLocalStorage, removeLocalStorage, safeNow, normalizeContextKey, getActiveDeviceId, INFLIGHT_REQUESTS, SHORT_CACHE } from './utils';
