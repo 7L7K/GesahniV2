@@ -8,13 +8,8 @@ echo "  - Backend: http://localhost:8000 (bound to 127.0.0.1)"
 echo "  - API Origin: http://localhost:8000"
 echo ""
 
-# Load centralized localhost configuration
-if [ -f "env.localhost" ]; then
-    echo "📝 Loading centralized localhost configuration..."
-    export $(grep -v '^#' env.localhost | xargs)
-else
-    echo "⚠️  Warning: env.localhost not found, using default configuration"
-fi
+# Environment variables loaded by direnv (.envrc)
+echo "📝 Environment loaded via direnv (.env file)"
 
 # Ensure Qdrant is running (idempotent container management)
 ensure_qdrant() {

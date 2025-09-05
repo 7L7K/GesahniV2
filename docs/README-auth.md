@@ -31,7 +31,8 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 ## Backend env (.env or process env)
 ```
 # Local HS256 JWT
-JWT_SECRET=change-me
+# Generate: python scripts/jwt_tools.py hs256
+JWT_SECRET=
 
 # Clerk JWT (RS256) verification (any of the following)
 CLERK_JWKS_URL=https://<tenant>.clerk.accounts.dev/.well-known/jwks.json

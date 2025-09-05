@@ -779,6 +779,15 @@ def create_app() -> FastAPI:
     """
     logger.info("🔧 Starting application composition in create_app()")
 
+    # Import guards at top of create_app()
+    import os
+    DEBUG = os.getenv("GSN_DEBUG_STARTUP") == "1"
+
+    # Add fault handler for startup diagnostics
+    if DEBUG:
+        import faulthandler, sys
+        faulthandler.dump_traceback_later(8, repeat=True, file=sys.stderr)
+
     # Construct app with single composition root + lifespan
     app = FastAPI(
         title="GesahniV2",
@@ -789,6 +798,27 @@ def create_app() -> FastAPI:
         # Optional but nice: keep tags if defined
         openapi_tags=tags_metadata,
     )
+
+    # Immediately after `app = FastAPI(...)`:
+    if DEBUG:
+        from app.diagnostics.startup_probe import probe
+        from app.diagnostics.state import set_snapshot, record_event
+        set_snapshot("before", probe(app))
+        record_event("app-created", "FastAPI instantiated")
+
+        # Wrap include_router to trace calls (observation-only)
+        _orig_include = app.include_router
+        def _trace_include(router, *args, **kwargs):
+            from app.diagnostics.state import record_router_call
+            prefix = kwargs.get("prefix")
+            try:
+                where = f"{router.tags if hasattr(router,'tags') else ''}"
+            except Exception:
+                where = "<router>"
+            res = _orig_include(router, *args, **kwargs)
+            record_router_call(where=str(where), prefix=prefix, routes_total=len(app.routes))
+            return res
+        app.include_router = _trace_include  # type: ignore[attr-defined]
 
     # Register routers once via registry with dev/prod handling
     from app.routers.config import register_routers
@@ -869,6 +899,19 @@ def create_app() -> FastAPI:
             # Fail closed; endpoints will map this to 503
             raise BackendUnavailable(f"Unknown PROMPT_BACKEND={backend!r}")
 
+    # Also inside create_app(), attach startup/shutdown event markers (observation only):
+    @app.on_event("startup")
+    async def _diag_start():
+        if DEBUG:
+            from app.diagnostics.state import record_event
+            record_event("startup", "application startup")
+
+    @app.on_event("shutdown")
+    async def _diag_stop():
+        if DEBUG:
+            from app.diagnostics.state import record_event
+            record_event("shutdown", "application shutdown")
+
     # Register backend factory for swappable, lazy backends (openai/llama/dryrun)
     try:
         from app.routers import register_backend_factory
@@ -911,9 +954,10 @@ def create_app() -> FastAPI:
     # Phase 6.1: Set up middleware stack (isolated from routers)
     # Note: middleware setup is intentionally executed after registering error handlers
     try:
-        from .middleware.stack import setup_middleware_stack, validate_middleware_order
-        setup_middleware_stack(app)
-        validate_middleware_order(app)
+        from app.middleware.stack import setup_middleware_stack
+        csrf_enabled = bool(int(os.getenv("CSRF_ENABLED", "1")))
+        cors_origins = os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGINS") else None
+        setup_middleware_stack(app, csrf_enabled=csrf_enabled, cors_origins=cors_origins)
         logger.debug("✅ Middleware stack configured")
     except Exception as e:
         logger.warning("⚠️  Failed to set up middleware stack: %s", e)
@@ -956,28 +1000,102 @@ def create_app() -> FastAPI:
     except Exception:
         pass
 
-    # Compatibility: ensure legacy root-level Google OAuth callback is reachable
-    try:
-        from fastapi import Request, HTTPException
-        import inspect
-
-        async def _legacy_google_oauth_callback_root(request: Request):
-            try:
-                from app.integrations.google.routes import legacy_oauth_callback
-            except Exception:
-                raise HTTPException(status_code=404)
-
-            maybe = legacy_oauth_callback(request)
-            if inspect.isawaitable(maybe):
-                return await maybe
-            return maybe
-
-        app.add_api_route("/google/oauth/callback", _legacy_google_oauth_callback_root, methods=["GET"])
-    except Exception:
-        # Best-effort compatibility shim; do not fail startup if unavailable
-        pass
+    # Legacy Google OAuth callback is now handled by app/api/google_compat.py with feature flag
 
 # Infrastructure initialization moved to beginning of create_app()
+
+    # After **all** middleware and routers are registered, but before return:
+    from app.diagnostics.state import set_snapshot, record_event
+    from app.diagnostics.startup_probe import probe
+    from fastapi import APIRouter, Query
+    from app.diagnostics.state import get_snapshot, events, router_calls, import_timings, set_import_timings
+
+    # Always take snapshot for diagnostic endpoints (lazy imports)
+    set_snapshot("after", probe(app))
+
+    if DEBUG:
+        record_event("wiring-complete", "routers+middleware registered")
+
+    # Always create diagnostic router for CI/regression testing
+    diag = APIRouter()
+
+    @diag.get("/__diag/startup", include_in_schema=False)
+    async def __diag_startup(phase: str = Query(default="after")):
+        return get_snapshot("before" if phase=="before" else "after")
+
+    @diag.get("/__diag/events", include_in_schema=False)
+    async def __diag_events():
+        return {"events": events(), "router_calls": router_calls(), "import_timings": import_timings()}
+
+    @diag.get("/__diag/verify", include_in_schema=False)
+    async def __diag_verify():
+        snap = get_snapshot("after")
+        routes = snap.get("routes", [])
+        mids = [m.get("class_name") for m in snap.get("middlewares", [])]
+        paths = [r.get("path") for r in routes]
+        checks = []
+
+        def add(name, ok, details=""):
+            checks.append({"name": name, "ok": bool(ok), "details": details})
+
+        add("CORS present once", mids.count("CORSMiddleware")==1, f"count={mids.count('CORSMiddleware')}")
+        if "CSRFMiddleware" in mids and "CORSMiddleware" in mids:
+            add("CSRF after CORS", mids.index("CSRFMiddleware") > mids.index("CORSMiddleware"),
+                f"order={mids}")
+        else:
+            add("CSRF ordering skipped", True, "CSRF or CORS missing")
+
+        add("has /v1/whoami", "/v1/whoami" in paths)
+        add("has health", ("/health" in paths) or ("/v1/health" in paths))
+        dup = sorted({p for p in paths if paths.count(p)>1})
+        add("no duplicate paths", not dup, f"dups={dup}")
+
+        passed = all(c["ok"] for c in checks)
+        return {"phase": snap.get("phase","after"), "passed": passed, "checks": checks}
+
+    @diag.get("/__diag/fingerprint", include_in_schema=False)
+    async def __diag_fingerprint():
+        """Generate a stable fingerprint of the application state for regression detection."""
+        snap = get_snapshot("after")
+        routes = snap.get("routes", [])
+        mids = snap.get("middlewares", [])
+
+        # Collect stable identifiers
+        route_info = []
+        for r in sorted(routes, key=lambda x: x.get("path", "")):
+            route_info.append({
+                "path": r.get("path", ""),
+                "methods": sorted(r.get("methods", [])),
+                "name": r.get("name", "")
+            })
+
+        middleware_info = []
+        for m in mids:
+            middleware_info.append({
+                "class_name": m.get("class_name", ""),
+                "name": m.get("name", "")
+            })
+
+        # Create stable fingerprint
+        fingerprint_data = {
+            "routes": route_info,
+            "middlewares": middleware_info,
+            "phase": snap.get("phase", "after")
+        }
+
+        # Convert to JSON string and hash for stable fingerprint
+        import json
+        stable_json = json.dumps(fingerprint_data, sort_keys=True, separators=(',', ':'))
+        fingerprint = hashlib.sha256(stable_json.encode('utf-8')).hexdigest()[:16]
+
+        return {
+            "fingerprint": fingerprint,
+            "data": fingerprint_data,
+            "generated_at": snap.get("timestamp", "unknown")
+        }
+
+    app.include_router(diag)
+    logger.info(f"DEBUG: Diagnostic router included with {len(diag.routes)} routes")
 
     logger.info("🎉 Application composition complete in create_app()")
     return app

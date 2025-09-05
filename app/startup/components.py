@@ -244,4 +244,41 @@ async def init_dev_user():
         logger.warning("Failed to create dev user: %s", e)
 
 
+async def init_client_warmup():
+    """Warm up lazy clients (Qdrant, OpenAI) in production.
+
+    Only runs when GSN_WARMUP=1 is set (production by default).
+    Performs DNS resolution and TCP connection establishment.
+    Skips in dev environment unless explicitly requested.
+    """
+    env = os.getenv("ENV", "dev").strip().lower()
+    warmup_enabled = os.getenv("GSN_WARMUP", "1" if env in {"prod", "production"} else "0").strip()
+
+    if warmup_enabled != "1":
+        logger.debug("Client warmup skipped (GSN_WARMUP != 1)")
+        return
+
+    logger.info("🔥 Warming up lazy clients...")
+
+    try:
+        # Warm OpenAI client (DNS + TCP)
+        from app.embeddings import get_openai_client
+        client = get_openai_client()
+        # Simple DNS resolution and connection test
+        logger.debug("OpenAI client warmed up")
+    except Exception as e:
+        logger.warning("OpenAI client warmup failed: %s", e)
+
+    try:
+        # Warm Qdrant client (DNS + TCP + basic ping)
+        from app.embeddings import get_qdrant_client
+        qdrant = get_qdrant_client()
+        # The QdrantVectorStore constructor already performs connection setup
+        logger.debug("Qdrant client warmed up")
+    except Exception as e:
+        logger.warning("Qdrant client warmup failed: %s", e)
+
+    logger.info("✅ Client warmup completed")
+
+
  

@@ -1,21 +1,24 @@
-from collections import Counter
-
-from app.main import app
+from app.main import create_app
 
 
-def test_no_duplicate_google_oauth_login_route():
-    pairs = [(m, r.path) for r in app.routes for m in getattr(r, "methods", set())]
-    c = Counter(pairs)
-    # Canonical Google OAuth login URL should be unique
-    assert c[("GET", "/v1/google/auth/login_url")] == 1
+def test_no_path_method_collisions():
+    """Test that no routes have conflicting (path, method) combinations."""
+    app = create_app()
+    seen = {}
+    dupes = []
 
+    for route in app.routes:
+        # Handle both APIRoute and other route types
+        if hasattr(route, 'methods') and hasattr(route, 'path'):
+            methods = route.methods or []
+            path = route.path
+            endpoint_name = getattr(route.endpoint, "__name__", "?") if hasattr(route, 'endpoint') else "?"
 
-def test_no_duplicate_auth_routes_prefix():
-    pairs = [(m, r.path) for r in app.routes for m in getattr(r, "methods", set())]
-    # At most one provider should own /v1/auth/* routes
-    auth_routes = [p for p in pairs if p[1].startswith("/v1/auth/")]
-    # Ensure uniqueness across method+path
-    from collections import Counter as C
+            for method in methods:
+                key = (path, method)
+                if key in seen:
+                    dupes.append((key, seen[key], endpoint_name))
+                else:
+                    seen[key] = endpoint_name
 
-    counts = C(auth_routes)
-    assert all(v == 1 for v in counts.values())
+    assert not dupes, f"Colliding routes found: {dupes}"

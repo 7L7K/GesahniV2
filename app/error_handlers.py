@@ -44,7 +44,7 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
         except Exception:
             pass
 
-        _emit_auth_metrics_if_ask(request, status, shaped)
+        _emit_auth_metrics(request, status, shaped)
         return JSONResponse(shaped, status_code=status, headers=headers)
 
     # Map generic HTTP errors to your stable envelope
@@ -53,7 +53,7 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
         msg = detail
 
     details = _trace_details(request, status)
-    _emit_auth_metrics_if_ask(request, status, {"details": details})
+    _emit_auth_metrics(request, status, {"details": details})
 
     # Gentle backoff hints for 5xx
     if 500 <= status < 600:
@@ -104,23 +104,21 @@ async def handle_unexpected_error(request: Request, exc: Exception):
         pass
     return JSONResponse(env, status_code=500, headers=headers)
 
-def _emit_auth_metrics_if_ask(request: Request, status: int, payload: Dict[str, Any]):
+def _emit_auth_metrics(request: Request, status: int, payload: Dict[str, Any]):
     # Best-effort, never raise
     try:
         path = getattr(request.url, "path", "")
-        if not path.startswith("/v1/ask"):
-            return
         from app.metrics import AUTH_401_TOTAL, AUTH_403_TOTAL
         if status == 401:
             hdr = request.headers.get("Authorization") or ""
             reason = "bad_token" if hdr.lower().startswith("bearer ") else "no_auth"
-            AUTH_401_TOTAL.labels(route="/v1/ask", reason=reason).inc()
+            AUTH_401_TOTAL.labels(route=path, reason=reason).inc()
         elif status == 403:
             scope = "unknown"
             det = payload.get("details") or {}
             if isinstance(det, dict):
                 scope = det.get("scope") or scope
-            AUTH_403_TOTAL.labels(route="/v1/ask", scope=scope).inc()
+            AUTH_403_TOTAL.labels(route=path, scope=scope).inc()
     except Exception:
         pass
 

@@ -157,8 +157,32 @@ export function useSpotifyStatus(pollMs: number = 30000) {
       }
     };
 
+    const handleStopPolling = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const detail = customEvent.detail;
+      console.info('🎵 SPOTIFY STATUS HOOK: Received stop polling event', { reason: detail?.reason });
+
+      // Clear any pending timer
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+
+      // Update state to indicate polling stopped
+      setConnected(false);
+      setReason('auth_expired');
+      setHasChecked(true);
+    };
+
     window.addEventListener('auth:state_changed', handleAuthStateChange);
-    return () => window.removeEventListener('auth:state_changed', handleAuthStateChange);
+    window.addEventListener('auth:stop_polling', handleStopPolling);
+    window.addEventListener('auth:stop_all_polling', handleStopPolling);
+
+    return () => {
+      window.removeEventListener('auth:state_changed', handleAuthStateChange);
+      window.removeEventListener('auth:stop_polling', handleStopPolling);
+      window.removeEventListener('auth:stop_all_polling', handleStopPolling);
+    };
   }, []);
 
   return { connected, reason, hasChecked } as const;
@@ -297,8 +321,31 @@ export function useMusicDevices(pollMs: number = 45000) {
       }
     };
 
+    const handleStopPolling = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const detail = customEvent.detail;
+      console.info('🎵 MUSIC DEVICES HOOK: Received stop polling event', { reason: detail?.reason });
+
+      // Clear any pending timer
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+
+      // Update state to indicate polling stopped
+      setDevices([]);
+      setHasChecked(true);
+    };
+
     window.addEventListener('auth:state_changed', handleAuthStateChange);
-    return () => window.removeEventListener('auth:state_changed', handleAuthStateChange);
+    window.addEventListener('auth:stop_music_polling', handleStopPolling);
+    window.addEventListener('auth:stop_all_polling', handleStopPolling);
+
+    return () => {
+      window.removeEventListener('auth:state_changed', handleAuthStateChange);
+      window.removeEventListener('auth:stop_music_polling', handleStopPolling);
+      window.removeEventListener('auth:stop_all_polling', handleStopPolling);
+    };
   }, []);
 
   const hasDevice = devices && devices.length > 0;

@@ -5,13 +5,54 @@ import os
 from uuid import uuid4
 
 from fastapi import HTTPException, Request, WebSocket, Response
+from app.web.cookies import clear_all_auth
+
+log = logging.getLogger("auth")
 
 try:
     from jose import jwt as jose_jwt
 except Exception:
     jose_jwt = None
 
-from ..security import jwt_decode
+# Import decode_jwt from security module
+try:
+    import app.security as security_module
+    decode_jwt = security_module.decode_jwt
+except AttributeError:
+    # Fallback: define decode_jwt locally if not available in module
+    import jwt
+    from jwt import PyJWTError, ExpiredSignatureError
+    from app.security.jwt_config import get_jwt_config
+
+    def decode_jwt(token: str):
+        cfg = get_jwt_config()
+        try:
+            if cfg.alg == "HS256":
+                return jwt.decode(
+                    token, cfg.secret, algorithms=["HS256"],
+                    options={"verify_aud": bool(cfg.audience)},
+                    audience=cfg.audience, issuer=cfg.issuer)
+            else:
+                headers = jwt.get_unverified_header(token)
+                kid = headers.get("kid")
+                if not kid or kid not in cfg.public_keys:
+                    # Fallback: try any key to tolerate older tokens without kid
+                    for k in cfg.public_keys.values():
+                        try:
+                            return jwt.decode(
+                                token, k, algorithms=[cfg.alg],
+                                options={"verify_aud": bool(cfg.audience)},
+                                audience=cfg.audience, issuer=cfg.issuer)
+                        except Exception:
+                            continue
+                    return None
+                key = cfg.public_keys[kid]
+                return jwt.decode(
+                    token, key, algorithms=[cfg.alg],
+                    options={"verify_aud": bool(cfg.audience)},
+                    audience=cfg.audience, issuer=cfg.issuer)
+        except (ExpiredSignatureError, PyJWTError):
+            return None
 from ..telemetry import LogRecord, hash_user_id, log_record_var
 
 JWT_SECRET: str | None = None  # overridden in tests; env used when None
@@ -106,9 +147,9 @@ def get_current_user_id(
     # Cookie fallback so browser sessions persist without sending headers
     if token is None and request is not None:
         try:
-            from ..web.cookies import read_access_cookie
+            from ..web.cookies import get_any, ACCESS_ALIASES
 
-            token = read_access_cookie(request)
+            token = get_any(request, ACCESS_ALIASES)
             if token:
                 token_source = "access_token_cookie"
         except Exception:
@@ -328,12 +369,7 @@ def get_current_user_id(
 
                 if access_token:
                     try:
-                        payload = jwt_decode(
-                            access_token,
-                            secret,
-                            algorithms=["HS256"],
-                            leeway=int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60),
-                        )
+                        payload = decode_jwt(access_token)
                         uid = payload.get("user_id") or payload.get("sub")
                         if uid:
                             user_id = str(uid)
@@ -350,57 +386,49 @@ def get_current_user_id(
                     except jose_jwt.JWTError:
                         pass
 
-    # Try traditional JWT first (same secret/issuer checks for both access_token and __session)
+    # Try traditional JWT first using centralized decode
     if (
         not user_id
         and token
-        and secret
         and token_source not in ["__session_cookie", "websocket_session_cookie"]
     ):
-        try:
-            # Enforce iss/aud in prod if configured
-            opts = {}
-            iss = os.getenv("JWT_ISSUER")
-            aud = os.getenv("JWT_AUDIENCE")
-            if iss:
-                opts["issuer"] = iss
-            if aud:
-                opts["audience"] = aud
-
-            if opts:
-                payload = jwt_decode(token, secret, algorithms=["HS256"], **opts)
-            else:
-                payload = jwt_decode(token, secret, algorithms=["HS256"])
-
+        payload = decode_jwt(token)
+        if payload:
             user_id = payload.get("user_id") or payload.get("sub") or user_id
 
             # Store JWT payload in request state for scope enforcement
             if target and isinstance(payload, dict):
                 target.state.jwt_payload = payload
-        except jose_jwt.JWTError:
-            # For WebSocket handshakes, proceed as anonymous on invalid token to avoid
-            # closing the connection before it's established. HTTP requests still fail.
-            if websocket is None:
-                try:
-                    logger.warning(
-                        "auth.invalid_token",
-                        extra={"meta": {"reason": "invalid_auth_token"}},
-                    )
-                except Exception:
-                    pass
+        else:
+            # Log signature failure for audit without leaking secrets
+            if request is not None:
+                ua = request.headers.get("user-agent", "-")
+                ip = request.client.host if request.client else "-"
+                log.info("auth.jwt_invalid: ip=%s ua=%s path=%s", ip, ua, request.url.path)
 
-                # Record auth failure metrics
-                try:
-                    from app.security import AUTH_FAIL
+                # Clear auth cookies and return clean 401 on HTTP JWT failure
+                if response is not None:
+                    clear_all_auth(response)
+                raise HTTPException(status_code=401, detail="unauthorized")
+            elif websocket is not None:
+                # Log WebSocket auth failures but allow anonymous access
+                ua = websocket.headers.get("user-agent", "-")
+                log.info("auth.jwt_invalid_ws: ua=%s", ua)
+                # WebSocket connections proceed as anonymous (current behavior)
+    elif not token and request is not None:
+        # Log missing token for audit
+        ua = request.headers.get("user-agent", "-")
+        ip = request.client.host if request.client else "-"
+        log.info("auth.jwt_missing: ip=%s ua=%s path=%s", ip, ua, request.url.path)
 
-                    if AUTH_FAIL:
-                        AUTH_FAIL.labels(reason="invalid").inc()
-                except Exception:
-                    pass
-
-                raise HTTPException(
-                    status_code=401, detail="Invalid authentication token"
-                )
+        # Clear auth cookies and return clean 401 when token is missing
+        if response is not None:
+            clear_all_auth(response)
+        raise HTTPException(status_code=401, detail="unauthorized")
+    elif not token and websocket is not None:
+        # Log missing token for WebSocket connections
+        ua = websocket.headers.get("user-agent", "-")
+        log.info("auth.jwt_missing_ws: ua=%s", ua)
     elif token and not secret and require_jwt:
         # Token provided but no secret configured while required → unauthorized, not 500
         from ..http_errors import unauthorized
@@ -415,33 +443,32 @@ def get_current_user_id(
                 from ..cookies import read_refresh_cookie
                 refresh_token = read_refresh_cookie(request)
                 if refresh_token:
-                    from ..auth_refresh import perform_lazy_refresh
-                    from ..metrics_auth import lazy_refresh_minted, lazy_refresh_skipped, lazy_refresh_failed
+                        from ..auth_refresh import perform_lazy_refresh
+                        from ..metrics_auth import lazy_refresh_minted, lazy_refresh_skipped, lazy_refresh_failed
 
-                    # Extract user_id from refresh token for lazy refresh
-                    try:
-                        from ..tokens import SECRET_KEY, ALGORITHM
-                        rt_payload = jose_jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
-                        lazy_user_id = str(rt_payload.get("sub") or rt_payload.get("user_id") or "")
-                    except Exception:
-                        lazy_user_id = ""
-
-                    if lazy_user_id and perform_lazy_refresh(request, response, lazy_user_id, None):
-                        lazy_refresh_minted("deps_fallback")
-                        # After lazy refresh, try to authenticate with the new access token
+                        # Extract user_id from refresh token for lazy refresh
                         try:
-                            from ..cookies import read_access_cookie
-                            new_access_token = read_access_cookie(request)
-                            if new_access_token:
-                                from ..tokens import SECRET_KEY, ALGORITHM
-                                at_payload = jose_jwt.decode(new_access_token, SECRET_KEY, algorithms=[ALGORITHM])
-                                user_id = str(at_payload.get("user_id") or at_payload.get("sub") or "")
-                                if target and isinstance(at_payload, dict):
-                                    target.state.jwt_payload = at_payload
+                            rt_payload = decode_jwt(refresh_token)
+                            lazy_user_id = str(rt_payload.get("sub") or rt_payload.get("user_id") or "") if rt_payload else ""
                         except Exception:
-                            pass
-                    else:
-                        lazy_refresh_skipped("deps_fallback")
+                            lazy_user_id = ""
+
+                        if lazy_user_id and perform_lazy_refresh(request, response, lazy_user_id, None):
+                            lazy_refresh_minted("deps_fallback")
+                            # After lazy refresh, try to authenticate with the new access token
+                            try:
+                                from ..cookies import read_access_cookie
+                                new_access_token = read_access_cookie(request)
+                                if new_access_token:
+                                    at_payload = decode_jwt(new_access_token)
+                                    if at_payload:
+                                        user_id = str(at_payload.get("user_id") or at_payload.get("sub") or "")
+                                        if target and isinstance(at_payload, dict):
+                                            target.state.jwt_payload = at_payload
+                            except Exception:
+                                pass
+                        else:
+                            lazy_refresh_skipped("deps_fallback")
             except Exception as e:
                 try:
                     from ..metrics_auth import lazy_refresh_failed

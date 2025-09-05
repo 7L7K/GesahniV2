@@ -172,7 +172,7 @@ export function useSessionState() {
   return useQuery({
     queryKey: buildQueryKey('session'),
     queryFn: async () => {
-      const res = await apiFetch('/v1/auth/whoami', { auth: true });
+      const res = await apiFetch('/v1/whoami', { auth: true });
       if (!res.ok) throw new Error('Failed to fetch session');
       return await res.json();
     },
@@ -184,7 +184,7 @@ export function useSessionState() {
 
 // Auth API endpoints for cookie mode
 export const AuthAPI = {
-  whoami: () => apiFetch('/v1/auth/whoami').then(r => r.json()),
+  whoami: () => apiFetch('/v1/whoami').then(r => r.json()),
   login: (body: any) => apiFetch('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   refresh: () => apiFetch('/v1/auth/refresh', { method: 'POST' }),
   logout: () => apiFetch('/v1/auth/logout', { method: 'POST' }),

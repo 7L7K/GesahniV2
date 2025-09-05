@@ -12,12 +12,10 @@ from typing import Any
 from uuid import uuid4
 
 import jwt
+from app.security.jwt_config import get_jwt_config
 
-# JWT configuration constants
-ALGORITHM = os.getenv("JWT_ALGS", "HS256").split(",")[0].strip() or "HS256"
-SECRET_KEY = os.getenv("JWT_SECRET")
-JWT_ISS = os.getenv("JWT_ISS")
-JWT_AUD = os.getenv("JWT_AUD")
+# JWT configuration constants - now centralized in get_jwt_config()
+# ALGORITHM, SECRET_KEY, JWT_ISS, JWT_AUD removed - use get_jwt_config() instead
 
 # Token expiration times (fallback defaults)
 EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
@@ -338,35 +336,229 @@ def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> 
 # -----------------
 
 def _select_signing_key() -> tuple[str, str, str | None]:
-    """Select signing algorithm, key, and kid based on environment.
+    """Select signing algorithm, key, and kid based on centralized config.
 
-    Prefers RS/ES when JWT_PRIVATE_KEYS is provided; otherwise falls back to HS256.
+    Uses get_jwt_config() for consistent configuration.
     Returns (alg, key, kid).
     """
-    # Try private keys for RS/ES
-    try:
-        import json
+    cfg = get_jwt_config()
 
-        priv = os.getenv("JWT_PRIVATE_KEYS")
-        if priv:
-            mapping = json.loads(priv)
-            if isinstance(mapping, dict) and mapping:
-                primary = os.getenv("JWT_PRIMARY_KID") or next(iter(mapping.keys()))
-                pem = mapping.get(primary) or next(iter(mapping.values()))
-                # Default alg preference from env JWT_ALGS sequence; else RS256
-                algs = [a.strip() for a in (os.getenv("JWT_ALGS") or "RS256,HS256").split(",") if a.strip()]
-                alg = next((a for a in algs if a in {"RS256", "ES256"}), "RS256")
-                if pem:
-                    return alg, pem, primary
-    except Exception:
-        pass
-    # Fallback HS256
-    # Get JWT secret dynamically to handle test environment changes
-    try:
-        from .api.auth import _jwt_secret
+    if cfg.secret:
+        # Legacy HS256 mode
+        return cfg.alg, cfg.secret, None
+    elif cfg.private_keys:
+        # Key rotation mode: pick first key for signing
+        kid, key = next(iter(cfg.private_keys.items()))
+        return cfg.alg, key, kid
+    else:
+        raise RuntimeError("No JWT keys available")
 
-        secret = _jwt_secret()
+
+# Centralized token creation using get_jwt_config()
+
+def _now():
+    """Get current UTC datetime."""
+    return datetime.now(tz=timezone.utc)
+
+
+def sign_access_token(sub: str, *, extra: dict | None = None) -> str:
+    """Create a JWT access token using centralized configuration."""
+    cfg = get_jwt_config()  # Auto-detects DEV_MODE
+
+    # Check for TTL override in extra claims
+    ttl_minutes = cfg.access_ttl_min
+    if extra and "ttl_override" in extra:
+        ttl_minutes = extra.pop("ttl_override")  # Remove from extra claims
+
+    claims = {
+        "sub": sub,
+        "iat": int(_now().timestamp()),
+        "exp": int((_now() + timedelta(minutes=ttl_minutes)).timestamp())
+    }
+    if cfg.issuer:
+        claims["iss"] = cfg.issuer
+    if cfg.audience:
+        claims["aud"] = cfg.audience
+    if extra:
+        claims.update(extra)
+
+    headers = {}
+    if cfg.secret:
+        # Legacy HS256 mode
+        key = cfg.secret
+    else:
+        # Key rotation mode
+        kid, key = next(iter(cfg.private_keys.items()))
+        headers["kid"] = kid
+
+    return jwt.encode(claims, key, algorithm=cfg.alg, headers=headers)
+
+
+def sign_refresh_token(sub: str) -> str:
+    """Create a JWT refresh token using centralized configuration."""
+    cfg = get_jwt_config()  # Auto-detects DEV_MODE
+    claims = {
+        "sub": sub,
+        "iat": int(_now().timestamp()),
+        "exp": int((_now() + timedelta(minutes=cfg.refresh_ttl_min)).timestamp()),
+        "typ": "refresh"
+    }
+    if cfg.issuer:
+        claims["iss"] = cfg.issuer
+    if cfg.audience:
+        claims["aud"] = cfg.audience
+
+    headers = {}
+    if cfg.secret:
+        # Legacy HS256 mode
+        key = cfg.secret
+    else:
+        # Key rotation mode
+        kid, key = next(iter(cfg.private_keys.items()))
+        headers["kid"] = kid
+
+    return jwt.encode(claims, key, algorithm=cfg.alg, headers=headers)
+
+
+# -----------------
+# JWT Decoding with Key Rotation Support
+# -----------------
+
+def decode_jwt_token(token: str) -> dict[str, Any]:
+    """Decode JWT token with key rotation support.
+
+    Tries all available keys until one works, supporting backward compatibility
+    during key rotation scenarios.
+
+    Args:
+        token: JWT token string
+
+    Returns:
+        Decoded token claims
+
+    Raises:
+        jwt.InvalidTokenError: If token cannot be decoded with any key
+    """
+    cfg = get_jwt_config()
+
+    # Extract header to get kid if present
+    try:
+        header = jwt.get_unverified_header(token)
+        kid = header.get("kid")
     except Exception:
-        secret = os.getenv("JWT_SECRET", "")
-    alg = "HS256"
-    return alg, secret, None
+        kid = None
+
+    # Try specific kid first if available
+    if kid and cfg.public_keys and kid in cfg.public_keys:
+        try:
+            return jwt.decode(
+                token,
+                cfg.public_keys[kid],
+                algorithms=[cfg.alg],
+                audience=cfg.audience,
+                issuer=cfg.issuer,
+                options={"verify_exp": True, "verify_iat": True},
+                leeway=cfg.clock_skew_s
+            )
+        except jwt.InvalidTokenError:
+            pass  # Fall through to try all keys
+
+    # Try all available keys
+    keys_to_try = []
+
+    # Legacy HS256 secret (for backward compatibility)
+    if cfg.secret:
+        keys_to_try.append(("HS256", cfg.secret))
+
+    # All public keys for asymmetric algorithms (including old keys for rotation)
+    if cfg.public_keys:
+        for k, pub_key in cfg.public_keys.items():
+            keys_to_try.append((cfg.alg, pub_key))
+
+    # Also try legacy JWT_SECRET if available (for migration scenarios)
+    legacy_secret = os.getenv("JWT_SECRET")
+    if legacy_secret and legacy_secret != cfg.secret:
+        keys_to_try.append(("HS256", legacy_secret))
+
+    # Try each key until one works
+    last_error = None
+    for alg, key in keys_to_try:
+        try:
+            return jwt.decode(
+                token,
+                key,
+                algorithms=[alg],
+                audience=cfg.audience,
+                issuer=cfg.issuer,
+                options={"verify_exp": True, "verify_iat": True},
+                leeway=cfg.clock_skew_s
+            )
+        except jwt.InvalidTokenError as e:
+            last_error = e
+            continue
+
+    # If we get here, all keys failed
+    if last_error:
+        raise last_error
+    else:
+        raise jwt.InvalidTokenError("No keys available for JWT verification")
+
+
+def verify_jwt_token(token: str) -> dict[str, Any]:
+    """Verify and decode JWT token with key rotation support.
+
+    Alias for decode_jwt_token for backward compatibility.
+    """
+    return decode_jwt_token(token)
+
+
+# -----------------
+# JWT Key Rotation Testing
+# -----------------
+
+def test_jwt_backward_compatibility():
+    """Test JWT backward compatibility during key rotation."""
+    import json
+    import os
+
+    # Save original env
+    orig_env = dict(os.environ)
+
+    try:
+        # Test 1: Issue token with old key, rotate, ensure decode still works
+        os.environ["JWT_SECRET"] = "old_secret_for_rotation_test_12345678901234567890"
+        old_cfg = get_jwt_config()
+
+        # Create token with old key
+        old_token = sign_access_token("test_user", extra={"test": "rotation"})
+
+        # Rotate to new key setup (keep old key for verification)
+        os.environ.pop("JWT_SECRET", None)  # Remove old secret first
+        os.environ["JWT_PRIVATE_KEYS"] = json.dumps({
+            "key1": "new_secret_for_rotation_test_12345678901234567890",
+            "legacy": "old_secret_for_rotation_test_12345678901234567890"  # Keep old key
+        })
+        os.environ["JWT_PUBLIC_KEYS"] = json.dumps({
+            "key1": "new_secret_for_rotation_test_12345678901234567890",
+            "legacy": "old_secret_for_rotation_test_12345678901234567890"
+        })
+
+        # Should still be able to decode old token (uses legacy key)
+        decoded = decode_jwt_token(old_token)
+        assert decoded["sub"] == "test_user"
+        assert decoded["test"] == "rotation"
+
+        # New tokens should use new key
+        new_token = sign_access_token("test_user", extra={"test": "new_key"})
+        new_decoded = decode_jwt_token(new_token)
+        assert new_decoded["sub"] == "test_user"
+        assert new_decoded["test"] == "new_key"
+
+        return True
+    except Exception as e:
+        print(f"JWT rotation test failed: {e}")
+        return False
+    finally:
+        # Restore original env
+        os.environ.clear()
+        os.environ.update(orig_env)

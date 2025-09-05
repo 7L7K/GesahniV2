@@ -102,6 +102,14 @@ def get_openai_client() -> OpenAI:
     return OpenAI()
 
 
+def get_qdrant_client():
+    """Return a lazy Qdrant client (instantiate on first call for startup performance)."""
+    from app.memory.vector_store.qdrant import QdrantVectorStore  # type: ignore
+
+    # Return the QdrantVectorStore instance (lazy instantiation)
+    return QdrantVectorStore()
+
+
 @lru_cache(maxsize=5_000)
 def _embed_openai_sync(text: str, ttl_bucket: int) -> list[float]:
     """Return an embedding using the OpenAI sync client (cached by TTL bucket)."""

@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api';
 import type { AuthState, AuthOrchestrator } from './types';
 import { AuthOscillationDetector, AuthBackoffManager } from './utils';
 import { AuthEventDispatcher } from './events';
+import { getResilientWhoamiClient } from '@/lib/whoamiResilience';
 
 export class AuthOrchestratorImpl implements AuthOrchestrator {
     private state: AuthState = {
@@ -48,6 +49,11 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
     private oscillationDetector = new AuthOscillationDetector();
     private backoffManager = new AuthBackoffManager();
     private eventDispatcher = new AuthEventDispatcher();
+
+    // 401 handling state
+    private refreshInFlight: Promise<void> | null = null;
+    private lastRefreshAttempt = 0;
+    private refreshRetryCount = 0;
 
     constructor() {
         // Subscribe to bootstrap manager for auth finish coordination
@@ -253,6 +259,10 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         this.oscillationDetector.resetOscillationCount();
         this.lastSuccessfulState = null;
 
+        // Clear resilient client cache
+        const resilientClient = getResilientWhoamiClient();
+        resilientClient.clearCache();
+
         // Clear any pending operations
         if (this.debounceTimer) {
             clearTimeout(this.debounceTimer);
@@ -264,6 +274,210 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
             window.removeEventListener('auth:finish_start', this.handleAuthFinishStart);
             window.removeEventListener('auth:finish_end', this.handleAuthFinishEnd);
             window.removeEventListener('auth:epoch_bumped', this.handleAuthEpochBumped);
+        }
+    }
+
+    /**
+     * Handle 401 response from /v1/me - stop polling, purge cache, redirect to login
+     */
+    async handle401Response(): Promise<void> {
+        console.warn('AUTH Orchestrator: Handling 401 from /v1/me - stopping polling and redirecting');
+
+        // Audit log the 401 failure (without leaking secrets)
+        this.auditLog401Failure();
+
+        // Stop all polling hooks
+        this.stopAllPolling();
+
+        // Purge cached user state
+        this.purgeCachedState();
+
+        // Clear auth state immediately
+        this.setState({
+            is_authenticated: false,
+            session_ready: false,
+            user_id: null,
+            user: null,
+            source: 'missing',
+            version: this.state.version + 1,
+            lastChecked: Date.now(),
+            isLoading: false,
+            error: 'Authentication expired',
+            whoamiOk: false,
+        });
+
+        // Dispatch event to notify components of auth failure
+        this.eventDispatcher.dispatchAuthMismatch('Session expired - please sign in again.', new Date().toISOString());
+
+        // Redirect to login with return URL
+        if (typeof window !== 'undefined') {
+            const currentPath = window.location.pathname + window.location.search;
+            const loginUrl = `/login?next=${encodeURIComponent(currentPath)}`;
+            window.location.href = loginUrl;
+        }
+    }
+
+    /**
+     * Stop all polling hooks (Spotify, devices, etc.)
+     */
+    private stopAllPolling(): void {
+        console.info('AUTH Orchestrator: Stopping all polling hooks');
+
+        if (typeof window !== 'undefined') {
+            // Dispatch event to stop Spotify polling
+            window.dispatchEvent(new CustomEvent('auth:stop_polling', {
+                detail: { reason: '401_unauthorized' }
+            }));
+
+            // Dispatch event to stop music device polling
+            window.dispatchEvent(new CustomEvent('auth:stop_music_polling', {
+                detail: { reason: '401_unauthorized' }
+            }));
+
+            // Dispatch event to stop any other polling
+            window.dispatchEvent(new CustomEvent('auth:stop_all_polling', {
+                detail: { reason: '401_unauthorized' }
+            }));
+        }
+    }
+
+    /**
+     * Purge cached user state and related data
+     */
+    private purgeCachedState(): void {
+        console.info('AUTH Orchestrator: Purging cached user state');
+
+        try {
+            // Clear any cached API responses
+            if (typeof window !== 'undefined' && 'caches' in window) {
+                caches.keys().then(names => {
+                    names.forEach(name => {
+                        if (name.includes('auth') || name.includes('user')) {
+                            caches.delete(name);
+                        }
+                    });
+                });
+            }
+
+            // Clear localStorage items related to user state
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (key.startsWith('auth:') || key.startsWith('user:') || key.startsWith('spotify:'))) {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+
+        } catch (error) {
+            console.warn('AUTH Orchestrator: Error purging cached state:', error);
+        }
+    }
+
+    /**
+     * Handle refresh with deduplication - ensure only one refresh in flight
+     */
+    async handleRefreshWithRetry(): Promise<void> {
+        const now = Date.now();
+
+        // If refresh already in flight, wait for it
+        if (this.refreshInFlight) {
+            console.info('AUTH Orchestrator: Refresh already in flight, waiting...');
+            await this.refreshInFlight;
+            return;
+        }
+
+        // Rate limit refresh attempts
+        if (now - this.lastRefreshAttempt < 1000) {
+            console.warn('AUTH Orchestrator: Refresh rate limited, skipping');
+            return;
+        }
+
+        this.lastRefreshAttempt = now;
+        this.refreshInFlight = this._performRefreshWithRetry();
+
+        try {
+            await this.refreshInFlight;
+        } finally {
+            this.refreshInFlight = null;
+        }
+    }
+
+    private async _performRefreshWithRetry(): Promise<void> {
+        console.info('AUTH Orchestrator: Performing refresh with retry');
+
+        try {
+            // First refresh attempt
+            const refreshResponse = await this._callRefreshEndpoint();
+
+            if (refreshResponse.ok) {
+                console.info('AUTH Orchestrator: Refresh successful, re-checking auth state');
+                this.refreshRetryCount = 0;
+
+                // Re-fetch /v1/me to confirm auth state
+                await this.checkAuth();
+                return;
+            } else {
+                console.warn('AUTH Orchestrator: Refresh failed, attempting one more time');
+
+                // Reset refresh state and try once more
+                this.refreshInFlight = null;
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                const retryResponse = await this._callRefreshEndpoint();
+
+                if (retryResponse.ok) {
+                    console.info('AUTH Orchestrator: Retry refresh successful');
+                    this.refreshRetryCount = 0;
+                    await this.checkAuth();
+                    return;
+                } else {
+                    console.error('AUTH Orchestrator: Retry refresh also failed');
+                    this.refreshRetryCount = 0;
+                    await this.handle401Response();
+                }
+            }
+        } catch (error) {
+            console.error('AUTH Orchestrator: Refresh error:', error);
+            this.refreshRetryCount = 0;
+            await this.handle401Response();
+        }
+    }
+
+    private async _callRefreshEndpoint(): Promise<Response> {
+        const { apiFetch } = await import('@/lib/api');
+        return apiFetch('/v1/auth/refresh', {
+            method: 'POST',
+            auth: true,
+            dedupe: false,
+            cache: 'no-store'
+        });
+    }
+
+    /**
+     * Audit log 401 failures without leaking sensitive information
+     */
+    private auditLog401Failure(): void {
+        if (typeof window !== 'undefined') {
+            try {
+                const auditData = {
+                    event: 'auth.jwt_401',
+                    timestamp: new Date().toISOString(),
+                    userAgent: navigator.userAgent.substring(0, 100), // Truncate for privacy
+                    url: window.location.href.split('?')[0], // Remove query params
+                    referrer: document.referrer ? document.referrer.split('?')[0] : null,
+                    // Don't log IP as it's not available in browser
+                    sessionDuration: this.state.lastChecked ? Date.now() - this.state.lastChecked : null,
+                };
+
+                console.info('AUTH AUDIT:', auditData);
+
+                // Could send to analytics service here
+                // analytics.track('auth_401', auditData);
+
+            } catch (error) {
+                console.warn('AUTH Orchestrator: Error in audit logging:', error);
+            }
         }
     }
 
@@ -297,189 +511,158 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         this.setState({ isLoading: true, error: null });
 
         try {
-            const response = await apiFetch('/v1/me', {
-                method: 'GET',
-                auth: true,
-                dedupe: false,
-                cache: 'no-store'
-            });
+            // Use resilient whoami client for retry/backoff and caching
+            const resilientClient = getResilientWhoamiClient();
+            const data = await resilientClient.getIdentity(apiFetch);
 
-            if (response.ok) {
-                const data = await response.json();
-                // Health gate: require backend to be healthy before marking session_ready
-                // But be more lenient during initial authentication to avoid race conditions
-                let healthOk = true;
-                try {
-                    const controller = new AbortController();
-                    const to = setTimeout(() => controller.abort(), 1500);
-                    // Use unauthenticated health check during auth process to avoid chicken-and-egg problem
-                    const h = await apiFetch('/v1/health', { auth: false, dedupe: false, cache: 'no-store', signal: controller.signal });
-                    clearTimeout(to);
-                    // Treat any 2xx as online (degraded allowed); only network errors or 5xx as offline
-                    healthOk = h.status < 500;
-                } catch {
-                    // Be more lenient with health check failures during authentication
-                    // If whoami succeeded, assume backend is healthy enough for session_ready
-                    healthOk = true;
-                    console.info('AUTH Orchestrator: Health check failed but whoami succeeded, assuming healthy for session_ready');
+            // Since resilient client already handled success/error, we can proceed with data
+            // Health gate: require backend to be healthy before marking session_ready
+            // But be more lenient during initial authentication to avoid race conditions
+            let healthOk: boolean = true;
+            try {
+                const controller = new AbortController();
+                const to = setTimeout(() => controller.abort(), 1500);
+                // Use unauthenticated health check during auth process to avoid chicken-and-egg problem
+                const h = await apiFetch('/v1/health', { auth: false, dedupe: false, cache: 'no-store', signal: controller.signal });
+                clearTimeout(to);
+                // Treat any 2xx as online (degraded allowed); only network errors or 5xx as offline
+                healthOk = h.status < 500;
+            } catch {
+                // Be more lenient with health check failures during authentication
+                // If whoami succeeded, assume backend is healthy enough for session_ready
+                healthOk = true;
+                console.info('AUTH Orchestrator: Health check failed but whoami succeeded, assuming healthy for session_ready');
 
-                    // Dispatch backend online event for other components
-                    this.eventDispatcher.dispatchAuthEpochBumped();
-                }
-
-                console.info(`AUTH Orchestrator: Whoami success #${this.whoamiCallCount}`, {
-                    userId: data.user_id,
-                    hasUser: !!data.user_id,
-                    isAuthenticated: data.is_authenticated,
-                    sessionReady: data.session_ready,
-                    source: data.source,
-                    data,
-                    timestamp: new Date().toISOString(),
-                });
-
-                // Auth Orchestrator gate: Treat isAuthenticated === true && !userId as not authenticated
-                // This handles late cookie propagation scenarios
-                const hasValidUserId = data.user_id && typeof data.user_id === 'string' && data.user_id.trim() !== '';
-
-                // If is_authenticated is not provided in the response, fall back to the old behavior
-                // where we consider the user authenticated if they have a valid user_id
-                const isAuthenticatedFromResponse = data.is_authenticated !== undefined ? data.is_authenticated : hasValidUserId;
-                const shouldBeAuthenticated = isAuthenticatedFromResponse && hasValidUserId;
-                const shouldBeReady = shouldBeAuthenticated && healthOk;
-
-                if (data.is_authenticated !== undefined && data.is_authenticated && !hasValidUserId) {
-                    console.warn(`AUTH Orchestrator: Auth gate triggered - isAuthenticated=true but no userId`, {
-                        userId: data.user_id,
-                        isAuthenticated: data.is_authenticated,
-                        timestamp: new Date().toISOString(),
-                    });
-
-                    // Retry once with short backoff to handle late cookie propagation
-                    if (!this.authGateRetryAttempted) {
-                        console.info('AUTH Orchestrator: Auth gate retry - attempting one more whoami check');
-                        this.authGateRetryAttempted = true;
-
-                        // Set loading state and return early - the retry will be handled by the setTimeout
-                        this.setState({
-                            isLoading: false,
-                            error: null,
-                        });
-
-                        // Short backoff before retry - use a shorter delay for testing
-                        const retryDelay = process.env.NODE_ENV === 'test' ? 100 : 500;
-                        setTimeout(() => {
-                            this.checkAuth();
-                        }, retryDelay);
-
-                        return;
-                    } else {
-                        console.error('AUTH Orchestrator: Auth gate retry failed - flipping to unauthenticated state');
-
-                        // Dispatch auth mismatch event for toast notification
-                        this.eventDispatcher.dispatchAuthMismatch('Auth mismatch—re-login.', new Date().toISOString());
-
-                        // Flip to unauthenticated state after retry fails
-                        const unauthenticatedState: AuthState = {
-                            is_authenticated: false,
-                            session_ready: false,
-                            user_id: null,
-                            user: null,
-                            source: 'missing',
-                            version: this.state.version + 1,
-                            lastChecked: now,
-                            isLoading: false,
-                            error: 'Auth gate: isAuthenticated=true but no userId after retry',
-                            whoamiOk: false,
-                        };
-
-                        this.setState(unauthenticatedState);
-                        return;
-                    }
-                }
-
-                // Reset failure tracking on success
-                this.backoffManager.resetFailures();
-                this.authGateRetryAttempted = false; // Reset retry flag on successful auth
-
-                const newState: AuthState = {
-                    is_authenticated: shouldBeAuthenticated,
-                    session_ready: shouldBeReady,
-                    user_id: data.user_id,
-                    user: shouldBeAuthenticated ? {
-                        id: data.user_id,
-                        email: data.email || null,
-                    } : null,
-                    source: shouldBeAuthenticated ? 'cookie' : 'missing',
-                    version: this.state.version + 1,
-                    lastChecked: now,
-                    isLoading: false,
-                    error: null,
-                    whoamiOk: true,
-                };
-
-                // Update successful state for oscillation detection
-                this.oscillationDetector.updateSuccessfulState(newState);
-                this.setState(newState);
-
-                // One-time cleanup after first successful whoami to prevent oscillation
-                if (shouldBeAuthenticated && !this.oauthParamsCleaned) {
-                    this.oauthParamsCleaned = true;
-                    // Clean up OAuth params from URL to prevent oscillation
-                    if (typeof window !== 'undefined' && window.history.replaceState) {
-                        const url = new URL(window.location.href);
-                        const oauthParams = ['code', 'state', 'g_state', 'authuser', 'hd', 'prompt', 'scope', 'google', 'spotify'];
-                        let cleaned = false;
-                        oauthParams.forEach(param => {
-                            if (url.searchParams.has(param)) {
-                                url.searchParams.delete(param);
-                                cleaned = true;
-                            }
-                        });
-                        if (cleaned) {
-                            window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
-                        }
-                    }
-                }
-
-            } else {
-                // Handle non-2xx responses
-                const failures = this.backoffManager.incrementFailures();
-                console.warn(`AUTH Orchestrator: Whoami failed with status ${response.status}`, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    consecutiveFailures: failures,
-                    timestamp: new Date().toISOString(),
-                });
-
-                // Calculate backoff and apply it
-                const backoffMs = this.backoffManager.calculateBackoff();
-                this.backoffManager.applyBackoff(backoffMs);
-
-                // Set error state
-                const errorMessage = `Authentication failed: ${response.status} ${response.statusText}`;
-                this.setState({
-                    is_authenticated: false,
-                    session_ready: false,
-                    user_id: null,
-                    user: null,
-                    source: 'missing',
-                    version: this.state.version + 1,
-                    lastChecked: now,
-                    isLoading: false,
-                    error: errorMessage,
-                    whoamiOk: false,
-                });
+                // Dispatch backend online event for other components
+                this.eventDispatcher.dispatchAuthEpochBumped();
             }
 
+            console.info(`AUTH Orchestrator: Whoami success #${this.whoamiCallCount}`, {
+                userId: data.user_id,
+                hasUser: !!data.user_id,
+                isAuthenticated: data.is_authenticated,
+                sessionReady: data.session_ready,
+                source: data.source,
+                data,
+                timestamp: new Date().toISOString(),
+            });
+
+            // Auth Orchestrator gate: Treat isAuthenticated === true && !userId as not authenticated
+            // This handles late cookie propagation scenarios
+            const hasValidUserId = data.user_id && typeof data.user_id === 'string' && data.user_id.trim() !== '';
+
+            // If is_authenticated is not provided in the response, fall back to the old behavior
+            // where we consider the user authenticated if they have a valid user_id
+            const isAuthenticatedFromResponse = data.is_authenticated !== undefined ? data.is_authenticated : hasValidUserId;
+            const shouldBeAuthenticated: boolean = Boolean(isAuthenticatedFromResponse && hasValidUserId);
+            const shouldBeReady: boolean = shouldBeAuthenticated && healthOk;
+
+            if (data.is_authenticated !== undefined && data.is_authenticated && !hasValidUserId) {
+                console.warn(`AUTH Orchestrator: Auth gate triggered - isAuthenticated=true but no userId`, {
+                    userId: data.user_id,
+                    isAuthenticated: data.is_authenticated,
+                    timestamp: new Date().toISOString(),
+                });
+
+                // Retry once with short backoff to handle late cookie propagation
+                if (!this.authGateRetryAttempted) {
+                    console.info('AUTH Orchestrator: Auth gate retry - attempting one more whoami check');
+                    this.authGateRetryAttempted = true;
+
+                    // Set loading state and return early - the retry will be handled by the setTimeout
+                    this.setState({
+                        isLoading: false,
+                        error: null,
+                    });
+
+                    // Short backoff before retry - use a shorter delay for testing
+                    const retryDelay = process.env.NODE_ENV === 'test' ? 100 : 500;
+                    setTimeout(() => {
+                        this.checkAuth();
+                    }, retryDelay);
+
+                    return;
+                } else {
+                    console.error('AUTH Orchestrator: Auth gate retry failed - flipping to unauthenticated state');
+
+                    // Dispatch auth mismatch event for toast notification
+                    this.eventDispatcher.dispatchAuthMismatch('Auth mismatch—re-login.', new Date().toISOString());
+
+                    // Flip to unauthenticated state after retry fails
+                    const unauthenticatedState: AuthState = {
+                        is_authenticated: false,
+                        session_ready: false,
+                        user_id: null,
+                        user: null,
+                        source: 'missing',
+                        version: this.state.version + 1,
+                        lastChecked: now,
+                        isLoading: false,
+                        error: 'Auth gate: isAuthenticated=true but no userId after retry',
+                        whoamiOk: false,
+                    };
+
+                    this.setState(unauthenticatedState);
+                    return;
+                }
+            }
+
+            // Reset failure tracking on success
+            this.backoffManager.resetFailures();
+            this.authGateRetryAttempted = false; // Reset retry flag on successful auth
+
+            const newState: AuthState = {
+                is_authenticated: Boolean(shouldBeAuthenticated),
+                session_ready: shouldBeReady,
+                user_id: data.user_id,
+                user: shouldBeAuthenticated ? {
+                    id: data.user_id,
+                    email: data.email || null,
+                } : null,
+                source: shouldBeAuthenticated ? 'cookie' : 'missing',
+                version: this.state.version + 1,
+                lastChecked: now,
+                isLoading: false,
+                error: null,
+                whoamiOk: true,
+            };
+
+            // Update successful state for oscillation detection
+            this.oscillationDetector.updateSuccessfulState(newState);
+            this.setState(newState);
+
+            // One-time cleanup after first successful whoami to prevent oscillation
+            if (shouldBeAuthenticated && !this.oauthParamsCleaned) {
+                this.oauthParamsCleaned = true;
+                // Clean up OAuth params from URL to prevent oscillation
+                if (typeof window !== 'undefined' && window.history.replaceState) {
+                    const url = new URL(window.location.href);
+                    const oauthParams = ['code', 'state', 'g_state', 'authuser', 'hd', 'prompt', 'scope', 'google', 'spotify'];
+                    let cleaned = false;
+                    oauthParams.forEach(param => {
+                        if (url.searchParams.has(param)) {
+                            url.searchParams.delete(param);
+                            cleaned = true;
+                        }
+                    });
+                    if (cleaned) {
+                        window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+                    }
+                }
+            }
+
+            // Success path continues here...
+
         } catch (error) {
+            // Resilient client already handled retries, so this is a final failure
             const failures = this.backoffManager.incrementFailures();
-            console.error(`AUTH Orchestrator: Whoami request failed`, {
+            console.error(`AUTH Orchestrator: Whoami request failed after retries`, {
                 error: error instanceof Error ? error.message : String(error),
                 consecutiveFailures: failures,
                 timestamp: new Date().toISOString(),
             });
 
-            // Calculate backoff and apply it
+            // Calculate backoff and apply it (still use existing backoff manager for consistency)
             const backoffMs = this.backoffManager.calculateBackoff();
             this.backoffManager.applyBackoff(backoffMs);
 

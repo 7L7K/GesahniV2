@@ -1,17 +1,19 @@
+"""
+FastAPI Middleware Stack - Single Source of Truth
+
+This module contains the canonical middleware stack configuration for the GesahniV2 application.
+
+⚠️  IMPORTANT: This is the ONLY place where middleware order should be modified!
+   Do not add middleware elsewhere in the codebase.
+
+See the header comment below for detailed documentation on environment controls and usage.
+"""
+
 from __future__ import annotations
 import os
 import logging
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
-
-from app.settings_cors import (
-    get_cors_origins,
-    get_cors_allow_credentials,
-    get_cors_allow_methods,
-    get_cors_allow_headers,
-    get_cors_expose_headers,
-    get_cors_max_age,
-)
 
 # Local middlewares (all must be import-safe)
 from app.middleware import (
@@ -28,411 +30,168 @@ from app.middleware import (
 )
 from app.middleware.audit_mw import AuditMiddleware
 from app.middleware.metrics_mw import MetricsMiddleware
+from app.middleware.cors import CorsPreflightMiddleware
+from app.middleware.cors_cache_fix import SafariCORSCacheFixMiddleware
+from app.csrf import CSRFMiddleware
+from app.middleware.custom import EnhancedErrorHandlingMiddleware
+from app.middleware.error_handler import ErrorHandlerMiddleware
 
 log = logging.getLogger(__name__)
+
+# =============================================================================
+# MIDDLEWARE STACK - SINGLE SOURCE OF TRUTH
+# =============================================================================
+#
+# ⚠️  CRITICAL: This file is the ONLY place to modify middleware order! ⚠️
+#
+# - Add order = outer → inner (first added runs outermost)
+# - To change middleware order, edit the EXPECTED list and setup logic below
+# - Do NOT add middleware elsewhere in the codebase
+#
+# Environment toggles used:
+# - CSRF_ENABLED=1|0 (default: 1) - Enable/disable CSRF middleware
+# - CORS_ORIGINS="origin1,origin2" - Comma-separated allowed CORS origins
+# - RATE_LIMIT_ENABLED=1|0 (default: 1) - Enable/disable rate limiting (auto-disabled in CI)
+# - LEGACY_ERROR_MW=1 - Enable legacy error handling middlewares (not recommended)
+# - CI/dev detection: RATE_LIMIT_ENABLED auto-disabled in CI, ReloadEnvMiddleware only in dev
+#
+# To verify: Run `python scripts/print_middleware.py`
+# =============================================================================
 
 def _is_truthy(v: str | None) -> bool:
     return (v or "").strip().lower() in {"1", "true", "yes", "on"}
 
-def setup_middleware_stack(app: FastAPI) -> None:
+def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_origins: list[str] | None = None) -> None:
     """
-    Deterministic stack with env-aware toggles.
-    Ordering is outside-in (added first runs outermost).
+    SINGLE SOURCE OF TRUTH for FastAPI middleware stack configuration.
+
+    ⚠️  DO NOT modify middleware order elsewhere in the codebase!
+
+    Add order = outer → inner:
+    - First middleware added runs outermost (closest to client)
+    - Last middleware added runs innermost (closest to routes)
+
+    Environment controls:
+    - csrf_enabled: Controlled by CSRF_ENABLED env var (default: True)
+    - cors_origins: Controlled by CORS_ORIGINS env var (comma-separated)
+    - RATE_LIMIT_ENABLED: Auto-disabled in CI environments
+    - LEGACY_ERROR_MW: Enables legacy error middlewares (not recommended)
+
+    To verify middleware order: Run `python scripts/print_middleware.py`
     """
+    EXPECTED = [
+        "ReloadEnvMiddleware",            # innermost (added last)
+        "ErrorHandlerMiddleware",         # conditional
+        "EnhancedErrorHandlingMiddleware", # conditional
+        "CSRFMiddleware",                 # conditional
+        "MetricsMiddleware",
+        "AuditMiddleware",
+        "DedupMiddleware",
+        "SilentRefreshMiddleware",
+        "SessionAttachMiddleware",
+        "RateLimitMiddleware",            # conditional
+        "HealthCheckFilterMiddleware",
+        "RedactHashMiddleware",
+        "TraceRequestMiddleware",
+        "RequestIDMiddleware",
+        "CORSMiddleware",                 # added third
+        "SafariCORSCacheFixMiddleware",   # added second
+        "CorsPreflightMiddleware",        # added first (outermost)
+    ]
+
+    # Environment checks for conditionals
     env = (os.getenv("ENV") or "dev").strip().lower()
     dev_mode = _is_truthy(os.getenv("DEV_MODE"))
     in_ci = _is_truthy(os.getenv("CI")) or "PYTEST_CURRENT_TEST" in os.environ
-    # Explicit feature flag for rate limiting; default on unless CI or disabled
     rate_limit_enabled_env = os.getenv("RATE_LIMIT_ENABLED", "1")
     rate_limit_enabled = _is_truthy(rate_limit_enabled_env) and not in_ci
+    legacy_error_mw = _is_truthy(os.getenv("LEGACY_ERROR_MW"))
 
-    log.info("mw.flags env=%s dev_mode=%s in_ci=%s rate_limit_enabled_env=%s -> rate_limit_enabled=%s",
-             env, dev_mode, in_ci, rate_limit_enabled_env, rate_limit_enabled)
+    log.info("Setting up middleware stack with csrf_enabled=%s, cors_origins=%s", csrf_enabled, cors_origins)
 
+    # Add middleware in exact order (outer → inner)
 
-    # 1) Request ID + tracing come first for observability
-    add_mw(app, RequestIDMiddleware)
-    add_mw(app, TraceRequestMiddleware)
+    # CORS layers - CorsPreflightMiddleware runs before CORSMiddleware
+    cors_origins_list = cors_origins or ["http://localhost:3000", "http://127.0.0.1:3000"]
+    app.add_middleware(CorsPreflightMiddleware, allow_origins=cors_origins_list)
+    add_mw(app, SafariCORSCacheFixMiddleware, name="SafariCORSCacheFixMiddleware")
 
-    # 2) Dev-only hot reload of env (cheap & safe)
-    if dev_mode and not in_ci:
-        add_mw(app, ReloadEnvMiddleware)
+    # CORSMiddleware from Starlette (kept for backward compatibility)
+    # Add this after CorsPreflightMiddleware so CorsPreflightMiddleware runs first
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"]
+    )
 
-    # 3) Hygiene filters (never block requests)
-    add_mw(app, RedactHashMiddleware)
-    add_mw(app, HealthCheckFilterMiddleware)
+    # Request ID and tracing
+    add_mw(app, RequestIDMiddleware, name="RequestIDMiddleware")
+    add_mw(app, TraceRequestMiddleware, name="TraceRequestMiddleware")
 
-    # 4) Throttles and auth/session surface (these may block)
+    # Hygiene filters
+    add_mw(app, RedactHashMiddleware, name="RedactHashMiddleware")
+    add_mw(app, HealthCheckFilterMiddleware, name="HealthCheckFilterMiddleware")
+
+    # Rate limiting (conditional)
     if rate_limit_enabled:
-        add_mw(app, RateLimitMiddleware)
-    else:
-        log.debug("RateLimitMiddleware skipped (rate_limit_enabled=%s)", rate_limit_enabled)
-    add_mw(app, SessionAttachMiddleware)
-    add_mw(app, SilentRefreshMiddleware)
-
-    # 5) De-duplication (idempotency layer)
-    add_mw(app, DedupMiddleware)
-
-    # 6) Audit & metrics (must see the final status code)
-    add_mw(app, AuditMiddleware)
-    add_mw(app, MetricsMiddleware)
-
-    # 7) Legacy error middlewares — **DISABLED BY DEFAULT**
-    # Your exception handlers now own the error contract.
-    # Turn these back on only for temporary compatibility:
-    #   LEGACY_ERROR_MW=1
-    if _is_truthy(os.getenv("LEGACY_ERROR_MW")):
-        try:
-            from app.middleware import EnhancedErrorHandlingMiddleware, ErrorHandlerMiddleware
-            add_mw(app, EnhancedErrorHandlingMiddleware)
-            add_mw(app, ErrorHandlerMiddleware)
-            log.warning("Legacy error middlewares enabled (LEGACY_ERROR_MW=1) — not recommended.")
-        except Exception as e:
-            log.warning("Legacy error middlewares not available: %s", e)
-
-    # Safety: if CI=true but some other code added RateLimitMiddleware earlier,
-    # prune it now to guarantee CI runs without rate limiting.
-    if in_ci:
-        original = list(getattr(app, "user_middleware", []))
-        pruned = [mw for mw in original if mw.cls.__name__ != "RateLimitMiddleware"]
-        if len(pruned) != len(original):
-            log.warning("Pruned RateLimitMiddleware in CI mode (found %d -> kept %d)",
-                        len(original), len(pruned))
-            app.user_middleware = pruned  # starlette will rebuild stack on next request
-
-def validate_middleware_order(app: FastAPI) -> None:
-    """
-    Assert the stack respects invariants (developer guardrails).
-    """
-    names = [mw.cls.__name__ for mw in getattr(app, "user_middleware", [])]
-    def _must_appear(name: str):
-        assert name in names, f"Expected middleware {name} to be registered"
-
-    # Presence checks (core)
-    for n in (
-        "RequestIDMiddleware",
-        "TraceRequestMiddleware",
-        "RedactHashMiddleware",
-        "HealthCheckFilterMiddleware",
-        "SessionAttachMiddleware",
-        "SilentRefreshMiddleware",
-        "DedupMiddleware",
-        "AuditMiddleware",
-        "MetricsMiddleware",
-    ):
-        _must_appear(n)
-
-    # Order checks (basic)
-    assert names.index("RequestIDMiddleware") < names.index("TraceRequestMiddleware")
-    if "RateLimitMiddleware" in names:
-        assert names.index("RateLimitMiddleware") < names.index("SessionAttachMiddleware")
-
-    # CORS should be outermost or near-outermost (added by FastAPI/Starlette as class)
-    # We can't index it easily, but we can sanity-check preflight separately in smoke tests.
-
-    
-    # Why this works
-    # CORS sits on the outside → OPTIONS never collides with auth/CSRF/rate limit.
-    # RequestID/Trace first → every log/metric gets an ID.
-    # Legacy error middlewares off → your Phase 2 handlers own the error path.
-    # No imports from app.main → no cycles.
-
-"""Middleware stack assembly - isolated from router modules.
-
-This module handles all middleware setup without importing any
-router modules that could create circular dependencies.
-"""
-import logging
-import os
-from typing import Any, List
-
-
-def setup_cors_middleware(app: Any) -> None:
-    """Set up CORS middleware for the application.
-
-    Args:
-        app: FastAPI application instance
-    """
-    # Import CORS configuration (should be lightweight)
-    try:
-        from ..settings_cors import (
-            get_cors_origins,
-            get_cors_allow_credentials,
-            get_cors_allow_methods,
-            get_cors_allow_headers,
-            get_cors_expose_headers,
-            get_cors_max_age,
-            validate_cors_origins,
-        )
-
-        origins = get_cors_origins()
-        allow_credentials = get_cors_allow_credentials()
-        allow_methods = get_cors_allow_methods()
-        allow_headers = get_cors_allow_headers()
-        expose_headers = get_cors_expose_headers()
-        max_age = get_cors_max_age()
-
-        # Validate CORS origins
-        validate_cors_origins(origins)
-
-        # Store as single source of truth for HTTP+WS origin validation
-        app.state.allowed_origins = origins
-
-        # Log CORS configuration
-        logging.info(
-            "CORS resolved origins=%s | allow_credentials=%s | allow_methods=%s | allow_headers=%s | expose_headers=%s",
-            origins,
-            allow_credentials,
-            allow_methods,
-            allow_headers,
-            expose_headers,
-        )
-
-        from starlette.middleware.cors import CORSMiddleware
-
-        # Add standard CORS middleware
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=origins,
-            allow_credentials=allow_credentials,
-            allow_methods=allow_methods,
-            allow_headers=allow_headers,
-            expose_headers=expose_headers,
-            max_age=max_age,
-        )
-
-    except Exception as e:
-        logging.warning("Failed to set up CORS middleware: %s", e)
-
-
-def setup_core_middlewares(app: Any) -> None:
-    """Set up core middlewares for the application.
-
-    Args:
-        app: FastAPI application instance
-    """
-    try:
-        # CI detection and rate limiting control
-        in_ci = _is_truthy(os.getenv("CI")) or "PYTEST_CURRENT_TEST" in os.environ
-        rate_limit_enabled_env = os.getenv("RATE_LIMIT_ENABLED", "1")
-        rate_limit_enabled = _is_truthy(rate_limit_enabled_env) and not in_ci
-
-        log.info("setup_core_middlewares: CI detection: in_ci=%s, rate_limit_enabled=%s", in_ci, rate_limit_enabled)
-
-        # Import middleware components
-        from ..middleware import (
-            RequestIDMiddleware,
-            DedupMiddleware,
-            HealthCheckFilterMiddleware,
-            TraceRequestMiddleware,
-            AuditMiddleware,
-            RedactHashMiddleware,
-            MetricsMiddleware,
-            RateLimitMiddleware,
-            SessionAttachMiddleware,
-            CSRFMiddleware,
-            EnhancedErrorHandlingMiddleware,
-            ErrorHandlerMiddleware,
-        )
-
-        # Core middlewares (inner → outer)
-        middlewares = [
-            (RequestIDMiddleware, {}),
-            (DedupMiddleware, {}),
-            (HealthCheckFilterMiddleware, {}),
-            (TraceRequestMiddleware, {}),
-            (AuditMiddleware, {}),
-            (RedactHashMiddleware, {}),
-            (MetricsMiddleware, {}),
-        ]
-
-        # Conditionally add RateLimitMiddleware
-        if rate_limit_enabled:
-            middlewares.append((RateLimitMiddleware, {}))
-            log.debug("RateLimitMiddleware added to core middlewares")
-        else:
-            log.info("RateLimitMiddleware skipped (CI mode or disabled)")
-
-        middlewares.append((SessionAttachMiddleware, {}))
-
-        # Add core middlewares
-        for middleware_class, kwargs in middlewares:
-            app.add_middleware(middleware_class, **kwargs)
-
-        # Add CSRF middleware (after core middlewares)
-        app.add_middleware(CSRFMiddleware)
-
-        # Error handling middlewares (outermost for error catching)
-        app.add_middleware(ErrorHandlerMiddleware)
-        app.add_middleware(EnhancedErrorHandlingMiddleware)
-
-        logging.debug("Core middlewares registered successfully")
-
-    except Exception as e:
-        logging.warning("Failed to set up core middlewares: %s", e)
-
-
-def setup_optional_middlewares(app: Any) -> None:
-    """Set up optional middlewares for the application.
-
-    Args:
-        app: FastAPI application instance
-    """
-    try:
-        # Dev-only middleware
-        if os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}:
-            try:
-                from ..middleware import ReloadEnvMiddleware
-                app.add_middleware(ReloadEnvMiddleware)
-                logging.debug("ReloadEnvMiddleware added for dev mode")
-            except ImportError:
-                pass
-
-        # Optional silent refresh middleware
-        if os.getenv("SILENT_REFRESH_ENABLED", "1").lower() in {"1", "true", "yes", "on"}:
-            try:
-                from ..middleware import SilentRefreshMiddleware
-                app.add_middleware(SilentRefreshMiddleware)
-                logging.debug("SilentRefreshMiddleware added")
-            except ImportError:
-                pass
-
-    except Exception as e:
-        logging.warning("Failed to set up optional middlewares: %s", e)
-
-
-def setup_browser_specific_middlewares(app: Any) -> None:
-    """Set up browser-specific middlewares.
-
-    Args:
-        app: FastAPI application instance
-    """
-    try:
-        # Safari CORS cache fix
-        try:
-            from ..middleware import SafariCORSCacheFixMiddleware
-            app.add_middleware(SafariCORSCacheFixMiddleware)
-            logging.debug("SafariCORSCacheFixMiddleware added")
-        except ImportError:
-            pass
-
-        # CORS preflight middleware (must be outermost)
-        try:
-            from ..middleware.cors import CorsPreflightMiddleware
-
-            # Get origins for preflight middleware
-            try:
-                from ..settings_cors import get_cors_origins
-                origins = get_cors_origins()
-            except ImportError:
-                origins = ["*"]  # Fallback
-
-            app.add_middleware(CorsPreflightMiddleware, allow_origins=origins)
-            logging.debug("CorsPreflightMiddleware added")
-        except ImportError:
-            pass
-
-    except Exception as e:
-        logging.warning("Failed to set up browser-specific middlewares: %s", e)
-
-
-def setup_middleware_stack(app: Any) -> None:
-    """Set up the complete middleware stack for the application.
-
-    This function should be called from create_app() to set up
-    all middlewares without triggering router imports.
-
-    Args:
-        app: FastAPI application instance
-    """
-    logging.info("🔧 Setting up middleware stack...")
-
-    # Set up CORS preflight middleware first (short-circuits OPTIONS)
-    try:
-        from ..middleware.cors import CorsPreflightMiddleware
-        from ..settings_cors import get_cors_origins
-        origins = get_cors_origins()
-        app.add_middleware(CorsPreflightMiddleware, allow_origins=origins)
-        logging.debug("CorsPreflightMiddleware added")
-    except Exception as e:
-        logging.warning("Failed to set up CorsPreflightMiddleware: %s", e)
-
-    # Set up Safari CORS cache fix
-    try:
-        from ..middleware import SafariCORSCacheFixMiddleware
-        app.add_middleware(SafariCORSCacheFixMiddleware)
-        logging.debug("SafariCORSCacheFixMiddleware added")
-    except ImportError:
-        pass
-
-    # Set up CORS middleware (after preflight)
-    setup_cors_middleware(app)
-
-    # Set up core middlewares
-    setup_core_middlewares(app)
-
-    # Set up optional middlewares
-    setup_optional_middlewares(app)
-
-    # Mark middleware as registered
-    try:
-        app.state.mw_registered = True
-
-        # Log final middleware order in dev
-        if os.getenv("ENV", "dev").lower() in {"dev", "local"}:
-            names = [m.cls.__name__ for m in getattr(app, "user_middleware", [])]
-            logging.info("MW (outer→inner) = %s", names)
-
-        logging.info("=== MIDDLEWARE STACK COMPLETE ===")
-    except Exception:
-        logging.debug("Failed to set middleware registered flag")
-
-
-def validate_middleware_order(app: Any) -> None:
-    """Validate middleware order in development.
-
-    Args:
-        app: FastAPI application instance
-    """
-    if os.getenv("ENV", "dev").lower() != "dev":
-        return  # only validate in dev environment
-
-    try:
-        # Get current middleware names
-        got = []
-        for m in getattr(app, "user_middleware", []):
-            if hasattr(m.cls, '__name__'):
-                got.append(m.cls.__name__)
-            else:
-                got.append(type(m.cls).__name__)
-
-        # Expected order (outer → inner as reported by Starlette)
-        expected_outer_to_inner = [
-            "CorsPreflightMiddleware",
-            "SafariCORSCacheFixMiddleware",
-            "CORSMiddleware",
-            "CSRFMiddleware",
-            "EnhancedErrorHandlingMiddleware",
-            "ErrorHandlerMiddleware",
-            "SilentRefreshMiddleware",
-            "ReloadEnvMiddleware",
-            "SessionAttachMiddleware",
-            "RateLimitMiddleware",
-            "MetricsMiddleware",
-            "RedactHashMiddleware",
-            "AuditMiddleware",
-            "TraceRequestMiddleware",
-            "HealthCheckFilterMiddleware",
-            "DedupMiddleware",
-            "RequestIDMiddleware",  # innermost
-        ]
-
-        if got != expected_outer_to_inner:
-            logging.warning(
-                "Middleware order mismatch.\\n"
-                f"Expected (outer→inner): {expected_outer_to_inner}\\n"
-                f"Actual   (outer→inner): {got}"
-            )
-
-    except Exception as e:
-        logging.debug("Middleware order validation failed: %s", e)
+        add_mw(app, RateLimitMiddleware, name="RateLimitMiddleware")
+
+    # Session and auth
+    add_mw(app, SessionAttachMiddleware, name="SessionAttachMiddleware")
+    add_mw(app, SilentRefreshMiddleware, name="SilentRefreshMiddleware")
+
+    # De-duplication
+    add_mw(app, DedupMiddleware, name="DedupMiddleware")
+
+    # Audit and metrics
+    add_mw(app, AuditMiddleware, name="AuditMiddleware")
+    add_mw(app, MetricsMiddleware, name="MetricsMiddleware")
+
+    # CSRF (conditional)
+    if csrf_enabled:
+        add_mw(app, CSRFMiddleware, name="CSRFMiddleware")
+
+    # Legacy error middlewares (conditional)
+    if legacy_error_mw:
+        add_mw(app, EnhancedErrorHandlingMiddleware, name="EnhancedErrorHandlingMiddleware")
+        add_mw(app, ErrorHandlerMiddleware, name="ErrorHandlerMiddleware")
+        log.warning("Legacy error middlewares enabled (LEGACY_ERROR_MW=1) — not recommended.")
+
+    # ReloadEnvMiddleware (dev/CI only, innermost)
+    if dev_mode and not in_ci:
+        add_mw(app, ReloadEnvMiddleware, name="ReloadEnvMiddleware")
+
+    # Validate order
+    names = [m.cls.__name__ for m in app.user_middleware]
+    expected = []
+    for name in EXPECTED:
+        if name == "CSRFMiddleware" and not csrf_enabled:
+            continue
+        elif name == "RateLimitMiddleware" and not rate_limit_enabled:
+            continue
+        elif name in ["EnhancedErrorHandlingMiddleware", "ErrorHandlerMiddleware"] and not legacy_error_mw:
+            continue
+        elif name == "ReloadEnvMiddleware" and not (dev_mode and not in_ci):
+            continue
+        expected.append(name)
+
+    if names != expected:
+        raise RuntimeError(f"Middleware order mismatch.\nExpected (outer→inner): {expected}\nActual   (outer→inner): {names}")
+
+    log.info("Middleware stack setup complete with %d middlewares", len(names))
+
+# =============================================================================
+# END OF SINGLE SOURCE OF TRUTH - DO NOT MODIFY MIDDLEWARE ORDER ELSEWHERE
+# =============================================================================
+#
+# If you need to change middleware order, modify the EXPECTED list and setup logic above.
+# Do NOT add middleware in other files - this will break the canonical order!
+#
+# Verify changes: Run `python scripts/print_middleware.py`
+# =============================================================================
+
+# Middleware stack assembly - isolated from router modules.
+# This module handles all middleware setup without importing any
+# router modules that could create circular dependencies.

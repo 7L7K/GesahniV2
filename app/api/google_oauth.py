@@ -28,7 +28,7 @@ from .. import cookie_config as cookie_cfg
 from ..integrations.google.config import JWT_STATE_SECRET
 from ..integrations.google.state import generate_signed_state, verify_signed_state, generate_pkce_verifier, generate_pkce_challenge
 from ..logging_config import req_id_var
-from ..security import jwt_decode
+from ..security import jwt_decode  # Direct import from main security module
 from ..error_envelope import raise_enveloped
 
 logger = logging.getLogger(__name__)

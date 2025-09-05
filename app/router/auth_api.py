@@ -66,7 +66,7 @@ async def log_request_meta(request: Request):
 
 
 @router.get(
-    "/auth/finish",
+    "/finish",
     dependencies=[Depends(log_request_meta)],
     include_in_schema=False,
 )
@@ -88,7 +88,7 @@ async def auth_finish_get(
 
 
 @router.post(
-    "/auth/finish",
+    "/finish",
     dependencies=[Depends(log_request_meta)],
     include_in_schema=False,
 )

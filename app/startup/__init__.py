@@ -94,6 +94,7 @@ async def _run_components():
         "init_scheduler": C.init_scheduler,
         "init_dev_user": C.init_dev_user,
         "init_chaos_mode": C.init_chaos_mode,
+        "init_client_warmup": C.init_client_warmup,
     }
 
     for idx, comp_name in enumerate(profile.components, 1):

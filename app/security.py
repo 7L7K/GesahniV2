@@ -21,7 +21,9 @@ from fastapi import Header
 logger = logging.getLogger(__name__)
 
 import jwt
+from jwt import PyJWTError, ExpiredSignatureError, InvalidTokenError
 from fastapi import Depends, HTTPException, Request, WebSocket, WebSocketException, Response
+from app.security.jwt_config import get_jwt_config
 
 try:
     # Optional Clerk JWT verification for RS256 tokens
@@ -409,6 +411,38 @@ def jwt_decode(
 
 # Backwards-compat alias; prefer jwt_decode going forward.
 _jwt_decode = jwt_decode
+
+
+def decode_jwt(token: str) -> dict | None:
+    """Decode JWT using centralized configuration with kid support for RSA/ES."""
+    cfg = get_jwt_config()
+    try:
+        if cfg.alg == "HS256":
+            return jwt.decode(
+                token, cfg.secret, algorithms=["HS256"],
+                options={"verify_aud": bool(cfg.audience)},
+                audience=cfg.audience, issuer=cfg.issuer)
+        else:
+            headers = jwt.get_unverified_header(token)
+            kid = headers.get("kid")
+            if not kid or kid not in cfg.public_keys:
+                # Fallback: try any key to tolerate older tokens without kid
+                for k in cfg.public_keys.values():
+                    try:
+                        return jwt.decode(
+                            token, k, algorithms=[cfg.alg],
+                            options={"verify_aud": bool(cfg.audience)},
+                            audience=cfg.audience, issuer=cfg.issuer)
+                    except Exception:
+                        continue
+                return None
+            key = cfg.public_keys[kid]
+            return jwt.decode(
+                token, key, algorithms=[cfg.alg],
+                options={"verify_aud": bool(cfg.audience)},
+                audience=cfg.audience, issuer=cfg.issuer)
+    except (ExpiredSignatureError, PyJWTError):
+        return None
 
 
 def _rl_key(kind: str, user_key: str, window: str) -> str:

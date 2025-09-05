@@ -28,6 +28,10 @@ export interface AuthOrchestrator {
     refreshAuth(): Promise<void>;
     markExplicitStateChange(): void;
 
+    // 401 handling
+    handle401Response(): Promise<void>;
+    handleRefreshWithRetry(): Promise<void>;
+
     // Lifecycle
     initialize(): Promise<void>;
     cleanup(): void;

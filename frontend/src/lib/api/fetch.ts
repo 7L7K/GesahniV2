@@ -32,7 +32,7 @@ const PUBLIC_PATHS = new Set([
   '/v1/auth/login',
   '/v1/auth/logout',
   '/v1/auth/refresh',
-  '/v1/auth/whoami',
+  '/v1/whoami',
 ]);
 
 // CSRF token management
@@ -387,31 +387,22 @@ export async function apiFetch(
     const isAuthCheckEndpoint = path.includes('/whoami') || path.includes('/me') || path.includes('/profile');
 
     if (isAuthCheckEndpoint) {
-      console.warn('API_FETCH auth.401_auth_endpoint - redirecting to login (tokens preserved)', { path, errorCode, errorMessage, timestamp: new Date().toISOString() });
-      if (typeof document !== "undefined") {
-        // Prevent redirect loops by checking if we're already on login-related pages
-        const currentPath = window.location.pathname;
-        const isOnLoginPage = currentPath === '/login' || currentPath === '/sign-in' || currentPath === '/sign-up' || currentPath.startsWith('/sign-in/') || currentPath.startsWith('/sign-up/');
+      console.warn('API_FETCH auth.401_auth_endpoint - delegating to auth orchestrator', { path, errorCode, errorMessage, timestamp: new Date().toISOString() });
 
-        if (!isOnLoginPage) {
-          // Import sanitizeNextPath dynamically to avoid circular dependencies
-          import('@/lib/utils').then(({ sanitizeNextPath }) => {
-            const currentUrl = window.location.pathname + window.location.search;
-            const sanitizedNext = sanitizeNextPath(currentUrl, '/');
+      // Use the auth orchestrator's 401 handler for comprehensive cleanup
+      const { getAuthOrchestrator } = await import('@/services/authOrchestrator');
+      const orchestrator = getAuthOrchestrator();
 
-            // Prevent recursive next parameters that could cause loops
-            const nextParam = encodeURIComponent(sanitizedNext);
-            const redirectUrl = `/login?next=${nextParam}`;
-
-            try {
-              window.location.href = redirectUrl;
-            } catch { }
-          }).catch(() => {
-            // Fallback if import fails
-            try { window.location.href = '/login'; } catch { }
-          });
+      try {
+        await orchestrator.handle401Response();
+      } catch (error) {
+        console.error('API_FETCH: Error in orchestrator 401 handler:', error);
+        // Fallback to basic redirect if orchestrator fails
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
         }
       }
+
       // Fall through to let caller handle the 401 response as well
     } else {
       if (errorCode === 'spotify_not_authenticated') {

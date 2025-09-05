@@ -23,7 +23,7 @@ Expected response:
 
 ## Me Endpoint
 ```bash
-curl -i -b /tmp/gsn.cookies http://127.0.0.1:8000/v1/me
+curl -i -b /tmp/gsn.cookies http://127.0.0.1:8000/v1/whoami
 ```
 
 Expected response:

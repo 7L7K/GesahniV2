@@ -1146,8 +1146,8 @@ def _get_refresh_ttl_seconds() -> int:
 
 
 
-@router.get("/auth/finish")
-@router.post("/auth/finish")
+@router.get("/finish")
+@router.post("/finish")
 async def finish_clerk_login(
     request: Request, response: Response, user_id: str = Depends(_require_user_or_dev)
 ):

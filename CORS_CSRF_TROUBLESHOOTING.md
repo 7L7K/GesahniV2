@@ -152,7 +152,7 @@ curl -v -H "Origin: http://localhost:3000" \
 - [ ] `CORS_ALLOW_ORIGINS=http://localhost:3000`
 - [ ] `CORS_ALLOW_CREDENTIALS=true`
 - [ ] `CSRF_ENABLED=0` (for development)
-- [ ] `JWT_SECRET=change-me` (or your secret)
+- [ ] `JWT_SECRET=<generate-with-jwt-tools>` (generate with `python scripts/jwt_tools.py hs256`)
 
 ### Frontend (frontend/.env.local)
 - [ ] `NEXT_PUBLIC_API_ORIGIN=http://localhost:8000`

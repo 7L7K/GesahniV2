@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from .deps.scopes import require_scope
 from .deps.user import get_current_user_id
-from .security import jwt_decode
+from .security import jwt_decode, decode_jwt
 from .user_store import user_store
 from .api.auth import _jwt_secret
 from .db.paths import resolve_db_path
@@ -28,7 +28,7 @@ def _db_path() -> Path:
     return resolve_db_path("USERS_DB", "users.db")
 AUTH_TABLE = os.getenv("AUTH_TABLE", "auth_users")
 ALGORITHM = "HS256"
-SECRET_KEY = os.getenv("JWT_SECRET")
+# SECRET_KEY removed - now use get_jwt_config() for centralized configuration
 # Defer strict validation of the JWT secret until token creation time so imports
 # don't fail in tests that don't need JWT functionality
 JWT_ISS = os.getenv("JWT_ISS")
@@ -567,10 +567,9 @@ async def register(req: RegisterRequest, request: Request, response: Response):
         access_ttl, refresh_ttl = get_token_ttls()
 
         try:
-            secret = _jwt_secret()
-            payload = jwt_decode(access_token, secret, algorithms=[ALGORITHM])
-            jti = payload.get("jti")
-            expires_at = payload.get("exp", time.time() + access_ttl)
+            payload = decode_jwt(access_token)
+            jti = payload.get("jti") if payload else None
+            expires_at = payload.get("exp", time.time() + access_ttl) if payload else time.time() + access_ttl
             session_id = _create_session_id(jti, expires_at) if jti else f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
         except Exception:
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
@@ -934,11 +933,9 @@ async def login(req: LoginRequest, request: Request, response: Response):
         # This provides better security by using an opaque session ID
         try:
             # Decode the access token to get the JTI
-            # Use dynamic JWT secret function to handle test environment changes
-            secret = _jwt_secret()
-            payload = jwt_decode(access_token, secret, algorithms=[ALGORITHM])
-            jti = payload.get("jti")
-            expires_at = payload.get("exp", time.time() + access_ttl)
+            payload = decode_jwt(access_token)
+            jti = payload.get("jti") if payload else None
+            expires_at = payload.get("exp", time.time() + access_ttl) if payload else time.time() + access_ttl
 
             if jti:
                 session_id = _create_session_id(jti, expires_at)
@@ -1016,11 +1013,9 @@ async def login(req: LoginRequest, request: Request, response: Response):
             # Set __session cookie with session ID instead of fingerprint
             try:
                 # Decode the access token to get the JTI
-                # Use dynamic JWT secret function to handle test environment changes
-                secret = _jwt_secret()
-                payload = jwt_decode(access_token, secret, algorithms=[ALGORITHM])
-                jti = payload.get("jti")
-                expires_at = payload.get("exp", time.time() + access_ttl)
+                payload = decode_jwt(access_token)
+                jti = payload.get("jti") if payload else None
+                expires_at = payload.get("exp", time.time() + access_ttl) if payload else time.time() + access_ttl
 
                 if jti:
                     session_id = _create_session_id(jti, expires_at)

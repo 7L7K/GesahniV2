@@ -15,7 +15,7 @@ Goal: A new dev can validate sign-in/out, token behavior, per-user rate limits, 
    - `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up`
    - `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000`
 2) Backend env:
-   - `JWT_SECRET=change-me`
+   - `JWT_SECRET=<generate-with-jwt-tools>` (generate with `python scripts/jwt_tools.py hs256`)
    - Clerk JWKS:
      - Either `CLERK_JWKS_URL=https://<tenant>.clerk.accounts.dev/.well-known/jwks.json`
      - Or `CLERK_ISSUER=https://<tenant>.clerk.accounts.dev`

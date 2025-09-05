@@ -103,8 +103,9 @@ This document outlines the key environment variables that control authentication
 
 ### Minimum Production Configuration
 ```bash
-# Required
-JWT_SECRET="your-super-secure-jwt-secret-key-here"
+# Required - Generate secure secrets
+# Generate: python scripts/jwt_tools.py hs256
+JWT_SECRET="GENERATE ONE - DO NOT USE PLACEHOLDER"
 
 # Recommended Security Settings
 CLERK_ENABLED="0"          # Disable if not using Clerk
@@ -117,7 +118,8 @@ COOKIE_SECURE="auto"      # HTTPS detection
 ### Development Configuration
 ```bash
 # Development settings with warnings
-JWT_SECRET="dev-secret-key-for-testing-only"
+# Generate: python scripts/jwt_tools.py hs256
+JWT_SECRET="GENERATE ONE - DO NOT USE PLACEHOLDER"
 DEV_MODE="1"              # Enables warnings for weak settings
 CSRF_ENABLED="0"          # Disable for easier testing
 LOG_LEVEL="DEBUG"         # Enable debug logging
@@ -126,7 +128,8 @@ LOG_LEVEL="DEBUG"         # Enable debug logging
 ### Testing Configuration
 ```bash
 # Test environment
-JWT_SECRET="test-secret-key"
+# Generate: python scripts/jwt_tools.py hs256
+JWT_SECRET="GENERATE ONE - DO NOT USE PLACEHOLDER"
 DEV_MODE="0"              # Tests should exercise strict validation
 LOG_LEVEL="WARNING"       # Reduce noise during testing
 ```

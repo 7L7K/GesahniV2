@@ -25,6 +25,7 @@ def detect_profile() -> StartupProfile:
         "init_vector_store",
         "init_memory_store",
         "init_scheduler",
+        "init_client_warmup",
     )
     ha = ("init_home_assistant",)
     llama = ("init_llama",)

@@ -93,7 +93,8 @@ The frontend tests verify client-side behavior:
 
 ```bash
 cd /path/to/project
-export JWT_SECRET="test-secret-key"
+# Generate a test secret: python scripts/jwt_tools.py hs256
+export JWT_SECRET="GENERATE ONE - DO NOT USE PLACEHOLDER"
 export USERS_DB=":memory:"
 python -m pytest tests/test_auth_behavior.py -v
 ```
@@ -301,7 +302,8 @@ The authentication behavior tests are integrated into the CI/CD pipeline:
 
 2. **Environment variable issues**
    ```bash
-   export JWT_SECRET="test-secret-key"
+   # Generate a test secret: python scripts/jwt_tools.py hs256
+export JWT_SECRET="GENERATE ONE - DO NOT USE PLACEHOLDER"
    export USERS_DB=":memory:"
    ```
 

@@ -5,7 +5,7 @@ export default function AuthDebug() {
     const [r, setR] = useState<any>({});
     useEffect(() => {
         (async () => {
-            const me = await fetch('http://localhost:8000/v1/me', { credentials: 'include' })
+            const me = await fetch('http://localhost:8000/v1/whoami', { credentials: 'include' })
                 .then(r => ({ ok: r.ok, status: r.status, h: Object.fromEntries(r.headers), body: r.json().catch(() => null) }))
                 .catch(e => ({ error: String(e) }));
             const diag = await fetch('http://localhost:8000/v1/_diag/auth', { credentials: 'include' })

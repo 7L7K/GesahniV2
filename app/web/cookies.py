@@ -7,7 +7,7 @@ class CookieNames(NamedTuple):
     session: str
     csrf: str
 
-_CANON = os.getenv("COOKIE_CANON", "legacy").lower()
+_CANON = os.getenv("COOKIE_CANON", "classic").lower()  # "classic" or "gsn"
 _HOST  = os.getenv("USE_HOST_COOKIE_PREFIX", "0") == "1"
 _PREFIX = "__Host-" if (_CANON == "host" or _HOST) else ""
 
@@ -17,6 +17,26 @@ elif _CANON == "gsnh":
     NAMES = CookieNames(f"{_PREFIX}GSNH_AT", f"{_PREFIX}GSNH_RT", f"{_PREFIX}GSNH_SESS", "csrf_token")
 else:
     NAMES = CookieNames(f"{_PREFIX}access_token", f"{_PREFIX}refresh_token", f"{_PREFIX}__session", "csrf_token")
+
+# Cookie aliases for backward compatibility
+if _CANON == "gsn":
+    ACCESS_CANON, REFRESH_CANON = "gsn_access", "gsn_refresh"
+else:
+    ACCESS_CANON, REFRESH_CANON = "access_token", "refresh_token"
+
+SESSION_CANON = os.getenv("SESSION_COOKIE_NAME", "__session")
+
+ACCESS_ALIASES = {ACCESS_CANON, "access_token", "gsn_access"}
+REFRESH_ALIASES = {REFRESH_CANON, "refresh_token", "gsn_refresh"}
+
+def get_any(req, names: set[str]) -> str | None:
+    """Get the first available cookie value from a set of possible names."""
+    jar = req.cookies or {}
+    for n in names:
+        v = jar.get(n)
+        if v:
+            return v
+    return None
 
 def set_cookie(resp, key: str, value: str, *, max_age: int, http_only=True, same_site="Lax", domain=None, path="/", secure=None):
     secure = True if secure is None else secure
@@ -128,7 +148,18 @@ def read(req):
 
 
 # Backwards-compatible helpers (thin wrappers to keep existing call sites working)
-def set_auth_cookies(resp, *, access: str, refresh: str | None = None, session_id: str | None = None, access_ttl: int = 0, refresh_ttl: int = 0, request=None, identity=None):
+def set_auth_cookies_canon(resp, access: str, refresh: str, *, secure: bool, samesite: str, domain: str | None):
+    """Set auth cookies using canonical names and clear aliases."""
+    common = dict(httponly=True, secure=secure, samesite=samesite, domain=domain, path="/")
+    resp.set_cookie(ACCESS_CANON, access, **common)
+    resp.set_cookie(REFRESH_CANON, refresh, **common)
+
+def clear_all_auth(resp):
+    """Clear all auth cookies including canonical names and aliases."""
+    for n in {ACCESS_CANON, REFRESH_CANON, "access_token", "refresh_token", "gsn_access", "gsn_refresh", SESSION_CANON}:
+        resp.delete_cookie(n, path="/")
+
+def set_auth_cookies_legacy(resp, *, access: str, refresh: str | None = None, session_id: str | None = None, access_ttl: int = 0, refresh_ttl: int = 0, request=None, identity=None):
     """Compatibility wrapper for the older API `set_auth_cookies`.
 
     Writes a single set of auth cookies (access, refresh, session) using the
@@ -190,9 +221,17 @@ def read_session_cookie(req):
 __all__ = [
     "CookieNames",
     "NAMES",
+    "ACCESS_CANON",
+    "REFRESH_CANON",
+    "SESSION_CANON",
+    "ACCESS_ALIASES",
+    "REFRESH_ALIASES",
+    "get_any",
     "set_cookie",
     "set_auth",
-    "set_auth_cookies",
+    "set_auth_cookies_canon",
+    "clear_all_auth",
+    "set_auth_cookies_legacy",
     "clear_auth_cookies",
     "set_csrf",
     "set_csrf_cookie",

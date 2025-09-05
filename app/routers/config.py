@@ -51,20 +51,20 @@ def build_plan() -> list[RouterSpec]:
         RouterSpec("app.api.health:router", ""),
         RouterSpec("app.api.root:router", ""),
         RouterSpec("app.api.me:router", "/v1"),  # User profile endpoint
+        RouterSpec("app.api.whoami:router", "/v1"),  # Auth state endpoint
         RouterSpec("app.status:router", "/v1"),
         RouterSpec("app.api.schema:router", ""),
-        RouterSpec("app.api.google_oauth:router", "/v1/google"),
-        RouterSpec("app.api.google_compat:router", ""),  # Deprecated Google OAuth compatibility
-        RouterSpec("app.api.google:integrations_router", "/v1"),
         RouterSpec("app.auth:router", "/v1"),
         RouterSpec("app.api.util:router", ""),  # Utility endpoints including CSRF
         RouterSpec("app.api.debug:router", "/v1"),  # Debug endpoints
+        RouterSpec("app.api.metrics_root:router", ""),  # Prometheus metrics endpoint
     ])
 
     enable_spotify = _is_truthy(os.getenv("SPOTIFY_ENABLED")) and not in_ci
     enable_apple = _is_truthy(os.getenv("APPLE_OAUTH_ENABLED")) and not in_ci
     enable_device = _is_truthy(os.getenv("DEVICE_AUTH_ENABLED")) and not in_ci
     enable_preflt = _is_truthy(os.getenv("PREFLIGHT_ENABLED", "1"))
+    enable_legacy_google = _is_truthy(os.getenv("GSN_ENABLE_LEGACY_GOOGLE"))
 
     optional: list[RouterSpec] = []
     optional += _optional(enable_spotify, [
@@ -74,10 +74,11 @@ def build_plan() -> list[RouterSpec]:
     optional += _optional(enable_apple, [RouterSpec("app.api.oauth_apple:router", "/v1")])
     optional += _optional(enable_device, [RouterSpec("app.auth_device:router", "/v1")])
     optional += _optional(enable_preflt, [RouterSpec("app.api.preflight:router", "/v1")])
+    optional += _optional(enable_legacy_google, [RouterSpec("app.api.google_compat:router", "")])
 
     plan = core + optional
-    log.info("router.plan env=%s ci=%s total=%d (spotify=%s apple=%s device=%s preflight=%s)",
-             env, in_ci, len(plan), enable_spotify, enable_apple, enable_device, enable_preflt)
+    log.info("router.plan env=%s ci=%s total=%d (spotify=%s apple=%s device=%s preflight=%s legacy_google=%s)",
+             env, in_ci, len(plan), enable_spotify, enable_apple, enable_device, enable_preflt, enable_legacy_google)
     return plan
 
 

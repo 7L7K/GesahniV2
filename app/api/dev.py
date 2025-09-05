@@ -27,29 +27,18 @@ async def mint_access(request: MintAccessRequest, response: Response):
     if not _is_dev():
         raise HTTPException(status_code=403, detail="forbidden")
 
-    from ..tokens import SECRET_KEY, ALGORITHM
+    from ..tokens import sign_access_token
     from ..sessions_store import sessions_store
     from ..web.cookies import set_auth_cookies, set_csrf_cookie
 
     user_id = request.user_id
     ttl_minutes = request.ttl_minutes
 
-    # Create JWT payload
-    now = datetime.now(timezone.utc)
-    exp = now + timedelta(minutes=ttl_minutes)
-    payload = {
-        "user_id": user_id,
-        "sub": user_id,
-        "iat": int(now.timestamp()),
-        "exp": int(exp.timestamp()),
-    }
-
-    # Encode token
-    try:
-        from jose import jwt as jose_jwt
-        access_token = jose_jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-    except ImportError:
-        raise HTTPException(status_code=500, detail="JWT library not available")
+    # Create access token using centralized configuration
+    access_token = sign_access_token(
+        user_id,
+        extra={"ttl_override": ttl_minutes}  # Custom TTL for dev testing
+    )
 
     # Create session
     session_id = await sessions_store.create_session(user_id)

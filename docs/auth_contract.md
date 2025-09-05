@@ -1,7 +1,7 @@
 # Auth Contract (Runtime-Truth)
 
 ## Endpoints (canonical)
-- GET /v1/whoami → 200 JSON { is_authenticated:boolean, session_ready:boolean, user:{ id, email }|null, source:"cookie|header|missing", version:1 }
+- GET /v1/whoami → 200 JSON { ok:true, authenticated:boolean, user_id:string|null, source:"cookie|header|missing", conflict:boolean }
   - **LOCKED CONTRACT**: Always returns 200, never 401, never redirects, no caching
 - GET /v1/sessions → 200 JSON [Session]
 - GET /v1/sessions/paginated → 200 JSON { items:[Session], next_cursor?:string }
@@ -37,3 +37,8 @@
 - auth/finish: 204 (always, idempotent)
 - refresh: 200/204 | 401 (missing/expired/replay) | 429 (rate limit)
 - logout: 200 | 401
+
+## Legacy Compatibility
+- Google OAuth: `/google/oauth/callback` (deprecated, redirects to `/v1/google/callback`)
+  - Enable with `GSN_ENABLE_LEGACY_GOOGLE=1`
+  - Only for backward compatibility with existing integrations

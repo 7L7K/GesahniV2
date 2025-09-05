@@ -68,7 +68,7 @@ class OAuthCallbackMonitor:
 # Use infra.get_oauth_monitor() instead
 
 
-@router.get("/auth/login_url")
+@router.get("/login_url")
 async def google_login_url(request: Request):
     """Generate Google OAuth login URL with CSRF protection."""
     try:
@@ -107,7 +107,7 @@ async def google_login_url(request: Request):
         raise HTTPException(status_code=500, detail="Failed to generate login URL")
 
 
-@router.get("/auth/callback")
+@router.get("/callback")
 async def google_oauth_callback(
     request: Request,
     code: str | None = None,
@@ -157,13 +157,3 @@ async def google_oauth_callback(
         raise HTTPException(status_code=500, detail="OAuth callback failed")
 
 
-@router.get("/google/oauth/callback", include_in_schema=False)
-async def legacy_google_callback(
-    request: Request,
-    code: str | None = None,
-    state: str | None = None,
-    error: str | None = None,
-):
-    """Legacy Google OAuth callback endpoint."""
-    # This is a compatibility endpoint
-    return await google_oauth_callback(request, code, state, error)
