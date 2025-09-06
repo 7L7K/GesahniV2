@@ -61,6 +61,7 @@ describe('Header Mode Credentials Configuration', () => {
         }));
 
         // Make a request to whoami endpoint and disable dedupe
+        // eslint-disable-next-line no-restricted-syntax
         await apiFetch('/v1/whoami', { method: 'GET', dedupe: false });
 
         // Verify the fetch was called with credentials: 'include'

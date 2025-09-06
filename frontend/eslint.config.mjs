@@ -19,6 +19,17 @@ const eslintConfig = [
           "name": "fetch",
           "message": "Use apiFetch from @/lib/api instead of global fetch"
         }
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          "selector": "CallExpression[callee.name='fetch'][arguments.0.value='/v1/whoami']",
+          "message": "Never call /v1/whoami directly; use getAuthOrchestrator().checkAuth()."
+        },
+        {
+          "selector": "CallExpression[callee.name='apiFetch'][arguments.0.value='/v1/whoami']",
+          "message": "Never call /v1/whoami directly; use getAuthOrchestrator().checkAuth()."
+        }
       ]
     }
   }

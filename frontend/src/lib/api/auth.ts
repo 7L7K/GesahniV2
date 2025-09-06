@@ -3,6 +3,7 @@
  */
 
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
+import { useAuthState } from '@/hooks/useAuth';
 
 // Utility function to check if an error is an AbortError
 function isAbortError(error: unknown): boolean {
@@ -169,22 +170,34 @@ export function authHeaders(): Record<string, string> {
 }
 
 export function useSessionState() {
-  return useQuery({
-    queryKey: buildQueryKey('session'),
-    queryFn: async () => {
-      const res = await apiFetch('/v1/whoami', { auth: true });
-      if (!res.ok) throw new Error('Failed to fetch session');
-      return await res.json();
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-    enabled: isAuthed(),
-  });
+  // Use the orchestrator's auth state instead of direct API calls
+  const authState = useAuthState();
+
+  // Transform the auth state to match the expected format
+  const sessionData = {
+    is_authenticated: authState.is_authenticated,
+    session_ready: authState.session_ready,
+    user_id: authState.user_id,
+    user: authState.user,
+    source: authState.source,
+  };
+
+  return {
+    data: sessionData,
+    isLoading: authState.isLoading,
+    error: authState.error,
+    isError: !!authState.error,
+    refetch: () => getAuthOrchestrator().checkAuth(),
+  };
 }
 
 // Auth API endpoints for cookie mode
 export const AuthAPI = {
-  whoami: () => apiFetch('/v1/whoami').then(r => r.json()),
+  whoami: async () => {
+    const orchestrator = getAuthOrchestrator();
+    await orchestrator.checkAuth();
+    return orchestrator.getState();
+  },
   login: (body: any) => apiFetch('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   refresh: () => apiFetch('/v1/auth/refresh', { method: 'POST' }),
   logout: () => apiFetch('/v1/auth/logout', { method: 'POST' }),

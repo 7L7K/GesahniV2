@@ -79,6 +79,7 @@ describe('Whoami Interceptor', () => {
     it('should warn when direct fetch calls are made to whoami', async () => {
         // Make a direct apiFetch call (this should trigger the warning)
         const { apiFetch } = await import('@/lib/api');
+        // eslint-disable-next-line no-restricted-syntax
         apiFetch('/v1/whoami');
 
         // Verify that the warning was logged

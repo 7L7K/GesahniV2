@@ -145,49 +145,112 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
         it('should not warn when whoami is called through AuthOrchestrator.checkAuth()', async () => {
             const orchestrator = getAuthOrchestrator();
             const { apiFetch } = require('@/lib/api');
-            await orchestrator.refreshAuth();
 
-            expect(apiFetch).toHaveBeenCalledWith(
-                '/v1/whoami',
+            // Set up a token to prevent early return
+            localStorage.setItem('auth:access', 'test-token');
+
+            // Mock the global fetch used by AuthOrchestrator for whoami calls
+            const originalFetch = global.fetch;
+            global.fetch = jest.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({
+                    is_authenticated: true,
+                    user_id: 'test-user',
+                    source: 'cookie'
+                })
+            });
+
+            await orchestrator.refreshAuth();
+            // Advance timers to execute the debounced whoami check
+            jest.advanceTimersByTime(1000);
+
+            // Verify global.fetch was called with whoami URL
+            expect(global.fetch).toHaveBeenCalledWith(
+                expect.stringContaining('/v1/whoami'),
                 expect.objectContaining({
                     method: 'GET',
-                    auth: false,
-                    dedupe: false
+                    credentials: 'include'
                 })
             );
             expect(mockConsoleWarn).not.toHaveBeenCalled();
+
+            // Clean up
+            localStorage.removeItem('auth:access');
+            global.fetch = originalFetch;
         });
 
         it('should not warn when whoami is called through AuthOrchestrator.refreshAuth()', async () => {
             const orchestrator = getAuthOrchestrator();
             const { apiFetch } = require('@/lib/api');
-            await orchestrator.refreshAuth();
 
-            expect(apiFetch).toHaveBeenCalledWith(
-                '/v1/whoami',
+            // Set up a token to prevent early return
+            localStorage.setItem('auth:access', 'test-token');
+
+            // Mock the global fetch used by AuthOrchestrator for whoami calls
+            const originalFetch = global.fetch;
+            global.fetch = jest.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({
+                    is_authenticated: true,
+                    user_id: 'test-user',
+                    source: 'cookie'
+                })
+            });
+
+            await orchestrator.refreshAuth();
+            // Advance timers to execute the debounced whoami check
+            jest.advanceTimersByTime(1000);
+
+            // Verify global.fetch was called with whoami URL
+            expect(global.fetch).toHaveBeenCalledWith(
+                expect.stringContaining('/v1/whoami'),
                 expect.objectContaining({
                     method: 'GET',
-                    auth: false,
-                    dedupe: false
+                    credentials: 'include'
                 })
             );
             expect(mockConsoleWarn).not.toHaveBeenCalled();
+
+            // Clean up
+            localStorage.removeItem('auth:access');
+            global.fetch = originalFetch;
         });
 
         it('should not warn when whoami is called through getAuthOrchestrator()', async () => {
             const orchestrator = getAuthOrchestrator();
             const { apiFetch } = require('@/lib/api');
-            await orchestrator.refreshAuth();
 
-            expect(apiFetch).toHaveBeenCalledWith(
-                '/v1/whoami',
+            // Set up a token to prevent early return
+            localStorage.setItem('auth:access', 'test-token');
+
+            // Mock the global fetch used by AuthOrchestrator for whoami calls
+            const originalFetch = global.fetch;
+            global.fetch = jest.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({
+                    is_authenticated: true,
+                    user_id: 'test-user',
+                    source: 'cookie'
+                })
+            });
+
+            await orchestrator.refreshAuth();
+            // Advance timers to execute the debounced whoami check
+            jest.advanceTimersByTime(1000);
+
+            // Verify global.fetch was called with whoami URL
+            expect(global.fetch).toHaveBeenCalledWith(
+                expect.stringContaining('/v1/whoami'),
                 expect.objectContaining({
                     method: 'GET',
-                    auth: false,
-                    dedupe: false
+                    credentials: 'include'
                 })
             );
             expect(mockConsoleWarn).not.toHaveBeenCalled();
+
+            // Clean up
+            localStorage.removeItem('auth:access');
+            global.fetch = originalFetch;
         });
     });
 
@@ -195,6 +258,7 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
         it('should warn when whoami is called directly via fetch', async () => {
             // Simulate a direct apiFetch call to whoami
             const { apiFetch } = await import('@/lib/api');
+            // eslint-disable-next-line no-restricted-syntax
             await apiFetch('/v1/whoami');
 
             expect(mockConsoleWarn).toHaveBeenCalledWith(
@@ -238,6 +302,7 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
 
     describe('Stack trace analysis', () => {
         it('should include stack trace information in warning', async () => {
+            // eslint-disable-next-line no-restricted-syntax
             await fetch('/v1/whoami');
 
             const warningCall = mockConsoleWarn.mock.calls[0];
@@ -250,6 +315,7 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
         });
 
         it('should include detection timestamp', async () => {
+            // eslint-disable-next-line no-restricted-syntax
             await fetch('/v1/whoami');
 
             const warningCall = mockConsoleWarn.mock.calls[0];
@@ -329,6 +395,7 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
 
             // The error should be thrown by the fetch interceptor
             expect(() => {
+                // eslint-disable-next-line no-restricted-syntax
                 fetch('/v1/whoami');
             }).toThrow('Direct whoami call detected! Use AuthOrchestrator instead.');
 

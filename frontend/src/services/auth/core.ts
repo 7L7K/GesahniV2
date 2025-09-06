@@ -4,10 +4,11 @@
 
 import { getBootstrapManager } from '../bootstrapManager';
 import { apiFetch } from '@/lib/api';
+import { authHeaders } from '@/lib/api/auth';
 import type { AuthState, AuthOrchestrator } from './types';
 import { AuthOscillationDetector, AuthBackoffManager } from './utils';
 import { AuthEventDispatcher } from './events';
-import { getResilientWhoamiClient } from '@/lib/whoamiResilience';
+import { fetchWhoamiWithResilience, type WhoamiResponse } from '@/lib/whoamiResilience';
 
 export class AuthOrchestratorImpl implements AuthOrchestrator {
     private state: AuthState = {
@@ -113,6 +114,10 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
 
     getState(): AuthState {
         return { ...this.state };
+    }
+
+    getCachedIdentity() {
+        return this.lastGoodWhoamiIdentity?.data || null;
     }
 
     subscribe(callback: (state: AuthState) => void): () => void {
@@ -259,9 +264,8 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         this.oscillationDetector.resetOscillationCount();
         this.lastSuccessfulState = null;
 
-        // Clear resilient client cache
-        const resilientClient = getResilientWhoamiClient();
-        resilientClient.clearCache();
+        // Clear internal whoami cache
+        this.lastGoodWhoamiIdentity = null;
 
         // Clear any pending operations
         if (this.debounceTimer) {
@@ -496,6 +500,34 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         }
     }
 
+    // Internal caching for whoami responses
+    private lastGoodWhoamiIdentity: { data: any; timestamp: number } | null = null;
+    private readonly WHOAMI_CACHE_TTL_MS = 3000; // 3 seconds
+
+    private async _performResilientWhoamiCheck(): Promise<WhoamiResponse> {
+        // Check internal cache first
+        const now = Date.now();
+        if (this.lastGoodWhoamiIdentity && (now - this.lastGoodWhoamiIdentity.timestamp) < this.WHOAMI_CACHE_TTL_MS) {
+            console.debug('AuthOrchestrator: Returning cached identity', {
+                age: now - this.lastGoodWhoamiIdentity.timestamp,
+                ttl: this.WHOAMI_CACHE_TTL_MS,
+            });
+            return this.lastGoodWhoamiIdentity.data;
+        }
+
+        // Perform the actual whoami call with retry logic using the resilience utility
+        const data = await fetchWhoamiWithResilience();
+
+        // Cache the successful result
+        this.lastGoodWhoamiIdentity = {
+            data,
+            timestamp: now
+        };
+
+        return data;
+    }
+
+
     private async _doWhoamiCheck(): Promise<void> {
         const now = Date.now();
         this.lastWhoamiCall = now;
@@ -511,9 +543,8 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         this.setState({ isLoading: true, error: null });
 
         try {
-            // Use resilient whoami client for retry/backoff and caching
-            const resilientClient = getResilientWhoamiClient();
-            const data = await resilientClient.getIdentity(apiFetch);
+            // Use orchestrator's internal whoami method with built-in resilience
+            const data = await this._performResilientWhoamiCheck();
 
             // Since resilient client already handled success/error, we can proceed with data
             // Health gate: require backend to be healthy before marking session_ready

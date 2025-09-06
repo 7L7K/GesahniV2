@@ -1,5 +1,8 @@
 import '@testing-library/jest-dom';
 
+// Set NODE_ENV for tests to enable AuthOrchestrator detection
+(process.env as any).NODE_ENV = 'test';
+
 // Ensure ReadableStream exists for SSE tests in jsdom
 try {
   if (typeof (global as any).ReadableStream === 'undefined') {

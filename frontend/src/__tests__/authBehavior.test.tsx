@@ -543,6 +543,7 @@ describe('Authentication Behavior', () => {
 
     describe('CSP/service worker sanity', () => {
         it('should have whoami responses with no-store headers', async () => {
+            // eslint-disable-next-line no-restricted-syntax
             const response = await apiFetch('/v1/whoami');
             const cacheControl = response.headers.get('cache-control');
 
