@@ -1,6 +1,6 @@
 {
   "name": "gesahni-frontend",
-  "version": "0.1.0",
+  "version": "0.6.0",
   "private": true,
   "scripts": {
     "dev": "NODE_OPTIONS=\"--dns-result-order=ipv4first --max-old-space-size=4096\" next dev -H :: -p 3000",
