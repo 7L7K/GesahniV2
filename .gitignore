@@ -31,6 +31,10 @@ __pycache__/
 *.sqlite3
 *.sqlite
 *.db
+*.db-shm
+*.db-wal
+*-shm
+*-wal
 
 # Coverage / build artifacts
 .coverage
@@ -38,6 +42,16 @@ coverage.xml
 build/
 dist/
 *.egg-info/
+
+# Test results and generated artifacts
+test_results_*.txt
+.pytest.last.txt
+artifacts/
+out/
+perf_results/
+audit_*.json
+sample_audit_results.json
+grafana_security_dashboard.json
 
 # Editors / envs
 .vscode/
