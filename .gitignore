@@ -69,3 +69,4 @@ env.prod
 env.staging
 env.dev
 .chroma_data
+frontend/venv/

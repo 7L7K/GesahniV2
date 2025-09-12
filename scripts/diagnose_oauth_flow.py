@@ -68,8 +68,8 @@ def test_token_exchange_simulation():
     # Show what the token response should look like
     print("Expected Google token response format:")
     mock_response = {
-        "access_token": "ya29.abc123...",
-        "refresh_token": "1//refresh_token...",
+        "access_token": "[REDACTED]",
+        "refresh_token": "[REDACTED]",
         "scope": "openid https://www.googleapis.com/auth/userinfo.email",
         "token_type": "Bearer",
         "expires_in": 3600,

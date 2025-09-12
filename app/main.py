@@ -920,7 +920,9 @@ def create_app() -> FastAPI:
     # Note: middleware setup is intentionally executed after registering error handlers
     from app.middleware.loader import register_canonical_middlewares
     csrf_enabled = bool(int(os.getenv("CSRF_ENABLED", "1")))
-    cors_origins = os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGINS") else None
+    # Support both newer `CORS_ORIGINS` and legacy `CORS_ALLOW_ORIGINS` env var names.
+    cors_env = os.getenv("CORS_ORIGINS") or os.getenv("CORS_ALLOW_ORIGINS")
+    cors_origins = cors_env.split(",") if cors_env else None
     register_canonical_middlewares(app, csrf_enabled=csrf_enabled, cors_origins=cors_origins)
     logger.debug("✅ Canonical middleware stack configured")
 

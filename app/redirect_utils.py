@@ -29,6 +29,13 @@ from fastapi import Request, Response
 
 logger = logging.getLogger(__name__)
 
+# Import security feature flags
+try:
+    from .feature_flags import SAFE_REDIRECTS_ENFORCED
+except ImportError:
+    # Fallback for when feature flags are not available
+    SAFE_REDIRECTS_ENFORCED = True
+
 # Import metrics for observability
 try:
     from .metrics import AUTH_REDIRECT_SANITIZED_TOTAL
@@ -186,30 +193,68 @@ def sanitize_redirect_path(
         original_path = path
         sanitized = False
 
-        # Step 1: Safe URL decoding (at most twice)
-        decoded_path = safe_decode_url(path, max_decodes=2)
-        if decoded_path != path:
-            AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="double_decode").inc()
-            logger.info(
-                "Redirect sanitization",
-                extra={
-                    "component": "auth.redirect",
-                    "reason": "double_decode",
-                    "input_len": len(raw_path),
-                    "output_path": fallback,
-                    "cookie_present": (
-                        get_gs_next_cookie(request) is not None if request else False
-                    ),
-                    "env": os.getenv("ENV", "dev"),
-                    "raw_path": raw_path,
-                    "decoded_path": decoded_path,
-                },
-            )
-            return fallback
-        path = decoded_path
+        # Step 1: Safe URL decoding with double-decode enforcement
+        # First decode once to check if it's single or double encoded
+        single_decoded = safe_decode_url(path, max_decodes=1)
+        double_decoded = safe_decode_url(path, max_decodes=2)
 
-        # Step 2: Reject absolute URLs to prevent open redirects
-        if path.startswith(("http://", "https://")):
+        # Check if double decoding was actually needed (path changed after second decode)
+        requires_double_decode = (double_decoded != single_decoded)
+
+        if requires_double_decode:
+            if SAFE_REDIRECTS_ENFORCED:
+                # Strict enforcement: reject paths that require double-decoding
+                AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="double_decode").inc()
+                logger.info(
+                    "Redirect sanitization",
+                    extra={
+                        "component": "auth.redirect",
+                        "reason": "double_decode",
+                        "input_len": len(raw_path),
+                        "output_path": fallback,
+                        "cookie_present": (
+                            get_gs_next_cookie(request) is not None if request else False
+                        ),
+                        "env": os.getenv("ENV", "dev"),
+                        "raw_path": raw_path,
+                        "single_decoded": single_decoded,
+                        "double_decoded": double_decoded,
+                    },
+                )
+                return fallback
+            else:
+                # Legacy compatibility mode: allow but warn
+                logger.warning(
+                    "SAFE_REDIRECTS_ENFORCED disabled: allowing double-decoded redirect path",
+                    extra={
+                        "component": "auth.redirect",
+                        "reason": "double_decode_bypass",
+                        "input_len": len(raw_path),
+                        "cookie_present": (
+                            get_gs_next_cookie(request) is not None if request else False
+                        ),
+                        "env": os.getenv("ENV", "dev"),
+                        "raw_path": raw_path,
+                        "single_decoded": single_decoded,
+                        "double_decoded": double_decoded,
+                    },
+                )
+
+        # Use double-decoded path (safe since we checked it doesn't require more than double)
+        path = double_decoded
+
+        # Step 2: Reject absolute URLs and mobile deep links to prevent open redirects
+        # Block common malicious URL schemes
+        dangerous_schemes = (
+            "http://", "https://",  # Web URLs
+            "app://", "intent://", "itms-services://",  # Mobile deep links
+            "android-app://", "ios-app://",  # App-specific schemes
+            "fb://", "twitter://", "whatsapp://",  # Social app schemes
+            "tel:", "sms:", "mailto:",  # Communication schemes
+            "file://", "javascript:", "data:",  # File and script schemes
+        )
+
+        if path.startswith(dangerous_schemes):
             AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="absolute_url").inc()
             logger.info(
                 "Redirect sanitization",
@@ -264,6 +309,30 @@ def sanitize_redirect_path(
                 },
             )
             return fallback
+
+        # Step 4.1: Reject obvious local filesystem paths or direct file downloads
+        try:
+            import re as _re
+            lower = path.lower()
+            # Common system path prefixes on macOS/Linux that should never be next targets
+            if _re.match(r"^/(var|etc|usr|private|system|library|applications|volumes)\\b", lower):
+                AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="filesystem_path").inc()
+                logger.info(
+                    "Redirect sanitization",
+                    extra={"component": "auth.redirect", "reason": "filesystem_path", "raw_path": raw_path},
+                )
+                return fallback
+            # Reject file-like paths ending with common file extensions (e.g., screenshots)
+            if _re.search(r"\\.(png|jpe?g|gif|webp|svg|pdf|zip|dmg|mov|mp4|mp3|wav|heic|heif)(?:[?#].*)?$", path, _re.IGNORECASE):
+                AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="file_like_path").inc()
+                return fallback
+            # Reject spaces or colon which often indicate pasted file URIs
+            if _re.search(r"[\\s:]", path):
+                AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="suspicious_chars").inc()
+                return fallback
+        except Exception:
+            # If regex checks fail for any reason, continue; later steps still sanitize
+            pass
 
         # Step 5: Strip fragments (#...)
         if "#" in path:

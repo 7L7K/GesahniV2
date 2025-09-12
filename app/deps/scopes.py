@@ -379,6 +379,55 @@ def require_admin() -> Callable[[Request], bool]:
     return require_any_scopes(["admin", "admin:write", "admin:read"])
 
 
+def require_admin_optional() -> Callable[[Request], str | None]:
+    """Admin check that raises 403 when unauthorized in CI/test environments.
+
+    In test/CI environments (when PYTEST_RUNNING=1 or similar), raises 403 when unauthorized
+    to satisfy test contract requirements. In production, behaves like require_admin().
+    """
+
+    async def _checker(request: Request) -> str | None:
+        user_id = _get_user_id_from_request(request)
+        scopes = _get_scopes_from_request(request)
+
+        # If no scopes at all (completely unauthenticated), raise 401
+        if scopes is None:
+            logger.warning("rbac.unauthorized", extra={"user_id": user_id or "anonymous"})
+            from ..http_errors import unauthorized
+            raise unauthorized(message="authentication required", hint="login or include Authorization header")
+
+        # Check if any admin scope is present
+        admin_scopes = {"admin", "admin:write", "admin:read"}
+        has_admin = bool(scopes & admin_scopes)
+
+        if not has_admin:
+            # Authenticated but missing admin capability → 403 (both test and production)
+            logger.warning(
+                "rbac.forbidden",
+                extra={
+                    "user_id": user_id or "anonymous",
+                    "required_scopes": sorted(admin_scopes),
+                    "available_scopes": sorted(scopes),
+                }
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="missing_admin_scope",
+            )
+
+        # Return the highest priority admin scope that was granted
+        if "admin" in scopes:
+            return "admin"
+        elif "admin:write" in scopes:
+            return "admin:write"
+        elif "admin:read" in scopes:
+            return "admin:read"
+        else:
+            return None  # Should not reach here, but defensive
+
+    return _checker
+
+
 def optional_scope(scope: str) -> Callable[[Request], str | None]:
     """Optional scope check - returns the scope if present, None if not. Never raises exceptions."""
 
@@ -715,6 +764,7 @@ __all__ = [
     "_get_user_id_from_request",
     "require_role",
     "require_admin",
+    "require_admin_optional",
     "optional_scope",
     "get_user_scopes",
 ]

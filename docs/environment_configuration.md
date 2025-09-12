@@ -206,6 +206,39 @@ done
 6. **Use strong secrets** - Generate unique JWT secrets for each environment
 7. **Regular backups** - Keep backups of your `.env` files
 
+## Dev (proxy) vs Prod (cross-origin)
+
+### Development (Same-Origin Proxy) — Recommended
+
+- Set in `frontend/.env.local`:
+  - `NEXT_PUBLIC_USE_DEV_PROXY=true`
+  - `NEXT_PUBLIC_API_ORIGIN=http://localhost:8000`
+- The Next.js dev server proxies `/v1/*` and other API routes to the backend, keeping requests same-origin.
+- Benefits:
+  - Safari treats cookies as first-party (no third-party cookie blocks)
+  - No CORS preflight complexity
+  - Simpler local debugging for `GSNH_AT`/`GSNH_RT` cookies and CSRF
+
+### Production (Cross-Origin)
+
+- Set in frontend env:
+  - `NEXT_PUBLIC_USE_DEV_PROXY=false`
+  - `NEXT_PUBLIC_API_ORIGIN=https://api.example.com`
+- Set in backend env:
+  - `CORS_ORIGINS=https://app.example.com` (exact match; no `*` when credentials are used)
+  - Keep `CSRF_ENABLED=1`
+- FastAPI CORS must be configured with:
+  - `allow_origins=["https://app.example.com"]`
+  - `allow_credentials=True`
+  - Methods: `GET, POST, PUT, PATCH, DELETE, OPTIONS`
+  - Headers: `Authorization, Content-Type, X-CSRF-Token`
+  - Include `Vary: Origin` and echo `Access-Control-Allow-Origin` for the requesting origin
+
+### Switching
+
+- To use proxy locally, set `NEXT_PUBLIC_USE_DEV_PROXY=true` and restart the Next server.
+- To test cross-origin locally, set `NEXT_PUBLIC_USE_DEV_PROXY=false`, ensure backend env has `CORS_ORIGINS=http://localhost:3000`, and restart both servers.
+
 ## Adding New Environment Variables
 
 When adding new environment variables:

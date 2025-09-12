@@ -8,6 +8,7 @@ with debug statements.
 """
 
 import asyncio
+import importlib
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -192,7 +193,7 @@ async def check_spotify_imports():
     results = {}
     for module in modules:
         try:
-            exec(f"import {module}")
+            importlib.import_module(module)
             results[module] = "ok"
         except Exception as e:
             results[module] = f"error: {e}"

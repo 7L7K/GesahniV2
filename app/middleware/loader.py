@@ -130,7 +130,9 @@ def register_canonical_middlewares(app: FastAPI, *, csrf_enabled: bool = True, c
         add_mw(app, RateLimitMiddleware, name="RateLimitMiddleware")
 
     # Session and auth
-    add_mw(app, SessionAttachMiddleware, name="SessionAttachMiddleware")
+    session_attach_enabled = _is_truthy(os.getenv("SESSION_ATTACH_ENABLED", "0"))
+    if session_attach_enabled:
+        add_mw(app, SessionAttachMiddleware, name="SessionAttachMiddleware")
     add_mw(app, SilentRefreshMiddleware, name="SilentRefreshMiddleware")
     add_mw(app, DedupMiddleware, name="DedupMiddleware")
 
@@ -171,7 +173,7 @@ def register_canonical_middlewares(app: FastAPI, *, csrf_enabled: bool = True, c
         "AuditMiddleware",
         "DedupMiddleware",
         "SilentRefreshMiddleware",
-        "SessionAttachMiddleware",
+        "SessionAttachMiddleware",        # conditional
         "RateLimitMiddleware",            # conditional
         "HealthCheckFilterMiddleware",
         "RedactHashMiddleware",
@@ -193,6 +195,8 @@ def register_canonical_middlewares(app: FastAPI, *, csrf_enabled: bool = True, c
         elif name in ["EnhancedErrorHandlingMiddleware", "ErrorHandlerMiddleware"] and not legacy_error_mw:
             continue
         elif name == "ReloadEnvMiddleware" and not (dev_mode and not in_ci):
+            continue
+        elif name == "SessionAttachMiddleware" and not _is_truthy(os.getenv("SESSION_ATTACH_ENABLED", "0")):
             continue
         expected_filtered.append(name)
 

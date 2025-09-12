@@ -9,6 +9,11 @@ setopt NO_NOMATCH 2>/dev/null || true
 # Gesahni project directory
 export GESAHNI_DIR="$HOME/2025/GesahniV2"
 
+# Safe lsof wrapper that won't hang
+_safe_lsof() {
+    timeout 2 lsof "$@" 2>/dev/null
+}
+
 # Function to navigate to Gesahni project
 gesahni() {
     cd "$GESAHNI_DIR"
@@ -149,7 +154,7 @@ gesahni-stop() {
     # Stop by ports (ALL connection states, not just LISTEN)
     for port in "${ports[@]}"; do
       # First try LISTENING processes
-      pids=$(lsof -t -iTCP:$port -sTCP:LISTEN 2>/dev/null || true)
+      pids=$(_safe_lsof -t -iTCP:$port -sTCP:LISTEN 2>/dev/null || true)
       if [ -n "$pids" ]; then
         found=true
         echo "Found LISTENING processes on port $port: $pids"
@@ -161,7 +166,7 @@ gesahni-stop() {
       fi
 
       # Also kill ALL processes connected to this port (including CLOSED connections)
-      all_pids=$(lsof -t -iTCP:$port 2>/dev/null || true)
+      all_pids=$(_safe_lsof -t -iTCP:$port 2>/dev/null || true)
       if [ -n "$all_pids" ]; then
         found=true
         echo "Found ALL processes on port $port: $all_pids"
@@ -183,7 +188,7 @@ gesahni-stop() {
     # Final cleanup - kill any remaining processes on our ports
     sleep 2
     for port in "${ports[@]}"; do
-      remaining_pids=$(lsof -t -iTCP:$port 2>/dev/null || true)
+      remaining_pids=$(_safe_lsof -t -iTCP:$port 2>/dev/null || true)
       if [ -n "$remaining_pids" ]; then
         echo "⚠️  Force-killing remaining processes on port $port: $remaining_pids"
         for pid in $remaining_pids; do

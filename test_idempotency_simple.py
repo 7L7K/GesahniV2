@@ -8,7 +8,9 @@ import subprocess
 def run_curl(cmd):
     """Run curl command and return response."""
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+        # Use shell=False and pass command as list to avoid injection vulnerabilities
+        result = subprocess.run(cmd if isinstance(cmd, list) else cmd.split(),
+                               shell=False, capture_output=True, text=True, timeout=10)
         return result.stdout.strip(), result.stderr.strip(), result.returncode
     except Exception as e:
         return "", str(e), 1

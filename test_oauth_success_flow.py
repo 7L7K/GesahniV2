@@ -55,8 +55,8 @@ class OAuthSuccessFlowTest:
 
         # Mock complete Google token response
         return {
-            "access_token": "ya29.test_access_token_" + "x" * 200,
-            "refresh_token": "1//test_refresh_token_" + "x" * 50,
+            "access_token": "[REDACTED]",
+            "refresh_token": "[REDACTED]",
             "scope": "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly",
             "token_type": "Bearer",
             "expires_in": 3600,

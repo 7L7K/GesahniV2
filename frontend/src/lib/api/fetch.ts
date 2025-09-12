@@ -15,7 +15,7 @@ if (typeof console !== 'undefined') {
 // IMPORTANT: Do NOT include whoami here; it must require auth
 const PUBLIC_PATHS = new Set([
   '/v1/health',
-  '/v1/auth/csrf',  // Canonical CSRF path
+  '/v1/csrf',  // Canonical CSRF path
   '/v1/login',      // Legacy - keep for backward compatibility
   '/v1/auth/login', // Canonical login path
   '/v1/register',   // Legacy - keep for backward compatibility
@@ -35,7 +35,8 @@ const PUBLIC_PATHS = new Set([
 // CSRF token management
 async function getCsrfToken(): Promise<string | null> {
   try {
-    const response = await fetch(`${API_URL}/v1/auth/csrf`, {
+    // Backend exposes CSRF issuer at /v1/csrf
+    const response = await fetch(`${API_URL}/v1/csrf`, {
       method: 'GET',
       credentials: 'include',
       headers: {
@@ -127,17 +128,41 @@ export async function apiFetch(
   const credentials: RequestCredentials = 'include';
   const isAbsolute = /^(?:https?:)?\/\//i.test(path);
   const isBrowser = typeof window !== "undefined";
-  // Honor NEXT_PUBLIC_USE_DEV_PROXY via API_URL resolution: when using the
-  // dev proxy the frontend talks to the same origin ("" base) and the Next dev
-  // server proxies requests to the backend. Otherwise fall back to explicit API_URL.
-  const useDevProxy = (process.env.NEXT_PUBLIC_USE_DEV_PROXY || 'false') === 'true';
-  // API_URL already considers NEXT_PUBLIC_USE_DEV_PROXY in auth.ts; use it directly.
-  const base = API_URL || (isBrowser ? '' : 'http://localhost:8000');
+  // API_URL already considers NEXT_PUBLIC_USE_DEV_PROXY in auth.ts.
+  // If API_URL is empty (proxy mode) or we're in the browser with proxy enabled,
+  // use relative paths to keep requests same-origin.
+  const base = API_URL || '';
 
-  // Add cache-busting parameter for Safari CORS requests
-  const separator = path.includes('?') ? '&' : '?';
-  const cacheBustParam = `cors_cache_bust=${Date.now()}`;
-  const url = isAbsolute ? path : `${base}${path}${separator}${cacheBustParam}`;
+  // DEBUG: Log all the inputs and construction
+  console.log('🔍 API_FETCH DEBUG:', {
+    inputPath: path,
+    isAbsolute,
+    base,
+    API_URL,
+    NEXT_PUBLIC_USE_DEV_PROXY: process.env.NEXT_PUBLIC_USE_DEV_PROXY,
+    method: rest.method || 'GET',
+    timestamp: new Date().toISOString()
+  });
+
+  // Note: Cache-busting removed - SafariCORSCacheFixMiddleware handles caching
+  const url = isAbsolute ? path : `${base}${path}`;
+
+  console.log('🔍 URL CONSTRUCTION:', {
+    finalUrl: url,
+    hasCacheBust: url.includes('cors_cache_bust'),
+    hasAnyQuery: url.includes('?'),
+    path: path,
+    base: base,
+    isAbsolute: isAbsolute
+  });
+
+  // DEBUG: Verify cache-busting is removed
+  if (url.includes('cors_cache_bust')) {
+    console.error('🚨 CACHE-BUSTING DETECTED IN URL:', url);
+    console.error('🚨 STACK TRACE:', new Error().stack);
+  } else {
+    console.log('✅ No cache-busting in URL:', url);
+  }
 
   // Define endpoint type checks
   const isWhoamiEndpoint = path.includes('/whoami');
@@ -297,6 +322,17 @@ export async function apiFetch(
         const bodyInst = typeof rest.body === 'string' || rest.body instanceof FormData || rest.body instanceof URLSearchParams || rest.body == null
           ? rest.body
           : bodyFactory();
+
+        console.log('🚀 ACTUAL FETCH CALL:', {
+          attempt,
+          url,
+          method: rest.method || 'GET',
+          hasCacheBust: url.includes('cors_cache_bust'),
+          credentials,
+          headers: Object.keys(mergedHeaders),
+          timestamp: new Date().toISOString()
+        });
+
         res = await fetch(url, { ...rest, body: bodyInst as any, headers: mergedHeaders, credentials });
         // Retry on transient upstream errors
         if (res && res.status >= 500 && res.status < 600) {

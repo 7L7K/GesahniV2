@@ -96,8 +96,8 @@ def test_user_data_saving():
         from app.models.third_party_tokens import ThirdPartyToken
 
         # Mock Google tokens
-        mock_access_token = "ya29.mock_access_token_" + "x" * 200
-        mock_refresh_token = "1//mock_refresh_token_" + "x" * 50
+        mock_access_token = "[REDACTED]"
+        mock_refresh_token = "[REDACTED]"
 
         token = ThirdPartyToken(
             user_id=user_data["email"],  # Use email as user ID

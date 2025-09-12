@@ -58,8 +58,26 @@ module.exports = {
     // number of pages that should be kept simultaneously without being disposed
     pagesBufferLength: 2,
   },
-  // Removed rewrites to eliminate double-layer API calls and cookie site issues
-  // All API calls now go directly to http://localhost:8000 via NEXT_PUBLIC_API_ORIGIN
+  // Development proxy: keep API same-origin to avoid Safari third-party cookie issues
+  // When NEXT_PUBLIC_USE_DEV_PROXY=true, frontend will call relative paths and these
+  // rewrites will proxy them to the backend at http://localhost:8000
+  async rewrites() {
+    const useProxy = (process.env.NEXT_PUBLIC_USE_DEV_PROXY || 'false') === 'true';
+    if (!useProxy) return [];
+    const backend = process.env.NEXT_PUBLIC_API_ORIGIN || 'http://localhost:8000';
+    // Normalize trailing slash
+    const target = backend.replace(/\/$/, '');
+    return [
+      { source: '/v1/:path*', destination: `${target}/v1/:path*` },
+      { source: '/healthz/:path*', destination: `${target}/healthz/:path*` },
+      { source: '/health/:path*', destination: `${target}/health/:path*` },
+      { source: '/metrics', destination: `${target}/metrics` },
+      { source: '/debug/:path*', destination: `${target}/debug/:path*` },
+      // Optional: static mounts proxied for convenience
+      { source: '/shared_photos/:path*', destination: `${target}/shared_photos/:path*` },
+      { source: '/album_art/:path*', destination: `${target}/album_art/:path*` },
+    ];
+  },
   async headers() {
     return [
       // Flag Next static assets for quick visibility in devtools

@@ -13,7 +13,6 @@ behind a load balancer.
 import json
 import logging
 import os
-import pickle
 import time
 from typing import Any
 
@@ -23,29 +22,46 @@ logger = logging.getLogger(__name__)
 _store: dict[str, tuple[dict[str, Any], float]] = {}
 
 # File-based store for cross-process sharing during testing
-_store_file = os.path.join(os.path.dirname(__file__), '..', '..', 'oauth_store.pkl')
+_store_file = os.path.join(os.path.dirname(__file__), '..', '..', 'oauth_store.json')
+
+def _is_dev_env() -> bool:
+    """Check if we're in a development/testing environment."""
+    env = os.getenv("ENV", "").strip().lower()
+    return env in {"dev", "development", "test", "testing", "ci"} or os.getenv("DEV_MODE", "0") == "1"
 
 def _load_store():
-    """Load store from file if it exists."""
+    """Load store from file if it exists and we're in dev environment."""
     global _store
+    if not _is_dev_env():
+        logger.info("OAuth store: Skipping file-based store in production environment")
+        return
+
     try:
         if os.path.exists(_store_file):
-            with open(_store_file, 'rb') as f:
-                _store = pickle.load(f)
+            with open(_store_file, 'r') as f:
+                # Convert JSON data back to tuple format
+                json_data = json.load(f)
+                _store = {k: (v[0], v[1]) for k, v in json_data.items()}
                 logger.info(f"OAuth store: Loaded {len(_store)} items from file")
     except Exception as e:
         logger.warning(f"OAuth store: Failed to load from file: {e}")
 
 def _save_store():
-    """Save store to file."""
+    """Save store to file if we're in dev environment."""
+    if not _is_dev_env():
+        logger.debug("OAuth store: Skipping file save in production environment")
+        return
+
     try:
-        with open(_store_file, 'wb') as f:
-            pickle.dump(_store, f)
+        # Convert tuples to lists for JSON serialization
+        json_data = {k: [v[0], v[1]] for k, v in _store.items()}
+        with open(_store_file, 'w') as f:
+            json.dump(json_data, f, indent=2)
         logger.debug("OAuth store: Saved to file")
     except Exception as e:
         logger.warning(f"OAuth store: Failed to save to file: {e}")
 
-# Load store on import
+# Load store on import (only in dev environments)
 _load_store()
 
 _redis = None

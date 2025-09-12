@@ -11,4 +11,7 @@ extend-exclude = [
 
 # Keep rule surface focused on correctness + clarity
 select = ["E","F","I","UP","B","N"]
+# Explicitly ensure pyflakes rule for rebinding imported names is enabled
+# (e.g. shadowing `Request`, `Response`, `status`) - pyflakes emits F823
+extend-select = ["F823"]
 ignore = ["E501"]

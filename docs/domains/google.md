@@ -250,7 +250,7 @@ profile = await httpx.get("https://www.googleapis.com/oauth2/v2/userinfo",
   "user_id": "user123",
   "identity_id": "google_user_456",
   "provider": "google",
-  "access_token": "ya29.abc123...",
+  "access_token": "[REDACTED]",
   "refresh_token": "1/abc123def...",
   "scope": "openid profile email https://www.googleapis.com/auth/gmail.readonly",
   "expires_at": 1640995200,
@@ -262,7 +262,7 @@ profile = await httpx.get("https://www.googleapis.com/oauth2/v2/userinfo",
 **Token Refresh:**
 ```json
 {
-  "access_token": "ya29.new_token...",
+  "access_token": "[REDACTED]",
   "expires_in": 3600,
   "scope": "openid profile email https://www.googleapis.com/auth/gmail.readonly",
   "token_type": "Bearer"

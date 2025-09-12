@@ -4,10 +4,6 @@ rules:
       - pattern-either:
           # Python redirect patterns
           - pattern: |
-              $REDIRECT_METHOD($URL)
-              ...
-              $URL = $VAR
-          - pattern: |
               redirect($URL, ...)
               ...
               $URL = $VAR
@@ -17,6 +13,10 @@ rules:
               $URL = $VAR
           - pattern: |
               Response.redirect($URL)
+              ...
+              $URL = $VAR
+          - pattern: |
+              RedirectResponse($URL, ...)
               ...
               $URL = $VAR
           # JavaScript redirect patterns
@@ -45,8 +45,6 @@ rules:
               useNavigate()($URL)
               ...
               $URL = $VAR
-    metavariable-regex:
-      $VAR: '^(?!.*(?:sanitiz|validat|escap|whitelist|allowlist)).*'  # Flag if variable name doesn't suggest sanitization
     message: |
       Potential open redirect vulnerability: redirecting to unsanitized variable '$VAR'.
       This could allow attackers to redirect users to malicious sites.
@@ -54,10 +52,10 @@ rules:
     severity: ERROR
     languages: [python, javascript, typescript]
 
-  - id: open-redirect-login-next-construction
+  - id: open-redirect-login-next-construction-js
     patterns:
       - pattern-either:
-          # Frontend construction of /login?next= URLs
+          # JavaScript/Node.js patterns
           - pattern: |
               "/login?next=" + $VAR
           - pattern: |
@@ -70,6 +68,16 @@ rules:
               `/login?redirect=${$VAR}`
           - pattern: |
               "/login?redirect=".concat($VAR)
+    message: |
+      Potential open redirect via login next parameter construction.
+      Constructing '/login?next=' URLs with user input '$VAR' can lead to open redirect vulnerabilities.
+      Validate the next/redirect parameter against a whitelist of allowed URLs.
+    severity: ERROR
+    languages: [javascript, typescript]
+
+  - id: open-redirect-login-next-construction-py
+    patterns:
+      - pattern-either:
           # Python f-string patterns
           - pattern: |
               f"/login?next={$VAR}"
@@ -85,7 +93,7 @@ rules:
       Constructing '/login?next=' URLs with user input '$VAR' can lead to open redirect vulnerabilities.
       Validate the next/redirect parameter against a whitelist of allowed URLs.
     severity: ERROR
-    languages: [python, javascript, typescript]
+    languages: [python]
 
   - id: open-redirect-protocol-relative-url
     patterns:

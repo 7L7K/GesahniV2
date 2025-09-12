@@ -56,6 +56,74 @@ ensure_qdrant() {
   exit 1
 }
 
+# Ensure Redis is running
+ensure_redis() {
+  # Check if Redis is already running
+  if pgrep -f redis-server >/dev/null; then
+    echo "✅ Redis already running."
+    return 0
+  fi
+
+  # Try to start Redis via Homebrew
+  if command -v redis-server >/dev/null 2>&1; then
+    echo "▶️  Starting Redis via Homebrew..."
+    redis-server --daemonize yes
+    sleep 2
+    if pgrep -f redis-server >/dev/null; then
+      echo "✅ Redis started via Homebrew."
+      return 0
+    fi
+  fi
+
+  # Fallback to Docker
+  if command -v docker >/dev/null 2>&1; then
+    local NAME="gesahni-redis"
+    local IMAGE="redis:7-alpine"
+
+    # Check if container exists
+    if docker ps -a --format '{{.Names}}' | grep -qx "$NAME"; then
+      if docker ps --format '{{.Names}}' | grep -qx "$NAME"; then
+        echo "✅ Redis container '$NAME' already running."
+      else
+        echo "▶️  Starting existing Redis container '$NAME'..."
+        docker start "$NAME" >/dev/null
+      fi
+    else
+      echo "🧰 Creating Redis container '$NAME'..."
+      docker run -d --name "$NAME" \
+        -p "6379:6379" \
+        --health-cmd="redis-cli ping" \
+        --health-interval=5s --health-retries=5 --health-timeout=3s \
+        "$IMAGE" --appendonly yes >/dev/null
+    fi
+
+    # Wait for healthy
+    echo -n "⏳ Waiting for Redis to be healthy..."
+    for i in {1..30}; do
+      if docker inspect --format='{{json .State.Health.Status}}' "$NAME" 2>/dev/null | grep -q healthy; then
+        echo; echo "✅ Redis healthy."
+        return 0
+      fi
+      echo -n "."
+      sleep 1
+    done
+    echo; echo "❌ Redis container failed to become healthy."
+    return 1
+  fi
+
+  echo "❌ No Redis installation found. Please install Redis via:"
+  echo "   brew install redis"
+  echo "   or start it manually: redis-server --daemonize yes"
+  return 1
+}
+
+# Start Redis (optional but recommended for stable sessions)
+if command -v redis-server >/dev/null 2>&1 || command -v docker >/dev/null 2>&1; then
+    ensure_redis
+else
+    echo "⚠️  Neither Redis nor Docker available for Redis startup"
+fi
+
 # Start Qdrant if Docker is available
 if command -v docker >/dev/null 2>&1; then
     ensure_qdrant

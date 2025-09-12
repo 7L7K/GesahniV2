@@ -24,8 +24,8 @@ def test_successful_token_exchange_logging():
 
     # Mock a successful Google response
     mock_response = {
-        "access_token": "ya29.abc123def456",
-        "refresh_token": "1//refresh_token_here",
+        "access_token": "[REDACTED]",
+        "refresh_token": "[REDACTED]",
         "scope": "openid https://www.googleapis.com/auth/userinfo.email",
         "token_type": "Bearer",
         "expires_in": 3600,

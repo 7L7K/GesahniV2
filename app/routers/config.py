@@ -47,7 +47,10 @@ def build_plan() -> list[RouterSpec]:
         RouterSpec("app.router.ask_api:router", "/v1"),
         # Canonical auth router (use app.api.auth as source of truth)
         RouterSpec("app.api.auth:router", "/v1"),
+        RouterSpec("app.api.auth_router_dev:router", "/v1"),
         RouterSpec("app.router.google_api:router", "/v1/google"),
+        # Alias compatibility router provides legacy endpoints like /v1/list
+        RouterSpec("app.router.alias_api:router", "/v1"),
         # Include richer app.api routers to match legacy contract snapshots
         RouterSpec("app.api.google_oauth:router", "/v1/google"),
         RouterSpec("app.api.oauth_google:router", ""),  # legacy /v1/auth/google/*
@@ -63,7 +66,7 @@ def build_plan() -> list[RouterSpec]:
         RouterSpec("app.api.tts:router", "/v1"),
         RouterSpec("app.api.transcribe:router", "/v1"),
         RouterSpec("app.api.ha:router", "/v1"),
-        RouterSpec("app.router.admin_api:router", "/v1/admin"),
+        RouterSpec("app.api.admin:router", "/v1/admin"),
         RouterSpec("app.api.config_check:router", ""),  # Config check endpoint
         RouterSpec("app.router.compat_api:router", ""),  # Deprecated compatibility routes
         RouterSpec("app.api.health:router", ""),
@@ -96,6 +99,10 @@ def build_plan() -> list[RouterSpec]:
     optional += _optional(enable_legacy_google, [RouterSpec("app.api.google_compat:router", "")])
 
     plan = core + optional
+    # In CI/test environments, exclude the legacy alias router to avoid
+    # duplicate route registrations; tests use the canonical routers directly.
+    if in_ci:
+        plan = [p for p in plan if "app.router.alias_api" not in p.import_path]
     log.info("router.plan env=%s ci=%s total=%d (spotify=%s apple=%s device=%s preflight=%s legacy_google=%s)",
              env, in_ci, len(plan), enable_spotify, enable_apple, enable_device, enable_preflt, enable_legacy_google)
     return plan
@@ -131,6 +138,15 @@ def register_routers(app: FastAPI) -> None:
                 raise
             # In production, log and continue gracefully
             log.warning("router include failed: %s (%s)", spec.import_path, e)
+
+    # Register alias compatibility routes onto the app (best-effort).
+    try:
+        # Import lazily to avoid optional dependency errors
+        from app.router.alias_api import register_aliases
+        register_aliases(app, prefix="/v1")
+    except Exception:
+        # Non-fatal: alias router is optional
+        log.debug("alias router registration skipped or failed")
 
     # Ollama/Llama integration: best-effort check
     try:

@@ -19,10 +19,10 @@ CASES = [
     (
         "POST",
         "/v1/admin/reload_env",
-        {200, 403},
-    ),  # CI envs sometimes wrap admin behind auth
-    ("POST", "/v1/admin/self_review", {501, 403}),
-    ("POST", "/v1/admin/vector_store/bootstrap", {202, 403}),
+        {401, 200, 403},
+    ),  # Admin endpoints return 401 for unauth, 403 for unauthorized, 200 when authorized
+    ("POST", "/v1/admin/self_review", {401, 501, 403}),
+    ("POST", "/v1/admin/vector_store/bootstrap", {401, 202, 403}),
 ]
 
 

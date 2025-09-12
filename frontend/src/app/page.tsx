@@ -525,8 +525,10 @@ export default function Page() {
                 onClick={() => {
                   setAuthError(null);
                   musicStateFetchAttempted.current = false;
-                  // Trigger a fresh auth check
-                  authOrchestrator.refreshAuth();
+                  // Only refresh auth if we have tokens
+                  if (getToken()) {
+                    authOrchestrator.refreshAuth();
+                  }
                 }}
                 className="w-full"
               >

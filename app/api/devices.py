@@ -81,15 +81,7 @@ async def pair_complete(body: dict[str, Any]) -> dict[str, Any]:
     return {"access_token": token, "token_type": "bearer", "expires_in": ttl}
 
 
-@router.post(
-    "/devices/{device_id}/revoke",
-    dependencies=[
-        # Temporarily disabled verify_token due to import order issues
-        # Depends(verify_token),
-        # Temporarily disabled for debugging
-        # Depends(require_roles(["resident", "caregiver", "admin"])),
-    ],
-)
+@router.post("/devices/{device_id}/revoke")
 async def device_revoke(
     device_id: str, request: Request, user_id: str = Depends(get_current_user_id)
 ) -> dict[str, str]:

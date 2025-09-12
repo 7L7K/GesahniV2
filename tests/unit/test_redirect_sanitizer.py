@@ -61,6 +61,26 @@ class TestRedirectSanitizer:
             # Protocol-relative rejection
             ("//evil.com", DEFAULT_FALLBACK),
             ("///evil.com", "/evil.com"),
+            # Mobile deep-link rejection
+            ("app://evil.com", DEFAULT_FALLBACK),
+            ("intent://evil.com#Intent;scheme=https;action=android.intent.action.VIEW;end", DEFAULT_FALLBACK),
+            ("itms-services://?action=download-manifest&url=https://evil.com/manifest.plist", DEFAULT_FALLBACK),
+            ("android-app://com.example.app", DEFAULT_FALLBACK),
+            ("ios-app://123456789/com.example.app", DEFAULT_FALLBACK),
+            ("fb://profile/12345", DEFAULT_FALLBACK),
+            ("twitter://user?screen_name=evil", DEFAULT_FALLBACK),
+            ("whatsapp://send?text=evil", DEFAULT_FALLBACK),
+            ("tel:+1234567890", DEFAULT_FALLBACK),
+            ("sms:+1234567890", DEFAULT_FALLBACK),
+            ("mailto:evil@example.com", DEFAULT_FALLBACK),
+            ("file:///etc/passwd", DEFAULT_FALLBACK),
+            ("javascript:alert('evil')", DEFAULT_FALLBACK),
+            ("data:text/html,<script>alert('evil')</script>", DEFAULT_FALLBACK),
+            # Protocol-relative with app paths
+            ("//evil.com/app", DEFAULT_FALLBACK),
+            ("//evil.com/android-app", DEFAULT_FALLBACK),
+            ("//evil.com/ios-app", DEFAULT_FALLBACK),
+            ("//evil.com/intent", DEFAULT_FALLBACK),
             # Auth path variations
             ("/v1/auth/login", DEFAULT_FALLBACK),
             ("/v1/auth/logout", DEFAULT_FALLBACK),
@@ -144,3 +164,111 @@ class TestRedirectSanitizer:
         deeply_encoded = "%2525252Fdashboard"  # Triple encoded
         result = safe_decode_url(deeply_encoded, max_decodes=2)
         assert result == "%252Fdashboard"  # Only decoded twice
+
+
+class TestSafeRedirectsEnforcedFlag:
+    """Test SAFE_REDIRECTS_ENFORCED feature flag behavior."""
+
+    def test_safe_redirects_enforced_default_enabled(self, monkeypatch):
+        """Test that SAFE_REDIRECTS_ENFORCED defaults to enabled (1)."""
+        # Ensure clean environment
+        monkeypatch.delenv("SAFE_REDIRECTS_ENFORCED", raising=False)
+
+        # Force reload of feature flags
+        import importlib
+        import app.feature_flags
+        importlib.reload(app.feature_flags)
+        from app.feature_flags import SAFE_REDIRECTS_ENFORCED
+
+        assert SAFE_REDIRECTS_ENFORCED is True
+
+    def test_safe_redirects_enforced_explicit_enabled(self, monkeypatch):
+        """Test that SAFE_REDIRECTS_ENFORCED=1 enables strict mode."""
+        monkeypatch.setenv("SAFE_REDIRECTS_ENFORCED", "1")
+
+        # Force reload of feature flags
+        import importlib
+        import app.feature_flags
+        importlib.reload(app.feature_flags)
+        from app.feature_flags import SAFE_REDIRECTS_ENFORCED
+
+        assert SAFE_REDIRECTS_ENFORCED is True
+
+    def test_safe_redirects_enforced_disabled(self, monkeypatch):
+        """Test that SAFE_REDIRECTS_ENFORCED=0 disables strict mode."""
+        monkeypatch.setenv("SAFE_REDIRECTS_ENFORCED", "0")
+
+        # Force reload of feature flags
+        import importlib
+        import app.feature_flags
+        importlib.reload(app.feature_flags)
+        from app.feature_flags import SAFE_REDIRECTS_ENFORCED
+
+        assert SAFE_REDIRECTS_ENFORCED is False
+
+    def test_double_decode_enforced_enabled(self, monkeypatch, caplog):
+        """Test double-decode rejection when SAFE_REDIRECTS_ENFORCED=1."""
+        monkeypatch.setenv("SAFE_REDIRECTS_ENFORCED", "1")
+
+        # Force reload of feature flags and redirect utils
+        import importlib
+        import app.feature_flags
+        import app.redirect_utils
+        importlib.reload(app.feature_flags)
+        importlib.reload(app.redirect_utils)
+
+        from app.redirect_utils import sanitize_redirect_path
+
+        # Double-encoded path should be rejected
+        result = sanitize_redirect_path("%252Fdashboard")
+        assert result == DEFAULT_FALLBACK
+
+    def test_double_decode_bypass_disabled(self, monkeypatch, caplog):
+        """Test double-decode bypass when SAFE_REDIRECTS_ENFORCED=0."""
+        monkeypatch.setenv("SAFE_REDIRECTS_ENFORCED", "0")
+
+        # Force reload of feature flags and redirect utils
+        import importlib
+        import app.feature_flags
+        import app.redirect_utils
+        importlib.reload(app.feature_flags)
+        importlib.reload(app.redirect_utils)
+
+        from app.redirect_utils import sanitize_redirect_path
+
+        # Double-encoded path should be allowed in compatibility mode
+        with caplog.at_level("WARNING"):
+            result = sanitize_redirect_path("%252Fdashboard")
+
+        # Should succeed and return decoded path
+        assert result == "/dashboard"
+
+        # Should log a warning about bypass
+        assert any("SAFE_REDIRECTS_ENFORCED disabled: allowing double-decoded redirect path" in record.message
+                  for record in caplog.records)
+
+    def test_other_security_rules_still_enforced_disabled(self, monkeypatch):
+        """Test that other security rules are still enforced when flag is disabled."""
+        monkeypatch.setenv("SAFE_REDIRECTS_ENFORCED", "0")
+
+        # Force reload of feature flags and redirect utils
+        import importlib
+        import app.feature_flags
+        import app.redirect_utils
+        importlib.reload(app.feature_flags)
+        importlib.reload(app.redirect_utils)
+
+        from app.redirect_utils import sanitize_redirect_path
+
+        # Auth paths should still be blocked
+        assert sanitize_redirect_path("/login") == DEFAULT_FALLBACK
+        assert sanitize_redirect_path("/v1/auth/login") == DEFAULT_FALLBACK
+
+        # Absolute URLs should still be blocked
+        assert sanitize_redirect_path("http://evil.com") == DEFAULT_FALLBACK
+
+        # Protocol-relative URLs should still be blocked
+        assert sanitize_redirect_path("//evil.com") == DEFAULT_FALLBACK
+
+        # Only double-decode enforcement is bypassed
+        assert sanitize_redirect_path("%252Fdashboard") == "/dashboard"

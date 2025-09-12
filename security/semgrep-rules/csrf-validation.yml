@@ -1,0 +1,172 @@
+rules:
+  - id: csrf-missing-token-validation
+    patterns:
+      - pattern-either:
+          # Python Flask/Django form processing without CSRF
+          - pattern: |
+              @app.route(..., methods=['POST'])
+              def $FUNC(...):
+                ...
+                $VAR = request.form.get(...)
+                ...
+          - pattern-not: |
+              @csrf.exempt
+              ...
+          - pattern-not: |
+              csrf_token = request.form.get('csrf_token')
+              ...
+          - pattern-not: |
+              validate_csrf_token(...)
+              ...
+          # FastAPI endpoints without CSRF protection
+          - pattern: |
+              @router.post(...)
+              async def $FUNC(...):
+                ...
+                $DATA = await request.form()
+                ...
+          - pattern-not: |
+              @csrf_protect
+              ...
+          - pattern-not: |
+              csrf_token = $DATA.get('csrf_token')
+              ...
+          # Node.js/Express without CSRF middleware
+          - pattern: |
+              app.post(..., (req, res) => {
+                ...
+                const $VAR = req.body.$FIELD
+                ...
+              })
+          - pattern-not: |
+              csurf(...)
+              ...
+          - pattern-not: |
+              req.csrfToken()
+              ...
+    message: |
+      Potential CSRF vulnerability: Processing form data without CSRF token validation.
+      State-changing operations should validate CSRF tokens to prevent cross-site request forgery attacks.
+      Add CSRF token validation or use CSRF protection middleware.
+    severity: ERROR
+    languages: [python, javascript, typescript]
+
+  - id: csrf-token-not-validated
+    patterns:
+      - pattern-either:
+          # Extracting CSRF token but not validating it
+          - pattern: |
+              csrf_token = request.form.get('csrf_token')
+              ...
+          - pattern-not: |
+              validate_csrf_token(csrf_token)
+              ...
+          - pattern-not: |
+              if csrf_token != session.get('csrf_token'):
+              ...
+          - pattern: |
+              csrf_token = req.body.csrf_token
+              ...
+          - pattern-not: |
+              if (!csrf.verify(csrf_token)) {
+              ...
+              }
+          - pattern-not: |
+              req.csrfToken() === csrf_token
+              ...
+    message: |
+      CSRF token extracted but not validated: '$VAR'.
+      Extracting a CSRF token without validation provides no security benefit.
+      Always validate the token against the expected value from session or secure storage.
+    severity: ERROR
+    languages: [python, javascript, typescript]
+
+  - id: csrf-unsafe-token-generation
+    patterns:
+      - pattern-either:
+          # Weak CSRF token generation
+          - pattern: |
+              csrf_token = str(random.randint(0, 1000))
+          - pattern: |
+              csrf_token = uuid.uuid4().hex[:8]
+          - pattern: |
+              csrf_token = str(time.time())
+          # Predictable token patterns
+          - pattern: |
+              csrf_token = f"user_{user_id}_{timestamp}"
+          - pattern: |
+              csrf_token = base64.b64encode(f"{user_id}:{timestamp}".encode()).decode()
+    message: |
+      Weak CSRF token generation detected.
+      CSRF tokens should be cryptographically secure and unpredictable.
+      Use secrets.token_urlsafe() or equivalent secure random generation.
+    severity: ERROR
+    languages: [python, javascript]
+
+  - id: csrf-token-stored-insecurely
+    patterns:
+      - pattern-either:
+          # Storing CSRF token in cookies without security flags
+          - pattern: |
+              response.set_cookie('csrf_token', $TOKEN)
+          - pattern-not: |
+              secure=True
+              ...
+          - pattern-not: |
+              httponly=True
+              ...
+          - pattern: |
+              res.cookie('csrf_token', $TOKEN)
+          - pattern-not: |
+              secure: true
+              ...
+          - pattern-not: |
+              httpOnly: true
+              ...
+    message: |
+      CSRF token stored in cookie without proper security flags.
+      CSRF tokens in cookies should have 'secure', 'httponly', and 'samesite' flags set.
+      This prevents token theft and ensures tokens are only sent over HTTPS.
+    severity: WARNING
+    languages: [python, javascript, typescript]
+
+  - id: csrf-missing-on-state-changing-endpoints
+    patterns:
+      - pattern-either:
+          # POST endpoints that modify state
+          - pattern: |
+              @app.route(..., methods=['POST'])
+              def $FUNC(...):
+                ...
+                # State changing operations
+                db.update(...)
+                file.write(...)
+                os.system(...)
+          - pattern-not: |
+              @csrf.exempt
+              ...
+          - pattern-not: |
+              validate_csrf_token(...)
+              ...
+          # PUT/PATCH/DELETE endpoints
+          - pattern: |
+              @router.put(...)
+              async def $FUNC(...):
+                ... # Any state modification
+          - pattern-not: |
+              @csrf_protect
+              ...
+          # Express state-changing routes
+          - pattern: |
+              app.put(..., (req, res) => {
+                ... // Database updates, file operations, etc.
+              })
+          - pattern-not: |
+              csrfProtection
+              ...
+    message: |
+      State-changing endpoint missing CSRF protection.
+      POST, PUT, PATCH, and DELETE endpoints that modify server state should validate CSRF tokens.
+      Consider using CSRF protection middleware or individual token validation.
+    severity: ERROR
+    languages: [python, javascript, typescript]

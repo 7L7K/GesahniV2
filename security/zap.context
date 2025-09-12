@@ -1,0 +1,2 @@
+# This lets you scope to your dev hosts only
+include ^http://localhost:(3000|8000).*

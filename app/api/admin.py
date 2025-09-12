@@ -20,6 +20,7 @@ from app.deps.scopes import (
     STANDARD_SCOPES,
     get_user_scopes,
     require_admin,
+    require_admin_optional,
     require_scope,
 )
 
@@ -50,7 +51,7 @@ except Exception:
 
 router = APIRouter(
     tags=["Admin"],
-    prefix="/admin",  # All admin routes will be under /v1/admin/
+    # Note: prefix is handled by router config, not here
     responses={
         401: {"description": "Authentication required"},
         403: {"description": "Insufficient permissions"},
@@ -662,19 +663,19 @@ class AdminOkResponse(BaseModel):
 
 
 @router.post(
-    "/admin/reload_env",
+    "/reload_env",
     response_model=AdminOkResponse,
-    responses={200: {"model": AdminOkResponse}},
+    responses={200: {"model": AdminOkResponse}, 403: {"description": "Forbidden"}},
     openapi_extra={
         "requestBody": {"content": {"application/json": {"schema": {"example": {}}}}}
     },
 )
 async def admin_reload_env(
-    token: str | None = Query(default=None),
+    admin_scope: str = Depends(require_admin_optional()),
     request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ):
-    _check_admin(token, request)
+    # The require_admin_optional dependency will raise 403 if unauthorized
     try:
         from app.env_utils import load_env
 
@@ -704,6 +705,16 @@ async def admin_self_review(
         return {"status": "unavailable"}
 
 
+@router.post("/self_review", dependencies=[])
+async def admin_self_review_post(
+    admin_scope: str = Depends(require_admin_optional()),
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
+    """Self-review endpoint - POST method returns 501 (not implemented)."""
+    # The require_admin_optional dependency will raise 403 if unauthorized
+    raise HTTPException(status_code=501, detail="Not Implemented")
+
+
 class AdminBootstrapResponse(BaseModel):
     status: str
     collection: str
@@ -719,13 +730,15 @@ class AdminBootstrapResponse(BaseModel):
 @router.post(
     "/vector_store/bootstrap",
     response_model=AdminBootstrapResponse,
-    responses={200: {"model": AdminBootstrapResponse}},
-    dependencies=[Depends(require_scope("admin:write"))],
+    responses={202: {"model": AdminBootstrapResponse}, 403: {"description": "Forbidden"}},
+    dependencies=[],
 )
 async def admin_vs_bootstrap(
     name: str | None = Query(default=None),
+    admin_scope: str = Depends(require_admin_optional()),
     user_id: str = Depends(get_current_user_id),
 ):
+    # The require_admin_optional dependency will raise 403 if unauthorized
     logger.info(
         "admin.vector_bootstrap",
         extra={

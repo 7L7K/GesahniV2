@@ -1,0 +1,55 @@
+{
+  "timestamp": "2025-09-12T15:04:30.381872",
+  "branch": "unknown",
+  "commit": "unknown",
+  "run_id": "unknown",
+  "metrics": {
+    "tests": {
+      "unit_tests_passed": 0,
+      "unit_tests_failed": 0,
+      "integration_tests_passed": 0,
+      "integration_tests_failed": 0,
+      "e2e_tests_passed": 0,
+      "e2e_tests_failed": 0,
+      "total_passed": 0,
+      "total_failed": 0,
+      "coverage_percentage": 0.0,
+      "status": "unknown"
+    },
+    "quality": {
+      "flake8_violations": 0,
+      "mypy_errors": 0,
+      "lint_violations": 0,
+      "complexity_score": 0,
+      "status": "passing"
+    }
+  },
+  "summaries": {
+    "zap": {
+      "frontend_alerts": 0,
+      "backend_alerts": 0,
+      "high_risk_alerts": 0,
+      "medium_risk_alerts": 0,
+      "low_risk_alerts": 0,
+      "status": "unknown"
+    },
+    "semgrep": {
+      "findings": 0,
+      "critical_findings": 0,
+      "high_findings": 0,
+      "medium_findings": 0,
+      "low_findings": 0,
+      "status": "unknown"
+    },
+    "grep_guard": {
+      "violations": 0,
+      "critical_violations": 0,
+      "high_violations": 0,
+      "medium_violations": 0,
+      "low_violations": 0,
+      "files_scanned": 0,
+      "status": "unknown"
+    }
+  },
+  "status": "passing"
+}

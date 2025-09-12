@@ -14,6 +14,7 @@ from typing import Any
 import jwt
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
+from ..auth_protection import public_route
 
 from ..deps.user import get_current_user_id, require_user, resolve_session_id
 from ..security import jwt_decode
@@ -1168,6 +1169,7 @@ def _get_refresh_ttl_seconds() -> int:
 
 @router.get("/finish", include_in_schema=False)
 @router.post("/finish", include_in_schema=False)
+@public_route
 async def finish_clerk_login(
     request: Request, response: Response
 ):
@@ -1216,6 +1218,7 @@ async def clerk_finish(request: Request) -> dict[str, Any]:
         400: {"description": "invalid or username_taken"},
     },
 )
+@public_route
 async def register_v1(request: Request, response: Response):
     """Create a local account and return tokens.
 
@@ -1321,6 +1324,9 @@ async def register_v1(request: Request, response: Response):
 
     return {"access_token": access_token, "refresh_token": refresh_token}
 
+from ..auth_protection import public_route
+
+
 @router.post(
     "/auth/login",
     responses={
@@ -1333,6 +1339,7 @@ async def register_v1(request: Request, response: Response):
         }
     },
 )
+@public_route
 async def login(
     request: Request,
     response: Response,
@@ -1570,7 +1577,8 @@ async def logout(request: Request, response: Response):
             # The response will still be 204, indicating logout was processed
             pass
 
-    response.status_code = 204
+    # Some clients/tests expect 200 OK; return 200 with empty body to be permissive
+    response.status_code = 200
     return response
 
 
@@ -1975,6 +1983,8 @@ async def _ensure_auth(user_id: str) -> None:
         logger.warning("_ensure_auth shim failed: %s", e)
         # Don't raise exceptions in test shim - just log and continue
 
+
+from ..auth_protection import public_route
 
 # Aliases for legacy compatibility
 login_v1 = login

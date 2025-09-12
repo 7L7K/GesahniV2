@@ -35,18 +35,19 @@ def test_no_404_for_get_and_post_routes():
             url = _fill_path(path)
             tried += 1
             try:
+                print(f"TESTING -> {method} {url}")
                 if method == "GET":
-                    resp = client.get(url)
+                    resp = client.get(url, timeout=5)
                 else:
                     # POST with a small JSON body; many legacy endpoints accept this
-                    resp = client.post(url, json={"text": "hi", "device_id": "x"})
+                    resp = client.post(url, json={"text": "hi", "device_id": "x"}, timeout=5)
                 assert (
                     resp.status_code != 404
                 ), f"{method} {url} unexpectedly returned 404"
-            except Exception:
-                # Some routes may raise during test-time due to missing external
-                # deps (DB, providers). Treat raised exceptions as non-404
-                # server errors for the purposes of this safety-net sweep.
+            except Exception as e:
+                # Print exception for diagnosis and continue; timeouts or network
+                # errors indicate a route that blocks or depends on external services.
+                print(f"SKIP (exception) -> {method} {url}: {type(e).__name__} {e}")
                 continue
 
     assert tried > 0, "No GET/POST routes were discovered to test"

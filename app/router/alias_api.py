@@ -355,9 +355,108 @@ def _register_alias(path: str, method: str):
         router.add_api_route(path, handler, methods=[method])
 
 
-# Materialize aliases at import-time
-for p, (m, _) in list(ALIASES.items()):
-    _register_alias(p, m)
+def _make_handler(path: str, method: str):
+    """Return a request handler for the given alias path/method without
+    registering it. This lets callers decide where/how to attach the handler
+    (router vs app) and avoid duplicate registration when canonical handlers
+    are present.
+    """
+    async def handler(request: Request):
+        # record every alias request
+        try:
+            ALIAS_HITS[path] += 1
+        except Exception:
+            pass
+        m, fn = ALIASES.get(path, (method, None))
+        # Deprecation headers
+        headers = {
+            "Deprecation": "true",
+            "X-Replace-With": f"/v1{path}",
+        }
+
+        if callable(fn):
+            try:
+                if "request" in getattr(fn, "__code__", object()).co_varnames:
+                    res = await fn(request)
+                else:
+                    res = await fn()
+            except Exception:
+                fallback_res = await _fallback(request, path, method)
+                try:
+                    # attach headers if Response-like
+                    from starlette.responses import Response as _StarResponse
+
+                    if isinstance(fallback_res, _StarResponse):
+                        for k, v in headers.items():
+                            fallback_res.headers.setdefault(k, v)
+                        return fallback_res
+                except Exception:
+                    pass
+                # ensure JSONResponse
+                try:
+                    ALIAS_FALLBACK_TOTAL.labels(path=path, method=method, reason="handler_error").inc()
+                except Exception:
+                    pass
+                import logging
+
+                logging.warning("alias.fallback used: %s %s (handler error)", method, path)
+                return JSONResponse(fallback_res if isinstance(fallback_res, dict) else {}, headers=headers)
+
+            try:
+                from starlette.responses import Response as _StarResponse
+
+                if isinstance(res, _StarResponse):
+                    for k, v in headers.items():
+                        res.headers.setdefault(k, v)
+                    return res
+            except Exception:
+                pass
+
+            return JSONResponse(res if isinstance(res, dict | list) else {"result": res}, headers=headers)
+
+        try:
+            ALIAS_FALLBACK_HITS[path] += 1
+        except Exception:
+            pass
+        fallback_res = await _fallback(request, path, method)
+        try:
+            ALIAS_FALLBACK_TOTAL.labels(path=path, method=method, reason="no_handler").inc()
+        except Exception:
+            pass
+        import logging
+        logging.warning("alias.fallback used: %s %s (no handler)", method, path)
+        try:
+            from starlette.responses import Response as _StarResponse
+
+            if isinstance(fallback_res, _StarResponse):
+                for k, v in headers.items():
+                    fallback_res.headers.setdefault(k, v)
+                return fallback_res
+        except Exception:
+            pass
+        return JSONResponse(fallback_res if isinstance(fallback_res, dict) else {}, headers=headers)
+
+    return handler
+
+
+def register_aliases(app, prefix: str = "/v1") -> None:
+    """Register alias routes onto the given FastAPI `app` only when a
+    canonical route for the same (method,path) is not already present.
+    """
+    # Build set of existing (METHOD, path)
+    existing = {(m, r.path) for r in app.routes for m in getattr(r, "methods", []) if m != "HEAD"}
+    for p, (m, _) in list(ALIASES.items()):
+        full = prefix + p
+        if (m, full) in existing:
+            # Skip registration when canonical handler already exists
+            continue
+        h = _make_handler(p, m)
+        # Attach as deprecated for compatibility
+        try:
+            app.add_api_route(full, h, methods=[m], deprecated=True)
+        except Exception:
+            # Fallback to include without deprecation flag
+            app.add_api_route(full, h, methods=[m])
 
 
 @router.get("/_alias/report")

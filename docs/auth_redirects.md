@@ -108,6 +108,46 @@ export function sanitizeNextPath(rawPath: string | null | undefined): string {
 5. On success, backend reads `gs_next` cookie and redirects there
 6. Cookie is cleared after use
 
+## Legacy Compatibility Kill-Switch
+
+The redirect sanitizer includes a legacy compatibility feature flag `SAFE_REDIRECTS_ENFORCED=1` (default: enabled) for emergency situations.
+
+### Feature Flag Behavior
+
+When `SAFE_REDIRECTS_ENFORCED=1` (default):
+- All security rules are strictly enforced, including double-decode prevention
+- Double-encoded URLs are rejected with fallback to `/dashboard`
+
+When `SAFE_REDIRECTS_ENFORCED=0` (disabled):
+- **Emergency compatibility mode**: Double-decode enforcement is bypassed
+- All other security rules remain active (auth path blocking, open redirect prevention, etc.)
+- A WARNING is logged when double-decoding occurs
+- The sanitizer continues processing with the decoded path
+
+### When to Use
+
+**Only disable in emergency situations** where legacy systems require double-encoded URLs that cannot be immediately updated. This provides a temporary workaround while maintaining most security protections.
+
+**Never disable permanently** - the double-decode protection prevents sophisticated encoding-based bypass attacks.
+
+### Configuration
+
+Set the environment variable:
+```bash
+# Default (recommended) - strict security
+SAFE_REDIRECTS_ENFORCED=1
+
+# Emergency compatibility mode (temporary only)
+SAFE_REDIRECTS_ENFORCED=0
+```
+
+### Logging
+
+When the flag is disabled and double-decoding occurs, a warning is logged:
+```
+WARNING: SAFE_REDIRECTS_ENFORCED disabled: allowing double-decoded redirect path
+```
+
 ## Test Coverage Overview
 
 The redirect security implementation includes comprehensive test coverage:

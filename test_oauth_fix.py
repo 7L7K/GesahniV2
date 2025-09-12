@@ -20,8 +20,8 @@ def test_exchange_code_preserves_id_token():
 
     # Create a mock token response with id_token
     mock_token_response = {
-        "access_token": "ya29.mock_token",
-        "refresh_token": "mock_refresh_token",
+        "access_token": "[REDACTED]",
+        "refresh_token": "[REDACTED]",
         "scope": "openid email profile",
         "token_type": "Bearer",
         "expires_in": 3600,

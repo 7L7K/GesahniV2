@@ -95,7 +95,7 @@ def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_orig
         "AuditMiddleware",
         "DedupMiddleware",
         "SilentRefreshMiddleware",
-        "SessionAttachMiddleware",
+        "SessionAttachMiddleware",        # conditional
         "RateLimitMiddleware",            # conditional
         "HealthCheckFilterMiddleware",
         "RedactHashMiddleware",
@@ -146,7 +146,9 @@ def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_orig
         add_mw(app, RateLimitMiddleware, name="RateLimitMiddleware")
 
     # Session and auth
-    add_mw(app, SessionAttachMiddleware, name="SessionAttachMiddleware")
+    session_attach_enabled = _is_truthy(os.getenv("SESSION_ATTACH_ENABLED", "0"))
+    if session_attach_enabled:
+        add_mw(app, SessionAttachMiddleware, name="SessionAttachMiddleware")
     add_mw(app, SilentRefreshMiddleware, name="SilentRefreshMiddleware")
 
     # De-duplication
@@ -183,6 +185,8 @@ def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_orig
         elif name in ["EnhancedErrorHandlingMiddleware", "ErrorHandlerMiddleware"] and not legacy_error_mw:
             continue
         elif name == "ReloadEnvMiddleware" and not (dev_mode and not in_ci):
+            continue
+        elif name == "SessionAttachMiddleware" and not _is_truthy(os.getenv("SESSION_ATTACH_ENABLED", "0")):
             continue
         expected.append(name)
 

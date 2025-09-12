@@ -131,7 +131,7 @@ def _policy_hash() -> str:
     default = CONFIG.router_default_model
     budget = str(CONFIG.router_budget_ms)
     base = f"allow:{allow}|d:{default}|b:{budget}"
-    return hashlib.sha1(base.encode("utf-8")).hexdigest()[:10]
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()[:10]
 
 
 def make_semantic_cache_key(*, user_id: str, prompt_text: str) -> str:

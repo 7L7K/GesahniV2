@@ -223,15 +223,10 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
             // Don't clear tokens or redirect - let the auth flow handle it
             return;
         }
-
-        // Use the same debouncing mechanism as checkAuth to prevent rapid calls
-        if (this.debounceTimer) {
-            clearTimeout(this.debounceTimer);
-        }
-
-        this.debounceTimer = setTimeout(async () => {
-            await this._performWhoamiCheck();
-        }, this.DEBOUNCE_DELAY);
+        // IMPORTANT: Reuse checkAuth so we honor throttling/backoff/cooldowns.
+        // This prevents multiple components from causing rapid whoami loops
+        // when the app is unauthenticated or during transient failures.
+        await this.checkAuth();
     }
 
     async initialize(): Promise<void> {
@@ -243,15 +238,29 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         console.info('AUTH Orchestrator: Initializing...');
         this.initialized = true;
 
-        // Initial auth check on mount - bypass rate limiting for initialization
-        try {
-            await this._performWhoamiCheck();
-        } catch (error) {
-            console.error('AUTH Orchestrator: Initialization error', error);
-            // Don't throw - let components handle auth state
+        // Only perform initial auth check if we have tokens to work with
+        const hasTokens = Boolean(localStorage.getItem('auth:access'));
+        if (hasTokens) {
+            try {
+                await this._performWhoamiCheck();
+            } catch (error) {
+                console.error('AUTH Orchestrator: Initialization error', error);
+                // Don't throw - let components handle auth state
+                this.setState({
+                    isLoading: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        } else {
+            // No tokens, just mark as initialized with unauthenticated state
             this.setState({
                 isLoading: false,
-                error: error instanceof Error ? error.message : String(error),
+                is_authenticated: false,
+                session_ready: false,
+                user_id: null,
+                user: null,
+                source: 'missing',
+                whoamiOk: false,
             });
         }
     }

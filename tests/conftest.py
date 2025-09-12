@@ -123,9 +123,14 @@ class TestClient(_TestClient):
         return super().delete(*args, **kwargs)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def client(app):
-    """TestClient fixture with lifespan via context manager to ensure clean startup/shutdown."""
+    """TestClient fixture with lifespan via context manager to ensure clean startup/shutdown.
+
+    Promoted to session scope so session-scoped fixtures can reuse the same TestClient
+    without causing PyTest ScopeMismatch errors when route coverage analyzer requests
+    a session-scoped app fixture.
+    """
     with TestClient(app) as c:
         yield c
 

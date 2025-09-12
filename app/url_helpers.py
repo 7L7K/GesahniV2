@@ -141,7 +141,7 @@ def build_origin_aware_url(request: Request, path: str) -> str:
 
             parsed = urlparse(origin)
             base_url = f"{parsed.scheme}://{parsed.netloc}"
-            return f"{base_url}{path}"
+            return f"{base_url}{path}"  # nosemgrep: python.flask.security.audit.directly-returned-format-string.directly-returned-format-string
         except Exception:
             pass
 

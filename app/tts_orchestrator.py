@@ -197,7 +197,7 @@ async def synthesize(
     # In-memory TTL cache to avoid repeated synthesis cost for identical requests
     _ttl_s = int(os.getenv("TTS_CACHE_TTL_S", "600") or 600)
     key_voice = (openai_voice or "piper") if engine == "openai" else "piper"
-    _key = f"{engine}:{tier}:{key_voice}:{hashlib.sha1((text or '').encode('utf-8')).hexdigest()}"
+    _key = f"{engine}:{tier}:{key_voice}:{hashlib.sha256((text or '').encode('utf-8')).hexdigest()}"
     # simple module-level cache
     global _TTS_CACHE  # type: ignore[var-annotated]
     try:

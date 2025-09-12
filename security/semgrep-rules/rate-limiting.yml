@@ -1,0 +1,244 @@
+rules:
+  - id: rate-limit-missing-on-api-endpoints
+    patterns:
+      - pattern-either:
+          # FastAPI endpoints without rate limiting
+          - pattern: |
+              @router.$METHOD(...)
+              async def $FUNC(...):
+                ...
+          - pattern-not: |
+              @rate_limit(...)
+              ...
+          - pattern-not: |
+              @limiter.limit(...)
+              ...
+          - pattern-not: |
+              rate_limit_middleware
+              ...
+          # Flask endpoints without rate limiting
+          - pattern: |
+              @app.route(..., methods=[$METHODS])
+              def $FUNC(...):
+                ...
+          - pattern-not: |
+              @rate_limiter(...)
+              ...
+          - pattern-not: |
+              limiter.check(...)
+              ...
+          # Express routes without rate limiting
+          - pattern: |
+              app.$METHOD(..., (req, res) => {
+                ...
+              })
+          - pattern-not: |
+              rateLimit(...)
+              ...
+          - pattern-not: |
+              expressRateLimit(...)
+              ...
+    message: |
+      API endpoint missing rate limiting protection.
+      Public API endpoints should have rate limiting to prevent abuse, DoS attacks, and resource exhaustion.
+      Consider implementing rate limiting middleware or decorators with appropriate limits.
+    severity: WARNING
+    languages: [python, javascript, typescript]
+
+  - id: rate-limit-missing-on-auth-endpoints
+    patterns:
+      - pattern-either:
+          # Login endpoints without rate limiting
+          - pattern: |
+              @app.route('/login', methods=['POST'])
+              def login(...):
+                ...
+          - pattern-not: |
+              @rate_limit("5/minute")
+              ...
+          - pattern-not: |
+              limiter.check(...)
+              ...
+          - pattern: |
+              @router.post('/auth/login')
+              async def login(...):
+                ...
+          - pattern-not: |
+              @limiter.limit("5/minute")
+              ...
+          # Password reset endpoints
+          - pattern: |
+              @app.route('/password-reset', methods=['POST'])
+              def reset_password(...):
+                ...
+          - pattern-not: |
+              @rate_limit(...)
+              ...
+          # Token refresh endpoints
+          - pattern: |
+              app.post('/refresh-token', (req, res) => {
+                ...
+              })
+          - pattern-not: |
+              rateLimit(...)
+              ...
+    message: |
+      Authentication endpoint missing rate limiting protection.
+      Login, password reset, and token refresh endpoints are prime targets for brute force attacks.
+      Implement strict rate limiting (e.g., 5 attempts per minute) to prevent credential stuffing and DoS.
+    severity: ERROR
+    languages: [python, javascript, typescript]
+
+  - id: rate-limit-missing-on-file-upload
+    patterns:
+      - pattern-either:
+          # File upload endpoints without rate limiting
+          - pattern: |
+              @app.route('/upload', methods=['POST'])
+              def upload_file(...):
+                ...
+                file = request.files.get('file')
+                ...
+          - pattern-not: |
+              @rate_limit(...)
+              ...
+          - pattern-not: |
+              limiter.check(...)
+              ...
+          - pattern: |
+              @router.post('/upload')
+              async def upload_file(...):
+                ...
+                file = await request.form()
+                ...
+          - pattern-not: |
+              @limiter.limit(...)
+              ...
+          # Express file upload
+          - pattern: |
+              app.post('/upload', upload.single('file'), (req, res) => {
+                ...
+              })
+          - pattern-not: |
+              rateLimit(...)
+              ...
+    message: |
+      File upload endpoint missing rate limiting protection.
+      File uploads consume significant resources and can be abused for DoS attacks.
+      Implement rate limiting and file size limits to prevent resource exhaustion.
+    severity: ERROR
+    languages: [python, javascript, typescript]
+
+  - id: rate-limit-missing-on-search-endpoints
+    patterns:
+      - pattern-either:
+          # Search endpoints without rate limiting
+          - pattern: |
+              @app.route('/search', methods=['GET'])
+              def search(...):
+                ...
+                query = request.args.get('q')
+                # Database or expensive search operation
+                ...
+          - pattern-not: |
+              @rate_limit(...)
+              ...
+          - pattern: |
+              @router.get('/search')
+              async def search(...):
+                ...
+                # Expensive search operation
+                ...
+          - pattern-not: |
+              @limiter.limit(...)
+              ...
+          # API search endpoints
+          - pattern: |
+              app.get('/api/search', (req, res) => {
+                ... // Expensive search
+              })
+          - pattern-not: |
+              rateLimit(...)
+              ...
+    message: |
+      Search endpoint missing rate limiting protection.
+      Search operations can be resource-intensive and are often abused for DoS attacks.
+      Implement rate limiting to prevent excessive resource consumption and database load.
+    severity: WARNING
+    languages: [python, javascript, typescript]
+
+  - id: rate-limit-insufficient-limits
+    patterns:
+      - pattern-either:
+          # Very high rate limits that may not be effective
+          - pattern: |
+              @rate_limit("1000/minute")
+          - pattern: |
+              @limiter.limit("500/hour")
+          - pattern: |
+              rateLimit({ windowMs: 60000, max: 1000 })
+          # No burst protection
+          - pattern: |
+              @rate_limit("100/minute")
+          - pattern-not: |
+              burst=...
+              ...
+          - pattern-not: |
+              burst_limit=...
+              ...
+    message: |
+      Potentially insufficient rate limiting configuration.
+      Rate limits should be appropriate for the endpoint's sensitivity and resource cost.
+      Consider implementing burst limits and more restrictive rates for sensitive operations.
+    severity: WARNING
+    languages: [python, javascript, typescript]
+
+  - id: rate-limit-missing-on-external-api-calls
+    patterns:
+      - pattern-either:
+          # External API calls without rate limiting
+          - pattern: |
+              response = requests.get($EXTERNAL_API, ...)
+              response = httpx.get($EXTERNAL_API, ...)
+              fetch($EXTERNAL_API, ...)
+              axios.get($EXTERNAL_API, ...)
+          - pattern-not: |
+              @rate_limit(...)
+              ...
+          - pattern-not: |
+              limiter.check(...)
+              ...
+          - pattern-not: |
+              // Rate limited external API call
+              ...
+    message: |
+      External API call without rate limiting protection.
+      Calls to external services should be rate limited to prevent overwhelming third-party APIs.
+      Implement rate limiting to respect API quotas and prevent cascading failures.
+    severity: WARNING
+    languages: [python, javascript, typescript]
+
+  - id: rate-limit-bypass-via-multiple-endpoints
+    patterns:
+      - pattern-either:
+          # Similar endpoints with different rate limits
+          - pattern: |
+              @rate_limit("10/minute")
+              def endpoint_a(...):
+                ...
+
+              @rate_limit("50/minute")
+              def endpoint_b(...):
+                ...
+                # Same underlying resource or operation
+          - pattern: |
+              limiter.limit("10/minute")(endpoint_a)
+              limiter.limit("50/minute")(endpoint_b)
+              # Both endpoints perform similar operations
+    message: |
+      Potential rate limiting bypass through multiple endpoints.
+      Different endpoints accessing the same resources should have consistent rate limiting.
+      Attackers could bypass limits by distributing requests across multiple endpoints.
+      Consider implementing global rate limiting or shared limiters.
+    severity: WARNING
+    languages: [python, javascript, typescript]

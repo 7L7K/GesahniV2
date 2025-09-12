@@ -57,6 +57,23 @@ class OAuthCallbackMonitor:
 # Use infra.get_oauth_monitor() instead
 
 
+def _get_oauth_monitor_safe():
+    """Return the infra oauth monitor or None without creating local name binding
+
+    Import inside the helper so callers can safely call this from anywhere in the
+    module without causing UnboundLocalError when the import fails.
+    """
+    try:
+        from ..infra.oauth_monitor import get_oauth_monitor
+
+        try:
+            return get_oauth_monitor()
+        except Exception:
+            return None
+    except Exception:
+        return None
+
+
 @router.get("/login_url")
 async def google_login_url(request: Request):
     """Generate Google OAuth login URL with CSRF protection."""
@@ -123,9 +140,13 @@ async def google_oauth_callback(
             logger.warning("google_oauth_callback.csrf", extra={"error": str(e)})
             raise HTTPException(status_code=403, detail="Invalid state parameter")
 
-        # Record callback attempt
-        from ..infra.oauth_monitor import get_oauth_monitor
-        get_oauth_monitor().record_attempt(state)
+        # Record callback attempt (best-effort)
+        mon = _get_oauth_monitor_safe()
+        if mon is not None and hasattr(mon, "record"):
+            try:
+                mon.record(success=True if error is None else False)
+            except Exception:
+                pass
 
         # Exchange code for tokens
         # This would need to be implemented based on your token exchange logic
@@ -138,10 +159,20 @@ async def google_oauth_callback(
         }
 
     except HTTPException:
-        get_oauth_monitor().record_attempt(state)
+        mon = _get_oauth_monitor_safe()
+        if mon is not None and hasattr(mon, "record_attempt"):
+            try:
+                mon.record_attempt(state)
+            except Exception:
+                pass
         raise
     except Exception:
-        get_oauth_monitor().record_attempt(state)
+        mon = _get_oauth_monitor_safe()
+        if mon is not None and hasattr(mon, "record_attempt"):
+            try:
+                mon.record_attempt(state)
+            except Exception:
+                pass
         logger.error("google_oauth_callback.failed", exc_info=True)
         raise HTTPException(status_code=500, detail="OAuth callback failed")
 
@@ -181,4 +212,14 @@ async def google_connect(request: Request):
     except Exception:
         logger.exception("google_connect.failed")
         raise HTTPException(status_code=500, detail="failed_to_build_google_url")
+
+
+@router.post("/callback")
+async def google_oauth_callback_post(request: Request):
+    """POST shim: redirect to canonical GET /v1/google/callback preserving query string."""
+    qs = request.scope.get("query_string", b"").decode()
+    target = "/v1/google/callback" + (f"?{qs}" if qs else "")
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url=target, status_code=303)
 

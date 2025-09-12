@@ -54,6 +54,7 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
                         if user_id:
                             # Successfully authenticated - normalize scopes
                             raw_scopes = payload.get("scopes")
+                            log.debug("session_attach.jwt_decoded", extra={"user_id": user_id, "raw_scopes": raw_scopes, "payload_keys": list(payload.keys())})
                             if isinstance(raw_scopes, str):
                                 scopes = [
                                     s.strip() for s in raw_scopes.split() if s.strip()
@@ -62,6 +63,7 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
                                 scopes = list(raw_scopes)
                             else:
                                 scopes = []  # authenticated but no scopes
+                                log.debug("session_attach.no_scopes_direct", extra={"raw_scopes": raw_scopes})
                     except Exception:
                         # Authentication failed - leave scopes as None
                         pass
@@ -77,6 +79,9 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
                         scopes = list(raw_scopes)
                     else:
                         scopes = []  # authenticated but no scopes
+                        log.debug("session_attach.no_scopes_in_payload", extra={"raw_scopes": raw_scopes, "payload_keys": list(payload.keys()) if payload else None})
+                else:
+                    log.debug("session_attach.no_payload", extra={"user_id": user_id})
         except Exception as e:
             log.debug("session_attach.failed", extra={"error": str(e)})
             # On any error, leave scopes as None (unauthenticated)

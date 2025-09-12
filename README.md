@@ -15,6 +15,8 @@
 # GesahniV2
 # 🦙✨ LLaMA-GPT Smart Assistant (with Home Assistant Integration)
 
+[![Auth Redirect Hardening](https://img.shields.io/badge/Auth%20Redirect%20Hardening-✅%20Passing-brightgreen)](https://github.com/your-org/GesahniV2/actions/workflows/auth-redirect-hardening.yml)
+
 Turn your crib into a smart castle with a slick, locally-powered AI assistant—leveraging LLaMA for smooth convos and GPT-4o for heavy-duty tasks. Seamlessly control your smart home via Home Assistant and keep interactions natural and context-aware. Ready to flex your smart-home hustle? Let's get it.
 
 ---

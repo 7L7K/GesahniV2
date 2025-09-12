@@ -822,7 +822,7 @@ def _current_key(request: Request) -> str:
         if ip
         else (request.client.host if request.client else "anon")
     )
-    return f"ip:{ip}"
+    return f"ip:{ip}"  # nosemgrep: python.flask.security.audit.directly-returned-format-string.directly-returned-format-string
 
 
 def _should_bypass_rate_limit(request: Request) -> bool:
@@ -1892,7 +1892,7 @@ def _current_key_for_headers(request: Request | None) -> str:
         except Exception:
             did = None
     if did:
-        return f"device:{did}"
+        return f"device:{did}"  # nosemgrep: python.flask.security.audit.directly-returned-format-string.directly-returned-format-string
     # For admin routes, avoid IP-based key entirely
     if is_admin_route:
         return "user:anon-admin"

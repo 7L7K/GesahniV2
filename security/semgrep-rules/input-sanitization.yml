@@ -1,0 +1,160 @@
+rules:
+  - id: sql-injection-string-formatting
+    patterns:
+      - pattern-either:
+          # Direct string formatting with user input
+          - pattern: |
+              query = f"SELECT * FROM users WHERE id = {user_id}"
+          - pattern: |
+              query = "SELECT * FROM users WHERE id = {}".format(user_id)
+          - pattern: |
+              query = "SELECT * FROM users WHERE id = %s" % user_id
+          # Raw SQL execution with user input
+          - pattern: |
+              cursor.execute(f"SELECT * FROM {table_name} WHERE ...", ...)
+          - pattern: |
+              db.execute("SELECT * FROM users WHERE name = '" + name + "'")
+          # Unsanitized input in SQL queries
+          - pattern: |
+              sql = f"INSERT INTO users VALUES ({user_input})"
+    message: |
+      Potential SQL injection vulnerability: Using string formatting with user input in SQL queries.
+      Never use string formatting or concatenation for SQL queries with user input.
+      Use parameterized queries or prepared statements to prevent SQL injection attacks.
+    severity: ERROR
+    languages: [python, javascript, typescript]
+
+  - id: xss-unsanitized-html-output
+    patterns:
+      - pattern-either:
+          # Direct user input in HTML without sanitization
+          - pattern: |
+              return f"<div>{user_input}</div>"
+          - pattern: |
+              html = f"<p>Hello {username}</p>"
+          - pattern: |
+              res.send(`<h1>Welcome ${user.name}</h1>`)
+          # jQuery HTML insertion without sanitization
+          - pattern: |
+              $('#content').html(user_input)
+          - pattern: |
+              element.innerHTML = user_input
+          - pattern: |
+              document.write(user_input)
+          # React dangerouslySetInnerHTML without validation
+          - pattern: |
+              <div dangerouslySetInnerHTML={{__html: userContent}} />
+    message: |
+      Potential XSS vulnerability: Unsanitized user input in HTML output.
+      User input should be properly escaped or sanitized before being inserted into HTML.
+      Use HTML escaping, Content Security Policy, or a templating engine with auto-escaping.
+    severity: ERROR
+    languages: [python, javascript, typescript]
+
+  - id: command-injection-unsanitized-input
+    patterns:
+      - pattern-either:
+          # Command execution with user input
+          - pattern: |
+              os.system(f"ls {user_path}")
+          - pattern: |
+              subprocess.run(["ls", user_path])
+          - pattern: |
+              exec(`git log --oneline ${branch_name}`)
+          - pattern: |
+              child_process.exec(`cat ${filename}`)
+          # Shell execution with user input
+          - pattern: |
+              os.popen(f"grep {pattern} {filename}")
+          - pattern: |
+              shell_exec(`find / -name ${search_term}`)
+    message: |
+      Potential command injection vulnerability: Executing commands with unsanitized user input.
+      User input in command execution can lead to command injection attacks.
+      Validate input, use whitelisting, or avoid shell execution when possible.
+    severity: ERROR
+    languages: [python, javascript, typescript]
+
+  - id: path-traversal-directory-traversal
+    patterns:
+      - pattern-either:
+          # Path traversal with user input
+          - pattern: |
+              with open(f"/app/files/{filename}") as f:
+                ...
+          - pattern: |
+              path = os.path.join("/uploads", filename)
+          - pattern: |
+              fs.readFileSync(path.join(__dirname, 'uploads', filename))
+          - pattern: |
+              file_path = f"./files/{user_input}"
+          # URL/path parameters in file operations
+          - pattern: |
+              filepath = request.GET.get('file')
+              with open(filepath) as f:
+                ...
+          - pattern: |
+              const file = req.query.file;
+              fs.readFile(file, ...);
+    message: |
+      Potential path traversal vulnerability: Using user input to construct file paths.
+      User-controlled paths can lead to directory traversal attacks (../ sequences).
+      Validate paths against a whitelist or use secure path resolution functions.
+    severity: ERROR
+    languages: [python, javascript, typescript]
+
+  - id: missing-input-validation
+    patterns:
+      - pattern-either:
+          # API endpoints without input validation
+          - pattern: |
+              @app.route('/api/data', methods=['POST'])
+              def process_data():
+                data = request.get_json()
+                # Direct processing without validation
+                process_data(data)
+          - pattern-not: |
+              validate_data(...)
+              ...
+          - pattern-not: |
+              schema.validate(...)
+              ...
+          # Function parameters without validation
+          - pattern: |
+              def process_user(user_id, email, password):
+                # No validation of inputs
+                ...
+          - pattern-not: |
+              if not validate_email(email):
+              ...
+          - pattern-not: |
+              assert isinstance(user_id, int)
+              ...
+    message: |
+      Missing input validation: Processing user input without validation.
+      All user input should be validated for type, format, and business rules.
+      Implement proper input validation using schemas, type checking, or validation libraries.
+    severity: WARNING
+    languages: [python, javascript, typescript]
+
+  - id: mass-assignment-vulnerability
+    patterns:
+      - pattern-either:
+          # Mass assignment without allowlist
+          - pattern: |
+              user.update(request.POST.dict())
+          - pattern: |
+              user.__dict__.update(request_data)
+          - pattern: |
+              Object.assign(user, req.body);
+          # Direct object creation from user input
+          - pattern: |
+              User(**request.POST.dict())
+          - pattern: |
+              new User(req.body);
+    message: |
+      Potential mass assignment vulnerability: Updating objects directly from user input.
+      Mass assignment can allow attackers to modify sensitive fields they shouldn't access.
+      Use allowlists or explicit field mapping instead of direct object updates.
+    severity: ERROR
+    languages: [python, javascript, typescript]

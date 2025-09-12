@@ -69,7 +69,9 @@ All privileged API calls are now properly gated behind authentication. Component
   useEffect(() => {
     // Only check onboarding status if authenticated
     if (!authState.isAuthenticated) {
-      router.replace('/login?next=%2Fonboarding');
+      // Set post-login redirect using cookie capture pattern
+      await setRedirectCookie('/onboarding');
+      router.push('/login');
       return;
     }
 
@@ -91,6 +93,56 @@ All privileged API calls are now properly gated behind authentication. Component
     getBudget().then((b) => setBudget(b as any)).catch(() => setBudget(null));
   }, [authState.isAuthenticated]);
   ```
+
+## 🔒 **Cookie-Based Redirect Pattern (Canonical)**
+
+### ✅ **Canonical Pattern: Cookie Capture for Post-Login Redirects**
+```typescript
+// Set redirect cookie before navigation
+await setRedirectCookie('/dashboard');
+router.push('/login');
+
+// Implementation in frontend:
+const setRedirectCookie = async (path: string) => {
+  // Set gs_next cookie with safe redirect path
+  await fetch('/api/set-redirect', {
+    method: 'POST',
+    body: JSON.stringify({ path }),
+    credentials: 'include'
+  });
+};
+
+// Backend handles cookie setting:
+@app.post('/api/set-redirect')
+async def set_redirect_cookie(request: Request, path: str):
+    # Validate and sanitize path
+    safe_path = sanitize_redirect_path(path)
+    if safe_path:
+        set_gs_next_cookie(response, safe_path, request)
+    return {"status": "ok"}
+```
+
+### ❌ **Deprecated Pattern: URL-based Redirects**
+```typescript
+// DON'T USE - This pattern is now forbidden
+router.push(`/login?next=${encodeURIComponent('/dashboard')}`);
+// Or
+router.replace('/login?next=%2Fdashboard');
+```
+
+### **Why Cookie-Based Redirects Are Canonical**
+1. **Security**: No user-controlled URLs in navigation
+2. **Consistency**: Centralized cookie configuration and validation
+3. **CI Protection**: Migration guard prevents reintroduction of URL patterns
+4. **Maintainability**: Single implementation in `app/redirect_utils.py`
+5. **Performance**: Short-lived cookies (5-minute TTL) minimize attack window
+
+### **Migration Guard**
+The project now includes a CI check that fails if `/login?next=` patterns are reintroduced:
+```bash
+make migration-guard  # Runs tools/grep_guard.sh
+make docs-and-links   # Includes migration guard
+```
 
 ## 📊 **Authentication Gating Patterns**
 

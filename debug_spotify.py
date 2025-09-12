@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Spotify integration debugging script."""
 
+import importlib
 import logging
 import os
 
@@ -26,7 +27,7 @@ def test_spotify_imports():
 
     for module_path, description in modules_to_test:
         try:
-            exec(f"import {module_path}")
+            importlib.import_module(module_path)
             print(f"✓ {description}: {module_path} - OK")
         except ImportError as e:
             print(f"✗ {description}: {module_path} - FAILED: {e}")

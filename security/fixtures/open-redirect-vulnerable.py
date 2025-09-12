@@ -1,5 +1,9 @@
+# ⚠️  SECURITY TEST FIXTURE - INTENTIONALLY VULNERABLE CODE ⚠️
 # This file contains intentionally vulnerable code to test Semgrep open-redirect rules
 # DO NOT USE THIS CODE IN PRODUCTION - IT'S FOR TESTING ONLY
+#
+# This file is designed to trigger security scan warnings and should not be deployed.
+# It exists solely to validate that our security scanning tools work correctly.
 
 from flask import Flask, request, redirect, Response
 from fastapi import FastAPI, Request

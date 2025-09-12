@@ -588,6 +588,25 @@ async def spotify_debug_cookie(request: Request) -> dict:
         return {"cookies": list(request.cookies.keys())}
     raise HTTPException(status_code=404, detail="not_found")
 
+@router.post("/callback")
+async def spotify_callback_post(request: Request, code: str | None = None, state: str | None = None) -> Response:
+    """POST shim for Spotify callback that redirects to GET canonical endpoint."""
+    from starlette.responses import RedirectResponse
+    # Build the GET URL with the same query parameters
+    query_params = []
+    if code:
+        query_params.append(f"code={code}")
+    if state:
+        query_params.append(f"state={state}")
+    query_string = "&".join(query_params) if query_params else ""
+
+    get_url = f"/v1/spotify/callback"
+    if query_string:
+        get_url += f"?{query_string}"
+
+    return RedirectResponse(url=get_url, status_code=303)
+
+
 @router.get("/callback")
 async def spotify_callback(request: Request, code: str | None = None, state: str | None = None) -> Response:
     """Handle Spotify OAuth callback with stateless JWT state.

@@ -462,6 +462,16 @@ class OkResponse(CommonOkResponse):
     model_config = ConfigDict(title="OkResponse")
 
 
+@router.get(
+    "/music",
+    response_model=OkResponse,
+    responses={200: {"model": OkResponse}},
+)
+async def get_music():
+    """Simple music surface endpoint that returns ok status."""
+    return {"status": "ok"}
+
+
 @router.post(
     "/music",
     response_model=OkResponse,
@@ -682,6 +692,16 @@ async def list_devices(user_id: str = Depends(get_current_user_id)):
 
 class TransferBody(BaseModel):
     device_id: str | None = None
+
+
+@router.put("/music/device", response_model=CommonOkResponse, responses={200: {"model": CommonOkResponse}, 400: {"description": "Missing device_id"}})
+async def put_music_device(body: TransferBody):
+    """Simple PUT handler for music device endpoint that validates device_id presence."""
+    device_id = (body.device_id or "").strip()
+    if not device_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="missing device_id")
+    return {"status": "ok"}
 
 
 @router.post("/music/device", response_model=CommonOkResponse, responses={200: {"model": CommonOkResponse}})

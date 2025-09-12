@@ -4,7 +4,7 @@ Database configuration for GesahniV2
 import os
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine as sa_create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 
@@ -41,15 +41,9 @@ def create_sync_engine():
 def create_async_engine():
     """Create asynchronous SQLAlchemy engine with production settings"""
     db_url = get_database_url(async_mode=True)
-
-    return create_async_engine(
-        db_url,
-        pool_size=10,
-        max_overflow=20,
-        pool_pre_ping=True,  # Verify connections before use
-        pool_recycle=1800,   # Recycle connections every 30 minutes
-        echo=False,  # Set to True for SQL debugging
-    )
+    # Use SQLAlchemy's async engine constructor (imported as sa_create_async_engine).
+    # Keep arguments minimal to avoid incompatibilities across SQLAlchemy versions.
+    return sa_create_async_engine(db_url, future=True, echo=False)
 
 
 # Session factories

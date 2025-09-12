@@ -1,0 +1,40 @@
+
+
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✓ 'p(95)<500' p(95)=130.1ms
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 258     11.773004/s
+    checks_succeeded...: 100.00% 258 out of 258
+    checks_failed......: 0.00%   0 out of 258
+
+    ✓ health 200
+    ✓ me 200
+    ✓ ask status okish
+
+    HTTP
+    http_req_duration..............: avg=101.7ms min=7.96ms med=39.95ms max=3.03s p(90)=97.28ms p(95)=130.1ms
+      { expected_response:true }...: avg=101.7ms min=7.96ms med=39.95ms max=3.03s p(90)=97.28ms p(95)=130.1ms
+    http_req_failed................: 0.00%  0 out of 258
+    http_reqs......................: 258    11.773004/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.15s   min=1.04s  med=1.11s   max=1.41s p(90)=1.27s   p(95)=1.39s  
+    iterations.....................: 81     3.696176/s
+    vus............................: 5      min=5        max=5
+    vus_max........................: 5      min=5        max=5
+
+    NETWORK
+    data_received..................: 158 kB 7.2 kB/s
+    data_sent......................: 26 kB  1.2 kB/s
+
+
+
+time="2025-09-12T11:12:49-04:00" level=error msg="test run was aborted because k6 received a 'interrupt' signal"

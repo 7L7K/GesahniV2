@@ -122,7 +122,7 @@ class AuthDebugger:
             logger.error(f"Registration test failed: {e}")
             return {}
 
-    def run_full_test(self, username: str = "testuser", password: str = "testpass123"):
+    def run_full_test(self, username: str = "testuser", password: str = os.getenv("DEBUG_PASSWORD", "testpass123")):
         """Run a full authentication flow test."""
         logger.info("=" * 50)
         logger.info("Starting Authentication Debug Test")

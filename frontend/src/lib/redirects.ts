@@ -16,6 +16,7 @@ const AUTH_PATHS = new Set([
     '/v1/auth/logout',
     '/v1/auth/refresh',
     '/v1/auth/csrf',
+    '/v1/csrf',
     '/google',
     '/oauth',
     '/sign-in',
@@ -89,6 +90,21 @@ export function sanitizeNextPath(rawPath: string | null | undefined): string {
         // Step 4: Ensure path starts with /
         if (!path.startsWith('/')) {
             console.warn('Rejected non-relative path redirect:', path);
+            return DEFAULT_REDIRECT;
+        }
+
+        // Step 4.1: Reject obvious local filesystem paths or file downloads
+        const lower = path.toLowerCase();
+        if (/^\/(var|etc|usr|private|system|library|applications|volumes)\b/.test(lower)) {
+            console.warn('Rejected filesystem-like redirect path:', path);
+            return DEFAULT_REDIRECT;
+        }
+        if (/\.(png|jpe?g|gif|webp|svg|pdf|zip|dmg|mov|mp4|mp3|wav|heic|heif)(?:[?#].*)?$/i.test(path)) {
+            console.warn('Rejected file-like redirect path:', path);
+            return DEFAULT_REDIRECT;
+        }
+        if (/[\s:]/.test(path)) {
+            console.warn('Rejected suspicious redirect path with spaces/colon:', path);
             return DEFAULT_REDIRECT;
         }
 

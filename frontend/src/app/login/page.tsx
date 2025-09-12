@@ -153,7 +153,11 @@ function LoginPageInner() {
         });
 
         try {
-            const endpoint = mode === 'login' ? '/v1/auth/login' : '/v1/auth/register';
+            const isHeaderMode = process.env.NEXT_PUBLIC_HEADER_AUTH_MODE === '1';
+            // Backend login expects username as a query param; registration accepts JSON body
+            const endpoint = mode === 'login'
+                ? `/v1/auth/login?username=${encodeURIComponent(username)}`
+                : '/v1/auth/register';
             console.info('LOGIN api.request', {
                 endpoint,
                 method: 'POST',
@@ -164,7 +168,9 @@ function LoginPageInner() {
             const response = await apiFetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password }),
+                // Include a body to ensure CSRF header injection for POST
+                // Login ignores body and reads username from query
+                body: mode === 'login' ? JSON.stringify({}) : JSON.stringify({ username, password }),
                 auth: false,
             });
 
@@ -190,18 +196,20 @@ function LoginPageInner() {
                     timestamp: new Date().toISOString(),
                 });
 
-                if (!data || !data.access_token) {
-                    console.error('LOGIN api.error: Invalid response data', {
-                        data,
-                        dataType: typeof data,
-                        timestamp: new Date().toISOString(),
-                    });
-                    setError('Login failed: Invalid response from server');
-                    return;
+                if (isHeaderMode) {
+                    // In header mode, backend should return tokens in the body
+                    if (!data || !data.access_token) {
+                        console.error('LOGIN api.error: Missing tokens in header mode', {
+                            data,
+                            dataType: typeof data,
+                            timestamp: new Date().toISOString(),
+                        });
+                        setError('Login failed: Missing tokens (header mode)');
+                        return;
+                    }
+                    setTokens(data.access_token, data.refresh_token);
+                    bumpAuthEpoch();
                 }
-
-                setTokens(data.access_token, data.refresh_token);
-                bumpAuthEpoch();
 
                 console.info('LOGIN tokens.set', {
                     authEpochBumped: true,
