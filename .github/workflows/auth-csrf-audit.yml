@@ -1,0 +1,43 @@
+name: Auth/CSRF Protection Audit
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Run Auth/CSRF Audit
+      run: |
+        python auth_csrf_audit.py --fail-on-any --output audit_results.json
+        python scripts/ci_auth_csrf_check.py --max-issues 0
+
+    - name: Run Security Tests
+      run: pytest -q -k "admin_security or csrf or write_protection or auth_protection"
+
+    - name: Upload audit results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: auth-csrf-audit-results
+        path: |
+          audit_results.json
+          audit_ci_results.json

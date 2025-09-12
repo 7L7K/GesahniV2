@@ -1,0 +1,36 @@
+name: Route Coverage Check
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  route-coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run route coverage check
+      run: |
+        python -m pytest tests/smoke/test_route_coverage.py::test_route_coverage_completeness -v
+
+    - name: Run smoke tests
+      run: |
+        python -m pytest tests/smoke/ -m smoke -v --tb=short
+
+    - name: Generate coverage report
+      run: |
+        python -m pytest tests/smoke/test_route_coverage.py::test_route_coverage_report -v -s

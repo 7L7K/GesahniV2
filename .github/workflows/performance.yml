@@ -1,0 +1,136 @@
+name: Performance Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+# Skip on forks to avoid running on every PR
+jobs:
+  performance-test:
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install hey load testing tool
+      run: |
+        wget -O hey.tar.gz https://github.com/rakyll/hey/releases/download/v0.1.4/hey_0.1.4_linux_amd64.tar.gz
+        tar -xzf hey.tar.gz
+        sudo mv hey /usr/local/bin/
+        rm hey.tar.gz
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Set up environment
+      run: |
+        # Create minimal env file for testing
+        cat > .env << EOF
+        JWT_SECRET=test_jwt_secret_32_chars_minimum
+        DEV_MODE=1
+        ENV=test
+        CORS_ALLOW_ORIGINS=http://localhost:3000
+        VECTOR_STORE=qdrant
+        QDRANT_URL=http://localhost:6333
+        RATE_LIMIT_MODE=off
+        CSRF_ENABLED=0
+        COOKIE_SECURE=0
+        COOKIE_SAMESITE=lax
+        EOF
+
+    - name: Start Qdrant (Vector Store)
+      run: |
+        docker run -d --name qdrant \
+          -p 6333:6333 \
+          qdrant/qdrant:latest
+
+        # Wait for Qdrant to be ready
+        for i in {1..30}; do
+          if curl -s http://localhost:6333/readyz >/dev/null 2>&1; then
+            echo "Qdrant is ready"
+            break
+          fi
+          echo "Waiting for Qdrant..."
+          sleep 2
+        done
+
+    - name: Start backend server
+      run: |
+        python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+        SERVER_PID=$!
+
+        # Wait for server to be ready
+        for i in {1..30}; do
+          if curl -s http://127.0.0.1:8000/v1/healthz/live >/dev/null 2>&1; then
+            echo "Backend server is ready"
+            break
+          fi
+          echo "Waiting for backend server..."
+          sleep 2
+        done
+
+        # Store PID for cleanup
+        echo $SERVER_PID > server_pid.txt
+
+    - name: Run performance baseline tests
+      run: |
+        mkdir -p perf_results
+        ./scripts/perf_baseline.sh
+
+    - name: Analyze performance results
+      run: |
+        python scripts/perf_analyzer.py --results-dir perf_results --threshold 20.0
+
+    - name: Upload performance results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-results
+        path: perf_results/
+
+    - name: Performance regression check
+      run: |
+        if [ $? -ne 0 ]; then
+          echo "❌ Performance regression detected! Failing CI."
+          exit 1
+        else
+          echo "✅ No performance regressions detected."
+        fi
+
+    - name: Save new baselines (on main branch only)
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        python scripts/perf_analyzer.py --results-dir perf_results --save-baselines
+
+    - name: Upload baseline updates
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-baselines
+        path: perf_baselines/
+
+    - name: Clean up
+      if: always()
+      run: |
+        # Stop server
+        if [ -f server_pid.txt ]; then
+          kill $(cat server_pid.txt) 2>/dev/null || true
+        fi
+
+        # Stop Qdrant
+        docker stop qdrant 2>/dev/null || true
+
+        # Clean up files
+        rm -f server_pid.txt

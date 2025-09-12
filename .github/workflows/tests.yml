@@ -1,0 +1,109 @@
+name: Core Test Gates
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  smoke-tests:
+    name: "Smoke Tests"
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run smoke tests
+      run: |
+        python -m pytest tests/smoke -q
+
+  oauth-tests:
+    name: "OAuth Tests"
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run OAuth tests
+      run: |
+        python -m pytest tests/google -q
+        python -m pytest -k "spotify" -q
+
+  contract-tests:
+    name: "Contract Tests"
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run contract tests
+      run: |
+        python -m pytest tests/contract -k "openapi or route or coverage" -q
+
+  ask-router-tests:
+    name: "Ask Router Contract Tests"
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run ask router contract tests
+      run: |
+        python -m pytest tests/integration/test_ask_router_contract.py -q
+
+  refresh-sessions-tests:
+    name: "Refresh & Sessions Tests"
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run refresh and sessions tests
+      run: |
+        python -m pytest tests/integration/test_refresh_* tests/integration/test_sessions_bucket.py -q

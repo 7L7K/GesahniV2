@@ -1,0 +1,13 @@
+{
+  "endpoint": "/v1/auth/login",
+  "timestamp": "20250910_122642",
+  "metrics": {
+    "total_requests": 1000.0,
+    "avg_response_time": 84.0,
+    "min_response_time": 5.0,
+    "max_response_time": 360.0,
+    "p50_response_time": 60.0,
+    "p95_response_time": 120.0,
+    "p99_response_time": 180.0
+  }
+}

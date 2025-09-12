@@ -1,0 +1,99 @@
+name: Update Contracts
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to update (ci, dev_min, dev_spotify, prod_min, or all)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - ci
+          - dev_min
+          - dev_spotify
+          - prod_min
+      reason:
+        description: 'Reason for updating contracts'
+        required: true
+        type: string
+
+jobs:
+  update-contracts:
+    name: "Update Schema Contracts"
+    runs-on: ubuntu-latest
+    environment: contract-update
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.CONTRACT_UPDATE_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Generate breaking change reports
+        run: |
+          echo "Generating breaking change reports before update..."
+          python generate_contracts.py --compare
+
+      - name: Update contract snapshots
+        env:
+          UPDATE_SNAPSHOTS: "1"
+        run: |
+          echo "Updating contract snapshots for: ${{ inputs.environment }}"
+          if [ "${{ inputs.environment }}" = "all" ]; then
+            python generate_contracts.py
+          else
+            echo "Selective contract update not yet implemented - updating all"
+            python generate_contracts.py
+          fi
+
+      - name: Upload breaking change reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: breaking-change-reports-pre-update
+          path: artifacts/breaking_changes_*.*
+          if-no-files-found: warn
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.CONTRACT_UPDATE_TOKEN }}
+          commit-message: |
+            feat: update API contract snapshots
+
+            Updated contract snapshots for ${{ inputs.environment }} environment.
+
+            Reason: ${{ inputs.reason }}
+
+            Breaking changes detected and reviewed. See artifacts for details.
+          title: "feat: update API contract snapshots (${{ inputs.environment }})"
+          body: |
+            ## Contract Snapshot Update
+
+            **Environment:** ${{ inputs.environment }}
+            **Reason:** ${{ inputs.reason }}
+            **Initiated by:** @${{ github.actor }}
+
+            ### Changes
+            - Updated OpenAPI contract snapshots in `contracts/` directory
+            - Breaking change reports available in CI artifacts
+
+            ### Next Steps
+            1. Review the breaking changes in the CI artifacts
+            2. Update any client code that depends on the changed endpoints
+            3. Test the changes in staging environment
+            4. Merge this PR to update the canonical API contracts
+
+            ### Breaking Changes
+            Check the "breaking-change-reports-pre-update" artifact for detailed breaking change analysis.
+          branch: update-contracts-${{ inputs.environment }}-${{ github.run_id }}
+          delete-branch: true
+          labels: |
+            contract-update
+            ${{ inputs.environment }}
