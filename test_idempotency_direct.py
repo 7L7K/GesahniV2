@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Direct test script for idempotency functionality using requests."""
 
+
 import requests
-import json
+
 
 def test_idempotency():
     base_url = "http://127.0.0.1:8000"

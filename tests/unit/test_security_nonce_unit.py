@@ -1,5 +1,6 @@
 import pytest
 from starlette.requests import Request
+from fastapi import HTTPException
 
 
 @pytest.mark.asyncio
@@ -17,5 +18,5 @@ async def test_require_nonce_enforced(monkeypatch):
     )
     await sec.require_nonce(req)
     # reuse should fail
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException):
         await sec.require_nonce(req)

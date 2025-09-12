@@ -1,15 +1,34 @@
 # Security module package
 
-from .jwt_config import get_jwt_config, JWTConfig
-from .webhooks import verify_webhook, sign_webhook, rotate_webhook_secret
+from .jwt_config import JWTConfig, get_jwt_config
+from .webhooks import rotate_webhook_secret, sign_webhook, verify_webhook
 
 # Import jwt_decode from the main security module (app.security)
 try:
-    from .security import jwt_decode, decode_jwt, get_rate_limit_snapshot, _get_request_payload, verify_token, verify_token_strict, verify_ws, rate_limit, _payload_scopes, validate_websocket_origin, _apply_rate_limit, rate_limit_problem, http_burst, _http_requests, rate_limit_with, require_nonce, scope_rate_limit
+    from .security import (
+        _apply_rate_limit,
+        _get_request_payload,
+        _http_requests,
+        _payload_scopes,
+        decode_jwt,
+        get_rate_limit_snapshot,
+        http_burst,
+        jwt_decode,
+        rate_limit,
+        rate_limit_problem,
+        rate_limit_with,
+        require_nonce,
+        scope_rate_limit,
+        validate_websocket_origin,
+        verify_token,
+        verify_token_strict,
+        verify_ws,
+    )
 except ImportError:
     # Fallback for circular import situations: provide minimal implementations
-    import jwt as _pyjwt  # type: ignore
     from typing import Any as _Any
+
+    import jwt as _pyjwt  # type: ignore
 
     def jwt_decode(token: str, key: str | bytes | None = None, algorithms: list[str] | None = None, **kwargs: _Any) -> dict:
         algs = algorithms or ["HS256"]

@@ -3,11 +3,12 @@
 Test the OAuth fix to verify id_token is properly preserved.
 """
 
+import asyncio
 import os
 import sys
+from unittest.mock import patch
+
 import jwt
-import asyncio
-from unittest.mock import Mock, patch
 
 # Add the app directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
@@ -141,7 +142,7 @@ if __name__ == "__main__":
     test1_passed = test_exchange_code_preserves_id_token()
     test2_passed = test_callback_id_token_extraction()
 
-    print(f"\n📊 Test Results:")
+    print("\n📊 Test Results:")
     print(f"• exchange_code preserves id_token: {'✅' if test1_passed else '❌'}")
     print(f"• callback extracts provider_iss: {'✅' if test2_passed else '❌'}")
 

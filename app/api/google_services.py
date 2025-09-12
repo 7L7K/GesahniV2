@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import time
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from ..deps.user import get_current_user_id
 from ..auth_store_tokens import get_token
-from ..service_state import set_status, parse
-from ..integrations.google.oauth import gmail_unread_count, calendar_next_event
+from ..deps.user import get_current_user_id
+from ..integrations.google.oauth import calendar_next_event, gmail_unread_count
+from ..service_state import parse
 
 router = APIRouter(tags=["GoogleServices"])
 

@@ -4,7 +4,7 @@ import re
 
 from ..telemetry import log_record_var
 from .base import Skill
-from .math_eval import evaluate_expr, EvalError
+from .math_eval import EvalError, evaluate_expr
 
 
 class MathSkill(Skill):
@@ -23,7 +23,7 @@ class MathSkill(Skill):
         expr = prompt.strip()
         try:
             val, expl = evaluate_expr(expr)
-        except EvalError as e:
+        except EvalError:
             # Fall back to existing simple patterns for backwards compatibility
             d = match.groupdict()
             if "op" in d and d["op"]:

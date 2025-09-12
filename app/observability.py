@@ -4,13 +4,11 @@ Provides golden queries for latency and error rate monitoring.
 """
 
 import logging
-from typing import Dict, Any, List
-from app.metrics import ASK_LATENCY_MS, ASK_ERRORS_TOTAL, PROMPT_ROUTER_CALLS_TOTAL
 
 logger = logging.getLogger(__name__)
 
 
-def get_ask_latency_p95_by_backend() -> Dict[str, float]:
+def get_ask_latency_p95_by_backend() -> dict[str, float]:
     """Get p95 latency by backend for /v1/ask requests.
 
     Returns:
@@ -29,7 +27,7 @@ def get_ask_latency_p95_by_backend() -> Dict[str, float]:
         return {}
 
 
-def get_ask_error_rate_by_backend() -> Dict[str, Dict[str, float]]:
+def get_ask_error_rate_by_backend() -> dict[str, dict[str, float]]:
     """Get error rate by backend and error type for /v1/ask requests.
 
     Returns:
@@ -75,7 +73,7 @@ def log_ask_observability_summary():
         logger.error(f"Failed to generate observability summary: {e}")
 
 
-def _generate_alerts(latency_p95: Dict[str, float], error_rates: Dict[str, Dict[str, float]]) -> List[str]:
+def _generate_alerts(latency_p95: dict[str, float], error_rates: dict[str, dict[str, float]]) -> list[str]:
     """Generate alerts based on latency and error rate thresholds."""
     alerts = []
 

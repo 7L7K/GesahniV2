@@ -1,4 +1,6 @@
-import pytest, asyncio
+import asyncio
+
+import pytest
 
 
 @pytest.mark.asyncio

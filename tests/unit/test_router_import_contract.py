@@ -5,10 +5,8 @@ in heavy dependencies, and that the basic contract (protocol, registry, entrypoi
 works as expected.
 """
 
-import asyncio
-import pytest
-from typing import Any
 from unittest.mock import AsyncMock
+
 import pytest
 
 
@@ -35,7 +33,7 @@ def test_router_contracts_import():
 
 def test_router_registry_import():
     """Test that router registry functions can be imported and work."""
-    from app.router.registry import set_router, get_router
+    from app.router.registry import get_router, set_router
 
     # Functions should be importable
     assert callable(set_router)
@@ -48,8 +46,8 @@ def test_router_registry_import():
 
 def test_router_registry_functionality():
     """Test that registry set/get works correctly."""
-    from app.router.registry import set_router, get_router
     from app.router.contracts import Router
+    from app.router.registry import get_router, set_router
 
     # Create a mock router
     mock_router = AsyncMock(spec=Router)
@@ -74,8 +72,6 @@ def test_router_entrypoint_import():
 async def test_router_entrypoint_without_router():
     """Test that entrypoint raises RuntimeError when no router configured."""
     # Clear any cached router state from previous tests
-    import sys
-    from app.router.registry import _router
 
     # Reset the global router state
     import app.router.registry
@@ -148,7 +144,7 @@ def test_no_circular_imports():
     assert Router is not None
 
     # Import registry
-    from app.router.registry import set_router, get_router
+    from app.router.registry import get_router, set_router
 
     assert set_router is not None
     assert get_router is not None

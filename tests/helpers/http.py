@@ -1,13 +1,15 @@
 """Test helpers for HTTP requests with CSRF handling using unified constants."""
 
-from typing import Dict, Any, Optional, Union
+from typing import Any
+
 from fastapi.testclient import TestClient
 
-from app.auth.constants import ACCESS_COOKIE, REFRESH_COOKIE, CSRF_COOKIE
+from app.auth.constants import ACCESS_COOKIE, CSRF_COOKIE, REFRESH_COOKIE
+
 from .auth import mint_access_token
 
 
-def get_csrf_token(client: TestClient) -> tuple[Dict[str, str], str]:
+def get_csrf_token(client: TestClient) -> tuple[dict[str, str], str]:
     """Fetch CSRF token and cookies from the server.
 
     Returns:
@@ -48,9 +50,9 @@ def auth_request(
     client: TestClient,
     method: str,
     url: str,
-    json: Optional[Dict[str, Any]] = None,
-    data: Optional[Dict[str, Any]] = None,
-    headers: Optional[Dict[str, str]] = None,
+    json: dict[str, Any] | None = None,
+    data: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
     allow_redirects: bool = True,
     **kwargs
 ) -> Any:
@@ -86,7 +88,7 @@ def auth_request(
 def auth_get(
     client: TestClient,
     url: str,
-    headers: Optional[Dict[str, str]] = None,
+    headers: dict[str, str] | None = None,
     allow_redirects: bool = True,
     **kwargs
 ) -> Any:
@@ -97,9 +99,9 @@ def auth_get(
 def auth_post(
     client: TestClient,
     url: str,
-    json: Optional[Dict[str, Any]] = None,
-    data: Optional[Dict[str, Any]] = None,
-    headers: Optional[Dict[str, str]] = None,
+    json: dict[str, Any] | None = None,
+    data: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
     allow_redirects: bool = True,
     **kwargs
 ) -> Any:
@@ -110,9 +112,9 @@ def auth_post(
 def auth_put(
     client: TestClient,
     url: str,
-    json: Optional[Dict[str, Any]] = None,
-    data: Optional[Dict[str, Any]] = None,
-    headers: Optional[Dict[str, str]] = None,
+    json: dict[str, Any] | None = None,
+    data: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
     allow_redirects: bool = True,
     **kwargs
 ) -> Any:
@@ -123,9 +125,9 @@ def auth_put(
 def auth_patch(
     client: TestClient,
     url: str,
-    json: Optional[Dict[str, Any]] = None,
-    data: Optional[Dict[str, Any]] = None,
-    headers: Optional[Dict[str, str]] = None,
+    json: dict[str, Any] | None = None,
+    data: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
     allow_redirects: bool = True,
     **kwargs
 ) -> Any:
@@ -136,7 +138,7 @@ def auth_patch(
 def auth_delete(
     client: TestClient,
     url: str,
-    headers: Optional[Dict[str, str]] = None,
+    headers: dict[str, str] | None = None,
     allow_redirects: bool = True,
     **kwargs
 ) -> Any:

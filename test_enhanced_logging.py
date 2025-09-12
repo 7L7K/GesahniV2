@@ -6,11 +6,10 @@ This script shows what the new logging looks like for both
 successful and failed Google OAuth token exchanges.
 """
 
+import logging
 import os
 import sys
-import json
-import logging
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # Add the app directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))

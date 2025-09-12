@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
+
 from fastapi import APIRouter, Depends
 
-from ..deps.user import get_current_user_id
 from ..auth_store_tokens import mark_invalid
+from ..deps.user import get_current_user_id
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

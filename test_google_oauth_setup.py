@@ -5,9 +5,10 @@ Run this after updating your .env file with real Google OAuth credentials.
 """
 
 import os
+from urllib.parse import parse_qs, urlparse
+
 import requests
-import json
-from urllib.parse import urlparse, parse_qs
+
 
 def test_google_oauth_config():
     """Test Google OAuth configuration and login URL generation."""

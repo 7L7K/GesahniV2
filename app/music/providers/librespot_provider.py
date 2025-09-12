@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,7 @@ class LibrespotProvider:
     advanced flows and is intended to be replaced by a real librespot bridge.
     """
 
-    async def play(self, device_id: str, context: Dict[str, Any]) -> None:
+    async def play(self, device_id: str, context: dict[str, Any]) -> None:
         raise NotImplementedError("LibrespotProvider.play not implemented")
 
     async def pause(self, device_id: str) -> None:
@@ -25,7 +25,7 @@ class LibrespotProvider:
     async def previous(self, device_id: str) -> None:
         raise NotImplementedError("LibrespotProvider.previous not implemented")
 
-    async def get_devices(self) -> List[Dict[str, Any]]:
+    async def get_devices(self) -> list[dict[str, Any]]:
         return []
 
 

@@ -100,7 +100,7 @@ class TestDeprecations:
         import os
         assert os.path.exists("DEPRECATIONS.md"), "DEPRECATIONS.md file should exist"
 
-        with open("DEPRECATIONS.md", "r") as f:
+        with open("DEPRECATIONS.md") as f:
             content = f.read()
 
         # Should contain key sections

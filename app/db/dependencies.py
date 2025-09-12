@@ -1,13 +1,18 @@
 """
 FastAPI database dependencies
 """
-from typing import Generator, AsyncGenerator
-from sqlalchemy.orm import Session
+from collections.abc import AsyncGenerator, Generator
+from contextlib import suppress
+
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
-from .config import create_sync_engine, get_session_factory
-from .config import create_async_engine, get_async_session_factory
-
+from .config import (
+    create_async_engine,
+    create_sync_engine,
+    get_async_session_factory,
+    get_session_factory,
+)
 
 # Global engine instances (create once)
 sync_engine = create_sync_engine()
@@ -36,6 +41,31 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
         finally:
             await session.close()
+
+
+# --- begin addition: async engine disposer registry ---
+_async_engines: list = []
+
+# Best-effort registrations for known engine variables
+try:  # noqa: F821
+    _async_engines.append(async_engine)  # type: ignore[name-defined]
+except Exception:
+    pass
+
+# Some codebases use a generic name `engine` for async engine; try to register
+try:  # noqa: F821
+    if 'engine' in globals():
+        _async_engines.append(globals()['engine'])
+except Exception:
+    pass
+
+
+async def dispose_engines() -> None:
+    """Dispose all known SQLAlchemy async engines (best-effort)."""
+    for e in list(_async_engines):
+        with suppress(Exception):
+            await e.dispose()
+# --- end addition ---
 
 
 # Example usage in FastAPI routes:

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, TypedDict
+from datetime import UTC, datetime
+from typing import Any, TypedDict
+
 from fastapi import HTTPException
 
 from .logging_config import req_id_var
@@ -10,7 +11,7 @@ from .logging_config import req_id_var
 try:  # best-effort import
     from .otel_utils import get_trace_id_hex
 except Exception:  # pragma: no cover
-    def get_trace_id_hex() -> Optional[str]:  # type: ignore
+    def get_trace_id_hex() -> str | None:  # type: ignore
         return None
 
 
@@ -18,8 +19,8 @@ class ErrorEnvelope(TypedDict, total=False):
     code: str
     message: str
     detail: str  # For test compatibility
-    hint: Optional[str]
-    details: Dict[str, Any]
+    hint: str | None
+    details: dict[str, Any]
 
 
 def _ulid() -> str:
@@ -48,7 +49,7 @@ def _ulid() -> str:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace(
+    return datetime.now(UTC).isoformat(timespec="seconds").replace(
         "+00:00", "Z"
     )
 
@@ -57,8 +58,8 @@ def build_error(
     *,
     code: str,
     message: str,
-    hint: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
+    hint: str | None = None,
+    details: dict[str, Any] | None = None,
 ) -> ErrorEnvelope:
     """Standard error envelope used across the API.
 
@@ -101,8 +102,8 @@ def build_error(
 def shape_from_status(
     status_code: int,
     *,
-    default_message: Optional[str] = None,
-) -> tuple[str, str, Optional[str]]:
+    default_message: str | None = None,
+) -> tuple[str, str, str | None]:
     """Map HTTP status codes to canonical error code/message/hint."""
     code = "error"
     msg = default_message or "error"
@@ -137,15 +138,14 @@ def raise_enveloped(
     code: str,
     message: str,
     *,
-    hint: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
+    hint: str | None = None,
+    details: dict[str, Any] | None = None,
     status: int = 400,
 ):
     """Raise a FastAPI HTTPException carrying a standard envelope.
 
     Raw HTTPException should be avoided; prefer this helper.
     """
-    from fastapi import HTTPException
 
     env = build_error(code=code, message=message, hint=hint, details=details)
     headers = {"X-Error-Code": code}
@@ -156,7 +156,6 @@ def enveloped_route(fn):
     """Decorator to auto-wrap unhandled exceptions with a standard envelope."""
 
     import functools
-    from fastapi import HTTPException
 
     @functools.wraps(fn)
     async def _inner(*args, **kwargs):

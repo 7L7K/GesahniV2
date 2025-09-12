@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Deterministic model router with self-check escalation and cache keys.
 
 This module centralizes routing decisions for text, RAG, ops, and vision.

@@ -9,9 +9,11 @@ how the stateless implementation works even without cookies.
 import asyncio
 import time
 import uuid
+
 import jwt
-from app.api.oauth_store import put_tx, pop_tx, dump_store
+
 from app.api.auth import _jwt_secret
+from app.api.oauth_store import dump_store, pop_tx, put_tx
 
 
 async def test_stateless_oauth_flow():
@@ -99,7 +101,7 @@ async def test_stateless_oauth_flow():
     print("-" * 40)
     print("Would persist tokens to database...")
     print(f"User ID: {callback_user_id}")
-    print(f"Provider: spotify")
+    print("Provider: spotify")
     print()
 
     # Step 6: Show final state

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Test script to verify deprecation signaling on compat endpoints."""
 
-import asyncio
 import logging
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 from app.router.compat_api import DeprecationRedirectResponse
 
 logging.basicConfig(level=logging.INFO)

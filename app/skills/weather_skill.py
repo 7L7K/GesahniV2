@@ -1,7 +1,6 @@
 from __future__ import annotations
+
 # app/skills/weather_skill.py
-
-
 import logging
 import os
 import re
@@ -58,6 +57,6 @@ class WeatherSkill(Skill):
         main = data.get("main", {}) or {}
         temp = main.get("temp")
         desc = data.get("weather", [{}])[0].get("description", "")
-        if isinstance(temp, (int, float)):
+        if isinstance(temp, int | float):
             return f"{city.title()} is currently {desc}, around {temp:.0f}°F."
         return f"No weather data for {city}."

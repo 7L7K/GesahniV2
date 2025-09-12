@@ -2,22 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any
 
 import httpx
-from time import perf_counter
 
-from ...metrics import SPOTIFY_REQUESTS, SPOTIFY_429, SPOTIFY_REFRESH, SPOTIFY_LATENCY
-
-from ...auth_store_tokens import get_token, upsert_token, mark_invalid
-from ...budget import get_budget_state
+from ...auth_store_tokens import get_token, mark_invalid, upsert_token
 from ...http_utils import json_request
+from ...metrics import SPOTIFY_429, SPOTIFY_LATENCY, SPOTIFY_REFRESH, SPOTIFY_REQUESTS
 from ...models.third_party_tokens import ThirdPartyToken
-from .oauth import SpotifyOAuth, SpotifyOAuthError
 from .budget import get_spotify_budget_manager
+from .oauth import SpotifyOAuth, SpotifyOAuthError
 
 logger = logging.getLogger(__name__)
 

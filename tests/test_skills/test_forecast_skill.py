@@ -23,7 +23,7 @@ class FakeClient:
 
     async def get(self, url, params=None):
         class R:
-            def json(self_non):
+            def json(self):
                 return {
                     "list": [
                         {"dt_txt": "2025-01-01 00:00:00", "main": {"temp": 50}},
@@ -35,7 +35,7 @@ class FakeClient:
                     ]
                 }
 
-            def raise_for_status(self_non):
+            def raise_for_status(self):
                 pass
 
         return R()
@@ -74,10 +74,10 @@ def test_forecast_handles_no_data(monkeypatch):
 
         async def get(self, url, params=None):
             class R:
-                def json(self_non):
+                def json(self):
                     return {"list": []}
 
-                def raise_for_status(self_non):
+                def raise_for_status(self):
                     pass
 
             return R()

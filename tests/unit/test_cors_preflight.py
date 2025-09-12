@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
+
 from app.main import create_app
+
 
 def test_cors_preflight_allows_options():
     app = create_app()

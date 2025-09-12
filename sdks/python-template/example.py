@@ -5,7 +5,8 @@ Demonstrates automatic redirect handling for deprecated endpoints
 """
 
 import asyncio
-from gesahni_client import GesahniClient, AsyncGesahniClient
+
+from gesahni_client import AsyncGesahniClient, GesahniClient
 
 
 def basic_example():

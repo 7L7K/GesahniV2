@@ -1,5 +1,4 @@
 import time
-import tempfile
 
 import pytest
 

@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from typing import Dict, Literal, Optional
+from datetime import UTC, datetime
+from typing import Literal
 
 ServiceName = Literal["gmail", "calendar"]
 ServiceStatus = Literal["enabled", "disabled", "error"]
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def parse(service_state: Optional[str]) -> Dict[str, dict]:
+def parse(service_state: str | None) -> dict[str, dict]:
     if not service_state:
         return {}
     try:
@@ -22,11 +22,11 @@ def parse(service_state: Optional[str]) -> Dict[str, dict]:
         return {}
 
 
-def serialize(state: Dict[str, dict]) -> str:
+def serialize(state: dict[str, dict]) -> str:
     return json.dumps(state, separators=(",", ":"))
 
 
-def _ensure_entry(st: Dict[str, dict], service: ServiceName) -> dict:
+def _ensure_entry(st: dict[str, dict], service: ServiceName) -> dict:
     entry = st.get(service) or {}
     entry.setdefault("status", "disabled")
     entry.setdefault("last_changed_at", _now_iso())
@@ -35,7 +35,7 @@ def _ensure_entry(st: Dict[str, dict], service: ServiceName) -> dict:
     return entry
 
 
-def set_service_enabled(service_state: Optional[str], service: ServiceName, enabled: bool) -> str:
+def set_service_enabled(service_state: str | None, service: ServiceName, enabled: bool) -> str:
     st = parse(service_state)
     entry = _ensure_entry(st, service)
     entry["status"] = "enabled" if enabled else "disabled"
@@ -46,7 +46,7 @@ def set_service_enabled(service_state: Optional[str], service: ServiceName, enab
     return serialize(st)
 
 
-def set_service_error(service_state: Optional[str], service: ServiceName, code: str) -> str:
+def set_service_error(service_state: str | None, service: ServiceName, code: str) -> str:
     st = parse(service_state)
     entry = _ensure_entry(st, service)
     entry["status"] = "error"
@@ -57,7 +57,7 @@ def set_service_error(service_state: Optional[str], service: ServiceName, code: 
 
 
 # Backwards-compatible alias used elsewhere in the codebase
-def set_status(service_state: Optional[str], service: ServiceName, status: ServiceStatus, *, last_error_code: Optional[str] = None) -> str:
+def set_status(service_state: str | None, service: ServiceName, status: ServiceStatus, *, last_error_code: str | None = None) -> str:
     if status == "enabled":
         return set_service_enabled(service_state, service, True)
     if status == "disabled":
@@ -67,7 +67,7 @@ def set_status(service_state: Optional[str], service: ServiceName, status: Servi
     return serialize(parse(service_state))
 
 
-def get_status(service_state: Optional[str], service: ServiceName) -> Optional[ServiceStatus]:
+def get_status(service_state: str | None, service: ServiceName) -> ServiceStatus | None:
     st = parse(service_state)
     entry = st.get(service)
     return entry.get("status") if isinstance(entry, dict) else None

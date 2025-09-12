@@ -2,18 +2,16 @@
 """
 Analyze all mutating endpoints for auth and CSRF protection
 """
-import ast
 import os
 import re
-from pathlib import Path
-from typing import Dict, List, Set, Tuple
 
-def find_router_decorators(file_path: str) -> List[Dict]:
+
+def find_router_decorators(file_path: str) -> list[dict]:
     """Find all router decorators and their associated endpoint info"""
     endpoints = []
 
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path) as f:
             content = f.read()
     except Exception as e:
         print(f"Error reading {file_path}: {e}")
@@ -150,7 +148,7 @@ def analyze_endpoints():
 
     return all_endpoints
 
-def filter_by_paths(endpoints: List[Dict], target_paths: List[str]) -> List[Dict]:
+def filter_by_paths(endpoints: list[dict], target_paths: list[str]) -> list[dict]:
     """Filter endpoints to only those under the specified paths"""
     filtered = []
 

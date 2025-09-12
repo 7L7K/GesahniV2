@@ -22,7 +22,7 @@ class DoorLockSkill(Skill):
                 return "Which door did you mean? I found multiple matches."
             entity = res.get("entity_id")
             # validate lock action
-            from .tools.validator import validate_lock_action, validate_entity_resolution
+            from .tools.validator import validate_entity_resolution, validate_lock_action
 
             ok, expl, confirm = validate_entity_resolution({"entity_id": entity, "friendly_name": res.get("friendly_name"), "confidence": res.get("confidence")})
             if not ok:

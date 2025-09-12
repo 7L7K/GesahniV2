@@ -11,10 +11,8 @@ import hashlib
 import hmac
 import logging
 import secrets
-import time
-from typing import Optional
 import threading
-from collections import deque
+import time
 
 from .config import JWT_STATE_SECRET
 
@@ -223,11 +221,11 @@ def generate_pkce_challenge(verifier: str) -> str:
     # Base64url encode the hash
     challenge = base64.urlsafe_b64encode(digest).decode('ascii').rstrip('=')
 
-    logger.debug(f"🔏 Generated PKCE challenge from verifier")
+    logger.debug("🔏 Generated PKCE challenge from verifier")
     return challenge
 
 
-def create_state_with_pkce(user_id: Optional[str] = None) -> tuple[str, str, str]:
+def create_state_with_pkce(user_id: str | None = None) -> tuple[str, str, str]:
     """
     Create a signed state along with PKCE parameters.
 

@@ -1,4 +1,3 @@
-import math
 import asyncio
 
 from app.skills import math_skill as ms

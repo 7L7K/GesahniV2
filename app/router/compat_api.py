@@ -6,10 +6,10 @@ not present. Keep imports lazy to avoid heavy dependencies at import time.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import JSONResponse, Response
 import inspect
-from fastapi.responses import RedirectResponse
+
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse, Response
 
 router = APIRouter(tags=["Compat"])
 
@@ -41,7 +41,7 @@ async def whoami_compat(request: Request):
     else:
         res = maybe
     # If downstream returned a Response, attach header; if dict, wrap into JSON
-    if isinstance(res, (Response, JSONResponse)):
+    if isinstance(res, Response | JSONResponse):
         return _attach_deprecation(res)
     return _attach_deprecation(None, payload=res)
 
@@ -63,7 +63,7 @@ async def spotify_status_compat():
 
         maybe = spotify_api.spotify_status()
         res = await maybe if inspect.isawaitable(maybe) else maybe
-        if isinstance(res, (Response, JSONResponse)):
+        if isinstance(res, Response | JSONResponse):
             return _attach_deprecation(res)
         return _attach_deprecation(None, payload=res)
     except Exception:
@@ -108,13 +108,13 @@ async def ask_compat(request: Request):
         )
 
     # Return JSON result; attach Deprecation header for compat
-    if isinstance(result, (Response, JSONResponse)):
+    if isinstance(result, Response | JSONResponse):
         try:
             result.headers.setdefault("Deprecation", "true")
         except Exception:
             pass
         return result
-    return JSONResponse(result if isinstance(result, (dict, list)) else {"result": result}, headers={"Deprecation": "true"})
+    return JSONResponse(result if isinstance(result, dict | list) else {"result": result}, headers={"Deprecation": "true"})
 
 
 @router.get("/google/status", deprecated=True)
@@ -134,7 +134,7 @@ async def google_status_compat():
 
         maybe = google_api.google_status()
         res = await maybe if inspect.isawaitable(maybe) else maybe
-        if isinstance(res, (Response, JSONResponse)):
+        if isinstance(res, Response | JSONResponse):
             return _attach_deprecation(res)
         return _attach_deprecation(None, payload=res)
     except Exception:

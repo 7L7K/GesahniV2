@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Authentication and rate limiting helpers.
 
 This module is intentionally lightweight so that tests can monkey‑patch the
@@ -10,7 +11,6 @@ with it directly.
 
 import asyncio
 import datetime as _dt
-import hashlib
 import hmac
 import logging
 import os
@@ -21,8 +21,9 @@ from fastapi import Header
 logger = logging.getLogger(__name__)
 
 import jwt
-from jwt import PyJWTError, ExpiredSignatureError, InvalidTokenError
-from fastapi import Depends, HTTPException, Request, WebSocket, WebSocketException, Response
+from fastapi import Depends, HTTPException, Request, Response, WebSocket, WebSocketException
+from jwt import ExpiredSignatureError, PyJWTError
+
 from app.security.jwt_config import get_jwt_config
 
 try:
@@ -474,10 +475,10 @@ async def _redis_incr_with_ttl(
     )
     try:
         res = await redis_client.eval(script, 1, key, int(period_seconds * 1000))
-        count = int(res[0]) if isinstance(res, (list, tuple)) else int(res)
+        count = int(res[0]) if isinstance(res, list | tuple) else int(res)
         pttl = (
             int(res[1])
-            if isinstance(res, (list, tuple)) and len(res) > 1
+            if isinstance(res, list | tuple) and len(res) > 1
             else await redis_client.pttl(key)
         )
         ttl_s = max(0, int((pttl + 999) // 1000))
@@ -517,8 +518,8 @@ async def _daily_incr(r, key: str) -> tuple[int, int]:
     )
     try:
         res = await r.eval(script, 1, k, ttl)
-        count = int(res[0]) if isinstance(res, (list, tuple)) else int(res)
-        t = int(res[1]) if isinstance(res, (list, tuple)) and len(res) > 1 else ttl
+        count = int(res[0]) if isinstance(res, list | tuple) else int(res)
+        t = int(res[1]) if isinstance(res, list | tuple) and len(res) > 1 else ttl
         return count, max(0, int(t))
     except Exception:
         # degrade to local
@@ -531,7 +532,7 @@ def _payload_scopes(payload: dict | None) -> set[str]:
     scopes = payload.get("scope") or payload.get("scopes") or []
     if isinstance(scopes, str):
         return {s.strip() for s in scopes.split() if s.strip()}
-    if isinstance(scopes, (list, tuple)):
+    if isinstance(scopes, list | tuple):
         return {str(s).strip() for s in scopes if str(s).strip()}
     return set()
 
@@ -1093,7 +1094,7 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
     # 4) For session cookies, resolve identity from session store (Phase 1)
     if token_source == "__session_cookie":
         try:
-            from .session_store import get_session_store, SessionStoreUnavailable
+            from .session_store import SessionStoreUnavailable, get_session_store
 
             store = get_session_store()
             identity = store.get_session_identity(token)
@@ -1101,8 +1102,8 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
             # Outage: allow requests with Authorization header, but session-only protected routes may choose to 503
             identity = None
             try:
-                setattr(request.state, "session_store_unavailable", True)
-                setattr(request.state, "session_cookie_present", True)
+                request.state.session_store_unavailable = True
+                request.state.session_cookie_present = True
             except Exception:
                 pass
 
@@ -1111,11 +1112,11 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
             # Lazy refresh: if RT exists and AT missing/expiring soon, mint a new AT
             try:
                 if response is not None:
-                    from .web.cookies import NAMES
-                    from .tokens import make_access
-                    from .cookie_config import get_token_ttls
-                    from .web.cookies import set_auth_cookies
                     import time as _t
+
+                    from .cookie_config import get_token_ttls
+                    from .tokens import make_access
+                    from .web.cookies import set_auth_cookies
 
                     now = int(_t.time())
                     from .cookies import read_access_cookie, read_refresh_cookie
@@ -1725,7 +1726,6 @@ def _load_webhook_secrets() -> list[str]:
 
 
 from app.security.webhooks import sign_webhook
-
 
 _webhook_seen: dict[str, float] = {}
 

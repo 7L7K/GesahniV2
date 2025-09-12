@@ -3,18 +3,17 @@
 Refined script to analyze routes with better understanding of FastAPI router prefixes and test intent.
 """
 
-import os
-import re
 import glob
+import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Set, List, Tuple
+
 
 class RouteAnalyzerRefined:
     def __init__(self, base_path: str):
         self.base_path = Path(base_path)
-        self.code_routes: Dict[str, Set[str]] = defaultdict(set)  # path -> {methods}
-        self.test_routes: Dict[str, Set[str]] = defaultdict(set)  # path -> {methods}
+        self.code_routes: dict[str, set[str]] = defaultdict(set)  # path -> {methods}
+        self.test_routes: dict[str, set[str]] = defaultdict(set)  # path -> {methods}
 
         # Routes that are intentionally tested but don't exist (error testing)
         self.intentional_missing_routes = {
@@ -88,7 +87,7 @@ class RouteAnalyzerRefined:
         # Find all Python files in app directory
         for py_file in glob.glob(str(self.base_path / "app/**/*.py"), recursive=True):
             try:
-                with open(py_file, 'r', encoding='utf-8') as f:
+                with open(py_file, encoding='utf-8') as f:
                     content = f.read()
 
                 # Find which router spec this file corresponds to
@@ -118,11 +117,11 @@ class RouteAnalyzerRefined:
             except Exception as e:
                 print(f"Error reading {py_file}: {e}")
 
-    def _parse_router_config(self) -> List[Dict]:
+    def _parse_router_config(self) -> list[dict]:
         """Parse the router configuration to understand prefixes."""
         specs = []
         try:
-            with open(self.base_path / "app/routers/config.py", 'r') as f:
+            with open(self.base_path / "app/routers/config.py") as f:
                 content = f.read()
 
             # Extract RouterSpec definitions
@@ -151,7 +150,7 @@ class RouteAnalyzerRefined:
 
         for py_file in test_files:
             try:
-                with open(py_file, 'r', encoding='utf-8') as f:
+                with open(py_file, encoding='utf-8') as f:
                     content = f.read()
 
                 # Extract client calls
@@ -194,7 +193,7 @@ class RouteAnalyzerRefined:
         path = path.split('?')[0].split('#')[0]
         return path
 
-    def analyze(self) -> Dict[str, any]:
+    def analyze(self) -> dict[str, any]:
         """Analyze routes and return findings."""
         # Normalize paths
         normalized_code_routes = {}

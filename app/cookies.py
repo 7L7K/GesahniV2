@@ -32,12 +32,13 @@ Usage:
     clear_auth_cookies(resp=response, request=request)
 """
 
-from fastapi import Request, Response
 import logging
 import os
 
-from . import cookie_config as cookie_cfg
+from fastapi import Request, Response
+
 from .cookie_config import format_cookie_header, get_cookie_config
+
 # Cookie name constants moved to web.cookies.NAMES
 
 log = logging.getLogger(__name__)
@@ -131,7 +132,6 @@ def clear_auth_cookies(resp: Response, request: Request) -> None:
     behavior in dev/tests (Secure=False; SameSite=Lax; Path=/; no Domain).
     """
     from .web.cookies import NAMES
-    from .cookie_config import format_cookie_header
     cfg = get_cookie_config(request)
     same_site = str(cfg.get("samesite", "lax")).capitalize()
     domain = cfg.get("domain")

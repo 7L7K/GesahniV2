@@ -1,15 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 import time
-import secrets
-import logging
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
-
-from ...models.third_party_tokens import ThirdPartyToken
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +20,6 @@ class GoogleTokenResponse:
 
 
 from .errors import OAuthError
-from .constants import ERR_OAUTH_EXCHANGE_FAILED, ERR_OAUTH_INVALID_GRANT, METRIC_TOKEN_EXCHANGE_FAILED, METRIC_TOKEN_EXCHANGE_OK
 from .http_exchange import async_token_exchange
 
 
@@ -68,13 +64,13 @@ class GoogleOAuth:
     async def exchange_code_for_tokens(self, code: str, code_verifier: str | None = None) -> dict[str, Any]:
         # Enforce PKCE presence and length
         if not code_verifier or not (43 <= len(code_verifier) <= 128):
-            from .errors import OAuthError as _OAuthError
             from .constants import ERR_OAUTH_EXCHANGE_FAILED
+            from .errors import OAuthError as _OAuthError
 
             raise _OAuthError(code=ERR_OAUTH_EXCHANGE_FAILED, http_status=400, reason="missing_or_invalid_pkce", extra=None)
 
         # Call unified async token exchange helper and emit metrics
-        from ...metrics import GOOGLE_TOKEN_EXCHANGE_OK, GOOGLE_TOKEN_EXCHANGE_FAILED
+        from ...metrics import GOOGLE_TOKEN_EXCHANGE_FAILED, GOOGLE_TOKEN_EXCHANGE_OK
         try:
             td = await async_token_exchange(code, code_verifier=code_verifier)
             try:
@@ -96,8 +92,8 @@ class GoogleOAuth:
                 GOOGLE_TOKEN_EXCHANGE_FAILED.labels(user_id="unknown", reason="internal_error").inc()
             except Exception:
                 pass
-            from .errors import OAuthError as _OAuthError
             from .constants import ERR_OAUTH_EXCHANGE_FAILED
+            from .errors import OAuthError as _OAuthError
 
             raise _OAuthError(code=ERR_OAUTH_EXCHANGE_FAILED, http_status=500, reason="internal_error", extra=None)
 
@@ -198,7 +194,7 @@ async def exchange_code(code: str, state: str | None = None, verify_state: bool 
     expires_at = int(td.get("expires_at", now + int(td.get("expires_in", 3600))))
 
     # Convert expires_at timestamp to datetime
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
     expiry_dt = datetime.fromtimestamp(expires_at, tz=UTC)
 
     creds = _Credentials(
@@ -220,7 +216,7 @@ async def exchange_code(code: str, state: str | None = None, verify_state: bool 
     id_token_val = td.get("id_token")
     if id_token_val:
         try:
-            setattr(creds, "id_token", id_token_val)
+            creds.id_token = id_token_val
         except Exception:
             # Create a lightweight proxy wrapper that exposes id_token and
             # forwards other attribute lookups to the underlying creds object.
@@ -256,11 +252,7 @@ import hashlib
 import hmac
 import json
 import logging
-import time
 from datetime import UTC, datetime, timedelta
-from typing import Any
-
-from fastapi import HTTPException
 
 # Optional Google libraries ----------------------------------------------------
 try:  # pragma: no cover - import varies by environment

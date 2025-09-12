@@ -8,7 +8,6 @@ validates OpenAPI inclusion, and outputs Markdown/CSV/JSON plus policy errors/wa
 """
 
 import argparse
-import inspect
 import json
 import logging
 import os
@@ -16,7 +15,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 # Add the project root to Python path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -46,7 +45,7 @@ class RouteAnalysis:
     admin_required: bool
     exempt_reason: str  # oauth_callback | webhook | compat_redirect | token_exchange | none
     in_schema: bool
-    evidence: List[str]
+    evidence: list[str]
     route_obj: APIRoute
 
 
@@ -67,13 +66,13 @@ class PolicyWarning:
 
 
 # Evidence matching by dependency callable names
-ADMIN_NAMES: Set[str] = {
+ADMIN_NAMES: set[str] = {
     "require_admin",
     "require_roles",
     "admin_required",
     "check_admin",
 }
-AUTH_NAMES: Set[str] = {
+AUTH_NAMES: set[str] = {
     "current_user",
     "require_user",
     "require_auth",
@@ -81,14 +80,14 @@ AUTH_NAMES: Set[str] = {
     "require_auth_no_csrf",
     "require_auth_with_csrf",
 }
-CSRF_NAMES: Set[str] = {
+CSRF_NAMES: set[str] = {
     "csrf_validate",
     "require_csrf",
     "ensure_csrf",
 }
 
 # Routes that are expected to be hidden from OpenAPI schema
-HIDE_OK: List[str] = [
+HIDE_OK: list[str] = [
     r"^/v1/debug/.*",
     r"^/v1/mock/.*",
     r"^/v1/spotify/(debug|test)/.*",
@@ -100,8 +99,8 @@ HIDE_OK: List[str] = [
 ]
 
 
-def nameset(callables: List[Any]) -> Set[str]:
-    s: Set[str] = set()
+def nameset(callables: list[Any]) -> set[str]:
+    s: set[str] = set()
     for fn in callables:
         try:
             s.add(fn.__name__)  # type: ignore[attr-defined]
@@ -110,7 +109,7 @@ def nameset(callables: List[Any]) -> Set[str]:
     return s
 
 
-def qualname(fn: Any) -> Optional[str]:
+def qualname(fn: Any) -> str | None:
     try:
         mod = getattr(fn, "__module__", None)
         nm = getattr(fn, "__name__", None)
@@ -121,14 +120,14 @@ def qualname(fn: Any) -> Optional[str]:
     return None
 
 
-def flatten_dependants(dep) -> List[Any]:  # pragma: no cover (runtime behavior)
+def flatten_dependants(dep) -> list[Any]:  # pragma: no cover (runtime behavior)
     """Recursively flatten a FastAPI dependant tree and return dependency callables.
 
     Robust across FastAPI versions by probing available attributes.
     Handles: callable OR call, dependencies OR sub_dependants OR dependants.
     """
-    seen: Set[int] = set()
-    out: List[Any] = []
+    seen: set[int] = set()
+    out: list[Any] = []
     used_call_attr = None
     used_deps_attr = None
 
@@ -169,7 +168,7 @@ def flatten_dependants(dep) -> List[Any]:  # pragma: no cover (runtime behavior)
     if dep is not None:
         dfs(dep)
 
-    uniq: Dict[str, Any] = {}
+    uniq: dict[str, Any] = {}
     for fn in out:
         try:
             key = f"{fn.__module__}.{fn.__name__}"
@@ -181,9 +180,9 @@ def flatten_dependants(dep) -> List[Any]:  # pragma: no cover (runtime behavior)
 
 class RouteSecurityAnalyzer:
     def __init__(self, csrf_enabled: bool = True):
-        self.routes: List[RouteAnalysis] = []
-        self.errors: List[PolicyError] = []
-        self.warnings: List[PolicyWarning] = []
+        self.routes: list[RouteAnalysis] = []
+        self.errors: list[PolicyError] = []
+        self.warnings: list[PolicyWarning] = []
         self.csrf_enabled = csrf_enabled
 
     def _is_hidden_by_design(self, path: str, is_compat: bool) -> bool:
@@ -195,9 +194,9 @@ class RouteSecurityAnalyzer:
         # Check if compat route
         return is_compat
 
-    def _collect_routes(self) -> List[APIRoute]:
+    def _collect_routes(self) -> list[APIRoute]:
         all_routes = getattr(app, "routes", [])
-        routes: List[APIRoute] = [r for r in all_routes if isinstance(r, APIRoute)]
+        routes: list[APIRoute] = [r for r in all_routes if isinstance(r, APIRoute)]
         return routes
 
     def analyze_all_routes(self) -> None:
@@ -229,8 +228,8 @@ class RouteSecurityAnalyzer:
 
                 # Flatten dependencies from route.dependant (includes router-level deps)
                 dep = getattr(route, "dependant", None)
-                flattened: List[Any] = flatten_dependants(dep)
-                dep_names: Set[str] = nameset(flattened)
+                flattened: list[Any] = flatten_dependants(dep)
+                dep_names: set[str] = nameset(flattened)
 
                 # Detect compat & exemptions
                 exempt_reason, is_compat = self._compute_exemptions_and_compat(route)
@@ -264,14 +263,14 @@ class RouteSecurityAnalyzer:
 
         self._validate_policies()
 
-    def _has_security_scheme(self, route: APIRoute, flattened: List[Any]) -> bool:
+    def _has_security_scheme(self, route: APIRoute, flattened: list[Any]) -> bool:
         """Heuristic detection of security schemes declared via dependencies."""
         dep = getattr(route, "dependant", None)
         for attr in ("security_requirements", "security_schemes", "security_scopes"):
             val = getattr(dep, attr, None)
             if val:
                 try:
-                    if isinstance(val, (list, tuple, set)) and len(val) > 0:
+                    if isinstance(val, list | tuple | set) and len(val) > 0:
                         return True
                 except Exception:
                     pass
@@ -284,7 +283,7 @@ class RouteSecurityAnalyzer:
                 continue
         return False
 
-    def _compute_exemptions_and_compat(self, route: APIRoute) -> Tuple[str, bool]:
+    def _compute_exemptions_and_compat(self, route: APIRoute) -> tuple[str, bool]:
         # Regex exemptions
         oauth_cb = re.compile(r"^/v1/google/callback$|^/v1/auth/finish$")
         webhooks = re.compile(r"^/v1/ha/webhook$|^/v1/spotify/callback$")
@@ -316,11 +315,11 @@ class RouteSecurityAnalyzer:
     def _classify_route(
         self,
         route: APIRoute,
-        dep_names: Set[str],
-        flattened: List[Any],
+        dep_names: set[str],
+        flattened: list[Any],
         is_compat: bool,
         exempt_reason: str,
-    ) -> Tuple[str, bool, bool, List[str]]:
+    ) -> tuple[str, bool, bool, list[str]]:
         admin_hit = sorted(list(ADMIN_NAMES.intersection(dep_names)))
         auth_hit = sorted(list(AUTH_NAMES.intersection(dep_names)))
         csrf_hit = sorted(list(CSRF_NAMES.intersection(dep_names)))
@@ -396,7 +395,7 @@ class RouteSecurityAnalyzer:
                 )
 
     def generate_markdown(self) -> str:
-        grouped: Dict[str, List[RouteAnalysis]] = {}
+        grouped: dict[str, list[RouteAnalysis]] = {}
         for ra in sorted(self.routes, key=lambda x: (x.path_template, x.method)):
             grouped.setdefault(ra.protection, []).append(ra)
 
@@ -412,7 +411,7 @@ class RouteSecurityAnalyzer:
             if matching_route and not getattr(matching_route, 'hidden_by_design', False):
                 filtered_warnings.append(w)
 
-        out: List[str] = []
+        out: list[str] = []
         out.append("# FastAPI Route Security Matrix\n")
         out.append("## Summary")
         out.append(f"- **Total**: {len(self.routes)}")
@@ -484,8 +483,8 @@ class RouteSecurityAnalyzer:
         return json.dumps(payload, indent=2)
 
 
-def generate_issue_report(errors: List[PolicyError], warnings: List[PolicyWarning], routes: List[RouteAnalysis]) -> str:
-    out: List[str] = []
+def generate_issue_report(errors: list[PolicyError], warnings: list[PolicyWarning], routes: list[RouteAnalysis]) -> str:
+    out: list[str] = []
     if errors:
         out.append("## POLICY ERRORS\n")
         for e in errors:
@@ -532,7 +531,7 @@ def _print_dependant_explain(sample_route: APIRoute) -> None:  # pragma: no cove
         for attr in ["callable", "call"]:
             fn = getattr(d, attr, None)
             if fn is not None:
-                print(f"  " * indent + f"- [{attr}] {qualname(fn) or str(fn)}")
+                print("  " * indent + f"- [{attr}] {qualname(fn) or str(fn)}")
                 break
         else:
             print("  " * indent + f"- [no callable] {str(d)}")
@@ -542,7 +541,7 @@ def _print_dependant_explain(sample_route: APIRoute) -> None:  # pragma: no cove
         for attr in ["dependencies", "sub_dependants", "dependants"]:
             deps = getattr(d, attr, None)
             if deps is not None:
-                print(f"  " * indent + f"  └─ {attr}: {len(deps) if hasattr(deps, '__len__') else '?'} items")
+                print("  " * indent + f"  └─ {attr}: {len(deps) if hasattr(deps, '__len__') else '?'} items")
                 for sd in deps:
                     render(sd, indent + 1)
                 break

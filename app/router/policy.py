@@ -3,12 +3,12 @@
 This module contains all router-related constants and policy settings.
 Leaf modules should import from here instead of defining their own constants.
 """
-from typing import Set
+
 from app import settings
 
 
 # Model allow-lists (single source of truth)
-def _get_allowed_models() -> tuple[Set[str], Set[str]]:
+def _get_allowed_models() -> tuple[set[str], set[str]]:
     """Get allowed models from centralized settings."""
     gpt_models = set(settings.allowed_gpt_models())
     llama_models = set(settings.allowed_llama_models())

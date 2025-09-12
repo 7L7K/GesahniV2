@@ -213,7 +213,7 @@ ROLE_SCOPES = {
 def _get_scopes_from_request(request: Request) -> set[str] | None:
     """Extract scopes from request.state.scopes (set by SessionAttachMiddleware)."""
     scopes = getattr(request.state, "scopes", None)
-    if isinstance(scopes, (list, tuple, set)):
+    if isinstance(scopes, list | tuple | set):
         return set(scopes)
     return None
 

@@ -3,10 +3,10 @@
 Test script to demonstrate authentication diagnostic logs
 """
 import os
-import requests
 import subprocess
 import time
-import signal
+
+import requests
 
 
 def test_auth_logs():

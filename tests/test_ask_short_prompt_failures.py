@@ -6,12 +6,13 @@ UnboundLocalError, empty responses, or other issues in the ask endpoint.
 """
 
 import json
-import pytest
-from unittest.mock import AsyncMock, patch, Mock
-from fastapi.testclient import TestClient
-from fastapi import HTTPException, Request
+from unittest.mock import AsyncMock, Mock, patch
 
-from app.api.ask import _ask, _get_or_generate_request_id
+import pytest
+from fastapi import HTTPException, Request
+from fastapi.testclient import TestClient
+
+from app.api.ask import _ask
 from app.main import app
 
 
@@ -250,6 +251,7 @@ class TestShortPromptFailures:
         """Test that request ID is generated at the top of the function."""
         # This test verifies that req_id is available even if exceptions occur early
         from unittest.mock import Mock
+
         from fastapi import Request
 
         mock_request = Mock(spec=Request)
@@ -290,6 +292,7 @@ class TestShortPromptFailures:
         # which could cause UnboundLocalError
 
         import inspect
+
         from app.api.ask import _ask
 
         # Get the source code of the _ask function

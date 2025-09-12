@@ -11,11 +11,9 @@ Specifically tests that when a user successfully logs in with Google:
 
 import os
 import sys
-import json
-import jwt
-import asyncio
-from unittest.mock import Mock, patch
 from datetime import datetime
+
+import jwt
 
 # Add the app directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))

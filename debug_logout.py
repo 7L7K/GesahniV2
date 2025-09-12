@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 
 import sys
+
 sys.path.insert(0, '/Users/kingal/2025/GesahniV2')
 
-from fastapi.testclient import TestClient
-from app.main import app
 import random
 import string
+
+from fastapi.testclient import TestClient
+
+from app.main import app
+
 
 def _generate_unique_username():
     return 'test_logout_' + ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))

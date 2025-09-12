@@ -10,18 +10,17 @@ This test validates that:
 5. Original circular import issues are resolved
 """
 
-import sys
 import asyncio
+import sys
 import time
-from typing import Dict, List
 
 
 class Phase3Validator:
     """Comprehensive validator for Phase 3 leaf module architecture."""
 
     def __init__(self):
-        self.results: Dict[str, bool] = {}
-        self.errors: List[str] = []
+        self.results: dict[str, bool] = {}
+        self.errors: list[str] = []
 
     def log_success(self, test_name: str):
         """Log a successful test."""
@@ -76,7 +75,6 @@ class Phase3Validator:
 
         # Test that importing app.router doesn't cause recursion
         try:
-            import app.router
             # The key test is that we don't get RecursionError
             # It's OK if heavy modules are imported - that's normal Python behavior
             self.log_success(test_name)
@@ -97,7 +95,11 @@ class Phase3Validator:
                 del sys.modules[module]
 
             # Import bootstrap registry
-            from app.bootstrap.router_registry import get_router, set_router, configure_default_router
+            from app.bootstrap.router_registry import (
+                configure_default_router,
+                get_router,
+                set_router,
+            )
 
             # Verify functions exist
             assert callable(get_router)
@@ -120,9 +122,11 @@ class Phase3Validator:
 
         try:
             from app.router.policy import (
-                ALLOWED_GPT_MODELS, ALLOWED_LLAMA_MODELS,
-                OPENAI_TIMEOUT_MS, OLLAMA_TIMEOUT_MS,
-                ROUTER_BUDGET_MS
+                ALLOWED_GPT_MODELS,
+                ALLOWED_LLAMA_MODELS,
+                OLLAMA_TIMEOUT_MS,
+                OPENAI_TIMEOUT_MS,
+                ROUTER_BUDGET_MS,
             )
 
             # Verify constants are sets
@@ -208,7 +212,7 @@ class Phase3Validator:
 
             # Verify it has route_prompt method
             assert hasattr(adapter, 'route_prompt')
-            assert callable(getattr(adapter, 'route_prompt'))
+            assert callable(adapter.route_prompt)
 
             self.log_success(test_name)
 
@@ -220,10 +224,10 @@ class Phase3Validator:
         test_name = "API Routers Exist"
 
         try:
+            from app.router.admin_api import router as admin_router
             from app.router.ask_api import router as ask_router
             from app.router.auth_api import router as auth_router
             from app.router.google_api import router as google_router
-            from app.router.admin_api import router as admin_router
 
             # Verify they are APIRouter instances
             assert hasattr(ask_router, 'routes')
@@ -264,7 +268,7 @@ class Phase3Validator:
             violations = []
             for file_path in leaf_files:
                 if os.path.exists(file_path):
-                    with open(file_path, 'r') as f:
+                    with open(file_path) as f:
                         content = f.read()
 
                     # Check for explicit imports from app.router

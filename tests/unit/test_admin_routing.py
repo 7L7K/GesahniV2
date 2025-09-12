@@ -6,10 +6,9 @@ This test verifies that:
 3. Only /v1/admin/* endpoints appear in OpenAPI schema
 4. Single canonical handlers exist for each admin endpoint
 """
-import pytest
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from fastapi.responses import RedirectResponse
+from fastapi.testclient import TestClient
 
 
 def test_admin_routing_consolidation():
@@ -20,12 +19,13 @@ def test_admin_routing_consolidation():
 
     # Import and include the actual routers in the correct order
     try:
-        from app.router.compat_api import router as compat_router
-        from app.router.admin_api import router as admin_router
         from app.api.config_check import router as config_check_router
-        from app.api.util import router as util_router
         from app.api.debug import router as debug_router
-        from app.status import router as status_router, public_router as status_public_router
+        from app.api.util import router as util_router
+        from app.router.admin_api import router as admin_router
+        from app.router.compat_api import router as compat_router
+        from app.status import public_router as status_public_router
+        from app.status import router as status_router
 
         app.include_router(compat_router, prefix="")
         app.include_router(admin_router, prefix="/v1/admin")
@@ -35,7 +35,7 @@ def test_admin_routing_consolidation():
         app.include_router(status_router, prefix="/v1")
         app.include_router(status_public_router, prefix="/v1")
 
-    except Exception as e:
+    except Exception:
         # If imports fail due to dependencies, create minimal mock routers
         from fastapi import APIRouter
 
@@ -123,11 +123,12 @@ def test_admin_schema_inclusion():
 
     # Import the actual routers
     try:
-        from app.router.admin_api import router as admin_router
         from app.api.config_check import router as config_check_router
-        from app.api.util import router as util_router
         from app.api.debug import router as debug_router
-        from app.status import router as status_router, public_router as status_public_router
+        from app.api.util import router as util_router
+        from app.router.admin_api import router as admin_router
+        from app.status import public_router as status_public_router
+        from app.status import router as status_router
 
         app.include_router(admin_router, prefix="/v1/admin")
         app.include_router(config_check_router, prefix="")

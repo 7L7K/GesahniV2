@@ -1,7 +1,7 @@
-import pytest
 from fastapi.testclient import TestClient
-from app.main import app
+
 from app.deps.user import get_current_user_id
+from app.main import app
 from app.models.user_stats import UserStats
 
 

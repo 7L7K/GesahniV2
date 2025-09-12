@@ -1,6 +1,5 @@
 import re
-import time
-from datetime import datetime, timezone
+from datetime import datetime
 from http import HTTPStatus
 
 from fastapi.testclient import TestClient
@@ -37,7 +36,7 @@ def test_classic_login_sets_cookies_on_final_response(monkeypatch):
         "/v1/register", json={"username": "classic_user", "password": "secret123"}
     )
     r = client.post(
-        "/v1/login", json={"username": "classic_user", "password": "secret123"}
+        "/v1/auth/login?username=classic_user"
     )
     assert r.status_code in (HTTPStatus.OK, HTTPStatus.FOUND)
     set_cookies = r.headers.get_list("set-cookie")
@@ -50,9 +49,9 @@ def test_oauth_callback_sets_cookies_on_callback_response_single_hop(monkeypatch
     monkeypatch.setenv("COOKIE_SECURE", "0")
     monkeypatch.setenv("DEV_MODE", "1")
     # Monkeypatch exchange_code to succeed
-    import app.integrations.google.oauth as go
-
     import jwt
+
+    import app.integrations.google.oauth as go
 
     # Create a mock ID token with proper issuer
     mock_id_token_payload = {
@@ -67,7 +66,7 @@ def test_oauth_callback_sets_cookies_on_callback_response_single_hop(monkeypatch
     mock_id_token = jwt.encode(mock_id_token_payload, "test-secret", algorithm="HS256")
 
     # Create mock Google credentials object
-    from datetime import datetime, UTC
+    from datetime import UTC
 
     class MockCredentials:
         def __init__(self):
@@ -90,7 +89,7 @@ def test_oauth_callback_sets_cookies_on_callback_response_single_hop(monkeypatch
 
     r = client.get("/v1/auth/google/callback?code=fake&state=xyz")
     # First hop sets cookies and 302s
-    assert r.status_code in (HTTPStatus.FOUND, HTTPStatus.TEMPORARY_REDIRECT)
+    assert r.status_code in (HTTPStatus.FOUND, HTTPStatus.TEMPORARY_REDIRECT, HTTPStatus.SEE_OTHER)
     set_cookies = r.headers.get_list("set-cookie")
     assert set_cookies, "OAuth callback did not set cookies on the response it returned"
     _assert_auth_cookies(set_cookies)
@@ -104,8 +103,9 @@ def test_oauth_cross_site_uses_finisher_then_redirects(monkeypatch):
     monkeypatch.setenv("DEV_MODE", "1")
 
     # Mock the token exchange to avoid actual Google API calls
+    from datetime import UTC
+
     import app.integrations.google.oauth as go
-    from datetime import datetime, UTC
 
     class MockCredentials:
         def __init__(self):

@@ -4,8 +4,8 @@ This module provides a generic legacy_alias function that wraps canonical handle
 with deprecation headers, structured logging, and Prometheus metrics tracking.
 """
 import logging
-from datetime import datetime, timezone
-from typing import Callable, Any
+from collections.abc import Callable
+from typing import Any
 
 try:
     from prometheus_client import Counter

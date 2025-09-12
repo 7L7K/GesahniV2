@@ -1,4 +1,5 @@
-from typing import Protocol, Dict, Any, Awaitable
+from collections.abc import Awaitable
+from typing import Any, Protocol
 
 
 class PromptRouter(Protocol):
@@ -9,7 +10,7 @@ class PromptRouter(Protocol):
     concrete implementations and enables typing for DI.
     """
 
-    def __call__(self, payload: Dict[str, Any]) -> Awaitable[Dict[str, Any]]:  # pragma: no cover - typing-only
+    def __call__(self, payload: dict[str, Any]) -> Awaitable[dict[str, Any]]:  # pragma: no cover - typing-only
         ...
 
 

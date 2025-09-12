@@ -18,8 +18,8 @@ class DummyWS:
     async def receive(self):
         try:
             return await asyncio.wait_for(self._in.get(), timeout=0.2)
-        except TimeoutError:
-            raise RuntimeError("timeout")
+        except TimeoutError as err:
+            raise RuntimeError("timeout") from err
 
     async def send_json(self, obj: dict):
         await self._q.put(obj)

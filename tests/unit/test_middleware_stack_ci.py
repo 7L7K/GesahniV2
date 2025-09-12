@@ -1,7 +1,8 @@
-import pytest
 import logging
 from unittest.mock import patch
+
 from app.main import create_app
+
 
 def test_ci_skips_rate_limit(caplog):
     """Test that CI mode correctly skips rate limiting by checking logs."""

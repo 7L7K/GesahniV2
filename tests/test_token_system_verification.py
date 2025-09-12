@@ -4,9 +4,9 @@ Tests the core functionality we implemented to ensure everything is working
 """
 
 import time
+from unittest.mock import AsyncMock, patch
+
 import pytest
-import tempfile
-from unittest.mock import patch, AsyncMock
 
 from app.auth_store_tokens import TokenDAO
 from app.models.third_party_tokens import ThirdPartyToken

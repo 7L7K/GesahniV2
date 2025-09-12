@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -12,7 +10,7 @@ class UserStats(BaseModel):
 
     user_id: str
     login_count: int = Field(default=0, ge=0)
-    last_login: Optional[str] = None
+    last_login: str | None = None
     request_count: int = Field(default=0, ge=0)
 
     class Config:
@@ -28,6 +26,6 @@ class UserStatsQuery(BaseModel):
 class UserStatsUpdate(BaseModel):
     """Update parameters for user statistics."""
 
-    login_count: Optional[int] = Field(None, ge=0)
-    last_login: Optional[str] = None
-    request_count: Optional[int] = Field(None, ge=0)
+    login_count: int | None = Field(None, ge=0)
+    last_login: str | None = None
+    request_count: int | None = Field(None, ge=0)

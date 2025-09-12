@@ -151,9 +151,9 @@ export default function GoogleConnectCard({ onManage }: { onManage?: () => void 
                 }
 
                 try {
-                    const apiUrl = `${process.env.NEXT_PUBLIC_API_ORIGIN || 'http://localhost:8000'}/v1/health/google`;
-                    console.log('🔗 GoogleCard: Making health request to:', apiUrl);
-                    const health = await fetch(apiUrl, { credentials: 'include' });
+                    console.log('🔗 GoogleCard: Making health request to: /v1/health/google');
+                    const { apiFetch } = await import('@/lib/api/fetch');
+                    const health = await apiFetch('/v1/health/google', { auth: false });
                     console.log('🔗 GoogleCard: Health response status:', health.status, 'ok:', health.ok);
                     if (health.ok) {
                         const j = await health.json();

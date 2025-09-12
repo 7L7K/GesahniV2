@@ -80,7 +80,7 @@ def test_ws_health_rejects_invalid_token():
     # Test without token - should fail
     try:
         with c.websocket_connect("/v1/ws/health") as ws:
-            assert False, "Should not connect without token"
+            raise AssertionError("Should not connect without token")
     except Exception as e:
         # Should get connection error due to missing token
         print(f"✅ Correctly rejected connection without token: {type(e).__name__}")
@@ -111,7 +111,7 @@ def test_ws_health_rejects_expired_token():
     # Test with expired token - should fail
     try:
         with c.websocket_connect(f"/v1/ws/health?token={expired_token}") as ws:
-            assert False, "Should not connect with expired token"
+            raise AssertionError("Should not connect with expired token")
     except Exception as e:
         # Should get connection error due to expired token
         print(f"✅ Correctly rejected expired token: {type(e).__name__}")

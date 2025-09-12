@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import logging
-from fastapi import APIRouter, Depends, Request, HTTPException
 
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from ..auth_core import require_scope
 from ..deps.user import get_current_user_id
 from ..integrations.spotify.client import (
-    SpotifyClient,
     SpotifyAuthError,
+    SpotifyClient,
     SpotifyRateLimitedError,
 )
+from ..metrics import SPOTIFY_DEVICE_LIST_COUNT, SPOTIFY_PLAY_COUNT
 from ..security import verify_token
-from ..auth_core import require_scope
-from ..metrics import SPOTIFY_PLAY_COUNT, SPOTIFY_DEVICE_LIST_COUNT
-import logging
 
 router = APIRouter(
     prefix="/v1/spotify",
@@ -45,7 +45,7 @@ async def devices(request: Request, user_id: str = Depends(get_current_user_id))
         from ..http_errors import unauthorized
 
         raise unauthorized(code="spotify_not_authenticated", message="Spotify not authenticated", hint="connect Spotify account")
-    except Exception as e:
+    except Exception:
         logger.exception("spotify.devices_error")
         try:
             SPOTIFY_DEVICE_LIST_COUNT.labels(status="fail").inc()
@@ -100,7 +100,7 @@ async def play(request: Request, body: dict, user_id: str = Depends(get_current_
         raise unauthorized(code="spotify_not_authenticated", message="Spotify not authenticated", hint="connect Spotify account")
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("spotify.play_error")
         try:
             SPOTIFY_PLAY_COUNT.labels(status="fail").inc()

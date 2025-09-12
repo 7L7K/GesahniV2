@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Metrics placeholders for Granny Mode."""
 
 

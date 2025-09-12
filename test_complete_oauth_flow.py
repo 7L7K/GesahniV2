@@ -4,11 +4,10 @@ Complete Google OAuth Flow Test Script
 Tests the entire OAuth flow from login URL to callback processing.
 """
 
-import os
+from urllib.parse import parse_qs, urlparse
+
 import requests
-import json
-import time
-from urllib.parse import urlparse, parse_qs, urlencode
+
 
 def test_oauth_flow():
     """Test the complete Google OAuth flow."""

@@ -28,7 +28,7 @@ def test_no_404_for_get_and_post_routes():
         path = getattr(r, "path", None)
         if not path:
             continue
-        methods = set(getattr(r, "methods") or [])
+        methods = set(r.methods or [])
         for method in ("GET", "POST"):
             if method not in methods:
                 continue
@@ -63,7 +63,7 @@ def test_deprecated_routes_emit_deprecation_header():
         path = getattr(r, "path", None)
         if not path:
             continue
-        methods = set(getattr(r, "methods") or [])
+        methods = set(r.methods or [])
         method = _pick_method(methods)
         url = _fill_path(path)
         try:

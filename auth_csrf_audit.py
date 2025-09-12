@@ -18,7 +18,6 @@ Options:
     --output FILE  Save results to JSON file
 """
 
-import importlib
 import inspect
 import json
 import logging
@@ -27,9 +26,7 @@ import re
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
-
-import yaml
+from typing import Any
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -40,12 +37,12 @@ logger = logging.getLogger(__name__)
 
 # Import FastAPI components
 try:
-    from app.main import create_app
-    from app.routers.config import build_plan, RouterSpec
-    from app.middleware.stack import setup_middleware_stack
     from app.csrf import CSRFMiddleware
+    from app.deps.scopes import require_any_scopes, require_scope, require_scopes
     from app.deps.user import get_current_user_id
-    from app.deps.scopes import require_scope, require_scopes, require_any_scopes
+    from app.main import create_app
+    from app.middleware.stack import setup_middleware_stack
+    from app.routers.config import RouterSpec, build_plan
 except ImportError as e:
     logger.error(f"Failed to import FastAPI components: {e}")
     sys.exit(1)
@@ -124,14 +121,14 @@ class RouteAuditor:
         # Extract from main app
         extract_from_router(self.app, "", self.app.openapi_tags)
 
-    def _is_public_route(self, path: str, methods: Set[str]) -> Tuple[bool, str]:
+    def _is_public_route(self, path: str, methods: set[str]) -> tuple[bool, str]:
         """Check if a route should be public."""
         for category, pattern in self.public_routes.items():
             if pattern.search(path):
                 return True, category
         return False, ""
 
-    def _requires_protection(self, path: str, methods: Set[str], is_public: bool = False) -> Tuple[bool, str]:
+    def _requires_protection(self, path: str, methods: set[str], is_public: bool = False) -> tuple[bool, str]:
         """Check if a route requires protection."""
         # Public routes don't require protection
         if is_public:
@@ -149,7 +146,7 @@ class RouteAuditor:
 
         return False, ""
 
-    def _analyze_route_protection(self, route_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _analyze_route_protection(self, route_info: dict[str, Any]) -> dict[str, Any]:
         """Analyze the protection mechanisms for a single route."""
         path = route_info['path']
         methods = route_info['methods']
@@ -254,13 +251,13 @@ class RouteAuditor:
                     logger.info(f"DEBUG /v1/ask source length: {len(source)}")
                     logger.info(f"DEBUG /v1/ask source preview: {source[:500]}...")
                     if 'dependencies=' in source:
-                        logger.info(f"DEBUG /v1/ask source has dependencies")
+                        logger.info("DEBUG /v1/ask source has dependencies")
                     else:
-                        logger.info(f"DEBUG /v1/ask source NO dependencies found")
+                        logger.info("DEBUG /v1/ask source NO dependencies found")
                     if 'require_user' in source:
-                        logger.info(f"DEBUG /v1/ask source has require_user")
+                        logger.info("DEBUG /v1/ask source has require_user")
                     if 'csrf_validate' in source:
-                        logger.info(f"DEBUG /v1/ask source has csrf_validate")
+                        logger.info("DEBUG /v1/ask source has csrf_validate")
                 except Exception as e:
                     logger.info(f"DEBUG /v1/ask source inspection failed: {e}")
 
@@ -286,7 +283,7 @@ class RouteAuditor:
 
         return analysis
 
-    def _analyze_csrf_protection(self, route_info: Dict[str, Any]) -> str:
+    def _analyze_csrf_protection(self, route_info: dict[str, Any]) -> str:
         """Analyze CSRF protection for a route."""
         # CSRF is handled globally by CSRFMiddleware when CSRF_ENABLED=1
         # Routes can opt-out with X-CSRF-Opt-Out header or csrf_opt_out query param
@@ -340,7 +337,7 @@ class RouteAuditor:
 
         logger.info(f"Audit complete. Analyzed {len(self.protection_analysis)} routes")
 
-    def generate_report(self) -> Dict[str, Any]:
+    def generate_report(self) -> dict[str, Any]:
         """Generate comprehensive audit report."""
         report = {
             'summary': {
@@ -379,7 +376,7 @@ class RouteAuditor:
 
         return report
 
-    def print_summary(self, report: Dict[str, Any]):
+    def print_summary(self, report: dict[str, Any]):
         """Print audit summary to console."""
         summary = report['summary']
 
@@ -407,7 +404,7 @@ class RouteAuditor:
             for category, routes in routes_by_category.items():
                 print(f"  {category}: {len(routes)} routes")
 
-    def save_report(self, report: Dict[str, Any], output_file: str):
+    def save_report(self, report: dict[str, Any], output_file: str):
         """Save detailed report to JSON file."""
         try:
             with open(output_file, 'w') as f:

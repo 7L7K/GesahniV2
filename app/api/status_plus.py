@@ -15,17 +15,53 @@ router = APIRouter(tags=["Admin"])
 
 @router.get("/status/features")
 async def features(user_id: str = Depends(get_current_user_id)):
-    def _flag(name: str) -> bool:
-        return os.getenv(name, "").lower() in {"1", "true", "yes"}
+    from app.feature_flags import HA_ON, OLLAMA_ON, QDRANT_ON
+    
+    # Feature flags (environment-based configuration)
+    flag_states = {
+        "ollama": bool(OLLAMA_ON),
+        "home_assistant": bool(HA_ON),
+        "qdrant": bool(QDRANT_ON),
+    }
+    
+    # Runtime states (what actually mounted/configured)
+    # Default heuristics based on environment
+    devices_enabled = (os.getenv("DEVICE_AUTH_ENABLED") or "").lower() in {"1", "true", "yes"}
+    transcribe_enabled = True
+    ollama_enabled = bool(os.getenv("OLLAMA_URL")) and flag_states["ollama"]
+    home_assistant_enabled = bool(os.getenv("HOME_ASSISTANT_TOKEN")) and flag_states["home_assistant"]
+    qdrant_enabled = (os.getenv("VECTOR_STORE") or "").lower().startswith("qdrant") and flag_states["qdrant"]
+
+    # Prefer authoritative app.state if populated during router registration
+    try:
+        from fastapi import current_app
+
+        mounted = getattr(current_app.state, "features_mounted", None)
+        if isinstance(mounted, dict):
+            devices_enabled = bool(mounted.get("devices"))
+            transcribe_enabled = bool(mounted.get("transcribe"))
+            # For flag-controlled features, require both flag AND mount success
+            ollama_enabled = bool(mounted.get("ollama")) and flag_states["ollama"]
+            home_assistant_enabled = bool(mounted.get("home_assistant")) and flag_states["home_assistant"]
+            qdrant_enabled = bool(mounted.get("qdrant")) and flag_states["qdrant"]
+    except Exception:
+        pass
 
     return {
-        "ha_enabled": bool(os.getenv("HOME_ASSISTANT_TOKEN")),
-        "vector_store": (os.getenv("VECTOR_STORE") or "memory").lower(),
-        "gpt_enabled": bool(os.getenv("OPENAI_API_KEY")),
-        "llama_url": os.getenv("OLLAMA_URL", ""),
-        "oauth_google": bool(os.getenv("GOOGLE_CLIENT_ID")),
-        "proactive": _flag("ENABLE_PROACTIVE_ENGINE"),
-        "deterministic_router": _flag("DETERMINISTIC_ROUTER"),
+        "devices": bool(devices_enabled),
+        "transcribe": bool(transcribe_enabled),
+        "ollama": bool(ollama_enabled),
+        "home_assistant": bool(home_assistant_enabled),
+        "qdrant": bool(qdrant_enabled),
+        # Include flag states for debugging
+        "_flags": flag_states,
+        "_runtime_state": {
+            "devices": bool(devices_enabled),
+            "transcribe": bool(transcribe_enabled),
+            "ollama": bool(ollama_enabled),
+            "home_assistant": bool(home_assistant_enabled),
+            "qdrant": bool(qdrant_enabled),
+        }
     }
 
 

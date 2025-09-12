@@ -4,14 +4,13 @@ These call into `app.api.tts` when available and return queued audio shapes.
 """
 from __future__ import annotations
 
-from typing import Any
+import asyncio
+import uuid
+from pathlib import Path
 
 from fastapi.responses import JSONResponse
 
 from app.tts_orchestrator import synthesize
-import asyncio
-import uuid
-from pathlib import Path
 
 
 async def tts_speak(request) -> JSONResponse:

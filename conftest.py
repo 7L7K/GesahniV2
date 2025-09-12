@@ -1,13 +1,13 @@
 import os
-import sys
-import uuid
 import pathlib
-import time
-import warnings
-import multiprocessing
 import socket
+import sys
+import time
+import uuid
+import warnings
 
 import pytest
+
 
 # Session-scoped fixtures for live server testing
 @pytest.fixture(scope="session", autouse=True)
@@ -195,6 +195,7 @@ async def async_app():
 async def async_client(async_app):
     """Provide an async test client using httpx with ASGITransport."""
     from httpx import ASGITransport
+
     from app.http_client import build_async_httpx_client
 
     # Create async client with lifespan support (lifespan is handled automatically)
@@ -220,9 +221,10 @@ async def test_user():
     - Password: test_password_123
     - Email: test@example.com
     """
-    from app.user_store import user_store
-    from app.auth_store_tokens import ThirdPartyToken, upsert_token
     import time
+
+    from app.auth_store_tokens import ThirdPartyToken, upsert_token
+    from app.user_store import user_store
 
     user_id = "test_user_123"
     username = "test_user_123"
@@ -371,8 +373,8 @@ async def cors_csrf_client(async_app):
 @pytest.fixture
 async def seed_spotify_token():
     """Seed a Spotify token for testing."""
-    from app.models.third_party_tokens import ThirdPartyToken
     from app.auth_store_tokens import upsert_token
+    from app.models.third_party_tokens import ThirdPartyToken
 
     token = ThirdPartyToken(
         user_id="test_user",
@@ -398,7 +400,6 @@ async def seed_spotify_token():
 
 import math
 import shutil
-import sys
 import tempfile
 import types
 from collections.abc import Iterable
@@ -612,6 +613,7 @@ def _isolate_debug_and_flags(monkeypatch):
     # Reload cookie helpers to pick up new canon in case previous tests imported them
     try:
         import importlib
+
         import app.web.cookies as _cookies_mod
         importlib.reload(_cookies_mod)
     except Exception:

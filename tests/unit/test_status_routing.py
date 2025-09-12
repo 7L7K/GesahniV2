@@ -10,9 +10,10 @@ Note: These tests require the route collision check to be mocked to avoid
 unrelated health route conflicts during testing.
 """
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch
 
 
 class TestStatusRouting:

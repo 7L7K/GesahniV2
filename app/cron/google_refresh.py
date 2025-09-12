@@ -57,7 +57,7 @@ async def _refresh_for_user(identity_id: str, provider: str) -> None:
         try:
             # Fetch latest token row by identity
             conn = sqlite3.connect(_db_path())
-    conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("PRAGMA foreign_keys=ON")
             try:
                 cur = conn.cursor()
                 cur.execute(

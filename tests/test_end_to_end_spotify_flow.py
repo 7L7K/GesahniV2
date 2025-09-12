@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """End-to-end test of the complete Spotify OAuth flow from frontend to backend."""
 
-import time
+from urllib.parse import parse_qs, urlparse
+
 import requests
-import json
-from urllib.parse import urlparse, parse_qs
 
 
 def test_complete_e2e_spotify_flow():

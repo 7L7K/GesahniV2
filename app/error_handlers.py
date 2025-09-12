@@ -1,10 +1,11 @@
 from __future__ import annotations
+
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError as PydanticValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -13,7 +14,7 @@ from app.otel_utils import get_trace_id_hex
 
 log = logging.getLogger(__name__)
 
-def _trace_details(request: Request, status: int) -> Dict[str, Any]:
+def _trace_details(request: Request, status: int) -> dict[str, Any]:
     try:
         tid = get_trace_id_hex()
     except Exception:
@@ -120,7 +121,7 @@ async def handle_unexpected_error(request: Request, exc: Exception):
         pass
     return JSONResponse(env, status_code=500, headers=headers)
 
-def _emit_auth_metrics(request: Request, status: int, payload: Dict[str, Any]):
+def _emit_auth_metrics(request: Request, status: int, payload: dict[str, Any]):
     # Best-effort, never raise
     try:
         path = getattr(request.url, "path", "")

@@ -3,8 +3,7 @@
 All business logic moved to app.api.auth as canonical source of truth.
 This module provides 308 Permanent Redirects to maintain compatibility.
 """
-from fastapi import APIRouter, Request
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter
 
 router = APIRouter()
 

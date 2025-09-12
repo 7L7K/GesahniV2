@@ -10,25 +10,22 @@ This module implements robust refresh token rotation with:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import jwt
 from fastapi import HTTPException, Request, Response
 
+from .deps.user import resolve_session_id
 from .token_store import (
     allow_refresh,
     claim_refresh_jti_with_retry,
     get_last_used_jti,
     is_refresh_family_revoked,
-    revoke_refresh_family,
     set_last_used_jti,
 )
-from .deps.user import resolve_session_id
-from .security import jwt_decode
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +70,7 @@ def _jwt_secret() -> str:
     return secret
 
 
-def _decode_refresh_token(token: str, leeway: int = None) -> Dict[str, Any]:
+def _decode_refresh_token(token: str, leeway: int = None) -> dict[str, Any]:
     """Decode and validate a refresh token."""
     if leeway is None:
         leeway = CFG.leeway_s
@@ -104,7 +101,7 @@ async def validate_refresh_token(
     token: str,
     request: Request,
     user_id: str
-) -> Tuple[str, str, int]:
+) -> tuple[str, str, int]:
     """
     Validate a refresh token and extract key information.
 
@@ -240,7 +237,7 @@ async def check_replay_protection(
 
 
 async def should_rotate_token(
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     request: Request
 ) -> bool:
     """
@@ -266,16 +263,16 @@ async def rotate_refresh_token(
     request: Request,
     response: Response,
     refresh_token: str = None
-) -> Optional[Dict[str, str]]:
+) -> dict[str, str] | None:
     """
     Perform refresh token rotation with replay protection.
 
     Returns a dict with new tokens if rotation succeeds, None if no rotation needed.
     Raises HTTPException on validation failures.
     """
-    from .tokens import make_access, make_refresh
     from .cookie_config import get_token_ttls
-    from .web.cookies import set_auth_cookies, read_refresh_cookie
+    from .tokens import make_access, make_refresh
+    from .web.cookies import read_refresh_cookie, set_auth_cookies
 
     # Get the refresh token
     rtok = refresh_token or read_refresh_cookie(request)
@@ -347,7 +344,7 @@ async def perform_lazy_refresh(
     request: Request,
     response: Response,
     user_id: str,
-    identity: Dict[str, Any] = None
+    identity: dict[str, Any] = None
 ) -> bool:
     """
     Perform lazy refresh of tokens when access token is expiring.
@@ -355,11 +352,12 @@ async def perform_lazy_refresh(
     Returns True if refresh was performed, False otherwise.
     """
     try:
-        from .cookies import read_refresh_cookie, read_access_cookie
+        import time
+
         from .cookie_config import get_token_ttls
+        from .cookies import read_access_cookie, read_refresh_cookie
         from .flags import get_lazy_refresh_window_s
         from .tokens import make_access
-        import time
 
         rt = read_refresh_cookie(request)
         at = read_access_cookie(request)

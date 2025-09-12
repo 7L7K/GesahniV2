@@ -56,7 +56,7 @@ class ForecastSkill(Skill):
         dates = sorted(temps.keys())[:3]
         parts = []
         for d in dates:
-            values = [t for t in temps[d] if isinstance(t, (int, float))]
+            values = [t for t in temps[d] if isinstance(t, int | float)]
             if not values:
                 continue
             day = _dt.datetime.strptime(d, "%Y-%m-%d").strftime("%a")

@@ -2,7 +2,7 @@ def test_vector_store_selection_env(monkeypatch):
     monkeypatch.setenv("VECTOR_STORE", "qdrant")
     monkeypatch.setenv("ALLOW_QDRANT_IN_TESTS", "1")
     from importlib import reload
-    from unittest.mock import Mock, MagicMock
+    from unittest.mock import Mock
 
     # Mock the QdrantClient to avoid connection errors
     mock_client = Mock()

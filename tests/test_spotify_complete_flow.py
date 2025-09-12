@@ -1,7 +1,8 @@
 """Comprehensive Spotify OAuth flow test with proper mocking."""
 
-import time
 import logging
+import time
+
 from fastapi.testclient import TestClient
 
 import app.main as main_mod
@@ -89,7 +90,7 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch, caplog):
     logger.info(f"✅ Session ID: {session_id}")
 
     # Extract state from auth_url for later use
-    from urllib.parse import urlparse, parse_qs
+    from urllib.parse import parse_qs, urlparse
 
     parsed_url = urlparse(auth_url)
     query_params = parse_qs(parsed_url.query)
@@ -105,7 +106,7 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch, caplog):
         logger.info("✅ Temporary spotify_oauth_jwt cookie was set")
     else:
         logger.error("❌ No Set-Cookie header found")
-        assert False, "No Set-Cookie header"
+        raise AssertionError("No Set-Cookie header")
 
     # Step 2: Call /v1/spotify/callback (simulating Spotify redirect)
     logger.info("Step 2: Simulating Spotify redirect to callback...")
@@ -146,7 +147,7 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch, caplog):
         logger.info("✅ Temporary cookie was cleared")
     else:
         logger.error("❌ No Set-Cookie header in callback response")
-        assert False, "No Set-Cookie header in callback"
+        raise AssertionError("No Set-Cookie header in callback")
 
     # Check structured logging events
     log_text = caplog.text

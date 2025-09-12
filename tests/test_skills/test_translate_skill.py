@@ -18,12 +18,12 @@ class FakeClient:
 
     async def post(self, url, json=None):
         class R:
-            def json(self_inner):
+            def json(self):
                 if url.endswith("/translate"):
                     return {"translatedText": "hola"}
                 return [{"language": "es"}]
 
-            def raise_for_status(self_inner):
+            def raise_for_status(self):
                 pass
 
         return R()

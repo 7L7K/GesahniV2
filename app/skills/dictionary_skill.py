@@ -1,6 +1,6 @@
 from __future__ import annotations
-# app/skills/dictionary_skill.py
 
+# app/skills/dictionary_skill.py
 import re
 
 import httpx

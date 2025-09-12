@@ -8,12 +8,11 @@ import os
 import random
 import secrets
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi import Form
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 
 from ..deps.user import get_current_user_id, require_user, resolve_session_id
@@ -22,24 +21,16 @@ from ..security import jwt_decode
 require_user_clerk = None  # Clerk removed
 from fastapi.responses import JSONResponse
 
-from ..auth_monitoring import record_finish_call, record_whoami_call, track_auth_event
+from ..auth_monitoring import record_whoami_call, track_auth_event
 from ..auth_store import create_pat as _create_pat
-
 from ..auth_store import get_pat_by_hash as _get_pat_by_hash
-from ..auth_store import get_pat_by_id as _get_pat_by_id
-from ..auth_store import list_pats_for_user as _list_pats_for_user
-from ..auth_store import revoke_pat as _revoke_pat
-from ..metrics import AUTH_REFRESH_OK, AUTH_REFRESH_FAIL, WHOAMI_OK, WHOAMI_FAIL
 from ..logging_config import req_id_var
+from ..metrics import WHOAMI_FAIL, WHOAMI_OK
 from ..token_store import (
     allow_refresh,
-    claim_refresh_jti_with_retry,
-    get_last_used_jti,
-    has_redis,
-    is_refresh_family_revoked,
-    set_last_used_jti,
 )
 from ..user_store import user_store
+
 
 # Debug dependency for auth endpoints
 async def log_request_meta(request: Request):
@@ -89,7 +80,7 @@ def _append_legacy_auth_cookie_headers(response: Response, *, access: str | None
     compatibility for tests/clients expecting legacy names.
     """
     try:
-        from ..cookie_config import get_cookie_config, format_cookie_header
+        from ..cookie_config import format_cookie_header, get_cookie_config
         cfg = get_cookie_config(request)
         ss = str(cfg.get("samesite", "lax")).capitalize()
         dom = cfg.get("domain")
@@ -204,9 +195,6 @@ async def _require_user_or_dev(request: Request) -> str:
         if env in {"dev", "development"} and not has_clerk:
             return os.getenv("DEV_USER_ID", "dev")
         # Otherwise, re-raise unauthorized
-        from fastapi import (
-            HTTPException as _HTTPException,
-        )  # lazy to avoid import cycles
 
         from ..http_errors import unauthorized as _unauth
 
@@ -773,6 +761,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
     if not has_any_token or (has_any_token and not session_ready):
         # Structured 401 for contract
         from fastapi.responses import JSONResponse as _JSON
+
         from ..logging_config import req_id_var as _rid
         body = {
             "code": "auth.not_authenticated",
@@ -1249,8 +1238,9 @@ async def register_v1(request: Request, response: Response):
 
     # Ensure table and insert user using the same store as /auth/register_pw
     try:
-        from .auth_password import _pwd, _db_path, _ensure  # type: ignore
         import aiosqlite
+
+        from .auth_password import _db_path, _ensure, _pwd  # type: ignore
 
         await _ensure()
         h = _pwd.hash(password)
@@ -1278,6 +1268,7 @@ async def register_v1(request: Request, response: Response):
     # Create refresh with JTI
     try:
         import os as _os
+
         import jwt as _jwt
         now = int(time.time())
         jti = _jwt.api_jws.base64url_encode(_os.urandom(16)).decode()
@@ -1289,8 +1280,8 @@ async def register_v1(request: Request, response: Response):
 
     # Map session id and set cookies
     try:
-        from ..web.cookies import set_auth_cookies
         from ..auth import _create_session_id
+        from ..web.cookies import set_auth_cookies
         from .auth import _jwt_secret as _secret_fn  # dynamic secret
 
         payload = jwt_decode(access_token, _secret_fn(), algorithms=["HSHS256" if False else "HS256"])  # ensure HS256
@@ -1470,6 +1461,7 @@ async def login(
 
 
 # Legacy login route removed - now handled by redirect in app.auth:router
+async def dev_token(
     request: Request,
     username: str = Form(None),
     password: str = Form(None),
@@ -1498,8 +1490,8 @@ async def login(
 
     # Issue short-lived access token using tokens facade
     try:
-        from ..tokens import make_access
         from ..cookie_config import get_token_ttls
+        from ..tokens import make_access
         access_ttl, _ = get_token_ttls()
         payload: dict[str, Any] = {"user_id": username}
         if scope:
@@ -1592,8 +1584,8 @@ async def logout_all(request: Request, response: Response):
     Best-effort; returns 204 even if revocation partially fails.
     """
     try:
-        from ..token_store import revoke_refresh_family
         from ..deps.user import resolve_session_id_strict
+        from ..token_store import revoke_refresh_family
 
         sid = resolve_session_id_strict(request=request)
         if sid:
@@ -1603,7 +1595,6 @@ async def logout_all(request: Request, response: Response):
     # Delete session id
     try:
         from ..auth import _delete_session_id
-
         from ..cookies import read_session_cookie
         sid = read_session_cookie(request)
         if sid:
@@ -1728,11 +1719,10 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
     except Exception:
         pass
     # Use the new robust refresh implementation
-    from ..auth_refresh import rotate_refresh_token
     from ..metrics_auth import (
         record_refresh_latency,
-        refresh_rotation_success,
         refresh_rotation_failed,
+        refresh_rotation_success,
         replay_detected,
     )
 
@@ -1808,8 +1798,8 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
 
             # Also set cookies to ensure client sees Set-Cookie headers even without rotation
             try:
-                from ..web.cookies import set_auth_cookies as _set_c
                 from ..cookie_config import get_token_ttls as _ttls
+                from ..web.cookies import set_auth_cookies as _set_c
                 access_ttl, refresh_ttl = _ttls()
                 sid = resolve_session_id(request=request, user_id=current_user_id)
                 _set_c(response, access=current_access_token, refresh=current_refresh_token, session_id=sid,
@@ -1986,4 +1976,8 @@ async def _ensure_auth(user_id: str) -> None:
         # Don't raise exceptions in test shim - just log and continue
 
 
-__all__ = ["router", "verify_pat", "rotate_refresh_cookies", "_ensure_auth"]
+# Aliases for legacy compatibility
+login_v1 = login
+register_v1 = register_v1
+
+__all__ = ["router", "verify_pat", "rotate_refresh_cookies", "_ensure_auth", "login_v1", "register_v1"]

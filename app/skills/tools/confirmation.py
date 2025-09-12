@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import time
-from typing import Dict, Optional
 
 # Simple in-memory pending confirmation queue (durable store advisable)
-_PENDING: Dict[str, Dict] = {}
+_PENDING: dict[str, dict] = {}
 
 
-def enqueue(key: str, payload: Dict, ttl: int = 30) -> None:
+def enqueue(key: str, payload: dict, ttl: int = 30) -> None:
     _PENDING[key] = {"payload": payload, "expires": time.time() + ttl}
 
 
-def dequeue(key: str) -> Optional[Dict]:
+def dequeue(key: str) -> dict | None:
     item = _PENDING.pop(key, None)
     if not item:
         return None

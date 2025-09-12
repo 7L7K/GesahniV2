@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Per-user budget guardrails: track usage and apply soft caps.
 
 - Tracks daily prompt+completion tokens and rough minutes.

@@ -4,14 +4,13 @@ WebSocket Observability Metrics
 Tracks WebSocket connection lifecycle, message throughput, and error rates.
 """
 
-import time
-from typing import Dict, Any
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Global metrics storage
-_ws_metrics: Dict[str, Any] = {
+_ws_metrics: dict[str, Any] = {
     "connections_active": 0,
     "connections_total": 0,
     "connections_by_endpoint": {},
@@ -126,7 +125,7 @@ def record_ws_heartbeat_failed():
     _ws_metrics["heartbeat_failed_total"] += 1
 
 
-def get_ws_metrics() -> Dict[str, Any]:
+def get_ws_metrics() -> dict[str, Any]:
     """Get current WebSocket metrics."""
     # Calculate rates (these would be better with time windows in a real implementation)
     metrics = _ws_metrics.copy()

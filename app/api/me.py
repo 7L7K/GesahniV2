@@ -1,25 +1,18 @@
 from __future__ import annotations
 
 import os
-from typing import Any
 from dataclasses import asdict
+from typing import Any
 
-import hashlib
-import json
-from datetime import UTC, datetime
-from email.utils import format_datetime
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from ..config_runtime import get_config
 from ..deps.user import get_current_user_id, resolve_auth_source_conflict
+from ..env_utils import is_test_mode
 from ..sessions_store import sessions_store
 from ..user_store import user_store
-from ..logging_config import req_id_var
-from ..utils.cache_async import AsyncTTLCache, CachedError
-from ..env_utils import is_test_mode
+from ..utils.cache_async import AsyncTTLCache
 
 try:
     from jose import jwt as jose_jwt

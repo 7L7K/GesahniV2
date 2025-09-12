@@ -26,7 +26,7 @@ async def skills_list():
                     "name": name,
                     "keywords": (
                         list(keywords)
-                        if isinstance(keywords, (list, set, tuple))
+                        if isinstance(keywords, list | set | tuple)
                         else [str(keywords)]
                     ),
                 }

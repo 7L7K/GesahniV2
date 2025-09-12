@@ -3,8 +3,9 @@ Tests for token health monitoring endpoints and metrics
 """
 
 import time
+from unittest.mock import patch, Mock
+
 import pytest
-from unittest.mock import patch
 
 from app.auth_store_tokens import get_token_system_health
 from app.models.third_party_tokens import ThirdPartyToken
@@ -152,7 +153,6 @@ class TestTokenHealthMonitoring:
 
     async def test_corrupted_database_handling(self, tmp_path):
         """Test health monitoring handles database corruption gracefully"""
-        from app.auth_store_tokens import TokenDAO
 
         # Create corrupted database file
         db_path = str(tmp_path / "corrupted.db")
@@ -212,7 +212,7 @@ class TestTokenHealthMonitoring:
 
             # Should include timestamp
             assert "timestamp" in health
-            assert isinstance(health["timestamp"], (int, float))
+            assert isinstance(health["timestamp"], int | float)
             assert start_time <= health["timestamp"] <= end_time
 
             # Should have consistent structure
@@ -267,6 +267,7 @@ class TestTokenHealthMonitoring:
 
     async def test_health_performance_under_load(self, tmp_path):
         """Test health monitoring performance with many tokens"""
+        import time
         from app.auth_store_tokens import TokenDAO
 
         db_path = str(tmp_path / "load_test.db")
@@ -285,7 +286,7 @@ class TestTokenHealthMonitoring:
                 provider="spotify" if i % 2 == 0 else "google",
                 provider_sub=f"user_{i}_sub",
                 provider_iss=(
-                    f"https://accounts.spotify.com"
+                    "https://accounts.spotify.com"
                     if i % 2 == 0
                     else "https://accounts.google.com"
                 ),

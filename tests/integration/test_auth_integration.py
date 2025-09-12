@@ -1,8 +1,8 @@
-import os
-import time
 import asyncio
-from fastapi.testclient import TestClient
+import time
+
 import pytest
+from fastapi.testclient import TestClient
 
 import app.auth as auth
 from app.main import app
@@ -14,6 +14,7 @@ def test_csrf_enforcement_on_login(monkeypatch):
     monkeypatch.setenv("CSRF_ENABLED", "1")
     # Re-import app after setting CSRF_ENABLED to ensure middleware picks it up
     import importlib
+
     import app.main
 
     importlib.reload(app.main)

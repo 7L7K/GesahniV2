@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
+import { apiFetch } from '@/lib/api/fetch';
 
 export default function AuthDebug() {
     const [r, setR] = useState<any>({});
@@ -22,7 +23,7 @@ export default function AuthDebug() {
                 }
             };
 
-            const diag = await fetch('http://localhost:8000/v1/_diag/auth', { credentials: 'include' })
+            const diag = await apiFetch('/v1/_diag/auth', { auth: true })
                 .then(r => r.json()).catch(e => ({ error: String(e) }));
 
             setR({ me, diag, method: 'orchestrator' });
@@ -32,10 +33,10 @@ export default function AuthDebug() {
     const handleDirectWhoami = async () => {
         // DANGER: Direct /v1/whoami call - only on explicit button click
         console.warn('🚨 DEBUG: Using direct /v1/whoami bypass (manual trigger)');
-        const me = await fetch('http://localhost:8000/v1/whoami', {
-            credentials: 'include',
+        const me = await apiFetch('/v1/whoami', {
+            method: 'GET',
             headers: {
-                'X-Auth-Orchestrator': 'debug-bypass' // Mark as debug bypass
+                'X-Auth-Orchestrator': 'debug-bypass'
             }
         })
             .then(r => ({ ok: r.ok, status: r.status, h: Object.fromEntries(r.headers), body: r.json().catch(() => null) }))

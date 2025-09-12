@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import Mapping, Any, Dict, List, Optional
-from pydantic import ValidationError
+from collections.abc import Mapping
+from typing import Any
 
 from fastapi import HTTPException
+from pydantic import ValidationError
+
 from .error_envelope import build_error
 
 
@@ -90,7 +92,7 @@ def payload_too_large(
 
 def validation_error(
     *,
-    errors: List[Dict[str, Any]] | None = None,
+    errors: list[dict[str, Any]] | None = None,
     code: str = "validation_error",
     message: str = "Validation Error",
     hint: str = "check your request data and try again",

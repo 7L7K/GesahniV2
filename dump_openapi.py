@@ -4,14 +4,15 @@ Export OpenAPI spec from the FastAPI app at runtime.
 """
 
 import json
-import sys
 import os
+import sys
 
 # Add the project root to sys.path
 sys.path.insert(0, os.path.dirname(__file__))
 
 # Import the app from main.py
 from app.main import app
+
 
 def export_openapi():
     """Export OpenAPI spec from the FastAPI app."""

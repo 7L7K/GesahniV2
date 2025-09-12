@@ -4,9 +4,9 @@ Simple test script to verify Google OAuth endpoints are working.
 Run this to check if the OAuth flow is functional.
 """
 
-import requests
-import json
 import time
+
+import requests
 
 BASE_URL = "http://localhost:8000"
 

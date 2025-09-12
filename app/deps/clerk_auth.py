@@ -190,7 +190,7 @@ def _claims_to_state(request_or_ws: Any, claims: dict[str, Any]) -> None:
     except Exception:
         pass
     try:
-        request_or_ws.state.roles = roles if isinstance(roles, (list, tuple)) else []
+        request_or_ws.state.roles = roles if isinstance(roles, list | tuple) else []
     except Exception:
         pass
 

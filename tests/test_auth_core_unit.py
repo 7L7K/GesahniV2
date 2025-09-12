@@ -1,9 +1,7 @@
-import os
 
 import jwt
 
-from app.auth_core import extract_token, decode_any, resolve_auth
-from app.auth_core import has_scope, require_scope
+from app.auth_core import decode_any, extract_token, has_scope, resolve_auth
 
 
 class FakeTarget:

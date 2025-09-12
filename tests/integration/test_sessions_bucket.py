@@ -34,8 +34,8 @@ def _mk_client(env: dict[str, str] | None = None) -> TestClient:
 def _register_and_login(
     client: TestClient, username: str = None, password: str = "secret123"
 ) -> dict[str, Any]:
-    import time
     import random
+    import time
 
     if username is None:
         username = f"user_{int(time.time())}_{random.randint(1000, 9999)}"

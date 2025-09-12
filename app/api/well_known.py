@@ -1,6 +1,7 @@
-from fastapi import APIRouter
 import json
 import os
+
+from fastapi import APIRouter
 
 router = APIRouter(tags=["Auth"], include_in_schema=False)
 

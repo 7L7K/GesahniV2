@@ -1,44 +1,31 @@
+import os
+
 from app.env_utils import load_env
 
 load_env()
-import asyncio
+
+# Activate dev-only tracer for middleware registration (dev/ci/test only)
+if os.getenv("ENV", "dev").lower() in {"dev", "ci", "test"}:
+    import app.middleware._trace_add  # noqa: F401
+
 import hashlib
 import logging
-import os
 import time
 import traceback
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request, Body
-from .errors import BackendUnavailable
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # CORS configuration
-from .settings_cors import (
-    get_cors_origins,
-    get_cors_allow_credentials,
-    get_cors_allow_methods,
-    get_cors_allow_headers,
-    get_cors_expose_headers,
-    get_cors_max_age,
-    validate_cors_origins,
-)
-
 # Router setup moved to create_app() to avoid import-time cycles
-
 import app.skills  # populate SKILLS
 
+from .errors import BackendUnavailableError
 from .logging_config import configure_logging, req_id_var
-from .error_envelope import build_error, shape_from_status
-from .otel_utils import get_trace_id_hex
-from .deps.scheduler import shutdown as scheduler_shutdown
-from .gpt_client import close_client
 
 # Backward-compat shims: some tests expect these names on app.main
 try:  # optional import for tests/monkeypatching
@@ -61,10 +48,6 @@ try:
     from .api.preflight import router as preflight_router
 except Exception:
     preflight_router = None  # type: ignore
-from .api.settings import router as settings_router
-from .api.google_oauth import router as google_oauth_router
-from .api.google import integrations_router
-from .api.spotify import integrations_router as spotify_integrations_router
 
 try:
     from .api.oauth_apple import router as _oauth_apple_router
@@ -93,7 +76,6 @@ try:
     from .auth_device import router as device_auth_router
 except Exception:
     device_auth_router = None  # type: ignore
-from .integrations.google.routes import router as google_router
 
 try:
     from .auth_monitoring import record_ws_reconnect_attempt
@@ -101,7 +83,6 @@ except Exception:  # pragma: no cover - optional
     record_ws_reconnect_attempt = lambda *a, **k: None
 from .session_manager import SESSIONS_DIR as SESSIONS_DIR  # re-export for tests
 from .storytime import schedule_nightly_jobs
-from .transcription import close_whisper_client
 
 try:
     from .proactive_engine import get_self_review as _get_self_review  # type: ignore
@@ -164,24 +145,7 @@ except Exception:  # pragma: no cover - optional
         return _noop2
 
 
-from app.middleware import (
-    DedupMiddleware,
-    EnhancedErrorHandlingMiddleware,
-    ErrorHandlerMiddleware,
-    HealthCheckFilterMiddleware,
-    RateLimitMiddleware,
-    RedactHashMiddleware,
-    ReloadEnvMiddleware,
-    RequestIDMiddleware,
-    SessionAttachMiddleware,
-    SilentRefreshMiddleware,
-    TraceRequestMiddleware,
-    add_mw,
-)
-from app.middleware.audit_mw import AuditMiddleware
-from app.middleware.metrics_mw import MetricsMiddleware
 
-from .security import verify_token
 
 # ensure optional import does not crash in test environment
 try:
@@ -209,8 +173,8 @@ logger = logging.getLogger(__name__)
 
 # Ensure a concrete router is registered at import time to avoid router-unavailable
 try:
-    from .router.registry import set_router, get_router
     from .router.model_router import model_router as _module_model_router
+    from .router.registry import get_router, set_router
 
     try:
         # Only set if not already configured
@@ -229,11 +193,12 @@ except Exception:
 # Import helper: prefer importlib over exec for safety/readability.
 import importlib
 
+
 def _import_router(module_path: str, *, attr: str = "router"):
     try:
         module = importlib.import_module(module_path, package=__package__)
         return getattr(module, attr)
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -273,7 +238,7 @@ _runtime_errors = []
 def _record_error(error: Exception, context: str = "unknown"):
     """Record an error for monitoring and debugging."""
     error_info = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "error_type": type(error).__name__,
         "error_message": str(error),
         "context": context,
@@ -343,13 +308,12 @@ async def _enhanced_startup():
         try:
             from app.startup.components import (
                 init_database,
-                init_token_store_schema,
-                init_openai_health_check,
-                init_vector_store,
-                init_llama,
                 init_home_assistant,
                 init_memory_store,
+                init_openai_health_check,
                 init_scheduler,
+                init_token_store_schema,
+                init_vector_store,
             )
 
             components = [
@@ -380,7 +344,7 @@ async def _enhanced_startup():
                     await asyncio.wait_for(task, timeout=30.0)  # 30 second timeout per component
                     duration = time.time() - start_time
                     logger.info(f"✅ {name} initialized successfully ({duration:.1f}s)")
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.warning(f"⚠️ {name} initialization timed out after 30s - continuing startup")
                     _record_error(TimeoutError(f"{name} init timeout"), f"startup.{name.lower().replace(' ', '_')}")
                     continue
@@ -441,10 +405,10 @@ async def _init_database():
 
 async def _init_token_store_schema():
     try:
-        from .auth_store_tokens import token_dao
-
         # Start schema migration in background (non-blocking)
         import asyncio
+
+        from .auth_store_tokens import token_dao
         asyncio.create_task(token_dao.ensure_schema_migrated())
         logger.debug("Token store schema migration started in background")
     except Exception as e:
@@ -488,7 +452,7 @@ async def _init_vector_store():
             import inspect
 
             if hasattr(store, "ping"):
-                ping_fn = getattr(store, "ping")
+                ping_fn = store.ping
                 # If ping is an async function, await it; otherwise call it and await result if awaitable
                 if inspect.iscoroutinefunction(ping_fn):
                     await ping_fn()
@@ -497,7 +461,7 @@ async def _init_vector_store():
                     if inspect.isawaitable(res):
                         await res
             elif hasattr(store, "search_memories"):
-                search_fn = getattr(store, "search_memories")
+                search_fn = store.search_memories
                 # Call search with minimal impact; handle sync and async
                 if inspect.iscoroutinefunction(search_fn):
                     await search_fn("", "", limit=0)
@@ -591,7 +555,7 @@ async def _init_scheduler():
 
         # Check if scheduler.start() is awaitable
         start_method = scheduler.start
-        if hasattr(start_method, '__call__'):
+        if callable(start_method):
             # Try to determine if it's async by checking the return type or signature
             import inspect
             if inspect.iscoroutinefunction(start_method):
@@ -700,7 +664,7 @@ async def enhanced_error_handling(request: Request, call_next):
             content={
                 "error": "Internal server error",
                 "req_id": req_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -785,7 +749,8 @@ def create_app() -> FastAPI:
 
     # Add fault handler for startup diagnostics
     if DEBUG:
-        import faulthandler, sys
+        import faulthandler
+        import sys
         faulthandler.dump_traceback_later(8, repeat=True, file=sys.stderr)
 
     # Construct app with single composition root + lifespan
@@ -802,7 +767,7 @@ def create_app() -> FastAPI:
     # Immediately after `app = FastAPI(...)`:
     if DEBUG:
         from app.diagnostics.startup_probe import probe
-        from app.diagnostics.state import set_snapshot, record_event
+        from app.diagnostics.state import record_event, set_snapshot
         set_snapshot("before", probe(app))
         record_event("app-created", "FastAPI instantiated")
 
@@ -849,8 +814,8 @@ def create_app() -> FastAPI:
     # Phase 7: Initialize infrastructure singletons first (needed by router)
     try:
         from .infra.model_router import init_model_router
-        from .infra.router_rules import init_router_rules_cache
         from .infra.oauth_monitor import init_oauth_monitor
+        from .infra.router_rules import init_router_rules_cache
 
         init_model_router()
         init_router_rules_cache()
@@ -897,7 +862,7 @@ def create_app() -> FastAPI:
             logger.info("prompt backend bound: dryrun (safe default)")
         else:
             # Fail closed; endpoints will map this to 503
-            raise BackendUnavailable(f"Unknown PROMPT_BACKEND={backend!r}")
+            raise BackendUnavailableError(f"Unknown PROMPT_BACKEND={backend!r}")
 
     # Also inside create_app(), attach startup/shutdown event markers (observation only):
     @app.on_event("startup")
@@ -951,16 +916,13 @@ def create_app() -> FastAPI:
 
     # CORS middleware moved to middleware/stack.py to avoid duplicates
 
-    # Phase 6.1: Set up middleware stack (isolated from routers)
+    # Phase 6.1: Set up canonical middleware stack (isolated from routers)
     # Note: middleware setup is intentionally executed after registering error handlers
-    try:
-        from app.middleware.stack import setup_middleware_stack
-        csrf_enabled = bool(int(os.getenv("CSRF_ENABLED", "1")))
-        cors_origins = os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGINS") else None
-        setup_middleware_stack(app, csrf_enabled=csrf_enabled, cors_origins=cors_origins)
-        logger.debug("✅ Middleware stack configured")
-    except Exception as e:
-        logger.warning("⚠️  Failed to set up middleware stack: %s", e)
+    from app.middleware.loader import register_canonical_middlewares
+    csrf_enabled = bool(int(os.getenv("CSRF_ENABLED", "1")))
+    cors_origins = os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGINS") else None
+    register_canonical_middlewares(app, csrf_enabled=csrf_enabled, cors_origins=cors_origins)
+    logger.debug("✅ Canonical middleware stack configured")
 
     # Strict vector store preflight: fail startup early when STRICT_VECTOR_STORE is set
     try:
@@ -1015,10 +977,17 @@ def create_app() -> FastAPI:
 # Infrastructure initialization moved to beginning of create_app()
 
     # After **all** middleware and routers are registered, but before return:
-    from app.diagnostics.state import set_snapshot, record_event
-    from app.diagnostics.startup_probe import probe
     from fastapi import APIRouter, Query
-    from app.diagnostics.state import get_snapshot, events, router_calls, import_timings, set_import_timings
+
+    from app.diagnostics.startup_probe import probe
+    from app.diagnostics.state import (
+        events,
+        get_snapshot,
+        import_timings,
+        record_event,
+        router_calls,
+        set_snapshot,
+    )
 
     # Always take snapshot for diagnostic endpoints (lazy imports)
     set_snapshot("after", probe(app))
@@ -1154,8 +1123,8 @@ def create_app() -> FastAPI:
 
 # Wire store providers into middleware (dependency injection)
 # Import stores *after* app exists to avoid import-time cycles
-from .user_store import user_store
 from .middleware.middleware_core import set_store_providers
+from .user_store import user_store
 
 set_store_providers(user_store_provider=lambda: user_store)
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-import requests
 import json
+
+import requests
 
 BASE_URL = "http://localhost:8000"
 
@@ -18,7 +19,7 @@ def test_google_oauth_flow():
         print(f"   📏 URL length: {len(url)} characters")
 
         # Check required parameters
-        from urllib.parse import urlparse, parse_qs
+        from urllib.parse import parse_qs, urlparse
 
         parsed = urlparse(url)
         params = parse_qs(parsed.query)

@@ -1,11 +1,13 @@
 """Router rules loader for YAML-based configuration."""
 
-from app import settings
+from typing import Any
+
 import yaml
-from typing import Dict, Any
+
+from app import settings
 
 
-def get_router_rules() -> Dict[str, Any]:
+def get_router_rules() -> dict[str, Any]:
     """Load router rules from YAML file.
 
     Returns:
@@ -14,7 +16,7 @@ def get_router_rules() -> Dict[str, Any]:
     rules_path = settings.router_rules_path()
 
     try:
-        with open(rules_path, 'r') as f:
+        with open(rules_path) as f:
             rules = yaml.safe_load(f)
             return rules or {}
     except (FileNotFoundError, yaml.YAMLError) as e:
@@ -29,7 +31,7 @@ def get_router_rules() -> Dict[str, Any]:
 # Use infra.get_router_rules_cache() instead
 
 
-def get_cached_router_rules() -> Dict[str, Any]:
+def get_cached_router_rules() -> dict[str, Any]:
     """Get cached router rules, loading from file if not cached."""
     from ..infra.router_rules import get_router_rules_cache
     return get_router_rules_cache()

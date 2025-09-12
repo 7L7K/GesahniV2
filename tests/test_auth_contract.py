@@ -18,10 +18,10 @@ If this file fails, the app violates the contract → fix code.
 If this file passes but old tests fail, the old tests are stale → update tests to match the contract table.
 """
 
-import pytest
-from fastapi.testclient import TestClient
 import random
 import string
+
+from fastapi.testclient import TestClient
 
 
 def _generate_unique_username():

@@ -1,15 +1,14 @@
 """Test-specific fixtures."""
 
+import json
 import os
 import tempfile
-import pytest
-import asyncio
-import json
 import time
+
 import httpx
-from pathlib import Path
-from starlette.testclient import TestClient as _TestClient
+import pytest
 from httpx import ASGITransport
+from starlette.testclient import TestClient as _TestClient
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -124,10 +123,11 @@ class TestClient(_TestClient):
         return super().delete(*args, **kwargs)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def client(app):
-    """TestClient fixture with parameter name compatibility shim."""
-    return TestClient(app)
+    """TestClient fixture with lifespan via context manager to ensure clean startup/shutdown."""
+    with TestClient(app) as c:
+        yield c
 
 
 # Async fixtures and auth helpers for modern test support
@@ -165,9 +165,9 @@ def test_env(monkeypatch):
 @pytest.fixture(scope="session")
 async def create_test_user():
     """Create or reuse the standardized test user in the database."""
-    from app.user_store import user_store
-    from app.models.third_party_tokens import ThirdPartyToken
     from app.auth_store_tokens import upsert_token
+    from app.models.third_party_tokens import ThirdPartyToken
+    from app.user_store import user_store
 
     # Use standardized test user identity
     test_user_id = "test_user_123"
@@ -240,9 +240,10 @@ def seed_calendar_file(tmp_path):
 @pytest.fixture
 async def authed_client(async_client, create_test_user):
     """Async client with authentication cookies set using standardized test user."""
-    from app.web.cookies import set_auth_cookies
-    from app.tokens import make_access
     from fastapi.responses import Response
+
+    from app.tokens import make_access
+    from app.web.cookies import set_auth_cookies
 
     user_data = create_test_user
     user_id = user_data["user_id"]

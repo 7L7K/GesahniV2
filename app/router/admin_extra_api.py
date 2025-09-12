@@ -7,12 +7,12 @@ alias fallbacks.
 """
 from __future__ import annotations
 
-import os
 import logging
 
 from fastapi import Request
-from app import settings
 from fastapi.responses import JSONResponse
+
+from app import settings
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,9 @@
 import pytest
+from fastapi import Request, HTTPException
 
 
 @pytest.mark.asyncio
 async def test_verify_webhook_missing_secret(monkeypatch):
-    from fastapi import Request
 
     from app.security.webhooks import verify_webhook
 
@@ -14,5 +14,5 @@ async def test_verify_webhook_missing_secret(monkeypatch):
 
     scope = {"type": "http", "method": "POST", "path": "/", "headers": []}
     req = Request(scope)
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException):
         await verify_webhook(req)

@@ -20,9 +20,10 @@ Bearer Precedence:
 - Session cookie (gsn_session) used for session-based auth
 """
 
-from fastapi import Request, HTTPException
-from typing import Any, Dict, List, Optional
 import os
+from typing import Any
+
+from fastapi import HTTPException, Request
 
 # Try to reuse existing project helpers when available
 try:
@@ -36,17 +37,17 @@ try:
     from app.cookies import read_access_cookie, read_session_cookie
 except Exception:
     # Fallback readers
-    def read_access_cookie(request: Request) -> Optional[str]:
+    def read_access_cookie(request: Request) -> str | None:
         return request.cookies.get("gsn_access") or request.cookies.get("access_token")
 
-    def read_session_cookie(request: Request) -> Optional[str]:
+    def read_session_cookie(request: Request) -> str | None:
         return request.cookies.get("gsn_session") or request.cookies.get("__session")
 
 
-Identity = Dict[str, Any]
+Identity = dict[str, Any]
 
 
-def _decode_jwt(token: str) -> Optional[Identity]:
+def _decode_jwt(token: str) -> Identity | None:
     """Decode a JWT token into an identity dict, if possible.
 
     Prefers a project-level jwt_decode helper; otherwise uses PyJWT if available.
@@ -77,7 +78,7 @@ def _decode_jwt(token: str) -> Optional[Identity]:
         return None
 
 
-def resolve_identity(request: Request) -> Optional[Identity]:
+def resolve_identity(request: Request) -> Identity | None:
     """Resolve caller identity from request.
 
     Precedence rules:
@@ -111,7 +112,7 @@ def resolve_identity(request: Request) -> Optional[Identity]:
     return None
 
 
-def require_auth(request: Request, required_scopes: Optional[List[str]] = None) -> Identity:
+def require_auth(request: Request, required_scopes: list[str] | None = None) -> Identity:
     """Require an authenticated identity for the request.
 
     Args:
@@ -142,7 +143,7 @@ def require_auth(request: Request, required_scopes: Optional[List[str]] = None) 
     return ident
 
 
-def check_scopes(identity: Identity, required_scopes: List[str]) -> List[str]:
+def check_scopes(identity: Identity, required_scopes: list[str]) -> list[str]:
     """Check if identity has all required scopes.
 
     Args:
@@ -233,7 +234,7 @@ def require_csrf(request: Request) -> None:
             )
 
 
-def _get_csrf_allowlist() -> List[str]:
+def _get_csrf_allowlist() -> list[str]:
     """Get list of paths exempt from CSRF protection."""
     allowlist_str = os.getenv("CSRF_ALLOWLIST_PATHS", "")
     if not allowlist_str:

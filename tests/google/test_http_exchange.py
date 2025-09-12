@@ -1,9 +1,8 @@
-import asyncio
-import pytest
 import httpx
+import pytest
 
-from app.integrations.google.http_exchange import async_token_exchange
 from app.integrations.google.errors import OAuthError
+from app.integrations.google.http_exchange import async_token_exchange
 
 
 class DummyResponse:

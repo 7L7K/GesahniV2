@@ -10,6 +10,7 @@ import { useAuthState } from '@/hooks/useAuth';
 import { getToken, clearTokens, getBudget, bumpAuthEpoch, apiFetch } from '@/lib/api';
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
 import ClientOnly from './ClientOnly';
+import SessionBadge from '@/components/SessionBadge';
 
 // Clerk completely removed - using cookie authentication only
 
@@ -167,6 +168,9 @@ export default function Header() {
                             </Link>
                         )}
                         <ThemeToggle />
+                        <ClientOnly>
+                            <SessionBadge />
+                        </ClientOnly>
                         <ClientOnly>
                             {localMode && (
                                 <div className="flex items-center gap-1 text-xs text-muted-foreground">

@@ -11,8 +11,8 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.integrations.google.state import generate_signed_state
 from app.api.google_oauth import router
+from app.integrations.google.state import generate_signed_state
 
 
 @pytest.fixture

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import os
 import re
 import sys
 from pathlib import Path
 
 import aiosqlite
 
+from ..db.paths import resolve_db_path
 from .base import Skill
 from .ledger import record_action
-from ..db.paths import resolve_db_path
+
 
 def _db_path() -> Path:
     p = resolve_db_path("NOTES_DB", "notes.db")
@@ -62,8 +62,25 @@ class NotesDAO:
             rows = await cur.fetchall()
         return [r[0] for r in rows]
 
+    async def close(self) -> None:
+        """Close persistent aiosqlite connection if open."""
+        conn = getattr(self, "_conn", None)
+        if conn is not None:
+            try:
+                await conn.close()
+            except Exception:
+                pass
+            self._conn = None
+
 
 dao = NotesDAO(_db_path())
+
+
+async def close_notes_dao() -> None:
+    try:
+        await dao.close()
+    except Exception:
+        pass
 
 
 class NotesSkill(Skill):

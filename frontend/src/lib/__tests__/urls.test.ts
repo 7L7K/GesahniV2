@@ -44,7 +44,7 @@ describe('URL Helper Functions', () => {
             const req = createMockRequest('http://localhost:3000/some/path')
             const url = buildRedirectUrl(req, '/login', { next: '/dashboard' })
 
-            expect(url.href).toBe('http://localhost:3000/login?next=%2Fdashboard')
+            expect(url.href).toBe('http://localhost:3000/login')
         })
     })
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .logging_config import req_id_var
 
@@ -9,7 +9,7 @@ try:  # best-effort import
     from .otel_utils import get_trace_id_hex
 except Exception:  # pragma: no cover
 
-    def get_trace_id_hex() -> Optional[str]:  # type: ignore
+    def get_trace_id_hex() -> str | None:  # type: ignore
         return None
 
 
@@ -18,13 +18,13 @@ def log_with_enhanced_schema(
     level: int,
     message: str,
     *,
-    provider: Optional[str] = None,
-    service: Optional[str] = None,
-    sub: Optional[str] = None,
-    status_code: Optional[int] = None,
-    latency_ms: Optional[float] = None,
-    error_code: Optional[str] = None,
-    extra_meta: Optional[Dict[str, Any]] = None,
+    provider: str | None = None,
+    service: str | None = None,
+    sub: str | None = None,
+    status_code: int | None = None,
+    latency_ms: float | None = None,
+    error_code: str | None = None,
+    extra_meta: dict[str, Any] | None = None,
     **kwargs,
 ) -> None:
     """Log with enhanced structured schema including required fields.
@@ -69,9 +69,9 @@ def log_request_start(
     method: str,
     path: str,
     *,
-    user_id: Optional[str] = None,
-    provider: Optional[str] = None,
-    service: Optional[str] = None,
+    user_id: str | None = None,
+    provider: str | None = None,
+    service: str | None = None,
     **kwargs,
 ) -> None:
     """Log the start of a request with enhanced schema."""
@@ -98,10 +98,10 @@ def log_request_complete(
     status_code: int,
     latency_ms: float,
     *,
-    user_id: Optional[str] = None,
-    provider: Optional[str] = None,
-    service: Optional[str] = None,
-    error_code: Optional[str] = None,
+    user_id: str | None = None,
+    provider: str | None = None,
+    service: str | None = None,
+    error_code: str | None = None,
     **kwargs,
 ) -> None:
     """Log the completion of a request with enhanced schema."""
@@ -130,11 +130,11 @@ def log_error(
     logger: logging.Logger,
     error: Exception,
     *,
-    status_code: Optional[int] = None,
-    provider: Optional[str] = None,
-    service: Optional[str] = None,
-    sub: Optional[str] = None,
-    context: Optional[str] = None,
+    status_code: int | None = None,
+    provider: str | None = None,
+    service: str | None = None,
+    sub: str | None = None,
+    context: str | None = None,
     **kwargs,
 ) -> None:
     """Log an error with enhanced schema."""
@@ -163,11 +163,11 @@ def log_service_call(
     service: str,
     operation: str,
     *,
-    provider: Optional[str] = None,
-    sub: Optional[str] = None,
-    latency_ms: Optional[float] = None,
-    status_code: Optional[int] = None,
-    error_code: Optional[str] = None,
+    provider: str | None = None,
+    sub: str | None = None,
+    latency_ms: float | None = None,
+    status_code: int | None = None,
+    error_code: str | None = None,
     **kwargs,
 ) -> None:
     """Log a service call with enhanced schema."""
@@ -195,9 +195,9 @@ def log_auth_event(
     logger: logging.Logger,
     event: str,
     *,
-    sub: Optional[str] = None,
-    status_code: Optional[int] = None,
-    error_code: Optional[str] = None,
+    sub: str | None = None,
+    status_code: int | None = None,
+    error_code: str | None = None,
     **kwargs,
 ) -> None:
     """Log authentication events."""
@@ -222,10 +222,10 @@ def log_api_call(
     endpoint: str,
     method: str,
     *,
-    sub: Optional[str] = None,
-    status_code: Optional[int] = None,
-    latency_ms: Optional[float] = None,
-    error_code: Optional[str] = None,
+    sub: str | None = None,
+    status_code: int | None = None,
+    latency_ms: float | None = None,
+    error_code: str | None = None,
     **kwargs,
 ) -> None:
     """Log API calls."""

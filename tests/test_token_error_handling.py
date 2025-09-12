@@ -3,12 +3,14 @@ Tests for comprehensive error handling and recovery in token system
 """
 
 import time
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.auth_store_tokens import TokenDAO, TokenRefreshService
+from app.main import app
 from app.models.third_party_tokens import ThirdPartyToken
 
 
@@ -482,6 +484,7 @@ class TestTokenErrorHandling:
         now = int(time.time())
 
         # Create multiple users with tokens
+        tokens = []
         for i in range(50):
             token = ThirdPartyToken(
                 identity_id="7e91d33e-d446-4311-b533-82e03a9d7f6e",

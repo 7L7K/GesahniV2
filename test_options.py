@@ -3,19 +3,23 @@
 Simple test to verify OPTIONS preflight handling works correctly.
 """
 
-import requests
-import time
 import sys
+import time
+
+import requests
+
 
 def test_options_preflight():
     """Test that OPTIONS requests return 204 without CORS headers."""
     print("Testing OPTIONS preflight handling...")
 
     # Start a simple server for testing
-    from app.main import create_app
-    import uvicorn
-    import threading
     import os
+    import threading
+
+    import uvicorn
+
+    from app.main import create_app
 
     app = create_app()
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 import aiohttp
 
@@ -28,7 +28,7 @@ class HomeAssistantRadioProvider:
         self.ha_url = ha_url or HA_URL
         self.token = token or HA_TOKEN
 
-    async def play(self, device_id: str, context: Dict[str, Any]) -> None:
+    async def play(self, device_id: str, context: dict[str, Any]) -> None:
         await self.play_url(context.get("media_content_id"), device_id)
 
     async def pause(self, device_id: str) -> None:
@@ -65,7 +65,7 @@ class HomeAssistantRadioProvider:
                     logger.error("HA previous failed: %s %s", resp.status, text)
                     raise RuntimeError("Home Assistant previous failed")
 
-    async def list_devices(self) -> List[Device]:
+    async def list_devices(self) -> list[Device]:
         url = f"{self.ha_url}/api/states"
         headers = {"Authorization": f"Bearer {self.token}"}
         async with aiohttp.ClientSession() as sess:

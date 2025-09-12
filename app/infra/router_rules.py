@@ -3,10 +3,9 @@
 This module manages the global router rules cache.
 Initialized from create_app() to avoid circular dependencies.
 """
-from typing import Any, Dict, Optional
+from typing import Any
 
-
-_router_rules_cache: Optional[Dict[str, Any]] = None
+_router_rules_cache: dict[str, Any] | None = None
 
 
 def init_router_rules_cache() -> None:
@@ -21,7 +20,7 @@ def init_router_rules_cache() -> None:
         _router_rules_cache = get_router_rules()
 
 
-def get_router_rules_cache() -> Dict[str, Any]:
+def get_router_rules_cache() -> dict[str, Any]:
     """Get the global router rules cache.
 
     Returns:

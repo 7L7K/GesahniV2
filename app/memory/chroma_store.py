@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Chroma-backed vector store implementation."""
 
 
@@ -23,9 +24,8 @@ except ImportError:  # pragma: no cover - optional dependency
     chromadb = None
     chroma_ef = None  # type: ignore
 
-from .env_utils import _clean_meta
+from .env_utils import _clean_meta, _normalize
 from .env_utils import _get_sim_threshold as _env_get_sim_threshold
-from .env_utils import _normalize
 from .memory_store import VectorStore
 
 logger = logging.getLogger(__name__)

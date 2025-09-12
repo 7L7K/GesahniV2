@@ -8,9 +8,9 @@ object to understand when the missing_provider_iss error might occur.
 
 import os
 import sys
-import json
-import jwt
 from unittest.mock import Mock
+
+import jwt
 
 # Add the app directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
@@ -49,7 +49,7 @@ def simulate_oauth_callback_processing(creds):
         preview = id_token_str[:50] if len(id_token_str) > 50 else id_token_str
         print(f"Simulating OAuth callback with creds.id_token: {preview}")
     else:
-        print(f"Simulating OAuth callback with creds.id_token: None")
+        print("Simulating OAuth callback with creds.id_token: None")
 
     # This is the exact logic from google_oauth.py
     provider_sub = None
@@ -137,7 +137,7 @@ def test_scenarios():
     failing_scenarios = [desc for desc, success, _ in results if not success]
 
     if failing_scenarios:
-        print(f"\n⚠️  The following scenarios would trigger missing_provider_iss:")
+        print("\n⚠️  The following scenarios would trigger missing_provider_iss:")
         for scenario in failing_scenarios:
             print(f"   • {scenario}")
     else:

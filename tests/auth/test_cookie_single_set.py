@@ -4,6 +4,7 @@ This test ensures that the canonical cookie system works correctly and
 prevents setting multiple cookies with the same name in a single response.
 """
 import os
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -23,10 +24,10 @@ def _create_test_app(cookie_canon: str):
         del sys.modules["app.web"]
 
     # Import after setting environment
-    from app.auth import router as auth_router
+    from app.api.auth import router as auth_router
 
     app = FastAPI()
-    app.include_router(auth_router)
+    app.include_router(auth_router, prefix="/v1")
     return app
 
 
@@ -49,12 +50,12 @@ def test_single_cookie_set(cookie_canon: str, expected_names: set[str]):
 
     with TestClient(test_app) as client:
         # Try to register a test user (might fail if already exists)
-        register_resp = client.post("/register", json={"username": unique_username, "password": "test_pass"})
+        register_resp = client.post("/v1/register", json={"username": unique_username, "password": "test_pass"})
         # Accept both success and conflict (user already exists)
         assert register_resp.status_code in [200, 201, 409], f"Failed to register user: {register_resp.text}"
 
         # Now try to login and check cookies
-        login_resp = client.post("/login", json={"username": unique_username, "password": "test_pass"})
+        login_resp = client.post(f"/v1/auth/login?username={unique_username}")
 
         # Check that login was successful
         assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"

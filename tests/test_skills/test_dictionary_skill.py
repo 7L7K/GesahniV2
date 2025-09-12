@@ -31,10 +31,10 @@ class FakeClient:
         class R:
             status_code = 200
 
-            def json(self_inner):
+            def json(self):
                 return DATA
 
-            def raise_for_status(self_inner):
+            def raise_for_status(self):
                 pass
 
         return R()
@@ -78,10 +78,10 @@ def test_dictionary_no_meanings(monkeypatch):
             class R:
                 status_code = 200
 
-                def json(self_inner):
+                def json(self):
                     return [{}]
 
-                def raise_for_status(self_inner):
+                def raise_for_status(self):
                     pass
 
             return R()

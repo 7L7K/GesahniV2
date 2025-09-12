@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Comprehensive Spotify OAuth flow test with proper mocking."""
 
-import time
 import logging
 import sys
+import time
+
 from fastapi.testclient import TestClient
-import pytest
 
 # Import the app
 from app.main import app
@@ -90,7 +90,7 @@ def test_complete_spotify_oauth_flow_with_mocking(monkeypatch):
     logger.info(f"Session ID: {session_id}")
 
     # Extract state from auth_url for later use
-    from urllib.parse import urlparse, parse_qs
+    from urllib.parse import parse_qs, urlparse
 
     parsed_url = urlparse(auth_url)
     query_params = parse_qs(parsed_url.query)

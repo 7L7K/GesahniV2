@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import logging
 import os
 import time
 from dataclasses import asdict
-import logging
 from datetime import datetime
 from datetime import time as dtime
 from pathlib import Path
@@ -15,15 +15,14 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.common import OkResponse as CommonOkResponse
-from app.deps.user import get_current_user_id
-from app.integrations.spotify.client import SpotifyAuthError, SpotifyClient
-from app.music.orchestrator import MusicOrchestrator
-from app.music.providers.spotify_provider import SpotifyProvider
-from app.models.music_state import MusicVibe, load_state, save_state
 from app.api.music import PROVIDER_SPOTIFY
 from app.deps.scopes import require_scope
-
+from app.deps.user import get_current_user_id
+from app.integrations.spotify.client import SpotifyAuthError, SpotifyClient
+from app.models.common import OkResponse as CommonOkResponse
+from app.models.music_state import MusicVibe, load_state, save_state
+from app.music.orchestrator import MusicOrchestrator
+from app.music.providers.spotify_provider import SpotifyProvider
 
 router = APIRouter(tags=["Music"])  # mounted under /v1
 logger = logging.getLogger(__name__)
@@ -104,8 +103,8 @@ async def _ensure_album_cached(url: str | None, track_id: str | None) -> str | N
     if dest.exists() and dest.stat().st_size > 0:
         return public
     try:
-        import httpx
         import anyio
+        import httpx
 
         async with httpx.AsyncClient(timeout=10) as s:
             r = await s.get(url)

@@ -239,7 +239,7 @@ class QdrantVectorStore:
             op_id = None
             try:
                 if hasattr(resp, "operation_id"):
-                    op_id = getattr(resp, "operation_id")
+                    op_id = resp.operation_id
                 elif isinstance(resp, dict):
                     op_id = resp.get("operation_id")
             except Exception:

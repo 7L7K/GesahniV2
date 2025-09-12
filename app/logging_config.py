@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 from contextvars import ContextVar
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 # Exposed so other modules can set/request ids
@@ -17,7 +17,7 @@ _MAX_ERRORS = 200
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload = {
-            "timestamp": datetime.now(timezone.utc)
+            "timestamp": datetime.now(UTC)
             .isoformat(timespec="seconds")
             .replace("+00:00", "Z"),
             "req_id": getattr(record, "req_id", req_id_var.get()),
@@ -298,7 +298,7 @@ class _ErrorBufferHandler(logging.Handler):
             if record.levelno < logging.ERROR:
                 return
             item = {
-                "timestamp": datetime.now(timezone.utc)
+                "timestamp": datetime.now(UTC)
                 .isoformat(timespec="seconds")
                 .replace("+00:00", "Z"),
                 "level": record.levelname,

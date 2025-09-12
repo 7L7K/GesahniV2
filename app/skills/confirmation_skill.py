@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import re
+
 from .base import Skill
-from .tools.confirmation import enqueue, dequeue
 from .ledger import record_action
+from .tools.confirmation import dequeue
 
 
 class ConfirmationSkill(Skill):

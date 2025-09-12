@@ -3,16 +3,16 @@
 This module handles OpenAPI schema generation without importing any
 router modules that could create circular dependencies.
 """
-from typing import Any, Dict, List
+from typing import Any
 
 
 def generate_custom_openapi(
     title: str,
     version: str,
-    routes: List[Any],
-    tags: List[Dict[str, Any]],
+    routes: list[Any],
+    tags: list[dict[str, Any]],
     description: str = "GesahniV2 API",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Generate custom OpenAPI schema.
 
     This function generates the OpenAPI schema without importing
@@ -89,7 +89,7 @@ def setup_openapi_for_app(app: Any) -> None:
 
         # Import config only when needed
         try:
-            from ..config_docs import should_show_servers, get_dev_servers
+            from ..config_docs import get_dev_servers, should_show_servers
         except ImportError:
             should_show_servers = lambda: False
             get_dev_servers = lambda: []

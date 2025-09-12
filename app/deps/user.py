@@ -4,7 +4,8 @@ import logging
 import os
 from uuid import uuid4
 
-from fastapi import HTTPException, Request, WebSocket, Response
+from fastapi import HTTPException, Request, Response, WebSocket
+
 from app.web.cookies import clear_all_auth
 
 log = logging.getLogger("auth")
@@ -21,7 +22,8 @@ try:
 except AttributeError:
     # Fallback: define decode_jwt locally if not available in module
     import jwt
-    from jwt import PyJWTError, ExpiredSignatureError
+    from jwt import ExpiredSignatureError, PyJWTError
+
     from app.security.jwt_config import get_jwt_config
 
     def decode_jwt(token: str):
@@ -147,7 +149,7 @@ def get_current_user_id(
     # Cookie fallback so browser sessions persist without sending headers
     if token is None and request is not None:
         try:
-            from ..web.cookies import get_any, ACCESS_ALIASES
+            from ..web.cookies import ACCESS_ALIASES, get_any
 
             token = get_any(request, ACCESS_ALIASES)
             if token:
@@ -247,7 +249,7 @@ def get_current_user_id(
             # mark as logged for this request to avoid duplicate logs
             if target is not None:
                 try:
-                    setattr(target.state, "auth_cookie_source_logged", True)
+                    target.state.auth_cookie_source_logged = True
                 except Exception:
                     pass
     except Exception:
@@ -286,8 +288,8 @@ def get_current_user_id(
     # Handle opaque session ID resolution for __session cookies (Identity-first)
     if token and token_source in ["__session_cookie", "websocket_session_cookie"]:
         from ..session_store import (
-            get_session_store,
             SessionStoreUnavailable,
+            get_session_store,
         )
 
         store = get_session_store()
@@ -297,8 +299,8 @@ def get_current_user_id(
             # Flag for up-stack decision (503 on protected routes when session-only)
             try:
                 if target is not None:
-                    setattr(target.state, "session_store_unavailable", True)
-                    setattr(target.state, "session_cookie_present", True)
+                    target.state.session_store_unavailable = True
+                    target.state.session_cookie_present = True
                     try:
                         from ..metrics import AUTH_STORE_OUTAGE
 
@@ -315,7 +317,7 @@ def get_current_user_id(
             if target is not None:
                 try:
                     target.state.jwt_payload = identity
-                    setattr(target.state, "auth_source", "session_identity")
+                    target.state.auth_source = "session_identity"
                 except Exception:
                     pass
 
@@ -323,13 +325,17 @@ def get_current_user_id(
             try:
                 if request is not None and response is not None:
                     from ..auth_refresh import perform_lazy_refresh
-                    from ..metrics_auth import lazy_refresh_minted, lazy_refresh_skipped, lazy_refresh_failed
+                    from ..metrics_auth import (
+                        lazy_refresh_failed,
+                        lazy_refresh_minted,
+                        lazy_refresh_skipped,
+                    )
 
                     if perform_lazy_refresh(request, response, user_id, identity):
                         lazy_refresh_minted("deps")
                     else:
                         lazy_refresh_skipped("deps")
-            except Exception as e:
+            except Exception:
                 # Best-effort; do not block auth
                 try:
                     from ..metrics_auth import lazy_refresh_failed
@@ -375,7 +381,7 @@ def get_current_user_id(
                             user_id = str(uid)
                             if target is not None:
                                 target.state.jwt_payload = payload
-                                setattr(target.state, "auth_source", "session_backfill")
+                                target.state.auth_source = "session_backfill"
                             # Optionally write identity for future session-only auth
                             if os.getenv("AUTH_IDENTITY_BACKFILL", "1").strip().lower() in {"1","true","yes","on"}:
                                 try:
@@ -444,7 +450,11 @@ def get_current_user_id(
                 refresh_token = read_refresh_cookie(request)
                 if refresh_token:
                         from ..auth_refresh import perform_lazy_refresh
-                        from ..metrics_auth import lazy_refresh_minted, lazy_refresh_skipped, lazy_refresh_failed
+                        from ..metrics_auth import (
+                            lazy_refresh_failed,
+                            lazy_refresh_minted,
+                            lazy_refresh_skipped,
+                        )
 
                         # Extract user_id from refresh token for lazy refresh
                         try:
@@ -469,7 +479,7 @@ def get_current_user_id(
                                 pass
                         else:
                             lazy_refresh_skipped("deps_fallback")
-            except Exception as e:
+            except Exception:
                 try:
                     from ..metrics_auth import lazy_refresh_failed
                     lazy_refresh_failed("deps_fallback")

@@ -31,8 +31,8 @@ class TestAuthSmokeSuite:
         assert response.status_code in [200, 400, 401, 403, 422, 500]
 
     def test_auth_register_endpoint_exists(self, client):
-        """covers: POST: /v1/auth/register"""
-        response = client.post('/v1/auth/register', json={})
+        """covers: POST: /v1/register"""
+        response = client.post('/v1/register', json={})
         assert response.status_code in [200, 400, 401, 403, 409, 422, 500]
 
     def test_auth_logout_endpoint_exists(self, client):

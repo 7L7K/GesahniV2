@@ -2,8 +2,8 @@ from http import HTTPStatus
 
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.cookie_names import GSNH_AT, GSNH_RT
+from app.main import app
 
 
 def test_cookie_eviction_stress(monkeypatch):

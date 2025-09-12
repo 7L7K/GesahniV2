@@ -4,22 +4,22 @@ This creates endpoints that intentionally raise different types of exceptions
 to verify they get normalized to the correct status codes and JSON format.
 """
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, ValidationError
+from fastapi import APIRouter
+from pydantic import BaseModel
 
 # Tell pytest this module is not a test module so endpoints here are not collected
 # as test functions. The canonical tests live under `tests/`.
 __test__ = False
 
 from .http_errors import (
-    unauthorized,
     forbidden,
-    not_found,
-    method_not_allowed,
-    payload_too_large,
-    validation_error,
     internal_error,
-    translate_common_exception
+    method_not_allowed,
+    not_found,
+    payload_too_large,
+    translate_common_exception,
+    unauthorized,
+    validation_error,
 )
 
 router = APIRouter()

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Phase 6.2: Legacy audit module preserved as audit_legacy for compatibility.
 

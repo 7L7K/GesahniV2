@@ -7,13 +7,13 @@ Creates an expired token with valid refresh token, then triggers refresh job man
 import asyncio
 import time
 import uuid
-from pathlib import Path
 
 import pytest
+
+from app.auth_store import ensure_tables, link_oauth_identity
 from app.auth_store_tokens import TokenDAO
+from app.cron.spotify_refresh import _get_candidates, _refresh_for_user
 from app.models.third_party_tokens import ThirdPartyToken
-from app.auth_store import link_oauth_identity, ensure_tables, get_user_id_by_identity_id
-from app.cron.spotify_refresh import run_once, _get_candidates, _refresh_for_user
 
 
 @pytest.fixture
@@ -176,8 +176,8 @@ async def test_manual_token_refresh(temp_db, create_test_identity, caplog):
 
 async def main():
     """Standalone test execution."""
-    import tempfile
     import os
+    import tempfile
 
     # Create temporary directories for test databases
     with tempfile.TemporaryDirectory() as tmp_dir:

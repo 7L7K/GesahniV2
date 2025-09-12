@@ -3,10 +3,8 @@
 Debug script to test login functionality step by step
 """
 import asyncio
-import os
-import sys
 import json
-from datetime import datetime
+import sys
 
 # Add current directory to path
 sys.path.append('.')
@@ -17,8 +15,9 @@ async def debug_login():
     try:
         # Test token creation
         print("\n1. Testing token creation...")
-        from app.tokens import make_access, make_refresh
         from uuid import uuid4
+
+        from app.tokens import make_access, make_refresh
 
         access_token = make_access({"user_id": "demo"})
         refresh_jti = uuid4().hex
@@ -38,7 +37,6 @@ async def debug_login():
 
         # Test cookie configuration
         print("\n3. Testing cookie configuration...")
-        from fastapi import Request, Response
 
         # Create a mock request/response
         class MockRequest:
@@ -68,9 +66,9 @@ async def debug_login():
 
         # Test session creation
         print("\n4. Testing session creation...")
-        from app.session_store import get_session_store
-        from app.security import _jwt_decode
         from app.api.auth import _jwt_secret
+        from app.security import _jwt_decode
+        from app.session_store import get_session_store
 
         store = get_session_store()
 
@@ -92,7 +90,7 @@ async def debug_login():
             response,
             access=access_token,
             refresh=refresh_token,
-            session_id=session_id or f"sess_{int(0)}_{0:08x}",
+            session_id=session_id or f"sess_{0}_{0:08x}",
             access_ttl=access_ttl,
             refresh_ttl=refresh_ttl,
             request=request,

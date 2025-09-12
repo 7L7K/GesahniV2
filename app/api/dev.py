@@ -1,10 +1,6 @@
 import os
-import time
-from datetime import datetime, timedelta, timezone
-from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 router = APIRouter(tags=["Dev"])
@@ -27,9 +23,9 @@ async def mint_access(request: MintAccessRequest, response: Response):
     if not _is_dev():
         raise HTTPException(status_code=403, detail="forbidden")
 
-    from ..tokens import sign_access_token
     from ..sessions_store import sessions_store
-    from ..web.cookies import set_auth_cookies, set_csrf_cookie
+    from ..tokens import sign_access_token
+    from ..web.cookies import set_auth_cookies
 
     user_id = request.user_id
     ttl_minutes = request.ttl_minutes

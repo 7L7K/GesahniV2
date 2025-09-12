@@ -3,12 +3,10 @@
 This module manages the global model router singleton.
 Initialized from create_app() to avoid circular dependencies.
 """
-from typing import Optional
 
 from ..router.model_router import ModelRouter
 
-
-_model_router: Optional[ModelRouter] = None
+_model_router: ModelRouter | None = None
 
 
 def init_model_router() -> None:

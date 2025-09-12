@@ -10,13 +10,12 @@ from __future__ import annotations
 import logging
 import os
 import re
-from typing import List
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
 
-def get_cors_origins() -> List[str]:
+def get_cors_origins() -> list[str]:
     """Get the configured CORS allowed origins."""
     cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 
@@ -104,17 +103,17 @@ def get_cors_allow_credentials() -> bool:
     return True  # Always allow credentials for local dev and cookie support
 
 
-def get_cors_allow_methods() -> List[str]:
+def get_cors_allow_methods() -> list[str]:
     """Get the CORS allowed methods."""
     return ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 
 
-def get_cors_allow_headers() -> List[str]:
+def get_cors_allow_headers() -> list[str]:
     """Get the CORS allowed headers."""
     return ["*", "Authorization"]
 
 
-def get_cors_expose_headers() -> List[str]:
+def get_cors_expose_headers() -> list[str]:
     """Get the CORS exposed headers."""
     return ["X-Request-ID", "X-Error-Code", "X-Error-ID", "X-Trace-ID"]
 
@@ -124,7 +123,7 @@ def get_cors_max_age() -> int:
     return 600
 
 
-def validate_cors_origins(origins: List[str]) -> bool:
+def validate_cors_origins(origins: list[str]) -> bool:
     """Validate that all origins are in the same address family."""
     if not origins:
         return True

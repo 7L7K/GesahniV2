@@ -1,7 +1,7 @@
 import pytest
+from fastapi import HTTPException
 
 from app.error_envelope import build_error, raise_enveloped
-from fastapi import HTTPException
 
 
 def test_build_error_contains_ids():

@@ -2,9 +2,9 @@
 """End-to-end test of Spotify OAuth flow with proper mocking."""
 
 import time
+from urllib.parse import parse_qs, urlparse
+
 import requests
-import json
-from urllib.parse import urlparse, parse_qs
 
 
 def test_spotify_flow_with_mocking():

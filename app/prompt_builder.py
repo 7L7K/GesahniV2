@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """PromptBuilder module for constructing LLM prompts."""
 
 

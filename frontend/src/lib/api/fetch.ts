@@ -12,13 +12,14 @@ if (typeof console !== 'undefined') {
 }
 
 // List of public endpoints that don't require authentication
+// IMPORTANT: Do NOT include whoami here; it must require auth
 const PUBLIC_PATHS = new Set([
   '/v1/health',
-  '/v1/csrf',
-  '/v1/login',
-  '/v1/register',
-  '/v1/state',
-  '/v1/models',
+  '/v1/auth/csrf',  // Canonical CSRF path
+  '/v1/login',      // Legacy - keep for backward compatibility
+  '/v1/auth/login', // Canonical login path
+  '/v1/register',   // Legacy - keep for backward compatibility
+  '/v1/auth/register', // Canonical register path
   '/v1/status',
   '/health/live',
   '/health/ready',
@@ -29,16 +30,12 @@ const PUBLIC_PATHS = new Set([
   '/metrics',
   '/v1/auth/finish',
   '/v1/auth/google/login_url',
-  '/v1/auth/login',
-  '/v1/auth/logout',
-  '/v1/auth/refresh',
-  '/v1/whoami',
 ]);
 
 // CSRF token management
 async function getCsrfToken(): Promise<string | null> {
   try {
-    const response = await fetch(`${API_URL}/v1/csrf`, {
+    const response = await fetch(`${API_URL}/v1/auth/csrf`, {
       method: 'GET',
       credentials: 'include',
       headers: {

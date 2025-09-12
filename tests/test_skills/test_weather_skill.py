@@ -23,10 +23,10 @@ class FakeClient:
 
     async def get(self, url, params=None):
         class R:
-            def json(self_non):
+            def json(self):
                 return {"main": {"temp": 20}, "weather": [{"description": "clear"}]}
 
-            def raise_for_status(self_non):
+            def raise_for_status(self):
                 pass
 
         return R()
@@ -41,10 +41,10 @@ class FakeClientZero:
 
     async def get(self, url, params=None):
         class R:
-            def json(self_non):
+            def json(self):
                 return {"main": {"temp": 0}, "weather": [{"description": "clear"}]}
 
-            def raise_for_status(self_non):
+            def raise_for_status(self):
                 pass
 
         return R()
@@ -82,13 +82,13 @@ def test_weather_city_with_comma(monkeypatch):
 
         async def get(self, url, params=None):
             class R:
-                def json(self_non):
+                def json(self):
                     return {
                         "main": {"temp": 72},
                         "weather": [{"description": "cloudy"}],
                     }
 
-                def raise_for_status(self_non):
+                def raise_for_status(self):
                     pass
 
             return R()

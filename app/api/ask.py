@@ -11,21 +11,21 @@ from importlib import import_module
 
 import jwt
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from app.deps.prompt_router import get_prompt_router
-from app.domain.prompt_router import PromptRouter
-from app.errors import BackendUnavailable
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.auth_core import csrf_validate, require_scope as require_scope_core
+from app.auth_core import csrf_validate
+from app.auth_core import require_scope as require_scope_core
 from app.deps.user import get_current_user_id, require_user
+from app.errors import BackendUnavailableError
 from app.otel_utils import get_trace_id_hex, start_span
 from app.policy import moderation_precheck
+
 # OPENAI/OLLAMA timeouts are provided by the legacy router module in some
 # configurations. Import them lazily with safe fallbacks to avoid hard
 # import-time coupling to `app.router` (which may be a lightweight package).
 try:
-    from app.router import OPENAI_TIMEOUT_MS, OLLAMA_TIMEOUT_MS
+    from app.router import OLLAMA_TIMEOUT_MS, OPENAI_TIMEOUT_MS
 except Exception:
     OPENAI_TIMEOUT_MS = 6000
     OLLAMA_TIMEOUT_MS = 4500
@@ -268,7 +268,7 @@ def _create_sse_event(event_type: str, data: dict) -> str:
 def _heartbeat_generator(interval: int = 30):
     """Generate periodic heartbeat events for SSE connections."""
     import asyncio
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
 
     async def stream_heartbeats():
         while True:
@@ -619,6 +619,7 @@ async def _ask(request: Request, body: dict | None):
                 }
                 # Instrument and protect the backend call with timeout/circuit
                 from time import monotonic
+
                 from app.metrics import PROMPT_ROUTER_CALLS_TOTAL, PROMPT_ROUTER_FAILURES_TOTAL
 
                 backend_label = os.getenv("PROMPT_BACKEND", "dryrun").lower()
@@ -630,7 +631,7 @@ async def _ask(request: Request, body: dict | None):
                     import asyncio
 
                     result = await asyncio.wait_for(prompt_router(payload), timeout=10.0)
-                except asyncio.TimeoutError as e:
+                except TimeoutError:
                     elapsed = monotonic() - start
                     PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "timeout").inc()
                     logger.error(
@@ -647,7 +648,7 @@ async def _ask(request: Request, body: dict | None):
                             "cause": "timeout",
                         },
                     )
-                except BackendUnavailable as e:
+                except BackendUnavailableError as e:
                     elapsed = monotonic() - start
                     PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "unavailable").inc()
                     logger.error(
@@ -1285,7 +1286,7 @@ async def ask_stream(
                     last_token_ts = time.monotonic()
                     next_ping_ts = last_token_ts + ping_interval_s
                     yield sse("delta", {"content": tok})
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
 
                 now = time.monotonic()

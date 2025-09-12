@@ -8,9 +8,9 @@ OAuth endpoints and that all our fixes are working end-to-end.
 
 import os
 import sys
-import json
+from urllib.parse import parse_qs, urlparse
+
 import requests
-from urllib.parse import urlparse, parse_qs
 
 # Add the app directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))

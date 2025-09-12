@@ -5,10 +5,10 @@ This module ensures every canonical route has at least one test touching it.
 It provides comprehensive coverage analysis and fails CI on uncovered handlers.
 """
 
-import pytest
 import json
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+
+import pytest
 from fastapi import FastAPI
 
 from app.main import create_app
@@ -19,10 +19,10 @@ class RouteCoverageAnalyzer:
 
     def __init__(self):
         self.app: FastAPI = create_app()
-        self.canonical_routes: Set[Tuple[str, str]] = self._extract_routes()
-        self.test_inventory: Dict[str, List[str]] = self._build_test_inventory()
+        self.canonical_routes: set[tuple[str, str]] = self._extract_routes()
+        self.test_inventory: dict[str, list[str]] = self._build_test_inventory()
 
-    def _extract_routes(self) -> Set[Tuple[str, str]]:
+    def _extract_routes(self) -> set[tuple[str, str]]:
         """Extract all (method, path) pairs from the FastAPI app."""
         routes = set()
         for route in self.app.routes:
@@ -36,7 +36,7 @@ class RouteCoverageAnalyzer:
                             routes.add((method.upper(), path))
         return routes
 
-    def _build_test_inventory(self) -> Dict[str, List[str]]:
+    def _build_test_inventory(self) -> dict[str, list[str]]:
         """Build inventory of which tests cover which routes."""
         inventory = {}
 
@@ -65,7 +65,7 @@ class RouteCoverageAnalyzer:
 
         return inventory
 
-    def get_coverage_report(self) -> Dict:
+    def get_coverage_report(self) -> dict:
         """Generate detailed coverage report."""
         covered_routes = set()
         uncovered_routes = set()

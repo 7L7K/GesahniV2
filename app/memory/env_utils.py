@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Utility helpers for vector store modules."""
 
 

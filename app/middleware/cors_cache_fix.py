@@ -10,7 +10,6 @@ to all CORS-related responses to prevent this issue.
 """
 
 import logging
-from typing import List, Optional, Sequence
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request

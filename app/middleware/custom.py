@@ -72,11 +72,10 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
     ):
         # Inline the logic from your enhanced_error_handling function:
         import time
-        from datetime import datetime
 
+        from app.error_envelope import build_error
         from app.logging_config import req_id_var
         from app.otel_utils import get_trace_id_hex  # best-effort
-        from app.error_envelope import build_error
 
         logger = logging.getLogger(__name__)
         start_time = time.time()
@@ -156,7 +155,8 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
                 pass
 
             # INFO sampling
-            import os, random
+            import os
+            import random
             info_sampling = float(os.getenv("INFO_SAMPLING", "1.0"))
             if info_sampling >= 1.0 or random.random() < max(0.0, min(1.0, info_sampling)):
                 logger.info(
@@ -198,7 +198,8 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
             error_code = _generate_error_code(status_code, type(e).__name__)
 
             # ERROR sampling
-            import os, random
+            import os
+            import random
             err_sampling = float(os.getenv("ERROR_SAMPLING", "1.0"))
             if err_sampling >= 1.0 or random.random() < max(0.0, min(1.0, err_sampling)):
                 logger.error(

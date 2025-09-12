@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from typing import Optional
-
-from .base import Skill
-from .ledger import get_last_reversible_action, record_action
 from .. import home_assistant as ha
 from .. import storage
+from .base import Skill
+from .ledger import get_last_reversible_action
 
 
 class UndoSkill(Skill):

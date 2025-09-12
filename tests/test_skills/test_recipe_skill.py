@@ -33,10 +33,10 @@ class FakeClient:
 
     async def get(self, url, params=None):
         class R:
-            def json(self_inner):
+            def json(self):
                 return DATA
 
-            def raise_for_status(self_inner):
+            def raise_for_status(self):
                 pass
 
         return R()

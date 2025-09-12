@@ -1,6 +1,7 @@
 import pytest
-from app.main import create_app
 from starlette.testclient import TestClient
+
+from app.main import create_app
 
 CASES = [
     ("GET", "/v1/whoami", {401, 200}),  # some suites allow 200 for logged-in cases

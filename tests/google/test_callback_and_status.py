@@ -47,7 +47,6 @@ def test_status_refreshed_flag(monkeypatch):
     client = TestClient(app)
 
     # Mock whoami auth to return a user and existing token
-    from app.api.google import google_status
 
     async def _get_token(user, provider):
         class T:

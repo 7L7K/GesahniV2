@@ -1,10 +1,11 @@
 """
 Tests for production configuration guardrails.
 """
-import pytest
 from unittest.mock import patch
 
-from app.startup.config_guard import assert_strict_prod, ConfigError, _is_truthy
+import pytest
+
+from app.startup.config_guard import ConfigError, _is_truthy, assert_strict_prod
 
 
 class TestConfigGuard:

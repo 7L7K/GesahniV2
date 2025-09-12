@@ -9,14 +9,13 @@ This module provides comprehensive route collision detection that:
 
 import logging
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
 
 # Allowlist for intentional route overlaps (rare exceptions)
 # Format: (method, path) -> set of allowed module:function patterns
-ROUTE_COLLISION_ALLOWLIST: Dict[Tuple[str, str], Set[str]] = {
+ROUTE_COLLISION_ALLOWLIST: dict[tuple[str, str], set[str]] = {
     # Add intentional overlaps here as needed
     # Example: ("GET", "/health") -> {"app.api.health:health_endpoint", "app.status:health_check"}
 }
@@ -79,7 +78,7 @@ def check_route_collisions(app, fail_on_collision: bool = True) -> None:
     logger.info("🔍 Starting route collision analysis...")
 
     # Track (method, path) -> list of endpoint info
-    collision_map: Dict[Tuple[str, str], List[str]] = defaultdict(list)
+    collision_map: dict[tuple[str, str], list[str]] = defaultdict(list)
 
     total_routes = 0
     skipped_head_routes = 0
@@ -228,7 +227,7 @@ async def init_route_collision_guard():
         raise
 
 
-def add_to_allowlist(method: str, path: str, handler_patterns: Set[str]) -> None:
+def add_to_allowlist(method: str, path: str, handler_patterns: set[str]) -> None:
     """Add an entry to the route collision allowlist.
 
     Args:
@@ -261,6 +260,6 @@ def remove_from_allowlist(method: str, path: str) -> bool:
     return False
 
 
-def get_allowlist() -> Dict[Tuple[str, str], Set[str]]:
+def get_allowlist() -> dict[tuple[str, str], set[str]]:
     """Get a copy of the current route collision allowlist."""
     return ROUTE_COLLISION_ALLOWLIST.copy()

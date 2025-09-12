@@ -6,10 +6,7 @@ once during application startup, preventing redundant schema creation
 during runtime operations.
 """
 
-import asyncio
 import logging
-import os
-from pathlib import Path
 
 import aiosqlite
 
@@ -24,10 +21,6 @@ async def init_db_once() -> None:
     than repeatedly during runtime operations.
     """
     # Import database paths from various modules (lazy to avoid circular imports)
-    from .auth import _db_path as AUTH_DB_PATH
-    from .auth_store import _db_path as AUTH_STORE_DB_PATH
-    from .care_store import _db_path as CARE_DB_PATH
-    from .music.store import _db_path as MUSIC_DB_PATH
 
     logger.info("Initializing database schemas...")
 
@@ -66,7 +59,7 @@ async def _init_auth_db() -> None:
 
         # Create dedicated auth table to avoid collision with analytics 'users'
         await db.execute(
-            f"""
+            """
             CREATE TABLE IF NOT EXISTS auth (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,

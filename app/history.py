@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -43,7 +43,7 @@ async def append_history(
         record = record_or_prompt
         if "timestamp" not in record:
             record["timestamp"] = (
-                datetime.now(timezone.utc)
+                datetime.now(UTC)
                 .isoformat(timespec="seconds")
                 .replace("+00:00", "Z")
             )
@@ -57,14 +57,14 @@ async def append_history(
                 engine_used=engine_used,
                 response=response,
                 timestamp=(
-                    datetime.now(timezone.utc)
+                    datetime.now(UTC)
                     .isoformat(timespec="seconds")
                     .replace("+00:00", "Z")
                 ),
             )
         if rec.timestamp is None:
             rec.timestamp = (
-                datetime.now(timezone.utc)
+                datetime.now(UTC)
                 .isoformat(timespec="seconds")
                 .replace("+00:00", "Z")
             )
@@ -115,7 +115,7 @@ async def append_history(
             if file_path.suffix == ".json":
                 existing = []
                 if file_path.exists():
-                    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                    async with aiofiles.open(file_path, encoding="utf-8") as f:
                         content = await f.read()
                         existing = json.loads(content) if content else []
                 existing.append(record)

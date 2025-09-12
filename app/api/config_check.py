@@ -2,8 +2,9 @@
 Configuration self-check endpoint for operational visibility.
 Provides read-only summary of environment and feature configuration.
 """
-from fastapi import APIRouter
 import os
+
+from fastapi import APIRouter
 
 router = APIRouter(prefix="/v1/admin", tags=["Admin"])
 

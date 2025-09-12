@@ -4,10 +4,8 @@ This module defines /v1/admin/* routes.
 Leaf module - no imports from app/router/__init__.py.
 """
 import logging
-import os
-from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)

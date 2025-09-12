@@ -32,8 +32,8 @@ from app.jobs.qdrant_lifecycle import bootstrap_collection as _q_bootstrap
 from app.jobs.qdrant_lifecycle import collection_stats as _q_stats
 from app.logging_config import get_errors
 from app.models.tv import QuietHours, TvConfig, TvConfigResponse, TVConfigUpdate
-from app.token_store import get_storage_stats
 from app.status import _admin_token
+from app.token_store import get_storage_stats
 
 try:
     from app.proactive_engine import get_self_review as _get_self_review  # type: ignore
@@ -260,6 +260,7 @@ async def admin_user_identities(user_id: str):
     """
     try:
         import aiosqlite
+
         from ..auth_store import _db_path as AUTH_DB
 
         async with aiosqlite.connect(str(AUTH_DB())) as db:
@@ -309,6 +310,7 @@ async def admin_unlink_identity(user_id: str, identity_id: str, force: bool | No
     """
     try:
         import aiosqlite
+
         from ..auth_store import _db_path as AUTH_DB
 
         async with aiosqlite.connect(str(AUTH_DB())) as db:

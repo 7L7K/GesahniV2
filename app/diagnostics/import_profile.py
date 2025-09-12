@@ -1,9 +1,10 @@
 from __future__ import annotations
-import re, sys
-from typing import List, Dict
+
+import re
+import sys
 
 _LINE = re.compile(r"^import time:\s+(\d+(?:\.\d+)?)\s+\|\s+(\d+(?:\.\d+)?)\s+\|\s+(.+)$")
-def parse_stdin() -> List[Dict[str, str]]:
+def parse_stdin() -> list[dict[str, str]]:
     rows = []
     for line in sys.stdin:
         m = _LINE.match(line.strip())

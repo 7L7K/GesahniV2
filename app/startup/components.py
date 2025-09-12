@@ -27,9 +27,9 @@ Document any new initializer here and add its name to
 
 from __future__ import annotations
 
-import os
 import inspect
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +89,13 @@ async def init_token_store_schema():
     migrations are triggered.
     """
     from app.auth_store_tokens import token_dao  # lazy import
-    import asyncio
+    try:
+        from app.startup import start_background_task  # type: ignore
 
-    asyncio.create_task(token_dao.ensure_schema_migrated())
+        start_background_task(token_dao.ensure_schema_migrated())
+    except Exception:
+        import asyncio
+        asyncio.create_task(token_dao.ensure_schema_migrated())
     logger.debug("Token store schema migration started in background")
 
 
@@ -108,14 +112,23 @@ async def init_openai_health_check():
 async def init_vector_store():
     """Probe the vector store with a read-only operation.
 
+    - If feature flag GSN_ENABLE_QDRANT is off and VECTOR_STORE=qdrant, skip Qdrant health checks.
     Supports both synchronous and asynchronous backends by detecting callables
     and awaiting awaitables when needed.
     """
+    from app.feature_flags import QDRANT_ON
+    
+    # Check if this is a Qdrant vector store that's disabled
+    vector_store = (os.getenv("VECTOR_STORE") or "memory").lower()
+    if vector_store.startswith("qdrant") and not QDRANT_ON:
+        logger.debug("Qdrant disabled in this profile")
+        return
+    
     from app.memory.api import _get_store
     store = _get_store()
     try:
         if hasattr(store, "ping"):
-            ping_fn = getattr(store, "ping")
+            ping_fn = store.ping
             if inspect.iscoroutinefunction(ping_fn):
                 await ping_fn()
             else:
@@ -123,7 +136,7 @@ async def init_vector_store():
                 if inspect.isawaitable(res):
                     await res
         elif hasattr(store, "search_memories"):
-            search_fn = getattr(store, "search_memories")
+            search_fn = store.search_memories
             if inspect.iscoroutinefunction(search_fn):
                 await search_fn("", "", limit=0)
             else:
@@ -138,11 +151,18 @@ async def init_vector_store():
 async def init_llama():
     """Initialize/verify LLaMA (Ollama) integration when configured.
 
+    - If feature flag GSN_ENABLE_OLLAMA is off, this is a no-op.
     - If ``LLAMA_ENABLED`` is explicitly set to a falsey value, this is a no-op.
     - If no ``OLLAMA_URL`` is present and LLAMA is not explicitly enabled, skip.
     - Otherwise call into ``app.llama_integration._check_and_set_flag`` to
       perform the concrete health check.
     """
+    from app.feature_flags import OLLAMA_ON
+    
+    if not OLLAMA_ON:
+        logger.debug("Ollama disabled in this profile")
+        return
+    
     enabled = (os.getenv("LLAMA_ENABLED") or "").strip().lower()
     if enabled in {"0", "false", "no", "off"}:
         logger.debug("LLaMA disabled by LLAMA_ENABLED")
@@ -163,9 +183,16 @@ async def init_llama():
 async def init_home_assistant():
     """Verify Home Assistant connectivity when configured.
 
+    - If feature flag GSN_ENABLE_HOME_ASSISTANT is off, this is a no-op.
     Honor ``HOME_ASSISTANT_ENABLED`` and ``HOME_ASSISTANT_URL``; if missing,
     log and skip. Otherwise perform a minimal ``get_states`` probe.
     """
+    from app.feature_flags import HA_ON
+    
+    if not HA_ON:
+        logger.debug("Home Assistant disabled in this profile")
+        return
+    
     enabled = (os.getenv("HOME_ASSISTANT_ENABLED") or "").strip().lower()
     if enabled in {"0", "false", "no", "off"}:
         logger.debug("HA disabled by HOME_ASSISTANT_ENABLED")

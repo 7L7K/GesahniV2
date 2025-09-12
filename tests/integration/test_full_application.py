@@ -2,14 +2,15 @@
 Integration tests that verify the full application works end-to-end.
 These tests start the actual server and make HTTP requests.
 """
+import os
+import signal
+import subprocess
+import sys
+import time
+from contextlib import contextmanager
+
 import pytest
 import requests
-import time
-import subprocess
-import signal
-import os
-import sys
-from contextlib import contextmanager
 
 
 @contextmanager

@@ -1,8 +1,10 @@
 from __future__ import annotations
-import os
+
 import logging
+import os
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
+
 from fastapi import FastAPI
 
 log = logging.getLogger(__name__)
@@ -53,7 +55,7 @@ def build_plan() -> list[RouterSpec]:
         RouterSpec("app.api.calendar:router", "/v1"),
         RouterSpec("app.api.care:router", "/v1"),
         RouterSpec("app.api.devices:router", "/v1"),
-        RouterSpec("app.api.google:router", "/v1"),
+        RouterSpec("app.api.google:integrations_router", "/v1"),
         RouterSpec("app.api.integrations_status:router", "/v1"),
         RouterSpec("app.api.music_http:router", "/v1"),
         # Spotify OAuth/connect handlers expected by tests
@@ -69,6 +71,7 @@ def build_plan() -> list[RouterSpec]:
         RouterSpec("app.api.me:router", "/v1"),  # User profile endpoint
         RouterSpec("app.status:router", "/v1"),
         RouterSpec("app.status:public_router", "/v1"),  # Public observability endpoints
+        RouterSpec("app.api.status_plus:router", "/v1"),  # Features endpoint
         RouterSpec("app.api.schema:router", ""),
         # Utility endpoints including CSRF (exclude from CI schema to match snapshot)
         RouterSpec("app.api.util:router", "", include_in_schema=not in_ci),
@@ -99,9 +102,56 @@ def build_plan() -> list[RouterSpec]:
 
 
 def register_routers(app: FastAPI) -> None:
+    env = _env_name()
+    # Track mounted feature routers for UI visibility
+    mounted: dict[str, bool] = {
+        "devices": False,
+        "transcribe": False,
+        "ollama": False,
+        "home_assistant": False,
+        "qdrant": False,
+    }
+
     for spec in build_plan():
         try:
             r = _load_router(spec.import_path)
             app.include_router(r, prefix=spec.prefix, include_in_schema=spec.include_in_schema)
+
+            # Mark known feature routers as mounted
+            if "app.api.devices" in spec.import_path:
+                mounted["devices"] = True
+            if "app.api.transcribe" in spec.import_path:
+                mounted["transcribe"] = True
+            if "app.api.ha" in spec.import_path or "home_assistant" in spec.import_path:
+                mounted["home_assistant"] = True
         except Exception as e:
+            # In dev/test, fail fast so issues are visible during development and CI
+            if env in {"dev", "test"}:
+                log.exception("router include failed (fatal in %s): %s", env, spec.import_path)
+                raise
+            # In production, log and continue gracefully
             log.warning("router include failed: %s (%s)", spec.import_path, e)
+
+    # Ollama/Llama integration: best-effort check
+    try:
+        # Try to import llama router module to see if local LLaMA integration is available
+        _ = _load_router("app.routers.llama_router:llama_router")
+        mounted["ollama"] = True
+    except Exception:
+        mounted["ollama"] = False
+
+    # Qdrant vector store detection (best-effort)
+    try:
+
+        # If import succeeds and VECTOR_STORE env references qdrant, mark True
+        if (os.getenv("VECTOR_STORE") or "").lower().startswith("qdrant"):
+            mounted["qdrant"] = True
+    except Exception:
+        mounted["qdrant"] = False
+
+    # Expose mounted features on the app state for other modules to query
+    try:
+        app.state.features_mounted = mounted
+    except Exception:
+        # Best-effort; do not fail include flow for apps that don't support .state assignment
+        log.debug("Could not set app.state.features_mounted")

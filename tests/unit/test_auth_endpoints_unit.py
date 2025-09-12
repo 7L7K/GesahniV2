@@ -7,11 +7,7 @@ These tests focus on specific endpoint behaviors and edge cases:
 - /auth/finish endpoint idempotent behavior
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient
 
-from app.main import app
 
 
 class TestWhoamiEndpoint:

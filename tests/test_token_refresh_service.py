@@ -2,13 +2,13 @@
 Tests for the TokenRefreshService - automatic token refresh functionality
 """
 
-import time
-import pytest
 import asyncio
-from unittest.mock import Mock, patch, AsyncMock
-from concurrent.futures import ThreadPoolExecutor
+import time
+from unittest.mock import AsyncMock, patch
 
-from app.auth_store_tokens import TokenRefreshService, TokenDAO
+import pytest
+
+from app.auth_store_tokens import TokenDAO, TokenRefreshService
 from app.models.third_party_tokens import ThirdPartyToken
 
 

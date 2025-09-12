@@ -1,16 +1,15 @@
 import asyncio
-from typing import Any, Dict, Tuple
 
-from .oauth import GoogleOAuth
+from ...metrics import GOOGLE_REFRESH_FAILED, GOOGLE_REFRESH_SUCCESS
 from .errors import OAuthError
-from ...metrics import GOOGLE_REFRESH_SUCCESS, GOOGLE_REFRESH_FAILED
+from .oauth import GoogleOAuth
 
 # In-flight refresh map: key -> Future
-_inflight: Dict[str, asyncio.Future] = {}
+_inflight: dict[str, asyncio.Future] = {}
 _lock = asyncio.Lock()
 
 
-async def refresh_dedup(user_id: str, refresh_token: str) -> Tuple[bool, dict]:
+async def refresh_dedup(user_id: str, refresh_token: str) -> tuple[bool, dict]:
     """Refresh access token with deduplication per user_id+provider.
 
     Returns (refreshed: bool, token_dict)

@@ -4,9 +4,8 @@ Tests the robust token validation system we implemented
 """
 
 import time
+
 import pytest
-import tempfile
-from unittest.mock import Mock, patch
 
 from app.auth_store_tokens import TokenDAO
 from app.models.third_party_tokens import ThirdPartyToken

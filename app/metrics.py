@@ -1,4 +1,5 @@
 from prometheus_client import Counter, Histogram
+
 try:
     from prometheus_client import Gauge
 except Exception:  # pragma: no cover - optional dependency
@@ -1055,3 +1056,30 @@ except Exception:  # pragma: no cover
         def inc(self, *a, **k):
             return None
     ASK_ERROR_CODES_TOTAL = _CError()  # type: ignore
+
+# Auth redirect sanitization metrics
+try:
+    AUTH_REDIRECT_SANITIZED_TOTAL = Counter(
+        "auth_redirect_sanitized_total",
+        "Total number of redirect sanitization events",
+        ["reason"],
+    )
+except Exception:  # pragma: no cover
+    class _CRedirect:
+        def labels(self, *a, **k):
+            return self
+        def inc(self, *a, **k):
+            return None
+    AUTH_REDIRECT_SANITIZED_TOTAL = _CRedirect()  # type: ignore
+
+# Auth redirect cookie gauge
+try:
+    AUTH_REDIRECT_COOKIE_IN_USE = Gauge(
+        "auth_redirect_cookie_in_use",
+        "Whether gs_next cookie is present during finish endpoint (0/1)"
+    )
+except Exception:  # pragma: no cover
+    class _GCookie:
+        def set(self, *a, **k):
+            return None
+    AUTH_REDIRECT_COOKIE_IN_USE = _GCookie()  # type: ignore

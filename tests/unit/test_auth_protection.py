@@ -8,7 +8,6 @@ Tests verify the standardized protection modes:
 """
 
 import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -197,8 +196,8 @@ class TestProtectionModeDocumentation:
 
     def test_public_routes_have_public_decorator(self):
         """Public routes should have @public_route decorator."""
-        from app.api.auth import login_v1, register_v1, finish_clerk_login
-        from app.api.google_oauth import google_login_url, google_callback
+        from app.api.auth import finish_clerk_login, login_v1, register_v1
+        from app.api.google_oauth import google_callback, google_login_url
 
         # Check docstrings contain protection mode info
         assert "@public_route" in login_v1.__doc__

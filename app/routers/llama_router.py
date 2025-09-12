@@ -46,20 +46,20 @@ async def llama_router(payload: Dict[str, Any]) -> Dict[str, Any]:
                     return response
 
         response = await chaos_wrap_async("vendor", operation, make_request)
-                if response.status != 200:
-                    raise RuntimeError(f"Ollama API error: {response.status}")
+        if response.status != 200:
+            raise RuntimeError(f"Ollama API error: {response.status}")
 
-                result = await response.json()
+        result = await response.json()
 
-                return {
-                    "backend": "llama",
-                    "model": model,
-                    "answer": result.get("response", ""),
-                    "usage": {
-                        "input_tokens": result.get("prompt_eval_count", 0),
-                        "output_tokens": result.get("eval_count", 0)
-                    }
-                }
+        return {
+            "backend": "llama",
+            "model": model,
+            "answer": result.get("response", ""),
+            "usage": {
+                "input_tokens": result.get("prompt_eval_count", 0),
+                "output_tokens": result.get("eval_count", 0)
+            }
+        }
 
     except aiohttp.ClientError as e:
         logger.warning(f"Ollama connection error: {e}")

@@ -6,7 +6,7 @@ import os
 import time
 from typing import Any
 
-from fastapi import HTTPException, Request, Response
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp

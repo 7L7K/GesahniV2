@@ -10,32 +10,35 @@ See the header comment below for detailed documentation on environment controls 
 """
 
 from __future__ import annotations
-import os
+
 import logging
+import os
+
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from app.csrf import CSRFMiddleware
+
 # Local middlewares (all must be import-safe)
 from app.middleware import (
-    RequestIDMiddleware,
-    TraceRequestMiddleware,
-    ReloadEnvMiddleware,
-    RedactHashMiddleware,
+    DedupMiddleware,
     HealthCheckFilterMiddleware,
     RateLimitMiddleware,
+    RedactHashMiddleware,
+    ReloadEnvMiddleware,
+    RequestIDMiddleware,
     SessionAttachMiddleware,
     SilentRefreshMiddleware,
-    DedupMiddleware,
+    TraceRequestMiddleware,
     add_mw,
 )
 from app.middleware.audit_mw import AuditMiddleware
-from app.middleware.metrics_mw import MetricsMiddleware
 from app.middleware.cors import CorsPreflightMiddleware
 from app.middleware.cors_cache_fix import SafariCORSCacheFixMiddleware
-from app.csrf import CSRFMiddleware
 from app.middleware.custom import EnhancedErrorHandlingMiddleware
 from app.middleware.deprecation_mw import DeprecationHeaderMiddleware
 from app.middleware.error_handler import ErrorHandlerMiddleware
+from app.middleware.metrics_mw import MetricsMiddleware
 
 log = logging.getLogger(__name__)
 
@@ -80,13 +83,15 @@ def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_orig
 
     To verify middleware order: Run `python scripts/print_middleware.py`
     """
+    # NOTE: FastAPI stores app.user_middleware in reverse order (inner→outer)
+    # So EXPECTED must match the actual storage order, not the addition order
     EXPECTED = [
         "ReloadEnvMiddleware",            # innermost (added last)
         "ErrorHandlerMiddleware",         # conditional
         "EnhancedErrorHandlingMiddleware", # conditional
         "CSRFMiddleware",                 # conditional
-        "MetricsMiddleware",
-        "DeprecationHeaderMiddleware",   # attach Deprecation header for legacy paths
+        "DeprecationHeaderMiddleware",   # runs before MetricsMiddleware in execution
+        "MetricsMiddleware",              # runs after DeprecationHeaderMiddleware in execution
         "AuditMiddleware",
         "DedupMiddleware",
         "SilentRefreshMiddleware",
@@ -98,7 +103,7 @@ def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_orig
         "RequestIDMiddleware",
         "CORSMiddleware",                 # added third
         "SafariCORSCacheFixMiddleware",   # added second
-        "CorsPreflightMiddleware",        # added first (outermost)
+        "CorsPreflightMiddleware",        # outermost (added first)
     ]
 
     # Environment checks for conditionals

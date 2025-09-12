@@ -2,11 +2,13 @@
 Tests to validate startup behavior, middleware stack, and application composition.
 """
 import os
-import pytest
 from unittest.mock import patch
+
+import pytest
+from fastapi import FastAPI
+
 from app.main import create_app
 from app.middleware.stack import setup_middleware_stack
-from fastapi import FastAPI
 
 
 def test_create_app_returns_fastapi_instance():
@@ -94,7 +96,6 @@ def test_rate_limit_enabled_flag():
 def test_startup_profile_detection():
     """Test that startup profile is correctly detected."""
     from app.startup.config import detect_profile
-    from unittest.mock import patch
 
     # Test CI detection
     with patch.dict(os.environ, {"CI": "1"}, clear=True):

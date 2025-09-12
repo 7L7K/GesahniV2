@@ -2,8 +2,10 @@
 """Test script to verify route collision guard functionality."""
 
 import logging
-from fastapi import FastAPI, APIRouter
-from app.startup.route_collision_guard import check_route_collisions, add_to_allowlist
+
+from fastapi import APIRouter, FastAPI
+
+from app.startup.route_collision_guard import add_to_allowlist, check_route_collisions
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

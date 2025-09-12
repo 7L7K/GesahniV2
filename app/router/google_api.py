@@ -3,30 +3,19 @@
 This module defines /v1/google/auth/* routes.
 Leaf module - no imports from app/router/__init__.py.
 """
-import hashlib
-import hmac
 import logging
-from app import settings
-import random
-import secrets
 import time
-import base64
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Request
 
-from app import cookie_config as cookie_cfg
-from app.integrations.google.config import JWT_STATE_SECRET
+from app import settings
 from app.integrations.google.state import (
+    generate_pkce_challenge,
+    generate_pkce_verifier,
     generate_signed_state,
     verify_signed_state,
-    generate_pkce_verifier,
-    generate_pkce_challenge,
 )
-from app.logging_config import req_id_var
-from app.security import jwt_decode
-from app.error_envelope import raise_enveloped
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +91,7 @@ async def google_login_url(request: Request):
             "state": state,
         }
 
-    except Exception as e:
+    except Exception:
         logger.error("google_login_url.failed", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate login URL")
 
@@ -151,7 +140,7 @@ async def google_oauth_callback(
     except HTTPException:
         get_oauth_monitor().record_attempt(state)
         raise
-    except Exception as e:
+    except Exception:
         get_oauth_monitor().record_attempt(state)
         logger.error("google_oauth_callback.failed", exc_info=True)
         raise HTTPException(status_code=500, detail="OAuth callback failed")

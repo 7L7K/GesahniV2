@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import requests
 import json
-import time
+
+import requests
 
 BASE_URL = "http://localhost:8000"
 FRONTEND_URL = "http://localhost:3000"
@@ -93,7 +93,7 @@ def test_google_connect_flow():
         try:
             data = status_response.json()
             google_status = data.get("google", {}).get("status", "unknown")
-            print(f"   ✅ Integrations status accessible")
+            print("   ✅ Integrations status accessible")
             print(f"   📊 Google status: {google_status}")
         except json.JSONDecodeError:
             print("   ❌ Invalid JSON from integrations status")

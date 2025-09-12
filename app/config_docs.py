@@ -4,10 +4,10 @@ Documentation configuration for GesahniV2 API.
 This module provides visibility flags and configuration for API documentation.
 """
 import os
-from typing import Dict, Any
+from typing import Any
 
 
-def get_docs_visibility_config() -> Dict[str, Any]:
+def get_docs_visibility_config() -> dict[str, Any]:
     """
     Get documentation visibility configuration based on environment.
 
@@ -34,7 +34,7 @@ def get_docs_visibility_config() -> Dict[str, Any]:
     }
 
 
-def get_swagger_ui_parameters() -> Dict[str, Any]:
+def get_swagger_ui_parameters() -> dict[str, Any]:
     """
     Get Swagger UI parameters for better developer experience.
 

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import os
 import re
 from datetime import datetime, timedelta
-from typing import Optional
+
+from app import storage
 
 from .base import Skill
-from app import storage
 
 
 class DaySummarySkill(Skill):

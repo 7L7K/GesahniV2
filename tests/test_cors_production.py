@@ -2,11 +2,10 @@
 import os
 from unittest.mock import patch
 
-import pytest
 from starlette.testclient import TestClient
 
 from app.main import create_app
-from app.middleware.cors import get_cors_metrics, _is_production_mode, _get_allowed_origins
+from app.middleware.cors import _get_allowed_origins, _is_production_mode, get_cors_metrics
 
 
 def test_cors_production_mode_detection():
@@ -58,7 +57,7 @@ def test_cors_development_defaults():
 
 def test_cors_preflight_rejection_metrics():
     """Test CORS preflight rejection metrics."""
-    from app.middleware.cors import _cors_rejected_origins, _cors_rejected_count
+    from app.middleware.cors import _cors_rejected_count, _cors_rejected_origins
 
     # Reset metrics
     _cors_rejected_origins.clear()
@@ -137,7 +136,7 @@ def test_cors_preflight_cache_production():
 
 def test_cors_metrics_functionality():
     """Test CORS metrics collection."""
-    from app.middleware.cors import _cors_rejected_origins, _cors_rejected_count
+    from app.middleware.cors import _cors_rejected_count, _cors_rejected_origins
 
     # Reset metrics
     _cors_rejected_origins.clear()

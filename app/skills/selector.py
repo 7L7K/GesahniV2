@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import time
-from typing import List, Dict, Tuple
 
+from ..metrics import SELECTOR_LATENCY_MS, SKILL_CONF_BUCKET, SKILL_HITS_TOTAL
 from . import SKILLS
-from ..metrics import SKILL_HITS_TOTAL, SELECTOR_LATENCY_MS, SKILL_CONF_BUCKET
 
 
-def score_skill(skill, match) -> Tuple[float, Dict[str, float]]:
+def score_skill(skill, match) -> tuple[float, dict[str, float]]:
     groups = match.groupdict() if match else {}
     matched = len([v for v in groups.values() if v])
     total = max(1, len(groups))
@@ -42,7 +41,7 @@ def score_skill(skill, match) -> Tuple[float, Dict[str, float]]:
     return score, {"pattern_score": pattern_score, "context_bonus": context_bonus}
 
 
-async def select(prompt: str, top_n: int = 3) -> Tuple[Dict | None, List[Dict]]:
+async def select(prompt: str, top_n: int = 3) -> tuple[dict | None, list[dict]]:
     start = time.monotonic()
     candidates = []
     for s in SKILLS:
@@ -119,12 +118,12 @@ Performance note:
 """
 
 import re
-from typing import Any, List, Tuple
+from typing import Any
 
-from .base import _normalize, SKILLS
+from .base import SKILLS, _normalize
 
 
-async def select(prompt: str, top_n: int = 3) -> Tuple[dict | None, List[dict]]:
+async def select(prompt: str, top_n: int = 3) -> tuple[dict | None, list[dict]]:
     """Lightweight selector compatible with existing skills.
 
     - Gathers matching skills by calling `match()` only (no side-effects).
@@ -134,8 +133,8 @@ async def select(prompt: str, top_n: int = 3) -> Tuple[dict | None, List[dict]]:
     """
 
     norm = _normalize(prompt)
-    candidates: List[dict] = []
-    matches: List[Tuple[Any, re.Match | None]] = []
+    candidates: list[dict] = []
+    matches: list[tuple[Any, re.Match | None]] = []
 
     for skill in SKILLS:
         try:

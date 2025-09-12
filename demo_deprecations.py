@@ -3,7 +3,6 @@
 Demonstration of API deprecation functionality.
 Shows deprecated routes and their OpenAPI documentation.
 """
-import json
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -61,7 +60,7 @@ def demo_deprecations():
     print("-" * 40)
 
     try:
-        with open("DEPRECATIONS.md", "r") as f:
+        with open("DEPRECATIONS.md") as f:
             content = f.read()
 
         # Count deprecated endpoints

@@ -9,24 +9,21 @@ Tests cover:
 5. Origin validation
 """
 
-import pytest
 import asyncio
-import time
-import json
 import logging
-from unittest.mock import patch, MagicMock, AsyncMock
-from fastapi import HTTPException
-from fastapi.testclient import TestClient
-from fastapi.responses import JSONResponse
-import jwt
+import time
+from unittest.mock import MagicMock, patch
 
+import jwt
+import pytest
+from fastapi import HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.testclient import TestClient
+
+from app.api.oauth_store import pop_tx, put_tx
 from app.main import app
+from app.security import _http_requests, http_burst, rate_limit
 from app.web.cookies import set_named_cookie
-from app.cookie_config import get_cookie_config
-from app.security import rate_limit, _apply_rate_limit, _http_requests, http_burst
-from app.api.spotify import router as spotify_router
-from app.api.oauth_store import put_tx, pop_tx, get_tx
-from app.integrations.spotify.oauth import make_authorize_url
 
 # Test client for integration tests
 client = TestClient(app)
@@ -42,8 +39,6 @@ class TestCookiePolicy:
 
     def test_legacy_temp_cookie_attributes(self):
         """Test that legacy temp cookie gets HttpOnly=True, SameSite=lax, Secure=(not localhost)."""
-        from fastapi import Request, Response
-        from unittest.mock import MagicMock
 
         # Mock request for localhost (not HTTPS)
         mock_request = MagicMock()
@@ -77,8 +72,6 @@ class TestCookiePolicy:
 
     def test_legacy_temp_cookie_secure_on_https(self):
         """Test that legacy temp cookie respects secure configuration when environment is set."""
-        from fastapi import Request, Response
-        from unittest.mock import MagicMock
 
         # Mock request for HTTPS
         mock_request = MagicMock()
@@ -150,8 +143,6 @@ class TestRateLimit:
 
     def test_11th_call_in_minute_yields_429(self):
         """Test that the 11th call in a minute yields 429."""
-        from fastapi import Request
-        from unittest.mock import MagicMock
 
         # Clear rate limit state
         _http_requests.clear()
@@ -179,8 +170,6 @@ class TestRateLimit:
 
     def test_rate_limit_headers_present(self):
         """Test that rate limit headers are present in 429 responses."""
-        from fastapi import Request
-        from unittest.mock import MagicMock
 
         # Clear rate limit state
         _http_requests.clear()
@@ -282,7 +271,6 @@ class TestNoURLLog:
 
     def test_jwt_state_not_logged_in_logs(self):
         """Test that JWT state is not included in log messages."""
-        import logging
 
         # Create a test JWT state
         payload = {
@@ -395,9 +383,8 @@ class TestCookieSecurity:
 
     def test_oauth_state_cookies_httponly(self):
         """Test that OAuth state cookies are HttpOnly."""
+
         from app.web.cookies import set_oauth_state_cookies
-        from fastapi import Request, Response
-        from unittest.mock import MagicMock
 
         mock_request = MagicMock()
         mock_request.url.scheme = "https"
@@ -413,9 +400,9 @@ class TestCookieSecurity:
     def test_temp_cookie_no_preview_in_logs(self, caplog):
         """Test that temporary cookies don't leak sensitive data in logs."""
         with caplog.at_level(logging.DEBUG):
-            from app.web.cookies import set_named_cookie
-            from fastapi import Request, Response
             from unittest.mock import MagicMock
+
+            from app.web.cookies import set_named_cookie
 
             mock_request = MagicMock()
             mock_request.url.scheme = "http"
@@ -455,8 +442,6 @@ class TestRateLimitSecurity:
 
     def test_rate_limit_user_scoping(self):
         """Test that rate limiting is properly scoped to users."""
-        from fastapi import Request
-        from unittest.mock import MagicMock
 
         # Clear rate limit state
         _http_requests.clear()

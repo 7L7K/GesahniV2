@@ -8,6 +8,7 @@ import os
 import sqlite3
 import tempfile
 
+
 def setup_test_db():
     """Create test database with all required tables."""
 

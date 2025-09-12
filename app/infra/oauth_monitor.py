@@ -3,7 +3,6 @@
 This module manages the global OAuth callback monitor singleton.
 Initialized from create_app() to avoid circular dependencies.
 """
-from typing import Optional
 
 
 class OAuthCallbackMonitor:
@@ -21,7 +20,7 @@ class OAuthCallbackMonitor:
         return state in self.attempts
 
 
-_oauth_monitor: Optional[OAuthCallbackMonitor] = None
+_oauth_monitor: OAuthCallbackMonitor | None = None
 
 
 def init_oauth_monitor() -> None:

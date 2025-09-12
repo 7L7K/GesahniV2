@@ -3,19 +3,16 @@ from __future__ import annotations
 import base64
 import email.utils
 import os
-import time
 import random
+import time
 
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from app.auth import EXPIRE_MINUTES as APP_JWT_EXPIRE_MINUTES
-from app.deps.user import get_current_user_id
 from app.security import jwt_decode
 
 from . import oauth  # import module so tests can monkey‑patch its attributes
-from .config import validate_config
 from .db import GoogleToken, SessionLocal
 
 router = APIRouter(tags=["Auth"])
@@ -28,7 +25,6 @@ def _current_user_id(req: Request) -> str:
 
 
 def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "anon"):
-    from datetime import datetime, timedelta
     from uuid import uuid4
 
     jti = uuid4().hex
@@ -144,8 +140,9 @@ def connect_endpoint(request: Request):
     oauth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
     # Return response in the format the test expects
-    from fastapi import Response
     import json
+
+    from fastapi import Response
 
     response_data = {"authorize_url": oauth_url}
 

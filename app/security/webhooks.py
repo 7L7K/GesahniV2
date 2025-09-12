@@ -5,9 +5,9 @@ import hashlib
 import hmac
 import os
 import time
-from typing import List
 
 from fastapi import Header, HTTPException, Request
+
 from app.http_errors import unauthorized
 
 
@@ -21,7 +21,7 @@ def sign_webhook(body: bytes, secret: str, timestamp: str | None = None) -> str:
     return hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
 
 
-def _load_webhook_secrets() -> List[str]:
+def _load_webhook_secrets() -> list[str]:
     secrets: list[str] = []
     env_val = os.getenv("HA_WEBHOOK_SECRETS", "")
     if env_val:
@@ -74,12 +74,12 @@ async def verify_webhook(
         raise HTTPException(status_code=500, detail="webhook_secret_missing")
 
     # Allow direct call style (when called without FastAPI dependency injection)
-    if not isinstance(x_signature, (str, bytes)) or not str(x_signature).strip():
+    if not isinstance(x_signature, str | bytes) or not str(x_signature).strip():
         try:
             x_signature = request.headers.get("X-Signature")
         except Exception:
             x_signature = None
-    if not isinstance(x_timestamp, (str, bytes, int, float)) or not str(x_timestamp).strip():
+    if not isinstance(x_timestamp, str | bytes | int | float) or not str(x_timestamp).strip():
         try:
             x_timestamp = request.headers.get("X-Timestamp")
         except Exception:

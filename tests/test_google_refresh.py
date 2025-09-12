@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import os
+
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 # Set test environment
@@ -27,7 +29,7 @@ if response.status_code == 200:
     current_time = int(time.time())
     expires_at = data.get("expires_at")
     if expires_at is None:
-        print(f"   ⚠️  No token configured (expires_at is None)")
+        print("   ⚠️  No token configured (expires_at is None)")
     elif expires_at < current_time:
         print(f"   ❌ Token expired {current_time - expires_at} seconds ago")
 

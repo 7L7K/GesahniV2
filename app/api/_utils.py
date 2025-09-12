@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import HTTPException
 
@@ -12,8 +12,8 @@ def raise_enveloped_error(
     message: str,
     *,
     status: int = 400,
-    hint: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
+    hint: str | None = None,
+    details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a standardized HTTPException with ErrorEnvelope.
 
@@ -41,8 +41,8 @@ def raise_bad_request(
     message: str,
     *,
     code: str = "bad_request",
-    hint: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
+    hint: str | None = None,
+    details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 400 Bad Request error with envelope."""
     raise_enveloped_error(code=code, message=message, status=400, hint=hint, details=details)
@@ -53,7 +53,7 @@ def raise_unauthorized(
     *,
     code: str = "unauthorized",
     hint: str = "provide valid authentication credentials",
-    details: Optional[Dict[str, Any]] = None,
+    details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 401 Unauthorized error with envelope."""
     raise_enveloped_error(code=code, message=message, status=401, hint=hint, details=details)
@@ -64,7 +64,7 @@ def raise_forbidden(
     *,
     code: str = "forbidden",
     hint: str = "you don't have permission for this action",
-    details: Optional[Dict[str, Any]] = None,
+    details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 403 Forbidden error with envelope."""
     raise_enveloped_error(code=code, message=message, status=403, hint=hint, details=details)
@@ -74,8 +74,8 @@ def raise_not_found(
     message: str = "not found",
     *,
     code: str = "not_found",
-    hint: Optional[str] = None,
-    details: Optional[Dict[str, Any]] = None,
+    hint: str | None = None,
+    details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 404 Not Found error with envelope."""
     raise_enveloped_error(code=code, message=message, status=404, hint=hint, details=details)
@@ -86,7 +86,7 @@ def raise_conflict(
     *,
     code: str = "conflict",
     hint: str = "resource already exists or is in an incompatible state",
-    details: Optional[Dict[str, Any]] = None,
+    details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 409 Conflict error with envelope."""
     raise_enveloped_error(code=code, message=message, status=409, hint=hint, details=details)
@@ -97,7 +97,7 @@ def raise_internal_error(
     *,
     code: str = "internal",
     hint: str = "try again shortly",
-    details: Optional[Dict[str, Any]] = None,
+    details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 500 Internal Server Error with envelope."""
     raise_enveloped_error(code=code, message=message, status=500, hint=hint, details=details)
@@ -108,13 +108,13 @@ def raise_service_unavailable(
     *,
     code: str = "service_unavailable",
     hint: str = "try again later",
-    details: Optional[Dict[str, Any]] = None,
+    details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 503 Service Unavailable error with envelope."""
     raise_enveloped_error(code=code, message=message, status=503, hint=hint, details=details)
 
 
-def validate_required_fields(data: Dict[str, Any], required_fields: list[str]) -> None:
+def validate_required_fields(data: dict[str, Any], required_fields: list[str]) -> None:
     """Validate that required fields are present in data.
 
     Args:

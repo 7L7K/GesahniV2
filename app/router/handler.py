@@ -1,29 +1,31 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any, AsyncIterator, Dict, Optional, Union
+from typing import Any
 
 from app.api.ask_contract import AskRequest, AskResponse, AskStreamEvent
+
 from . import entrypoint as router_entrypoint
 
 
-def _shape_usage(raw: Dict[str, Any]) -> Dict[str, int]:
+def _shape_usage(raw: dict[str, Any]) -> dict[str, int]:
     usage = raw.get("usage") or {}
     ti = usage.get("tokens_in", usage.get("input_tokens", 0))
     to = usage.get("tokens_out", usage.get("output_tokens", 0))
     return {"tokens_in": int(ti or 0), "tokens_out": int(to or 0)}
 
 
-def _shape_vendor(raw: Dict[str, Any]) -> str:
+def _shape_vendor(raw: dict[str, Any]) -> str:
     return raw.get("vendor") or raw.get("backend") or raw.get("chosen_vendor") or "dryrun"
 
 
-def _shape_model(raw: Dict[str, Any], fallback: Optional[str]) -> str:
+def _shape_model(raw: dict[str, Any], fallback: str | None) -> str:
     return raw.get("model") or raw.get("chosen_model") or (fallback or "unknown")
 
 
-def _shape_answer(raw: Dict[str, Any]) -> str:
+def _shape_answer(raw: dict[str, Any]) -> str:
     if isinstance(raw.get("answer"), str):
         return raw["answer"]
     for key in ("text", "message", "echo"):
@@ -33,14 +35,14 @@ def _shape_answer(raw: Dict[str, Any]) -> str:
     return ""
 
 
-def _shape_cache_hit(raw: Dict[str, Any]) -> bool:
+def _shape_cache_hit(raw: dict[str, Any]) -> bool:
     v = raw.get("cache_hit")
     if isinstance(v, bool):
         return v
     return bool(raw.get("semantic_cache_hit", False))
 
 
-def _shape_observability(raw: Dict[str, Any]) -> Dict[str, Any]:
+def _shape_observability(raw: dict[str, Any]) -> dict[str, Any]:
     obs = raw.get("observability")
     if isinstance(obs, dict):
         return obs
@@ -56,13 +58,13 @@ def _shape_observability(raw: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-async def _call_route_prompt(req: AskRequest) -> Dict[str, Any]:
+async def _call_route_prompt(req: AskRequest) -> dict[str, Any]:
     return await router_entrypoint.route_prompt(req)
 
 
 async def handle_ask(
     request: AskRequest, *, streaming: bool = False
-) -> Union[AskResponse, AsyncIterator[AskStreamEvent]]:
+) -> AskResponse | AsyncIterator[AskStreamEvent]:
     if not streaming:
         raw = await _call_route_prompt(request)
         obs = _shape_observability(raw)
@@ -96,7 +98,7 @@ async def handle_ask(
         return resp
 
     async def _stream() -> AsyncIterator[AskStreamEvent]:
-        done: asyncio.Future[Dict[str, Any]] = asyncio.get_running_loop().create_future()
+        done: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
 
         async def _worker():
             try:

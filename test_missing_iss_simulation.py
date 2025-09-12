@@ -8,9 +8,8 @@ when Google returns an ID token without the 'iss' claim.
 
 import os
 import sys
-import json
+
 import jwt
-from unittest.mock import Mock, patch
 
 # Add the app directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))

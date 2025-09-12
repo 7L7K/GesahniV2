@@ -1,5 +1,6 @@
-from starlette.testclient import TestClient
 import sys
+
+from starlette.testclient import TestClient
 
 # 1) create_app must exist and mount everything
 try:

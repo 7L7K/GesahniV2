@@ -1,5 +1,4 @@
 import pytest
-
 from fastapi import FastAPI
 
 from app.main import create_app
@@ -34,7 +33,7 @@ def test_expected_routes_present(app: FastAPI):
     for r in app.router.routes:
         if not hasattr(r, "methods") or not hasattr(r, "path"):
             continue
-        for m in getattr(r, "methods") or []:
+        for m in r.methods or []:
             available.add((m.upper(), r.path))
 
     for method, path in expected:

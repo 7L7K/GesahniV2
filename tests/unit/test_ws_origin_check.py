@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from app.main import app
 
@@ -21,6 +22,6 @@ def test_ws_origin_policy(origin, should_connect):
             with c.websocket_connect("/v1/ws/health", headers={"Origin": origin}) as ws:
                 assert ws.receive_text() == "healthy"
         else:
-            with pytest.raises(Exception):
+            with pytest.raises(WebSocketDisconnect):
                 with c.websocket_connect("/v1/ws/health", headers={"Origin": origin}):
                     pass

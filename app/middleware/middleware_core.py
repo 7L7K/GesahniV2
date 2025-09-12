@@ -65,16 +65,18 @@ except Exception:  # pragma: no cover - fallback implementation
 from ..logging_config import req_id_var
 
 logger = logging.getLogger(__name__)
+# Provider injection pattern - no direct imports of stores
+from collections.abc import Callable
+from typing import Any
+
 from .. import metrics
 from ..analytics import latency_p95, record_latency
 from ..history import append_history
 from ..otel_utils import get_trace_id_hex, observe_with_exemplar, start_span
 from ..security import get_rate_limit_snapshot
 from ..telemetry import LogRecord, log_record_var, utc_now
-# Provider injection pattern - no direct imports of stores
-from typing import Any, Callable, Optional
 
-_user_store_provider: Optional[Callable[[], Any]] = None
+_user_store_provider: Callable[[], Any] | None = None
 
 def set_store_providers(*, user_store_provider: Callable[[], Any]):
     """Set store providers for middleware. Called from main.py after app construction."""

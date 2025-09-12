@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Any
 
 
 @dataclass
 class Device:
     id: str
     name: str
-    area: Optional[str] = None
-    provider: Optional[str] = None
+    area: str | None = None
+    provider: str | None = None
 
 
 @dataclass
@@ -25,7 +25,7 @@ class Track:
 class QueueItem:
     id: str
     track: Track
-    requested_by: Optional[str] = None
-    vibe: Optional[Dict[str, Any]] = None
+    requested_by: str | None = None
+    vibe: dict[str, Any] | None = None
 
 

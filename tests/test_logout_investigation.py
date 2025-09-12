@@ -4,10 +4,9 @@ Systematic test to identify which pages cause authentication logouts.
 This script will test various endpoints and conditions to isolate the logout trigger.
 """
 
-import requests
-import json
 import time
-from typing import Dict, List, Tuple
+
+import requests
 
 
 class LogoutInvestigator:
@@ -49,7 +48,7 @@ class LogoutInvestigator:
             print(f"❌ Login simulation failed: {e}")
             return False
 
-    def test_authentication_status(self) -> Tuple[bool, Dict]:
+    def test_authentication_status(self) -> tuple[bool, dict]:
         """Test current authentication status"""
         whoami_url = f"{self.base_url}/v1/whoami"
         print(f"🔍 Checking auth status: {whoami_url}")
@@ -70,8 +69,8 @@ class LogoutInvestigator:
             return False, {}
 
     def test_endpoint(
-        self, endpoint: str, method: str = "GET", data: Dict = None
-    ) -> Dict:
+        self, endpoint: str, method: str = "GET", data: dict = None
+    ) -> dict:
         """Test a specific endpoint and check auth status"""
         url = f"{self.base_url}{endpoint}"
         print(f"🧪 Testing {method} {endpoint}")

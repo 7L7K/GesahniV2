@@ -6,10 +6,11 @@ import json
 import os
 import time
 from pathlib import Path
-from app.db.paths import resolve_db_path
 from typing import Any
 
 import aiosqlite
+
+from app.db.paths import resolve_db_path
 
 # Optional override for tests to set a custom DB path (tests may assign this)
 DB_PATH: str | None = None

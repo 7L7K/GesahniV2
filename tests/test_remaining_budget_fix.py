@@ -3,9 +3,8 @@
 Test script to verify that the get_remaining_budget fix works correctly.
 """
 
-import asyncio
-import time
 import os
+import time
 
 # Set up minimal environment
 os.environ["OLLAMA_URL"] = "http://x"

@@ -1,7 +1,7 @@
 """Phase 5 – Docs & Tests: Comprehensive integration tests for API behavior."""
 
 import json
-import os
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -123,7 +123,6 @@ class TestPhase5DocsAndTests:
         # Mock streaming response
         def mock_stream_generator():
             import asyncio
-            from datetime import datetime, UTC
 
             async def stream_response():
                 # Route event

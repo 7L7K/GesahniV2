@@ -3,8 +3,7 @@ from __future__ import annotations
 import ast
 import math
 import os
-from typing import Any, Tuple
-
+from typing import Any
 
 EPS = float(os.getenv("MATH_EPS", "1e-9"))
 REL_TOL = float(os.getenv("MATH_REL_TOL", "1e-7"))
@@ -82,7 +81,7 @@ def _eval_node(node: ast.AST) -> Any:
     if isinstance(node, ast.Compare):
         left = _eval_node(node.left)
         results = []
-        for op, comp in zip(node.ops, node.comparators):
+        for op, comp in zip(node.ops, node.comparators, strict=False):
             right = _eval_node(comp)
             if isinstance(op, ast.Eq):
                 results.append(_approx_eq(left, right))
@@ -110,7 +109,7 @@ def _approx_eq(a: Any, b: Any) -> bool:
         return a == b
 
 
-def evaluate_expr(expr: str) -> Tuple[Any, str]:
+def evaluate_expr(expr: str) -> tuple[Any, str]:
     """Safely evaluate a numeric/comparison expression and return (value, explanation).
 
     Uses the AST module with a small whitelist. Returns either a numeric value or a

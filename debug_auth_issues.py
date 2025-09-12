@@ -4,10 +4,10 @@ Debug script for Google and Spotify authentication issues.
 Tests all auth endpoints and configurations.
 """
 
-import os
+from urllib.parse import parse_qs, urlparse
+
 import requests
-import json
-from urllib.parse import urlparse, parse_qs
+
 
 def test_auth_endpoints():
     """Test all authentication endpoints and configurations."""

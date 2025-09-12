@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Test script to verify music endpoints work correctly."""
 
-import asyncio
+import os
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 from app.api.music_http import router as music_router
-import os
 
 # Set test environment
 os.environ["TEST_MODE"] = "1"

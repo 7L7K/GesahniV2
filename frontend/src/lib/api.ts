@@ -7,20 +7,16 @@ import { getLocalStorage, setLocalStorage, removeLocalStorage, safeNow, normaliz
 import { apiFetch } from './api/fetch';
 import { getToken, getAuthNamespace } from './api/auth';
 import { getAuthOrchestrator } from '../services/authOrchestrator';
-import { sanitizeNextPath } from './urls';
+import { sanitizeRedirectPath } from './redirect-utils';
 
 // Simple API function for cookie mode
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 
 export async function api(path: string, init: RequestInit = {}) {
-    const res = await fetch(`${API_BASE}${path}`, {
-        credentials: 'include',
-        headers: {
-            'content-type': 'application/json',
-            ...(init.headers || {}),
-        },
-        ...init,
-    });
+    // Deprecated: use apiFetch for all new code; keep this shim for legacy callers
+    const { apiFetch } = await import('./api/fetch');
+    const headers = { 'content-type': 'application/json', ...(init.headers || {}) } as HeadersInit;
+    const res = await apiFetch(path, { ...(init as any), headers });
     if (!res.ok) {
         const body = await res.text().catch(() => '');
         throw new Error(`HTTP ${res.status} ${res.statusText}: ${body}`);
@@ -463,7 +459,7 @@ export async function getGoogleAuthUrl(next?: string): Promise<string> {
     console.log('🔗 OAUTH_DEBUG: getGoogleAuthUrl called with next:', next, 'at:', new Date().toISOString());
 
     // Sanitize the next parameter to prevent open redirects
-    const sanitizedNext = next ? sanitizeNextPath(next, '/') : '/';
+    const sanitizedNext = next ? sanitizeRedirectPath(next, '/') : '/';
     console.log('🔗 API: sanitized next:', sanitizedNext);
 
     const params = new URLSearchParams();

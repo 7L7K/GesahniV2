@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from fastapi import Depends, FastAPI, Request
@@ -36,8 +36,8 @@ def create_test_token(
     """Create a test JWT token."""
     payload = {
         "user_id": user_id,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
         **kwargs,
     }
     return jwt.encode(payload, secret, algorithm="HS256")

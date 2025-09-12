@@ -22,7 +22,7 @@ class FakeClient:
         class R:
             text = RSS_SAMPLE
 
-            def raise_for_status(self_inner):
+            def raise_for_status(self):
                 pass
 
         return R()

@@ -10,26 +10,27 @@ ALERTING THRESHOLDS:
 - provider_sub_mismatch (ever) → WARN
 """
 
-import hashlib
-import hmac
 import inspect
 import logging
 import os
 import random
 import secrets
 import time
-import base64
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from .. import cookie_config as cookie_cfg
-from ..integrations.google.config import JWT_STATE_SECRET
-from ..integrations.google.state import generate_signed_state, verify_signed_state, generate_pkce_verifier, generate_pkce_challenge
+from ..error_envelope import raise_enveloped
+from ..integrations.google.state import (
+    generate_pkce_challenge,
+    generate_pkce_verifier,
+    generate_signed_state,
+    verify_signed_state,
+)
 from ..logging_config import req_id_var
 from ..security import jwt_decode  # Direct import from main security module
-from ..error_envelope import raise_enveloped
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Auth"])
@@ -164,7 +165,7 @@ def _allow_redirect(url: str) -> bool:
     if not allowed:
         return True
     try:
-        from urllib.parse import urlparse, unquote
+        from urllib.parse import unquote, urlparse
 
         # URL-decode the URL multiple times to handle nested encoding
         decoded_url = url
@@ -296,6 +297,25 @@ async def google_login_url(request: Request) -> Response:
                 next_url = "/"  # Reset to safe default
             params["redirect_params"] = f"next={next_url}"
 
+            # Sanitize and set gs_next cookie for post-login redirect
+            # sanitize_redirect_path prevents open redirects by rejecting absolute/protocol-relative
+            # URLs and auth paths that could cause redirect loops. This ensures users are only
+            # redirected to safe, same-origin application pages after OAuth completion.
+            from ..redirect_utils import sanitize_redirect_path, set_gs_next_cookie
+            sanitized_next = sanitize_redirect_path(next_url, "/", request)
+            set_gs_next_cookie(http_response, sanitized_next, request)
+            logger.info(
+                "Set gs_next cookie for OAuth flow",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "component": "google_oauth",
+                        "msg": "gs_next_cookie_set",
+                        "sanitized_next": sanitized_next,
+                    }
+                },
+            )
+
         oauth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
         # Create JSON response with state cookie
@@ -347,8 +367,9 @@ async def google_login_url(request: Request) -> Response:
 
         # Emit GOOGLE_CONNECT_STARTED metric
         try:
-            from ..metrics import GOOGLE_CONNECT_STARTED
             import hashlib
+
+            from ..metrics import GOOGLE_CONNECT_STARTED
             scopes_hash = hashlib.sha256(" ".join(sorted(scopes)).encode()).hexdigest()[:8]
             GOOGLE_CONNECT_STARTED.labels(user_id="unknown", scopes_hash=scopes_hash).inc()
         except Exception:
@@ -732,8 +753,8 @@ async def google_callback(request: Request) -> Response:
             )
             # Force session deletion for safety (rotation will occur on cookie write)
             try:
-                from ..cookies import read_session_cookie
                 from ..auth import _delete_session_id
+                from ..cookies import read_session_cookie
 
                 old_sess = read_session_cookie(request)
                 if old_sess:
@@ -808,11 +829,8 @@ async def google_callback(request: Request) -> Response:
         except Exception:
             pass
 
-        # Prefer frontend redirect target from cookie if present/allowed
-        try:
-            next_cookie = request.cookies.get("g_next")
-        except Exception:
-            next_cookie = None
+        # Use get_safe_redirect_target for gs_next cookie priority
+        from ..redirect_utils import get_safe_redirect_target
 
         # Emit extra telemetry in logs/meta
         try:
@@ -917,9 +935,9 @@ async def google_callback(request: Request) -> Response:
 
         # Determine canonical application user via deterministic identity linking
         try:
-            from .. import cookies as cookie_helpers
-            from .. import auth_store as auth_store
             import secrets as _secrets
+
+            from .. import auth_store as auth_store
 
             # Look up existing identity by provider+sub
             canonical_user = None
@@ -1161,8 +1179,8 @@ async def google_callback(request: Request) -> Response:
         # Also persist to the shared ThirdPartyToken store so UI status and
         # management endpoints can detect connection state consistently.
         try:
-            from ..models.third_party_tokens import ThirdPartyToken
             from ..auth_store_tokens import upsert_token
+            from ..models.third_party_tokens import ThirdPartyToken
 
             now = int(time.time())
             expiry = rec.get("expiry")
@@ -1288,10 +1306,16 @@ async def google_callback(request: Request) -> Response:
                 n = "/" + n
             return f"{frontend_base}{n}"
 
-        if next_cookie and _allow_redirect(next_cookie):
-            final_root = _resolve_next(next_cookie)
-        else:
-            final_root = f"{frontend_base}/"
+        # Get safe redirect target with gs_next cookie priority
+        final_root = get_safe_redirect_target(request, fallback=f"{frontend_base}/")
+
+        # Sample cookie gauge for observability
+        try:
+            from ..metrics import AUTH_REDIRECT_COOKIE_IN_USE
+            gs_next_present = get_gs_next_cookie(request) is not None
+            AUTH_REDIRECT_COOKIE_IN_USE.set(1 if gs_next_present else 0)
+        except Exception:
+            pass
 
         # Append token query params to the redirect target so frontend can
         # pick up `access_token`/`refresh_token` when present (header-mode flows).
@@ -1421,8 +1445,8 @@ async def google_callback(request: Request) -> Response:
 
         # Rotate session and CSRF on login to prevent replay from old anon sessions
         try:
-            from ..web.cookies import read_session_cookie, set_csrf_cookie
             from ..auth import _delete_session_id
+            from ..web.cookies import read_session_cookie, set_csrf_cookie
 
             session_before = read_session_cookie(request)
         except Exception:
@@ -1583,8 +1607,9 @@ async def google_callback(request: Request) -> Response:
         # Log auth context
         # Emit GOOGLE_CALLBACK_SUCCESS metric
         try:
-            from ..metrics import GOOGLE_CALLBACK_SUCCESS
             import hashlib
+
+            from ..metrics import GOOGLE_CALLBACK_SUCCESS
             scopes_hash = hashlib.sha256(" ".join(sorted(rec.get("scopes", []))).encode()).hexdigest()[:8]
             GOOGLE_CALLBACK_SUCCESS.labels(user_id=uid, scopes_hash=scopes_hash).inc()
         except Exception:

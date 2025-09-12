@@ -1,6 +1,6 @@
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from datetime import time as dt_time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,6 +9,7 @@ from app.home_assistant import _request
 
 from . import budget as _budget
 from .analytics import cache_hit_rate, get_metrics
+from .deps.flags import require_home_assistant, require_ollama
 from .deps.scopes import docs_security_with
 from .deps.user import get_current_user_id
 from .llama_integration import get_status as llama_get_status
@@ -125,7 +126,7 @@ async def budget_status_alias(user_id: str = Depends(get_current_user_id)) -> di
     return await budget_status(user_id)  # type: ignore[arg-type]
 
 
-@router.get("/ha_status")
+@router.get("/ha_status", dependencies=[Depends(require_home_assistant)])
 async def ha_status(user_id: str = Depends(get_current_user_id)) -> dict:
     start = time.monotonic()
     try:
@@ -136,7 +137,7 @@ async def ha_status(user_id: str = Depends(get_current_user_id)) -> dict:
         raise HTTPException(status_code=500, detail="ha_error")
 
 
-@router.get("/llama_status")
+@router.get("/llama_status", dependencies=[Depends(require_ollama)])
 async def llama_status(user_id: str = Depends(get_current_user_id)) -> dict:
     """Report LLaMA health by attempting a minimal generation."""
     try:
@@ -283,7 +284,11 @@ async def observability_metrics() -> dict:
     - p95 latency by backend
     - error rate by backend and error type
     """
-    from .observability import get_ask_latency_p95_by_backend, get_ask_error_rate_by_backend, log_ask_observability_summary
+    from .observability import (
+        get_ask_error_rate_by_backend,
+        get_ask_latency_p95_by_backend,
+        log_ask_observability_summary,
+    )
 
     # Log summary for monitoring
     log_ask_observability_summary()
@@ -291,7 +296,7 @@ async def observability_metrics() -> dict:
     return {
         "latency_p95_by_backend": get_ask_latency_p95_by_backend(),
         "error_rate_by_backend": get_ask_error_rate_by_backend(),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "description": "Golden queries for ASK observability budgets"
     }
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Smalltalk skill mini-prompt.
 
 Respond to simple greetings with a friendly opener while keeping the chat

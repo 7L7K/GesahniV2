@@ -8,19 +8,19 @@ calls and remove this bridge after migration.
 """
 from __future__ import annotations
 
-from typing import Dict, Any, Union, Optional
 import logging
-import os
+from typing import Any
 
-from app.errors import BackendUnavailable
-from .state import HEALTH
+from app.errors import BackendUnavailableError
+
 from .config import CONFIG
 from .hooks import run_post_hooks as _run_post_hooks
+from .state import HEALTH
 
 logger = logging.getLogger(__name__)
 
 
-async def route_prompt(*args, **kwargs) -> Dict[str, Any]:
+async def route_prompt(*args, **kwargs) -> dict[str, Any]:
     """Compatibility entrypoint used by both legacy and new callers.
 
     Prefer the DI-bound router on ``app.main.app.state.prompt_router`` when
@@ -37,14 +37,14 @@ async def route_prompt(*args, **kwargs) -> Dict[str, Any]:
     # Normalize to a flat payload dict supporting legacy signature variants
     if _AskRequest is not None and isinstance(payload_or_request, _AskRequest):  # type: ignore[arg-type]
         req = payload_or_request
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "prompt": req.text,
             "session_id": req.session_id,
             "model_override": req.model_override,
             "intent_hint": req.intent_hint,
             "metadata": req.metadata or {},
         }
-        user_id: Optional[str] = kwargs.get("user_id")
+        user_id: str | None = kwargs.get("user_id")
     elif isinstance(payload_or_request, dict):
         payload = payload_or_request
         user_id = payload.get("user_id") or kwargs.get("user_id")
@@ -117,7 +117,7 @@ async def route_prompt(*args, **kwargs) -> Dict[str, Any]:
 
 
 # Public hook runner (kept here for a stable import path)
-async def run_post_hooks(result: Dict[str, Any], request: Any) -> Dict[str, Any]:  # type: ignore[override]
+async def run_post_hooks(result: dict[str, Any], request: Any) -> dict[str, Any]:  # type: ignore[override]
     try:
         return await _run_post_hooks(result, request)
     except Exception:
@@ -126,7 +126,7 @@ async def run_post_hooks(result: Dict[str, Any], request: Any) -> Dict[str, Any]
 
     # In-process semantic cache (non-blocking)
     try:
-        from .state import SEM_CACHE, make_semantic_cache_key, ensure_usage_ints
+        from .state import SEM_CACHE, ensure_usage_ints, make_semantic_cache_key
 
         key = make_semantic_cache_key(
             user_id=user_id or "anon",
@@ -322,4 +322,4 @@ async def run_post_hooks(result: Dict[str, Any], request: Any) -> Dict[str, Any]
             return {"dry_run": True, "echo": payload}
     except Exception as e:
         logger.exception("compat.route_prompt: backend call failed: %s", e)
-        raise BackendUnavailable(str(e))
+        raise BackendUnavailableError(str(e))

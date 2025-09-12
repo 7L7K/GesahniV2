@@ -29,7 +29,7 @@ def test_metrics_cache_rate_is_float_under_pytest():
     client = make_client()
     r = client.get("/v1/admin/metrics?token=t")
     assert r.status_code == 200
-    assert isinstance(r.json().get("cache_hit_rate"), (float, int))
+    assert isinstance(r.json().get("cache_hit_rate"), float | int)
 
 
 def test_router_decisions_limit_bounds():

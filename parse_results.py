@@ -1,5 +1,6 @@
 # parse_results.py
-import re, csv
+import csv
+import re
 
 with open("test_results_9_8_815pm.txt") as f, open("tests_summary.csv", "w", newline="") as out:
     writer = csv.writer(out)

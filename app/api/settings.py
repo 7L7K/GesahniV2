@@ -4,10 +4,10 @@ Settings API endpoints.
 Provides basic settings and configuration information for the frontend.
 """
 
-from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import JSONResponse
-from typing import Dict, Any
 import os
+
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/settings")
 

@@ -1,9 +1,9 @@
 """
 Integration tests for config guard in actual startup scenarios.
 """
-import pytest
-import asyncio
 from unittest.mock import patch
+
+import pytest
 
 from app.main import create_app
 from app.startup import lifespan

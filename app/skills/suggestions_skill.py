@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import List
 
 from .base import Skill
 from .ledger import record_action
@@ -10,7 +9,7 @@ from .ledger import record_action
 _SUG_PATH = Path("data/suggestions.json")
 
 
-def _load_suggestions() -> List[dict]:
+def _load_suggestions() -> list[dict]:
     try:
         import json
 
@@ -19,7 +18,7 @@ def _load_suggestions() -> List[dict]:
         return []
 
 
-def _save_suggestions(lst: List[dict]) -> None:
+def _save_suggestions(lst: list[dict]) -> None:
     try:
         import json
 
@@ -54,12 +53,12 @@ class SuggestionsSkill(Skill):
 
 
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 from .base import Skill
 
 # Simple in-memory suggestion queue for demo purposes
-_SUGGESTIONS: List[Dict[str, Any]] = []
+_SUGGESTIONS: list[dict[str, Any]] = []
 
 
 class SuggestionsSkill(Skill):
@@ -86,7 +85,7 @@ class SuggestionsSkill(Skill):
 
     # Helper for learners to push suggestions
     @staticmethod
-    def push_suggestion(sugg: Dict[str, Any]) -> None:
+    def push_suggestion(sugg: dict[str, Any]) -> None:
         _SUGGESTIONS.append(sugg)
 
 __all__ = ["SuggestionsSkill"]

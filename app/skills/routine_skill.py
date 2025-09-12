@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import re
-from typing import Dict, List
-
 from pathlib import Path
+
 from .base import Skill
 from .ledger import record_action
 
 _ROUTINES_PATH = Path("data/routines.json")
 
 
-def _load_routines() -> Dict[str, List[str]]:
+def _load_routines() -> dict[str, list[str]]:
     try:
         import json
 
@@ -19,7 +18,7 @@ def _load_routines() -> Dict[str, List[str]]:
         return {}
 
 
-def _save_routines(r: Dict[str, List[str]]) -> None:
+def _save_routines(r: dict[str, list[str]]) -> None:
     try:
         import json
 
@@ -60,10 +59,8 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from .base import Skill
-from .ledger import record_action
 
 ROUTINES_DB = Path(__file__).resolve().parents[1] / "data" / "routines.json"
 ROUTINES_DB.parent.mkdir(parents=True, exist_ok=True)

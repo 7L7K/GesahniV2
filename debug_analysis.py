@@ -4,10 +4,11 @@ Debug the endpoint analysis
 """
 import re
 
+
 def debug_file(file_path: str):
     """Debug analysis of a single file"""
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path) as f:
             content = f.read()
     except Exception as e:
         print(f"Error reading {file_path}: {e}")
@@ -84,7 +85,7 @@ def debug_file(file_path: str):
                 has_require_roles = 'require_roles' in full_func_block
                 has_optional_require_scope = 'optional_require_scope' in full_func_block
 
-                print(f"  Auth patterns found:")
+                print("  Auth patterns found:")
                 print(f"    get_current_user_id: {has_get_current_user_id}")
                 print(f"    require_user: {has_require_user}")
                 print(f"    require_auth: {has_require_auth}")

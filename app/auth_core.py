@@ -4,16 +4,15 @@ import json
 import logging
 import os
 import time
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import jwt
-from .security import jwt_decode
-
 from fastapi import Request
 from starlette.websockets import WebSocket
 
+from .security import jwt_decode
+from .session_store import SessionStoreUnavailable, get_session_store
 from .web.cookies import NAMES
-from .session_store import get_session_store, SessionStoreUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +53,7 @@ def _hs_decode(token: str, leeway: int) -> dict:
     return jwt_decode(token, CFG.hs_secret, algorithms=["HS256"], leeway=leeway, **opts)
 
 
-def _rs_decode(token: str, leeway: int) -> Optional[dict]:
+def _rs_decode(token: str, leeway: int) -> dict | None:
     if not CFG.public_keys:
         return None
     try:
@@ -62,7 +61,7 @@ def _rs_decode(token: str, leeway: int) -> Optional[dict]:
         kid = hdr.get("kid")
     except Exception:
         kid = None
-    candidates: list[Tuple[str, str]] = []
+    candidates: list[tuple[str, str]] = []
     if kid and kid in CFG.public_keys:
         candidates.append((kid, CFG.public_keys[kid]))
     candidates += [(k, v) for (k, v) in CFG.public_keys.items() if k != kid]
@@ -145,7 +144,7 @@ def decode_with_leeway(token: str, operation: str = "default") -> dict:
         except Exception:
             pass
         raise
-    except jwt.InvalidTokenError as e:
+    except jwt.InvalidTokenError:
         # Record validation failure
         try:
             from .metrics_auth import record_token_validation
@@ -278,7 +277,7 @@ def extract_token_metadata(token: str) -> dict:
         }
 
 
-def extract_token(target: Request | WebSocket) -> tuple[str, Optional[str]]:
+def extract_token(target: Request | WebSocket) -> tuple[str, str | None]:
     """Unified token extraction with precedence: access cookie > header > session cookie.
 
     Returns (source, token) where source in {"access_cookie", "authorization", "session"}.
@@ -345,8 +344,8 @@ def resolve_auth(target: Request | WebSocket) -> dict[str, Any]:
     """
     t0 = time.time()
     source, tok = extract_token(target)
-    user_id: Optional[str] = None
-    payload: Optional[dict] = None
+    user_id: str | None = None
+    payload: dict | None = None
     try:
         if source in {"authorization", "access_cookie"} and tok:
             payload = decode_any(tok)
@@ -357,7 +356,7 @@ def resolve_auth(target: Request | WebSocket) -> dict[str, Any]:
             except SessionStoreUnavailable:
                 ident = None
                 try:
-                    setattr(target.state, "session_store_unavailable", True)
+                    target.state.session_store_unavailable = True
                 except Exception:
                     pass
             if ident:
@@ -477,7 +476,7 @@ def csrf_validate(request: Request) -> None:
             from fastapi import HTTPException
 
             raise HTTPException(status_code=400, detail="invalid_csrf")
-    except Exception as e:
+    except Exception:
         # Be explicit: fail-closed for enabled CSRF on mutation
         from fastapi import HTTPException
 

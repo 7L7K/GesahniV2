@@ -1,8 +1,8 @@
-import os
 import time
+
+import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-import pytest
 
 import app.auth as auth
 from app.main import app

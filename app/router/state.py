@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import time
-from typing import Any, Dict, Optional, Tuple
 import hashlib
 import re
+import time
 from collections import OrderedDict
+from typing import Any
+
 from .config import CONFIG
 
 
@@ -20,11 +21,11 @@ class AsyncCachedHealth:
 
     def __init__(self, *, ttl_seconds: float = 3.0) -> None:
         self._ttl = float(ttl_seconds)
-        self._snapshot: Dict[str, Any] = {"openai": {"ok": False, "latency_ms": 0}, "llama": {"ok": False, "latency_ms": 0}, "ts": 0.0}
+        self._snapshot: dict[str, Any] = {"openai": {"ok": False, "latency_ms": 0}, "llama": {"ok": False, "latency_ms": 0}, "ts": 0.0}
         self._ts: float = 0.0
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
-    def get_snapshot(self) -> Dict[str, Any]:
+    def get_snapshot(self) -> dict[str, Any]:
         now = time.monotonic()
         # Return current snapshot immediately
         snap = dict(self._snapshot)
@@ -41,7 +42,7 @@ class AsyncCachedHealth:
     async def refresh(self) -> None:
         # Perform vendor probes concurrently; tolerate failures
         try:
-            from app.health import check_openai_health, check_ollama_health
+            from app.health import check_ollama_health, check_openai_health
 
             async def _probe(fn):
                 try:
@@ -85,7 +86,7 @@ class TTLCache:
         self._max = int(max_entries)
         self._ttl = float(ttl_seconds)
         # OrderedDict: key -> (expires_at, value)
-        self._data: "OrderedDict[str, Tuple[float, Any]]" = OrderedDict()
+        self._data: OrderedDict[str, tuple[float, Any]] = OrderedDict()
 
     def _purge_expired(self) -> None:
         now = time.monotonic()
@@ -96,7 +97,7 @@ class TTLCache:
         for k in to_delete:
             self._data.pop(k, None)
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         self._purge_expired()
         item = self._data.get(key)
         if not item:
@@ -138,7 +139,7 @@ def make_semantic_cache_key(*, user_id: str, prompt_text: str) -> str:
     return f"uid:{user_id}|p:{_normalize_text(prompt_text)}|pol:{_policy_hash()}|sv:{skills_ver}"
 
 
-def ensure_usage_ints(usage: Dict[str, Any]) -> None:
+def ensure_usage_ints(usage: dict[str, Any]) -> None:
     # Normalize usage keys to ints; accept multiple shapes
     ti = usage.get("tokens_in")
     to = usage.get("tokens_out")

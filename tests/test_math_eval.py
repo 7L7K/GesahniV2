@@ -1,4 +1,4 @@
-from app.skills.math_eval import evaluate_expr, EvalError
+from app.skills.math_eval import evaluate_expr
 
 
 def test_basic_arithmetic():

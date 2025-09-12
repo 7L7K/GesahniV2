@@ -16,16 +16,14 @@ from fastapi import (
 )
 
 from app.deps.user import get_current_user_id
-from app.session_manager import SESSIONS_DIR
+from app.session_manager import SESSIONS_DIR, get_session_meta
 from app.session_manager import generate_tags as queue_tag_extraction
-from app.session_manager import get_session_meta
 from app.session_manager import save_session as finalize_capture_session
 from app.session_manager import start_session as start_capture_session
 from app.session_store import SessionStatus
 from app.session_store import list_sessions as list_session_store
 from app.tasks import enqueue_summary, enqueue_transcription
 from app.transcription import transcribe_file
-
 
 router = APIRouter(tags=["Care"])
 

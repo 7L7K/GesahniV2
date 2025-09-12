@@ -1,14 +1,15 @@
 """Test helpers for authentication using unified constants."""
 
 import os
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
 import jwt
-from datetime import datetime, timedelta, UTC
-from typing import Dict, Any
 
-from app.auth.constants import JWT_SECRET, JWT_ALG, JWT_ISS, JWT_AUD
+from app.auth.constants import JWT_ALG, JWT_AUD, JWT_ISS, JWT_SECRET
 
 
-def mint_test_jwt(payload: Dict[str, Any], ttl_seconds: int = 3600, token_type: str = "access") -> str:
+def mint_test_jwt(payload: dict[str, Any], ttl_seconds: int = 3600, token_type: str = "access") -> str:
     """Mint a test JWT using unified constants.
 
     Args:

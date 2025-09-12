@@ -1,15 +1,12 @@
 """Model router for selecting and routing to appropriate LLM backends."""
 
 import logging
-import os
 from dataclasses import dataclass
-from typing import Any, Optional
 
-from ..model_config import GPT_BASELINE_MODEL, GPT_HEAVY_MODEL, GPT_MID_MODEL
-from ..model_picker import pick_model
 from app import settings
+
+from ..model_picker import pick_model
 from .debug_flags import is_debug_routing_enabled, is_dry_run_mode
-from .rules_loader import get_router_rules
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +17,10 @@ class RoutingDecision:
     vendor: str
     model: str
     reason: str
-    keyword_hit: Optional[str] = None
+    keyword_hit: str | None = None
     stream: bool = False
     allow_fallback: bool = True
-    request_id: Optional[str] = None
+    request_id: str | None = None
 
 
 class ModelRouter:
@@ -131,7 +128,7 @@ class ModelRouter:
             # Should not happen due to validation in main router
             raise ValueError(f"Invalid model override pattern: {mv}")
 
-    def _determine_vendor_and_model_from_picker(self, prompt: str, intent: str, tokens: int) -> tuple[str, str, str, Optional[str]]:
+    def _determine_vendor_and_model_from_picker(self, prompt: str, intent: str, tokens: int) -> tuple[str, str, str, str | None]:
         """Determine vendor and model using the model picker."""
         engine, model_name, picker_reason, keyword_hit = pick_model(prompt, intent, tokens)
         vendor = "openai" if engine == "gpt" else "ollama"
@@ -180,10 +177,10 @@ class ModelRouter:
         user_id: str,
         intent: str,
         tokens: int,
-        model_override: Optional[str] = None,
+        model_override: str | None = None,
         allow_fallback: bool = True,
         stream: bool = False,
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
     ) -> RoutingDecision:
         """Route to appropriate model based on prompt, intent, and overrides."""
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 import asyncio
-import aiosqlite
 import os
-import sys
+
+import aiosqlite
 from passlib.context import CryptContext
 
 _pwd = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-import os
 import json
-import requests
-import pytest
+import os
+
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 # Set test environment

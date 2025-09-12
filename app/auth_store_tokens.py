@@ -5,12 +5,11 @@ import logging
 import os
 import sqlite3
 import time
-from typing import Optional
 
-from .models.third_party_tokens import ThirdPartyToken, TokenQuery, TokenUpdate
-from .crypto_tokens import encrypt_token, decrypt_token
+from .crypto_tokens import encrypt_token
+from .metrics import TOKEN_REFRESH_OPERATIONS, TOKEN_STORE_OPERATIONS
+from .models.third_party_tokens import ThirdPartyToken, TokenUpdate
 from .service_state import set_status as set_service_status_json
-from .metrics import TOKEN_STORE_OPERATIONS, TOKEN_REFRESH_OPERATIONS
 from .settings import settings
 
 logger = logging.getLogger(__name__)
@@ -169,7 +168,7 @@ class TokenDAO:
             here = os.path.dirname(__file__)
             migration_path = os.path.join(here, "migrations", "002_add_access_token_enc.sql")
             if os.path.exists(migration_path):
-                with open(migration_path, "r", encoding="utf-8") as f:
+                with open(migration_path, encoding="utf-8") as f:
                     sql = f.read()
                 # Execute the migration SQL in a single script run
                 with sqlite3.connect(self.db_path) as conn:
@@ -607,7 +606,7 @@ class TokenDAO:
             })
             return False
 
-    async def get_token(self, user_id: str, provider: str, provider_sub: Optional[str] = None) -> Optional[ThirdPartyToken]:
+    async def get_token(self, user_id: str, provider: str, provider_sub: str | None = None) -> ThirdPartyToken | None:
         """
         Retrieve a valid token for the given user and provider.
 
@@ -907,8 +906,9 @@ class TokenDAO:
         else:
             # Check if identity_id exists in auth_identities table
             try:
-                from .auth_store import _db_path
                 import sqlite3
+
+                from .auth_store import _db_path
 
                 with sqlite3.connect(str(_db_path())) as conn:
                     cursor = conn.cursor()
@@ -1065,7 +1065,7 @@ class TokenDAO:
 
         return validation_passed
 
-    async def get_canonical_row(self, user_id: str, provider: str, provider_iss: str, provider_sub: Optional[str]) -> Optional[ThirdPartyToken]:
+    async def get_canonical_row(self, user_id: str, provider: str, provider_iss: str, provider_sub: str | None) -> ThirdPartyToken | None:
         """Return the single valid canonical row for (user,provider,provider_iss,provider_sub) or None.
 
         This helper enforces that exactly one valid row exists; returns the latest valid row if present.
@@ -1144,7 +1144,7 @@ class TokenDAO:
             logger.error(f"Failed to get tokens for user {user_id}: {e}")
             return []
 
-    async def get_by_id(self, token_id: str) -> Optional[ThirdPartyToken]:
+    async def get_by_id(self, token_id: str) -> ThirdPartyToken | None:
         """
         Retrieve a token by its unique ID.
 
@@ -1387,9 +1387,9 @@ class TokenDAO:
         provider: str,
         service: str,
         status: str,
-        provider_sub: Optional[str] = None,
-        provider_iss: Optional[str] = None,
-        last_error_code: Optional[str] = None,
+        provider_sub: str | None = None,
+        provider_iss: str | None = None,
+        last_error_code: str | None = None,
     ) -> bool:
         """Update per-service state on the current valid token row.
 
@@ -1471,7 +1471,7 @@ async def upsert_token(token: ThirdPartyToken) -> bool:
     return await token_dao.upsert_token(token)
 
 
-async def get_token_by_user_identities(user_id: str, provider: str) -> Optional[ThirdPartyToken]:
+async def get_token_by_user_identities(user_id: str, provider: str) -> ThirdPartyToken | None:
     """Resolve identities for a user and return the newest valid token for the provider.
 
     This pivots via the `auth_identities` table to avoid relying on token.user_id.
@@ -1509,7 +1509,7 @@ async def get_token_by_user_identities(user_id: str, provider: str) -> Optional[
         return None
 
 
-async def get_token(user_id: str, provider: str, provider_sub: Optional[str] = None) -> Optional[ThirdPartyToken]:
+async def get_token(user_id: str, provider: str, provider_sub: str | None = None) -> ThirdPartyToken | None:
     """Convenience function to get a token.
 
     If `provider_sub` is provided (e.g., Google OIDC `sub`), selects the matching row.
@@ -1559,9 +1559,9 @@ class TokenRefreshService:
         self,
         user_id: str,
         provider: str,
-        provider_sub: Optional[str] = None,
+        provider_sub: str | None = None,
         force_refresh: bool = False
-    ) -> Optional[ThirdPartyToken]:
+    ) -> ThirdPartyToken | None:
         """
         Get a valid token, automatically refreshing if needed.
 
@@ -1665,7 +1665,7 @@ class TokenRefreshService:
             # If we can't determine expiry, assume it needs refresh
             return True
 
-    async def _refresh_token_for_provider(self, token: ThirdPartyToken) -> Optional[ThirdPartyToken]:
+    async def _refresh_token_for_provider(self, token: ThirdPartyToken) -> ThirdPartyToken | None:
         """Refresh token based on provider."""
         try:
             if token.provider == "spotify":
@@ -1688,7 +1688,7 @@ class TokenRefreshService:
             })
             return None
 
-    async def _refresh_spotify_token(self, token: ThirdPartyToken) -> Optional[ThirdPartyToken]:
+    async def _refresh_spotify_token(self, token: ThirdPartyToken) -> ThirdPartyToken | None:
         """Refresh Spotify token."""
         try:
             from .integrations.spotify.client import SpotifyClient
@@ -1720,11 +1720,12 @@ class TokenRefreshService:
             })
             return None
 
-    async def _refresh_google_token(self, token: ThirdPartyToken) -> Optional[ThirdPartyToken]:
+    async def _refresh_google_token(self, token: ThirdPartyToken) -> ThirdPartyToken | None:
         """Refresh Google token."""
         try:
             # Import here to avoid circular dependencies
             from .integrations.google.oauth import refresh_access_token
+            from .models.third_party_tokens import ThirdPartyToken
 
             # Refresh the token
             token_data = await refresh_access_token(token.refresh_token)
@@ -1817,9 +1818,9 @@ token_refresh_service = TokenRefreshService()
 async def get_valid_token_with_auto_refresh(
     user_id: str,
     provider: str,
-    provider_sub: Optional[str] = None,
+    provider_sub: str | None = None,
     force_refresh: bool = False
-) -> Optional[ThirdPartyToken]:
+) -> ThirdPartyToken | None:
     """
     Convenience function to get a valid token with automatic refresh.
 
@@ -1907,3 +1908,20 @@ async def get_token_system_health() -> dict:
             "database": {"status": "unknown"},
             "refresh_service": {"status": "unknown"},
         }
+
+
+# module-level close helper for TokenDAO (sync sqlite3)
+def close_token_dao() -> None:
+    try:
+        conn = getattr(token_dao, "_conn", None)
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            try:
+                token_dao._conn = None  # type: ignore[attr-defined]
+            except Exception:
+                pass
+    except Exception:
+        pass

@@ -8,17 +8,15 @@ Comprehensive tests for token upsert functionality including:
 """
 
 import asyncio
-import sqlite3
 import time
 import uuid
-from pathlib import Path
 
 import pytest
-import pytest_asyncio
 
+from app.auth_store import _db_path as AUTH_DB_PATH
+from app.auth_store import ensure_tables, link_oauth_identity
 from app.auth_store_tokens import TokenDAO, _default_db_path
 from app.models.third_party_tokens import ThirdPartyToken
-from app.auth_store import _db_path as AUTH_DB_PATH, link_oauth_identity, ensure_tables
 
 
 @pytest.fixture

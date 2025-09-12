@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Awaitable, Callable, Dict, Tuple
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 
 class CachedError(RuntimeError):
@@ -21,9 +22,9 @@ class AsyncTTLCache:
 
     def __init__(self, ttl_seconds: int = 5):
         self._ttl = max(1, int(ttl_seconds))
-        self._cache: Dict[Any, Tuple[float, Any]] = {}
-        self._error_until: Dict[Any, float] = {}
-        self._locks: Dict[Any, asyncio.Lock] = {}
+        self._cache: dict[Any, tuple[float, Any]] = {}
+        self._error_until: dict[Any, float] = {}
+        self._locks: dict[Any, asyncio.Lock] = {}
 
     def _lock_for(self, key: Any) -> asyncio.Lock:
         lock = self._locks.get(key)

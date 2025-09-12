@@ -651,7 +651,7 @@ export async function apiFetch(
     if (isAuthCheckEndpoint) {
       console.warn('API_FETCH auth.401_auth_endpoint - redirecting to login (tokens preserved)', { path, errorCode, errorMessage, timestamp: new Date().toISOString() });
       if (typeof document !== "undefined") {
-        try { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search); } catch { }
+        try { window.location.href = '/login'; } catch { }
       }
       // Fall through to let caller handle the 401 response as well
     } else {
@@ -697,7 +697,7 @@ export async function apiFetch(
           console.error('Failed to refresh authentication state:', authError);
           // If refresh fails, redirect to login (do not forcibly clear tokens)
           if (typeof document !== "undefined") {
-            try { window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search); } catch { }
+            try { window.location.href = '/login'; } catch { }
           }
         }
       }

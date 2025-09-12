@@ -1,14 +1,15 @@
 """Test the persistence contract - DAOs that can be relied on."""
 
-import pytest
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from app.auth_store_tokens import TokenDAO
-from app.user_store import UserDAO
+from app.db.migrate import run_all_migrations
 from app.models.third_party_tokens import ThirdPartyToken
 from app.models.user_stats import UserStats
-from app.db.migrate import run_all_migrations
+from app.user_store import UserDAO
 
 
 class TestPersistenceContract:

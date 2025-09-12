@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import List, Optional
 
 import sqlalchemy as sa
 from sqlalchemy import (
@@ -10,15 +9,14 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    PrimaryKeyConstraint,
     String,
     Text,
     Time,
     UniqueConstraint,
-    PrimaryKeyConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-
 
 # ---------- Base with naming convention ----------
 NAMING_CONVENTION = {
@@ -49,26 +47,26 @@ class AuthUser(Base):
         server_default=sa.text("uuid_generate_v4()"),
     )
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
-    password_hash: Mapped[Optional[str]] = mapped_column(Text)
-    name: Mapped[Optional[str]] = mapped_column(String(200))
-    avatar_url: Mapped[Optional[str]] = mapped_column(Text)
+    password_hash: Mapped[str | None] = mapped_column(Text)
+    name: Mapped[str | None] = mapped_column(String(200))
+    avatar_url: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
     )
-    verified_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
-    auth_providers: Mapped[Optional[str]] = mapped_column(Text)  # JSON string or CSV
+    verified_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    auth_providers: Mapped[str | None] = mapped_column(Text)  # JSON string or CSV
 
     # relationships
-    devices: Mapped[List["AuthDevice"]] = relationship(
+    devices: Mapped[list[AuthDevice]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    sessions: Mapped[List["Session"]] = relationship(
+    sessions: Mapped[list[Session]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    identities: Mapped[List["AuthIdentity"]] = relationship(
+    identities: Mapped[list[AuthIdentity]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    pat_tokens: Mapped[List["PATToken"]] = relationship(
+    pat_tokens: Mapped[list[PATToken]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -83,16 +81,16 @@ class AuthDevice(Base):
     user_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
     )
-    device_name: Mapped[Optional[str]] = mapped_column(String(200))
+    device_name: Mapped[str | None] = mapped_column(String(200))
     ua_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     ip_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
     )
-    last_seen_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
-    user: Mapped["AuthUser"] = relationship(back_populates="devices")
-    sessions: Mapped[List["Session"]] = relationship(back_populates="device")
+    user: Mapped[AuthUser] = relationship(back_populates="devices")
+    sessions: Mapped[list[Session]] = relationship(back_populates="device")
 
 
 class Session(Base):
@@ -111,12 +109,12 @@ class Session(Base):
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
     )
-    last_seen_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
-    revoked_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     mfa_passed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("false"))
 
-    user: Mapped["AuthUser"] = relationship(back_populates="sessions")
-    device: Mapped["AuthDevice"] = relationship(back_populates="sessions")
+    user: Mapped[AuthUser] = relationship(back_populates="sessions")
+    device: Mapped[AuthDevice] = relationship(back_populates="sessions")
 
 
 class AuthIdentity(Base):
@@ -135,9 +133,9 @@ class AuthIdentity(Base):
         UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
     )
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
-    provider_iss: Mapped[Optional[str]] = mapped_column(String(255))
-    provider_sub: Mapped[Optional[str]] = mapped_column(String(255))
-    email_normalized: Mapped[Optional[str]] = mapped_column(String(320))
+    provider_iss: Mapped[str | None] = mapped_column(String(255))
+    provider_sub: Mapped[str | None] = mapped_column(String(255))
+    email_normalized: Mapped[str | None] = mapped_column(String(320))
     email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("false"))
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
@@ -146,7 +144,7 @@ class AuthIdentity(Base):
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
     )
 
-    user: Mapped["AuthUser"] = relationship(back_populates="identities")
+    user: Mapped[AuthUser] = relationship(back_populates="identities")
 
 
 class PATToken(Base):
@@ -162,13 +160,13 @@ class PATToken(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     scopes: Mapped[str] = mapped_column(Text, nullable=False)
-    exp_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    exp_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
     )
-    revoked_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
-    user: Mapped["AuthUser"] = relationship(back_populates="pat_tokens")
+    user: Mapped[AuthUser] = relationship(back_populates="pat_tokens")
 
 
 # =====================================================================
@@ -185,7 +183,7 @@ class UserStats(Base):
         primary_key=True,
     )
     login_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=sa.text("0"))
-    last_login: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    last_login: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     request_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=sa.text("0"))
 
 
@@ -200,16 +198,16 @@ class Resident(Base):
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
     )
-    name: Mapped[Optional[str]] = mapped_column(String(200))
+    name: Mapped[str | None] = mapped_column(String(200))
 
-    devices: Mapped[List["CareDevice"]] = relationship(back_populates="resident")
-    alerts: Mapped[List["Alert"]] = relationship(back_populates="resident")
-    sessions: Mapped[List["CareSession"]] = relationship(back_populates="resident")
-    contacts: Mapped[List["Contact"]] = relationship(back_populates="resident")
-    tv_config: Mapped[Optional["TVConfig"]] = relationship(
+    devices: Mapped[list[CareDevice]] = relationship(back_populates="resident")
+    alerts: Mapped[list[Alert]] = relationship(back_populates="resident")
+    sessions: Mapped[list[CareSession]] = relationship(back_populates="resident")
+    contacts: Mapped[list[Contact]] = relationship(back_populates="resident")
+    tv_config: Mapped[TVConfig | None] = relationship(
         back_populates="resident", uselist=False, cascade="all, delete-orphan"
     )
-    caregivers: Mapped[List["Caregiver"]] = relationship(
+    caregivers: Mapped[list[Caregiver]] = relationship(
         secondary="care.caregiver_resident",
         back_populates="residents",
     )
@@ -222,10 +220,10 @@ class Caregiver(Base):
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
     )
-    name: Mapped[Optional[str]] = mapped_column(String(200))
-    phone: Mapped[Optional[str]] = mapped_column(String(50))
+    name: Mapped[str | None] = mapped_column(String(200))
+    phone: Mapped[str | None] = mapped_column(String(50))
 
-    residents: Mapped[List["Resident"]] = relationship(
+    residents: Mapped[list[Resident]] = relationship(
         secondary="care.caregiver_resident", back_populates="caregivers"
     )
 
@@ -253,17 +251,17 @@ class CareDevice(Base):
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
     )
-    resident_id: Mapped[Optional[str]] = mapped_column(
+    resident_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("care.residents.id", ondelete="SET NULL")
     )
-    last_seen: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
-    battery_pct: Mapped[Optional[int]] = mapped_column(Integer)
-    battery_low_since: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    last_seen: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    battery_pct: Mapped[int | None] = mapped_column(Integer)
+    battery_low_since: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     battery_notified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("false"))
-    offline_since: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    offline_since: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     offline_notified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("false"))
 
-    resident: Mapped[Optional["Resident"]] = relationship(back_populates="devices")
+    resident: Mapped[Resident | None] = relationship(back_populates="devices")
 
 
 class Alert(Base):
@@ -273,19 +271,19 @@ class Alert(Base):
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
     )
-    resident_id: Mapped[Optional[str]] = mapped_column(
+    resident_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("care.residents.id", ondelete="SET NULL")
     )
-    kind: Mapped[Optional[str]] = mapped_column(String(50))
-    severity: Mapped[Optional[str]] = mapped_column(String(20))
-    note: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
-    status: Mapped[Optional[str]] = mapped_column(String(30))
-    ack_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
-    resolved_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    kind: Mapped[str | None] = mapped_column(String(50))
+    severity: Mapped[str | None] = mapped_column(String(20))
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str | None] = mapped_column(String(30))
+    ack_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
-    resident: Mapped[Optional["Resident"]] = relationship(back_populates="alerts")
-    events: Mapped[List["AlertEvent"]] = relationship(
+    resident: Mapped[Resident | None] = relationship(back_populates="alerts")
+    events: Mapped[list[AlertEvent]] = relationship(
         back_populates="alert", cascade="all, delete-orphan"
     )
 
@@ -298,11 +296,11 @@ class AlertEvent(Base):
     alert_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), ForeignKey("care.alerts.id", ondelete="CASCADE"), nullable=False
     )
-    t: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
-    type: Mapped[Optional[str]] = mapped_column(String(50))
-    meta: Mapped[Optional[dict]] = mapped_column(JSONB)
+    t: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    type: Mapped[str | None] = mapped_column(String(50))
+    meta: Mapped[dict | None] = mapped_column(JSONB)
 
-    alert: Mapped["Alert"] = relationship(back_populates="events")
+    alert: Mapped[Alert] = relationship(back_populates="events")
 
 
 class CareSession(Base):
@@ -312,15 +310,15 @@ class CareSession(Base):
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
     )
-    resident_id: Mapped[Optional[str]] = mapped_column(
+    resident_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("care.residents.id", ondelete="SET NULL")
     )
-    title: Mapped[Optional[str]] = mapped_column(String(200))
-    transcript_uri: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    title: Mapped[str | None] = mapped_column(String(200))
+    transcript_uri: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
-    resident: Mapped[Optional["Resident"]] = relationship(back_populates="sessions")
+    resident: Mapped[Resident | None] = relationship(back_populates="sessions")
 
 
 class Contact(Base):
@@ -333,12 +331,12 @@ class Contact(Base):
     resident_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), ForeignKey("care.residents.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[Optional[str]] = mapped_column(String(200))
-    phone: Mapped[Optional[str]] = mapped_column(String(50))
-    priority: Mapped[Optional[int]] = mapped_column(Integer)
-    quiet_hours: Mapped[Optional[str]] = mapped_column(String(50))
+    name: Mapped[str | None] = mapped_column(String(200))
+    phone: Mapped[str | None] = mapped_column(String(50))
+    priority: Mapped[int | None] = mapped_column(Integer)
+    quiet_hours: Mapped[str | None] = mapped_column(String(50))
 
-    resident: Mapped["Resident"] = relationship(back_populates="contacts")
+    resident: Mapped[Resident] = relationship(back_populates="contacts")
 
 
 class TVConfig(Base):
@@ -348,13 +346,13 @@ class TVConfig(Base):
     resident_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), ForeignKey("care.residents.id", ondelete="CASCADE"), primary_key=True
     )
-    ambient_rotation: Mapped[Optional[int]] = mapped_column(Integer)
-    rail: Mapped[Optional[str]] = mapped_column(String(50))
-    quiet_hours: Mapped[Optional[str]] = mapped_column(String(50))
-    default_vibe: Mapped[Optional[str]] = mapped_column(String(50))
-    updated_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    ambient_rotation: Mapped[int | None] = mapped_column(Integer)
+    rail: Mapped[str | None] = mapped_column(String(50))
+    quiet_hours: Mapped[str | None] = mapped_column(String(50))
+    default_vibe: Mapped[str | None] = mapped_column(String(50))
+    updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
-    resident: Mapped["Resident"] = relationship(back_populates="tv_config")
+    resident: Mapped[Resident] = relationship(back_populates="tv_config")
 
 
 # =====================================================================
@@ -370,10 +368,10 @@ class MusicDevice(Base):
 
     provider: Mapped[str] = mapped_column(String(40), nullable=False)
     device_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    room: Mapped[Optional[str]] = mapped_column(String(100))
-    name: Mapped[Optional[str]] = mapped_column(String(200))
-    last_seen: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
-    capabilities: Mapped[Optional[str]] = mapped_column(Text)
+    room: Mapped[str | None] = mapped_column(String(100))
+    name: Mapped[str | None] = mapped_column(String(200))
+    last_seen: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    capabilities: Mapped[str | None] = mapped_column(Text)
 
 
 class MusicToken(Base):
@@ -388,10 +386,10 @@ class MusicToken(Base):
     )
     provider: Mapped[str] = mapped_column(String(40), nullable=False)
     access_token: Mapped[bytes] = mapped_column(sa.LargeBinary, nullable=False)
-    refresh_token: Mapped[Optional[bytes]] = mapped_column(sa.LargeBinary)
-    scope: Mapped[Optional[str]] = mapped_column(Text)
-    expires_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    refresh_token: Mapped[bytes | None] = mapped_column(sa.LargeBinary)
+    scope: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class MusicPreferences(Base):
@@ -401,7 +399,7 @@ class MusicPreferences(Base):
     user_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), primary_key=True
     )
-    default_provider: Mapped[Optional[str]] = mapped_column(String(40))
+    default_provider: Mapped[str | None] = mapped_column(String(40))
     quiet_start: Mapped[str] = mapped_column(Time, nullable=False, server_default=sa.text("'22:00'::time"))
     quiet_end: Mapped[str] = mapped_column(Time, nullable=False, server_default=sa.text("'07:00'::time"))
     quiet_max_volume: Mapped[int] = mapped_column(Integer, nullable=False, server_default=sa.text("30"))
@@ -415,14 +413,14 @@ class MusicSession(Base):
     session_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
     )
-    user_id: Mapped[Optional[str]] = mapped_column(
+    user_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="SET NULL")
     )
-    room: Mapped[Optional[str]] = mapped_column(String(100))
-    provider: Mapped[Optional[str]] = mapped_column(String(40))
-    device_id: Mapped[Optional[str]] = mapped_column(String(128))
-    started_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
-    ended_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    room: Mapped[str | None] = mapped_column(String(100))
+    provider: Mapped[str | None] = mapped_column(String(40))
+    device_id: Mapped[str | None] = mapped_column(String(128))
+    started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class MusicQueue(Base):
@@ -436,10 +434,10 @@ class MusicQueue(Base):
         UUID(as_uuid=False), ForeignKey("music.music_sessions.session_id", ondelete="CASCADE"), nullable=False
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
-    provider: Mapped[Optional[str]] = mapped_column(String(40))
-    entity_type: Mapped[Optional[str]] = mapped_column(String(40))
-    entity_id: Mapped[Optional[str]] = mapped_column(String(128))
-    meta: Mapped[Optional[dict]] = mapped_column(JSONB)
+    provider: Mapped[str | None] = mapped_column(String(40))
+    entity_type: Mapped[str | None] = mapped_column(String(40))
+    entity_id: Mapped[str | None] = mapped_column(String(128))
+    meta: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class MusicFeedback(Base):
@@ -474,10 +472,10 @@ class ThirdPartyToken(Base):
     )
     provider: Mapped[str] = mapped_column(String(80), nullable=False)
     access_token: Mapped[bytes] = mapped_column(sa.LargeBinary, nullable=False)
-    refresh_token: Mapped[Optional[bytes]] = mapped_column(sa.LargeBinary)
-    scope: Mapped[Optional[str]] = mapped_column(Text)
-    expires_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    refresh_token: Mapped[bytes | None] = mapped_column(sa.LargeBinary)
+    scope: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 # =====================================================================
@@ -491,14 +489,14 @@ class AuditLog(Base):
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
     )
-    user_id: Mapped[Optional[str]] = mapped_column(
+    user_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="SET NULL")
     )
-    session_id: Mapped[Optional[str]] = mapped_column(
+    session_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("auth.sessions.id", ondelete="SET NULL")
     )
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)
-    meta: Mapped[Optional[dict]] = mapped_column(JSONB)
+    meta: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
     )

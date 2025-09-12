@@ -1,6 +1,6 @@
 from __future__ import annotations
-# app/skills/joke_skill.py
 
+# app/skills/joke_skill.py
 import re
 
 import httpx

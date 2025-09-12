@@ -150,7 +150,7 @@ class TestComprehensiveErrors:
             assert store is not None
         except Exception as e:
             # Should handle large content gracefully without crashing
-            assert isinstance(e, (MemoryError, ValueError, OSError))
+            assert isinstance(e, MemoryError | ValueError | OSError)
 
     def test_memory_store_empty_content(self):
         """Test memory store handling of empty content."""
@@ -160,7 +160,7 @@ class TestComprehensiveErrors:
             # Empty content should be handled gracefully
         except Exception as e:
             # Expected to handle empty content without crashing
-            assert isinstance(e, (ValueError, TypeError))
+            assert isinstance(e, ValueError | TypeError)
 
     def test_memory_store_none_content(self):
         """Test memory store handling of None content."""
@@ -170,15 +170,15 @@ class TestComprehensiveErrors:
             # None content should be handled gracefully
         except Exception as e:
             # Expected to handle None content without crashing
-            assert isinstance(e, (ValueError, TypeError))
+            assert isinstance(e, ValueError | TypeError)
 
     def test_llama_integration_failures(self, event_loop):
         """Test LLaMA integration failure scenarios."""
-        from app.llama_integration import LLAMA_HEALTHY, llama_health_check_state
         import time
 
         # Reset health status and state before test
         import app.llama_integration
+        from app.llama_integration import LLAMA_HEALTHY, llama_health_check_state
 
         app.llama_integration.LLAMA_HEALTHY = True
         # Reset health check state to ensure the check runs

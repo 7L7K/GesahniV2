@@ -1,6 +1,7 @@
 import types
 
 import pytest
+from fastapi import HTTPException
 
 
 def test_get_rate_limit_snapshot_and_current_key(monkeypatch):
@@ -104,5 +105,5 @@ async def test_require_nonce(monkeypatch):
     await sec.require_nonce(req)
 
     # reuse -> conflict
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException):
         await sec.require_nonce(req)

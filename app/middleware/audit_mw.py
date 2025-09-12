@@ -45,7 +45,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                         req_id=req_id,
                         scopes=(
                             list(scopes)
-                            if isinstance(scopes, (list, set, tuple))
+                            if isinstance(scopes, list | set | tuple)
                             else []
                         ),
                         action="http_request",
@@ -74,7 +74,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                                     "path": request.url.path,
                                     "scopes": (
                                         list(scopes)
-                                        if isinstance(scopes, (list, set, tuple))
+                                        if isinstance(scopes, list | set | tuple)
                                         else []
                                     ),
                                 },
@@ -98,7 +98,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                                     "path": request.url.path,
                                     "scopes": (
                                         list(scopes)
-                                        if isinstance(scopes, (list, set, tuple))
+                                        if isinstance(scopes, list | set | tuple)
                                         else []
                                     ),
                                 },

@@ -8,8 +8,8 @@ import jwt
 from fastapi import HTTPException
 from starlette.websockets import WebSocket
 
-from .security import jwt_decode, _payload_scopes
-from .ws_metrics import record_ws_auth_attempt, record_ws_auth_success, record_ws_auth_failure
+from .security import _payload_scopes, jwt_decode
+from .ws_metrics import record_ws_auth_attempt, record_ws_auth_failure, record_ws_auth_success
 
 log = logging.getLogger(__name__)
 
@@ -75,6 +75,8 @@ async def verify_ws(ws: WebSocket):
         try:
             from .auth_core import (
                 extract_token as _extract,
+            )
+            from .auth_core import (
                 resolve_session_identity as _resolve_sess,
             )
 

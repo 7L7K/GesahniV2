@@ -80,7 +80,7 @@ async def synthesize_openai_tts(
         audio_bytes = (
             resp.read() if hasattr(resp, "read") else getattr(resp, "content", b"")
         )
-        if not isinstance(audio_bytes, (bytes, bytearray)):
+        if not isinstance(audio_bytes, bytes | bytearray):
             # Some SDKs return base64 string; normalize
             try:
                 import base64

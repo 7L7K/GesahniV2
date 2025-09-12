@@ -7,13 +7,10 @@ Only used by create_app() - no other modules should import this.
 """
 from __future__ import annotations
 
-from typing import Optional
-
 # Import Router protocol from bootstrap location
 from .router_contracts import Router
 
-
-_router: Optional[Router] = None
+_router: Router | None = None
 
 
 def set_router(router: Router) -> None:
@@ -98,7 +95,7 @@ def create_legacy_router_adapter() -> Router:
         legacy = importlib.import_module("router")
 
         if hasattr(legacy, "route_prompt"):
-            fn = getattr(legacy, "route_prompt")
+            fn = legacy.route_prompt
 
             class LegacyRouterAdapter:
                 """Adapter to make legacy router implement the Router protocol."""

@@ -98,6 +98,7 @@ async def test_require_nonce_disabled_passes(monkeypatch):
 @pytest.mark.asyncio
 async def test_verify_webhook_missing_secret(monkeypatch):
     from fastapi import HTTPException
+
     from app.security.webhooks import verify_webhook
 
     monkeypatch.delenv("HA_WEBHOOK_SECRETS", raising=False)

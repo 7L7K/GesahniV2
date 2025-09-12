@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import os
+
+# Ensure app modules are importable when running `alembic` from repo root
+import sys
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-# Ensure app modules are importable when running `alembic` from repo root
-import sys
 sys.path.insert(0, os.getcwd())
 
 from app.db.models import Base  # noqa: E402
-
 
 # this is the Alembic Config object, which provides access to the values
 # within the .ini file in use.

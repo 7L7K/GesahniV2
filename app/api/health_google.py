@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from ..deps.user import get_current_user_id
 from ..auth_store_tokens import get_token
+from ..deps.user import get_current_user_id
 from ..service_state import parse as parse_state
 
 router = APIRouter(tags=["Admin"])

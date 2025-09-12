@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Request, Response, Depends
+from fastapi import APIRouter, Depends, Request, Response
 
 router = APIRouter()
 
-from .auth import dev_token, dev_login, make_dev_token  # lightweight dev helpers
+from .auth import dev_login, make_dev_token  # lightweight dev helpers
 from .deps.user import get_current_user_id
 
 

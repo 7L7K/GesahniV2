@@ -16,10 +16,9 @@ from .gpt_client import ask_gpt
 from .memory.vector_store import add_user_memory
 from .router.compat import OPENAI_TIMEOUT_MS
 from .session_manager import SESSIONS_DIR, extract_tags_from_text
-from .session_store import SessionStatus, append_error
+from .session_store import SessionStatus, append_error, update_status
 from .session_store import load_meta as _load_meta
 from .session_store import save_meta as _save_meta
-from .session_store import update_status
 from .transcribe import transcribe_file as sync_transcribe_file
 
 

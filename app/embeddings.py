@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Embedding utilities supporting OpenAI and local LLaMA backends.
 
 This module exposes a single :func:`embed` coroutine which returns a vector of
@@ -157,7 +158,7 @@ async def _embed_openai(text: str) -> list[float]:
         def _flatten(v):
             out = []
             for item in v:
-                if isinstance(item, (list, tuple)):
+                if isinstance(item, list | tuple):
                     out.extend(_flatten(item))
                 else:
                     out.append(item)

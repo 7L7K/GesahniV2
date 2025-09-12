@@ -1,9 +1,11 @@
 import asyncio
-import time
 import tempfile
+import time
+
+from app.api import google_services
 from app.auth_store_tokens import TokenDAO
 from app.models.third_party_tokens import ThirdPartyToken
-from app.api import google_services
+
 
 async def debug_mismatch():
     # Create a temporary database
@@ -96,7 +98,7 @@ async def debug_mismatch():
     current_token = await dao.get_token("u42", "google")
     all_tokens = await dao.get_all_user_tokens("u42")
 
-    print(f"\n=== Account Mismatch Debug ===")
+    print("\n=== Account Mismatch Debug ===")
     print(f"Current token: {current_token.id} provider_sub: {current_token.provider_sub}")
     print(f"All tokens: {len(all_tokens)}")
 

@@ -6,10 +6,9 @@ import os
 import random
 import sqlite3
 import time
-from typing import List, Tuple
 
-from ..integrations.spotify.client import SpotifyClient, SpotifyAuthError
 from ..auth_store import get_user_id_by_identity_id
+from ..integrations.spotify.client import SpotifyAuthError
 from ..metrics import SPOTIFY_REFRESH, SPOTIFY_REFRESH_ERROR
 
 logger = logging.getLogger(__name__)
@@ -48,7 +47,7 @@ def _resolve_db_path() -> str:
         return _default_db_path()
 
 
-def _get_candidates(now: int) -> List[Tuple[str, str, int]]:
+def _get_candidates(now: int) -> list[tuple[str, str, int]]:
     """Return list of (user_id, provider, expires_at) for tokens expiring within window."""
     out = []
     # Resolve DB path with priority: explicit env var > module DEFAULT_DB_PATH > TokenDAO default

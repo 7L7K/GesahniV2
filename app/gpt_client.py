@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Thin wrapper around the OpenAI chat API.
 
 The original project depended on the official ``openai`` package.  The

@@ -1,9 +1,9 @@
 """Test JWT key rotation and backward compatibility."""
 import json
 import os
-import pytest
-from app.tokens import sign_access_token, decode_jwt_token, test_jwt_backward_compatibility
+
 from app.security.jwt_config import get_jwt_config
+from app.tokens import decode_jwt_token, sign_access_token, test_jwt_backward_compatibility
 
 
 def test_jwt_rotation_backward_compat():

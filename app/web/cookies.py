@@ -1,4 +1,5 @@
 import os
+from datetime import UTC
 from typing import NamedTuple
 
 from app.cookie_config import format_cookie_header, get_cookie_config
@@ -354,9 +355,9 @@ def set_named_cookie(
     try:
         if expires is not None:
             # If expires is datetime-like, convert to seconds from now; if numeric, treat as seconds
-            from datetime import datetime, timezone
+            from datetime import datetime
             if hasattr(expires, "timestamp"):
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 exp_ts = expires.timestamp()  # type: ignore[attr-defined]
                 max_age_final = max(0, int(exp_ts - now.timestamp()))
             else:

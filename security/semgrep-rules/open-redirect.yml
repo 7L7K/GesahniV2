@@ -1,0 +1,150 @@
+rules:
+  - id: open-redirect-unsanitized-variable
+    patterns:
+      - pattern-either:
+          # Python redirect patterns
+          - pattern: |
+              $REDIRECT_METHOD($URL)
+              ...
+              $URL = $VAR
+          - pattern: |
+              redirect($URL, ...)
+              ...
+              $URL = $VAR
+          - pattern: |
+              response.redirect($URL)
+              ...
+              $URL = $VAR
+          - pattern: |
+              Response.redirect($URL)
+              ...
+              $URL = $VAR
+          # JavaScript redirect patterns
+          - pattern: |
+              window.location.href = $URL
+              ...
+              $URL = $VAR
+          - pattern: |
+              window.location.replace($URL)
+              ...
+              $URL = $VAR
+          - pattern: |
+              location.href = $URL
+              ...
+              $URL = $VAR
+          - pattern: |
+              location.replace($URL)
+              ...
+              $URL = $VAR
+          # React Router patterns
+          - pattern: |
+              navigate($URL, ...)
+              ...
+              $URL = $VAR
+          - pattern: |
+              useNavigate()($URL)
+              ...
+              $URL = $VAR
+    metavariable-regex:
+      $VAR: '^(?!.*(?:sanitiz|validat|escap|whitelist|allowlist)).*'  # Flag if variable name doesn't suggest sanitization
+    message: |
+      Potential open redirect vulnerability: redirecting to unsanitized variable '$VAR'.
+      This could allow attackers to redirect users to malicious sites.
+      Ensure URL is validated against a whitelist or properly sanitized.
+    severity: ERROR
+    languages: [python, javascript, typescript]
+
+  - id: open-redirect-login-next-construction
+    patterns:
+      - pattern-either:
+          # Frontend construction of /login?next= URLs
+          - pattern: |
+              "/login?next=" + $VAR
+          - pattern: |
+              `/login?next=${$VAR}`
+          - pattern: |
+              "/login?next=".concat($VAR)
+          - pattern: |
+              "/login?redirect=" + $VAR
+          - pattern: |
+              `/login?redirect=${$VAR}`
+          - pattern: |
+              "/login?redirect=".concat($VAR)
+          # Python f-string patterns
+          - pattern: |
+              f"/login?next={$VAR}"
+          - pattern: |
+              f"/login?redirect={$VAR}"
+          # Python format patterns
+          - pattern: |
+              "/login?next={}".format($VAR)
+          - pattern: |
+              "/login?redirect={}".format($VAR)
+    message: |
+      Potential open redirect via login next parameter construction.
+      Constructing '/login?next=' URLs with user input '$VAR' can lead to open redirect vulnerabilities.
+      Validate the next/redirect parameter against a whitelist of allowed URLs.
+    severity: ERROR
+    languages: [python, javascript, typescript]
+
+  - id: open-redirect-protocol-relative-url
+    patterns:
+      - pattern-either:
+          # Protocol-relative URLs in redirects
+          - pattern: |
+              redirect("//$DOMAIN$PATH", ...)
+          - pattern: |
+              response.redirect("//$DOMAIN$PATH")
+          - pattern: |
+              window.location.href = "//$DOMAIN$PATH"
+          - pattern: |
+              location.href = "//$DOMAIN$PATH"
+          # Python patterns
+          - pattern: |
+              RedirectResponse("//$DOMAIN$PATH", ...)
+          - pattern: |
+              HTTPFound("//$DOMAIN$PATH", ...)
+    message: |
+      Protocol-relative URL in redirect: '//$DOMAIN$PATH'.
+      This allows attackers to potentially redirect to malicious sites on different protocols.
+      Use absolute URLs with explicit protocols or validate the domain.
+    severity: WARNING
+    languages: [python, javascript, typescript]
+
+  - id: open-redirect-unsafe-parameter
+    patterns:
+      - pattern-either:
+          # Common redirect parameter names
+          - pattern: |
+              $PARAM = request.GET.get('redirect')
+          - pattern: |
+              $PARAM = request.GET.get('next')
+          - pattern: |
+              $PARAM = request.GET.get('url')
+          - pattern: |
+              $PARAM = request.GET.get('return')
+          - pattern: |
+              $PARAM = request.GET.get('return_url')
+          - pattern: |
+              $PARAM = request.GET.get('returnTo')
+          - pattern: |
+              $PARAM = request.GET.get('continue')
+          - pattern: |
+              $PARAM = req.query.redirect
+          - pattern: |
+              $PARAM = req.query.next
+          - pattern: |
+              $PARAM = req.query.url
+          - pattern: |
+              $PARAM = req.query.return
+          - pattern: |
+              $PARAM = req.query.return_url
+          - pattern: |
+              $PARAM = req.query.returnTo
+          - pattern: |
+              $PARAM = req.query.continue
+    message: |
+      Reading redirect parameter '$PARAM' from user input without validation.
+      This is commonly used in open redirect attacks. Always validate against a whitelist.
+    severity: WARNING
+    languages: [python, javascript, typescript]

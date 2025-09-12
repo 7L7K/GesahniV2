@@ -22,7 +22,7 @@ async def _load() -> dict[str, str]:
     try:
         # Ensure directory exists before reads/writes
         await _ensure_parent_dir()
-        async with aiofiles.open(_PATH, "r") as f:
+        async with aiofiles.open(_PATH) as f:
             raw = await f.read()
             try:
                 data = json.loads(raw) if raw else {}

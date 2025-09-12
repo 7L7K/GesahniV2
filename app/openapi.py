@@ -4,10 +4,9 @@ OpenAPI configuration module for GesahniV2.
 This module handles OpenAPI tag ordering, route visibility, and schema customization.
 """
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi.openapi.utils import get_openapi
-
 
 # Define the exact order of tags as required by tests
 TAG_ORDER = ["Care", "Music", "Calendar", "TV", "Admin", "Auth"]
@@ -32,7 +31,7 @@ def should_hide_route(path: str) -> bool:
     return path in HIDDEN_ROUTES
 
 
-def customize_openapi_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
+def customize_openapi_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """
     Customize the OpenAPI schema with proper tag ordering and route filtering.
 
@@ -74,9 +73,9 @@ def customize_openapi_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
 def generate_custom_openapi(
     title: str,
     version: str,
-    routes: List[Any],
-    tags: Optional[List[Dict[str, str]]] = None,
-) -> Dict[str, Any]:
+    routes: list[Any],
+    tags: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
     """
     Generate a customized OpenAPI schema with proper tag ordering and visibility.
 

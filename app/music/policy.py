@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Dict, Any
 import datetime
+from typing import Any
 
 
 def is_quiet_hours(now: datetime.datetime | None = None, start_hour: int = 22, end_hour: int = 7) -> bool:
@@ -12,7 +12,7 @@ def is_quiet_hours(now: datetime.datetime | None = None, start_hour: int = 22, e
     return h >= start_hour or h < end_hour
 
 
-def filter_explicit(content: Dict[str, Any]) -> bool:
+def filter_explicit(content: dict[str, Any]) -> bool:
     # Placeholder: return False if explicit content detected
     return not content.get("explicit", False)
 

@@ -86,7 +86,7 @@ class LightsSkill(Skill):
             entity = res["entity_id"]
             friendly = res["friendly_name"]
             # validate parsed slots
-            from .tools.validator import validate_level, validate_entity_resolution
+            from .tools.validator import validate_entity_resolution, validate_level
 
             ok, expl, confirm = validate_entity_resolution(res)
             if not ok:

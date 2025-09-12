@@ -8,9 +8,10 @@ from fastapi.responses import PlainTextResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
+from app.headers import get_rate_limit_headers, get_retry_after_header
+
 # Import settings and header utilities
 from app.settings_rate import rate_limit_settings
-from app.headers import get_rate_limit_headers, get_retry_after_header
 
 # Phase 6.1: Clean rate limit metrics
 try:

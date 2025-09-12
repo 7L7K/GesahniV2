@@ -4,7 +4,6 @@
 import re
 import sys
 from collections import defaultdict
-from typing import Dict, List, Tuple, Set
 
 # Add current directory to path
 sys.path.insert(0, '.')
@@ -27,7 +26,7 @@ def analyze_routes():
     # Analyze compat_api.py
     compat_file = "/Users/kingal/2025/GesahniV2/app/router/compat_api.py"
     try:
-        with open(compat_file, 'r') as f:
+        with open(compat_file) as f:
             content = f.read()
 
         # Extract route patterns from compat_api
@@ -43,7 +42,7 @@ def analyze_routes():
 
             if matched_patterns:
                 # Extract handler function name
-                handler_match = re.search(rf'def\s+(\w+)\s*\([^)]*\):\s*\n\s*"""([^"]*).*?"""', content, re.DOTALL)
+                handler_match = re.search(r'def\s+(\w+)\s*\([^)]*\):\s*\n\s*"""([^"]*).*?"""', content, re.DOTALL)
                 handler_name = handler_match.group(1) if handler_match else "unknown"
 
                 route_info.append({
@@ -63,7 +62,7 @@ def analyze_routes():
     # Analyze auth.py for canonical routes
     auth_file = "/Users/kingal/2025/GesahniV2/app/api/auth.py"
     try:
-        with open(auth_file, 'r') as f:
+        with open(auth_file) as f:
             content = f.read()
 
         # Find routes with their decorators
@@ -119,7 +118,7 @@ def analyze_routes():
             continue
 
         # Group routes by path for better display
-        path_groups: Dict[str, List[Dict]] = defaultdict(list)
+        path_groups: dict[str, list[dict]] = defaultdict(list)
         for route in matching_routes:
             path_groups[route['path']].append(route)
 

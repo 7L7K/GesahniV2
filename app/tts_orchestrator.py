@@ -211,7 +211,7 @@ async def synthesize(
         if (
             exp
             and now < float(exp)
-            and isinstance(cached, (bytes, bytearray))
+            and isinstance(cached, bytes | bytearray)
             and cached
         ):
             return bytes(cached)

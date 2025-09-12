@@ -10,9 +10,10 @@ with debug statements.
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
+from typing import Any
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -29,11 +30,11 @@ class SpotifyDebugEvent:
     operation: str = ""
     user_id: str = ""
     status: str = ""
-    duration_ms: Optional[float] = None
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    duration_ms: float | None = None
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "timestamp": self.timestamp,
             "operation": self.operation,
@@ -49,7 +50,7 @@ class SpotifyDebugger:
 
     def __init__(self):
         self.logger = logging.getLogger("spotify.debugger")
-        self.events: List[SpotifyDebugEvent] = []
+        self.events: list[SpotifyDebugEvent] = []
         self._health_checks = {}
         self._active_operations = {}
 
@@ -97,7 +98,7 @@ class SpotifyDebugger:
         """Register a health check function."""
         self._health_checks[name] = check_func
 
-    async def run_health_checks(self) -> Dict[str, Any]:
+    async def run_health_checks(self) -> dict[str, Any]:
         """Run all registered health checks."""
         results = {}
         for name, check_func in self._health_checks.items():
@@ -109,11 +110,11 @@ class SpotifyDebugger:
 
         return results
 
-    def get_recent_events(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_recent_events(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get recent debug events."""
         return [event.to_dict() for event in self.events[-limit:]]
 
-    def get_operation_stats(self) -> Dict[str, Any]:
+    def get_operation_stats(self) -> dict[str, Any]:
         """Get statistics about operations."""
         stats = {}
         for event in self.events:

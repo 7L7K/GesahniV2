@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 try:  # Type-only import; tolerate absence during early import
     from app.api.ask_contract import AskRequest  # type: ignore
@@ -15,22 +15,22 @@ class Hook(Protocol):
     def name(self) -> str:  # pragma: no cover - simple property
         ...
 
-    async def run(self, result: Dict[str, Any], request: "AskRequest") -> None:
+    async def run(self, result: dict[str, Any], request: AskRequest) -> None:
         ...
 
 
-_HOOKS: List[Hook] = []
+_HOOKS: list[Hook] = []
 
 
 def register_hook(hook: Hook) -> None:
     _HOOKS.append(hook)
 
 
-def list_hooks() -> List[Hook]:
+def list_hooks() -> list[Hook]:
     return list(_HOOKS)
 
 
-async def run_post_hooks(result: Dict[str, Any], request: "AskRequest") -> Dict[str, Any]:
+async def run_post_hooks(result: dict[str, Any], request: AskRequest) -> dict[str, Any]:
     """Run all registered hooks with supervision and return a summary.
 
     This function must never raise; it returns a dict summary with per-hook
@@ -40,12 +40,12 @@ async def run_post_hooks(result: Dict[str, Any], request: "AskRequest") -> Dict[
     if not hooks:
         return {"results": [], "ok": True}
 
-    outcomes: List[Dict[str, Any]] = []
+    outcomes: list[dict[str, Any]] = []
 
     async def _run_one(h: Hook) -> None:
         start = time.monotonic()
         ok = True
-        err: Optional[str] = None
+        err: str | None = None
         try:
             await h.run(result, request)
         except Exception as e:  # Never leak exceptions

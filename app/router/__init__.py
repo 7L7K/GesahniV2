@@ -8,8 +8,9 @@ import-time side effects and circular imports.
 
 # Expose key router functions for test compatibility
 from .entrypoint import route_prompt, run_post_hooks
+from .hooks import list_hooks, register_hook
+from .hooks import run_post_hooks as _run_post_hooks
 from .model_router import ModelRouter
-from .hooks import register_hook, list_hooks, run_post_hooks as _run_post_hooks
 
 # Create a global model router instance for testing
 _model_router = ModelRouter()
@@ -55,8 +56,8 @@ async def _user_circuit_open(user_id, *args, **kwargs):
     return _circuit_breaker_state[user_id]["open"]
 
 # Import commonly used router components
-from .state import HEALTH, SEM_CACHE
 from .config import CONFIG
+from .state import HEALTH, SEM_CACHE
 
 # Import constants and functions from the main router.py file for compatibility
 try:
@@ -68,7 +69,12 @@ except ImportError:
 
 # Import timeout and model constants from policy module
 try:
-    from .policy import OPENAI_TIMEOUT_MS, OLLAMA_TIMEOUT_MS, ALLOWED_GPT_MODELS, ALLOWED_LLAMA_MODELS
+    from .policy import (
+        ALLOWED_GPT_MODELS,
+        ALLOWED_LLAMA_MODELS,
+        OLLAMA_TIMEOUT_MS,
+        OPENAI_TIMEOUT_MS,
+    )
 except ImportError:
     OPENAI_TIMEOUT_MS = 6000
     OLLAMA_TIMEOUT_MS = 30000

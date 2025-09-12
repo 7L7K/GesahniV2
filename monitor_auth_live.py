@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 
-import subprocess
-import time
 import json
-import sys
-from datetime import datetime
+import subprocess
+
 
 def colored(text, color):
     colors = {

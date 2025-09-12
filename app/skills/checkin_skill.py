@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from .base import Skill
 from .ledger import record_action
@@ -24,11 +24,9 @@ class CheckinSkill(Skill):
 
 
 import re
-from datetime import datetime, timedelta
 
 from .base import Skill
 from .notes_skill import dao as notes_dao
-from .ledger import record_action
 
 
 class CheckinSkill(Skill):

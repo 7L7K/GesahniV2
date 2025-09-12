@@ -3,19 +3,20 @@
 Test script for Spotify OAuth callback with proper transaction storage.
 """
 
-import sys
 import os
-import requests
-import json
-import jwt
+import secrets
+import sys
 import time
 import uuid
-import secrets
+
+import jwt
+import requests
 
 # Add the app directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '.'))
 
 from app.api.oauth_store import put_tx
+
 
 def test_spotify_callback():
     """Test the Spotify callback with proper transaction setup."""

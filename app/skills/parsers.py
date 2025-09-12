@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import difflib
 import re
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from .. import home_assistant as ha
 
 
-def parse_duration(amount: Optional[str], unit: Optional[str]) -> Optional[int]:
+def parse_duration(amount: str | None, unit: str | None) -> int | None:
     """Parse an amount+unit into seconds (int) or return None.
 
     Canonical output: seconds (int)
@@ -30,7 +30,7 @@ def parse_duration(amount: Optional[str], unit: Optional[str]) -> Optional[int]:
     return n
 
 
-def parse_level(level_str: Optional[str]) -> Optional[int]:
+def parse_level(level_str: str | None) -> int | None:
     """Normalize a brightness/level string to 0-100 int.
 
     Canonical output: int in 0-100
@@ -47,7 +47,7 @@ def parse_level(level_str: Optional[str]) -> Optional[int]:
     return max(0, min(100, v))
 
 
-def parse_when(when_str: Optional[str]) -> Optional[Any]:
+def parse_when(when_str: str | None) -> Any | None:
     """Parse human-friendly when expressions.
 
     Canonical outputs:
@@ -59,7 +59,7 @@ def parse_when(when_str: Optional[str]) -> Optional[Any]:
     if not when_str:
         return None
     s = when_str.strip().lower()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     m = re.match(r"in\s+(?P<n>\d+)\s*(?P<unit>seconds?|minutes?|hours?|hrs?|mins?)", s)
     if m:
         n = int(m.group("n"))
@@ -81,7 +81,7 @@ def parse_when(when_str: Optional[str]) -> Optional[Any]:
                 hr += 12
             if ampm == "am" and hr == 12:
                 hr = 0
-        return datetime(dt.year, dt.month, dt.day, hr, mn, tzinfo=timezone.utc)
+        return datetime(dt.year, dt.month, dt.day, hr, mn, tzinfo=UTC)
 
     m = re.match(r"every\s+(?P<period>day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)", s)
     if m:
@@ -90,7 +90,7 @@ def parse_when(when_str: Optional[str]) -> Optional[Any]:
     return None
 
 
-async def resolve_entity(name: str, kind: str = "light") -> Dict[str, Any]:
+async def resolve_entity(name: str, kind: str = "light") -> dict[str, Any]:
     """Resolve a friendly name to a single entity id and confidence.
 
     Canonical output: {entity_id, friendly_name, confidence}
@@ -106,7 +106,7 @@ async def resolve_entity(name: str, kind: str = "light") -> Dict[str, Any]:
     except Exception:
         states = []
 
-    choices: Dict[str, str] = {}
+    choices: dict[str, str] = {}
     for s in states:
         eid = s.get("entity_id")
         if not eid:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import random
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import urlencode
 
 import httpx
@@ -56,6 +56,15 @@ async def apple_start(request: Request) -> Response:
     next_url = request.query_params.get("next") or "/"
     if not _allow_redirect(next_url):
         next_url = "/"
+
+    # Sanitize and set gs_next cookie for post-login redirect if next param present
+    # sanitize_redirect_path prevents open redirects by rejecting absolute/protocol-relative
+    # URLs and auth paths that could cause redirect loops. This ensures users are only
+    # redirected to safe, same-origin application pages after OAuth completion.
+    if request.query_params.get("next"):
+        from ..redirect_utils import sanitize_redirect_path, set_gs_next_cookie
+        sanitized_next = sanitize_redirect_path(next_url, "/", request)
+        set_gs_next_cookie(resp, sanitized_next, request)
     # Generate a random state and set short-lived cookies to validate callback and redirect target
     import secrets
 
@@ -145,7 +154,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
 
     sess = await sessions_store.create_session(user_id)
     sid, did = sess["sid"], sess["did"]
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_access, make_refresh
 
@@ -202,9 +211,17 @@ async def apple_callback(request: Request, response: Response) -> Response:
     except Exception:
         pass
 
-    next_url = str(request.cookies.get("oauth_next") or "/")
-    if not _allow_redirect(next_url):
-        next_url = "/"
+    # Use get_safe_redirect_target for gs_next cookie priority
+    from ..redirect_utils import get_safe_redirect_target
+    next_url = get_safe_redirect_target(request, fallback="/")
+
+    # Sample cookie gauge for observability
+    try:
+        from ..metrics import AUTH_REDIRECT_COOKIE_IN_USE
+        gs_next_present = get_gs_next_cookie(request) is not None
+        AUTH_REDIRECT_COOKIE_IN_USE.set(1 if gs_next_present else 0)
+    except Exception:
+        pass
     # Return the same response we set cookies on to ensure cookies persist
     response.status_code = 302
     response.headers["Location"] = next_url

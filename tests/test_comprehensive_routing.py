@@ -8,6 +8,7 @@ sys.path.insert(0, ".")
 
 # Import fallback functions for use throughout the module
 from app.router.model_router import ModelRouter
+
 _model_router = ModelRouter()
 _validate_model_allowlist = _model_router._validate_model_allowlist
 _get_fallback_model = _model_router._get_fallback_model
@@ -242,7 +243,11 @@ def test_user_circuit_breaker_thread_safety():
 
     import asyncio
 
-    from app.router import _user_cb_record_failure, _user_cb_reset, _user_circuit_open  # Mock functions from router package
+    from app.router import (  # Mock functions from router package
+        _user_cb_record_failure,
+        _user_cb_reset,
+        _user_circuit_open,
+    )
 
     async def test_concurrent_access():
         """Test concurrent access to user circuit breaker functions."""

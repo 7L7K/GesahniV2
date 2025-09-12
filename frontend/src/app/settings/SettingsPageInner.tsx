@@ -13,6 +13,7 @@ import { toast } from '@/lib/toast';
 import { ToastManager } from '@/components/ui/ToastManager';
 import AuthHUD from '@/components/AuthHUD';
 import { disconnectSpotify, getIntegrationsStatus } from '@/lib/api/integrations';
+import { fetchFeatures } from '@/lib/features';
 import GoogleCard from './Integrations/GoogleCard';
 import GoogleManageDrawer from './Integrations/GoogleManageDrawer';
 
@@ -116,6 +117,19 @@ function SettingsPageInner() {
             connected: false,
         }
     });
+    const [features, setFeatures] = useState<{ devices: boolean; transcribe: boolean; ollama: boolean; home_assistant: boolean; qdrant: boolean } | null>(null);
+
+    useEffect(() => {
+        fetchFeatures().then(f => {
+            setFeatures({
+                devices: f.devices,
+                transcribe: f.transcribe,
+                ollama: f.ollama,
+                home_assistant: f.home_assistant,
+                qdrant: f.qdrant
+            });
+        }).catch(() => setFeatures({ devices: false, transcribe: false, ollama: false, home_assistant: false, qdrant: false }));
+    }, []);
 
     useEffect(() => {
         if (data) setProfile(prev => ({ ...prev, ...data }));
@@ -309,7 +323,7 @@ function SettingsPageInner() {
                 const timer = setTimeout(() => {
                     if (!authState.is_authenticated) {
                         console.log('🎵 SETTINGS: Auth still not ready after Spotify OAuth, redirecting to login');
-                        router.replace(`/login?next=${encodeURIComponent('/settings')}`);
+                        router.replace('/login');
                     }
                 }, 3000); // Wait 3 seconds for auth refresh
 
@@ -319,7 +333,7 @@ function SettingsPageInner() {
 
         // Normal auth check for non-Spotify flows
         if (!authState.is_authenticated) {
-            router.replace(`/login?next=${encodeURIComponent('/settings')}`);
+            router.replace('/login');
         }
     }, [authState.is_authenticated, router]);
     */
@@ -504,7 +518,7 @@ function SettingsPageInner() {
 
                     <div className="space-y-3">
                         <Button
-                            onClick={() => window.location.href = `/login?next=${encodeURIComponent('/settings')}`}
+                            onClick={() => window.location.href = '/login'}
                             className="w-full"
                         >
                             {isSpotifyOAuthFailure ? 'Login & Try Spotify Again' : 'Go to Login'}
@@ -1129,50 +1143,119 @@ function SettingsPageInner() {
                                 </div>
 
                                 <GoogleCard onManage={() => setGoogleDrawerOpen(true)} />
+                                {/* Devices / Transcribe cards only when backend reports features */}
+                                {features && features.devices ? (
+                                    <div className="border rounded-lg p-6">
+                                        <h3 className="font-medium text-gray-900">Devices</h3>
+                                        <p className="text-sm text-gray-600">Manage device pairings and device tokens</p>
+                                    </div>
+                                ) : null}
+                                {features && features.transcribe ? (
+                                    <div className="border rounded-lg p-6">
+                                        <h3 className="font-medium text-gray-900">Transcribe</h3>
+                                        <p className="text-sm text-gray-600">Transcription features for recorded sessions</p>
+                                    </div>
+                                ) : null}
                                 <GoogleManageDrawer open={googleDrawerOpen} onClose={() => setGoogleDrawerOpen(false)} />
 
-                                {/* Home Assistant Integration */}
-                                <div className="border rounded-lg p-6">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex items-start space-x-4">
-                                            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                                                <span className="text-2xl">🏠</span>
-                                            </div>
-                                            <div className="flex-1">
-                                                <div className="flex items-center space-x-2">
-                                                    <h3 className="text-lg font-medium text-gray-900">Home Assistant</h3>
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(integrations.home_assistant.status)}`}>
-                                                        {getStatusIcon(integrations.home_assistant.status)} {integrations.home_assistant.status}
-                                                    </span>
+                                {/* Home Assistant Integration - only show when enabled */}
+                                {features && features.home_assistant ? (
+                                    <div className="border rounded-lg p-6">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex items-start space-x-4">
+                                                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                                                    <span className="text-2xl">🏠</span>
                                                 </div>
-                                                <p className="text-sm text-gray-600 mt-1">{integrations.home_assistant.description}</p>
-                                                {integrations.home_assistant.error && (
-                                                    <p className="text-sm text-red-600 mt-2">⚠️ {integrations.home_assistant.error}</p>
-                                                )}
+                                                <div className="flex-1">
+                                                    <div className="flex items-center space-x-2">
+                                                        <h3 className="text-lg font-medium text-gray-900">Home Assistant</h3>
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(integrations.home_assistant.status)}`}>
+                                                            {getStatusIcon(integrations.home_assistant.status)} {integrations.home_assistant.status}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-600 mt-1">{integrations.home_assistant.description}</p>
+                                                    {integrations.home_assistant.error && (
+                                                        <p className="text-sm text-red-600 mt-2">⚠️ {integrations.home_assistant.error}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center space-x-3">
+                                                <Button variant="outline" size="sm" disabled>
+                                                    ⚙️ Configure
+                                                </Button>
                                             </div>
                                         </div>
-                                        <div className="flex items-center space-x-3">
-                                            <Button variant="outline" size="sm" disabled>
-                                                ⚙️ Configure
-                                            </Button>
+
+                                        {/* Features when connected */}
+                                        {integrations.home_assistant.status === 'connected' && (
+                                            <div className="mt-4 p-4 bg-orange-50 rounded-lg">
+                                                <h4 className="text-sm font-medium text-orange-800 mb-2">🏠 Available Features:</h4>
+                                                <div className="grid grid-cols-2 gap-2 text-sm text-orange-700">
+                                                    <span>✓ Control Lights</span>
+                                                    <span>✓ Smart Home Devices</span>
+                                                    <span>✓ Climate Control</span>
+                                                    <span>✓ Security Systems</span>
+                                                    <span>✓ Media Players</span>
+                                                    <span>✓ Energy Monitoring</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : null}
+
+                                {/* Ollama/LLaMA Integration - only show when enabled */}
+                                {features && features.ollama ? (
+                                    <div className="border rounded-lg p-6">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex items-start space-x-4">
+                                                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                                                    <span className="text-2xl">🦙</span>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center space-x-2">
+                                                        <h3 className="text-lg font-medium text-gray-900">LLaMA (Ollama)</h3>
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                                                            🟢 Local AI
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-600 mt-1">Local language model for privacy-focused AI chat</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center space-x-3">
+                                                <Button variant="outline" size="sm" disabled>
+                                                    ⚙️ Configure
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
+                                ) : null}
 
-                                    {/* Features when connected */}
-                                    {integrations.home_assistant.status === 'connected' && (
-                                        <div className="mt-4 p-4 bg-orange-50 rounded-lg">
-                                            <h4 className="text-sm font-medium text-orange-800 mb-2">🏠 Available Features:</h4>
-                                            <div className="grid grid-cols-2 gap-2 text-sm text-orange-700">
-                                                <span>✓ Control Lights</span>
-                                                <span>✓ Smart Home Devices</span>
-                                                <span>✓ Climate Control</span>
-                                                <span>✓ Security Systems</span>
-                                                <span>✓ Media Players</span>
-                                                <span>✓ Energy Monitoring</span>
+                                {/* Qdrant Vector Store - only show when enabled */}
+                                {features && features.qdrant ? (
+                                    <div className="border rounded-lg p-6">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex items-start space-x-4">
+                                                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                                    <span className="text-2xl">🔍</span>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center space-x-2">
+                                                        <h3 className="text-lg font-medium text-gray-900">Qdrant Vector Store</h3>
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                                                            🟢 Memory
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-600 mt-1">Vector database for semantic search and memory storage</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center space-x-3">
+                                                <Button variant="outline" size="sm" disabled>
+                                                    ⚙️ Configure
+                                                </Button>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
+                                    </div>
+                                ) : null}
                             </div>
 
                             {/* Connection Help */}

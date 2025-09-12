@@ -5,10 +5,9 @@ This test verifies that:
 2. There is exactly one handler for GET /v1/whoami
 3. GET /whoami redirects to /v1/whoami with 308 status
 """
-import pytest
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from fastapi.responses import RedirectResponse
+from fastapi.testclient import TestClient
 
 
 def test_me_whoami_deduplication():
@@ -19,15 +18,15 @@ def test_me_whoami_deduplication():
 
     # Import and include the actual routers (this will fail if there are duplicates)
     try:
-        from app.api.me import router as me_router
         from app.api.auth import router as auth_router
+        from app.api.me import router as me_router
         from app.router.compat_api import router as compat_router
 
         app.include_router(me_router, prefix="/v1")
         app.include_router(auth_router, prefix="/v1")
         app.include_router(compat_router, prefix="")
 
-    except Exception as e:
+    except Exception:
         # If imports fail due to dependencies, create minimal mock routers
         from fastapi import APIRouter
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
-# app/skills/recipe_skill.py
 
+# app/skills/recipe_skill.py
 import re
 
 import httpx

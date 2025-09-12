@@ -120,7 +120,7 @@ def test_401_handling():
             print_result(
                 "protected_endpoint_returns_401",
                 False,
-                f"404 suggests music router not mounted. Check main.py imports.",
+                "404 suggests music router not mounted. Check main.py imports.",
             )
             return  # Don't continue if endpoint not found
         else:

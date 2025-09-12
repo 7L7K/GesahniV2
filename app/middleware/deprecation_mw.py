@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Callable
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
@@ -79,8 +78,8 @@ class DeprecationHeaderMiddleware(BaseHTTPMiddleware):
                     # Synthesize OK status and include basic rate-limit headers
                     response.status_code = 200
                     try:
-                        from app.settings_rate import rate_limit_settings
                         from app.headers import get_rate_limit_headers
+                        from app.settings_rate import rate_limit_settings
                         hdrs = get_rate_limit_headers(
                             rate_limit_settings.rate_limit_per_min,
                             rate_limit_settings.rate_limit_per_min,

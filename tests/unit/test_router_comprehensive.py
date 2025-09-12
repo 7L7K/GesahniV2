@@ -2,9 +2,10 @@
 Comprehensive router configuration tests to ensure all edge cases and behaviors work correctly.
 """
 import os
-from app.routers.config import build_plan, register_routers
-from app.main import create_app
+
 from fastapi import FastAPI
+
+from app.routers.config import build_plan, register_routers
 
 
 def names(plan):
@@ -13,7 +14,6 @@ def names(plan):
 
 def test_core_routers_always_present():
     """Test that core routers are always included regardless of environment."""
-    from app.routers.config import build_plan
 
     # Test in different environments
     for env_var in [None, "dev", "prod", "staging"]:
@@ -48,7 +48,6 @@ def test_core_routers_always_present():
 
 def test_preflight_router_conditional():
     """Test that preflight router is included by default but can be disabled."""
-    from app.routers.config import build_plan
 
     # Test default (preflight enabled)
     plan = build_plan()
@@ -88,7 +87,6 @@ def test_router_registration_creates_app():
 
 def test_environment_variable_isolation():
     """Test that environment variables don't leak between tests."""
-    from app.routers.config import build_plan
 
     # Clear CI-related environment variables to simulate non-CI mode
     ci_vars = ["CI", "PYTEST_CURRENT_TEST"]
@@ -134,7 +132,6 @@ def test_environment_variable_isolation():
 
 def test_router_spec_structure():
     """Test that all router specs have required fields."""
-    from app.routers.config import build_plan
 
     plan = build_plan()
 
@@ -153,7 +150,6 @@ def test_router_spec_structure():
 
 def test_router_plan_consistency():
     """Test that build_plan returns consistent results for same environment."""
-    from app.routers.config import build_plan
 
     # Set specific environment
     os.environ["ENV"] = "test"
@@ -166,7 +162,7 @@ def test_router_plan_consistency():
         # Should be identical
         assert len(plan1) == len(plan2), "Plan lengths should be consistent"
 
-        for spec1, spec2 in zip(plan1, plan2):
+        for spec1, spec2 in zip(plan1, plan2, strict=False):
             assert spec1.import_path == spec2.import_path, f"Inconsistent import_path: {spec1.import_path} != {spec2.import_path}"
             assert spec1.prefix == spec2.prefix, f"Inconsistent prefix: {spec1.prefix} != {spec2.prefix}"
 

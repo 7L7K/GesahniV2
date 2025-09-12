@@ -2,9 +2,9 @@ import time
 
 import pytest
 
+from app.api import google_services
 from app.auth_store_tokens import TokenDAO
 from app.models.third_party_tokens import ThirdPartyToken
-from app.api import google_services
 
 
 @pytest.mark.asyncio

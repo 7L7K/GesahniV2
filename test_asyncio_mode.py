@@ -5,6 +5,7 @@ This test should run without @pytest.mark.asyncio decorator.
 """
 
 import asyncio
+
 import pytest
 
 

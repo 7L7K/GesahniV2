@@ -15,12 +15,12 @@ Usage:
     ID_TOKEN="your_token" python debug_id_token.py
 """
 
-import jwt
+import base64
 import json
 import os
 import sys
-import base64
-from typing import Optional
+
+import jwt
 
 
 def decode_id_token_locally(token: str) -> tuple[dict, dict]:
@@ -42,7 +42,7 @@ def decode_id_token_locally(token: str) -> tuple[dict, dict]:
         return {}, {}
 
 
-def validate_google_issuer(issuer: Optional[str]) -> tuple[bool, str]:
+def validate_google_issuer(issuer: str | None) -> tuple[bool, str]:
     """Validate that the issuer is a valid Google issuer."""
     if not issuer:
         return False, "Missing issuer claim"

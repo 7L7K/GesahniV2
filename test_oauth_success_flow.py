@@ -12,14 +12,14 @@ Simulates and verifies the complete Google OAuth success scenario:
 7. User is authenticated and can access protected endpoints
 """
 
+import asyncio
 import os
 import sys
-import json
-import jwt
-import asyncio
-import requests
-from unittest.mock import Mock, patch
 from datetime import datetime, timedelta
+from unittest.mock import Mock, patch
+
+import jwt
+import requests
 
 # Add the app directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))

@@ -1,7 +1,7 @@
 '''Application-level errors for routers and backends.'''
 
 
-class BackendUnavailable(RuntimeError):
+class BackendUnavailableError(RuntimeError):
     """Raised when a configured backend cannot be resolved at startup."""
 
     def __init__(self, message: str):

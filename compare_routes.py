@@ -3,10 +3,11 @@
 Compare expected endpoints from tests vs actual routes in FastAPI app.
 """
 
-import re
-import json
 import pathlib
+import re
+
 from app.main import create_app
+
 
 def get_expected_endpoints():
     """Extract expected endpoints from test files."""
@@ -44,7 +45,7 @@ def main():
     missing = sorted(expected - actual)
     extra = sorted(actual - expected)
 
-    print(f"\n📊 Summary:")
+    print("\n📊 Summary:")
     print(f"  Expected endpoints: {len(expected)}")
     print(f"  Actual routes: {len(actual)}")
     print(f"  Missing routes: {len(missing)}")

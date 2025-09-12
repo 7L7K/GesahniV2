@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Request, HTTPException, Response
 import inspect
-import os
 import logging
+import os
+
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from app.integrations.google.routes import legacy_oauth_callback
 

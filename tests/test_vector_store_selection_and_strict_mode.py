@@ -47,7 +47,7 @@ def test_strict_mode_raises_on_init_error(monkeypatch, tmp_path):
     import sys
 
     sys.modules.pop("qdrant_client", None)
-    with pytest.raises(Exception):
+    with pytest.raises(ImportError):
         _reload_memory_api(monkeypatch)
 
 

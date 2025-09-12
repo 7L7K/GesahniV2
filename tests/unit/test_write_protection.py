@@ -10,9 +10,8 @@ For each endpoint, tests:
 - Token + CSRF => 2xx Success
 """
 import os
+
 import pytest
-import json
-from typing import Dict, List, Tuple
 from fastapi.testclient import TestClient
 
 # Import the test client from conftest or create one
@@ -45,7 +44,7 @@ TEST_PAYLOADS = {
 }
 
 # Protected endpoints to test
-PROTECTED_ENDPOINTS: List[Tuple[str, str, str, str]] = [
+PROTECTED_ENDPOINTS: list[tuple[str, str, str, str]] = [
     # (method, path, payload_key, description)
     ("POST", "/v1/ask", "ask", "Main ask endpoint"),
     ("POST", "/v1/register", "register", "User registration endpoint"),
@@ -98,7 +97,7 @@ class TestWriteProtection:
         client: TestClient,
         method: str,
         path: str,
-        payload: Dict,
+        payload: dict,
         auth_token: str = None,
         csrf_token: str = None
     ):
@@ -273,7 +272,7 @@ class TestWriteProtectionReport:
             f.write(report)
 
         # Assert no failures for CI
-        assert len(failures) == 0, f"Write protection failures detected:\n" + "\n".join(failures)
+        assert len(failures) == 0, "Write protection failures detected:\n" + "\n".join(failures)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
+import time
+
 from fastapi import APIRouter, Request
 
-from ..deps.user import get_current_user_id, resolve_user_id
-from ..integrations.spotify.client import SpotifyClient
 from ..auth_store_tokens import get_token
-from ..metrics import HEALTH_CHECK_DURATION_SECONDS
-import time
+from ..deps.user import resolve_user_id
+from ..integrations.spotify.client import SpotifyClient
 
 router = APIRouter()
 

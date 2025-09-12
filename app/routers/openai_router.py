@@ -1,7 +1,6 @@
-from typing import Dict, Any
-import os
 import asyncio
-
+import os
+from typing import Any
 
 _client = None
 
@@ -26,7 +25,7 @@ def _init_client():
     return _client
 
 
-async def openai_router(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def openai_router(payload: dict[str, Any]) -> dict[str, Any]:
     """Call OpenAI backend with standardized response format.
 
     Frozen response contract:

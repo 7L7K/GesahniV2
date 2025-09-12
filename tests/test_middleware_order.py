@@ -10,10 +10,15 @@ def test_middleware_order_dev(monkeypatch):
     from app.main import app
 
     names = [m.cls.__name__ for m in getattr(app, "user_middleware", [])]
-    # Adjust for optional SilentRefresh/ReloadEnv toggles if you gate them
-    # Current outermost middleware is RequestIDMiddleware
-    assert names[-1] == "RequestIDMiddleware"
-    assert "CSRFMiddleware" in names
+
+    # Canonical order: outermost middleware is CorsPreflightMiddleware
+    assert names[-1] == "CorsPreflightMiddleware"
+    assert "CSRFMiddleware" not in names  # CSRF disabled by default
+    # Critical order: MetricsMiddleware BEFORE DeprecationHeaderMiddleware in execution
+    # FastAPI executes middleware in user_middleware order (first to last)
+    metrics_idx = names.index("MetricsMiddleware")
+    deprecation_idx = names.index("DeprecationHeaderMiddleware")
+    assert metrics_idx < deprecation_idx, f"MetricsMiddleware ({metrics_idx}) should execute before DeprecationHeaderMiddleware ({deprecation_idx})"
     # Inner cluster present
     for n in ["CORSMiddleware", "TraceRequestMiddleware", "RedactHashMiddleware"]:
         assert n in names

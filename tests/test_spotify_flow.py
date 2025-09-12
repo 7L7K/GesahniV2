@@ -2,9 +2,9 @@
 """
 Test script to simulate the complete Spotify OAuth flow
 """
-import requests
 import json
-import time
+
+import requests
 
 
 def test_spotify_flow():

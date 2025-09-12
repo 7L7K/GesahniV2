@@ -7,10 +7,11 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from app.db.paths import resolve_db_path
 from typing import Any
 
 import aiosqlite
+
+from app.db.paths import resolve_db_path
 
 
 def _compute_db_path() -> Path:
@@ -536,7 +537,7 @@ async def list_contacts(resident_id: str) -> list[dict[str, Any]]:
 async def update_contact(contact_id: str, **fields: Any) -> None:
     if not fields:
         return
-    if "quiet_hours" in fields and isinstance(fields["quiet_hours"], (dict, list)):
+    if "quiet_hours" in fields and isinstance(fields["quiet_hours"], dict | list):
         fields["quiet_hours"] = json.dumps(fields["quiet_hours"])
     cols = ",".join(f"{k}=?" for k in fields)
     vals = list(fields.values()) + [contact_id]

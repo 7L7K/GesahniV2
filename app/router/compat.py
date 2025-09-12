@@ -7,15 +7,15 @@ These shims import from leaf modules only - no circular dependencies.
 """
 
 # Import from leaf modules (safe, no circular imports)
+from .budget import get_remaining_budget
 from .entrypoint import route_prompt
 from .policy import (
     ALLOWED_GPT_MODELS,
     ALLOWED_LLAMA_MODELS,
-    OPENAI_TIMEOUT_MS,
     OLLAMA_TIMEOUT_MS,
+    OPENAI_TIMEOUT_MS,
     ROUTER_BUDGET_MS,
 )
-from .budget import get_remaining_budget
 
 # Legacy aliases that some tests might expect
 ALLOWED_MODELS = ALLOWED_GPT_MODELS | ALLOWED_LLAMA_MODELS
@@ -24,10 +24,10 @@ ALLOWED_MODELS = ALLOWED_GPT_MODELS | ALLOWED_LLAMA_MODELS
 # (These would be imported from appropriate modules if they exist)
 try:
     from .policy import (
-        LLAMA_USER_CB_THRESHOLD,
         LLAMA_USER_CB_COOLDOWN,
-        MODEL_ROUTER_HEAVY_WORDS,
+        LLAMA_USER_CB_THRESHOLD,
         MODEL_ROUTER_HEAVY_TOKENS,
+        MODEL_ROUTER_HEAVY_WORDS,
         SIM_THRESHOLD,
     )
 except ImportError:

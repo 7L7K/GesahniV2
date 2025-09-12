@@ -470,7 +470,7 @@ async def incr_login_counter(key: str, ttl_seconds: int) -> int:
             p.incr(key)
             p.expire(key, max(1, int(ttl_seconds)))
             res = await p.execute()
-            return int(res[0]) if isinstance(res, (list, tuple)) and res else 0
+            return int(res[0]) if isinstance(res, list | tuple) and res else 0
         except Exception as e:
             logger.warning(
                 f"Redis incr_login_counter failed, falling back to local: {e}"

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { initiateGoogleSignIn } from '@/lib/api';
-import { sanitizeNextPath } from '@/lib/utils';
+import { sanitizeNextPath } from '@/lib/redirects';
 
 interface GoogleSignInButtonProps {
     next?: string;
@@ -22,8 +22,11 @@ export default function GoogleSignInButton({
 
         setLoading(true);
         try {
-            // Ensure next is never undefined - default to '/' if empty
-            const sanitizedNext = next ? sanitizeNextPath(next, '/') : '/';
+            // Ensure next is never undefined - use sanitizeNextPath
+            // sanitizeNextPath prevents open redirects by rejecting absolute/protocol-relative
+            // URLs and auth paths that could cause redirect loops. This ensures users are only
+            // redirected to safe, same-origin application pages after OAuth completion.
+            const sanitizedNext = sanitizeNextPath(next || null);
             await initiateGoogleSignIn(sanitizedNext);
         } catch (error) {
             console.error('Google sign-in failed:', error);

@@ -313,11 +313,9 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         // Dispatch event to notify components of auth failure
         this.eventDispatcher.dispatchAuthMismatch('Session expired - please sign in again.', new Date().toISOString());
 
-        // Redirect to login with return URL
+        // Redirect to login
         if (typeof window !== 'undefined') {
-            const currentPath = window.location.pathname + window.location.search;
-            const loginUrl = `/login?next=${encodeURIComponent(currentPath)}`;
-            window.location.href = loginUrl;
+            window.location.href = '/login';
         }
     }
 

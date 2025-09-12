@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 router = APIRouter()
 
-from .auth import list_pats as _list_pats_impl
 from .auth import create_pat as _create_pat_impl
-from .auth import _get_pat_by_id as _get_pat_by_id_impl
+from .auth import list_pats as _list_pats_impl
 from .auth import revoke_pat as _revoke_pat_impl
 from .deps.user import get_current_user_id
 

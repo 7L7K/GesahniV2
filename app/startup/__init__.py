@@ -20,15 +20,39 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import Awaitable, Callable
+from datetime import datetime, timezone
+from typing import Set
 
 from fastapi import FastAPI
 
-from app.startup.config import detect_profile
 from app.startup import components as C
+from app.startup.config import detect_profile
 from app.startup.config_guard import assert_strict_prod
+
+# --- begin addition: background task registry ---
+_background_tasks: set[asyncio.Task] = set()
+
+
+def start_background_task(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(lambda t: _background_tasks.discard(t))
+    return task
+
+
+async def cancel_background_tasks(timeout: float = 2.0) -> None:
+    if not _background_tasks:
+        return
+    for t in list(_background_tasks):
+        t.cancel()
+    try:
+        await asyncio.wait(_background_tasks, timeout=timeout)
+    except Exception:
+        pass
+    _background_tasks.clear()
+# --- end addition ---
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +127,7 @@ async def _run_components():
         try:
             await asyncio.wait_for(fn(), timeout=float(os.getenv("STARTUP_STEP_TIMEOUT", "30")))
             logger.info("✅ [%d/%d] %s ok (%.1fs)", idx, len(profile.components), comp_name, time.time()-started)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("⚠️ %s timed out; continuing", comp_name)
         except Exception as e:
             logger.warning("⚠️ %s failed: %s; continuing", comp_name, e)
@@ -113,15 +137,13 @@ def _start_daemons():
     # These are best-effort; never fatal
     try:
         from app.care_daemons import heartbeat_monitor_loop
-
-        asyncio.create_task(heartbeat_monitor_loop())
+        start_background_task(heartbeat_monitor_loop())
     except Exception:
         logger.debug("heartbeat_monitor_loop not started", exc_info=True)
 
     try:
         from app.api.sms_queue import sms_worker
-
-        asyncio.create_task(sms_worker())
+        start_background_task(sms_worker())
     except Exception:
         logger.debug("sms_worker not started", exc_info=True)
 
@@ -167,6 +189,12 @@ async def _shutdown(app: FastAPI):
     except Exception:
         logger.debug("scheduler shutdown failed", exc_info=True)
 
+    # Cancel background tasks first to stop new DB calls
+    try:
+        await cancel_background_tasks()
+    except Exception:
+        logger.debug("background task cancellation failed", exc_info=True)
+
     # Token store cleanup
     try:
         from app.token_store import stop_cleanup_task
@@ -174,6 +202,48 @@ async def _shutdown(app: FastAPI):
         await stop_cleanup_task()
     except Exception:
         logger.debug("token store cleanup stop failed", exc_info=True)
+
+    # Close DAOs best-effort
+    try:
+        from app.user_store import close_user_store  # async
+    except Exception:
+        async def close_user_store():  # type: ignore
+            return None
+
+    try:
+        from app.skills.notes_skill import close_notes_dao  # async
+    except Exception:
+        async def close_notes_dao():  # type: ignore
+            return None
+
+    try:
+        from app.auth_store_tokens import close_token_dao  # sync
+    except Exception:
+        def close_token_dao():  # type: ignore
+            return None
+
+    try:
+        await close_user_store()
+    except Exception:
+        logger.debug("close_user_store failed", exc_info=True)
+
+    try:
+        await close_notes_dao()
+    except Exception:
+        logger.debug("close_notes_dao failed", exc_info=True)
+
+    try:
+        close_token_dao()
+    except Exception:
+        logger.debug("close_token_dao failed", exc_info=True)
+
+    # Dispose SQLAlchemy async engines
+    try:
+        from app.db.dependencies import dispose_engines
+
+        await dispose_engines()
+    except Exception:
+        logger.debug("dispose_engines failed", exc_info=True)
 
 
 # util used by components.init_openai_health_check

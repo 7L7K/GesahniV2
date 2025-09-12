@@ -12,10 +12,10 @@ Usage:
     python google_oauth_debugger.py
 """
 
-import os
-import sys
-import subprocess
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 

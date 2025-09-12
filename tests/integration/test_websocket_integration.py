@@ -1,15 +1,12 @@
 """Comprehensive integration tests for WebSocket functionality."""
 
-import asyncio
-import json
-import time
-import jwt
 import os
+import time
 from unittest.mock import AsyncMock, Mock
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
-import websockets
 
 from app.main import app
 

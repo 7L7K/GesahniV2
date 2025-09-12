@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, String, Text, create_engine, UniqueConstraint
+from sqlalchemy import Column, DateTime, String, Text, UniqueConstraint, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from .config import GOOGLE_OAUTH_DB_URL

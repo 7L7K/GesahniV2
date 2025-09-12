@@ -6,16 +6,16 @@ This script manually analyzes identity-related files to extract endpoint informa
 dependencies, middleware, and response schemas.
 """
 
-import os
 import json
-import inspect
+import os
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any
 
-def analyze_file(file_path: str) -> Dict[str, Any]:
+
+def analyze_file(file_path: str) -> dict[str, Any]:
     """Analyze a Python file for identity-related endpoints and dependencies."""
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path) as f:
             content = f.read()
     except Exception as e:
         return {'error': f'Failed to read {file_path}: {e}'}
@@ -68,7 +68,7 @@ def analyze_middleware_stack():
         return {'error': 'Middleware stack file not found'}
 
     try:
-        with open(middleware_file, 'r') as f:
+        with open(middleware_file) as f:
             content = f.read()
 
         middleware = []

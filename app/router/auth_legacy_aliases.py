@@ -6,8 +6,8 @@ with deprecation headers, logging, and metrics tracking.
 """
 from fastapi import APIRouter, Request, Response
 
+from ..api.auth import login_v1, logout, refresh, register_v1, whoami
 from .legacy_alias import LegacyAlias
-from ..api.auth import register_v1, login_v1, logout, refresh, whoami
 
 router = APIRouter(tags=["Auth Legacy"])
 

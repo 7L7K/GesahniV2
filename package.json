@@ -2,5 +2,8 @@
   "dependencies": {
     "node-fetch": "^3.3.2",
     "puppeteer": "^24.17.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
   }
 }

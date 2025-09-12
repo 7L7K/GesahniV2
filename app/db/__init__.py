@@ -2,11 +2,11 @@
 Database package initialization
 """
 from .config import (
-    create_sync_engine,
     create_async_engine,
-    get_session_factory,
+    create_sync_engine,
     get_async_session_factory,
-    health_check
+    get_session_factory,
+    health_check,
 )
 
 __all__ = [

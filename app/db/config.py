@@ -2,12 +2,10 @@
 Database configuration for GesahniV2
 """
 import os
-from typing import Optional
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 
 # Database URL configuration

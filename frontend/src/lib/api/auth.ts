@@ -4,6 +4,7 @@
 
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
 import { useAuthState } from '@/hooks/useAuth';
+import { API_ROUTES } from './routes';
 
 // Utility function to check if an error is an AbortError
 function isAbortError(error: unknown): boolean {
@@ -198,10 +199,10 @@ export const AuthAPI = {
     await orchestrator.checkAuth();
     return orchestrator.getState();
   },
-  login: (body: any) => apiFetch('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
-  refresh: () => apiFetch('/v1/auth/refresh', { method: 'POST' }),
-  logout: () => apiFetch('/v1/auth/logout', { method: 'POST' }),
-  csrf: () => apiFetch('/v1/csrf').then(r => r.json()),
+  login: (body: any) => apiFetch(API_ROUTES.AUTH.LOGIN, { method: 'POST', body: JSON.stringify(body) }),
+  refresh: () => apiFetch(API_ROUTES.AUTH.REFRESH, { method: 'POST' }),
+  logout: () => apiFetch(API_ROUTES.AUTH.LOGOUT, { method: 'POST' }),
+  csrf: () => apiFetch(API_ROUTES.AUTH.CSRF).then(r => r.json()),
 };
 
 // Import required dependencies at the end to avoid circular imports

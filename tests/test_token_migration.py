@@ -1,7 +1,4 @@
-import asyncio
-import os
 import sqlite3
-import tempfile
 
 import pytest
 

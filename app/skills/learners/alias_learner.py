@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Harvest stable phrases for aliases and propose suggestions.
 
@@ -7,13 +8,13 @@ alias_store or HA resolution and propose an alias if repeated >= 3 times.
 """
 
 
-from typing import Any, Dict, List
+from typing import Any
 
 from ..ledger import _inmem
 
 
-def find_alias_candidates(min_occurrences: int = 3) -> List[Dict[str, Any]]:
-    counts: Dict[str, int] = {}
+def find_alias_candidates(min_occurrences: int = 3) -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
     for e in _inmem:
         md = e.get("metadata") or {}
         phrase = md.get("phrase")
@@ -22,7 +23,7 @@ def find_alias_candidates(min_occurrences: int = 3) -> List[Dict[str, Any]]:
             key = f"{phrase}|{entity}"
             counts[key] = counts.get(key, 0) + 1
 
-    suggestions: List[Dict[str, Any]] = []
+    suggestions: list[dict[str, Any]] = []
     for k, v in counts.items():
         if v >= min_occurrences:
             phrase, entity = k.split("|", 1)

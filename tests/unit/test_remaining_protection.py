@@ -7,12 +7,13 @@ Tests endpoints:
 - /v1/status/preflight and /v1/status/rate_limit → public (no auth, no CSRF)
 - /v1/status/observability, /v1/status/vector_store, /v1/status/integrations → require_admin
 """
+import os
+import time
+from unittest.mock import patch
+
+import jwt
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
-import jwt
-import time
-import os
 
 from app.main import create_app
 

@@ -5,11 +5,10 @@ and Redis support for production use.
 """
 
 import asyncio
-import json
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -66,13 +65,13 @@ except Exception:  # pragma: no cover - fallback implementation
 class IdempotencyEntry:
     """Represents a cached idempotency response."""
 
-    def __init__(self, status_code: int, headers: Dict[str, str], body: bytes):
+    def __init__(self, status_code: int, headers: dict[str, str], body: bytes):
         self.status_code = status_code
         self.headers = headers
         self.body = body
         self.created_at = time.monotonic()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for storage."""
         return {
             "status_code": self.status_code,
@@ -82,7 +81,7 @@ class IdempotencyEntry:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "IdempotencyEntry":
+    def from_dict(cls, data: dict[str, Any]) -> "IdempotencyEntry":
         """Create from dictionary."""
         entry = cls(
             status_code=data["status_code"],
@@ -101,7 +100,7 @@ class IdempotencyStore(ABC):
     """Abstract base class for idempotency storage."""
 
     @abstractmethod
-    async def get(self, key: str) -> Optional[IdempotencyEntry]:
+    async def get(self, key: str) -> IdempotencyEntry | None:
         """Retrieve cached response by key."""
         pass
 
@@ -121,10 +120,10 @@ class InMemoryIdempotencyStore(IdempotencyStore):
 
     def __init__(self, maxsize: int = 10000, ttl: float = 300.0):
         self._cache = TTLCache(maxsize=maxsize, ttl=ttl)
-        self._data: Dict[str, IdempotencyEntry] = {}
+        self._data: dict[str, IdempotencyEntry] = {}
         self._lock = asyncio.Lock()
 
-    async def get(self, key: str) -> Optional[IdempotencyEntry]:
+    async def get(self, key: str) -> IdempotencyEntry | None:
         """Retrieve cached response by key."""
         async with self._lock:
             return self._data.get(key)
@@ -153,7 +152,7 @@ class InMemoryIdempotencyStore(IdempotencyStore):
 
 
 # Global store instance - can be replaced with Redis in production
-_idempotency_store: Optional[IdempotencyStore] = None
+_idempotency_store: IdempotencyStore | None = None
 
 
 def get_idempotency_store() -> IdempotencyStore:

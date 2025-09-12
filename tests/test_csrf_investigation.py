@@ -4,11 +4,10 @@ Test CSRF token handling and authentication consistency.
 This script tests the specific conditions that might cause 401 errors.
 """
 
-import requests
-import json
-import time
 import random
-from typing import Dict, List, Tuple
+import time
+
+import requests
 
 
 class CSRFInvestigator:
@@ -50,7 +49,7 @@ class CSRFInvestigator:
             print(f"❌ CSRF token fetch failed: {e}")
             return False
 
-    def test_multiple_whoami_calls(self, num_calls: int = 10) -> List[Dict]:
+    def test_multiple_whoami_calls(self, num_calls: int = 10) -> list[dict]:
         """Test multiple whoami calls to check for consistency"""
         results = []
         whoami_url = f"{self.base_url}/v1/whoami"
@@ -110,7 +109,7 @@ class CSRFInvestigator:
 
         return results
 
-    def test_concurrent_requests(self) -> List[Dict]:
+    def test_concurrent_requests(self) -> list[dict]:
         """Test concurrent requests that might cause race conditions"""
         import threading
 
@@ -162,7 +161,7 @@ class CSRFInvestigator:
 
         return results
 
-    def test_csrf_protected_endpoint(self) -> Dict:
+    def test_csrf_protected_endpoint(self) -> dict:
         """Test a CSRF-protected endpoint to see if it affects auth"""
         ask_url = f"{self.base_url}/v1/ask"
 
@@ -215,7 +214,7 @@ class CSRFInvestigator:
         except Exception as e:
             return {"error": str(e)}
 
-    def test_cookie_behavior(self) -> Dict:
+    def test_cookie_behavior(self) -> dict:
         """Test cookie handling and potential issues"""
         print("🍪 Testing cookie behavior...")
 

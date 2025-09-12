@@ -81,7 +81,6 @@ async def check_builtin_skills(prompt: str) -> str | None:
     """
     # Scoring-based selector (best-match)
     from .contracts import Candidate
-    from . import parsers
 
     norm = _normalize(prompt)  # use normalized text for matching
     candidates: list[Candidate] = []

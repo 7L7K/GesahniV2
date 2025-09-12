@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Protocol
 
 try:  # Avoid hard import failures at type-check/runtime
     from app.api.ask_contract import AskRequest  # type: ignore
@@ -14,7 +14,7 @@ class Candidate:
     skill: Any
     pattern: Any
     score: float
-    reasons: Dict[str, str]
+    reasons: dict[str, str]
 
 """
 SkillResult shape (fields only) — design document
@@ -95,11 +95,11 @@ class Skill(Protocol):
         """Canonical skill name used in observability and selection."""
         ...
 
-    def can_handle(self, text: str, intent_hint: Optional[str] = None) -> bool:
+    def can_handle(self, text: str, intent_hint: str | None = None) -> bool:
         """Return True if this skill can handle the text prompt."""
         ...
 
-    def confidence(self, text: str, intent_hint: Optional[str] = None) -> float:
+    def confidence(self, text: str, intent_hint: str | None = None) -> float:
         """Confidence in [0,1] that this skill is appropriate for the prompt."""
         ...
 
@@ -107,6 +107,6 @@ class Skill(Protocol):
         """Relative cost estimate (>0.0) used to trade off against confidence."""
         ...
 
-    async def run(self, request: "AskRequest") -> Dict[str, Any]:
+    async def run(self, request: AskRequest) -> dict[str, Any]:
         """Execute the skill and return a response dict compatible with AskResponse shaping."""
         ...

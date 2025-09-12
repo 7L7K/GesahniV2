@@ -1,44 +1,41 @@
 from __future__ import annotations
 
+import logging
 import os
 import secrets
-import logging
 import time
 
-from fastapi import APIRouter, Request, Response, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from ..web.cookies import set_oauth_state_cookies, clear_oauth_state_cookies, set_named_cookie, clear_named_cookie
-from ..cookie_config import get_cookie_config
-from .oauth_store import put_tx, pop_tx
-from ..api.oauth_store import debug_store
-from ..integrations.spotify.oauth import (
-    store_pkce_challenge,
-    get_pkce_challenge,
-    get_pkce_challenge_by_state,
-    clear_pkce_challenge,
-    clear_pkce_challenge_by_state,
-    SpotifyPKCE,
-    SpotifyOAuth,
-    make_authorize_url,
-    exchange_code,
-    STATE_KEY,
-    PKCE_VERIFIER_KEY,
-)
-from ..integrations.spotify.client import SpotifyClient
-from ..auth_store_tokens import upsert_token
-# Cookie names moved to web.cookies.NAMES
-from ..tokens import make_access, make_refresh, get_default_access_ttl, get_default_refresh_ttl
-from ..models.third_party_tokens import ThirdPartyToken
-from ..deps.user import get_current_user_id, resolve_session_id
-from ..security import jwt_decode
 from ..api.auth import _jwt_secret
+from ..api.oauth_store import debug_store
+from ..auth_store_tokens import upsert_token
+from ..deps.user import get_current_user_id, resolve_session_id
+from ..integrations.spotify.client import SpotifyClient
+from ..integrations.spotify.oauth import (
+    SpotifyOAuth,
+    SpotifyPKCE,
+    clear_pkce_challenge_by_state,
+    exchange_code,
+    get_pkce_challenge_by_state,
+    make_authorize_url,
+    store_pkce_challenge,
+)
+from ..models.third_party_tokens import ThirdPartyToken
+from ..security import jwt_decode
+
+# Cookie names moved to web.cookies.NAMES
+from ..web.cookies import (
+    set_named_cookie,
+)
+from .oauth_store import pop_tx, put_tx
 
 
 # Test compatibility: add _jwt_decode function that tests expect
 def _jwt_decode(token: str, secret: str, algorithms=None) -> dict:
     """Decode JWT token for test compatibility."""
     return jwt_decode(token, secret, algorithms=algorithms or ["HS256"])
-from ..metrics import OAUTH_START, OAUTH_CALLBACK, OAUTH_IDEMPOTENT
+from ..metrics import OAUTH_CALLBACK, OAUTH_START
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/spotify")
@@ -237,9 +234,9 @@ async def debug_oauth_store():
 @router.post("/test/store_tx")
 async def test_store_tx():
     """Test endpoint to store a transaction for testing."""
-    import uuid
     import secrets
     import time
+    import uuid
 
     tx_id = uuid.uuid4().hex
     tx_data = {
@@ -259,12 +256,11 @@ async def test_store_tx():
 @router.post("/test/full_flow")
 async def test_full_flow():
     """Test endpoint that stores a transaction and returns the JWT state."""
-    import uuid
     import secrets
     import time
+    import uuid
+
     import jwt
-    import os
-    from ..api.auth import _jwt_secret
 
     # Store transaction
     tx_id = uuid.uuid4().hex
@@ -378,9 +374,9 @@ async def spotify_connect(request: Request) -> Response:
         raise
     except Exception:
         pass
-    import jwt
     import time
-    from ..api.auth import _jwt_secret
+
+    import jwt
 
     # user_id is provided by dependency injection (requires authentication)
     if not user_id or user_id == "anon":
@@ -601,7 +597,6 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
     """
     import jwt
     from starlette.responses import RedirectResponse
-    from ..api.auth import _jwt_secret
 
     logger.info("🎵 SPOTIFY CALLBACK: start has_code=%s has_state=%s, code='%s'", bool(code), bool(state), code)
     # Pre-decode diagnostics for `state` integrity without leaking secrets
@@ -842,7 +837,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                     logger.info("🎵 SPOTIFY CALLBACK: Created new identity", extra={
                         "meta": {"identity_id": identity_id_used, "provider_sub": provider_sub}
                     })
-                except Exception as e_link:
+                except Exception:
                     # Race condition: fetch existing identity
                     try:
                         re = await auth_store.get_oauth_identity_by_provider("spotify", "https://accounts.spotify.com", str(provider_sub))
@@ -905,6 +900,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
         identity_id_used = None
         try:
             import httpx
+
             from .. import auth_store as auth_store
 
             async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as cli:
@@ -933,7 +929,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                             provider_iss="https://accounts.spotify.com",
                         )
                         identity_id_used = new_id
-                    except Exception as e_link:
+                    except Exception:
                         # Race condition: fetch existing identity
                         try:
                             re = await auth_store.get_oauth_identity_by_provider("spotify", "https://accounts.spotify.com", str(provider_sub))
@@ -1166,8 +1162,8 @@ async def spotify_status(request: Request) -> dict:
 
         # If we get an auth-related error, mark tokens invalid so frontend knows to reauth
         try:
-            from ..integrations.spotify.client import SpotifyAuthError, SpotifyPremiumRequiredError
             from ..auth_store_tokens import mark_invalid
+            from ..integrations.spotify.client import SpotifyAuthError, SpotifyPremiumRequiredError
 
             logger.info("🎵 SPOTIFY STATUS: Checking exception type", extra={
                 "meta": {

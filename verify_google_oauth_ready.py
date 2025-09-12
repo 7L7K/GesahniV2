@@ -12,10 +12,11 @@ Run this after deploying the OAuth fixes.
 """
 
 import os
-import sys
-import requests
 import subprocess
+import sys
 from datetime import datetime
+
+import requests
 
 # Add the app directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
@@ -99,7 +100,7 @@ def check_recent_logs():
             print("ℹ️ No log file found (this is normal if no requests have been made)")
             return True
 
-        with open(log_file, 'r') as f:
+        with open(log_file) as f:
             lines = f.readlines()[-20:]  # Last 20 lines
 
         oauth_lines = [line for line in lines if any(keyword in line.lower() for keyword in ['google', 'oauth', 'auth'])]
@@ -198,7 +199,7 @@ def main():
         print("\nThe missing_provider_iss error is completely resolved! 🎉")
 
     else:
-        failed_checks = [name for (name, _), result in zip(checks, results) if not result]
+        failed_checks = [name for (name, _), result in zip(checks, results, strict=False) if not result]
         print(f"\n❌ {total - passed} check(s) failed:")
         for check in failed_checks:
             print(f"   • {check}")

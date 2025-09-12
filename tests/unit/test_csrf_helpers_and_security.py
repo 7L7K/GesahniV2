@@ -6,10 +6,12 @@ proper security testing patterns.
 """
 
 import os
+
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.conftest import get_csrf, auth_post, auth_put, auth_delete
+from tests.helpers.http import auth_delete, auth_post
+from tests.helpers.http import get_csrf_token as get_csrf
 
 
 def test_get_csrf_helper_fetches_token_and_cookies():
@@ -144,7 +146,7 @@ def test_logout_all_supports_post_not_delete():
 
     # DELETE should return 405 (method not allowed)
     response = client.delete("/v1/auth/logout_all")
-    assert response.status_code == 405, f"DELETE method should not be supported for logout_all"
+    assert response.status_code == 405, "DELETE method should not be supported for logout_all"
 
 
 def test_spotify_disconnect_supports_delete():

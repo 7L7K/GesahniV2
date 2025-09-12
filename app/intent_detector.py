@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Hybrid intent detector combining heuristics and a semantic classifier."""
 
 

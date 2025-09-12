@@ -11,7 +11,7 @@ Tests 429 responses for login and refresh endpoints under various conditions:
 
 import os
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -120,7 +120,7 @@ class TestAuthRateLimiting:
                 mock_get.return_value.status_code = 200
                 # Simulate request with different client IP
                 return mock_get(
-                    f"http://testserver/v1/whoami", headers={"X-Forwarded-For": ip}
+                    "http://testserver/v1/whoami", headers={"X-Forwarded-For": ip}
                 )
 
         # Make requests from different IPs - should not interfere
@@ -263,7 +263,6 @@ class TestAuthRateLimiting:
         assert response.status_code == 200
 
         # Concurrent requests should be rate limited
-        import concurrent.futures
         import requests
 
         def make_concurrent_request():

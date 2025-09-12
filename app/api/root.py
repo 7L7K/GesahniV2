@@ -5,7 +5,7 @@ Provides a friendly landing page for the root URL instead of an ugly 404.
 """
 
 from fastapi import APIRouter
-from starlette.responses import RedirectResponse, JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
 
 router = APIRouter()
 

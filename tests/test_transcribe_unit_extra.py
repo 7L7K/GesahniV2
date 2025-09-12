@@ -56,7 +56,7 @@ def test_max_audio_bytes_guard(tmp_path, monkeypatch):
     audio.write_bytes(b"too big")
     try:
         transcribe.transcribe_file(str(audio))
-        assert False, "expected ValueError(file_too_large)"
+        raise AssertionError("expected ValueError(file_too_large)")
     except ValueError as e:
         assert str(e) == "file_too_large"
 
@@ -83,7 +83,7 @@ def test_missing_api_key_raises(monkeypatch):
     # get_sync_whisper_client should raise when key missing
     try:
         transcribe.get_sync_whisper_client()
-        assert False, "expected RuntimeError"
+        raise AssertionError("expected RuntimeError")
     except RuntimeError as e:
         assert "OPENAI_API_KEY" in str(e)
 
@@ -99,7 +99,7 @@ def test_missing_openai_package_raises(monkeypatch):
     monkeypatch.setattr(transcribe, "_SyncOpenAI", None)
     try:
         transcribe.get_sync_whisper_client()
-        assert False, "expected RuntimeError"
+        raise AssertionError("expected RuntimeError")
     except RuntimeError as e:
         assert "openai" in str(e).lower()
 

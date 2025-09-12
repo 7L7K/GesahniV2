@@ -1,8 +1,8 @@
 """
 Production configuration guardrails - refuses risky configs in prod environment.
 """
-import os
 import logging
+import os
 
 log = logging.getLogger(__name__)
 

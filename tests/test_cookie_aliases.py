@@ -1,8 +1,7 @@
-import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import patch
 import os
+from unittest.mock import patch
 
+import pytest
 
 # Note: Full FastAPI client tests are commented out due to import issues
 # These tests focus on the core cookie functionality instead
@@ -19,8 +18,9 @@ class TestCookieAliases:
 
     def test_alias_reading_functionality(self):
         """Test that get_any can read from multiple cookie aliases"""
-        from app.web.cookies import get_any, ACCESS_ALIASES
         from unittest.mock import Mock
+
+        from app.web.cookies import ACCESS_ALIASES, get_any
 
         # Test with canonical cookie
         request = Mock()
@@ -44,8 +44,9 @@ class TestCookieMigration:
 
     def test_cookie_clearing_functionality(self):
         """Test that clear_all_auth clears all cookie variants"""
-        from app.web.cookies import clear_all_auth
         from unittest.mock import Mock
+
+        from app.web.cookies import clear_all_auth
 
         response = Mock()
         clear_all_auth(response)
@@ -66,7 +67,7 @@ class TestCookieConfiguration:
     def test_classic_configuration(self):
         """Test COOKIE_CANON=classic configuration"""
         with patch.dict(os.environ, {"COOKIE_CANON": "classic"}):
-            from app.web.cookies import ACCESS_CANON, REFRESH_CANON, ACCESS_ALIASES
+            from app.web.cookies import ACCESS_ALIASES, ACCESS_CANON, REFRESH_CANON
             assert ACCESS_CANON == "access_token"
             assert REFRESH_CANON == "refresh_token"
             assert "access_token" in ACCESS_ALIASES
@@ -76,6 +77,7 @@ class TestCookieConfiguration:
         """Test COOKIE_CANON=gsn configuration"""
         # Need to reload the module to pick up the new environment variable
         import importlib
+
         import app.web.cookies
 
         with patch.dict(os.environ, {"COOKIE_CANON": "gsn"}):
@@ -90,6 +92,7 @@ class TestCookieConfiguration:
         # Remove COOKIE_CANON from environment if it exists
         with patch.dict(os.environ, {}, clear=True):
             import importlib
+
             import app.web.cookies
             importlib.reload(app.web.cookies)
             assert app.web.cookies.ACCESS_CANON == "access_token"
@@ -101,8 +104,9 @@ class TestCookieFunctions:
 
     def test_get_any_function(self):
         """Test the get_any cookie reading function"""
-        from app.web.cookies import get_any, ACCESS_ALIASES
         from unittest.mock import Mock
+
+        from app.web.cookies import ACCESS_ALIASES, get_any
 
         # Test with canonical cookie
         request = Mock()
@@ -122,8 +126,9 @@ class TestCookieFunctions:
 
     def test_clear_all_auth_function(self):
         """Test the clear_all_auth cookie clearing function"""
-        from app.web.cookies import clear_all_auth
         from unittest.mock import Mock
+
+        from app.web.cookies import clear_all_auth
 
         response = Mock()
         clear_all_auth(response)
@@ -139,8 +144,9 @@ class TestCookieFunctions:
 
     def test_set_auth_cookies_canon_function(self):
         """Test the set_auth_cookies_canon function"""
-        from app.web.cookies import set_auth_cookies_canon
         from unittest.mock import Mock
+
+        from app.web.cookies import set_auth_cookies_canon
 
         response = Mock()
         set_auth_cookies_canon(

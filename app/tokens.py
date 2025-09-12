@@ -7,11 +7,12 @@ with centralized TTL management and normalized claims handling.
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
 import jwt
+
 from app.security.jwt_config import get_jwt_config
 
 # JWT configuration constants - now centralized in get_jwt_config()
@@ -47,14 +48,14 @@ def _create_access_token_internal(
 
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=EXPIRE_MINUTES)
+        expire = datetime.now(UTC) + timedelta(minutes=EXPIRE_MINUTES)
 
     to_encode.update(
         {
             "exp": expire,
-            "iat": datetime.now(timezone.utc),
+            "iat": datetime.now(UTC),
             "jti": uuid4().hex,
             "type": "access",
             "scopes": data.get("scopes", ["care:resident", "music:control", "chat:write"]),
@@ -104,14 +105,14 @@ def _create_refresh_token_internal(
 
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=REFRESH_EXPIRE_MINUTES)
+        expire = datetime.now(UTC) + timedelta(minutes=REFRESH_EXPIRE_MINUTES)
 
     to_encode.update(
         {
             "exp": expire,
-            "iat": datetime.now(timezone.utc),
+            "iat": datetime.now(UTC),
             "jti": uuid4().hex,
             "type": "refresh",
             "scopes": data.get("scopes", ["care:resident", "music:control", "chat:write"]),
@@ -360,7 +361,7 @@ def _select_signing_key() -> tuple[str, str, str | None]:
 
 def _now():
     """Get current UTC datetime."""
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 def sign_access_token(sub: str, *, extra: dict | None = None) -> str:

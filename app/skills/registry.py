@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .contracts import Skill
 
@@ -33,7 +33,8 @@ def register_builtin_skills() -> None:
 
     # Smalltalk adaptor -------------------------------------------------
     try:
-        from .smalltalk_skill import SmalltalkSkill as _Smalltalk, is_greeting as _is_greeting
+        from .smalltalk_skill import SmalltalkSkill as _Smalltalk
+        from .smalltalk_skill import is_greeting as _is_greeting
 
         class _SmalltalkAdaptor:
             @property
@@ -43,19 +44,19 @@ def register_builtin_skills() -> None:
             def __init__(self) -> None:
                 self._impl = _Smalltalk()
 
-            def can_handle(self, text: str, intent_hint: Optional[str] = None) -> bool:
+            def can_handle(self, text: str, intent_hint: str | None = None) -> bool:
                 try:
                     return bool(_is_greeting(text))
                 except Exception:
                     return False
 
-            def confidence(self, text: str, intent_hint: Optional[str] = None) -> float:
+            def confidence(self, text: str, intent_hint: str | None = None) -> float:
                 return 0.9 if self.can_handle(text, intent_hint) else 0.0
 
             def cost_estimate(self, text: str) -> float:
                 return 0.05
 
-            async def run(self, request: "AskRequest") -> Dict[str, Any]:
+            async def run(self, request: AskRequest) -> dict[str, Any]:
                 try:
                     text = await self._impl.handle(request.text)
                 except Exception:
@@ -82,6 +83,7 @@ def register_builtin_skills() -> None:
     # Clock adaptor -----------------------------------------------------
     try:
         import re
+
         from .clock_skill import ClockSkill as _Clock
 
         class _ClockAdaptor:
@@ -95,7 +97,7 @@ def register_builtin_skills() -> None:
             def name(self) -> str:
                 return "clock"
 
-            def can_handle(self, text: str, intent_hint: Optional[str] = None) -> bool:
+            def can_handle(self, text: str, intent_hint: str | None = None) -> bool:
                 t = (text or "").strip().lower()
                 for p in self._patterns:
                     try:
@@ -105,15 +107,14 @@ def register_builtin_skills() -> None:
                         continue
                 return False
 
-            def confidence(self, text: str, intent_hint: Optional[str] = None) -> float:
+            def confidence(self, text: str, intent_hint: str | None = None) -> float:
                 return 0.8 if self.can_handle(text, intent_hint) else 0.0
 
             def cost_estimate(self, text: str) -> float:
                 return 0.05
 
-            async def run(self, request: "AskRequest") -> Dict[str, Any]:
+            async def run(self, request: AskRequest) -> dict[str, Any]:
                 # Find first matching pattern and run underlying skill.run(prompt, match)
-                import re as _re
 
                 prompt = request.text
                 match = None

@@ -3,10 +3,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
-from .client import SpotifyClient, SpotifyAuthError
-from .oauth import SpotifyOAuth, SpotifyOAuthError
+from .client import SpotifyAuthError, SpotifyClient
 
 logger = logging.getLogger(__name__)
 

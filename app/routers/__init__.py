@@ -13,9 +13,9 @@ Backend routing rules (frozen contract):
   - Default fallback → dryrun
 """
 
-from typing import Callable, Awaitable, Any, Optional
 import os
-
+from collections.abc import Awaitable, Callable
+from typing import Any, Optional
 
 _factory: Callable[[str], Callable[[dict], Awaitable[dict]]] | None = None
 
@@ -39,7 +39,7 @@ def get_backend_callable(name: str) -> Callable[[dict], Awaitable[dict]]:
     return _factory(name)
 
 
-def resolve_backend(model_override: Optional[str] = None, default_backend: str = "dryrun") -> str:
+def resolve_backend(model_override: str | None = None, default_backend: str = "dryrun") -> str:
     """Resolve backend name from model or environment.
 
     Frozen routing contract:
@@ -77,7 +77,7 @@ def resolve_backend(model_override: Optional[str] = None, default_backend: str =
     return default_backend
 
 
-def get_backend_for_request(model_override: Optional[str] = None) -> Callable[[dict], Awaitable[dict]]:
+def get_backend_for_request(model_override: str | None = None) -> Callable[[dict], Awaitable[dict]]:
     """Get backend callable for a request with automatic model routing.
 
     Args:

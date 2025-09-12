@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import aiosqlite
-import os
 import logging
+import os
+
+import aiosqlite
 from cryptography.fernet import Fernet, InvalidToken
-from typing import Optional
 
 from ..db.paths import resolve_db_path
 

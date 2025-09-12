@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import logging
-import os
-from typing import Any, Dict, List
 
-from ...integrations.spotify.client import SpotifyClient, SpotifyAuthError
-from .base import Device, PlaybackState, Track, Album, Artist, Playlist
+from ...integrations.spotify.client import SpotifyAuthError, SpotifyClient
+from .base import Device, PlaybackState, Track
 
 logger = logging.getLogger(__name__)
 

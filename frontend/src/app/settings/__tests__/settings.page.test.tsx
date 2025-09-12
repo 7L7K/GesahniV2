@@ -23,6 +23,10 @@ jest.mock('@/lib/api', () => {
   };
 });
 
+jest.mock('@/lib/features', () => ({
+  fetchFeatures: jest.fn().mockResolvedValue({ devices: false, transcribe: false, ollama: false, home_assistant: false, qdrant: false }),
+}));
+
 const { useProfile, updateProfile } = jest.requireMock('@/lib/api');
 
 describe('SettingsPage', () => {
@@ -59,7 +63,7 @@ describe('SettingsPage', () => {
 
   it('updates fields and saves successfully', async () => {
     (useProfile as jest.Mock).mockReturnValue({ data: { name: 'Alice', email: 'a@b.com' }, isLoading: false, error: null });
-    ;(updateProfile as jest.Mock).mockResolvedValueOnce(undefined);
+    ; (updateProfile as jest.Mock).mockResolvedValueOnce(undefined);
     render(<SettingsPage />);
     fireEvent.change(await screen.findByLabelText('Full Name'), { target: { value: 'Alice B' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
@@ -68,7 +72,7 @@ describe('SettingsPage', () => {
 
   it('shows error when save fails', async () => {
     (useProfile as jest.Mock).mockReturnValue({ data: { name: 'Bob' }, isLoading: false, error: null });
-    ;(updateProfile as jest.Mock).mockRejectedValueOnce(new Error('profile_update_failed'));
+    ; (updateProfile as jest.Mock).mockRejectedValueOnce(new Error('profile_update_failed'));
     render(<SettingsPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Save Changes' }));
     await waitFor(() => expect(screen.getByText(/profile_update_failed/)).toBeInTheDocument());

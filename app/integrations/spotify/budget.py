@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Optional
 
 from ...budget import get_budget_state
 
@@ -38,7 +37,7 @@ class SpotifyBudgetManager:
         budget_state = get_budget_state(self.user_id)
         return not budget_state.get("escalate_allowed", True)
 
-    def apply_backoff(self, retry_after: Optional[int] = None) -> None:
+    def apply_backoff(self, retry_after: int | None = None) -> None:
         """Apply exponential backoff after a failure."""
         now = time.time()
 

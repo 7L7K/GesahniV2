@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Base interfaces and common errors for vector-store backends.
 
 This module purposely keeps only abstract protocols and light exceptions so

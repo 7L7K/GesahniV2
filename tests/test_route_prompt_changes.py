@@ -4,8 +4,8 @@ Test script to verify route_prompt parameter standardization works correctly.
 """
 import asyncio
 import logging
-import sys
 import os
+import sys
 
 # Setup logging to see our new log messages
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")

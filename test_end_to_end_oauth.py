@@ -7,12 +7,10 @@ Tests every component of the Google OAuth flow to ensure the missing_provider_is
 
 import os
 import sys
-import json
+from urllib.parse import parse_qs, urlparse
+
 import jwt
 import requests
-import asyncio
-from urllib.parse import urlparse, parse_qs
-from unittest.mock import Mock, patch
 
 # Add the app directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
@@ -84,7 +82,7 @@ class OAuthEndToEndTest:
                 self.log_test_result("OAuth Login URL", False, "Missing state parameter")
                 return False
 
-            self.log_test_result("OAuth Login URL", True, f"Generated correctly with openid scope")
+            self.log_test_result("OAuth Login URL", True, "Generated correctly with openid scope")
             return True
 
         except Exception as e:

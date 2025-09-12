@@ -40,17 +40,28 @@ export async function fetchWhoamiWithResilience(): Promise<WhoamiResponse> {
 
             if (response.ok) {
                 return await response.json();
-            } else if (response.status >= 500) {
-                // Server error - retry
-                throw new Error(`Server error: ${response.status}`);
-            } else {
-                // Client error (4xx) - don't retry
-                throw new Error(`Client error: ${response.status}`);
             }
+
+            // Distinguish error classes for orchestrator/backoff
+            if (response.status === 404) {
+                throw new Error('WHOAMI_404_NotFound');
+            }
+            if (response.status === 401) {
+                throw new Error('WHOAMI_401_Unauthorized');
+            }
+            if (response.status >= 500) {
+                // Server error - retry
+                throw new Error(`WHOAMI_5xx_ServerError_${response.status}`);
+            }
+            // Other client errors (4xx) - don't retry
+            throw new Error(`WHOAMI_4xx_ClientError_${response.status}`);
         } catch (error) {
             lastError = error instanceof Error ? error : new Error(String(error));
 
-            if (attempt < MAX_RETRIES - 1) {
+            // Only retry on server errors and network failures
+            const msg = lastError.message || '';
+            const shouldRetry = /5xx|ServerError|NetworkError|TypeError/i.test(msg);
+            if (attempt < MAX_RETRIES - 1 && shouldRetry) {
                 // Calculate incremental backoff
                 const backoffMs = (attempt + 1) * 500; // 500ms, 1000ms, 1500ms
                 console.debug(`WhoamiResilience: Retry ${attempt + 1} after ${backoffMs}ms`, {
@@ -65,12 +76,13 @@ export async function fetchWhoamiWithResilience(): Promise<WhoamiResponse> {
 }
 
 /**
- * Raw whoami fetch using direct fetch
+ * Raw whoami fetch using apiFetch with proper credentials and CSRF
  * PRIVATE - internal to this module only
  */
 async function rawWhoamiFetch(): Promise<Response> {
-    const url = '/v1/whoami';
-    return fetch(url, {
+    // Import apiFetch dynamically to avoid circular dependencies
+    const { apiFetch } = await import('@/lib/api/fetch');
+    return apiFetch('/v1/whoami', {
         method: 'GET',
         credentials: 'include',
         headers: {

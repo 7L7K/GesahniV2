@@ -43,10 +43,10 @@ def _create_test_app():
     app = FastAPI()
 
     # Set up test database before including routers
-    import tempfile
     import os
     import subprocess
     import sys
+    import tempfile
     from pathlib import Path
 
     # Create temp DB path

@@ -6,8 +6,8 @@ Safe to call from startup, tests, and manual operations.
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import List, Callable, Awaitable
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ async def run_all_migrations(db_dir: Path | None = None) -> None:
     """
     logger.info("Starting database migrations", extra={"db_dir": str(db_dir) if db_dir else None})
 
-    migration_tasks: List[Callable[[], Awaitable[None]]] = []
+    migration_tasks: list[Callable[[], Awaitable[None]]] = []
 
     # Token store migration
     async def migrate_token_store():

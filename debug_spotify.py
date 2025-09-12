@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """Spotify integration debugging script."""
 
-import os
-import sys
 import logging
-import asyncio
-from fastapi import FastAPI
+import os
+
 from fastapi.testclient import TestClient
 
 # Set up logging

@@ -1,7 +1,6 @@
 """
 Tests for configuration check endpoint.
 """
-import pytest
 from unittest.mock import patch
 
 from app.api.config_check import config_check

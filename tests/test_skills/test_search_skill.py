@@ -18,10 +18,10 @@ class FakeClient:
 
     async def get(self, url, params=None):
         class R:
-            def json(self_inner):
+            def json(self):
                 return {"Answer": "Paris"}
 
-            def raise_for_status(self_inner):
+            def raise_for_status(self):
                 pass
 
         return R()
@@ -45,10 +45,10 @@ def test_search_was_are_variants(monkeypatch):
 
         async def get(self, url, params=None):
             class R:
-                def json(self_inner):
+                def json(self):
                     return {"AbstractText": "Answer text"}
 
-                def raise_for_status(self_inner):
+                def raise_for_status(self):
                     pass
 
             return R()
@@ -70,10 +70,10 @@ def test_search_related_topics_fallback(monkeypatch):
 
         async def get(self, url, params=None):
             class R:
-                def json(self_inner):
+                def json(self):
                     return {"RelatedTopics": [{"Text": "Alt snippet"}]}
 
-                def raise_for_status(self_inner):
+                def raise_for_status(self):
                     pass
 
             return R()

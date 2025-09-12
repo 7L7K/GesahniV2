@@ -1,4 +1,3 @@
-import os
 import asyncio
 
 from app.skills import selector

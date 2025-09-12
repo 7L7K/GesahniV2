@@ -15,7 +15,7 @@ def test_tts_cache_hit(monkeypatch):
         .get_event_loop()
         .run_until_complete(tts.synthesize(text="hello", mode="utility"))
     )
-    assert isinstance(audio1, (bytes, bytearray))
+    assert isinstance(audio1, bytes | bytearray)
     # Second call should return cached bytes quickly
     audio2 = (
         tts.__dict__["asyncio"]
@@ -37,4 +37,4 @@ def test_tts_daily_cap_autodegrade(monkeypatch):
         .get_event_loop()
         .run_until_complete(tts.synthesize(text="status ok", mode="utility"))
     )
-    assert isinstance(audio, (bytes, bytearray))
+    assert isinstance(audio, bytes | bytearray)

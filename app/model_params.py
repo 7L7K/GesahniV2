@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Unified generation parameter handling for GPT and LLaMA backends.
 
 Provides a single place to define defaults (via env) and to translate

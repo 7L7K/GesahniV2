@@ -1,16 +1,19 @@
 """Tests for idempotency middleware and per-route rate limiting."""
-import json
-import time
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 from app.middleware.idempotency import IdempotencyMiddleware, get_idempotency_store
-from app.middleware.rate_limit import RateLimitMiddleware, _test_clear_buckets, _test_clear_metrics, _test_set_config, _test_reset_config
+from app.middleware.rate_limit import (
+    RateLimitMiddleware,
+    _test_clear_buckets,
+    _test_clear_metrics,
+    _test_reset_config,
+    _test_set_config,
+)
 
 
 class TestIdempotencyMiddleware:

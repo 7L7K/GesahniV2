@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any
 
 from ... import home_assistant as ha
 from ..tools import validator
 
-
 # Minimal tool catalog mirroring Tier-0 slots
-TOOL_CATALOG: Dict[str, Dict[str, Any]] = {
+TOOL_CATALOG: dict[str, dict[str, Any]] = {
     "timer.start": {
         "slots": {"label": str, "duration_s": int},
         "reversible": True,
@@ -27,7 +26,7 @@ TOOL_CATALOG: Dict[str, Dict[str, Any]] = {
 }
 
 
-async def validate_and_execute(tool: str, slots: Dict[str, Any], user_id: str | None = None) -> Tuple[bool, str, bool]:
+async def validate_and_execute(tool: str, slots: dict[str, Any], user_id: str | None = None) -> tuple[bool, str, bool]:
     """Validate tool slots and execute the action.
 
     Returns (executed, message, requires_confirmation).

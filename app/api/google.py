@@ -1,29 +1,19 @@
 from __future__ import annotations
 
-import os
-import time
-import secrets
 import logging
-from fastapi import APIRouter, Request, HTTPException, Depends
-from fastapi.responses import JSONResponse
-from starlette.responses import RedirectResponse
+import os
+import secrets
+import time
 
-from ..api.auth import _jwt_secret
-from ..deps.user import get_current_user_id, resolve_session_id
-from ..auth_store_tokens import upsert_token, mark_invalid, get_token
-from ..integrations.google.oauth import build_auth_url, exchange_code, creds_to_record, refresh_if_needed
-from ..web.cookies import set_oauth_state_cookies, clear_oauth_state_cookies
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
+
+from ..auth_store_tokens import get_token, mark_invalid, upsert_token
+from ..deps.user import get_current_user_id
 from ..metrics import (
-    GOOGLE_CONNECT_STARTED,
-    GOOGLE_CONNECT_AUTHORIZE_URL_ISSUED,
-    GOOGLE_CALLBACK_SUCCESS,
-    GOOGLE_CALLBACK_FAILED,
-    GOOGLE_REFRESH_SUCCESS,
-    GOOGLE_REFRESH_FAILED,
     GOOGLE_DISCONNECT_SUCCESS,
 )
 from ..models.third_party_tokens import ThirdPartyToken
-from ..metrics import OAUTH_START, OAUTH_CALLBACK
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +69,6 @@ async def integrations_google_disconnect(request: Request):
 
 
 async def google_status(request: Request):
-    from fastapi.responses import JSONResponse
     try:
         current_user = get_current_user_id(request=request)
     except Exception:

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
-from fastapi import APIRouter, HTTPException, Request, Depends
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from ..deps.user import get_current_user_id
 from ..music.orchestrator import MusicOrchestrator
-from ..music.store import get_idempotent, set_idempotent
 from ..music.providers.spotify_provider import SpotifyProvider
+from ..music.store import get_idempotent, set_idempotent
 
 router = APIRouter(prefix="/api/music")
 
@@ -53,17 +54,16 @@ from datetime import time as dtime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.common import OkResponse as CommonOkResponse
 
 from ..deps.user import get_current_user_id
+
 # Use unified Spotify client that reads/writes tokens via auth_store_tokens
 from ..integrations.spotify.client import SpotifyAuthError, SpotifyClient
 from ..models.music_state import MusicVibe, load_state, save_state
-
-from .ws_helpers import handle_reauth
 
 router = APIRouter(prefix="", tags=["Music"])  # rate limit applied selectively in main
 

@@ -6,9 +6,9 @@ Run this after completing an OAuth flow to verify the fix worked.
 """
 
 import os
-import sys
-import requests
 from datetime import datetime
+
+import requests
 
 
 def check_recent_logs():
@@ -26,7 +26,7 @@ def check_recent_logs():
         for log_file in log_files:
             if os.path.exists(log_file):
                 try:
-                    with open(log_file, 'r') as f:
+                    with open(log_file) as f:
                         lines = f.readlines()[-50:]  # Last 50 lines
                         for line in lines:
                             if any(keyword in line.lower() for keyword in ['google', 'oauth', 'id_token', 'provider_iss']):

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Storytime helpers: JSONL transcript logging and nightly summarization.
 
 This module provides lightweight primitives to:
@@ -24,6 +25,7 @@ from pathlib import Path
 from .gpt_client import ask_gpt
 from .memory.vector_store import add_user_memory
 from .redaction import redact_and_store
+
 """
 Note: importing the `router` package at module import time can cause
 import cycles when `app.main` imports `storytime` while `router` is

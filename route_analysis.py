@@ -8,16 +8,19 @@ Analyzes all routes in the GesahniV2 FastAPI application to:
 - Flag unreachable/shadowed/misconfigured endpoints
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(__file__))
 
-from app.main import create_app
 import inspect
-from fastapi.routing import APIRoute
-from typing import get_type_hints
-from collections import defaultdict
 import json
+from collections import defaultdict
+
+from fastapi.routing import APIRoute
+
+from app.main import create_app
+
 
 def analyze_routes():
     """Main analysis function"""

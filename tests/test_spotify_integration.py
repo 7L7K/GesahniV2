@@ -11,17 +11,17 @@ Usage:
 
 import asyncio
 import os
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 # Import the Spotify debugger
 from spotify_debugger import (
-    spotify_debugger,
+    create_debug_routes,
     debug_log_spotify_request,
     debug_log_spotify_response,
-    debug_track_spotify_operation,
-    create_debug_routes,
     debug_spotify_integration,
+    debug_track_spotify_operation,
 )
 
 

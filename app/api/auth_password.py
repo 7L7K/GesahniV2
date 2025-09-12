@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import os
-
 import aiosqlite
 from fastapi import APIRouter, HTTPException
 from passlib.context import CryptContext
+
 from app.db.paths import resolve_db_path
 
 router = APIRouter(tags=["auth"], include_in_schema=False)

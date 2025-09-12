@@ -4,7 +4,8 @@ Demonstration of production configuration guardrails.
 Run this script to see how the config guard validates configurations.
 """
 import os
-from app.startup.config_guard import assert_strict_prod, ConfigError
+
+from app.startup.config_guard import ConfigError, assert_strict_prod
 
 
 def demo_config_guard():

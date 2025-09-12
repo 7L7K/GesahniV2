@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import os
-import tempfile
 import sys
+import tempfile
 from pathlib import Path
 
 _DB_CACHE: dict[str, Path] = {}

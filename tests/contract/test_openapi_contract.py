@@ -3,9 +3,9 @@ OpenAPI contract tests - freeze API surface for different environments.
 When you intentionally add/remove routes, update the snapshot files in the same PR.
 """
 import json
-import os
-from pathlib import Path
+
 from fastapi.testclient import TestClient
+
 from app.main import create_app
 
 
@@ -23,7 +23,7 @@ def _keys(d):
 
 def _load(path):
     """Load JSON from file."""
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -47,12 +47,11 @@ def test_ci_schema_contains_critical_paths(monkeypatch):
         "/v1/ask",
         "/v1/health",
         "/v1/health/vector_store",
-        "/v1/login",
-        "/v1/logout",
-        "/v1/register",
-        "/v1/refresh",
+        "/v1/auth/login",
+        "/v1/auth/logout",
+        "/v1/auth/refresh",
         "/v1/me",
-        "/v1/whoami",
+        "/whoami",
         "/v1/admin/config",
     }
     # Accept either /v1/google/login_url or /v1/google/auth/login_url
@@ -82,9 +81,9 @@ def test_dev_min_schema_contains_critical_paths(monkeypatch):
     must_have = {
         "/v1/ask",
         "/v1/health",
-        "/v1/login",
+        "/v1/auth/login",
         "/v1/me",
-        "/v1/register",
+        "/v1/auth/logout",
     }
     missing = sorted([p for p in must_have if p not in paths])
     assert not missing, f"Critical routes missing: {missing}"
@@ -102,7 +101,7 @@ def test_prod_min_schema_contains_critical_paths(monkeypatch):
     client = TestClient(app)
     paths = set(_schema(client).get("paths", {}).keys())
 
-    must_have = {"/v1/ask", "/v1/health", "/v1/login", "/v1/whoami"}
+    must_have = {"/v1/ask", "/v1/health", "/v1/auth/login", "/whoami"}
     missing = sorted([p for p in must_have if p not in paths])
     assert not missing, f"Critical routes missing: {missing}"
 

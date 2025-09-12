@@ -39,8 +39,8 @@ async def get_csrf(request: Request):
     """
     import os
 
+    from app.csrf import _csrf_token_store, get_csrf_token
     from app.web.cookies import set_csrf_cookie
-    from app.csrf import get_csrf_token, _csrf_token_store
 
     token = await get_csrf_token()
     ttl = int(os.getenv("CSRF_TTL_SECONDS", "600"))

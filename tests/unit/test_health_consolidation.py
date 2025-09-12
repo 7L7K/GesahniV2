@@ -9,10 +9,9 @@ This test verifies that:
    - GET /v1/healthz/ready
 4. Only canonical endpoints appear in OpenAPI schema
 """
-import pytest
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from fastapi.responses import RedirectResponse
+from fastapi.testclient import TestClient
 
 
 def test_health_consolidation():
@@ -24,16 +23,17 @@ def test_health_consolidation():
     # Import and include the actual routers in the correct order
     # Note: compat_router must come BEFORE health_router to allow redirects to work
     try:
-        from app.router.compat_api import router as compat_router
         from app.api.health import router as health_router
-        from app.status import router as status_router, public_router as status_public_router
+        from app.router.compat_api import router as compat_router
+        from app.status import public_router as status_public_router
+        from app.status import router as status_router
 
         app.include_router(compat_router, prefix="")
         app.include_router(health_router, prefix="")
         app.include_router(status_router, prefix="/v1")
         app.include_router(status_public_router, prefix="/v1")
 
-    except Exception as e:
+    except Exception:
         # If imports fail due to dependencies, create minimal mock routers
         from fastapi import APIRouter
 
@@ -125,7 +125,8 @@ def test_health_schema_inclusion():
     # Import the actual routers
     try:
         from app.api.health import router as health_router
-        from app.status import router as status_router, public_router as status_public_router
+        from app.status import public_router as status_public_router
+        from app.status import router as status_router
 
         app.include_router(health_router, prefix="")
         app.include_router(status_router, prefix="/v1")

@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -122,7 +122,7 @@ def _ensure_ledger_schema() -> None:
             pass
 
 
-def _append_debug_jsonl(record: Dict[str, Any]) -> None:
+def _append_debug_jsonl(record: dict[str, Any]) -> None:
     """Append to optional JSONL debug file; best-effort."""
     try:
         LEDGER_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -135,12 +135,12 @@ def _append_debug_jsonl(record: Dict[str, Any]) -> None:
 def record_ledger(
     type: str,
     skill: str,
-    slots: Optional[Dict[str, Any]] = None,
+    slots: dict[str, Any] | None = None,
     reversible: bool = True,
-    reverse_id: Optional[int] = None,
-    idempotency_key: Optional[str] = None,
-    user_id: Optional[str] = None,
-) -> Tuple[bool, int]:
+    reverse_id: int | None = None,
+    idempotency_key: str | None = None,
+    user_id: str | None = None,
+) -> tuple[bool, int]:
     """Record an action atomically in the SQLite ledger.
 
     Returns (inserted, rowid). If the entry was deduped by idempotency window,
@@ -149,12 +149,12 @@ def record_ledger(
     init_storage()
     _ensure_ledger_schema()
     slots_json = json.dumps(slots or {}, ensure_ascii=False)
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(UTC).isoformat()
 
     with _conn(LEDGER_DB) as c:
         # Deduplicate by idempotency_key within DEDUPE_WINDOW seconds
         if idempotency_key:
-            cutoff = (datetime.now(timezone.utc) - timedelta(seconds=DEDUPE_WINDOW)).isoformat()
+            cutoff = (datetime.now(UTC) - timedelta(seconds=DEDUPE_WINDOW)).isoformat()
             cur = c.execute(
                 "SELECT id, ts FROM ledger WHERE idempotency_key = ? AND ts >= ? ORDER BY ts DESC LIMIT 1",
                 (idempotency_key, cutoff),
@@ -206,18 +206,18 @@ def link_reverse(forward_id: int, reverse_id: int) -> None:
         pass
 
 
-def add_note(text: str, tags: Optional[List[str]] = None, pinned: bool = False) -> int:
+def add_note(text: str, tags: list[str] | None = None, pinned: bool = False) -> int:
     init_storage()
     tags_txt = json.dumps(tags or [], ensure_ascii=False)
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
     with _conn(NOTES_DB) as c:
         cur = c.execute("INSERT INTO notes (text, created_at, tags, pinned) VALUES (?,?,?,?)", (text, created_at, tags_txt, 1 if pinned else 0))
         return cur.lastrowid
 
 
-def add_reminder(text: str, when_txt: str, recurrence: Optional[str] = None, created_by: Optional[str] = None) -> int:
+def add_reminder(text: str, when_txt: str, recurrence: str | None = None, created_by: str | None = None) -> int:
     init_storage()
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
     with _conn(REMINDERS_DB) as c:
         cur = c.execute(
             "INSERT INTO reminders (text, when_txt, recurrence, status, created_by, created_at) VALUES (?,?,?,?,?,?)",
@@ -232,11 +232,11 @@ def save_alias(alias: str, entity_id: str, confidence: float = 1.0) -> None:
         data = json.loads(ALIASES_JSON.read_text(encoding="utf-8") or "{}")
     except Exception:
         data = {}
-    data[alias] = {"entity": entity_id, "confidence": float(confidence), "last_used": datetime.now(timezone.utc).isoformat()}
+    data[alias] = {"entity": entity_id, "confidence": float(confidence), "last_used": datetime.now(UTC).isoformat()}
     ALIASES_JSON.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def load_aliases() -> Dict[str, Dict[str, Any]]:
+def load_aliases() -> dict[str, dict[str, Any]]:
     init_storage()
     try:
         return json.loads(ALIASES_JSON.read_text(encoding="utf-8") or "{}")
@@ -244,9 +244,9 @@ def load_aliases() -> Dict[str, Dict[str, Any]]:
         return {}
 
 
-def save_summary(date_txt: str, bullets: List[str], source_hash: Optional[str] = None) -> int:
+def save_summary(date_txt: str, bullets: list[str], source_hash: str | None = None) -> int:
     init_storage()
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
     bullets_json = json.dumps(bullets, ensure_ascii=False)
     with _conn(SUMMARIES_DB) as c:
         cur = c.execute(
@@ -256,11 +256,11 @@ def save_summary(date_txt: str, bullets: List[str], source_hash: Optional[str] =
         return cur.lastrowid
 
 
-def get_last_reversible_action(user_id: Optional[str] = None, action_types: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+def get_last_reversible_action(user_id: str | None = None, action_types: list[str] | None = None) -> dict[str, Any] | None:
     init_storage()
     _ensure_ledger_schema()
     q = "SELECT * FROM ledger WHERE reversible = 1"
-    params: List[Any] = []
+    params: list[Any] = []
     if user_id:
         q += " AND user_id = ?"
         params.append(user_id)
@@ -295,7 +295,7 @@ def get_last_reversible_action(user_id: Optional[str] = None, action_types: Opti
 def prune_retention() -> None:
     """Prune according to retention policies (best-effort, synchronous)."""
     init_storage()
-    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=RETENTION_LEDGER_SECONDS)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(seconds=RETENTION_LEDGER_SECONDS)).isoformat()
     with _conn(LEDGER_DB) as c:
         c.execute("DELETE FROM ledger WHERE ts < ?", (cutoff,))
 

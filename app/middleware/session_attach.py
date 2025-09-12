@@ -4,7 +4,6 @@ import logging
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-from app.deps.user import get_current_user_id
 from app.security import _get_request_payload
 
 log = logging.getLogger(__name__)
@@ -59,7 +58,7 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
                                 scopes = [
                                     s.strip() for s in raw_scopes.split() if s.strip()
                                 ]
-                            elif isinstance(raw_scopes, (list, tuple, set)):
+                            elif isinstance(raw_scopes, list | tuple | set):
                                 scopes = list(raw_scopes)
                             else:
                                 scopes = []  # authenticated but no scopes
@@ -74,7 +73,7 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
                     raw_scopes = payload.get("scopes")
                     if isinstance(raw_scopes, str):
                         scopes = [s.strip() for s in raw_scopes.split() if s.strip()]
-                    elif isinstance(raw_scopes, (list, tuple, set)):
+                    elif isinstance(raw_scopes, list | tuple | set):
                         scopes = list(raw_scopes)
                     else:
                         scopes = []  # authenticated but no scopes

@@ -4,7 +4,6 @@ Debug script to check rate limiting behavior in test environment
 """
 import os
 import sys
-import asyncio
 
 # Set test environment
 os.environ['PYTEST_RUNNING'] = '1'
@@ -14,6 +13,7 @@ sys.path.insert(0, '.')
 
 # Import and configure test environment
 import app.env_utils as env_utils
+
 env_utils.load_env()
 
 print("=== Environment Check ===")
@@ -22,10 +22,11 @@ print(f"ENABLE_RATE_LIMIT_IN_TESTS: {os.getenv('ENABLE_RATE_LIMIT_IN_TESTS')}")
 print(f"IS_TEST: {env_utils.IS_TEST}")
 
 # Test middleware logic
-from app.middleware.rate_limit import RateLimitMiddleware
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
-from starlette.requests import Request
+
+from app.middleware.rate_limit import RateLimitMiddleware
+
 
 async def hello(request):
     return PlainTextResponse("Hello World")
@@ -48,5 +49,6 @@ print(f"should_disable (rate limiting): {should_disable}")
 
 print("\n=== Security Module Check ===")
 import app.security as security
+
 print(f"RATE_LIMIT: {security.RATE_LIMIT}")
 print(f"RATE_LIMIT_BURST: {security.RATE_LIMIT_BURST}")

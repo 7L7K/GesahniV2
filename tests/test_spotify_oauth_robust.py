@@ -3,13 +3,13 @@ Tests for the robust Spotify OAuth flow with our improvements
 """
 
 import time
-import pytest
-from unittest.mock import Mock, patch, AsyncMock
-from fastapi.testclient import TestClient
-from fastapi import HTTPException
+from unittest.mock import AsyncMock, patch
 
-from app.main import app
+import pytest
+from fastapi.testclient import TestClient
+
 from app.auth_store_tokens import TokenDAO
+from app.main import app
 from app.models.third_party_tokens import ThirdPartyToken
 
 

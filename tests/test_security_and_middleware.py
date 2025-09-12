@@ -11,7 +11,7 @@ def _app_with_security(monkeypatch, extra_env: dict | None = None):
             monkeypatch.setenv(k, str(v))
 
     import app.security as sec
-    from app.security.webhooks import verify_webhook, rotate_webhook_secret
+    from app.security.webhooks import rotate_webhook_secret, verify_webhook
 
     # clear buckets to avoid bleed between tests (best-effort; skip if unavailable)
     try:

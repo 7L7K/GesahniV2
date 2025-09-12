@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app import storage
 
 
 async def record_action(
     action_type: str,
-    idempotency_key: Optional[str],
-    user_id: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
+    idempotency_key: str | None,
+    user_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
     reversible: bool = True,
 ) -> bool:
     """Record an action using the centralized SQLite ledger.
@@ -40,7 +38,7 @@ async def record_action(
     return bool(inserted)
 
 
-async def get_last_reversible_action(user_id: Optional[str] = None, action_types: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+async def get_last_reversible_action(user_id: str | None = None, action_types: list[str] | None = None) -> dict[str, Any] | None:
     """Query the authoritative SQLite ledger for the latest reversible action.
 
     Returns a dict with keys: id, type, skill, slots, reversible, reverse_id, ts, idempotency_key, user_id

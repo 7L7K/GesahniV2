@@ -1,0 +1,189 @@
+name: Security Scan - ZAP + Semgrep
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run weekly on Mondays at 2 AM UTC
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    services:
+      # Start backend service
+      backend:
+        image: python:3.11-slim
+        ports:
+          - 8000:8000
+        env:
+          VECTOR_STORE: qdrant
+          QDRANT_URL: http://qdrant:6333
+        options: >-
+          --health-cmd "curl -f http://localhost:8000/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      # Start Qdrant vector database
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+        options: >-
+          --health-cmd "curl -f http://localhost:6333/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      # Start frontend service
+      frontend:
+        image: node:18-alpine
+        ports:
+          - 3000:3000
+        options: >-
+          --health-cmd "curl -f http://localhost:3000 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Setup backend
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install backend dependencies
+      working-directory: .
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # Setup frontend
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    # Start services
+    - name: Start backend
+      working-directory: .
+      run: |
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
+        echo $! > backend.pid
+        sleep 10
+
+    - name: Start frontend
+      working-directory: ./frontend
+      run: |
+        npm run dev &
+        echo $! > frontend.pid
+        sleep 15
+
+    # Wait for services to be ready
+    - name: Wait for backend readiness
+      run: |
+        for i in {1..30}; do
+          if curl -f http://localhost:8000/health; then
+            echo "Backend is ready"
+            break
+          fi
+          echo "Waiting for backend... ($i/30)"
+          sleep 2
+        done
+
+    - name: Wait for frontend readiness
+      run: |
+        for i in {1..30}; do
+          if curl -f http://localhost:3000; then
+            echo "Frontend is ready"
+            break
+          fi
+          echo "Waiting for frontend... ($i/30)"
+          sleep 2
+        done
+
+    # Run ZAP Baseline Scan on Frontend
+    - name: ZAP Scan - Frontend (localhost:3000)
+      uses: zaproxy/action-baseline@v0.10.0
+      with:
+        target: 'http://localhost:3000'
+        rules_file_name: 'zap-rules-frontend.conf'
+        docker_name: 'owasp/zap2docker-stable:latest'
+        cmd_options: '-a'
+
+    # Run ZAP Baseline Scan on Backend
+    - name: ZAP Scan - Backend (localhost:8000)
+      uses: zaproxy/action-baseline@v0.10.0
+      with:
+        target: 'http://localhost:8000'
+        rules_file_name: 'zap-rules-backend.conf'
+        docker_name: 'owasp/zap2docker-stable:latest'
+        cmd_options: '-a'
+
+    # Run Semgrep with custom rules
+    - name: Setup Semgrep
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: ./security/semgrep-rules/
+        output: semgrep-results.json
+        format: json
+
+    # Analyze Semgrep results
+    - name: Check Semgrep findings
+      id: semgrep-check
+      run: |
+        if [ -f semgrep-results.json ]; then
+          findings=$(jq '.results | length' semgrep-results.json)
+          echo "Semgrep found $findings issues"
+          echo "findings=$findings" >> $GITHUB_OUTPUT
+
+          if [ "$findings" -gt 0 ]; then
+            echo "::error::Semgrep found $findings security issues. Review the findings above."
+            jq -r '.results[] | "🔴 \(.check_id): \(.path):\(.start.line) - \(.extra.message)"' semgrep-results.json
+            exit 1
+          else
+            echo "✅ No security issues found by Semgrep"
+          fi
+        else
+          echo "No semgrep results file found"
+          echo "findings=0" >> $GITHUB_OUTPUT
+        fi
+
+    # Upload results
+    - name: Upload ZAP reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: zap-reports
+        path: |
+          zap-report-frontend.html
+          zap-report-backend.html
+
+    - name: Upload Semgrep results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: semgrep-results
+        path: semgrep-results.json
+
+    # Cleanup
+    - name: Cleanup services
+      if: always()
+      run: |
+        if [ -f backend.pid ]; then kill $(cat backend.pid) 2>/dev/null || true; fi
+        if [ -f frontend.pid ]; then kill $(cat frontend.pid) 2>/dev/null || true; fi

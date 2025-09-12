@@ -2,10 +2,12 @@
 
 from . import base as _base
 from .calendar_skill import CalendarSkill
+from .checkin_skill import CheckinSkill
 from .climate_skill import ClimateSkill
 from .clock_skill import ClockSkill
 from .cover_skill import CoverSkill
 from .currency_skill import CurrencySkill
+from .day_summary_skill import DaySummarySkill
 from .dictionary_skill import DictionarySkill
 from .door_lock_skill import DoorLockSkill
 from .entities_skill import EntitiesSkill  # “list all lights”
@@ -14,6 +16,7 @@ from .forecast_skill import ForecastSkill
 from .joke_skill import JokeSkill
 from .lights_skill import LightsSkill
 from .math_skill import MathSkill
+from .medication_skill import MedicationSkill
 from .music_skill import MusicSkill
 from .news_skill import NewsSkill
 from .notes_skill import NotesSkill
@@ -21,24 +24,21 @@ from .notify_skill import NotifySkill
 from .recipe_skill import RecipeSkill
 from .reminder_skill import ReminderSkill
 from .roku_skill import RokuSkill
+from .routine_skill import RoutineSkill
 from .scene_skill import SceneSkill
 from .script_skill import ScriptSkill
 from .search_skill import SearchSkill
 from .smalltalk_skill import SmalltalkSkill
 from .status_skill import StatusSkill
+from .suggestions_skill import SuggestionsSkill
 from .teach_skill import TeachSkill  # “my bedroom is Hija room”
 from .timer_skill import TimerSkill
 from .translate_skill import TranslateSkill
+from .undo_skill import UndoSkill
 from .unit_conversion_skill import UnitConversionSkill
 from .vacuum_skill import VacuumSkill
 from .weather_skill import WeatherSkill
 from .world_clock_skill import WorldClockSkill
-from .undo_skill import UndoSkill
-from .medication_skill import MedicationSkill
-from .checkin_skill import CheckinSkill
-from .routine_skill import RoutineSkill
-from .day_summary_skill import DaySummarySkill
-from .suggestions_skill import SuggestionsSkill
 
 try:
     from .explain_route_skill import ExplainRouteSkill  # type: ignore

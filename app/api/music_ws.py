@@ -3,15 +3,14 @@ from __future__ import annotations
 import logging
 import os
 import time as _t
-from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response, WebSocket
 
 from app.deps.user import get_current_user_id
 from app.security import verify_ws
 from app.ws_manager import get_ws_manager
-from .music_http import _build_state_payload
 
+from .music_http import _build_state_payload
 
 router = APIRouter(tags=["Music"])  # mounted under /v1
 
@@ -30,7 +29,6 @@ def _ws_origin_allowed(ws: WebSocket) -> bool:
 
 async def _broadcast(topic: str, payload: dict) -> None:
     """Enhanced WebSocket broadcasting using the connection manager."""
-    import asyncio as _aio
     import logging as _log
 
     logger = _log.getLogger(__name__)
@@ -138,14 +136,14 @@ async def ws_music(ws: WebSocket, _user_id: str = Depends(get_current_user_id)):
                 break
 
             data = raw.get("text") or raw.get("bytes")
-            if data == "pong" or (isinstance(data, (bytes, bytearray)) and bytes(data) == b"pong"):
+            if data == "pong" or (isinstance(data, bytes | bytearray) and bytes(data) == b"pong"):
                 last_pong = _t.monotonic()
                 conn_state.update_activity()
                 continue
 
             try:
                 import json
-                payload = json.loads(data) if isinstance(data, (str, bytes, bytearray)) else None
+                payload = json.loads(data) if isinstance(data, str | bytes | bytearray) else None
             except Exception:
                 payload = None
 

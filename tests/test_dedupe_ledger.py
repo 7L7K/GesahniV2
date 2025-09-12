@@ -1,4 +1,3 @@
-import asyncio
 from app import storage
 
 

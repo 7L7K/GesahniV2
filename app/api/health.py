@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+import os
 import time
+from typing import Any
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
-from typing import Any, Dict
-import os
 
 from .. import health_utils as hu
 from .. import metrics as _m
 from ..health import VendorHealthTracker
-from ..metrics import HEALTH_OK, HEALTH_DEPS_OK
+from ..metrics import HEALTH_DEPS_OK, HEALTH_OK
 
 router = APIRouter(tags=["Health"])  # unauthenticated health; not privileged
 
@@ -173,7 +173,6 @@ async def health_ready() -> JSONResponse:
 
     Always returns HTTP 200 - never 5xx. Degraded status is indicated in response body.
     """
-    import datetime
 
     # Component health checks
     components = {}
@@ -411,7 +410,7 @@ async def health_combined() -> JSONResponse:
             if isinstance(x, JSONResponse):
                 try:
                     body = x.body
-                    if isinstance(body, (bytes, bytearray)):
+                    if isinstance(body, bytes | bytearray):
                         return json.loads(body.decode())
                     if isinstance(body, str):
                         return json.loads(body)
@@ -453,8 +452,8 @@ async def health_vector_store() -> dict:
     Intended for automated smoke tests: returns `ok` + store_type + config
     and a minimal write/read smoke check when possible.
     """
-    from ..memory.unified_store import get_vector_store_info
     from ..memory.api import add_user_memory, get_store
+    from ..memory.unified_store import get_vector_store_info
 
     cfg = get_vector_store_info()
     out: dict = {"ok": True}
@@ -526,7 +525,7 @@ async def health_vector_store() -> dict:
         }
     }
 )
-async def health_qdrant() -> Dict[str, Any]:
+async def health_qdrant() -> dict[str, Any]:
     """Check Qdrant health status."""
     try:
         status = await hu.with_timeout(hu.check_qdrant, ms=500)
@@ -561,7 +560,7 @@ async def health_qdrant() -> Dict[str, Any]:
         }
     }
 )
-async def health_chroma() -> Dict[str, Any]:
+async def health_chroma() -> dict[str, Any]:
     """Check Chroma health status."""
     try:
         status = await hu.with_timeout(hu.check_chroma, ms=500)

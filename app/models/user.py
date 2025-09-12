@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Minimal user model using ``sqlite3`` for tests.
 
 The original project relied on SQLAlchemy which pulls in a fairly heavy

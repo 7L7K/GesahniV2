@@ -6,34 +6,23 @@ Imports route_prompt from entrypoint, not from app.router/__init__.py.
 from __future__ import annotations
 
 import asyncio
-import inspect
-import json
 import logging
-import os
 import uuid
-from datetime import UTC, datetime
+from time import monotonic
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from app import settings
-from app.deps.prompt_router import get_prompt_router
-from app.domain.prompt_router import PromptRouter
-from app.errors import BackendUnavailable
-from app.metrics import PROMPT_ROUTER_CALLS_TOTAL, PROMPT_ROUTER_FAILURES_TOTAL, ASK_LATENCY_MS, ASK_ERRORS_TOTAL
-import asyncio
-from time import monotonic
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.auth_core import require_scope as require_scope_core
-from app.deps.user import get_current_user_id, require_user
-from app.otel_utils import get_trace_id_hex, start_span
-from app.policy import moderation_precheck
-from app.security import verify_token, jwt_decode
-from app.telemetry import hash_user_id
+from app import settings
+from app.metrics import (
+    ASK_ERRORS_TOTAL,
+    ASK_LATENCY_MS,
+)
+from app.otel_utils import get_trace_id_hex
 
 # Import from leaf modules, not from app.router.__init__.py
-from .entrypoint import route_prompt
-from .policy import OPENAI_TIMEOUT_MS, OLLAMA_TIMEOUT_MS
+from .policy import OLLAMA_TIMEOUT_MS, OPENAI_TIMEOUT_MS
 
 logger = logging.getLogger(__name__)
 
@@ -258,7 +247,7 @@ async def ask_endpoint(
             response = await asyncio.wait_for(backend_callable(payload), timeout=timeout_seconds)
             backend_duration = monotonic() - backend_start
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             backend_duration = monotonic() - backend_start
             ASK_ERRORS_TOTAL.labels(backend=backend_name, error_type="timeout").inc()
 

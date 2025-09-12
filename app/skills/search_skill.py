@@ -1,6 +1,6 @@
 from __future__ import annotations
-# app/skills/search_skill.py
 
+# app/skills/search_skill.py
 import re
 
 import httpx

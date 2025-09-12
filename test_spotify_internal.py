@@ -3,12 +3,13 @@
 Test script that calls Spotify callback internally.
 """
 
-import sys
-import os
 import asyncio
-import jwt
+import os
+import sys
 import time
 from unittest.mock import Mock
+
+import jwt
 
 # Set test mode
 os.environ["SPOTIFY_TEST_MODE"] = "1"
@@ -16,9 +17,10 @@ os.environ["SPOTIFY_TEST_MODE"] = "1"
 # Add the app directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '.'))
 
-from app.api.spotify import spotify_callback
 from starlette.requests import Request
-from starlette.responses import Response
+
+from app.api.spotify import spotify_callback
+
 
 async def test_callback_internal():
     """Test the Spotify callback internally."""

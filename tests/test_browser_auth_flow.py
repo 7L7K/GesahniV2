@@ -4,12 +4,11 @@ Test to reproduce the browser authentication flow and identify logout triggers.
 This simulates the real user experience that causes logouts on certain pages.
 """
 
-import requests
-import json
-import time
 import random
-from typing import Dict, List, Tuple
+import time
 from urllib.parse import urlencode, urljoin
+
+import requests
 
 
 class BrowserAuthSimulator:
@@ -124,7 +123,7 @@ class BrowserAuthSimulator:
             print(f"❌ Login flow failed: {e}")
             return False
 
-    def test_page_navigation(self, pages: List[str]) -> List[Dict]:
+    def test_page_navigation(self, pages: list[str]) -> list[dict]:
         """Test navigating to various pages and check for logout triggers"""
         results = []
 
@@ -184,7 +183,7 @@ class BrowserAuthSimulator:
 
         return results
 
-    def check_auth_status(self) -> Dict:
+    def check_auth_status(self) -> dict:
         """Check current authentication status"""
         whoami_url = f"{self.base_url}/v1/whoami"
 
@@ -210,7 +209,7 @@ class BrowserAuthSimulator:
         except Exception as e:
             return {"error": str(e), "status_code": 0}
 
-    def test_api_calls_after_login(self) -> List[Dict]:
+    def test_api_calls_after_login(self) -> list[dict]:
         """Test various API calls that might trigger logouts"""
         api_endpoints = [
             "/v1/whoami",
@@ -267,7 +266,7 @@ class BrowserAuthSimulator:
 
         return results
 
-    def test_timing_patterns(self) -> List[Dict]:
+    def test_timing_patterns(self) -> list[dict]:
         """Test timing patterns that might cause race conditions"""
         results = []
         whoami_url = f"{self.base_url}/v1/whoami"

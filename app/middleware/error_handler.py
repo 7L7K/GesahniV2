@@ -5,11 +5,10 @@ from typing import Any
 
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
-from pydantic import ValidationError
 
-from ..error_envelope import build_error, shape_from_status
+from ..error_envelope import build_error
+from ..http_errors import translate_common_exception
 from ..logging_config import req_id_var
-from ..http_errors import translate_common_exception, translate_validation_error
 
 try:  # best-effort import
     from ..otel_utils import get_trace_id_hex

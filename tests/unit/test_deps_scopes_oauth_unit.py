@@ -16,7 +16,7 @@ from app.deps.scopes import (
 def _make_token(scopes=None) -> str:
     payload = {"user_id": "u1"}
     if scopes:
-        if isinstance(scopes, (list, tuple, set)):
+        if isinstance(scopes, list | tuple | set):
             payload["scope"] = " ".join(sorted(set(scopes)))
         else:
             payload["scope"] = str(scopes)

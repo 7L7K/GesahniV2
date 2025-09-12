@@ -3,12 +3,12 @@ import builtins
 import os
 import sys
 import types
-import unittest.mock
 from typing import Any
 
 import httpx
 import pytest  # noqa: E402
 from fastapi import HTTPException
+
 
 # Test for PROMPT_BACKEND guardrails
 def test_prompt_backend_dryrun_guardrails():
@@ -20,6 +20,7 @@ def test_prompt_backend_dryrun_guardrails():
 
     # Re-import after setting env var
     import importlib
+
     import app.router.policy as router_policy
     importlib.reload(router_policy)
 
@@ -142,11 +143,12 @@ def test_router_fallback_metrics_updated(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    from app import analytics
     # Some heavy deps (aiosqlite) are stubbed earlier, but ensure aiosqlite exposes
     # a Connection-like attribute expected by importers to avoid AttributeError
-    import sys, types
+    import sys
     import types as _types
+
+    from app import analytics
     # Provide a minimal aiosqlite shim that implements the async context manager
     class _DummyConn:
         async def __aenter__(self):
@@ -168,8 +170,6 @@ def test_router_fallback_metrics_updated(monkeypatch):
     mod.Connection = _DummyConn
     sys.modules["aiosqlite"] = mod
 
-    from app.main import create_app
-    from app.deps.prompt_router import get_prompt_router
 
     # Ensure auth is relaxed for this test by using dryrun backend
     os.environ["PROMPT_BACKEND"] = "dryrun"
@@ -592,8 +592,8 @@ def test_low_confidence_path_fallback_and_metrics(monkeypatch):
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
 
-    from app import router, metrics
-    from unittest.mock import patch
+
+    from app import metrics, router
 
     # Mock LLaMA as healthy, OpenAI as healthy
     monkeypatch.setattr(router, "_check_vendor_health", lambda vendor: True)
@@ -635,8 +635,8 @@ def test_cache_trace_vendor_and_cache_hit(monkeypatch):
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
 
+
     from app import router
-    from unittest.mock import patch
 
     # Mock cache hit scenario
     monkeypatch.setattr(router, "cache_answer", lambda *args, **kwargs: None)

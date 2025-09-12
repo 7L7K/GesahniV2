@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Detect recurring actions and propose schedule suggestions.
 
@@ -12,12 +13,12 @@ Output format: suggestion dict with {"type": "schedule", "proposal": str, "why":
 
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any
 
 from ..ledger import _inmem
 
 
-def find_repeating_actions(window_days: int = 14, min_occurrences: int = 3, tolerance_min: int = 30) -> List[Dict[str, Any]]:
+def find_repeating_actions(window_days: int = 14, min_occurrences: int = 3, tolerance_min: int = 30) -> list[dict[str, Any]]:
     now = datetime.now()
     start = now - timedelta(days=window_days)
     # group by action+metadata['drug'|'label'|'entity'] heuristically
@@ -38,7 +39,7 @@ def find_repeating_actions(window_days: int = 14, min_occurrences: int = 3, tole
         key = "|".join(key_parts)
         buckets.setdefault(key, []).append(ts)
 
-    suggestions: List[Dict[str, Any]] = []
+    suggestions: list[dict[str, Any]] = []
     for key, times in buckets.items():
         if len(times) < min_occurrences:
             continue

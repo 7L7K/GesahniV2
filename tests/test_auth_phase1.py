@@ -1,6 +1,4 @@
 import os
-import json
-import contextlib
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,7 +16,7 @@ def client():
 
 
 def _login_and_get_cookies(client: TestClient, username: str = "alice"):
-    r = client.post(f"/v1/auth/login", params={"username": username})
+    r = client.post("/v1/auth/login", params={"username": username})
     assert r.status_code == 200
     # Collect cookies
     jar = client.cookies

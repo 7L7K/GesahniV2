@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 import aiosqlite
+
 
 def _db_path() -> str:
     from .db.paths import resolve_db_path

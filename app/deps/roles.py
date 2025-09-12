@@ -15,7 +15,7 @@ def _normalize_roles(obj) -> set[str]:
         return set()
     if isinstance(obj, str):
         return {obj.strip().lower()} if obj.strip() else set()
-    if isinstance(obj, (list, tuple, set)):
+    if isinstance(obj, list | tuple | set):
         return {str(x).strip().lower() for x in obj if str(x).strip()}
     return set()
 

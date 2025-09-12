@@ -38,9 +38,7 @@ try:  # pragma: no cover - fall back if circuit flag missing
     from .llama_integration import llama_circuit_open  # type: ignore
 except Exception:  # pragma: no cover - defensive
     llama_circuit_open = False  # type: ignore
-from .memory.profile_store import CANONICAL_KEYS, profile_store
 from .memory.vector_store import lookup_cached_answer
-from .memory.write_policy import memory_write_policy
 from .model_picker import pick_model
 from .postcall import PostCallData, process_postcall
 from .prompt_builder import PromptBuilder
@@ -117,16 +115,11 @@ def normalize_error(error: Exception) -> ErrorType:
     # Handle HTTPX specific errors
     if isinstance(
         error,
-        (
-            httpx.TimeoutException,
-            httpx.ReadTimeout,
-            httpx.WriteTimeout,
-            httpx.PoolTimeout,
-        ),
+        httpx.TimeoutException | httpx.ReadTimeout | httpx.WriteTimeout | httpx.PoolTimeout,
     ):
         return ErrorType.NETWORK_TIMEOUT
 
-    if isinstance(error, (httpx.ConnectError, httpx.RemoteProtocolError)):
+    if isinstance(error, httpx.ConnectError | httpx.RemoteProtocolError):
         return ErrorType.NETWORK_TIMEOUT
 
     # Handle generic timeout errors
@@ -513,7 +506,13 @@ def start_openai_health_background_loop(loop_interval: float = 5.0) -> None:
             await asyncio.sleep(loop_interval)
 
     try:
-        asyncio.create_task(_bg())
+        # Register via startup background registry if available
+        try:
+            from app.startup import start_background_task  # type: ignore
+
+            start_background_task(_bg())
+        except Exception:
+            asyncio.create_task(_bg())
     except Exception:
         logger.debug("Failed to schedule openai health background loop", exc_info=True)
 
@@ -715,7 +714,6 @@ def _test_router_improvements():
 # Comprehensive test suite for router improvements
 async def run_router_tests():
     """Run comprehensive tests for all router improvements."""
-    import asyncio
     from datetime import datetime
 
     print("🧪 Running comprehensive router tests...")
@@ -779,7 +777,6 @@ async def _test_phase2_single_path():
     """Test Phase 2: Single execution path."""
     try:
         # Test that prompt building happens
-        from .prompt_builder import PromptBuilder
 
         # Mock a simple prompt routing scenario
         result = await route_prompt(
@@ -818,7 +815,6 @@ async def _test_phase4_observability():
     """Test Phase 4: Observability polish."""
     try:
         # Test golden trace logging (this would normally log)
-        from .telemetry import log_record_var
 
         # Create a routing decision with request_id
         decision = RoutingDecision(
@@ -859,7 +855,6 @@ async def _test_phase4_observability():
 def _test_phase5_diet():
     """Test Phase 5: Diet (unused code removal)."""
     try:
-        import inspect
 
         # Get all functions in router module
         router_functions = [name for name, obj in globals().items()

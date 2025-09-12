@@ -1,5 +1,5 @@
-from typing import Iterable, List
 import os
+from collections.abc import Iterable
 
 try:
     # pydantic v2 moved BaseSettings to pydantic-settings package
@@ -53,18 +53,18 @@ else:
 # ----------------------------------------------------------------------------
 
 
-def _split_csv(env_value: str | None, default: Iterable[str]) -> List[str]:
+def _split_csv(env_value: str | None, default: Iterable[str]) -> list[str]:
     raw = (env_value or "").strip()
     if not raw:
         return list(default)
     return [p.strip() for p in raw.split(",") if p.strip()]
 
 
-def allowed_gpt_models() -> List[str]:
+def allowed_gpt_models() -> list[str]:
     return _split_csv(os.getenv("ALLOWED_GPT_MODELS"), ["gpt-4o", "gpt-4", "gpt-3.5-turbo"])
 
 
-def allowed_llama_models() -> List[str]:
+def allowed_llama_models() -> list[str]:
     return _split_csv(os.getenv("ALLOWED_LLAMA_MODELS"), ["llama3", "llama3:latest", "llama3.1"])
 
 
@@ -168,7 +168,7 @@ def cache_max_entries() -> int:
         return 200
 
 
-def allowlist_models() -> List[str]:
+def allowlist_models() -> list[str]:
     return allowed_gpt_models() + allowed_llama_models()
 
 

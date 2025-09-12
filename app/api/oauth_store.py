@@ -10,17 +10,17 @@ development. Using Redis ensures transactions survive across instances
 behind a load balancer.
 """
 
-import logging
-import time
 import json
+import logging
 import os
 import pickle
-from typing import Any, Dict, Optional
+import time
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # In-memory store for development; use Redis in production
-_store: Dict[str, tuple[Dict[str, Any], float]] = {}
+_store: dict[str, tuple[dict[str, Any], float]] = {}
 
 # File-based store for cross-process sharing during testing
 _store_file = os.path.join(os.path.dirname(__file__), '..', '..', 'oauth_store.pkl')
@@ -73,7 +73,7 @@ def _get_redis_sync():
         return None
 
 
-def put_tx(tx_id: str, data: Dict[str, Any], ttl_seconds: int = 600) -> None:
+def put_tx(tx_id: str, data: dict[str, Any], ttl_seconds: int = 600) -> None:
     """
     Store OAuth transaction data keyed by transaction ID.
 
@@ -114,7 +114,7 @@ def put_tx(tx_id: str, data: Dict[str, Any], ttl_seconds: int = 600) -> None:
     })
 
 
-def pop_tx(tx_id: str) -> Optional[Dict[str, Any]]:
+def pop_tx(tx_id: str) -> dict[str, Any] | None:
     """
     Atomically fetch and delete OAuth transaction data.
 
@@ -221,7 +221,7 @@ def pop_tx(tx_id: str) -> Optional[Dict[str, Any]]:
     return data
 
 
-def debug_store() -> Dict[str, Any]:
+def debug_store() -> dict[str, Any]:
     """Debug function to show current store contents."""
     _load_store()
     return {
@@ -231,7 +231,7 @@ def debug_store() -> Dict[str, Any]:
         "store_file_size": os.path.getsize(_store_file) if os.path.exists(_store_file) else 0
     }
 
-def get_tx(tx_id: str) -> Optional[Dict[str, Any]]:
+def get_tx(tx_id: str) -> dict[str, Any] | None:
     """
     Fetch OAuth transaction data without deleting it.
 
@@ -337,7 +337,7 @@ def cleanup_expired() -> None:
         logger.debug("🧹 OAuth TX CLEANUP - No expired transactions")
 
 
-def dump_store() -> Dict[str, Any]:
+def dump_store() -> dict[str, Any]:
     """Debug function to dump current store state."""
     now = time.time()
     result = {

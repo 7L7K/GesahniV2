@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import aiosqlite
-import os
 import json
+import os
 import time
-from typing import Any, List, Optional
+
+import aiosqlite
 from cryptography.fernet import Fernet, InvalidToken
 
 from app.db.paths import resolve_db_path
-
 
 
 def _db_path() -> str:

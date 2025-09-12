@@ -10,7 +10,7 @@ async def test_privacy_forces_piper(monkeypatch):
     audio = await synthesize(
         text="My email is test@example.com", mode="utility", intent_hint="chat"
     )
-    assert isinstance(audio, (bytes, bytearray))
+    assert isinstance(audio, bytes | bytearray)
     assert len(audio) > 0
 
 
@@ -21,6 +21,6 @@ async def test_budget_blocks_openai(monkeypatch):
     from app.tts_orchestrator import synthesize
 
     audio = await synthesize(text="hello", mode="capture", intent_hint="story")
-    assert isinstance(audio, (bytes, bytearray))
+    assert isinstance(audio, bytes | bytearray)
     # Should get some audio (piper silence) even when capped
     assert len(audio) >= 0

@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { setTokens, apiFetch, bumpAuthEpoch } from '@/lib/api';
-import { sanitizeNextPath } from '@/lib/utils';
-import { safeNext } from '@/lib/urls';
+import { sanitizeNextPath, captureNextPathToBackend } from '@/lib/redirects';
+import { safeNext } from '@/lib/redirect-utils';
 import { Button } from '@/components/ui/button';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
@@ -17,17 +17,29 @@ function LoginPageInner() {
     const [loading, setLoading] = useState(false);
     const router = useRouter();
     const params = useSearchParams();
-    const next = sanitizeNextPath(params?.get('next') || null, '/');
+    // sanitizeNextPath prevents open redirects by rejecting absolute/protocol-relative
+    // URLs and auth paths that could cause redirect loops. This ensures users are only
+    // redirected to safe, same-origin application pages after login completion.
+    const next = sanitizeNextPath(params?.get('next') || null);
 
-    // Normalize nested/encoded `next` query parameters to prevent redirect loops.
-    // If the incoming `next` decodes to a login-related path or is deeply nested,
-    // replace the browser URL with a sanitized `next` (or remove it) once.
+    // Capture next parameter to backend gs_next cookie and normalize URL
     useEffect(() => {
         if (typeof window === 'undefined') return;
 
         // Read raw next directly from location.search to be resilient to Next's router updates
         const sp = new URLSearchParams(window.location.search);
         const rawNext = sp.get('next');
+
+        // Capture next path to backend if present
+        // sanitizeNextPath prevents open redirects by rejecting absolute/protocol-relative
+        // URLs and auth paths that could cause redirect loops. This ensures users are only
+        // redirected to safe, same-origin application pages after login completion.
+        if (rawNext) {
+            const sanitizedNext = sanitizeNextPath(rawNext);
+            // Fire-and-forget POST to backend to set gs_next cookie
+            captureNextPathToBackend(sanitizedNext);
+        }
+
         if (!rawNext) return;
 
         // If sessionStorage indicates we've already normalized, skip.
@@ -41,53 +53,25 @@ function LoginPageInner() {
         // If URL already marked sanitized, skip normalization to avoid loops
         if (sp.get('sanitized') === '1') return;
 
-        const sanitized = sanitizeNextPath(rawNext, '/');
-
+        // Always clean the URL by removing next param and replacing with /login
         try {
-            // If sanitized equals '/', remove next param from URL without navigation
-            if (sanitized === '/') {
-                try { window.sessionStorage && window.sessionStorage.setItem('sanitized_next_done', '1'); } catch { }
+            try { window.sessionStorage && window.sessionStorage.setItem('sanitized_next_done', '1'); } catch { }
 
-                // Prefer in-place URL replace to avoid navigation. If sessionStorage is blocked,
-                // also add a sanitized flag to the URL so other actors don't re-trigger normalization.
-                if (window.history && window.history.replaceState) {
-                    const u = new URL(window.location.href);
-                    u.searchParams.delete('next');
-                    u.searchParams.set('sanitized', '1');
-                    const newUrl = u.pathname + u.search;
-                    if (window.location.pathname + window.location.search !== newUrl) {
-                        window.history.replaceState(null, '', newUrl);
-                    }
-                } else {
-                    router.replace('/login');
-                }
-                return;
-            }
-
-            // If decoded raw differs from sanitized, replace URL once
-            let decodedRaw = rawNext;
-            try { decodedRaw = decodeURIComponent(rawNext); } catch { }
-
-            if (decodedRaw !== sanitized) {
-                try { window.sessionStorage && window.sessionStorage.setItem('sanitized_next_done', '1'); } catch { }
-
-                // Build new URL and include sanitized flag to prevent other actors from re-adding
-                // a nested/encoded `next` param when sessionStorage is unavailable.
+            // Clean URL to /login by removing next query param
+            if (window.history && window.history.replaceState) {
                 const u = new URL(window.location.href);
-                u.searchParams.set('next', sanitized);
+                u.searchParams.delete('next');
                 u.searchParams.set('sanitized', '1');
-                const newPath = u.pathname + u.search;
-                if (window.history && window.history.replaceState) {
-                    // Only replace if it would change the current URL to avoid loops
-                    if (window.location.pathname + window.location.search !== newPath) {
-                        window.history.replaceState(null, '', newPath);
-                    }
-                } else {
-                    router.replace(newPath);
+                const newUrl = u.pathname + u.search;
+                if (window.location.pathname + window.location.search !== newUrl) {
+                    window.history.replaceState(null, '', newUrl);
                 }
+            } else {
+                router.replace('/login');
             }
+            return;
         } catch (e) {
-            console.warn('Failed to normalize next param', e);
+            console.warn('Failed to clean URL', e);
         }
     }, [router]);
 
@@ -169,7 +153,7 @@ function LoginPageInner() {
         });
 
         try {
-            const endpoint = mode === 'login' ? '/v1/login' : '/v1/register';
+            const endpoint = mode === 'login' ? '/v1/auth/login' : '/v1/auth/register';
             console.info('LOGIN api.request', {
                 endpoint,
                 method: 'POST',
@@ -356,6 +340,36 @@ function LoginPageInner() {
                                 {loading ? 'Processing...' : (mode === 'login' ? 'Sign In' : 'Create Account')}
                             </Button>
                         </div>
+
+                        {/* Mock Login Button for E2E Testing */}
+                        {process.env.NODE_ENV === 'development' && (
+                            <div className="mt-4">
+                                <Button
+                                    type="button"
+                                    onClick={async () => {
+                                        setError('');
+                                        setLoading(true);
+                                        try {
+                                            // Mock successful login for testing
+                                            setTokens('mock_access_token_e2e', 'mock_refresh_token_e2e');
+                                            bumpAuthEpoch();
+                                            const authOrchestrator = getAuthOrchestrator();
+                                            await authOrchestrator.refreshAuth();
+                                            router.replace(safeNext(params?.get('next')) || '/');
+                                        } catch (err) {
+                                            setError('Mock login failed');
+                                        } finally {
+                                            setLoading(false);
+                                        }
+                                    }}
+                                    disabled={loading}
+                                    className="w-full flex justify-center py-2 px-4 border border-dashed rounded-md shadow-sm text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
+                                    data-testid="mock-login-button"
+                                >
+                                    {loading ? 'Processing...' : 'Mock Login (E2E Test)'}
+                                </Button>
+                            </div>
+                        )}
 
                         <div className="text-center">
                             <button

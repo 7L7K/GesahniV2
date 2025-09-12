@@ -11,8 +11,8 @@ import time
 from fastapi import Request, Response
 from fastapi.testclient import TestClient
 
-from app.web.cookies import clear_auth_cookies, set_auth_cookies
 from app.tokens import create_access_token, create_refresh_token
+from app.web.cookies import clear_auth_cookies, set_auth_cookies
 
 
 def create_test_tokens(user_id: str, **kwargs) -> dict[str, str]:

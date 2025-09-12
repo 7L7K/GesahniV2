@@ -271,7 +271,7 @@ async def call_service(domain: str, service: str, data: dict) -> Any:
                 "turn_on",
             }:
                 ids = (data or {}).get("entity_id")
-                if isinstance(ids, (list, tuple)):
+                if isinstance(ids, list | tuple):
                     max_group = int(os.getenv("HA_CONFIRM_GROUP_SIZE", "5") or 5)
                     if len(ids) >= max_group:
                         needs_confirm = True

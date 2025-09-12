@@ -1,6 +1,8 @@
 import importlib
-from fastapi.testclient import TestClient
 from collections import Counter
+
+from fastapi.testclient import TestClient
+
 
 def _paths(app):
     return [getattr(r, "path", None) for r in app.routes if getattr(r, "path", None)]

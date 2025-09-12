@@ -6,8 +6,8 @@ This script verifies that the Google OAuth URL generation includes
 the required 'openid' scope for ID token issuance.
 """
 
-import sys
 import os
+import sys
 
 # Add the app directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
@@ -76,6 +76,7 @@ def test_oauth_flow_simulation():
     try:
         # Test the JWT decode function
         import jwt
+
         from app.security import jwt_decode
 
         # Create a mock Google ID token payload

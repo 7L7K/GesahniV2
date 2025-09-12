@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """High level vector store API used throughout the project."""
 
 

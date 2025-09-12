@@ -13,13 +13,13 @@ Protection Modes:
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
-from fastapi import Depends, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi import HTTPException, Request
 
-from .deps.user import get_current_user_id, require_user
 from .csrf import _extract_csrf_header
+from .deps.user import require_user
 
 logger = logging.getLogger(__name__)
 

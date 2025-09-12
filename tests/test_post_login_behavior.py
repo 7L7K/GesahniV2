@@ -4,11 +4,9 @@ Test post-login behavior to identify what causes logouts after successful authen
 This focuses on the scenario where a user is already logged in but loses authentication on certain pages.
 """
 
-import requests
-import json
 import time
-import random
-from typing import Dict, List, Tuple
+
+import requests
 
 
 class PostLoginTester:
@@ -46,7 +44,7 @@ class PostLoginTester:
         print("✅ Simulated authenticated session")
         return True
 
-    def test_whoami_patterns(self) -> List[Dict]:
+    def test_whoami_patterns(self) -> list[dict]:
         """Test whoami call patterns that might cause issues"""
         results = []
         whoami_url = f"{self.base_url}/v1/whoami"
@@ -94,7 +92,7 @@ class PostLoginTester:
 
         return results
 
-    def _make_whoami_call(self, url: str, extra_headers: Dict = None) -> Dict:
+    def _make_whoami_call(self, url: str, extra_headers: dict = None) -> dict:
         """Make a single whoami call and analyze the response"""
         headers = {}
         if extra_headers:
@@ -133,7 +131,7 @@ class PostLoginTester:
         except Exception as e:
             return {"error": str(e), "status_code": 0}
 
-    def test_api_endpoint_patterns(self) -> List[Dict]:
+    def test_api_endpoint_patterns(self) -> list[dict]:
         """Test various API endpoints that might trigger logouts"""
         results = []
         endpoints = [
@@ -199,7 +197,7 @@ class PostLoginTester:
 
         return results
 
-    def test_rate_limiting_scenarios(self) -> List[Dict]:
+    def test_rate_limiting_scenarios(self) -> list[dict]:
         """Test scenarios that might trigger rate limiting and cause logouts"""
         results = []
         whoami_url = f"{self.base_url}/v1/whoami"
@@ -231,7 +229,7 @@ class PostLoginTester:
 
         return results
 
-    def test_cookie_behavior(self) -> Dict:
+    def test_cookie_behavior(self) -> dict:
         """Test cookie behavior and potential issues"""
         print("🍪 Analyzing cookie behavior...")
 
@@ -268,7 +266,7 @@ class PostLoginTester:
             },
         }
 
-    def test_frontend_page_behavior(self) -> List[Dict]:
+    def test_frontend_page_behavior(self) -> list[dict]:
         """Test frontend pages that might cause logout issues"""
         results = []
         pages = [

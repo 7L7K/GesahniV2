@@ -1,13 +1,16 @@
 """Test chaos mode resilience drills."""
 
-import asyncio
-import pytest
 import os
 from unittest.mock import patch
 
+import pytest
+
 from app.chaos import (
-    is_chaos_enabled, should_inject_chaos, get_chaos_latency,
-    chaos_wrap_async, chaos_vector_operation_sync
+    chaos_vector_operation_sync,
+    chaos_wrap_async,
+    get_chaos_latency,
+    is_chaos_enabled,
+    should_inject_chaos,
 )
 
 
@@ -23,6 +26,7 @@ class TestChaosMode:
         with patch.dict(os.environ, {"CHAOS_MODE": "1"}):
             # Need to reload the module to pick up env changes
             import importlib
+
             import app.chaos
             importlib.reload(app.chaos)
             assert app.chaos.is_chaos_enabled()

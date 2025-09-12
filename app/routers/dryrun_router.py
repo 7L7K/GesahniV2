@@ -1,10 +1,10 @@
 """Dry-run backend router for testing and development."""
 
-from typing import Dict, Any
 import asyncio
+from typing import Any
 
 
-async def dryrun_router(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def dryrun_router(payload: dict[str, Any]) -> dict[str, Any]:
     """Dry-run backend with standardized response format.
 
     Always succeeds and returns mock data for testing.

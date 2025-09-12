@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 # app/memory/vector_store/__init__.py
 """
 Compatibility wrapper re-exporting vector-store API.

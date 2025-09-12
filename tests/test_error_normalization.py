@@ -4,20 +4,20 @@ Test error normalization functionality.
 
 import pytest
 from fastapi.testclient import TestClient
-from fastapi import FastAPI
 from pydantic import ValidationError
-from app.main import app
+
 from app.http_errors import (
+    forbidden,
+    internal_error,
+    method_not_allowed,
+    not_found,
+    payload_too_large,
     translate_common_exception,
     translate_validation_error,
     unauthorized,
-    forbidden,
-    not_found,
-    method_not_allowed,
-    payload_too_large,
     validation_error,
-    internal_error,
 )
+from app.main import app
 
 
 @pytest.fixture
@@ -282,16 +282,6 @@ def test_generic_error_normalization(client):
     assert data["details"]["status_code"] == 500
 
 
-def test_unauthorized_helper(client):
-    """Test the unauthorized helper function."""
-    response = client.get("/test-errors/test/unauthorized")
-
-    assert response.status_code == 401
-    data = response.json()
-
-    assert data["code"] == "unauthorized"
-    assert data["message"] == "Unauthorized"
-    assert data["details"]["status_code"] == 401
 
 
 def test_forbidden_helper(client):

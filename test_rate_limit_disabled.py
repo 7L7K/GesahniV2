@@ -13,11 +13,14 @@ sys.path.insert(0, '.')
 
 # Import conftest to set up test environment
 import app.env_utils as env_utils
+
 env_utils.load_env()
 
 # Import app
-from app.main import app
 from fastapi.testclient import TestClient
+
+from app.main import app
+
 
 def test_rate_limit_disabled():
     """Test that rate limiting is disabled in test environment."""

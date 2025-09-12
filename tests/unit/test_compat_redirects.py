@@ -5,11 +5,11 @@ to their canonical v1 API paths, preserving HTTP methods and providing clear
 migration paths for clients.
 """
 
+
 import pytest
-from unittest.mock import patch
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from fastapi.responses import RedirectResponse
+from fastapi.testclient import TestClient
 
 
 class TestCompatRedirects:

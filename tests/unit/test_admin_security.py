@@ -10,14 +10,11 @@ from __future__ import annotations
 import importlib
 import os
 import time
-from typing import List
 
 import jwt
 import pytest
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from app.deps.roles import require_admin
 
 
 @pytest.fixture
@@ -43,8 +40,8 @@ def client():
         app.add_middleware(SessionAttachMiddleware)
 
         # Import and include routers in the correct order to match production
-        from app.router.compat_api import router as compat_router
         from app.router.admin_api import router as admin_router
+        from app.router.compat_api import router as compat_router
 
         app.include_router(compat_router, prefix="")
         app.include_router(admin_router, prefix="/v1/admin")
@@ -56,7 +53,7 @@ def client():
     return TestClient(app)
 
 
-def _create_jwt_token(scopes: List[str] = None) -> str:
+def _create_jwt_token(scopes: list[str] = None) -> str:
     """Create a valid JWT token with specified scopes."""
     key = os.environ.get("JWT_SECRET", "x" * 64)
     now = int(time.time())

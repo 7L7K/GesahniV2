@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import aiosqlite
 
 from .models.user_stats import UserStats
 
+
 def _db_path() -> Path:
-    import os
-    from pathlib import Path
     from .db.paths import resolve_db_path
     p = resolve_db_path("USER_DB", "users.db")
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -70,7 +67,7 @@ class UserDAO:
 
     async def increment_login(self, user_id: str) -> None:
         conn = await self._get_conn()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         await conn.execute(
             """
             UPDATE user_stats
@@ -89,7 +86,7 @@ class UserDAO:
         )
         await conn.commit()
 
-    async def get_stats(self, user_id: str) -> Optional[UserStats]:
+    async def get_stats(self, user_id: str) -> UserStats | None:
         """Get user statistics by user ID."""
         conn = await self._get_conn()
         async with conn.execute(
@@ -106,7 +103,7 @@ class UserDAO:
             request_count=row[2],
         )
 
-    async def get_by_id(self, user_id: str) -> Optional[UserStats]:
+    async def get_by_id(self, user_id: str) -> UserStats | None:
         """Get user statistics by user ID (alias for get_stats)."""
         return await self.get_stats(user_id)
 
@@ -133,6 +130,16 @@ class UserDAO:
         # This method exists for interface consistency
         return True
 
+    async def close(self) -> None:
+        """Close persistent aiosqlite connection if open."""
+        conn = getattr(self, "_conn", None)
+        if conn is not None:
+            try:
+                await conn.close()
+            except Exception:
+                pass
+            self._conn = None
+
 
 user_dao = UserDAO(_db_path())
 
@@ -141,3 +148,11 @@ UserStore = UserDAO
 user_store = user_dao
 
 __all__ = ["UserDAO", "UserStore", "user_dao", "user_store"]
+
+
+# module-level helper
+async def close_user_store() -> None:
+    try:
+        await user_dao.close()
+    except Exception:
+        pass

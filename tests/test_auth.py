@@ -21,6 +21,7 @@ def _client(monkeypatch):
 
     # Initialize database tables
     import asyncio
+
     from app.db import init_db_once
 
     asyncio.run(init_db_once())

@@ -6,9 +6,9 @@ These tests verify that:
 3. OpenAPI schema shows only canonical routes, not legacy or debug endpoints
 """
 
-import os
 import pytest
 from fastapi.testclient import TestClient
+
 from app.main import create_app
 
 
@@ -53,7 +53,7 @@ class TestMusicRouting:
 
         # Should not be a redirect
         assert response.status_code != 308, \
-            f"Should not get 308 redirect for canonical /v1/state"
+            "Should not get 308 redirect for canonical /v1/state"
 
     def test_canonical_spotify_routes_respond_normally(self, client: TestClient):
         """Test that canonical /v1/spotify routes respond normally (not redirects)."""
@@ -65,7 +65,7 @@ class TestMusicRouting:
 
         # Should not be a redirect
         assert response.status_code != 308, \
-            f"Should not get 308 redirect for canonical /v1/spotify/status"
+            "Should not get 308 redirect for canonical /v1/spotify/status"
 
     def test_openapi_schema_excludes_debug_endpoints(self, client: TestClient):
         """Test that debug and test-only endpoints are excluded from OpenAPI schema."""

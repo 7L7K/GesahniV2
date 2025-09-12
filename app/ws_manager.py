@@ -14,20 +14,21 @@ import asyncio
 import logging
 import time
 import weakref
-from typing import Any, Dict, Optional, Set
 from dataclasses import dataclass, field
+from typing import Any
 
 from fastapi import WebSocket
+
 from .ws_metrics import (
-    record_ws_connection,
-    record_ws_disconnection,
-    record_ws_message_sent,
-    record_ws_message_failed,
     record_ws_broadcast,
     record_ws_broadcast_failed,
+    record_ws_connection,
+    record_ws_disconnection,
     record_ws_error,
-    record_ws_heartbeat_sent,
     record_ws_heartbeat_failed,
+    record_ws_heartbeat_sent,
+    record_ws_message_failed,
+    record_ws_message_sent,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class WSConnectionState:
     heartbeat_interval: float = 30.0
     max_idle_time: float = 300.0  # 5 minutes
     is_alive: bool = True
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         self.websocket_ref = weakref.ref(self.websocket)
@@ -90,10 +91,10 @@ class WSConnectionManager:
     """Centralized WebSocket connection manager."""
 
     def __init__(self):
-        self._connections: Dict[str, WSConnectionState] = {}
+        self._connections: dict[str, WSConnectionState] = {}
         self._lock = asyncio.Lock()
-        self._cleanup_task: Optional[asyncio.Task] = None
-        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
+        self._heartbeat_task: asyncio.Task | None = None
 
     async def start(self):
         """Start background cleanup and heartbeat tasks."""
@@ -168,7 +169,7 @@ class WSConnectionManager:
                 logger.info("ws.manager.remove: user_id=%s endpoint=%s duration=%.2f connections=%d",
                            user_id, endpoint, duration, len(self._connections))
 
-    def get_connection(self, user_id: str) -> Optional[WSConnectionState]:
+    def get_connection(self, user_id: str) -> WSConnectionState | None:
         """Get connection state for a user."""
         return self._connections.get(user_id)
 
@@ -180,7 +181,7 @@ class WSConnectionManager:
         """Get connections filtered by metadata."""
         return [conn for conn in self._connections.values() if conn.metadata.get(key) == value]
 
-    async def broadcast_to_all(self, message: dict, exclude_user_ids: Optional[Set[str]] = None):
+    async def broadcast_to_all(self, message: dict, exclude_user_ids: set[str] | None = None):
         """Broadcast message to all connections."""
         exclude = exclude_user_ids or set()
         connections = [conn for uid, conn in self._connections.items() if uid not in exclude and conn.is_alive]

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Iterable, Tuple
+from collections.abc import Iterable
 from dataclasses import dataclass
-from .providers.base import MusicProvider, Device, Track, PlaybackState
-from . import policy
+
+from .providers.base import MusicProvider
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ class MusicOrchestrator:
         if p:
             await p.set_volume(level)
 
-    async def search(self, term: str, types: Tuple[str, ...] = ("track", "artist", "album", "playlist")) -> dict:
+    async def search(self, term: str, types: tuple[str, ...] = ("track", "artist", "album", "playlist")) -> dict:
         p = self._provider_for()
         if not p:
             return {}

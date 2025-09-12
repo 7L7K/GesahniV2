@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import os
-from typing import Optional
 
 from cryptography.fernet import Fernet, InvalidToken
 

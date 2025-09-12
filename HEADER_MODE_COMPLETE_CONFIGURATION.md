@@ -63,8 +63,18 @@ if (res.status === 401 && auth) {
   if (typeof document !== "undefined") {
     try {
       document.cookie = "auth_hint=0; path=/; max-age=300";
-      // Redirect to sign-in page
-      window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+      // Post next path to backend and redirect to sign-in page
+      fetch('/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: '__capture_next__',
+          password: '__capture_next__',
+          next: window.location.pathname + window.location.search
+        })
+      }).finally(() => {
+        window.location.href = '/login';
+      });
     } catch { /* ignore SSR errors */ }
   }
 }

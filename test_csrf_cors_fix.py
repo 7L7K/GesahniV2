@@ -35,7 +35,7 @@ def test_cors_middleware():
 
     # Import CORS middleware and settings
     from app.middleware.cors import CorsMiddleware
-    from app.settings_cors import get_cors_origins, get_cors_allow_credentials
+    from app.settings_cors import get_cors_allow_credentials, get_cors_origins
 
     # Test CORS settings
     origins = get_cors_origins()
@@ -63,8 +63,9 @@ def test_csrf_enforcement():
     print("Testing CSRF enforcement...")
 
     # Test the _extract_csrf_header function
-    from app.csrf import _extract_csrf_header
     from unittest.mock import Mock
+
+    from app.csrf import _extract_csrf_header
 
     # Create mock request
     request = Mock()

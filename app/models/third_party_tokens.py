@@ -3,7 +3,6 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -13,29 +12,29 @@ class ThirdPartyToken:
     user_id: str
     provider: str  # 'spotify', 'google', 'apple', etc.
     access_token: str
-    identity_id: Optional[str] = None
+    identity_id: str | None = None
     # Provider-specific subject identifier (e.g., Google OIDC `sub`). Optional for non-OIDC providers.
-    provider_sub: Optional[str] = None
+    provider_sub: str | None = None
     # OIDC issuer for the provider (e.g., https://accounts.google.com)
-    provider_iss: Optional[str] = None
+    provider_iss: str | None = None
     # Encrypted access token blob (bytes) stored in DB
-    access_token_enc: Optional[bytes] = None
+    access_token_enc: bytes | None = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    refresh_token: Optional[str] = None
+    refresh_token: str | None = None
     # Encrypted refresh token blob (bytes) stored in DB
-    refresh_token_enc: Optional[bytes] = None
+    refresh_token_enc: bytes | None = None
     # Envelope/key version for rotation
     envelope_key_version: int = 1
     last_refresh_at: int = 0
     refresh_error_count: int = 0
-    scopes: Optional[str] = None
+    scopes: str | None = None
     # Optional JSON string to track per-service state
-    service_state: Optional[str] = None
+    service_state: str | None = None
     # Audit of scopes union
     scope_union_since: int = 0
-    scope_last_added_from: Optional[str] = None
+    scope_last_added_from: str | None = None
     # Lineage: if replaced, which new row superseded this one
-    replaced_by_id: Optional[str] = None
+    replaced_by_id: str | None = None
     expires_at: int = 0  # epoch seconds
     created_at: int = field(default_factory=lambda: int(time.time()))
     updated_at: int = field(default_factory=lambda: int(time.time()))
@@ -194,11 +193,11 @@ class TokenQuery:
 @dataclass
 class TokenUpdate:
     """Fields that can be updated on a token."""
-    access_token: Optional[str] = None
-    refresh_token: Optional[str] = None
-    scopes: Optional[str] = None
-    expires_at: Optional[int] = None
-    is_valid: Optional[bool] = None
+    access_token: str | None = None
+    refresh_token: str | None = None
+    scopes: str | None = None
+    expires_at: int | None = None
+    is_valid: bool | None = None
 
     def has_updates(self) -> bool:
         """Check if any fields have been set for update."""

@@ -5,10 +5,9 @@ import pathlib
 import re
 
 from .. import home_assistant as ha
-from .base import Skill
-from .parsers import resolve_entity
 from ..music.orchestrator import MusicOrchestrator
 from ..music.providers.spotify_provider import SpotifyProvider
+from .base import Skill
 
 _MAP_PATH = pathlib.Path(__file__).with_name("artist_map.json")
 try:

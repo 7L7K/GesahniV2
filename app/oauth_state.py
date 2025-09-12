@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import base64
-import hmac
 import hashlib
+import hmac
 import os
 import secrets
 import time
@@ -49,7 +49,7 @@ def make_state(user_id: str, session_id: str) -> str:
     core = f"{user_id}|{session_id}|{nonce}|{ts}"
     sig = _sign(core)
     if sig:
-        raw = f"{core}|{sig}".encode("utf-8")
+        raw = f"{core}|{sig}".encode()
     else:
         raw = core.encode("utf-8")
     return _base64url_encode(raw)

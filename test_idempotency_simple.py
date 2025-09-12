@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Simple test script for idempotency functionality."""
 
-import subprocess
 import json
+import subprocess
+
 
 def run_curl(cmd):
     """Run curl command and return response."""

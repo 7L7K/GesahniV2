@@ -7,18 +7,18 @@ rate limiting, session management, and observability.
 """
 
 # Strict re-exports to avoid circular imports and None values
+from ..csrf import CSRFMiddleware
 from .audit_mw import AuditMiddleware
 from .cors_cache_fix import SafariCORSCacheFixMiddleware
-from ..csrf import CSRFMiddleware
 from .custom import (
     EnhancedErrorHandlingMiddleware,
     ReloadEnvMiddleware,
     SilentRefreshMiddleware,
 )
+from .deprecation_mw import DeprecationHeaderMiddleware
 from .error_handler import ErrorHandlerMiddleware
 from .loader import add_mw
 from .metrics_mw import MetricsMiddleware
-from .deprecation_mw import DeprecationHeaderMiddleware
 from .middleware_core import (
     DedupMiddleware,
     HealthCheckFilterMiddleware,

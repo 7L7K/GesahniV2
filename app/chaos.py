@@ -16,7 +16,8 @@ import logging
 import os
 import random
 import time
-from typing import Optional, Callable, Awaitable, Any
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ async def inject_latency(event_type: str, operation: str) -> None:
 
     # Record chaos latency metric
     try:
-        from app.metrics import CHAOS_LATENCY_SECONDS, CHAOS_EVENTS_TOTAL
+        from app.metrics import CHAOS_EVENTS_TOTAL, CHAOS_LATENCY_SECONDS
         CHAOS_LATENCY_SECONDS.labels(event_type=event_type, operation=operation).observe(latency)
         CHAOS_EVENTS_TOTAL.labels(event_type=f"{event_type}_latency", operation=operation, result="injected").inc()
     except Exception:

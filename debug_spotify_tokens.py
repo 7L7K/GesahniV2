@@ -3,9 +3,9 @@
 Debug script to check Spotify tokens in the database.
 """
 
-import sqlite3
 import os
-from pathlib import Path
+import sqlite3
+
 
 def check_spotify_tokens():
     """Check for Spotify tokens in the database."""
@@ -65,7 +65,7 @@ def check_spotify_tokens():
 
         for row in rows:
             # Unpack based on actual column count
-            row_data = dict(zip(column_names, row))
+            row_data = dict(zip(column_names, row, strict=False))
 
             print("\n🎵 Spotify Token Details:")
             print(f"  ID: {row_data.get('id')}")

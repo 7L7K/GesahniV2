@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import List, Optional, Set
 
 from fastapi import Request, Response
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import PlainTextResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
@@ -92,11 +91,11 @@ class CorsMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app,
-        allow_origins: List[str] | None = None,
+        allow_origins: list[str] | None = None,
         allow_credentials: bool = True,
-        allow_methods: List[str] | None = None,
-        allow_headers: List[str] | None = None,
-        expose_headers: List[str] | None = None,
+        allow_methods: list[str] | None = None,
+        allow_headers: list[str] | None = None,
+        expose_headers: list[str] | None = None,
         max_age: int | None = None,
     ):
         super().__init__(app)
@@ -277,7 +276,7 @@ class CorsMiddleware(BaseHTTPMiddleware):
 class CorsPreflightMiddleware(BaseHTTPMiddleware):
     """Production-ready CORS preflight middleware with allowlist enforcement and metrics."""
 
-    def __init__(self, app, allow_origins: List[str] | None = None, **kwargs):
+    def __init__(self, app, allow_origins: list[str] | None = None, **kwargs):
         super().__init__(app)
 
         # Use environment config if no explicit origins provided

@@ -4,7 +4,6 @@ Debug script to test frontend-to-backend Spotify communication
 """
 import asyncio
 import json
-import os
 import sys
 
 # Add current directory to path

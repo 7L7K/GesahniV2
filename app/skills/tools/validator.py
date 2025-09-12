@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 # Policy defaults
 MAX_DURATION_S = 7 * 24 * 3600  # 7 days
@@ -11,7 +11,7 @@ MIN_TEMP = 5
 TEMP_CONFIRM_DELTA = 5
 
 
-def validate_duration(seconds: Optional[int]) -> Tuple[bool, str, bool]:
+def validate_duration(seconds: int | None) -> tuple[bool, str, bool]:
     """Validate duration seconds.
 
     Returns (allowed, explanation, requires_confirmation)
@@ -23,7 +23,7 @@ def validate_duration(seconds: Optional[int]) -> Tuple[bool, str, bool]:
     return True, "", False
 
 
-def validate_when(parsed_when: Any) -> Tuple[bool, str, bool]:
+def validate_when(parsed_when: Any) -> tuple[bool, str, bool]:
     """Ensure 'when' is a concrete datetime (not a recurrence string)."""
     if parsed_when is None:
         return False, "Missing or ambiguous time ('when').", False
@@ -34,7 +34,7 @@ def validate_when(parsed_when: Any) -> Tuple[bool, str, bool]:
     return False, "Unsupported 'when' format.", False
 
 
-def validate_entity_resolution(res: Dict[str, Any]) -> Tuple[bool, str, bool]:
+def validate_entity_resolution(res: dict[str, Any]) -> tuple[bool, str, bool]:
     """Validate resolver output; require disambiguation if ambiguous."""
     if not res:
         return False, "Could not resolve entity.", False
@@ -51,7 +51,7 @@ def validate_entity_resolution(res: Dict[str, Any]) -> Tuple[bool, str, bool]:
     return True, "", False
 
 
-def validate_level(level: Optional[int]) -> Tuple[bool, str, bool]:
+def validate_level(level: int | None) -> tuple[bool, str, bool]:
     if level is None:
         return False, "Missing level/brightness.", False
     if not (0 <= level <= 100):
@@ -59,7 +59,7 @@ def validate_level(level: Optional[int]) -> Tuple[bool, str, bool]:
     return True, "", False
 
 
-def validate_temperature(target_temp: Optional[int], current_temp: Optional[int] = None) -> Tuple[bool, str, bool]:
+def validate_temperature(target_temp: int | None, current_temp: int | None = None) -> tuple[bool, str, bool]:
     if target_temp is None:
         return False, "Missing temperature.", False
     if not (MIN_TEMP <= target_temp <= MAX_TEMP):
@@ -69,7 +69,7 @@ def validate_temperature(target_temp: Optional[int], current_temp: Optional[int]
     return True, "", False
 
 
-def validate_lock_action(action: str) -> Tuple[bool, str, bool]:
+def validate_lock_action(action: str) -> tuple[bool, str, bool]:
     """Locks/unlocks: require confirmation for unlocks by default."""
     if action.lower() == "unlock":
         return False, "Unlocking doors requires explicit confirmation.", True

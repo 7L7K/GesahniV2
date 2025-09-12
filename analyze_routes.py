@@ -3,18 +3,17 @@
 Script to analyze routes defined in codebase vs routes referenced in tests.
 """
 
-import os
-import re
 import glob
+import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Set, List, Tuple
+
 
 class RouteAnalyzer:
     def __init__(self, base_path: str):
         self.base_path = Path(base_path)
-        self.code_routes: Dict[str, Set[str]] = defaultdict(set)  # path -> {methods}
-        self.test_routes: Dict[str, Set[str]] = defaultdict(set)  # path -> {methods}
+        self.code_routes: dict[str, set[str]] = defaultdict(set)  # path -> {methods}
+        self.test_routes: dict[str, set[str]] = defaultdict(set)  # path -> {methods}
 
     def extract_code_routes(self):
         """Extract routes from FastAPI decorators in the codebase."""
@@ -24,7 +23,7 @@ class RouteAnalyzer:
         # Find all Python files in app directory
         for py_file in glob.glob(str(self.base_path / "app/**/*.py"), recursive=True):
             try:
-                with open(py_file, 'r', encoding='utf-8') as f:
+                with open(py_file, encoding='utf-8') as f:
                     content = f.read()
 
                 # Extract router definitions
@@ -43,7 +42,7 @@ class RouteAnalyzer:
         app_pattern = r'@app\.(\w+)\s*\(\s*["\']([^"\']+)["\']'
         for py_file in glob.glob(str(self.base_path / "app/**/*.py"), recursive=True):
             try:
-                with open(py_file, 'r', encoding='utf-8') as f:
+                with open(py_file, encoding='utf-8') as f:
                     content = f.read()
 
                 matches = re.findall(app_pattern, content)
@@ -71,7 +70,7 @@ class RouteAnalyzer:
 
         for py_file in test_files:
             try:
-                with open(py_file, 'r', encoding='utf-8') as f:
+                with open(py_file, encoding='utf-8') as f:
                     content = f.read()
 
                 # Extract client calls
@@ -105,7 +104,7 @@ class RouteAnalyzer:
         path = path.split('?')[0].split('#')[0]
         return path
 
-    def analyze(self) -> Dict[str, any]:
+    def analyze(self) -> dict[str, any]:
         """Analyze routes and return findings."""
         # Normalize paths
         normalized_code_routes = {}

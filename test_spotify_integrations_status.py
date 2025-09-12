@@ -7,14 +7,14 @@ Tests the /v1/integrations/spotify/status endpoint functionality.
 import asyncio
 import time
 import uuid
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
+
+from app.auth_store import ensure_tables, link_oauth_identity
 from app.auth_store_tokens import TokenDAO
 from app.models.third_party_tokens import ThirdPartyToken
-from app.auth_store import link_oauth_identity, ensure_tables
 
 
 @pytest_asyncio.fixture
@@ -83,10 +83,11 @@ async def create_test_identity(tmp_path):
 @pytest.mark.asyncio
 async def test_spotify_integrations_status_no_token(temp_db):
     """Test status endpoint when no token exists."""
-    from app.api.spotify import integrations_spotify_status
-    from fastapi import Request
     from unittest.mock import Mock
-    from app.auth_store_tokens import get_token
+
+    from fastapi import Request
+
+    from app.api.spotify import integrations_spotify_status
 
     dao = temp_db
 
@@ -115,9 +116,11 @@ async def test_spotify_integrations_status_no_token(temp_db):
 @pytest.mark.asyncio
 async def test_spotify_integrations_status_with_token(temp_db, create_test_identity):
     """Test status endpoint with a valid token."""
-    from app.api.spotify import integrations_spotify_status
-    from fastapi import Request
     from unittest.mock import Mock
+
+    from fastapi import Request
+
+    from app.api.spotify import integrations_spotify_status
 
     dao = temp_db
 
@@ -176,9 +179,11 @@ async def test_spotify_integrations_status_with_token(temp_db, create_test_ident
 @pytest.mark.asyncio
 async def test_spotify_integrations_status_expired_token(temp_db, create_test_identity):
     """Test status endpoint with an expired token."""
-    from app.api.spotify import integrations_spotify_status
-    from fastapi import Request
     from unittest.mock import Mock
+
+    from fastapi import Request
+
+    from app.api.spotify import integrations_spotify_status
 
     dao = temp_db
 
@@ -246,9 +251,11 @@ async def test_spotify_integrations_status_expired_token(temp_db, create_test_id
 @pytest.mark.asyncio
 async def test_spotify_integrations_status_recently_refreshed(temp_db, create_test_identity):
     """Test status endpoint with a recently refreshed token."""
-    from app.api.spotify import integrations_spotify_status
-    from fastapi import Request
     from unittest.mock import Mock
+
+    from fastapi import Request
+
+    from app.api.spotify import integrations_spotify_status
 
     dao = temp_db
 
@@ -312,8 +319,8 @@ async def test_spotify_integrations_status_recently_refreshed(temp_db, create_te
 
 if __name__ == "__main__":
     # Run tests manually
-    import tempfile
     import os
+    import tempfile
 
     async def run_tests():
         with tempfile.TemporaryDirectory() as tmp_dir:

@@ -10,11 +10,8 @@ This module provides Prometheus metrics for:
 
 from __future__ import annotations
 
-import os
-from typing import Optional
-
 try:
-    from prometheus_client import Counter, Histogram, Gauge
+    from prometheus_client import Counter, Gauge, Histogram
 except ImportError:
     # Fallback for environments without prometheus
     class Counter:

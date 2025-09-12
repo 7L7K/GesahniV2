@@ -16,12 +16,14 @@ real functions when available and otherwise return normalized fallbacks.
 """
 from __future__ import annotations
 
+from collections import Counter
+from collections.abc import Awaitable, Callable
+from typing import Any
+
 from fastapi import APIRouter, Request
 from starlette.responses import JSONResponse
-from typing import Callable, Awaitable, Any
-from app.metrics import ALIAS_FALLBACK_TOTAL
-from collections import Counter
 
+from app.metrics import ALIAS_FALLBACK_TOTAL
 
 # Runtime counters for quick post-test inspection
 ALIAS_HITS = Counter()
@@ -315,7 +317,7 @@ def _register_alias(path: str, method: str):
                 pass
 
             # Non-Response result (e.g., dict) -> wrap in JSONResponse and add headers
-            return JSONResponse(res if isinstance(res, (dict, list)) else {"result": res}, headers=headers)
+            return JSONResponse(res if isinstance(res, dict | list) else {"result": res}, headers=headers)
 
         # Non-callable: return fallback response and ensure headers are attached
         try:

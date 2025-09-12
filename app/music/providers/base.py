@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Protocol, Any, Dict, List, Iterable, Literal, Optional
+from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Literal, Protocol
 
 
 @dataclass

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Comprehensive Spotify OAuth flow test with detailed logging."""
 
-import time
 import logging
 import sys
+
 from fastapi.testclient import TestClient
 
 # Set up logging
@@ -47,7 +47,7 @@ def test_complete_spotify_oauth_flow():
     logger.info(f"Auth URL generated: {auth_url}")
 
     # Extract state from auth_url for later use
-    from urllib.parse import urlparse, parse_qs
+    from urllib.parse import parse_qs, urlparse
 
     parsed_url = urlparse(auth_url)
     query_params = parse_qs(parsed_url.query)

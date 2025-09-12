@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request
 
+from ..auth_core import require_scope
 from ..deps.user import get_current_user_id
 from ..integrations.spotify.client import SpotifyClient
 from ..security import verify_token
-from ..auth_core import require_scope
 
 router = APIRouter(
     prefix="/v1/spotify",

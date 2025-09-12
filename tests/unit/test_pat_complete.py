@@ -10,11 +10,9 @@ This test demonstrates the full PAT lifecycle:
 
 import asyncio
 import hashlib
-import os
 import secrets
 from unittest.mock import AsyncMock, patch
 
-import pytest
 import pytest_asyncio
 
 from app.api.auth import verify_pat_async

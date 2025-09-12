@@ -1,9 +1,10 @@
-import subprocess
-import time
-import requests
 import os
-import sys
 import signal
+import subprocess
+import sys
+import time
+
+import requests
 
 
 def _start_server(port: int = 8001):
