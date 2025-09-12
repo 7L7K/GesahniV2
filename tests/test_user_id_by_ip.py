@@ -1,22 +1,23 @@
-from fastapi import Depends
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 import app.security as security
 from app.deps.user import get_current_user_id
-from app.main import app
 from app.security import rate_limit
 
 
-@app.get("/whoami")
-async def whoami(
-    user_id: str = Depends(get_current_user_id),
-    _: None = Depends(rate_limit),
-):
-    return {"user_id": user_id}
-
-
 def test_unauthenticated_requests_are_rate_limited_per_ip(monkeypatch):
-    client = TestClient(app)
+    # Create a test app with the route
+    test_app = FastAPI()
+
+    @test_app.get("/whoami")
+    async def whoami(
+        user_id: str = Depends(get_current_user_id),
+        _: None = Depends(rate_limit),
+    ):
+        return {"user_id": user_id}
+
+    client = TestClient(test_app)
     monkeypatch.setattr(security, "RATE_LIMIT", 1)
     security._http_requests.clear()
     security._ws_requests.clear()

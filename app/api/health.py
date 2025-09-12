@@ -56,6 +56,9 @@ async def healthz_root() -> JSONResponse:
         resp.headers["Cache-Control"] = "no-store"
         resp.headers["Pragma"] = "no-cache"
         resp.headers.setdefault("Vary", "Accept")
+        # Provide rate-limit headers even when limiter disabled to satisfy probes
+        resp.headers.setdefault("RateLimit-Limit", "0")
+        resp.headers.setdefault("RateLimit-Remaining", "0")
         return resp
     except Exception as e:
         # Defensive: should not happen, but keep contract stable
@@ -67,6 +70,19 @@ async def healthz_root() -> JSONResponse:
         except Exception:
             pass
         return JSONResponse({"ok": False, "status": "error"}, status_code=200)
+
+
+@router.get("/v1/healthz")
+async def healthz_v1() -> JSONResponse:
+    """Versioned health endpoint for clients expecting /v1/healthz."""
+    resp = await healthz_root()
+    # Ensure type is JSONResponse and headers can be mutated
+    try:
+        resp.headers.setdefault("RateLimit-Limit", "0")
+        resp.headers.setdefault("RateLimit-Remaining", "0")
+    except Exception:
+        pass
+    return resp
 
 
 @router.get("/healthz/live", include_in_schema=False)

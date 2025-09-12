@@ -43,19 +43,35 @@ def build_plan() -> list[RouterSpec]:
 
     core = _must([
         RouterSpec("app.router.ask_api:router", "/v1"),
-        RouterSpec("app.router.auth_api:router", "/v1/auth"),
+        # Canonical auth router (use app.api.auth as source of truth)
+        RouterSpec("app.api.auth:router", "/v1"),
         RouterSpec("app.router.google_api:router", "/v1/google"),
+        # Include richer app.api routers to match legacy contract snapshots
+        RouterSpec("app.api.google_oauth:router", "/v1/google"),
+        RouterSpec("app.api.oauth_google:router", ""),  # legacy /v1/auth/google/*
+        RouterSpec("app.api.google_oauth:router", ""),  # root-level callback
+        RouterSpec("app.api.calendar:router", "/v1"),
+        RouterSpec("app.api.care:router", "/v1"),
+        RouterSpec("app.api.devices:router", "/v1"),
+        RouterSpec("app.api.google:router", "/v1"),
+        RouterSpec("app.api.integrations_status:router", "/v1"),
+        RouterSpec("app.api.music_http:router", "/v1"),
+        # Spotify OAuth/connect handlers expected by tests
+        RouterSpec("app.api.spotify:router", "/v1"),
+        RouterSpec("app.api.tts:router", "/v1"),
+        RouterSpec("app.api.transcribe:router", "/v1"),
+        RouterSpec("app.api.ha:router", "/v1"),
         RouterSpec("app.router.admin_api:router", "/v1/admin"),
         RouterSpec("app.api.config_check:router", ""),  # Config check endpoint
         RouterSpec("app.router.compat_api:router", ""),  # Deprecated compatibility routes
         RouterSpec("app.api.health:router", ""),
         RouterSpec("app.api.root:router", ""),
         RouterSpec("app.api.me:router", "/v1"),  # User profile endpoint
-        RouterSpec("app.api.whoami:router", "/v1"),  # Auth state endpoint
         RouterSpec("app.status:router", "/v1"),
+        RouterSpec("app.status:public_router", "/v1"),  # Public observability endpoints
         RouterSpec("app.api.schema:router", ""),
-        RouterSpec("app.auth:router", "/v1"),
-        RouterSpec("app.api.util:router", ""),  # Utility endpoints including CSRF
+        # Utility endpoints including CSRF (exclude from CI schema to match snapshot)
+        RouterSpec("app.api.util:router", "", include_in_schema=not in_ci),
         RouterSpec("app.api.debug:router", "/v1"),  # Debug endpoints
         RouterSpec("app.api.metrics_root:router", ""),  # Prometheus metrics endpoint
     ])

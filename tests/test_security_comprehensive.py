@@ -59,9 +59,9 @@ class TestCookiePolicy:
             name="spotify_oauth_jwt",
             value="test_jwt_token",
             ttl=600,
-            request=mock_request,
             httponly=True,
             samesite="lax",
+            secure=False,
         )
 
         # Check that response has Set-Cookie header
@@ -94,7 +94,6 @@ class TestCookiePolicy:
             name="spotify_oauth_jwt",
             value="test_jwt_token",
             ttl=600,
-            request=mock_request,
             httponly=True,
             samesite="lax",
         )
@@ -427,8 +426,8 @@ class TestCookieSecurity:
                 name="temp_jwt",
                 value="sensitive_jwt_value",
                 ttl=600,
-                request=mock_request,
                 httponly=True,
+                secure=False,
             )
 
             # Check that logs don't contain the sensitive JWT value

@@ -34,6 +34,7 @@ from app.middleware.cors import CorsPreflightMiddleware
 from app.middleware.cors_cache_fix import SafariCORSCacheFixMiddleware
 from app.csrf import CSRFMiddleware
 from app.middleware.custom import EnhancedErrorHandlingMiddleware
+from app.middleware.deprecation_mw import DeprecationHeaderMiddleware
 from app.middleware.error_handler import ErrorHandlerMiddleware
 
 log = logging.getLogger(__name__)
@@ -85,6 +86,7 @@ def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_orig
         "EnhancedErrorHandlingMiddleware", # conditional
         "CSRFMiddleware",                 # conditional
         "MetricsMiddleware",
+        "DeprecationHeaderMiddleware",   # attach Deprecation header for legacy paths
         "AuditMiddleware",
         "DedupMiddleware",
         "SilentRefreshMiddleware",
@@ -148,6 +150,8 @@ def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_orig
     # Audit and metrics
     add_mw(app, AuditMiddleware, name="AuditMiddleware")
     add_mw(app, MetricsMiddleware, name="MetricsMiddleware")
+    # Ensure deprecated alias paths emit Deprecation header even when served by canonical handlers
+    add_mw(app, DeprecationHeaderMiddleware, name="DeprecationHeaderMiddleware")
 
     # CSRF (conditional)
     if csrf_enabled:

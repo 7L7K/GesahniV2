@@ -7,6 +7,10 @@ to verify they get normalized to the correct status codes and JSON format.
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError
 
+# Tell pytest this module is not a test module so endpoints here are not collected
+# as test functions. The canonical tests live under `tests/`.
+__test__ = False
+
 from .http_errors import (
     unauthorized,
     forbidden,
@@ -28,18 +32,15 @@ class TestRequest(BaseModel):
 
 @router.get("/test/validation-error")
 async def test_validation_error():
-    """Test endpoint that raises a validation error."""
-    raise ValidationError.from_exception_data(
-        title="ValidationError",
-        line_errors=[
-            {
-                "type": "missing",
-                "loc": ("name",),
-                "msg": "Field required",
-                "input": {},
-            }
-        ]
-    )
+    """Test endpoint that raises a validation error using Pydantic model validation.
+
+    Pydantic's ValidationError construction changed across versions; instead of
+    constructing via internal helpers, exercise model validation to produce a
+    ValidationError instance which is then handled by the app's translator.
+    """
+    # Trigger a ValidationError by validating an empty payload against the
+    # TestRequest model (missing required fields).
+    TestRequest.model_validate({})
 
 
 @router.get("/test/value-error")

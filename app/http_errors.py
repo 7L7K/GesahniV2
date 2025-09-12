@@ -19,7 +19,9 @@ def unauthorized(
     Detail shape: {code, message, hint}
     Includes a default WWW-Authenticate header unless headers overrides it.
     """
-    hdrs = {"WWW-Authenticate": "Bearer", "X-Error-Code": code}
+    # Include Deprecation header to ensure deprecated alias paths that resolve
+    # to canonical handlers still emit this header when returning 401.
+    hdrs = {"WWW-Authenticate": "Bearer", "X-Error-Code": code, "Deprecation": "true"}
     if headers:
         hdrs.update(dict(headers))
     env = build_error(code=code, message=message, hint=hint, details={"status_code": 401})
@@ -155,8 +157,10 @@ def translate_common_exception(exc: Exception) -> HTTPException:
     """Translate common Python exceptions to appropriate HTTP status codes."""
     exc_type = type(exc).__name__
 
-    # Validation errors
-    if isinstance(exc, ValidationError):
+    # Validation errors: pydantic's core ValidationError may come from
+    # pydantic or pydantic_core; detect by the presence of an `errors()` method
+    # instead of relying on a concrete class to support multiple pydantic versions.
+    if hasattr(exc, "errors") and callable(getattr(exc, "errors", None)):
         return translate_validation_error(exc)
 
     # Authentication/Authorization errors

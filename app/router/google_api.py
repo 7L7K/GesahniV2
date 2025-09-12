@@ -157,3 +157,39 @@ async def google_oauth_callback(
         raise HTTPException(status_code=500, detail="OAuth callback failed")
 
 
+@router.get("/connect")
+async def google_connect(request: Request):
+    """Compatibility endpoint: return authorize_url and set state cookie.
+
+    Bridges to app.api.google_oauth.google_login_url, which sets the OAuth
+    state cookie. Adapts the response body key to "authorize_url" expected by
+    tests and legacy clients.
+    """
+    try:
+        from app.api.google_oauth import google_login_url as _login
+        # Call underlying handler to generate URL and state cookies
+        resp = await _login(request)
+        # Extract body safely
+        data = {}
+        try:
+            import json
+            data = json.loads(getattr(resp, "body", b"{}") or b"{}")
+        except Exception:
+            pass
+        url = data.get("auth_url") or data.get("url") or data.get("login_url")
+        from fastapi.responses import JSONResponse
+        out = JSONResponse({"authorize_url": url} if url else {"authorize_url": ""})
+        # Propagate Set-Cookie headers
+        try:
+            for k, v in resp.headers.items():
+                if k.lower() == "set-cookie":
+                    out.headers.append("set-cookie", v)
+        except Exception:
+            pass
+        return out
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("google_connect.failed")
+        raise HTTPException(status_code=500, detail="failed_to_build_google_url")
+

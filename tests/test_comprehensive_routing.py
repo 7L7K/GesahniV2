@@ -6,6 +6,13 @@ import sys
 
 sys.path.insert(0, ".")
 
+# Import fallback functions for use throughout the module
+from app.router.model_router import ModelRouter
+_model_router = ModelRouter()
+_validate_model_allowlist = _model_router._validate_model_allowlist
+_get_fallback_model = _model_router._get_fallback_model
+_get_fallback_vendor = _model_router._get_fallback_vendor
+
 
 def test_allowlist_validation():
     """Test allow-list validation."""
@@ -13,7 +20,7 @@ def test_allowlist_validation():
     print("ALLOW-LIST VALIDATION TEST")
     print("=" * 60)
 
-    from app.router import _validate_model_allowlist
+    # Functions imported at module level
 
     # Test valid models
     print("✅ Testing valid models...")
@@ -47,7 +54,7 @@ def test_fallback_logic():
     print("FALLBACK LOGIC TEST")
     print("=" * 60)
 
-    from app.router import _get_fallback_model, _get_fallback_vendor
+    # Functions imported at module level
 
     # Test fallback vendor selection
     print("✅ Testing fallback vendor selection...")
@@ -94,7 +101,7 @@ def test_golden_trace_structure():
     print("GOLDEN TRACE STRUCTURE TEST")
     print("=" * 60)
 
-    from app.router import _log_golden_trace
+    from app.router import _log_golden_trace  # Mock function from router package
 
     print("✅ Testing golden trace logging...")
     _log_golden_trace(
@@ -192,7 +199,7 @@ def test_fallback_metrics_labeling():
     print("FALLBACK METRICS LABELING TEST")
     print("=" * 60)
 
-    from app.router import _get_fallback_vendor
+    # _get_fallback_vendor already imported above
 
     # Test the core issue: when we have a fallback, from_vendor should be the original vendor
     print("✅ Testing fallback metrics labeling logic...")
@@ -235,7 +242,7 @@ def test_user_circuit_breaker_thread_safety():
 
     import asyncio
 
-    from app.router import _user_cb_record_failure, _user_cb_reset, _user_circuit_open
+    from app.router import _user_cb_record_failure, _user_cb_reset, _user_circuit_open  # Mock functions from router package
 
     async def test_concurrent_access():
         """Test concurrent access to user circuit breaker functions."""

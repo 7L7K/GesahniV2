@@ -962,6 +962,16 @@ def create_app() -> FastAPI:
     except Exception as e:
         logger.warning("⚠️  Failed to set up middleware stack: %s", e)
 
+    # Strict vector store preflight: fail startup early when STRICT_VECTOR_STORE is set
+    try:
+        strict_vs = (os.getenv("STRICT_VECTOR_STORE") or "").strip().lower() in {"1","true","yes","on"}
+        if strict_vs:
+            from app.memory.unified_store import create_vector_store as _create_vs
+            _create_vs()  # raise on invalid DSN when strict
+    except Exception:
+        # Let the exception propagate to fail-fast under strict mode
+        raise
+
     # Phase 7: Register test router for error normalization testing (dev only)
     try:
         logger.debug("Attempting to register test error normalization router...")
@@ -1096,6 +1106,48 @@ def create_app() -> FastAPI:
 
     app.include_router(diag)
     logger.info(f"DEBUG: Diagnostic router included with {len(diag.routes)} routes")
+
+    # Startup-time route collision check: ensure no duplicate (method, path) pairs
+    def _check_route_collisions():
+        from collections import defaultdict
+
+        pair_to_handlers: dict[tuple[str, str], list[str]] = defaultdict(list)
+
+        for route in app.routes:
+            # FastAPI/Starlette routes expose .methods (set) and .path
+            methods = getattr(route, "methods", None)
+            path = getattr(route, "path", None)
+            endpoint = getattr(route, "endpoint", None)
+            qualname = None
+            try:
+                qualname = f"{endpoint.__module__}.{endpoint.__qualname__}"
+            except Exception:
+                qualname = repr(endpoint)
+
+            if not methods or not path:
+                continue
+
+            for m in methods:
+                # Skip automatic HEAD added by Starlette when GET exists
+                if m == "HEAD":
+                    continue
+                pair_to_handlers[(m, path)].append(qualname)
+
+        # Find duplicates where more than one handler is registered for same (method,path)
+        duplicates = {pair: handlers for pair, handlers in pair_to_handlers.items() if len(handlers) > 1}
+
+        if duplicates:
+            lines = [f"Duplicate route registrations detected ({len(duplicates)}):"]
+            for (method, path), handlers in sorted(duplicates.items()):
+                lines.append(f" - {method} {path}:\n    " + "\n    ".join(handlers))
+            raise ValueError("\n".join(lines))
+
+    try:
+        _check_route_collisions()
+    except Exception:
+        # Make collision failures explicit during startup so CI/tests fail fast
+        logger.exception("Route collision check failed")
+        raise
 
     logger.info("🎉 Application composition complete in create_app()")
     return app

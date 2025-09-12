@@ -98,8 +98,7 @@ async def test_require_nonce_disabled_passes(monkeypatch):
 @pytest.mark.asyncio
 async def test_verify_webhook_missing_secret(monkeypatch):
     from fastapi import HTTPException
-
-    import app.security as sec
+    from app.security.webhooks import verify_webhook
 
     monkeypatch.delenv("HA_WEBHOOK_SECRETS", raising=False)
     monkeypatch.delenv("HA_WEBHOOK_SECRET", raising=False)
@@ -114,16 +113,16 @@ async def test_verify_webhook_missing_secret(monkeypatch):
     # Patch body method to return bytes
     req.body = _set_body  # type: ignore
     with pytest.raises(HTTPException) as e:
-        await sec.verify_webhook(req)
+        await verify_webhook(req)
     assert e.value.status_code == 500
 
 
 def test_rotate_webhook_secret_writes_file(tmp_path: Path, monkeypatch):
-    import app.security as sec
+    from app.security.webhooks import rotate_webhook_secret
 
     path = tmp_path / "secret.txt"
     monkeypatch.setenv("HA_WEBHOOK_SECRET_FILE", str(path))
-    new = sec.rotate_webhook_secret()
+    new = rotate_webhook_secret()
     assert isinstance(new, str) and len(new) >= 16
     assert path.exists() and new in path.read_text()
 

@@ -78,6 +78,7 @@ def load_env(force: bool | int | str = False) -> None:
         os.environ.setdefault("COOKIE_SECURE", "0")               # allow TestClient
         os.environ.setdefault("COOKIE_SAMESITE", "Lax")           # safe default
         os.environ.setdefault("ALLOW_DEV_ROUTERS", "1")           # mount compat routes for tests
+        os.environ.setdefault("JWT_OPTIONAL_IN_TESTS", "1")       # allow optional auth in tests
 
     # Snapshot current mtimes and existence
     def _mtime(path: Path) -> float:

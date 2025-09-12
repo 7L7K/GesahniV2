@@ -1724,16 +1724,7 @@ def _load_webhook_secrets() -> list[str]:
     return out
 
 
-def sign_webhook(body: bytes, secret: str, timestamp: str | None = None) -> str:
-    """Return hex HMAC-SHA256 signature.
-
-    New contract: when ``timestamp`` is provided, sign over ``body || "." || timestamp``.
-    Legacy callers that omit timestamp continue to be supported for a transition window.
-    """
-    payload = (
-        body if timestamp is None else (body + b"." + str(timestamp).encode("utf-8"))
-    )
-    return hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+from app.security.webhooks import sign_webhook
 
 
 _webhook_seen: dict[str, float] = {}

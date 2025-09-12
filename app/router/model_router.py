@@ -111,7 +111,7 @@ class ModelRouter:
         if vendor == "openai":
             return "gpt-4o"  # Default GPT model
         else:
-            return "llama3:latest"  # Default LLaMA model (with tag for consistency)
+            return "llama3"  # Default LLaMA model
 
     def _dry_run_response(self, vendor: str, model: str) -> str:
         """Generate dry-run response message."""

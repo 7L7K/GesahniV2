@@ -80,7 +80,8 @@ def _decode_refresh_token(token: str, leeway: int = None) -> Dict[str, Any]:
 
     try:
         secret = _jwt_secret()
-        payload = jwt_decode(token, secret, algorithms=["HS256"], leeway=leeway)
+        # Decode using PyJWT directly to avoid import cycles with app.security
+        payload = jwt.decode(token, secret, algorithms=["HS256"], leeway=leeway)
 
         # Validate token type
         if payload.get("type") != "refresh":
@@ -319,6 +320,12 @@ async def rotate_refresh_token(
         refresh_ttl=refresh_ttl,
         request=request,
     )
+    try:
+        # Append legacy cookie headers for compatibility
+        from app.api.auth import _append_legacy_auth_cookie_headers as _legacy
+        _legacy(response, access=new_access, refresh=new_refresh, session_id=sid, request=request)
+    except Exception:
+        pass
 
     # Allow the new refresh token
     await allow_refresh(sid, new_jti, refresh_ttl)
@@ -403,6 +410,11 @@ async def perform_lazy_refresh(
             request=request,
             identity=identity or rt_payload,
         )
+        try:
+            from app.api.auth import _append_legacy_auth_cookie_headers as _legacy
+            _legacy(response, access=new_at, refresh=None, session_id=sid, request=request)
+        except Exception:
+            pass
 
         logger.info(f"Performed lazy refresh for user {uid}")
 

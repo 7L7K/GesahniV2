@@ -120,7 +120,7 @@ ALIASES: dict[str, tuple[str, AliasHandler | None]] = {}
 ALIASES.update({
     # whoami / user info
     "/whoami": ("GET", _safe_import("app.router.auth_api", "whoami")),
-    "/me": ("GET", _safe_import("app.router.auth_api", "whoami")),
+    # '/me' now served by canonical app.api.me; do not alias to avoid conflicts
 
     # integrations/spotify/google → top-level expected paths
     # Prefer canonical integration endpoints when present
@@ -178,6 +178,10 @@ ALIASES.update({
     "/ping": ("GET", _safe_import("app.api.health", "ping_vendor_health")),
     "/ha_status": ("GET", _safe_import("app.status", "ha_status")),
     "/llama_status": ("GET", _safe_import("app.status", "llama_status")),
+    # Utility CSRF issuer under /v1 for tests expecting versioned path
+    "/csrf": ("GET", _safe_import("app.api.util", "get_csrf")),
+    # Legacy auth finisher path without version prefix (tests may probe it)
+    "/auth/finish": ("GET", _safe_import("app.router.auth_api", "auth_finish_get")),
 })
 
 
@@ -366,5 +370,3 @@ async def alias_report():
             "fallback_hits": int(ALIAS_FALLBACK_HITS.get(p, 0)),
         })
     return {"aliases": rows}
-
-

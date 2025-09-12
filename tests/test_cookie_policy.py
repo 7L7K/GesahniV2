@@ -32,7 +32,6 @@ def test_set_named_cookie_enforces_samesite_none_secure(monkeypatch):
         name="tmp",
         value="v",
         ttl=60,
-        request=req,  # cookie_config is monkeypatched, so no attributes needed
         samesite="none",
         secure=False,  # will be overridden by helper due to None+Secure policy
     )

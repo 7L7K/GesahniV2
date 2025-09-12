@@ -5,6 +5,7 @@ import os
 import aiosqlite
 from fastapi import APIRouter, HTTPException
 from passlib.context import CryptContext
+from app.db.paths import resolve_db_path
 
 router = APIRouter(tags=["auth"], include_in_schema=False)
 
@@ -13,7 +14,12 @@ _pwd = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
 
 
 def _db_path() -> str:
-    return os.getenv("USERS_DB", "users.db")
+    """Resolve the users DB path consistently with the rest of the app.
+
+    Uses resolve_db_path so tests that set GESAHNI_TEST_DB_DIR and env-based
+    overrides behave identically between register/login code paths.
+    """
+    return str(resolve_db_path("USERS_DB", "users.db"))
 
 
 async def _ensure():

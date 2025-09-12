@@ -36,16 +36,26 @@ def _admin_token() -> str | None:
 
 
 
-@router.get("/rate_limit_status")
-async def rate_limit_status(user_id: str = Depends(get_current_user_id)) -> dict:
-    """Return current rate-limit backend configuration and health."""
+@public_router.get("/rate_limit_status")
+async def rate_limit_status_public() -> dict:
+    """Return current rate‑limit backend configuration and health (public).
+
+    This endpoint intentionally does not require authentication. It exposes
+    non-sensitive metadata about the active rate limiting backend so clients
+    and tooling can adapt without needing credentials.
+    """
     try:
         from .security import get_rate_limit_backend_status  # lazy import
 
         return await get_rate_limit_backend_status()
     except Exception:
         # In case security module is unavailable or raises, return minimal info
-        return {"backend": "unknown", "enabled": False, "connected": False}
+        return {
+            "backend": "unknown",
+            "enabled": False,
+            "connected": False,
+            "limits": {"long": int(os.getenv("RATE_LIMIT", "60") or 60), "burst": int(os.getenv("RATE_LIMIT_BURST", "10") or 10)},
+        }
 
 
 @router.get("/config")

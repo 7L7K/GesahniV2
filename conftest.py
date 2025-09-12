@@ -73,6 +73,8 @@ def pytest_load_initial_conftests(early_config, parser):
         # JWT: Allow short secrets in tests
         os.environ.setdefault("DEV_MODE", "1")  # Allows weak JWT secrets
         os.environ.setdefault("ENV", "dev")     # Alternative way to allow weak secrets
+        # Provide a deterministic dev JWT secret to enable token minting
+        os.environ.setdefault("JWT_SECRET", "dev-secret-key-please-change-0123456789abcdef0123456789abcd")
 
         # Rate limiting: Disable for tests by default
         os.environ.setdefault("ENABLE_RATE_LIMIT_IN_TESTS", "0")
@@ -109,6 +111,9 @@ def pytest_load_initial_conftests(early_config, parser):
         os.environ.setdefault("JWT_EXPIRE_MINUTES", "60")          # 1 hour access tokens
         os.environ.setdefault("JWT_REFRESH_EXPIRE_MINUTES", "1440") # 1 day refresh tokens
         os.environ.setdefault("CSRF_TTL_SECONDS", "3600")           # 1 hour CSRF tokens
+
+        # Allow optional auth in tests for convenience
+        os.environ.setdefault("JWT_OPTIONAL_IN_TESTS", "1")
 
         # Cookie configuration for tests
         os.environ.setdefault("COOKIE_SAMESITE", "Lax")
@@ -189,16 +194,12 @@ async def async_app():
 @pytest.fixture(scope="session")
 async def async_client(async_app):
     """Provide an async test client using httpx with ASGITransport."""
-    from httpx import ASGITransport, AsyncClient
+    from httpx import ASGITransport
+    from app.http_client import build_async_httpx_client
 
     # Create async client with lifespan support (lifespan is handled automatically)
     transport = ASGITransport(app=async_app)
-    client = AsyncClient(
-        transport=transport,
-        base_url="http://testserver",
-        timeout=30.0,  # Longer timeout for tests
-        follow_redirects=True
-    )
+    client = build_async_httpx_client(transport=transport, base_url="http://testserver")
 
     try:
         yield client
@@ -606,6 +607,15 @@ def _isolate_debug_and_flags(monkeypatch):
 
     # Tell application code we're inside pytest (if you want to gate features)
     monkeypatch.setenv("PYTEST_RUNNING", "1")
+    # Normalize cookie canon per test to avoid cross-test leakage
+    monkeypatch.setenv("COOKIE_CANON", "gsnh")
+    # Reload cookie helpers to pick up new canon in case previous tests imported them
+    try:
+        import importlib
+        import app.web.cookies as _cookies_mod
+        importlib.reload(_cookies_mod)
+    except Exception:
+        pass
     # Ensure auth and token DB tables exist for tests that expect DB-backed tables.
     try:
         import app.auth_store as _auth_store

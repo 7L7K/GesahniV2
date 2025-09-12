@@ -474,7 +474,6 @@ class TestNamedCookies:
                 name="test_cookie",
                 value="test_value",
                 ttl=3600,
-                request=request,
             )
 
         # Verify cookie was set
@@ -511,7 +510,6 @@ class TestNamedCookies:
                 name="custom_cookie",
                 value="custom_value",
                 ttl=1800,
-                request=request,
                 httponly=False,
                 path="/api",
                 secure=False,

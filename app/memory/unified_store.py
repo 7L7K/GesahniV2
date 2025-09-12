@@ -362,3 +362,15 @@ def get_vector_store_info() -> dict[str, str]:
         }
     except Exception as e:
         return {"dsn": dsn, "error": str(e), "backend": "unknown"}
+
+
+# Import-time strict validation to support module reload tests
+try:  # best-effort; do not impact non-strict environments
+    if _strict_mode():
+        _dsn = (os.getenv("VECTOR_DSN") or "").strip()
+        if _dsn:
+            # Will raise on invalid DSN when strict; otherwise no-op
+            create_vector_store()
+except Exception:
+    # Propagate to fail-fast when strict
+    raise

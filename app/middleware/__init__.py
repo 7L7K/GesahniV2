@@ -18,6 +18,7 @@ from .custom import (
 from .error_handler import ErrorHandlerMiddleware
 from .loader import add_mw
 from .metrics_mw import MetricsMiddleware
+from .deprecation_mw import DeprecationHeaderMiddleware
 from .middleware_core import (
     DedupMiddleware,
     HealthCheckFilterMiddleware,
@@ -38,6 +39,7 @@ __all__ = [
     "HealthCheckFilterMiddleware",
     "RedactHashMiddleware",
     "MetricsMiddleware",
+    "DeprecationHeaderMiddleware",
     "RateLimitMiddleware",
     "SessionAttachMiddleware",
     "CSRFMiddleware",

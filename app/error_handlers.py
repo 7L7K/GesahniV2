@@ -5,6 +5,7 @@ from typing import Any, Dict
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError as PydanticValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.error_envelope import build_error, shape_from_status
@@ -44,6 +45,13 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
         except Exception:
             pass
 
+        # Ensure deprecated alias paths emit Deprecation header even when served by canonical handlers
+        try:
+            if request.url.path in {"/v1/whoami", "/v1/me", "/whoami", "/me"}:
+                headers.setdefault("Deprecation", "true")
+        except Exception:
+            pass
+
         _emit_auth_metrics(request, status, shaped)
         return JSONResponse(shaped, status_code=status, headers=headers)
 
@@ -59,6 +67,12 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
     if 500 <= status < 600:
         headers.setdefault("Retry-After", "1")
 
+    # Ensure deprecated alias paths emit Deprecation header even when served by canonical handlers
+    try:
+        if request.url.path in {"/v1/whoami", "/v1/me", "/whoami", "/me"}:
+            headers.setdefault("Deprecation", "true")
+    except Exception:
+        pass
     headers["X-Error-Code"] = code
     return JSONResponse(build_error(code=code, message=msg, hint=hint, details=details),
                         status_code=status, headers=headers)
@@ -66,12 +80,14 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
 async def handle_validation_error(request: Request, exc: RequestValidationError):
     # Keep FastAPI-compatible shape *and* your envelope in one response.
     details_block = _trace_details(request, 422)
+    # Use the canonical validation_error envelope so tests and clients
+    # receive a consistent `validation_error` code and human-friendly message.
     envelope = build_error(
-        code="invalid_input",
-        message="Validation error",
+        code="validation_error",
+        message="Validation Error",
         details={**details_block, "errors": exc.errors()},
     )
-    headers = {"X-Error-Code": "invalid_input"}
+    headers = {"X-Error-Code": "validation_error"}
     try:
         det = envelope.get("details") or {}
         if isinstance(det, dict):
@@ -81,7 +97,7 @@ async def handle_validation_error(request: Request, exc: RequestValidationError)
         pass
 
     # Include traditional FastAPI 'detail' for legacy clients/tests
-    combined = {**envelope, "detail": "Validation error", "errors": exc.errors(),
+    combined = {**envelope, "detail": "Validation Error", "errors": exc.errors(),
                 "path": request.url.path, "method": request.method}
     return JSONResponse(combined, status_code=422, headers=headers)
 
@@ -125,6 +141,8 @@ def _emit_auth_metrics(request: Request, status: int, payload: Dict[str, Any]):
 def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, handle_http_error)
     app.add_exception_handler(RequestValidationError, handle_validation_error)
+    # Also handle pydantic ValidationError instances raised from code paths
+    # that exercise model validation directly (not via FastAPI request parsing).
+    app.add_exception_handler(PydanticValidationError, handle_validation_error)
     app.add_exception_handler(Exception, handle_unexpected_error)
-
 

@@ -808,7 +808,6 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                             name="X-Local-Mode",
                             value="1",
                             ttl=600,
-                            request=request,
                             httponly=True,
                             secure=secure,
                             samesite="Lax",  # Keep Lax for local mode indicator
@@ -987,7 +986,6 @@ async def silent_refresh_middleware(request: Request, call_next):
                                 name="refresh_token",
                                 value=rtok,
                                 ttl=r_life,
-                                request=request,
                                 httponly=cookie_config["httponly"],
                             )
                         except Exception:

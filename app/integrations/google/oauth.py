@@ -43,8 +43,12 @@ class GoogleOAuth:
         self.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
         self.scopes = os.getenv("GOOGLE_SCOPES", "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly").strip()
 
+        # Do not raise during construction; allow callers/tests to construct
+        # the helper even when env vars are not populated. Validation that
+        # credentials exist should be performed at the integration callsite
+        # (e.g. when building real flows or hitting Google's endpoints).
         if not self.client_id or not self.client_secret:
-            raise ValueError("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required")
+            logger.debug("Google OAuth credentials not configured (GOOGLE_CLIENT_ID/SECRET missing)")
 
     def get_authorization_url(self, state: str) -> str:
         from urllib.parse import urlencode

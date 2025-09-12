@@ -25,17 +25,9 @@ logger = logging.getLogger(__name__)
 
 
 def _ensure_jwt_secret_present() -> None:
-    """Raise a clear ValueError if JWT_SECRET is missing or insecure."""
-    if not SECRET_KEY or not SECRET_KEY.strip():
-        raise ValueError("JWT_SECRET environment variable must be set")
-    if SECRET_KEY.strip().lower() in {
-        "change-me",
-        "default",
-        "placeholder",
-        "secret",
-        "key",
-    }:
-        raise ValueError("JWT_SECRET cannot use insecure default values")
+    """No-op in new configuration; kept for backward compatibility."""
+    # get_jwt_config() handles validation; callers don't use this helper anymore.
+    return None
 
 
 def _create_access_token_internal(
@@ -69,10 +61,15 @@ def _create_access_token_internal(
         }
     )
 
-    if JWT_ISS:
-        to_encode["iss"] = JWT_ISS
-    if JWT_AUD:
-        to_encode["aud"] = JWT_AUD
+    # Add issuer/audience from centralized config when available
+    try:
+        cfg = get_jwt_config()
+        if cfg.issuer:
+            to_encode["iss"] = cfg.issuer
+        if cfg.audience:
+            to_encode["aud"] = cfg.audience
+    except Exception:
+        pass
 
     logger.debug(
         "auth.create_access_token",
@@ -121,10 +118,15 @@ def _create_refresh_token_internal(
         }
     )
 
-    if JWT_ISS:
-        to_encode["iss"] = JWT_ISS
-    if JWT_AUD:
-        to_encode["aud"] = JWT_AUD
+    # Add issuer/audience from centralized config when available
+    try:
+        cfg = get_jwt_config()
+        if cfg.issuer:
+            to_encode["iss"] = cfg.issuer
+        if cfg.audience:
+            to_encode["aud"] = cfg.audience
+    except Exception:
+        pass
 
     logger.debug(
         "auth.create_refresh_token",

@@ -12,22 +12,22 @@ def _setup_env():
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
 
 
-def test_llama_override(monkeypatch):
+def test_llama_override():
     _setup_env()
-    from app import llama_integration, router
+    # Disable dry-run and exercise the real routing entrypoint
+    os.environ["PROMPT_BACKEND"] = "llama"
 
-    monkeypatch.setattr(llama_integration, "LLAMA_HEALTHY", True)
+    from app.router.entrypoint import route_prompt
 
-    async def fake_llama(prompt, model=None):
-        for tok in ["ok"]:
-            yield tok
-
-    monkeypatch.setattr(router, "ask_llama", fake_llama)
-    monkeypatch.setattr(router, "ALLOWED_LLAMA_MODELS", {"llama3"})
     result = asyncio.run(
-        router.route_prompt("hello", user_id="u", model_override="llama3")
+        route_prompt({"prompt": "hello", "model_override": "llama3:8b"}, req_id="codex-sweep")
     )
-    assert result == "ok"
+
+    # Check routed vendor/model shape (backend/vendor normalized by handler)
+    routed_vendor = result.get("vendor") or result.get("backend")
+    model = result.get("model", "")
+    assert routed_vendor == "llama"
+    assert model.startswith("llama3")
 
 
 def test_cache_hit(monkeypatch):

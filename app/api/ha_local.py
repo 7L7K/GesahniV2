@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict
 from app.api._deps import dep_nonce, deps_ha_http
 from app.deps.user import get_current_user_id
 from app.home_assistant import call_service, get_states, resolve_entity
-from app.security import verify_webhook
+from app.security.webhooks import verify_webhook
 
 router = APIRouter(tags=["Care"], dependencies=deps_ha_http())
 

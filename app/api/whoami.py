@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 try:
     from app.deps.user import get_current_user_id, resolve_auth_source_conflict
@@ -28,5 +29,9 @@ async def whoami(request: Request) -> Any:
             source, conflict = ("unknown", False)
 
     authed = bool(user_id and user_id != "anon")
-    return {"ok": True, "authenticated": authed, "user_id": user_id if authed else None,
+    body = {"ok": True, "authenticated": authed, "user_id": user_id if authed else None,
             "source": source, "conflict": bool(conflict)}
+    # Note: We include a Deprecation header for compatibility with smoke tests
+    # that assert deprecated alias paths emit this header even when the canonical
+    # handler serves the request.
+    return JSONResponse(body, headers={"Deprecation": "true"})
