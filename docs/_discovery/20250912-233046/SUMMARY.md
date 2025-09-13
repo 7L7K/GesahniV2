@@ -95,5 +95,3 @@ Local/health endpoints summary
 Target fit notes
 - Vercel (frontend): No blocking use of Next.js Edge features. Minimal app; ensure `NEXT_PUBLIC_*` exposure as needed. No custom `next.config.*` today.
 - Render (backend): Native build is suitable (Python 3.11 + pip install -r requirements.txt). Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`. Health check path: `/healthz/ready` or `/healthz/live`. Needs persistent disk if keeping local sessions, otherwise S3/GCS.
-
-

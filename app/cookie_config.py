@@ -195,6 +195,16 @@ def format_cookie_header(
     samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
     ss = samesite_map.get(samesite.lower(), "Lax")
 
+    # Enforce __Host- cookie rules per RFC 6265bis
+    # __Host- cookies MUST have Secure=True, Path="/", and no Domain
+    if key.startswith("__Host-"):
+        if not secure:
+            secure = True  # Force Secure=True for __Host- cookies
+        if path != "/":
+            path = "/"  # Force Path="/" for __Host- cookies
+        if domain is not None:
+            domain = None  # Force no Domain for __Host- cookies
+
     # Render token values: keep provided value for normal tests; for specific
     # placeholder inputs used in some unit tests, substitute masked examples.
     display_value = value

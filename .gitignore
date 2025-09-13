@@ -70,3 +70,6 @@ env.staging
 env.dev
 .chroma_data
 frontend/venv/
+_qdrant_data/collections/*
+venv311/*
+migrations/*

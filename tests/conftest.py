@@ -74,6 +74,9 @@ def _setup_test_db_and_init_tables():
     # Ensure the test directory exists
     os.makedirs(test_db_dir, exist_ok=True)
 
+    # Set DATABASE_URL for PostgreSQL tests (Phase 3 requirement)
+    os.environ["DATABASE_URL"] = "postgresql://app:app_pw@localhost:5432/gesahni_test"
+
     # Database initialization will be handled by the async app fixture
     # which properly manages the event loop through pytest-asyncio
 
@@ -139,14 +142,12 @@ def client(app):
 
 
 @pytest.fixture(scope="session")
-async def app():
-    """Async FastAPI app fixture with lifespan management."""
+def app():
+    """FastAPI app fixture for testing."""
     from app.main import app as fastapi_app
-    from app.main import lifespan
 
-    # Start the app with lifespan (env vars are set in _setup_test_db_and_init_tables)
-    async with lifespan(fastapi_app):
-        yield fastapi_app
+    # Return the app directly - TestClient will handle lifespan
+    return fastapi_app
 
 
 @pytest.fixture(scope="session")

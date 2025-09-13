@@ -21,4 +21,3 @@ def dump_cookie_config():
     except Exception:
         # Do not fail startup for logging issues
         pass
-

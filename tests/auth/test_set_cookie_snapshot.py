@@ -1,5 +1,4 @@
 import pytest
-from typing import Set
 
 
 def test_login_cookie_snapshot(client):
@@ -103,10 +102,22 @@ def test_login_cookie_snapshot(client):
     actual_secure_specs = {spec for spec in cookie_specs if ":Secure" in spec}
     expected_secure_specs = secure_specs
     if actual_secure_specs != expected_secure_specs:
-        print(f"NOTE: Secure flags - Expected: {expected_secure_specs}, Got: {actual_secure_specs}")
+        print(
+            f"NOTE: Secure flags - Expected: {expected_secure_specs}, Got: {actual_secure_specs}"
+        )
         print("This may be expected in test environment without HTTPS")
 
     # Ensure all expected cookies are present
     cookie_names = {spec for spec in cookie_specs if ":" not in spec}
-    expected_names = {"access_token", "refresh_token", "__session", "GSNH_AT", "GSNH_RT", "GSNH_SESS", "did"}
-    assert cookie_names == expected_names, f"Expected cookies {expected_names}, got {cookie_names}"
+    expected_names = {
+        "access_token",
+        "refresh_token",
+        "__session",
+        "GSNH_AT",
+        "GSNH_RT",
+        "GSNH_SESS",
+        "did",
+    }
+    assert (
+        cookie_names == expected_names
+    ), f"Expected cookies {expected_names}, got {cookie_names}"

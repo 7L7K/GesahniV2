@@ -4,6 +4,7 @@ Route collision detection and invariants.
 This module provides runtime assertions to detect route conflicts
 and ensure routing invariants are maintained.
 """
+
 from fastapi import FastAPI
 
 
@@ -40,5 +41,8 @@ def assert_no_route_collisions(app: FastAPI) -> None:
                 seen[key] = route_name
 
     if dups:
-        lines = [f"{path} {method} -> {existing} vs {new}" for (path, method), existing, new in dups]
+        lines = [
+            f"{path} {method} -> {existing} vs {new}"
+            for (path, method), existing, new in dups
+        ]
         raise RuntimeError("Route collisions detected:\n" + "\n".join(lines))

@@ -75,7 +75,15 @@ async def lifespan(app: FastAPI):
 
     # Router registration lives in create_app(); no HTTP mounts here.
 
-    # 3) Fire-and-forget daemons that are optional
+    # 3) Initialize WebSocket LRU cache
+    try:
+        from app.utils.lru_cache import init_ws_idempotency_cache
+        await init_ws_idempotency_cache()
+        logger.info("✅ WebSocket LRU cache initialized")
+    except Exception as e:
+        logger.warning("⚠️ WebSocket LRU cache initialization failed: %s", e)
+
+    # 4) Fire-and-forget daemons that are optional
     _start_daemons()
 
     try:
@@ -239,7 +247,7 @@ async def _shutdown(app: FastAPI):
 
     # Dispose SQLAlchemy async engines
     try:
-        from app.db.dependencies import dispose_engines
+        from app.db.core import dispose_engines
 
         await dispose_engines()
     except Exception:

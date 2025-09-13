@@ -15,6 +15,23 @@ class Track:
     explicit: bool
     provider: str
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize track to dictionary."""
+        return {
+            "id": self.id,
+            "title": self.title,
+            "artist": self.artist,
+            "album": self.album,
+            "duration_ms": self.duration_ms,
+            "explicit": self.explicit,
+            "provider": self.provider,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Track:
+        """Deserialize track from dictionary."""
+        return cls(**data)
+
 
 @dataclass
 class Album:
@@ -46,6 +63,21 @@ class Device:
     type: str
     volume: int | None
     active: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize device to dictionary."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "type": self.type,
+            "volume": self.volume,
+            "active": self.active,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Device:
+        """Deserialize device from dictionary."""
+        return cls(**data)
 
 
 @dataclass

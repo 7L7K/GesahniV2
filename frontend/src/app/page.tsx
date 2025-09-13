@@ -79,6 +79,29 @@ export default function Page() {
     content: "Hey King, what's good?",
   });
 
+  // DEV TEST: Add a test message
+  const addTestMessage = () => {
+    const testMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: '[TEST MESSAGE] Chat API verification - ' + new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, testMessage]);
+    console.log('🧪 DEV TEST: Added test message to chat');
+  };
+
+  // DEV TEST: Inspect localStorage
+  const inspectLocalStorage = () => {
+    const historyKey = `chat_history_${authState.user?.id || 'anon'}`;
+    const stored = localStorage.getItem(historyKey);
+    console.log('🧪 DEV TEST: localStorage inspection', {
+      historyKey,
+      stored: stored ? JSON.parse(stored) : null,
+      messageCount: stored ? JSON.parse(stored).length : 0,
+      timestamp: new Date().toISOString()
+    });
+  };
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [musicState, setMusicState] = useState<MusicState | null>(null);
@@ -506,6 +529,12 @@ export default function Page() {
             <span>Connected as {authState.user?.id || 'Unknown'}</span>
             <div className="flex items-center gap-4">
               <WebSocketStatus showDetails={true} />
+              <Button variant="ghost" size="sm" onClick={inspectLocalStorage}>
+                🔍 Storage
+              </Button>
+              <Button variant="ghost" size="sm" onClick={addTestMessage}>
+                🧪 Test Msg
+              </Button>
               <Button variant="ghost" size="sm" onClick={clearHistory}>
                 Clear History
               </Button>

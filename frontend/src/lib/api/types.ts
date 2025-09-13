@@ -3,25 +3,45 @@
  */
 
 export type MusicState = {
-  playing: boolean;
-  current_track: {
-    name: string;
+  is_playing: boolean;
+  progress_ms: number;
+  track: {
+    id: string;
+    title: string;
     artist: string;
     album?: string;
     duration_ms: number;
-    progress_ms: number;
-    uri: string;
+    explicit: boolean;
+    provider: string;
   } | null;
-  volume_percent: number;
   device: {
     id: string;
     name: string;
+    area?: string;
+    provider?: string;
     type: string;
     volume_percent: number;
+    is_active: boolean;
   } | null;
-  shuffle_state: boolean;
-  repeat_state: 'off' | 'track' | 'context';
-  timestamp: number;
+  queue: Array<{
+    id: string;
+    track: {
+      id: string;
+      title: string;
+      artist: string;
+      album?: string;
+      duration_ms: number;
+      explicit: boolean;
+      provider: string;
+    };
+    requested_by?: string;
+    vibe?: Record<string, unknown>;
+  }>;
+  shuffle: boolean;
+  repeat: 'off' | 'track' | 'context';
+  volume_percent: number;
+  provider: string;
+  server_ts_at_position: number;
 };
 
 export type AuthErrorType =

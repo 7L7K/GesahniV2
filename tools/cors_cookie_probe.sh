@@ -26,4 +26,3 @@ curl -sk "${API_ORIGIN}/v1/whoami" \
 
 echo "-- Cookies captured" >&2
 cat "$JAR" >&2
-

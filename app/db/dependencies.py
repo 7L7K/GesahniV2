@@ -1,81 +1,58 @@
 """
-FastAPI database dependencies
+FastAPI database dependencies - DEPRECATED
+
+⚠️  DEPRECATED: This module is deprecated. Import from app.db.core instead.
+
+All database access should now use:
+from app.db.core import get_db, get_async_db, sync_engine, async_engine
+
+This file remains for backward compatibility during migration.
 """
+
+import warnings
 from collections.abc import AsyncGenerator, Generator
-from contextlib import suppress
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from .config import (
-    create_async_engine,
-    create_sync_engine,
-    get_async_session_factory,
-    get_session_factory,
+# Re-export from the new core module
+from .core import (  # noqa: F401
+    AsyncSessionLocal,
+    SyncSessionLocal,
+    async_engine,
+    dispose_engines,
+    get_async_db,
+    get_db,
+    sync_engine,
 )
 
-# Global engine instances (create once)
-sync_engine = create_sync_engine()
-async_engine = create_async_engine()
-
-# Session factories
-SyncSessionLocal = get_session_factory(sync_engine)
-AsyncSessionLocal = get_async_session_factory(async_engine)
+warnings.warn(
+    "app.db.dependencies is deprecated. Import from app.db.core instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 
-# Synchronous dependency
-def get_db() -> Generator[Session, None, None]:
-    """Synchronous database session dependency for FastAPI"""
-    with SyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            session.close()
+# Legacy functions - redirect to core module
+def get_db() -> Generator[Session, None, None]:  # type: ignore
+    """DEPRECATED: Use app.db.core.get_db instead"""
+    warnings.warn("get_db is deprecated. Import from app.db.core", DeprecationWarning, stacklevel=2)
+    from .core import get_db as _get_db
+    yield from _get_db()
 
 
-# Asynchronous dependency
-async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
-    """Asynchronous database session dependency for FastAPI"""
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+async def get_async_db() -> AsyncGenerator[AsyncSession, None]:  # type: ignore
+    """DEPRECATED: Use app.db.core.get_async_db instead"""
+    warnings.warn("get_async_db is deprecated. Import from app.db.core", DeprecationWarning, stacklevel=2)
+    from .core import get_async_db as _get_async_db
+    async for session in _get_async_db():
+        yield session
 
 
-# --- begin addition: async engine disposer registry ---
-_async_engines: list = []
-
-# Best-effort registrations for known engine variables
-try:  # noqa: F821
-    _async_engines.append(async_engine)  # type: ignore[name-defined]
-except Exception:
-    pass
-
-# Some codebases use a generic name `engine` for async engine; try to register
-try:  # noqa: F821
-    if 'engine' in globals():
-        _async_engines.append(globals()['engine'])
-except Exception:
-    pass
-
-
-async def dispose_engines() -> None:
-    """Dispose all known SQLAlchemy async engines (best-effort)."""
-    for e in list(_async_engines):
-        with suppress(Exception):
-            await e.dispose()
-# --- end addition ---
-
-
-# Example usage in FastAPI routes:
+# Example usage in FastAPI routes (DEPRECATED - use app.db.core):
 """
-from fastapi import Depends, APIRouter
-from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.dependencies import get_db, get_async_db
-
-router = APIRouter()
+# DEPRECATED - Use this instead:
+from app.db.core import get_db, get_async_db
 
 # Synchronous route
 @router.get("/users/sync")

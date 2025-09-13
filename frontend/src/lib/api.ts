@@ -8,6 +8,79 @@ import { apiFetch } from './api/fetch';
 import { getToken, getAuthNamespace } from './api/auth';
 import { getAuthOrchestrator } from '../services/authOrchestrator';
 import { sanitizeRedirectPath } from './redirect-utils';
+import { API_ROUTES } from './api/routes';
+
+// Capped exponential backoff configuration
+const BACKOFF_CONFIG = {
+    initialDelay: 400, // Start at 400ms
+    maxDelay: 5000,    // Cap at 5 seconds
+    maxAttempts: 4,    // Maximum 4 attempts
+    multiplier: 2,     // Exponential growth
+} as const;
+
+/**
+ * Capped exponential backoff helper for network calls
+ * - Retries only on network errors and 5xx server errors
+ * - Aborts on 401/403/422 (auth/validation errors)
+ * - Logs retries with attempt count
+ */
+async function withBackoff<T>(
+    operation: () => Promise<T>,
+    context: string = 'unknown'
+): Promise<T> {
+    let attempt = 0;
+    let delay = BACKOFF_CONFIG.initialDelay;
+
+    while (attempt < BACKOFF_CONFIG.maxAttempts) {
+        attempt += 1;
+
+        try {
+            return await operation();
+        } catch (error: any) {
+            // Extract status code from error - could be from Response object or error object
+            let status: number | null = null;
+
+            // If it's a Response object, get the status
+            if (error && typeof error === 'object' && 'status' in error) {
+                status = error.status;
+            }
+            // If it's an error with status property
+            else if (error?.status) {
+                status = error.status;
+            }
+
+            // Don't retry on auth/validation errors
+            if (status === 401 || status === 403 || status === 422) {
+                console.warn(`[${context}] Backoff aborted - auth/validation error (status ${status})`);
+                throw error;
+            }
+
+            // Don't retry on the last attempt
+            if (attempt >= BACKOFF_CONFIG.maxAttempts) {
+                console.error(`[${context}] Backoff failed after ${attempt} attempts`);
+                throw error;
+            }
+
+            // Only retry on network errors or 5xx server errors
+            const shouldRetry = status === null || (status >= 500 && status < 600);
+            if (!shouldRetry) {
+                console.warn(`[${context}] Not retrying - client error (status ${status})`);
+                throw error;
+            }
+
+            // Log the retry attempt
+            console.warn(`[${context}] Retry ${attempt}/${BACKOFF_CONFIG.maxAttempts} after ${delay}ms delay`);
+
+            // Wait for the delay
+            await new Promise(resolve => setTimeout(resolve, delay));
+
+            // Calculate next delay (exponential with cap)
+            delay = Math.min(delay * BACKOFF_CONFIG.multiplier, BACKOFF_CONFIG.maxDelay);
+        }
+    }
+
+    throw new Error(`[${context}] Backoff failed after ${BACKOFF_CONFIG.maxAttempts} attempts`);
+}
 
 export async function api(path: string, init: RequestInit = {}) {
     // Deprecated: use apiFetch for all new code; keep this shim for legacy callers
@@ -68,7 +141,11 @@ export async function sendPrompt(
     const headers: HeadersInit = { Accept: "text/event-stream" };
     const payload: Record<string, unknown> = { prompt };
     if (modelOverride && modelOverride !== "auto") payload.model_override = modelOverride;
-    const res = await apiFetch("/v1/ask", { method: "POST", headers, body: JSON.stringify(payload) });
+
+    const res = await withBackoff(
+        () => apiFetch("/v1/ask", { method: "POST", headers, body: JSON.stringify(payload) }),
+        'chat.sendPrompt'
+    );
 
     const contentType = res.headers.get("content-type") || "";
     const isJson = contentType.includes("application/json");
@@ -269,29 +346,137 @@ export async function getBudget(): Promise<{ tokens_used?: number; minutes_used?
 
 // Music helpers
 export type MusicState = {
-    vibe: { name: string; energy: number; tempo: number; explicit: boolean }
-    volume: number
-    device_id: string | null
-    progress_ms?: number | null
-    is_playing?: boolean | null
-    track?: { id: string; name: string; artists: string; art_url?: string | null } | null
-    quiet_hours: boolean
-    explicit_allowed: boolean
-    provider?: 'spotify' | 'radio' | null
+    is_playing: boolean;
+    progress_ms: number;
+    track: {
+        id: string;
+        title: string;
+        artist: string;
+        album?: string;
+        duration_ms: number;
+        explicit: boolean;
+        provider: string;
+    } | null;
+    device: {
+        id: string;
+        name: string;
+        area?: string;
+        provider?: string;
+        type: string;
+        volume_percent: number;
+        is_active: boolean;
+    } | null;
+    queue: Array<{
+        id: string;
+        track: {
+            id: string;
+            title: string;
+            artist: string;
+            album?: string;
+            duration_ms: number;
+            explicit: boolean;
+            provider: string;
+        };
+        requested_by?: string;
+        vibe?: Record<string, unknown>;
+    }>;
+    shuffle: boolean;
+    repeat: 'off' | 'track' | 'context';
+    volume_percent: number;
+    provider: string;
+    server_ts_at_position: number;
+    // Legacy fields for backward compatibility
+    vibe?: { name: string; energy: number; tempo: number; explicit: boolean }
+    volume?: number
+    device_id?: string | null
+    quiet_hours?: boolean
+    explicit_allowed?: boolean
 }
 
 export async function musicCommand(cmd: {
-    command: 'play' | 'pause' | 'next' | 'previous' | 'volume'
+    command: 'play' | 'pause' | 'next' | 'previous' | 'seek' | 'setVolume' | 'transferPlayback' | 'queueAdd'
     volume?: number
-    temporary?: boolean
+    position_ms?: number
+    device_id?: string
+    entity_id?: string
+    entity_type?: string
 }): Promise<void> {
-    const res = await apiFetch(`/v1/music`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cmd),
-        auth: true,
-    })
-    if (!res?.ok) throw new Error(await res?.text?.() || 'Request failed')
+    // Try WebSocket first, fallback to HTTP
+    const wsHub = (window as any).wsHub;
+    if (wsHub && wsHub.getConnectionStatus('music').isOpen) {
+        return new Promise((resolve, reject) => {
+            // Send WebSocket message
+            const msg = {
+                type: cmd.command,
+                proto_ver: 1,
+                ts: Date.now(),
+                req_id: `cmd-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                ...cmd
+            };
+
+            // Remove command field as it's now in type
+            delete (msg as any).command;
+
+            try {
+                wsHub.send('music', JSON.stringify(msg));
+
+                // Listen for ack or error response
+                const handleAck = (event: Event) => {
+                    const customEvent = event as CustomEvent;
+                    const detail = customEvent.detail;
+                    if (detail.req_id === msg.req_id) {
+                        window.removeEventListener('music.ack', handleAck);
+                        window.removeEventListener('music.error', handleError);
+                        if (detail.type === 'ack') {
+                            resolve();
+                        } else {
+                            reject(new Error('Command failed'));
+                        }
+                    }
+                };
+
+                const handleError = (event: Event) => {
+                    const customEvent = event as CustomEvent;
+                    const detail = customEvent.detail;
+                    if (detail.req_id === msg.req_id) {
+                        window.removeEventListener('music.ack', handleAck);
+                        window.removeEventListener('music.error', handleError);
+                        reject(new Error(detail.message || 'Command failed'));
+                    }
+                };
+
+                window.addEventListener('music.ack', handleAck);
+                window.addEventListener('music.error', handleError);
+
+                // Timeout after 5 seconds
+                setTimeout(() => {
+                    window.removeEventListener('music.ack', handleAck);
+                    window.removeEventListener('music.error', handleError);
+                    reject(new Error('Command timeout'));
+                }, 5000);
+
+            } catch (error) {
+                reject(error);
+            }
+        });
+    } else {
+        // Fallback to HTTP
+        const httpCmd = { ...cmd };
+        // Map new command names to old HTTP format
+        if (cmd.command === 'setVolume') {
+            (httpCmd as any).command = 'volume';
+        } else if (cmd.command === 'seek') {
+            // HTTP might not support seek, handle gracefully
+        }
+
+        const res = await apiFetch(`/v1/music`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(httpCmd),
+            auth: true,
+        })
+        if (!res?.ok) throw new Error(await res?.text?.() || 'Request failed')
+    }
 }
 
 export async function setVibe(v: Partial<{

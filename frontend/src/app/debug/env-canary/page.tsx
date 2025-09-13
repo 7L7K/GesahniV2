@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api/fetch';
+import { useAuthState } from '@/hooks/useAuth';
 
 type Canary = {
   runtime: {
@@ -20,10 +21,12 @@ type Canary = {
     headers: Record<string, string>;
     body: any;
   } | { error: string };
+  authState?: any;
 };
 
 export default function EnvCanaryPage() {
   const [data, setData] = useState<Canary | null>(null);
+  const authState = useAuthState();
 
   useEffect(() => {
     const run = async () => {
@@ -46,29 +49,30 @@ export default function EnvCanaryPage() {
           mode: useProxy ? 'proxy' : 'direct',
           apiBase,
         },
+        authState: {
+          is_authenticated: authState.is_authenticated,
+          session_ready: authState.session_ready,
+          user_id: authState.user_id,
+          source: authState.source,
+          whoamiOk: authState.whoamiOk,
+          error: authState.error,
+          lastChecked: authState.lastChecked,
+        },
       };
 
-      try {
-        const res = await apiFetch('/v1/whoami', { credentials: 'include' });
-        const headers = Object.fromEntries(res.headers.entries());
-        let body: any = null;
-        try { body = await res.clone().json(); } catch { body = await res.text().catch(() => null); }
-        snapshot.whoami = { ok: res.ok, status: res.status, headers, body };
-      } catch (e: any) {
-        snapshot.whoami = { error: e?.message || String(e) };
-      }
+      // Note: Removed direct whoami call to avoid violating AuthOrchestrator contract
+      // Auth state is now provided by useAuthState hook above
 
       setData(snapshot);
     };
     run();
-  }, []);
+  }, [authState]);
 
   return (
     <div className="p-6">
       <h1 className="text-xl font-semibold mb-3">Env Canary</h1>
-      <p className="text-sm text-gray-600 mb-4">Quick check for origin/proxy and whoami.</p>
+      <p className="text-sm text-gray-600 mb-4">Quick check for origin/proxy and auth state. (Note: Shows AuthOrchestrator state, not direct API calls)</p>
       <pre className="text-xs bg-gray-100 rounded p-4 overflow-auto">{JSON.stringify(data, null, 2)}</pre>
     </div>
   );
 }
-

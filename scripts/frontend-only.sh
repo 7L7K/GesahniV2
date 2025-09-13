@@ -10,7 +10,16 @@ echo ""
 # Load centralized localhost configuration
 if [ -f "env.localhost" ]; then
     echo "📝 Loading centralized localhost configuration..."
-    export $(grep -v '^#' env.localhost | xargs)
+    # Export variables line by line to handle values with spaces and special characters
+    while IFS='=' read -r key value; do
+        # Skip comments and empty lines
+        [[ $key =~ ^[[:space:]]*# ]] && continue
+        [[ -z $key ]] && continue
+        # Remove leading/trailing whitespace from key
+        key=$(echo "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        # Export the variable
+        export "$key=$value"
+    done < env.localhost
 else
     echo "⚠️  Warning: env.localhost not found, using default configuration"
 fi

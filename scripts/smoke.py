@@ -1,5 +1,7 @@
 import os
 import datetime as dt
+import subprocess
+import sys
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
@@ -16,7 +18,35 @@ from app.db.models import (
 DB_URL = os.getenv("DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni").replace("postgresql://", "postgresql+psycopg2://")
 engine = create_engine(DB_URL, future=True)
 
+def run_database_smoke_tests():
+    """Run Phase 5 database behavior smoke tests."""
+    print("🚀 Running Phase 5 Database Behavior Smoke Tests...")
+
+    try:
+        # Run the pytest smoke tests for Phase 5
+        result = subprocess.run([
+            sys.executable, "-m", "pytest",
+            "tests/smoke/test_phase5_database_behavior.py",
+            "-v", "--tb=short"
+        ], capture_output=True, text=True, cwd=os.path.dirname(__file__))
+
+        if result.returncode == 0:
+            print("✅ Phase 5 Database Behavior Smoke Tests PASSED")
+            return True
+        else:
+            print("❌ Phase 5 Database Behavior Smoke Tests FAILED")
+            print("STDOUT:", result.stdout)
+            print("STDERR:", result.stderr)
+            return False
+
+    except Exception as e:
+        print(f"❌ Error running Phase 5 smoke tests: {e}")
+        return False
+
+
 def main():
+    print("🔍 Running Basic Database Smoke Tests...")
+
     with Session(engine, future=True) as s:
         # Create a user (auth)
         u = AuthUser(email="test@example.com", name="Test User")
@@ -51,10 +81,23 @@ def main():
             select(Resident.name, CareDevice.battery_pct)
             .join(CareDevice, CareDevice.resident_id == Resident.id)
         ).all()
-        print("Resident + Device battery:", q)
+        print("✅ Resident + Device battery:", q)
 
         q2 = s.execute(select(MusicPreferences).limit(1)).scalars().all()
-        print("Music preferences rows:", len(q2))
+        print("✅ Music preferences rows:", len(q2))
+
+    print("✅ Basic Database Smoke Tests PASSED")
+
+    # Run Phase 5 database behavior tests
+    print()
+    success = run_database_smoke_tests()
+
+    if success:
+        print("\n🎉 ALL SMOKE TESTS PASSED!")
+        return 0
+    else:
+        print("\n❌ SOME SMOKE TESTS FAILED!")
+        return 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

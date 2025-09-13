@@ -1,148 +1,134 @@
+"""
+PostgreSQL-based device sessions store.
+"""
+
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
-import aiosqlite
+from sqlalchemy import select, update, delete
+from sqlalchemy.ext.asyncio import AsyncSession
 
-
-def _db_path() -> str:
-    from .db.paths import resolve_db_path
-    return str(resolve_db_path("USER_DB", "users.db"))
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+from .db.core import get_async_db
+from .db.models import Session as SessionModel, AuthDevice
 
 
 class SessionsStore:
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str | None = None) -> None:
+        # Path parameter kept for compatibility but not used
         self._path = path
-
-    async def _get_conn(self) -> aiosqlite.Connection:
-        conn = await aiosqlite.connect(self._path)
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS device_sessions (
-                sid TEXT PRIMARY KEY,
-                did TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                device_name TEXT,
-                created_at TEXT,
-                last_seen TEXT,
-                revoked INTEGER DEFAULT 0
-            )
-            """
-        )
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS revoked_families (
-                family_id TEXT PRIMARY KEY,
-                revoked_at TEXT
-            )
-            """
-        )
-        await conn.commit()
-        return conn
 
     async def create_session(
         self, user_id: str, *, did: str | None = None, device_name: str | None = None
     ) -> dict[str, str]:
-        """Create a new logical login session for a device.
-
-        Returns a dict with keys: sid, did.
-        """
+        """Create a new logical login session for a device."""
         sid = uuid.uuid4().hex
         if not did:
             did = uuid.uuid4().hex
-        now = _utc_now_iso()
-        conn = await self._get_conn()
-        try:
-            await conn.execute(
-                "INSERT OR REPLACE INTO device_sessions (sid, did, user_id, device_name, created_at, last_seen, revoked) VALUES (?, ?, ?, ?, ?, ?, 0)",
-                (sid, did, user_id, device_name or "Web", now, now),
+
+        async with get_async_db() as session:
+            # Create or update device
+            device_stmt = select(AuthDevice).where(AuthDevice.id == did)
+            result = await session.execute(device_stmt)
+            device = result.scalar_one_or_none()
+
+            if not device:
+                device = AuthDevice(
+                    id=did,
+                    user_id=user_id,
+                    device_name=device_name or "Web",
+                    ua_hash="",
+                    ip_hash="",
+                    created_at=datetime.now(timezone.utc),
+                    last_seen_at=datetime.now(timezone.utc),
+                )
+                session.add(device)
+
+            # Create session
+            session_obj = SessionModel(
+                id=sid,
+                user_id=user_id,
+                device_id=did,
+                created_at=datetime.now(timezone.utc),
+                last_seen_at=datetime.now(timezone.utc),
+                mfa_passed=False,
             )
-            await conn.commit()
-        finally:
-            await conn.close()
+            session.add(session_obj)
+            await session.commit()
+
         return {"sid": sid, "did": did}
 
     async def update_last_seen(self, sid: str) -> None:
-        conn = await self._get_conn()
-        try:
-            await conn.execute(
-                "UPDATE device_sessions SET last_seen = ? WHERE sid = ?",
-                (_utc_now_iso(), sid),
+        """Update last seen time for session."""
+        async with get_async_db() as session:
+            stmt = update(SessionModel).where(SessionModel.id == sid).values(
+                last_seen_at=datetime.now(timezone.utc)
             )
-            await conn.commit()
-        finally:
-            await conn.close()
+            await session.execute(stmt)
+            await session.commit()
 
     async def list_user_sessions(self, user_id: str) -> list[dict[str, Any]]:
-        conn = await self._get_conn()
-        try:
-            out: list[dict[str, Any]] = []
-            async with conn.execute(
-                "SELECT sid, did, device_name, created_at, last_seen, revoked FROM device_sessions WHERE user_id = ? ORDER BY last_seen DESC",
-                (user_id,),
-            ) as cur:
-                async for row in cur:
-                    out.append(
-                        {
-                            "sid": row[0],
-                            "did": row[1],
-                            "device_name": row[2],
-                            "created_at": row[3],
-                            "last_seen": row[4],
-                            "revoked": bool(row[5]),
-                        }
-                    )
-            return out
-        finally:
-            await conn.close()
+        """List all sessions for a user."""
+        async with get_async_db() as session:
+            stmt = select(SessionModel, AuthDevice).join(
+                AuthDevice, SessionModel.device_id == AuthDevice.id
+            ).where(SessionModel.user_id == user_id)
+
+            result = await session.execute(stmt)
+            rows = result.all()
+
+            sessions = []
+            for session_obj, device in rows:
+                sessions.append({
+                    "sid": session_obj.id,
+                    "did": device.id,
+                    "device_name": device.device_name,
+                    "created_at": session_obj.created_at.isoformat() if session_obj.created_at else None,
+                    "last_seen": session_obj.last_seen_at.isoformat() if session_obj.last_seen_at else None,
+                    "revoked": session_obj.revoked_at is not None,
+                })
+
+            return sessions
+
+    async def revoke_family(self, sid: str) -> None:
+        """Revoke a session family."""
+        async with get_async_db() as session:
+            stmt = update(SessionModel).where(SessionModel.id == sid).values(
+                revoked_at=datetime.now(timezone.utc)
+            )
+            await session.execute(stmt)
+            await session.commit()
 
     async def rename_device(self, user_id: str, did: str, new_name: str) -> bool:
-        conn = await self._get_conn()
-        try:
-            await conn.execute(
-                "UPDATE device_sessions SET device_name = ? WHERE user_id = ? AND did = ?",
-                (new_name, user_id, did),
+        """Rename a device."""
+        async with get_async_db() as session:
+            # Verify device belongs to user
+            stmt = select(AuthDevice).where(
+                AuthDevice.id == did,
+                AuthDevice.user_id == user_id
             )
-            await conn.commit()
+            result = await session.execute(stmt)
+            device = result.scalar_one_or_none()
+
+            if not device:
+                return False
+
+            device.device_name = new_name
+            await session.commit()
             return True
-        finally:
-            await conn.close()
 
-    async def revoke_family(self, family_id: str) -> None:
-        conn = await self._get_conn()
-        try:
-            await conn.execute(
-                "INSERT OR REPLACE INTO revoked_families (family_id, revoked_at) VALUES (?, ?)",
-                (family_id, _utc_now_iso()),
-            )
-            # Best-effort: mark matching primary session as revoked (diagnostic)
-            await conn.execute(
-                "UPDATE device_sessions SET revoked = 1 WHERE sid = ?",
-                (family_id,),
-            )
-            await conn.commit()
-        finally:
-            await conn.close()
-
-    async def is_family_revoked(self, family_id: str) -> bool:
-        conn = await self._get_conn()
-        try:
-            async with conn.execute(
-                "SELECT 1 FROM revoked_families WHERE family_id = ?",
-                (family_id,),
-            ) as cur:
-                row = await cur.fetchone()
-            return bool(row)
-        finally:
-            await conn.close()
+    async def revoke_device_sessions(self, user_id: str, did: str) -> None:
+        """Revoke all sessions for a device."""
+        async with get_async_db() as session:
+            stmt = update(SessionModel).where(
+                SessionModel.user_id == user_id,
+                SessionModel.device_id == did
+            ).values(revoked_at=datetime.now(timezone.utc))
+            await session.execute(stmt)
+            await session.commit()
 
 
-sessions_store = SessionsStore(_db_path())
-
-__all__ = ["sessions_store", "SessionsStore"]
+# Global instance
+sessions_store = SessionsStore()

@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useAuthState } from '@/hooks/useAuth';
 
 export default function AuthHud() {
+    const authState = useAuthState();
     const [state, setState] = useState<any>(null);
-    const [whoami, setWhoami] = useState<any>(null);
 
     useEffect(() => {
         (async () => {
@@ -14,8 +15,6 @@ export default function AuthHud() {
                 xAuthReq: r.headers.get('x-authdiag-req'),
                 xAuthSetCookie: r.headers.get('x-authdiag-setcookie'),
             });
-            const w = await fetch('/v1/whoami', { credentials: 'include' });
-            setWhoami(await w.json().catch(() => null));
         })();
     }, []);
 
@@ -32,7 +31,15 @@ export default function AuthHud() {
             <div><b>Req-Id:</b> {state.xReqId || '—'}</div>
             <div><b>Req:</b> {state.xAuthReq || '—'}</div>
             <div style={{ wordBreak: 'break-all' }}><b>Set-Cookie:</b> {state.xAuthSetCookie || '—'}</div>
-            <div style={{ marginTop: 6 }}><b>whoami:</b> <code>{JSON.stringify(whoami)}</code></div>
+            <div style={{ marginTop: 6 }}><b>Auth State:</b> <code>{JSON.stringify({
+                is_authenticated: authState.is_authenticated,
+                session_ready: authState.session_ready,
+                user_id: authState.user_id,
+                source: authState.source,
+                whoamiOk: authState.whoamiOk,
+                error: authState.error,
+                lastChecked: authState.lastChecked
+            })}</code></div>
         </div>
     );
 }

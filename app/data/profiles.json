@@ -49,17 +49,17 @@
     },
     "calendar_integration": {
       "value": false,
-      "updated_at": 1757752540.8668091,
+      "updated_at": 1757755428.9873831,
       "source": "api"
     },
     "gmail_integration": {
       "value": false,
-      "updated_at": 1757752540.869646,
+      "updated_at": 1757755428.989025,
       "source": "api"
     },
     "onboarding_completed": {
       "value": true,
-      "updated_at": 1757752540.9129012,
+      "updated_at": 1757755429.031769,
       "source": "api"
     },
     "favorite_color": {
@@ -164,17 +164,17 @@
     },
     "calendar_integration": {
       "value": false,
-      "updated_at": 1755161808.3983948,
+      "updated_at": 1757799801.0094788,
       "source": "api"
     },
     "gmail_integration": {
       "value": false,
-      "updated_at": 1755161808.3992682,
+      "updated_at": 1757799801.012574,
       "source": "api"
     },
     "onboarding_completed": {
       "value": true,
-      "updated_at": 1755161808.4213068,
+      "updated_at": 1757799801.049621,
       "source": "api"
     },
     "communication_style": {

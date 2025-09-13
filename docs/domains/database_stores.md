@@ -2,9 +2,11 @@
 
 ## Current Purpose
 
-The Database/Stores domain handles all data persistence, storage, and retrieval operations for the GesahniV2 application. It provides:
+The Database/Stores domain handles all data persistence, storage, and retrieval operations for the GesahniV2 application. Backend is PostgreSQL-only. SQLite is unsupported.
 
-- **Multi-database architecture** with specialized SQLite stores for different data types (auth, tokens, users, music, sessions, care)
+It provides:
+
+- **PostgreSQL-only architecture** with specialized stores for different data types (auth, tokens, users, music, sessions, care)
 - **Encrypted token storage** using Fernet encryption with envelope key rotation for third-party OAuth tokens
 - **Unified database initialization** with centralized schema creation and migration management
 - **Redis integration** for session storage with automatic fallback to in-memory storage
@@ -61,12 +63,12 @@ The Database/Stores domain handles all data persistence, storage, and retrieval 
 ## External Dependencies
 
 ### Database Backends
-- **SQLite** (aiosqlite) - Primary storage for all domain-specific data stores
+- **PostgreSQL** (asyncpg) - Primary storage for all domain-specific data stores
 - **Redis** - Session storage and caching with automatic fallback to in-memory
 - **File System** - Session media storage in `sessions/` directory
 
 ### Libraries
-- `aiosqlite` - Async SQLite operations for all stores
+- `asyncpg` - Async PostgreSQL operations for all stores
 - `cryptography.fernet` - Symmetric encryption for sensitive token data
 - `redis` - Redis client for session storage
 - `pydantic` - Data validation for user statistics and token models
@@ -84,8 +86,8 @@ The Database/Stores domain handles all data persistence, storage, and retrieval 
 ## Invariants / Assumptions
 
 ### Schema Consistency
-- All SQLite databases use Write-Ahead Logging (WAL) mode with busy timeout of 2500ms
-- Foreign key constraints are enabled with deferred checking during transactions
+- PostgreSQL uses transaction isolation with proper locking and constraint enforcement
+- Foreign key constraints are enabled with cascading deletes where appropriate
 - Unique constraints prevent duplicate OAuth identities per provider
 - Primary keys are UUID strings for global uniqueness
 - Timestamps are stored as Unix epoch seconds (integers)
@@ -103,10 +105,10 @@ The Database/Stores domain handles all data persistence, storage, and retrieval 
 - Relative paths are resolved to absolute paths for consistency
 
 ### Connection Management
-- SQLite connections use aiosqlite for async operations
+- PostgreSQL connections use asyncpg for async operations with connection pooling
 - Redis connections fall back gracefully to in-memory storage
 - Database locks are acquired with asyncio.Lock() for thread safety
-- Connection pooling is implicit through aiosqlite's connection management
+- Connection pooling is managed through asyncpg's connection pool
 
 ## Known Weirdness / Bugs
 
@@ -138,7 +140,7 @@ The Database/Stores domain handles all data persistence, storage, and retrieval 
 
 ### Database Operations
 - All stores return `None` or empty dicts when records don't exist
-- Update operations use `INSERT OR REPLACE` for upsert semantics
+- Update operations use `INSERT ... ON CONFLICT` for upsert semantics
 - Foreign key cascades delete related records automatically
 - Transaction failures rollback all changes atomically
 
@@ -155,7 +157,7 @@ The Database/Stores domain handles all data persistence, storage, and retrieval 
 - User statistics are incremented atomically with request processing
 
 ### Error Handling
-- SQLite operational errors are logged but may not surface to API consumers
+- PostgreSQL operational errors are logged but may not surface to API consumers
 - Redis connection failures trigger automatic fallback to in-memory storage
 - Encryption failures return None values without user-visible errors
 - Migration errors during startup can halt application initialization
@@ -166,7 +168,7 @@ The Database/Stores domain handles all data persistence, storage, and retrieval 
 - Implement proper migration versioning with rollback capabilities
 - Add database health checks and connection pool monitoring
 - Support for database schema validation and integrity checks
-- Consider moving from multiple SQLite files to a single database with schemas
+- Use PostgreSQL schemas for logical separation of data domains
 
 ### Security Enhancements
 - Implement envelope key rotation for encrypted tokens

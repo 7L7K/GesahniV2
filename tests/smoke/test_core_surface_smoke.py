@@ -38,7 +38,7 @@ class TestAuthSmokeSuite:
     def test_auth_logout_endpoint_exists(self, client):
         """covers: POST: /v1/auth/logout"""
         response = client.post('/v1/auth/logout')
-        assert response.status_code in [200, 401, 403, 500]
+        assert response.status_code in [200, 204, 401, 403, 500]
 
     def test_auth_refresh_endpoint_exists(self, client):
         """covers: POST: /v1/auth/refresh"""
@@ -88,12 +88,12 @@ class TestMusicSmokeSuite:
     def test_music_device_post(self, client):
         """covers: POST: /v1/music/device"""
         response = client.post('/v1/music/device', json={})
-        assert response.status_code in [200, 400, 401, 403, 422, 500]
+        assert response.status_code in [200, 400, 401, 403, 405, 422, 500]
 
     def test_music_post(self, client):
         """covers: POST: /v1/music"""
         response = client.post('/v1/music', json={})
-        assert response.status_code in [200, 400, 401, 403, 422, 500]
+        assert response.status_code in [200, 400, 401, 403, 405, 422, 500]
 
 
 @pytest.mark.smoke

@@ -49,6 +49,7 @@ async def token_health():
         raise HTTPException(status_code=403, detail="forbidden")
 
     from ..auth_store_tokens import get_token_system_health
+
     return await get_token_system_health()
 
 
@@ -87,10 +88,14 @@ async def debug_oauth_routes(request):
             return path in paths
 
         summary = {
-            "has_login_url": has("/v1/google/auth/login_url") or has("/google/auth/login_url"),
-            "has_callback": has("/v1/google/auth/callback") or has("/google/auth/callback"),
+            "has_login_url": has("/v1/google/auth/login_url")
+            or has("/google/auth/login_url"),
+            "has_callback": has("/v1/google/auth/callback")
+            or has("/google/auth/callback"),
             "has_v1_integrations_google_status": has("/v1/integrations/google/status"),
-            "has_v1_integrations_google_disconnect": has("/v1/integrations/google/disconnect"),
+            "has_v1_integrations_google_disconnect": has(
+                "/v1/integrations/google/disconnect"
+            ),
             "all_oauth_paths": sorted(paths),
         }
         return summary
@@ -112,7 +117,9 @@ async def debug_oauth_config(request):
         "APP_URL": os.getenv("APP_URL"),
         "FRONTEND_URL": os.getenv("FRONTEND_URL"),
         "NEXT_PUBLIC_API_ORIGIN": os.getenv("NEXT_PUBLIC_API_ORIGIN"),
-        "allowed_origins": getattr(getattr(request.app, "state", object()), "allowed_origins", []),
+        "allowed_origins": getattr(
+            getattr(request.app, "state", object()), "allowed_origins", []
+        ),
     }
 
     return cfg
@@ -124,7 +131,11 @@ async def diag_auth(request: Request):
     if not _is_dev():
         raise HTTPException(status_code=403, detail="forbidden")
 
-    from ..web.cookies import read_access_cookie, read_refresh_cookie, read_session_cookie
+    from ..web.cookies import (
+        read_access_cookie,
+        read_refresh_cookie,
+        read_session_cookie,
+    )
 
     return {
         "cookies": {
@@ -158,7 +169,10 @@ async def auth_state(request: Request):
     if not _is_dev():
         raise HTTPException(status_code=403, detail="forbidden")
     authz = "authorization" in (k.lower() for k in request.headers.keys())
-    return {"authz_header_present": authz, "cookie_names": sorted(request.cookies.keys())}
+    return {
+        "authz_header_present": authz,
+        "cookie_names": sorted(request.cookies.keys()),
+    }
 
 
 @router.get("/debug/oauth", include_in_schema=False)

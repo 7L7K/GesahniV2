@@ -22,6 +22,7 @@ OAUTH2_SCOPES: dict[str, str] = {
     "care:caregiver": "Caregiver portal and actions",
     "music:control": "Control music playback and devices",
     "admin:write": "Administrative endpoints: flags, metrics, backups",
+    "chat:write": "Send messages to AI chat endpoints",
 }
 
 
@@ -80,6 +81,7 @@ STANDARD_SCOPES = {
     "memory:search": "Search through memories and history",
     "memory:delete": "Delete memories and conversation history",
     "ai:chat": "Access AI chat and conversation features",
+    "chat:write": "Send messages to AI chat endpoints",
     "ai:voice": "Use voice synthesis and recognition features",
     "ai:personalization": "Access personalized AI features and preferences",
     # Calendar and scheduling

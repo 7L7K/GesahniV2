@@ -15,4 +15,3 @@ test('proxy mode uses relative URLs (no absolute backend origin)', async ({ page
   const forbidden = requests.filter(u => /https?:\/\/(localhost|127\.0\.0\.1):8000\//.test(u));
   expect(forbidden).toEqual([]);
 });
-

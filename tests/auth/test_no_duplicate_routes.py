@@ -17,11 +17,16 @@ def test_no_duplicate_auth_routes():
     # Check that each (path, method) combination has exactly one handler
     for (path, method), handlers in path_method_handlers.items():
         if path.startswith("/v1/auth/") or path in ["/v1/whoami", "/v1/csrf"]:
-            assert len(handlers) == 1, f"Duplicate handlers for {method} {path}: {[h.endpoint for h in handlers]}"
+            assert (
+                len(handlers) == 1
+            ), f"Duplicate handlers for {method} {path}: {[h.endpoint for h in handlers]}"
 
     # Get all actual auth routes that exist
-    actual_auth_routes = [path for (path, method) in path_method_handlers.keys()
-                         if path.startswith("/v1/auth/") or path in ["/v1/whoami", "/v1/csrf"]]
+    actual_auth_routes = [
+        path
+        for (path, method) in path_method_handlers.keys()
+        if path.startswith("/v1/auth/") or path in ["/v1/whoami", "/v1/csrf"]
+    ]
 
     # Specifically check the routes we care about (only if they exist)
     auth_routes_to_check = [
@@ -43,12 +48,16 @@ def test_no_duplicate_auth_routes():
     for path in auth_routes_to_check:
         if path in actual_auth_routes:
             # Get all methods for this path
-            path_methods = [method for (p, method) in path_method_handlers.keys() if p == path]
+            path_methods = [
+                method for (p, method) in path_method_handlers.keys() if p == path
+            ]
 
             # Ensure no duplicate handlers for the same method
             for method in path_methods:
                 handlers = path_method_handlers[(path, method)]
-                assert len(handlers) == 1, f"Duplicate {method} handlers for {path}: {[h.endpoint for h in handlers]}"
+                assert (
+                    len(handlers) == 1
+                ), f"Duplicate {method} handlers for {path}: {[h.endpoint for h in handlers]}"
         else:
             # Skip routes that don't exist (they might be conditionally registered)
             print(f"Skipping {path} - route not found in current configuration")
@@ -61,5 +70,9 @@ def test_all_routes_have_handlers():
 
     for route in app.routes:
         if isinstance(route, APIRoute):
-            assert route.endpoint is not None, f"Route {route.path} has no endpoint handler"
-            assert callable(route.endpoint), f"Route {route.path} endpoint is not callable"
+            assert (
+                route.endpoint is not None
+            ), f"Route {route.path} has no endpoint handler"
+            assert callable(
+                route.endpoint
+            ), f"Route {route.path} endpoint is not callable"

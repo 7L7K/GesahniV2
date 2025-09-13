@@ -1,6 +1,7 @@
+from datetime import UTC, datetime, timedelta
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
-from datetime import datetime, timedelta, timezone
 
 try:
     from app.metrics import LEGACY_HITS
@@ -9,15 +10,20 @@ except ImportError:
     class _LegacyHitsStub:
         def labels(self, *args, **kwargs):
             return self
+
         def inc(self, *args, **kwargs):
             pass
+
     LEGACY_HITS = _LegacyHitsStub()
+
 
 class LegacyHeadersMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp, prefix="/v1/legacy", deprecates_in_days=90):
         super().__init__(app)
         self.prefix = prefix
-        self.sunset = (datetime.now(timezone.utc) + timedelta(days=deprecates_in_days)).strftime("%a, %d %b %Y %H:%M:%S GMT")
+        self.sunset = (datetime.now(UTC) + timedelta(days=deprecates_in_days)).strftime(
+            "%a, %d %b %Y %H:%M:%S GMT"
+        )
 
     async def dispatch(self, request, call_next):
         resp = await call_next(request)

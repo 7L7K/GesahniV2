@@ -67,4 +67,3 @@ Rules:
 - ESLint forbids absolute `http://localhost:8000` in client code.
 - Playwright test fails if proxy mode leaks any absolute backend URLs.
 - Backend pytest verifies zero CORS in proxy mode and exactly one CORS layer when configured.
-

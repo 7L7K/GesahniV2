@@ -4,7 +4,7 @@
 
 The AUTH domain handles user authentication and authorization for the GesahniV2 application. It provides:
 
-- **Local user authentication** via username/password with bcrypt hashing and SQLite storage
+- **Local user authentication** via username/password with bcrypt hashing and PostgreSQL storage
 - **OAuth integration** with Google, Spotify, and Apple providers
 - **JWT token management** with access and refresh token patterns
 - **Session management** with opaque session IDs for security
@@ -78,8 +78,8 @@ The AUTH domain handles user authentication and authorization for the GesahniV2 
 
 ### Dependencies and Data Stores
 
-- **`aiosqlite`** - User authentication database (`users.db`, `auth.db`)
-- **`aiosqlite`** - Token storage database (`third_party_tokens.db`)
+- **`asyncpg`** - User authentication database (PostgreSQL)
+- **`asyncpg`** - Token storage database (PostgreSQL)
 - **`passlib`** - Password hashing with bcrypt/pbkdf2 fallback
 - **`jwt`** - JSON Web Token encoding/decoding
 - **`cryptography`** - Token encryption for third-party credentials

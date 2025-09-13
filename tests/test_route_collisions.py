@@ -1,7 +1,9 @@
 """
 Test for duplicate route detection to prevent route collisions.
 """
+
 import os
+
 from fastapi.routing import APIRoute, APIWebSocketRoute, Mount
 from fastapi.testclient import TestClient
 
@@ -34,7 +36,9 @@ def test_no_duplicate_routes():
     def get_endpoint_info(route):
         """Get endpoint information for route"""
         if isinstance(route, (APIRoute, APIWebSocketRoute)):
-            if hasattr(route.endpoint, '__module__') and hasattr(route.endpoint, '__name__'):
+            if hasattr(route.endpoint, "__module__") and hasattr(
+                route.endpoint, "__name__"
+            ):
                 return f"{route.endpoint.__module__}.{route.endpoint.__name__}"
             else:
                 return str(route.endpoint)
@@ -71,7 +75,6 @@ def test_legacy_routes_not_present_by_default():
 
     This test verifies that the environment gating works correctly.
     """
-    import os
 
     # Ensure LEGACY_MUSIC_HTTP is not set or is 0
     legacy_env = os.getenv("LEGACY_MUSIC_HTTP", "0")
@@ -89,7 +92,9 @@ def test_legacy_routes_not_present_by_default():
                 found_legacy_routes.append(route.path)
 
     # Should only find system routes, not legacy redirect routes
-    assert len(found_legacy_routes) <= 1, f"Found unexpected legacy routes: {found_legacy_routes}"
+    assert (
+        len(found_legacy_routes) <= 1
+    ), f"Found unexpected legacy routes: {found_legacy_routes}"
 
 
 def test_legacy_routes_present_when_enabled():
@@ -98,7 +103,6 @@ def test_legacy_routes_present_when_enabled():
 
     This test verifies that the environment gating works correctly when enabled.
     """
-    import os
 
     # Temporarily set the environment variable
     original_value = os.environ.get("LEGACY_MUSIC_HTTP")
@@ -115,7 +119,9 @@ def test_legacy_routes_present_when_enabled():
                     legacy_redirect_found = True
                     break
 
-        assert legacy_redirect_found, "Legacy redirect route /v1/legacy/state not found when LEGACY_MUSIC_HTTP=1"
+        assert (
+            legacy_redirect_found
+        ), "Legacy redirect route /v1/legacy/state not found when LEGACY_MUSIC_HTTP=1"
 
     finally:
         # Restore original environment
@@ -155,10 +161,14 @@ def test_default_routes_no_legacy(monkeypatch):
     paths = _paths(client)
 
     # Legacy endpoint should NOT be present
-    assert "/v1/legacy/state" not in paths, "Legacy /v1/legacy/state should not be present when LEGACY_MUSIC_HTTP=0"
+    assert (
+        "/v1/legacy/state" not in paths
+    ), "Legacy /v1/legacy/state should not be present when LEGACY_MUSIC_HTTP=0"
 
     # But the canonical system state endpoint should be present
-    assert "/v1/state" in paths and "get" in paths["/v1/state"], "/v1/state GET should be available"
+    assert (
+        "/v1/state" in paths and "get" in paths["/v1/state"]
+    ), "/v1/state GET should be available"
 
 
 def test_legacy_enabled_has_redirect(monkeypatch):
@@ -176,13 +186,19 @@ def test_legacy_enabled_has_redirect(monkeypatch):
 
     # Test that the legacy endpoint is present in OpenAPI
     paths = _paths(client)
-    assert "/v1/legacy/state" in paths and "get" in paths["/v1/legacy/state"], "/v1/legacy/state GET should be available when LEGACY_MUSIC_HTTP=1"
+    assert (
+        "/v1/legacy/state" in paths and "get" in paths["/v1/legacy/state"]
+    ), "/v1/legacy/state GET should be available when LEGACY_MUSIC_HTTP=1"
 
     # Test the actual redirect behavior (307 status code)
     response = client.get("/v1/legacy/state", allow_redirects=False)
-    assert response.status_code == 307, f"Expected 307 redirect, got {response.status_code}"
+    assert (
+        response.status_code == 307
+    ), f"Expected 307 redirect, got {response.status_code}"
 
     # Check that redirect location points to a valid canonical endpoint
     location = response.headers.get("location")
     valid_targets = {"/v1/music/state", "/v1/state", "/v1/system/state"}
-    assert location in valid_targets, f"Redirect location {location} should be one of {valid_targets}"
+    assert (
+        location in valid_targets
+    ), f"Redirect location {location} should be one of {valid_targets}"

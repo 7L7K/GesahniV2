@@ -8,4 +8,3 @@ Remove custom preflight/Safari CORS layers.
 Kill NEXT_PUBLIC_API_BASE; centralize on NEXT_PUBLIC_API_ORIGIN.
 Canonicalize GET /v1/whoami; legacy /whoami is 308 + Deprecation.
 Add Env Canary page, curl probe, ESLint + Playwright + pytest guardrails.
-

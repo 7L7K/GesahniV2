@@ -10,6 +10,22 @@ jobs:
   smoke-tests:
     name: "Smoke Tests"
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app_pw
+          POSTGRES_DB: gesahni_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - uses: actions/checkout@v4
 
@@ -22,14 +38,61 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install alembic psycopg2-binary sqlalchemy
+
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+
+    - name: Set DATABASE_URL
+      run: echo "DATABASE_URL=postgresql://app:app_pw@localhost:5432/gesahni_test" >> $GITHUB_ENV
+
+    - name: Check for SQLite usage (Phase 4 requirement)
+      run: |
+        echo "🔍 Scanning for SQLite usage in app/ directory..."
+        python scripts/check_no_sqlite.py
+
+    - name: Check pending migration heads (Phase 4 requirement)
+      run: |
+        echo "🔍 Checking for pending migration heads..."
+        python scripts/check_pending_heads.py
+
+    - name: Run database migrations
+      run: |
+        echo "🔄 Running database migrations..."
+        alembic upgrade head
 
     - name: Run smoke tests
       run: |
         python -m pytest tests/smoke -q
 
+    - name: Run Phase 5 database behavior smoke tests
+      run: |
+        echo "🚀 Running Phase 5 Database Behavior Smoke Tests..."
+        python scripts/smoke.py
+
   oauth-tests:
     name: "OAuth Tests"
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app_pw
+          POSTGRES_DB: gesahni_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - uses: actions/checkout@v4
 
@@ -42,6 +105,21 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install alembic psycopg2-binary sqlalchemy
+
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+
+    - name: Set DATABASE_URL
+      run: echo "DATABASE_URL=postgresql://app:app_pw@localhost:5432/gesahni_test" >> $GITHUB_ENV
+
+    - name: Run database migrations
+      run: |
+        alembic upgrade head
 
     - name: Run OAuth tests
       run: |
@@ -51,6 +129,22 @@ jobs:
   contract-tests:
     name: "Contract Tests"
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app_pw
+          POSTGRES_DB: gesahni_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - uses: actions/checkout@v4
 
@@ -63,6 +157,21 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install alembic psycopg2-binary sqlalchemy
+
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+
+    - name: Set DATABASE_URL
+      run: echo "DATABASE_URL=postgresql://app:app_pw@localhost:5432/gesahni_test" >> $GITHUB_ENV
+
+    - name: Run database migrations
+      run: |
+        alembic upgrade head
 
     - name: Run contract tests
       run: |
@@ -71,6 +180,22 @@ jobs:
   ask-router-tests:
     name: "Ask Router Contract Tests"
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app_pw
+          POSTGRES_DB: gesahni_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - uses: actions/checkout@v4
 
@@ -83,6 +208,21 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install alembic psycopg2-binary sqlalchemy
+
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+
+    - name: Set DATABASE_URL
+      run: echo "DATABASE_URL=postgresql://app:app_pw@localhost:5432/gesahni_test" >> $GITHUB_ENV
+
+    - name: Run database migrations
+      run: |
+        alembic upgrade head
 
     - name: Run ask router contract tests
       run: |
@@ -91,6 +231,22 @@ jobs:
   refresh-sessions-tests:
     name: "Refresh & Sessions Tests"
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app_pw
+          POSTGRES_DB: gesahni_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - uses: actions/checkout@v4
 
@@ -103,6 +259,21 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install alembic psycopg2-binary sqlalchemy
+
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+
+    - name: Set DATABASE_URL
+      run: echo "DATABASE_URL=postgresql://app:app_pw@localhost:5432/gesahni_test" >> $GITHUB_ENV
+
+    - name: Run database migrations
+      run: |
+        alembic upgrade head
 
     - name: Run refresh and sessions tests
       run: |

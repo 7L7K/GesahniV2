@@ -28,20 +28,21 @@ describe('CSP Configuration', () => {
             expect(directives['connect-src']).toContain('ws://localhost:8000/v1/ws/health');
         });
 
-        it('should include frontend WebSocket URLs in connect-src', () => {
+        it('should include backend WebSocket URLs in connect-src', () => {
             const directives = getCSPDirectives();
-            expect(directives['connect-src']).toContain('ws://localhost:3000/v1/transcribe');
-            expect(directives['connect-src']).toContain('ws://localhost:3000/v1/ws/care');
-            expect(directives['connect-src']).toContain('ws://localhost:3000/v1/ws/health');
+            expect(directives['connect-src']).toContain('ws://localhost:8000/v1/transcribe');
+            expect(directives['connect-src']).toContain('ws://localhost:8000/v1/ws/care');
+            expect(directives['connect-src']).toContain('ws://localhost:8000/v1/ws/health');
         });
 
-        it('should not include hardcoded localhost:3000 beyond page origin', () => {
+        it('should include localhost:3000 for page origin but WebSockets go to backend', () => {
             const directives = getCSPDirectives();
             const connectSrc = directives['connect-src'];
 
-            // Should only include localhost:3000 in WebSocket URLs, not as a direct HTTP URL
-            const localhost3000Entries = connectSrc.filter(url => url.includes('localhost:3000'));
-            expect(localhost3000Entries.every(url => url.startsWith('ws://localhost:3000'))).toBe(true);
+            // WebSocket URLs should go to backend (localhost:8000)
+            expect(connectSrc).toContain('ws://localhost:8000/v1/transcribe');
+            expect(connectSrc).toContain('ws://localhost:8000/v1/ws/care');
+            expect(connectSrc).toContain('ws://localhost:8000/v1/ws/health');
         });
 
         it('should generate valid CSP policy string', () => {
@@ -49,7 +50,7 @@ describe('CSP Configuration', () => {
             expect(typeof policy).toBe('string');
             expect(policy).toContain('connect-src');
             expect(policy).toContain('http://localhost:8000');
-            expect(policy).toContain('ws://localhost:3000');
+            expect(policy).toContain('ws://localhost:8000');
         });
     });
 

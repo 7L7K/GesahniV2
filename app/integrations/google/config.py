@@ -32,9 +32,9 @@ def get_google_scopes() -> list[str]:
 # used to sign our state param
 JWT_STATE_SECRET = os.getenv("JWT_STATE_SECRET", "dev_only_change_me")
 
-# optional: override DB URL; defaults to sqlite file
+# optional: override DB URL; enforce PostgreSQL default for production
 GOOGLE_OAUTH_DB_URL = os.getenv(
-    "GOOGLE_OAUTH_DB_URL", "sqlite:///./google_oauth.sqlite3"
+    "GOOGLE_OAUTH_DB_URL", "postgresql://app:app_pw@localhost:5432/gesahni"
 )
 
 

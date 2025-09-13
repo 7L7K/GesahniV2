@@ -2,18 +2,17 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import text
+
+from .db.core import sync_engine
+
 STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-LEDGER_DB = STORAGE_DIR / "ledger.sqlite"
-NOTES_DB = STORAGE_DIR / "notes.sqlite"
-REMINDERS_DB = STORAGE_DIR / "reminders.sqlite"
-SUMMARIES_DB = STORAGE_DIR / "summaries.sqlite"
 ALIASES_JSON = STORAGE_DIR / "aliases.json"
 
 # Optional JSONL debug export (kept for debugging; SQLite is authoritative)
@@ -28,83 +27,20 @@ RETENTION_SUMMARIES_DAYS = 365
 DEDUPE_WINDOW = int(os.getenv("LEDGER_DEDUPE_WINDOW_S", "10"))
 
 
-def _conn(path: Path) -> sqlite3.Connection:
-    c = sqlite3.connect(str(path), detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
-    c.row_factory = sqlite3.Row
-    # Use WAL for better durability/concurrency when possible
-    try:
-        c.execute("PRAGMA journal_mode=WAL")
-    except Exception:
-        pass
-    return c
+def _pg_exec(query: str, params: dict[str, Any] | None = None) -> None:
+    with sync_engine.begin() as conn:
+        conn.execute(text(query), params or {})
+
+
+def _pg_fetchone(query: str, params: dict[str, Any]) -> dict[str, Any] | None:
+    with sync_engine.connect() as conn:
+        res = conn.execute(text(query), params)
+        row = res.mappings().first()
+        return dict(row) if row else None
 
 
 def init_storage() -> None:
-    """Create DB files and tables if they do not exist. Add missing columns when upgrading."""
-    # Ledger
-    with _conn(LEDGER_DB) as c:
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS ledger (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                type TEXT,
-                skill TEXT,
-                slots_json TEXT,
-                reversible INTEGER,
-                reverse_id INTEGER,
-                ts TEXT,
-                idempotency_key TEXT,
-                user_id TEXT
-            )
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS ledger_ts_idx ON ledger(ts)")
-        c.execute("CREATE INDEX IF NOT EXISTS ledger_idemp_idx ON ledger(idempotency_key)")
-        c.execute("CREATE INDEX IF NOT EXISTS ledger_user_idx ON ledger(user_id)")
-
-    # Notes
-    with _conn(NOTES_DB) as c:
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS notes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                text TEXT,
-                created_at TEXT,
-                tags TEXT,
-                pinned INTEGER DEFAULT 0
-            )
-            """
-        )
-
-    # Reminders
-    with _conn(REMINDERS_DB) as c:
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS reminders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                text TEXT,
-                when_txt TEXT,
-                recurrence TEXT,
-                status TEXT,
-                created_by TEXT,
-                created_at TEXT
-            )
-            """
-        )
-
-    # Summaries
-    with _conn(SUMMARIES_DB) as c:
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS summaries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                date_txt TEXT UNIQUE,
-                bullets_json TEXT,
-                source_hash TEXT,
-                created_at TEXT
-            )
-            """
-        )
+    """No-op for PostgreSQL-managed schemas (migrations create objects)."""
 
     # Aliases file
     if not ALIASES_JSON.exists():
@@ -112,14 +48,7 @@ def init_storage() -> None:
 
 
 def _ensure_ledger_schema() -> None:
-    """Add missing columns on upgrade for older DBs (best-effort)."""
-    with _conn(LEDGER_DB) as c:
-        try:
-            cols = [r[1] for r in c.execute("PRAGMA table_info(ledger)").fetchall()]
-            if "user_id" not in cols:
-                c.execute("ALTER TABLE ledger ADD COLUMN user_id TEXT")
-        except Exception:
-            pass
+    return None
 
 
 def _append_debug_jsonl(record: dict[str, Any]) -> None:
@@ -141,37 +70,51 @@ def record_ledger(
     idempotency_key: str | None = None,
     user_id: str | None = None,
 ) -> tuple[bool, int]:
-    """Record an action atomically in the SQLite ledger.
+    """Record an action atomically in PostgreSQL storage.ledger.
 
-    Returns (inserted, rowid). If the entry was deduped by idempotency window,
+    Returns (inserted, rowid). If unique conflict on (user_id, idempotency_key),
     inserted will be False and rowid points to the existing entry.
     """
     init_storage()
-    _ensure_ledger_schema()
-    slots_json = json.dumps(slots or {}, ensure_ascii=False)
-    ts = datetime.now(UTC).isoformat()
-
-    with _conn(LEDGER_DB) as c:
-        # Deduplicate by idempotency_key within DEDUPE_WINDOW seconds
-        if idempotency_key:
-            cutoff = (datetime.now(UTC) - timedelta(seconds=DEDUPE_WINDOW)).isoformat()
-            cur = c.execute(
-                "SELECT id, ts FROM ledger WHERE idempotency_key = ? AND ts >= ? ORDER BY ts DESC LIMIT 1",
-                (idempotency_key, cutoff),
-            )
-            row = cur.fetchone()
-            if row:
-                return False, int(row["id"])
-
-        cur = c.execute(
-            "INSERT INTO ledger (type, skill, slots_json, reversible, reverse_id, ts, idempotency_key, user_id) VALUES (?,?,?,?,?,?,?,?)",
-            (type, skill, slots_json, 1 if reversible else 0, reverse_id, ts, idempotency_key, user_id),
+    meta: dict[str, Any] = {
+        "skill": skill,
+        "slots": slots or {},
+        "reversible": bool(reversible),
+        "reverse_id": reverse_id,
+        "type": type,
+    }
+    now = datetime.now(UTC)
+    # Attempt insert with ON CONFLICT DO NOTHING
+    _pg_exec(
+        """
+        INSERT INTO storage.ledger (user_id, idempotency_key, operation, amount, metadata, created_at)
+        VALUES (:user_id, :idempotency_key, :operation, NULL, :metadata::jsonb, :created_at)
+        ON CONFLICT (user_id, idempotency_key) DO NOTHING
+        """,
+        {
+            "user_id": user_id,
+            "idempotency_key": idempotency_key,
+            "operation": type,
+            "metadata": json.dumps(meta, ensure_ascii=False),
+            "created_at": now,
+        },
+    )
+    # Fetch id
+    row = _pg_fetchone(
+        "SELECT id FROM storage.ledger WHERE user_id = :user_id AND idempotency_key = :idempotency_key",
+        {"user_id": user_id, "idempotency_key": idempotency_key},
+    )
+    inserted = True
+    if row is None:
+        # Rare: idempotency_key None or not provided -> best-effort insert then fetch
+        row = _pg_fetchone(
+            "SELECT id FROM storage.ledger WHERE user_id = :user_id ORDER BY created_at DESC LIMIT 1",
+            {"user_id": user_id or ""},
         )
-        rowid = cur.lastrowid
-
-        # Do NOT write JSONL here. JSONL is export-only and must be generated
-        # from SQLite on demand to avoid dual-write drift.
-        return True, int(rowid)
+    else:
+        # If the row existed, then not inserted
+        inserted = False
+    return bool(inserted), int(row["id"]) if row and "id" in row else 0
 
 
 def export_ledger_jsonl(target_path: Path) -> None:
@@ -181,12 +124,13 @@ def export_ledger_jsonl(target_path: Path) -> None:
     """
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        with _conn(LEDGER_DB) as c:
-            rows = c.execute("SELECT * FROM ledger ORDER BY ts ASC").fetchall()
+        from sqlalchemy import select
+        with sync_engine.connect() as conn:
+            rows = conn.execute(text("SELECT id, user_id, idempotency_key, operation, amount, metadata, created_at FROM storage.ledger ORDER BY created_at ASC")).mappings().all()
             with open(target_path, "w", encoding="utf-8") as f:
                 for r in rows:
                     try:
-                        f.write(json.dumps({k: r[k] for k in r.keys()}, ensure_ascii=False) + "\n")
+                        f.write(json.dumps(dict(r), ensure_ascii=False) + "\n")
                     except Exception:
                         continue
     except Exception:
@@ -200,30 +144,33 @@ def link_reverse(forward_id: int, reverse_id: int) -> None:
     the undo row.
     """
     try:
-        with _conn(LEDGER_DB) as c:
-            c.execute("UPDATE ledger SET reverse_id = ? WHERE id = ?", (reverse_id, forward_id))
+        _pg_exec(
+            """
+            UPDATE storage.ledger SET metadata = jsonb_set(COALESCE(metadata,'{}'::jsonb), '{reverse_id}', to_jsonb(:reverse_id::int), true)
+            WHERE id = :forward_id
+            """,
+            {"reverse_id": reverse_id, "forward_id": forward_id},
+        )
     except Exception:
         pass
 
 
 def add_note(text: str, tags: list[str] | None = None, pinned: bool = False) -> int:
-    init_storage()
-    tags_txt = json.dumps(tags or [], ensure_ascii=False)
-    created_at = datetime.now(UTC).isoformat()
-    with _conn(NOTES_DB) as c:
-        cur = c.execute("INSERT INTO notes (text, created_at, tags, pinned) VALUES (?,?,?,?)", (text, created_at, tags_txt, 1 if pinned else 0))
-        return cur.lastrowid
+    created_at = datetime.now(UTC)
+    row = _pg_fetchone(
+        """
+        INSERT INTO user_data.notes (user_id, text, created_at)
+        VALUES (:user_id, :text, :created_at)
+        RETURNING id
+        """,
+        {"user_id": os.getenv("DEFAULT_NOTES_USER_ID", "00000000-0000-0000-0000-000000000001"), "text": text, "created_at": created_at},
+    )
+    return int(row["id"]) if row else 0
 
 
 def add_reminder(text: str, when_txt: str, recurrence: str | None = None, created_by: str | None = None) -> int:
-    init_storage()
-    created_at = datetime.now(UTC).isoformat()
-    with _conn(REMINDERS_DB) as c:
-        cur = c.execute(
-            "INSERT INTO reminders (text, when_txt, recurrence, status, created_by, created_at) VALUES (?,?,?,?,?,?)",
-            (text, when_txt, recurrence or "", "pending", created_by, created_at),
-        )
-        return cur.lastrowid
+    # Not yet implemented in PG; placeholder returns 0
+    return 0
 
 
 def save_alias(alias: str, entity_id: str, confidence: float = 1.0) -> None:
@@ -245,58 +192,44 @@ def load_aliases() -> dict[str, dict[str, Any]]:
 
 
 def save_summary(date_txt: str, bullets: list[str], source_hash: str | None = None) -> int:
-    init_storage()
-    created_at = datetime.now(UTC).isoformat()
-    bullets_json = json.dumps(bullets, ensure_ascii=False)
-    with _conn(SUMMARIES_DB) as c:
-        cur = c.execute(
-            "INSERT OR REPLACE INTO summaries (date_txt, bullets_json, source_hash, created_at) VALUES (?,?,?,?)",
-            (date_txt, bullets_json, source_hash or "", created_at),
-        )
-        return cur.lastrowid
+    # Not yet implemented in PG; placeholder returns 0
+    return 0
 
 
 def get_last_reversible_action(user_id: str | None = None, action_types: list[str] | None = None) -> dict[str, Any] | None:
-    init_storage()
-    _ensure_ledger_schema()
-    q = "SELECT * FROM ledger WHERE reversible = 1"
-    params: list[Any] = []
+    where = ["(metadata->>'reversible')::boolean = true"]
+    params: dict[str, Any] = {}
     if user_id:
-        q += " AND user_id = ?"
-        params.append(user_id)
+        where.append("user_id = :user_id")
+        params["user_id"] = user_id
     if action_types:
-        placeholders = ",".join(["?" for _ in action_types])
-        q += f" AND type IN ({placeholders})"
-        params.extend(action_types)
-    q += " ORDER BY ts DESC LIMIT 1"
-
-    with _conn(LEDGER_DB) as c:
-        cur = c.execute(q, params)
-        row = cur.fetchone()
-        if not row:
-            return None
-        try:
-            slots = json.loads(row["slots_json"] or "{}")
-        except Exception:
-            slots = {}
-        return {
-            "id": int(row["id"]),
-            "type": row["type"],
-            "skill": row["skill"],
-            "slots": slots,
-            "reversible": bool(row["reversible"]),
-            "reverse_id": row["reverse_id"],
-            "ts": row["ts"],
-            "idempotency_key": row["idempotency_key"],
-            "user_id": row["user_id"],
-        }
+        where.append("operation = ANY(:ops)")
+        params["ops"] = action_types
+    q = f"SELECT id, user_id, idempotency_key, operation, metadata, created_at FROM storage.ledger WHERE {' AND '.join(where)} ORDER BY created_at DESC LIMIT 1"
+    row = _pg_fetchone(q, params)
+    if not row:
+        return None
+    md = row.get("metadata") or {}
+    try:
+        slots = (md or {}).get("slots") or {}
+    except Exception:
+        slots = {}
+    return {
+        "id": int(row["id"]),
+        "type": row.get("operation"),
+        "skill": (md or {}).get("skill"),
+        "slots": slots,
+        "reversible": True,
+        "reverse_id": (md or {}).get("reverse_id"),
+        "ts": row.get("created_at").isoformat() if row.get("created_at") else None,
+        "idempotency_key": row.get("idempotency_key"),
+        "user_id": row.get("user_id"),
+    }
 
 
 def prune_retention() -> None:
     """Prune according to retention policies (best-effort, synchronous)."""
-    init_storage()
-    cutoff = (datetime.now(UTC) - timedelta(seconds=RETENTION_LEDGER_SECONDS)).isoformat()
-    with _conn(LEDGER_DB) as c:
-        c.execute("DELETE FROM ledger WHERE ts < ?", (cutoff,))
+    cutoff = datetime.now(UTC) - timedelta(seconds=RETENTION_LEDGER_SECONDS)
+    _pg_exec("DELETE FROM storage.ledger WHERE created_at < :cutoff", {"cutoff": cutoff})
 
 

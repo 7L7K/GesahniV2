@@ -164,6 +164,7 @@ ALIASES.update(
         "/care/device_status": ("GET", _safe_import("app.api.care", "device_status")),
         # Music shims
         "/music": ("GET", _safe_import("app.router.music_api", "music_status")),
+        "/music/state": ("GET", _safe_import("app.router.music_api", "music_status")),
         "/music/devices": (
             "GET",
             _safe_import("app.router.music_api", "music_devices"),
@@ -274,7 +275,7 @@ async def _fallback(request: Request, path: str, method: str):
         return JSONResponse({"devices": []}, status_code=200)
 
     # Music
-    if path == "/music":
+    if path in ("/music", "/music/state"):
         # Normalize music status shape
         return JSONResponse(
             {"playing": False, "device": None, "track": None}, status_code=200

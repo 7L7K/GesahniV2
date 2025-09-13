@@ -1,6 +1,7 @@
 import logging
 import re
-from fastapi import Response, Request
+
+from fastapi import Request, Response
 
 log = logging.getLogger("auth.debug")
 _value_re = re.compile(r"(?:^|;)\s*([^=]+)=([^;]*)")
@@ -36,7 +37,7 @@ def _get_set_cookie_headers(resp: Response) -> list[str]:
     # Fallback to raw_headers scanning
     try:
         out: list[str] = []
-        for k, v in (resp.raw_headers or []):
+        for k, v in resp.raw_headers or []:
             try:
                 if k.decode("latin-1").lower() == "set-cookie":
                     out.append(v.decode("latin-1"))
@@ -72,4 +73,3 @@ def log_incoming_cookies(req: Request, route: str):
     except Exception:
         cookies = {}
     log.info("COOKIES_IN route=%s cookies=%s", route, cookies)
-

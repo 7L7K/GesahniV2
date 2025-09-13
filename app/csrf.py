@@ -81,11 +81,13 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         # Bypass CSRF for Bearer-only auth (Authorization header present, no session cookie)
         auth_header = request.headers.get("Authorization")
         try:
-            from .cookies import read_access_cookie, read_session_cookie
+            from .web.cookies import read_access_cookie, read_session_cookie
 
             session_cookie = read_access_cookie(request) or read_session_cookie(request) or request.cookies.get("session")
         except Exception:
-            session_cookie = request.cookies.get("access_token") or request.cookies.get("__session") or request.cookies.get("session")
+            # Fallback to direct cookie reads if helpers fail (should not happen in normal operation)
+            from .web.cookies import NAMES
+            session_cookie = request.cookies.get(NAMES.access) or request.cookies.get(NAMES.session) or request.cookies.get("session")
         if auth_header and auth_header.startswith("Bearer ") and not session_cookie:
             logger.info(
                 "bypass: csrf_bearer_only_auth header=<%s>",

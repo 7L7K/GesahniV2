@@ -5,14 +5,17 @@ const useDevProxy = ["1", "true", "yes", "on"].includes(String(process.env.NEXT_
 const apiOrigin = (process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000").replace(/\/$/, '');
 const API_URL = useDevProxy ? '' : apiOrigin;
 
-// Build WebSocket URLs dynamically (only if API_URL is not empty)
-const WS_URL = API_URL ? buildWebSocketUrl(API_URL, '/v1/ws/care') : ''
-const WS_HEALTH_URL = API_URL ? buildWebSocketUrl(API_URL, '/v1/ws/health') : ''
+// WebSocket URLs always need backend API origin, not frontend proxy
+const WS_API_ORIGIN = apiOrigin;
 
-// Build frontend WebSocket URLs for actual connections (only if API_URL is not empty)
-const FRONTEND_WS_URL = API_URL ? buildCanonicalWebSocketUrl(API_URL, '/v1/transcribe') : ''
-const FRONTEND_WS_CARE_URL = API_URL ? buildCanonicalWebSocketUrl(API_URL, '/v1/ws/care') : ''
-const FRONTEND_WS_HEALTH_URL = API_URL ? buildCanonicalWebSocketUrl(API_URL, '/v1/ws/health') : ''
+// Build WebSocket URLs for CSP (always use backend origin)
+const WS_URL = buildWebSocketUrl(WS_API_ORIGIN, '/v1/ws/care')
+const WS_HEALTH_URL = buildWebSocketUrl(WS_API_ORIGIN, '/v1/ws/health')
+
+// Build frontend WebSocket URLs for actual connections (always use backend origin)
+const FRONTEND_WS_URL = buildCanonicalWebSocketUrl(WS_API_ORIGIN, '/v1/transcribe')
+const FRONTEND_WS_CARE_URL = buildCanonicalWebSocketUrl(WS_API_ORIGIN, '/v1/ws/care')
+const FRONTEND_WS_HEALTH_URL = buildCanonicalWebSocketUrl(WS_API_ORIGIN, '/v1/ws/health')
 
 export function getCSPDirectives(): Record<string, string[]> {
     const isDev = process.env.NODE_ENV === 'development'

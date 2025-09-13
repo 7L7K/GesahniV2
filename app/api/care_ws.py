@@ -170,104 +170,45 @@ async def ws_care_docs(_user_id: str = Depends(get_current_user_id)):
 
 @router.websocket("/ws/care")
 async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
-    # verify_ws already handled authentication and origin validation
-    # Get user_id from WebSocket state (set by verify_ws)
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info("🏥 ws.care.handler.STARTED", extra={"meta": {
+        "origin": ws.headers.get("Origin"),
+        "user_agent": ws.headers.get("User-Agent"),
+        "query_params": dict(ws.query_params),
+        "headers": dict(ws.headers)
+    }})
+
+    # Get user_id from WebSocket state (set by dep_verify_ws)
     try:
         uid = getattr(ws.state, "user_id", None)
     except Exception:
         uid = None
 
     if not uid:
-        # This shouldn't happen if verify_ws worked, but handle gracefully
+        # This shouldn't happen if dep_verify_ws worked, but handle gracefully
+        logger.error("ws.care.auth.failed: no user_id after dep_verify_ws")
         try:
             await ws.close(code=1008, reason="unauthorized")
         except Exception:
             pass
-        try:
-            logger.info(
-                "ws.close policy",
-                extra={
-                    "meta": {
-                        "endpoint": "/v1/ws/care",
-                        "reason": "unauthorized",
-                        "code": 1008,
-                    }
-                },
-            )
-        except Exception:
-            pass
         return
+
+    logger.info("ws.care.auth.success: user_id=%s", uid)
     # Prefer agreed subprotocol; fall back gracefully
     try:
         await ws.accept(subprotocol="json.realtime.v1")
     except Exception:
         await ws.accept()
 
-    # Phase 6.2: Audit WebSocket connect
+    # Send hello frame after accept
     try:
-        from app.audit import append_audit
+        await ws.send_json({"type": "hello", "proto": "json.realtime.v1"})
+    except Exception:
+        pass  # Don't fail connection if hello fails
 
-        append_audit(
-            action="ws_connect",
-            user_id_hashed=uid,
-            data={"path": "/v1/ws/care", "endpoint": "/v1/ws/care"},
-            ip_address=_client_ip(ws),
-        )
-    except Exception:
-        # Never fail WebSocket connection due to audit issues
-        pass
-
-    # Post-accept handshake burst control (per-IP). Close immediately with 1013 when exceeded.
-    try:
-        ip = _client_ip(ws)
-        test_salt = (
-            os.getenv("PYTEST_RUNNING") or os.getenv("PYTEST_CURRENT_TEST") or ""
-        )
-        key = f"{ip}:{test_salt}" if test_salt else ip
-        now = time.monotonic()
-        async with _hs_lock:
-            global _hs_reset
-            if now - float(_hs_reset or 0.0) >= _HS_WINDOW_S:
-                _hs_counts.clear()
-                _hs_reset = now
-            _hs_counts[key] = int(_hs_counts.get(key, 0)) + 1
-            count = _hs_counts[key]
-        if count > _HS_LIMIT:
-            try:
-                await ws.close(code=1013, reason="too_busy")
-            except Exception:
-                pass
-            try:
-                logger.info(
-                    "ws.close policy",
-                    extra={
-                        "meta": {
-                            "endpoint": "/v1/ws/care",
-                            "reason": "too_busy",
-                            "code": 1013,
-                            "ip": ip,
-                        }
-                    },
-                )
-            except Exception:
-                pass
-            return
-    except Exception:
-        # Do not fail connection on limiter bookkeeping error
-        pass
-    try:
-        logger.info(
-            "ws.accept",
-            extra={
-                "meta": {
-                    "endpoint": "/v1/ws/care",
-                    "user_id": uid,
-                    "subprotocol": "json.realtime.v1",
-                }
-            },
-        )
-    except Exception:
-        pass
+    logger.info("ws.care.connection_established")
     import time as _t
 
     last_pong = _t.monotonic()

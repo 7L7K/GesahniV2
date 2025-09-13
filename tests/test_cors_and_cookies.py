@@ -1,7 +1,6 @@
 import os
 from contextlib import contextmanager
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -57,7 +56,13 @@ def test_single_cors_when_configured():
 
 def test_cookie_roundtrip_login_whoami(tmp_path, monkeypatch):
     # Ensure cookie roundtrip works without CORS in proxy mode
-    with env(CORS_ALLOW_ORIGINS=None, COOKIE_SAMESITE="lax", COOKIE_SECURE=0, DEV_MODE=1, JWT_SECRET="secret-secret-123456"):
+    with env(
+        CORS_ALLOW_ORIGINS=None,
+        COOKIE_SAMESITE="lax",
+        COOKIE_SECURE=0,
+        DEV_MODE=1,
+        JWT_SECRET="secret-secret-123456",
+    ):
         app = _build_app()
         client = TestClient(app)
 
@@ -73,4 +78,3 @@ def test_cookie_roundtrip_login_whoami(tmp_path, monkeypatch):
         body = r2.json()
         # Accept either canonical keys or fallback shape but must be authed
         assert body.get("is_authenticated") is True or body.get("authenticated") is True
-

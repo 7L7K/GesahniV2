@@ -1,8 +1,11 @@
+import logging
 import os
 from datetime import UTC
 from typing import NamedTuple
 
 from app.cookie_config import format_cookie_header, get_cookie_config
+
+logger = logging.getLogger(__name__)
 
 
 class CookieNames(NamedTuple):
@@ -19,7 +22,10 @@ _PREFIX = "__Host-" if (_CANON == "host" or _HOST) else ""
 
 if _CANON == "host":
     NAMES = CookieNames(
-        f"{_PREFIX}access_token", f"{_PREFIX}refresh_token", f"{_PREFIX}__session", "csrf_token"
+        f"{_PREFIX}access_token",
+        f"{_PREFIX}refresh_token",
+        f"{_PREFIX}__session",
+        "csrf_token",
     )
 elif _CANON == "gsnh":
     NAMES = CookieNames(
@@ -28,7 +34,10 @@ elif _CANON == "gsnh":
 else:
     # legacy/classic
     NAMES = CookieNames(
-        f"{_PREFIX}access_token", f"{_PREFIX}refresh_token", f"{_PREFIX}__session", "csrf_token"
+        f"{_PREFIX}access_token",
+        f"{_PREFIX}refresh_token",
+        f"{_PREFIX}__session",
+        "csrf_token",
     )
 
 # Cookie aliases for backward compatibility (old gsn_* names)
@@ -53,9 +62,27 @@ def get_any(req, names: set[str]) -> str | None:
     return None
 
 
-def _append_cookie(resp, *, key: str, value: str, max_age: int, http_only: bool, same_site: str, domain: str | None, path: str, secure: bool) -> None:
+def _append_cookie(
+    resp,
+    *,
+    key: str,
+    value: str,
+    max_age: int,
+    http_only: bool,
+    same_site: str,
+    domain: str | None,
+    path: str,
+    secure: bool,
+) -> None:
     header = format_cookie_header(
-        key=key, value=value or "", max_age=max_age, secure=secure, samesite=same_site, path=path, httponly=http_only, domain=domain or None
+        key=key,
+        value=value or "",
+        max_age=max_age,
+        secure=secure,
+        samesite=same_site,
+        path=path,
+        httponly=http_only,
+        domain=domain or None,
     )
     # Starlette Response supports headers.append("set-cookie", ...)
     resp.headers.append("set-cookie", header)
@@ -145,12 +172,23 @@ def set_auth_cookies(
     access_ttl: int,
     refresh_ttl: int,
     request=None,
+    **extras,
 ):
     """Public facade used across the codebase to set auth cookies consistently.
 
     Derives cookie attributes from centralized cookie configuration when a
     `request` is provided. Emits Set-Cookie headers via Response.headers.
+
+    Accepts and ignores extra keyword arguments for forward compatibility
+    (e.g., callers may pass identity or other metadata).
     """
+    if extras:
+        try:
+            ignored = ",".join(sorted(extras.keys()))
+        except Exception:
+            ignored = "<unprintable>"
+        logger.warning("set_auth_cookies: ignoring extra kwargs: %s", ignored)
+
     same_site = "lax"
     domain = None
     path = "/"
@@ -167,18 +205,55 @@ def set_auth_cookies(
     except Exception:
         pass
 
-    if access is None:
-        return
-
-    # Canonical cookie
-    _append_cookie(resp, key=NAMES.access, value=access, max_age=access_ttl, http_only=True,
-                   same_site=same_site.capitalize(), domain=domain, path=path, secure=secure)
+    # Access cookie: only write when non-empty
+    if access:
+        _append_cookie(
+            resp,
+            key=NAMES.access,
+            value=access,
+            max_age=access_ttl,
+            http_only=True,
+            same_site=same_site.capitalize(),
+            domain=domain,
+            path=path,
+            secure=secure,
+        )
     if refresh is not None and refresh != "":
-        _append_cookie(resp, key=NAMES.refresh, value=refresh, max_age=refresh_ttl, http_only=True,
-                       same_site=same_site.capitalize(), domain=domain, path=path, secure=secure)
+        _append_cookie(
+            resp,
+            key=NAMES.refresh,
+            value=refresh,
+            max_age=refresh_ttl,
+            http_only=True,
+            same_site=same_site.capitalize(),
+            domain=domain,
+            path=path,
+            secure=secure,
+        )
     if session_id is not None and session_id != "":
-        _append_cookie(resp, key=NAMES.session, value=session_id, max_age=access_ttl, http_only=True,
-                       same_site=same_site.capitalize(), domain=domain, path=path, secure=secure)
+        _append_cookie(
+            resp,
+            key=NAMES.session,
+            value=session_id,
+            max_age=access_ttl,
+            http_only=True,
+            same_site=same_site.capitalize(),
+            domain=domain,
+            path=path,
+            secure=secure,
+        )
+
+    # Validation logging: cookie status summary
+    try:
+        access_set = bool(access)
+        refresh_set = bool(refresh is not None and refresh != "")
+        session_set = bool(session_id is not None and session_id != "")
+        logger.info(
+            f"set_auth_cookies: access={access_set} refresh={refresh_set} session={session_set} "
+            f"samesite={same_site} secure={secure}"
+        )
+    except Exception:
+        pass  # Best-effort logging, don't fail on logging errors
 
 
 def set_csrf(
@@ -192,7 +267,11 @@ def set_csrf(
     secure: bool | None = None,
 ):
     # SameSite=None forces Secure=True per spec
-    sec = True if same_site.lower() == "none" else (True if secure is None else bool(secure))
+    sec = (
+        True
+        if same_site.lower() == "none"
+        else (True if secure is None else bool(secure))
+    )
     _append_cookie(
         resp,
         key=NAMES.csrf,
@@ -271,10 +350,28 @@ def clear_oauth_state_cookies(resp, *, provider: str = "oauth"):
     state_cookie_name = f"{provider}_state"
     next_cookie_name = f"{provider}_next"
     # Clear only the two contract cookies: state (HttpOnly) and next (non-HttpOnly)
-    _append_cookie(resp, key=state_cookie_name, value="", max_age=0, http_only=True,
-                   same_site="Lax", domain=None, path="/", secure=True)
-    _append_cookie(resp, key=next_cookie_name, value="", max_age=0, http_only=False,
-                   same_site="Lax", domain=None, path="/", secure=True)
+    _append_cookie(
+        resp,
+        key=state_cookie_name,
+        value="",
+        max_age=0,
+        http_only=True,
+        same_site="Lax",
+        domain=None,
+        path="/",
+        secure=True,
+    )
+    _append_cookie(
+        resp,
+        key=next_cookie_name,
+        value="",
+        max_age=0,
+        http_only=False,
+        same_site="Lax",
+        domain=None,
+        path="/",
+        secure=True,
+    )
 
 
 def clear_csrf(
@@ -285,7 +382,11 @@ def clear_csrf(
     path: str = "/",
     secure: bool | None = None,
 ):
-    sec = True if same_site.lower() == "none" else (True if secure is None else bool(secure))
+    sec = (
+        True
+        if same_site.lower() == "none"
+        else (True if secure is None else bool(secure))
+    )
     _append_cookie(
         resp,
         key=NAMES.csrf,
@@ -299,7 +400,9 @@ def clear_csrf(
     )
 
 
-def set_device_cookie(resp, *, name: str, value: str, ttl: int, http_only: bool = False):
+def set_device_cookie(
+    resp, *, name: str, value: str, ttl: int, http_only: bool = False
+):
     _append_cookie(
         resp,
         key=name,
@@ -347,15 +450,20 @@ def set_named_cookie(
     request=None,
 ):
     # Determine HttpOnly preference
-    http_only_final = http_only if http_only is not None else (httponly if httponly is not None else True)
+    http_only_final = (
+        http_only
+        if http_only is not None
+        else (httponly if httponly is not None else True)
+    )
     # Determine SameSite preference
-    ss = (same_site or samesite or "Lax")
+    ss = same_site or samesite or "Lax"
     # Compute Max-Age precedence: expires (seconds) > max_age > ttl
     max_age_final: int | None = None
     try:
         if expires is not None:
             # If expires is datetime-like, convert to seconds from now; if numeric, treat as seconds
             from datetime import datetime
+
             if hasattr(expires, "timestamp"):
                 now = datetime.now(UTC)
                 exp_ts = expires.timestamp()  # type: ignore[attr-defined]
@@ -426,7 +534,9 @@ def read(req):
 from app import cookies as cookie_facade
 
 
-def set_auth_cookies_canon(resp, access: str, refresh: str, *, secure: bool, samesite: str, domain: str | None):
+def set_auth_cookies_canon(
+    resp, access: str, refresh: str, *, secure: bool, samesite: str, domain: str | None
+):
     return cookie_facade.set_auth_cookies_canon(
         resp, access, refresh, secure=secure, samesite=samesite, domain=domain
     )
@@ -454,10 +564,20 @@ def set_csrf_cookie(resp, token: str, ttl: int, request=None):
     except Exception:
         pass
 
-    set_csrf(resp, token, ttl=ttl, same_site=same_site.capitalize(), domain=domain, path=path, secure=secure)
+    set_csrf(
+        resp,
+        token,
+        ttl=ttl,
+        same_site=same_site.capitalize(),
+        domain=domain,
+        path=path,
+        secure=secure,
+    )
 
 
-def set_oauth_state_cookie(resp, state: str, request=None, ttl: int = 600, provider: str = "oauth"):
+def set_oauth_state_cookie(
+    resp, state: str, request=None, ttl: int = 600, provider: str = "oauth"
+):
     # Back-compat singular alias
     set_oauth_state_cookies(resp, state=state, next_url="", ttl=ttl, provider=provider)
 
@@ -473,6 +593,7 @@ def clear_auth_cookies(resp, request=None):
             try:
                 # Prefer facade to allow tests to patch app.cookies.get_cookie_config
                 from app.cookies import get_cookie_config as _facade_cfg
+
                 cfg = _facade_cfg(request)
             except Exception:
                 cfg = get_cookie_config(request)
@@ -485,10 +606,30 @@ def clear_auth_cookies(resp, request=None):
         pass
     # Canonical
     for key in (NAMES.access, NAMES.refresh, NAMES.session):
-        _append_cookie(resp, key=key, value="", max_age=0, http_only=True, same_site=same_site, domain=domain, path=path, secure=secure)
+        _append_cookie(
+            resp,
+            key=key,
+            value="",
+            max_age=0,
+            http_only=True,
+            same_site=same_site,
+            domain=domain,
+            path=path,
+            secure=secure,
+        )
     # Legacy aliases
     for key in ("access_token", "refresh_token", "__session"):
-        _append_cookie(resp, key=key, value="", max_age=0, http_only=True, same_site=same_site, domain=domain, path=path, secure=secure)
+        _append_cookie(
+            resp,
+            key=key,
+            value="",
+            max_age=0,
+            http_only=True,
+            same_site=same_site,
+            domain=domain,
+            path=path,
+            secure=secure,
+        )
 
 
 def clear_all_auth(resp):
@@ -524,17 +665,80 @@ def read_access_cookie(req):
     may still set legacy names (access_token). Read both to avoid whoami
     failures when only legacy cookies are present.
     """
-    return req.cookies.get(NAMES.access) or req.cookies.get("access_token")
+    canonical = req.cookies.get(NAMES.access)
+    if canonical:
+        return canonical
+
+    # Check for legacy cookie
+    legacy = req.cookies.get("access_token")
+    if legacy:
+        try:
+            logger.info("auth.legacy_cookie_used", extra={
+                "meta": {
+                    "name": "access_token",
+                    "canonical_name": NAMES.access,
+                    "action": "read",
+                    "success": True,
+                    "location": "web.cookies.read_access_cookie"
+                }
+            })
+        except Exception:
+            pass  # Best effort logging
+        return legacy
+
+    return None
 
 
 def read_refresh_cookie(req):
     """Read the refresh token cookie with canonical and legacy fallbacks."""
-    return req.cookies.get(NAMES.refresh) or req.cookies.get("refresh_token")
+    canonical = req.cookies.get(NAMES.refresh)
+    if canonical:
+        return canonical
+
+    # Check for legacy cookie
+    legacy = req.cookies.get("refresh_token")
+    if legacy:
+        try:
+            logger.info("auth.legacy_cookie_used", extra={
+                "meta": {
+                    "name": "refresh_token",
+                    "canonical_name": NAMES.refresh,
+                    "action": "read",
+                    "success": True,
+                    "location": "web.cookies.read_refresh_cookie"
+                }
+            })
+        except Exception:
+            pass  # Best effort logging
+        return legacy
+
+    return None
 
 
 def read_session_cookie(req):
     """Read the session cookie with canonical and legacy fallbacks."""
-    return req.cookies.get(NAMES.session) or req.cookies.get("__session")
+    canonical = req.cookies.get(NAMES.session)
+    if canonical:
+        return canonical
+
+    # Check for legacy cookie
+    legacy = req.cookies.get("__session")
+    if legacy:
+        try:
+            logger.info("auth.legacy_cookie_used", extra={
+                "meta": {
+                    "name": "__session",
+                    "canonical_name": NAMES.session,
+                    "action": "read",
+                    "success": True,
+                    "location": "web.cookies.read_session_cookie"
+                }
+            })
+        except Exception:
+            pass  # Best effort logging
+        return legacy
+
+    return None
 
 
 __all__ = [

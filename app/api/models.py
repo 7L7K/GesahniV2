@@ -4,13 +4,9 @@ import json
 import os
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from app.deps.scopes import docs_security_with
-
-router = APIRouter(
-    tags=["Care"]
-)
+router = APIRouter(tags=["Care"])
 
 
 def _parse_models_env(val: str | None) -> list[dict[str, Any]]:

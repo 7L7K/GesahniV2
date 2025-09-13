@@ -27,3 +27,19 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [types-requests]
+  - repo: local
+    hooks:
+      - id: check-no-sqlite
+        name: Check for SQLite usage (PostgreSQL-only)
+        entry: python scripts/check_no_sqlite.py
+        language: system
+        files: \.(py)$
+        exclude: |
+          (?x)(
+            ^scripts/check_no_sqlite\.py$|
+            ^__pycache__/|
+            ^\.git/|
+            ^node_modules/|
+            ^_reports/|
+            ^artifacts/
+          )

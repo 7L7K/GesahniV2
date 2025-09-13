@@ -26,7 +26,9 @@ class PlayBody(BaseModel):
 
 
 @router.post("/play")
-async def play(body: PlayBody, request: Request, user_id: str = Depends(get_current_user_id)):
+async def play(
+    body: PlayBody, request: Request, user_id: str = Depends(get_current_user_id)
+):
     # idempotency
     key = request.headers.get("X-Idempotency-Key")
     if key:
@@ -35,11 +37,18 @@ async def play(body: PlayBody, request: Request, user_id: str = Depends(get_curr
             return prev
     provider = SpotifyProvider()
     orch = MusicOrchestrator(providers=[provider])
-    res = await orch.play(body.utterance, entity=body.entity, room=body.room, vibe=body.vibe, provider_hint=body.provider_hint)
+    res = await orch.play(
+        body.utterance,
+        entity=body.entity,
+        room=body.room,
+        vibe=body.vibe,
+        provider_hint=body.provider_hint,
+    )
     out = {"status": "ok", "result": res}
     if key:
         await set_idempotent(key, user_id, out)
     return out
+
 
 import asyncio
 import hashlib
@@ -224,7 +233,9 @@ def _maybe_304(request: Request, response: Response, etag: str) -> Response | No
     return None
 
 
-_PAUSE_POLL_AFTER_NO_PLAY_S = int(os.getenv("MUSIC_POLL_PAUSE_AFTER_NO_PLAY_S", str(5 * 60)))
+_PAUSE_POLL_AFTER_NO_PLAY_S = int(
+    os.getenv("MUSIC_POLL_PAUSE_AFTER_NO_PLAY_S", str(5 * 60))
+)
 _last_play_ts: dict[str, float] = {}
 
 
@@ -484,23 +495,26 @@ async def _build_state_payload(user_id: str) -> StateResponse:
 
     # Ensure state is always a MusicState object, not a dict
     if isinstance(state, dict):
-        logger.warning(f"load_state returned dict instead of MusicState object: {state}")
+        logger.warning(
+            f"load_state returned dict instead of MusicState object: {state}"
+        )
         # Convert dict back to MusicState if needed
         from ..models.music_state import MusicState, MusicVibe
+
         vibe_data = state.get("vibe", {})
         state = MusicState(
             vibe=MusicVibe(
                 name=vibe_data.get("name", "Calm Night"),
                 energy=float(vibe_data.get("energy", 0.25)),
                 tempo=float(vibe_data.get("tempo", 80)),
-                explicit=bool(vibe_data.get("explicit", False))
+                explicit=bool(vibe_data.get("explicit", False)),
             ),
             volume=int(state.get("volume", 40)),
             device_id=state.get("device_id"),
             last_track_id=state.get("last_track_id"),
             radio_playing=bool(state.get("radio_playing", False)),
             quiet_hours=bool(state.get("quiet_hours", False)),
-            explicit_allowed=bool(state.get("explicit_allowed", True))
+            explicit_allowed=bool(state.get("explicit_allowed", True)),
         )
 
     quiet = _in_quiet_hours()
@@ -641,7 +655,9 @@ async def music_command(
         state.quiet_hours = quiet
         state.explicit_allowed = _explicit_allowed(state.vibe)
         save_state(user_id, state)
-        await _broadcast("music.state", (await _build_state_payload(user_id)).model_dump())
+        await _broadcast(
+            "music.state", (await _build_state_payload(user_id)).model_dump()
+        )
     return {"status": "ok"}
 
 
@@ -730,7 +746,9 @@ async def restore_volume(user_id: str = Depends(get_current_user_id)):
         state.duck_from = None
         save_state(user_id, state)
         await _provider_set_volume(user_id, restored)
-        await _broadcast("music.state", (await _build_state_payload(user_id)).model_dump())
+        await _broadcast(
+            "music.state", (await _build_state_payload(user_id)).model_dump()
+        )
     return {"status": "ok"}
 
 
@@ -742,9 +760,7 @@ async def get_state(
     return await _get_state_impl(request, response, user_id)
 
 
-async def _get_state_impl(
-    request: Request, response: Response, user_id: str
-):
+async def _get_state_impl(request: Request, response: Response, user_id: str):
     """Actual implementation of get_state that can be called from multiple routes"""
     try:
         body = await _build_state_payload(user_id)
@@ -778,9 +794,12 @@ async def _get_state_impl(
             "device_id": safe_get("device_id"),
             "is_playing": (
                 bool(safe_get("is_playing"))
-                if safe_get("is_playing") is not None else None
+                if safe_get("is_playing") is not None
+                else None
             ),
-            "track_id": (safe_get("track") or {}).get("id") if safe_get("track") else None,
+            "track_id": (
+                (safe_get("track") or {}).get("id") if safe_get("track") else None
+            ),
             "quiet_hours": bool(safe_get("quiet_hours", False)),
             "explicit_allowed": bool(safe_get("explicit_allowed", False)),
             "provider": safe_get("provider"),
@@ -804,7 +823,7 @@ async def get_system_state():
     """Get system/app state at /v1/state"""
     import os
     import time
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
 
     return {
         "status": "ok",
@@ -812,7 +831,7 @@ async def get_system_state():
         "component": "system",
         "version": os.getenv("APP_VERSION", "dev"),
         "environment": os.getenv("ENV", "dev"),
-        "uptime": time.time()  # Will be set by startup
+        "uptime": time.time(),  # Will be set by startup
     }
 
 
@@ -995,100 +1014,129 @@ class DeviceBody(BaseModel):
 async def list_devices(
     request: Request, response: Response, user_id: str = Depends(get_current_user_id)
 ):
-    logger.info("🎵 MUSIC DEVICES: Request started", extra={
-        "meta": {
-            "user_id": user_id,
-            "method": request.method,
-            "url": str(request.url),
-            "headers": dict(request.headers),
-            "provider_spotify_enabled": PROVIDER_SPOTIFY
-        }
-    })
+    logger.info(
+        "🎵 MUSIC DEVICES: Request started",
+        extra={
+            "meta": {
+                "user_id": user_id,
+                "method": request.method,
+                "url": str(request.url),
+                "headers": dict(request.headers),
+                "provider_spotify_enabled": PROVIDER_SPOTIFY,
+            }
+        },
+    )
 
     if not PROVIDER_SPOTIFY:
-        logger.warning("🎵 MUSIC DEVICES: Spotify provider not enabled", extra={
-            "meta": {"user_id": user_id}
-        })
+        logger.warning(
+            "🎵 MUSIC DEVICES: Spotify provider not enabled",
+            extra={"meta": {"user_id": user_id}},
+        )
         body = {"devices": []}
         try:
             etag = _strong_etag("music.devices", user_id, {"ids": []})
             r304 = _maybe_304(request, response, etag)
             if r304 is not None:
-                logger.info("🎵 MUSIC DEVICES: Returning 304 Not Modified", extra={
-                    "meta": {"user_id": user_id, "etag": etag}
-                })
+                logger.info(
+                    "🎵 MUSIC DEVICES: Returning 304 Not Modified",
+                    extra={"meta": {"user_id": user_id, "etag": etag}},
+                )
                 return r304  # type: ignore[return-value]
             _attach_cache_headers(response, etag)
         except Exception as e:
-            logger.warning("🎵 MUSIC DEVICES: Cache header error", extra={
-                "meta": {"user_id": user_id, "error": str(e)}
-            })
-        logger.info("🎵 MUSIC DEVICES: Returning empty devices (Spotify disabled)", extra={
-            "meta": {"user_id": user_id}
-        })
+            logger.warning(
+                "🎵 MUSIC DEVICES: Cache header error",
+                extra={"meta": {"user_id": user_id, "error": str(e)}},
+            )
+        logger.info(
+            "🎵 MUSIC DEVICES: Returning empty devices (Spotify disabled)",
+            extra={"meta": {"user_id": user_id}},
+        )
         return body
 
     try:
-        logger.info("🎵 MUSIC DEVICES: Creating Spotify client", extra={
-            "meta": {"user_id": user_id}
-        })
+        logger.info(
+            "🎵 MUSIC DEVICES: Creating Spotify client",
+            extra={"meta": {"user_id": user_id}},
+        )
         client = SpotifyClient(user_id)
-        logger.info("🎵 MUSIC DEVICES: Calling get_devices()", extra={
-            "meta": {"user_id": user_id}
-        })
+        logger.info(
+            "🎵 MUSIC DEVICES: Calling get_devices()",
+            extra={"meta": {"user_id": user_id}},
+        )
         devices = await client.get_devices()
-        logger.info("🎵 MUSIC DEVICES: get_devices() completed", extra={
-            "meta": {
-                "user_id": user_id,
-                "device_count": len(devices) if devices else 0,
-                "devices": devices
-            }
-        })
+        logger.info(
+            "🎵 MUSIC DEVICES: get_devices() completed",
+            extra={
+                "meta": {
+                    "user_id": user_id,
+                    "device_count": len(devices) if devices else 0,
+                    "devices": devices,
+                }
+            },
+        )
     except SpotifyAuthError as e:
-        logger.warning("🎵 MUSIC DEVICES: Spotify auth error", extra={
-            "meta": {"user_id": user_id, "error": str(e)}
-        })
+        logger.warning(
+            "🎵 MUSIC DEVICES: Spotify auth error",
+            extra={"meta": {"user_id": user_id, "error": str(e)}},
+        )
         devices = []
     except Exception as e:
-        logger.error("🎵 MUSIC DEVICES: Unexpected error getting devices", extra={
-            "meta": {"user_id": user_id, "error": str(e), "error_type": type(e).__name__}
-        })
+        logger.error(
+            "🎵 MUSIC DEVICES: Unexpected error getting devices",
+            extra={
+                "meta": {
+                    "user_id": user_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }
+            },
+        )
         devices = []
 
     body = {"devices": devices}
-    logger.info("🎵 MUSIC DEVICES: Preparing response", extra={
-        "meta": {
-            "user_id": user_id,
-            "device_count": len(devices) if devices else 0,
-            "response_body": body
-        }
-    })
+    logger.info(
+        "🎵 MUSIC DEVICES: Preparing response",
+        extra={
+            "meta": {
+                "user_id": user_id,
+                "device_count": len(devices) if devices else 0,
+                "response_body": body,
+            }
+        },
+    )
 
     try:
         stable = {"ids": [d.get("id") for d in devices if isinstance(d, dict)]}
         etag = _strong_etag("music.devices", user_id, stable)
         r304 = _maybe_304(request, response, etag)
         if r304 is not None:
-            logger.info("🎵 MUSIC DEVICES: Returning 304 Not Modified (with data)", extra={
-                "meta": {"user_id": user_id, "etag": etag}
-            })
+            logger.info(
+                "🎵 MUSIC DEVICES: Returning 304 Not Modified (with data)",
+                extra={"meta": {"user_id": user_id, "etag": etag}},
+            )
             return r304  # type: ignore[return-value]
         _attach_cache_headers(response, etag)
-        logger.info("🎵 MUSIC DEVICES: Attached cache headers", extra={
-            "meta": {"user_id": user_id, "etag": etag}
-        })
+        logger.info(
+            "🎵 MUSIC DEVICES: Attached cache headers",
+            extra={"meta": {"user_id": user_id, "etag": etag}},
+        )
     except Exception as e:
-        logger.warning("🎵 MUSIC DEVICES: Cache header error (with data)", extra={
-            "meta": {"user_id": user_id, "error": str(e)}
-        })
+        logger.warning(
+            "🎵 MUSIC DEVICES: Cache header error (with data)",
+            extra={"meta": {"user_id": user_id, "error": str(e)}},
+        )
 
-    logger.info("🎵 MUSIC DEVICES: Returning devices", extra={
-        "meta": {
-            "user_id": user_id,
-            "device_count": len(devices) if devices else 0,
-            "final_response": body
-        }
-    })
+    logger.info(
+        "🎵 MUSIC DEVICES: Returning devices",
+        extra={
+            "meta": {
+                "user_id": user_id,
+                "device_count": len(devices) if devices else 0,
+                "final_response": body,
+            }
+        },
+    )
     return body
 
 

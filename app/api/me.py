@@ -89,7 +89,26 @@ async def me(request: Request, response: Response, user_id: str = Depends(get_cu
     # Read access_token cookie and extract sub
     sub = None
     if jose_jwt is not None:
-        access_token = request.cookies.get("access_token")
+        try:
+            from ..web.cookies import read_access_cookie
+            access_token = read_access_cookie(request)
+        except Exception:
+            access_token = request.cookies.get("access_token")
+            if access_token:
+                try:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info("auth.legacy_cookie_used", extra={
+                        "meta": {
+                            "name": "access_token",
+                            "canonical_name": "GSNH_AT",  # Default canonical name
+                            "action": "read",
+                            "success": True,
+                            "location": "me.py_fallback"
+                        }
+                    })
+                except Exception:
+                    pass  # Best effort logging
         if access_token:
             try:
                 # Prefer unverified claims

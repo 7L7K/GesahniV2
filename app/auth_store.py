@@ -1,154 +1,38 @@
+"""
+PostgreSQL-based authentication store.
+
+This module provides user, device, session, and OAuth identity management
+using PostgreSQL and SQLAlchemy ORM.
+"""
+
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import json
-import os
 import time
-from pathlib import Path
+from datetime import datetime, timezone
 from typing import Any
 
-import aiosqlite
+from sqlalchemy import select, update, delete
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.paths import resolve_db_path
-
-# Optional override for tests to set a custom DB path (tests may assign this)
-DB_PATH: str | None = None
-
-
-def _compute_db_path() -> Path:
-    env_path = os.getenv("AUTH_DB")
-    if env_path:
-        return Path(env_path).resolve()
-    # Create a deterministic per-test file to avoid bleed
-    if os.getenv("PYTEST_CURRENT_TEST"):
-        ident = os.getenv("PYTEST_CURRENT_TEST", "")
-        digest = hashlib.md5(ident.encode()).hexdigest()[:8]
-        p = Path.cwd() / f".tmp_auth_{digest}.db"
-    else:
-        p = Path("auth.db")
-    return p.resolve()
+from .db.core import get_async_db
+from .db.models import (
+    AuthUser,
+    AuthDevice,
+    Session,
+    AuthIdentity,
+    PATToken,
+    AuditLog,
+)
 
 
-def _db_path() -> Path:
-    # Allow tests to override the DB path by setting module-level DB_PATH.
-    # Tests set `app.auth_store.DB_PATH = ...` to force a temp DB file.
-    try:
-        if globals().get("DB_PATH"):
-            return Path(globals().get("DB_PATH")).resolve()
-    except Exception:
-        pass
-    return resolve_db_path("AUTH_DB", "auth.db")
-
-
-def _now() -> float:
-    return time.time()
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 async def ensure_tables() -> None:
-    # Under pytest, make sure an event loop exists for sync callers
-    try:
-        asyncio.get_event_loop()
-    except RuntimeError:
-        if os.getenv("PYTEST_CURRENT_TEST"):
-            asyncio.set_event_loop(asyncio.new_event_loop())
-    async with aiosqlite.connect(str(_db_path())) as db:
-        # users
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT,
-                name TEXT,
-                avatar_url TEXT,
-                created_at REAL NOT NULL,
-                verified_at REAL,
-                auth_providers TEXT
-            )
-            """
-        )
-        # devices
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS devices (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                device_name TEXT,
-                ua_hash TEXT NOT NULL,
-                ip_hash TEXT NOT NULL,
-                created_at REAL NOT NULL,
-                last_seen_at REAL,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-            """
-        )
-        # sessions
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                device_id TEXT NOT NULL,
-                created_at REAL NOT NULL,
-                last_seen_at REAL,
-                revoked_at REAL,
-                mfa_passed INTEGER DEFAULT 0,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE
-            )
-            """
-        )
-        # auth_identities
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS auth_identities (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                provider TEXT NOT NULL,
-                provider_iss TEXT,
-                provider_sub TEXT,
-                email_normalized TEXT,
-                email_verified INTEGER DEFAULT 0,
-                created_at REAL NOT NULL,
-                updated_at REAL NOT NULL,
-                UNIQUE(provider, provider_iss, provider_sub),
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-            """
-        )
-        # pat_tokens
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS pat_tokens (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                name TEXT NOT NULL,
-                token_hash TEXT NOT NULL,
-                scopes TEXT NOT NULL,
-                exp_at REAL,
-                created_at REAL NOT NULL,
-                revoked_at REAL,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-            """
-        )
-        # audit_log
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS audit_log (
-                id TEXT PRIMARY KEY,
-                user_id TEXT,
-                session_id TEXT,
-                event_type TEXT NOT NULL,
-                meta TEXT,
-                created_at REAL NOT NULL,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
-                FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL
-            )
-            """
-        )
-        await db.commit()
+    """PostgreSQL schema is managed by migrations, no runtime table creation needed."""
+    pass
 
 
 # ------------------------------ users ----------------------------------------
@@ -161,215 +45,200 @@ async def create_user(
     avatar_url: str | None = None,
     auth_providers: list[str] | None = None,
 ) -> None:
-    """Create or upsert a user, honoring the provided id.
-
-    If a user already exists with the same email, update that row's id to the
-    provided value along with other mutable fields. Created/verified timestamps
-    are preserved on upsert.
-    """
-    async with aiosqlite.connect(str(_db_path())) as db:
+    """Create or upsert a user, honoring the provided id."""
+    async with get_async_db() as session:
         norm_email = (email or "").strip().lower()
         providers_json = json.dumps(auth_providers or [])
-        # Transaction with deferred FK checks to allow primary-key update then child updates
-        await db.execute("BEGIN IMMEDIATE")
-        await db.execute("PRAGMA defer_foreign_keys=ON")
-        # Check for existing by email
-        async with db.execute(
-            "SELECT id FROM users WHERE email=?", (norm_email,)
-        ) as cur:
-            row = await cur.fetchone()
-        if row is None:
-            await db.execute(
-                "INSERT INTO users(id,email,password_hash,name,avatar_url,created_at,verified_at,auth_providers) VALUES (?,?,?,?,?,?,?,?)",
-                (
-                    id,
-                    norm_email,
-                    password_hash,
-                    name,
-                    avatar_url,
-                    _now(),
-                    None,
-                    providers_json,
-                ),
+
+        # Check for existing user by email
+        stmt = select(AuthUser).where(AuthUser.email == norm_email)
+        result = await session.execute(stmt)
+        existing_user = result.scalar_one_or_none()
+
+        if existing_user is None:
+            # Create new user
+            user = AuthUser(
+                id=id,
+                email=norm_email,
+                password_hash=password_hash,
+                name=name,
+                avatar_url=avatar_url,
+                created_at=_now(),
             )
-            await db.commit()
-            return
-        # Exists: migrate id if different, otherwise update mutable fields
-        old_id = row[0]
-        if str(old_id) != str(id):
-            # Update parent id first (deferred FK avoids immediate failure)
-            await db.execute(
-                "UPDATE users SET id=?, password_hash=COALESCE(?, password_hash), name=COALESCE(?, name), avatar_url=COALESCE(?, avatar_url), auth_providers=? WHERE email=?",
-                (id, password_hash, name, avatar_url, providers_json, norm_email),
-            )
-            # Cascade children manually to the new id
-            for table, col in (
-                ("devices", "user_id"),
-                ("sessions", "user_id"),
-                ("auth_identities", "user_id"),
-                ("pat_tokens", "user_id"),
-                ("audit_log", "user_id"),  # best-effort; nullable
-            ):
-                await db.execute(
-                    f"UPDATE {table} SET {col}=? WHERE {col}=?", (id, old_id)
-                )
-            await db.commit()
-            return
-        # Same id: update mutable fields
-        await db.execute(
-            "UPDATE users SET password_hash=COALESCE(?, password_hash), name=COALESCE(?, name), avatar_url=COALESCE(?, avatar_url), auth_providers=? WHERE email=?",
-            (password_hash, name, avatar_url, providers_json, norm_email),
-        )
-        await db.commit()
+            session.add(user)
+        else:
+            # Update existing user
+            existing_user.password_hash = password_hash or existing_user.password_hash
+            existing_user.name = name or existing_user.name
+            existing_user.avatar_url = avatar_url or existing_user.avatar_url
+
+        await session.commit()
 
 
 async def get_user_by_email(email: str) -> dict[str, Any] | None:
-    async with aiosqlite.connect(str(_db_path())) as db:
+    async with get_async_db() as session:
         norm_email = (email or "").strip().lower()
-        async with db.execute(
-            "SELECT id,email,password_hash,name,avatar_url,created_at,verified_at,auth_providers FROM users WHERE email=?",
-            (norm_email,),
-        ) as cur:
-            row = await cur.fetchone()
-    if not row:
-        return None
-    return {
-        "id": row[0],
-        "email": row[1],
-        "password_hash": row[2],
-        "name": row[3],
-        "avatar_url": row[4],
-        "created_at": row[5],
-        "verified_at": row[6],
-        "auth_providers": json.loads(row[7] or "[]"),
-    }
+        stmt = select(AuthUser).where(AuthUser.email == norm_email)
+        result = await session.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if not user:
+            return None
+
+        return {
+            "id": user.id,
+            "email": user.email,
+            "password_hash": user.password_hash,
+            "name": user.name,
+            "avatar_url": user.avatar_url,
+            "created_at": user.created_at.timestamp() if isinstance(user.created_at, datetime) else user.created_at,
+            "verified_at": user.verified_at.timestamp() if user.verified_at and isinstance(user.verified_at, datetime) else user.verified_at,
+            "auth_providers": [],  # TODO: Add auth_providers field to model if needed
+        }
 
 
 async def verify_user(user_id: str) -> None:
-    async with aiosqlite.connect(str(_db_path())) as db:
-        await db.execute("UPDATE users SET verified_at=? WHERE id=?", (_now(), user_id))
-        await db.commit()
+    async with get_async_db() as session:
+        stmt = update(AuthUser).where(AuthUser.id == user_id).values(verified_at=_now())
+        await session.execute(stmt)
+        await session.commit()
 
 
 # ----------------------------- devices ---------------------------------------
 async def create_device(
     *, id: str, user_id: str, device_name: str | None, ua_hash: str, ip_hash: str
 ) -> None:
-    async with aiosqlite.connect(str(_db_path())) as db:
-        await db.execute(
-            "INSERT INTO devices(id,user_id,device_name,ua_hash,ip_hash,created_at,last_seen_at) VALUES (?,?,?,?,?,?,?)",
-            (id, user_id, device_name, ua_hash, ip_hash, _now(), _now()),
+    async with get_async_db() as session:
+        device = AuthDevice(
+            id=id,
+            user_id=user_id,
+            device_name=device_name,
+            ua_hash=ua_hash,
+            ip_hash=ip_hash,
+            created_at=_now(),
+            last_seen_at=_now(),
         )
-        await db.commit()
+        session.add(device)
+        await session.commit()
 
 
 async def touch_device(device_id: str) -> None:
-    async with aiosqlite.connect(str(_db_path())) as db:
-        await db.execute(
-            "UPDATE devices SET last_seen_at=? WHERE id=?", (_now(), device_id)
-        )
-        await db.commit()
+    async with get_async_db() as session:
+        stmt = update(AuthDevice).where(AuthDevice.id == device_id).values(last_seen_at=_now())
+        await session.execute(stmt)
+        await session.commit()
 
 
 # ----------------------------- sessions --------------------------------------
 async def create_session(
     *, id: str, user_id: str, device_id: str, mfa_passed: bool = False
 ) -> None:
-    async with aiosqlite.connect(str(_db_path())) as db:
-        await db.execute(
-            "INSERT INTO sessions(id,user_id,device_id,created_at,last_seen_at,revoked_at,mfa_passed) VALUES (?,?,?,?,?,?,?)",
-            (id, user_id, device_id, _now(), _now(), None, 1 if mfa_passed else 0),
+    async with get_async_db() as session:
+        session_obj = Session(
+            id=id,
+            user_id=user_id,
+            device_id=device_id,
+            created_at=_now(),
+            last_seen_at=_now(),
+            mfa_passed=mfa_passed,
         )
-        await db.commit()
+        session.add(session_obj)
+        await session.commit()
 
 
 async def touch_session(session_id: str) -> None:
-    async with aiosqlite.connect(str(_db_path())) as db:
-        await db.execute(
-            "UPDATE sessions SET last_seen_at=? WHERE id=?", (_now(), session_id)
-        )
-        await db.commit()
+    async with get_async_db() as session:
+        stmt = update(Session).where(Session.id == session_id).values(last_seen_at=_now())
+        await session.execute(stmt)
+        await session.commit()
 
 
 async def revoke_session(session_id: str) -> None:
-    async with aiosqlite.connect(str(_db_path())) as db:
-        await db.execute(
-            "UPDATE sessions SET revoked_at=? WHERE id=?", (_now(), session_id)
-        )
-        await db.commit()
+    async with get_async_db() as session:
+        stmt = update(Session).where(Session.id == session_id).values(revoked_at=_now())
+        await session.execute(stmt)
+        await session.commit()
 
 
 # ------------------------- oauth identities ----------------------------------
 async def link_oauth_identity(
     *, id: str, user_id: str, provider: str, provider_sub: str, email_normalized: str, provider_iss: str | None = None, email_verified: bool = False
 ) -> None:
-    async with aiosqlite.connect(str(_db_path())) as db:
-        await db.execute(
-            (
-                "INSERT INTO auth_identities(id,user_id,provider,provider_iss,provider_sub,email_normalized,email_verified,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?) "
-                "ON CONFLICT(provider, provider_iss, provider_sub) DO UPDATE SET user_id=excluded.user_id, email_normalized=excluded.email_normalized, email_verified=excluded.email_verified, updated_at=excluded.updated_at"
-            ),
-            (id, user_id, provider, provider_iss, provider_sub, email_normalized, 1 if email_verified else 0, _now(), _now()),
+    async with get_async_db() as session:
+        identity = AuthIdentity(
+            id=id,
+            user_id=user_id,
+            provider=provider,
+            provider_iss=provider_iss,
+            provider_sub=provider_sub,
+            email_normalized=email_normalized,
+            email_verified=email_verified,
+            created_at=_now(),
+            updated_at=_now(),
         )
-        await db.commit()
+        session.add(identity)
+        await session.commit()
 
 
 async def get_oauth_identity_by_provider(provider: str, provider_iss: str | None, provider_sub: str) -> dict | None:
     """Return oauth identity row by provider+iss+provider_sub or None."""
-    async with aiosqlite.connect(str(_db_path())) as db:
-        async with db.execute(
-            "SELECT id, user_id, provider, provider_iss, provider_sub, email_normalized, email_verified, created_at, updated_at FROM auth_identities WHERE provider=? AND IFNULL(provider_iss,'') = IFNULL(?, '') AND provider_sub=?",
-            (provider, provider_iss or "", provider_sub),
-        ) as cur:
-            row = await cur.fetchone()
-    if not row:
-        return None
-    return {
-        "id": row[0],
-        "user_id": row[1],
-        "provider": row[2],
-        "provider_iss": row[3],
-        "provider_sub": row[4],
-        "email_normalized": row[5],
-        "email_verified": bool(row[6]),
-        "created_at": row[7],
-        "updated_at": row[8],
-    }
+    async with get_async_db() as session:
+        stmt = select(AuthIdentity).where(
+            AuthIdentity.provider == provider,
+            AuthIdentity.provider_sub == provider_sub,
+            AuthIdentity.provider_iss == provider_iss,
+        )
+        result = await session.execute(stmt)
+        identity = result.scalar_one_or_none()
+
+        if not identity:
+            return None
+
+        return {
+            "id": identity.id,
+            "user_id": identity.user_id,
+            "provider": identity.provider,
+            "provider_iss": identity.provider_iss,
+            "provider_sub": identity.provider_sub,
+            "email_normalized": identity.email_normalized,
+            "email_verified": identity.email_verified,
+            "created_at": identity.created_at.timestamp() if isinstance(identity.created_at, datetime) else identity.created_at,
+            "updated_at": identity.updated_at.timestamp() if isinstance(identity.updated_at, datetime) else identity.updated_at,
+        }
 
 
 async def get_oauth_identity_by_provider_simple(provider: str, provider_sub: str) -> dict | None:
     """Return oauth identity row by provider+provider_sub or None."""
-    async with aiosqlite.connect(str(_db_path())) as db:
-        async with db.execute(
-            "SELECT id, user_id, provider, provider_sub, email_normalized, email_verified, created_at, updated_at FROM auth_identities WHERE provider=? AND provider_sub=?",
-            (provider, provider_sub),
-        ) as cur:
-            row = await cur.fetchone()
-    if not row:
-        return None
-    return {
-        "id": row[0],
-        "user_id": row[1],
-        "provider": row[2],
-        "provider_sub": row[3],
-        "email_normalized": row[4],
-        "email_verified": bool(row[5]),
-        "created_at": row[6],
-        "updated_at": row[7],
-    }
+    async with get_async_db() as session:
+        stmt = select(AuthIdentity).where(
+            AuthIdentity.provider == provider,
+            AuthIdentity.provider_sub == provider_sub,
+        )
+        result = await session.execute(stmt)
+        identity = result.scalar_one_or_none()
+
+        if not identity:
+            return None
+
+        return {
+            "id": identity.id,
+            "user_id": identity.user_id,
+            "provider": identity.provider,
+            "provider_sub": identity.provider_sub,
+            "email_normalized": identity.email_normalized,
+            "email_verified": identity.email_verified,
+            "created_at": identity.created_at.timestamp() if isinstance(identity.created_at, datetime) else identity.created_at,
+            "updated_at": identity.updated_at.timestamp() if isinstance(identity.updated_at, datetime) else identity.updated_at,
+        }
 
 
 async def get_user_id_by_identity_id(identity_id: str) -> str | None:
     """Return user_id for the given identity_id or None."""
-    async with aiosqlite.connect(str(_db_path())) as db:
-        async with db.execute(
-            "SELECT user_id FROM auth_identities WHERE id=?",
-            (identity_id,),
-        ) as cur:
-            row = await cur.fetchone()
-    if not row:
-        return None
-    return row[0]
+    async with get_async_db() as session:
+        stmt = select(AuthIdentity.user_id).where(AuthIdentity.id == identity_id)
+        result = await session.execute(stmt)
+        user_id = result.scalar_one_or_none()
+        return user_id
 
 
 # ---------------------------- PAT tokens -------------------------------------
@@ -382,91 +251,86 @@ async def create_pat(
     scopes: list[str],
     exp_at: float | None = None,
 ) -> None:
-    async with aiosqlite.connect(str(_db_path())) as db:
-        await db.execute(
-            "INSERT INTO pat_tokens(id,user_id,name,token_hash,scopes,exp_at,created_at,revoked_at) VALUES (?,?,?,?,?,?,?,?)",
-            (
-                id,
-                user_id,
-                name,
-                token_hash,
-                json.dumps(scopes or []),
-                exp_at,
-                _now(),
-                None,
-            ),
+    async with get_async_db() as session:
+        pat = PATToken(
+            id=id,
+            user_id=user_id,
+            name=name,
+            token_hash=token_hash,
+            scopes=json.dumps(scopes or []),
+            exp_at=datetime.fromtimestamp(exp_at, timezone.utc) if exp_at else None,
+            created_at=_now(),
         )
-        await db.commit()
+        session.add(pat)
+        await session.commit()
 
 
 async def revoke_pat(pat_id: str) -> None:
-    async with aiosqlite.connect(str(_db_path())) as db:
-        await db.execute(
-            "UPDATE pat_tokens SET revoked_at=? WHERE id=?", (_now(), pat_id)
-        )
-        await db.commit()
+    async with get_async_db() as session:
+        stmt = update(PATToken).where(PATToken.id == pat_id).values(revoked_at=_now())
+        await session.execute(stmt)
+        await session.commit()
 
 
 async def get_pat_by_id(pat_id: str) -> dict[str, Any] | None:
-    async with aiosqlite.connect(str(_db_path())) as db:
-        async with db.execute(
-            "SELECT id,user_id,name,token_hash,scopes,exp_at,created_at,revoked_at FROM pat_tokens WHERE id=?",
-            (pat_id,),
-        ) as cur:
-            row = await cur.fetchone()
-    if not row:
-        return None
-    return {
-        "id": row[0],
-        "user_id": row[1],
-        "name": row[2],
-        "token_hash": row[3],
-        "scopes": json.loads(row[4] or "[]"),
-        "exp_at": row[5],
-        "created_at": row[6],
-        "revoked_at": row[7],
-    }
+    async with get_async_db() as session:
+        stmt = select(PATToken).where(PATToken.id == pat_id)
+        result = await session.execute(stmt)
+        pat = result.scalar_one_or_none()
+
+        if not pat:
+            return None
+
+        return {
+            "id": pat.id,
+            "user_id": pat.user_id,
+            "name": pat.name,
+            "token_hash": pat.token_hash,
+            "scopes": json.loads(pat.scopes) if pat.scopes else [],
+            "exp_at": pat.exp_at.timestamp() if pat.exp_at and isinstance(pat.exp_at, datetime) else pat.exp_at,
+            "created_at": pat.created_at.timestamp() if isinstance(pat.created_at, datetime) else pat.created_at,
+            "revoked_at": pat.revoked_at.timestamp() if pat.revoked_at and isinstance(pat.revoked_at, datetime) else pat.revoked_at,
+        }
 
 
 async def get_pat_by_hash(token_hash: str) -> dict[str, Any] | None:
-    async with aiosqlite.connect(str(_db_path())) as db:
-        async with db.execute(
-            "SELECT id,user_id,name,token_hash,scopes,exp_at,created_at,revoked_at FROM pat_tokens WHERE token_hash=?",
-            (token_hash,),
-        ) as cur:
-            row = await cur.fetchone()
-    if not row:
-        return None
-    return {
-        "id": row[0],
-        "user_id": row[1],
-        "name": row[2],
-        "token_hash": row[3],
-        "scopes": json.loads(row[4] or "[]"),
-        "exp_at": row[5],
-        "created_at": row[6],
-        "revoked_at": row[7],
-    }
+    async with get_async_db() as session:
+        stmt = select(PATToken).where(PATToken.token_hash == token_hash)
+        result = await session.execute(stmt)
+        pat = result.scalar_one_or_none()
+
+        if not pat:
+            return None
+
+        return {
+            "id": pat.id,
+            "user_id": pat.user_id,
+            "name": pat.name,
+            "token_hash": pat.token_hash,
+            "scopes": json.loads(pat.scopes) if pat.scopes else [],
+            "exp_at": pat.exp_at.timestamp() if pat.exp_at and isinstance(pat.exp_at, datetime) else pat.exp_at,
+            "created_at": pat.created_at.timestamp() if isinstance(pat.created_at, datetime) else pat.created_at,
+            "revoked_at": pat.revoked_at.timestamp() if pat.revoked_at and isinstance(pat.revoked_at, datetime) else pat.revoked_at,
+        }
 
 
 async def list_pats_for_user(user_id: str) -> list[dict[str, Any]]:
     """List all PATs for a user, returning safe fields only (no token hash)."""
-    async with aiosqlite.connect(str(_db_path())) as db:
-        async with db.execute(
-            "SELECT id,name,scopes,created_at,revoked_at FROM pat_tokens WHERE user_id=? ORDER BY created_at DESC",
-            (user_id,),
-        ) as cur:
-            rows = await cur.fetchall()
-    return [
-        {
-            "id": row[0],
-            "name": row[1],
-            "scopes": json.loads(row[2] or "[]"),
-            "created_at": row[3],
-            "revoked_at": row[4],
-        }
-        for row in rows
-    ]
+    async with get_async_db() as session:
+        stmt = select(PATToken).where(PATToken.user_id == user_id).order_by(PATToken.created_at.desc())
+        result = await session.execute(stmt)
+        pats = result.scalars().all()
+
+        return [
+            {
+                "id": pat.id,
+                "name": pat.name,
+                "scopes": json.loads(pat.scopes) if pat.scopes else [],
+                "created_at": pat.created_at.timestamp() if isinstance(pat.created_at, datetime) else pat.created_at,
+                "revoked_at": pat.revoked_at.timestamp() if pat.revoked_at and isinstance(pat.revoked_at, datetime) else pat.revoked_at,
+            }
+            for pat in pats
+        ]
 
 
 # ---------------------------- audit log --------------------------------------
@@ -478,12 +342,17 @@ async def record_audit(
     event_type: str,
     meta: dict[str, Any] | None = None,
 ) -> None:
-    async with aiosqlite.connect(str(_db_path())) as db:
-        await db.execute(
-            "INSERT INTO audit_log(id,user_id,session_id,event_type,meta,created_at) VALUES (?,?,?,?,?,?)",
-            (id, user_id, session_id, event_type, json.dumps(meta or {}), _now()),
+    async with get_async_db() as session:
+        audit = AuditLog(
+            id=id,
+            user_id=user_id,
+            session_id=session_id,
+            event_type=event_type,
+            meta=json.dumps(meta or {}),
+            created_at=_now(),
         )
-        await db.commit()
+        session.add(audit)
+        await session.commit()
 
 
 __all__ = [

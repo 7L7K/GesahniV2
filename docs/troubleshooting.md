@@ -12,4 +12,3 @@
 - Visit `/debug/env-canary` and confirm `mode: "proxy"` in dev, and that `/v1/whoami` returns 200 with cookies.
 - Run `tools/cors_cookie_probe.sh` to validate `Set-Cookie` and subsequent `whoami` with a cookie jar.
 - On prod cross-origin, confirm exact `Access-Control-Allow-Origin` echo and `Access-Control-Allow-Credentials: true`.
-

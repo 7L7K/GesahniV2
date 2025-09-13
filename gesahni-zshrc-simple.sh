@@ -355,4 +355,3 @@ alias gbgt="gesahni-budget"
 alias go="gesahni-open"
 alias gh="gesahni-help"
 alias g="gesahni"
-

@@ -1,7 +1,8 @@
+import uuid
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-import uuid
 
 REDACT = "■" * 8
 
@@ -18,15 +19,38 @@ def _summarize_set_cookie(headers):
             flags = {
                 "HttpOnly": "HttpOnly" in val,
                 "Secure": "Secure" in val,
-                "SameSite": ("SameSite=" + (val.split("SameSite=")[1].split(";")[0] if "SameSite=" in val else "absent")),
-                "Path": ("Path=" + (val.split("Path=")[1].split(";")[0] if "Path=" in val else "absent")),
-                "Domain": ("Domain=" + (val.split("Domain=")[1].split(";")[0] if "Domain=" in val else "absent")),
+                "SameSite": (
+                    "SameSite="
+                    + (
+                        val.split("SameSite=")[1].split(";")[0]
+                        if "SameSite=" in val
+                        else "absent"
+                    )
+                ),
+                "Path": (
+                    "Path="
+                    + (
+                        val.split("Path=")[1].split(";")[0]
+                        if "Path=" in val
+                        else "absent"
+                    )
+                ),
+                "Domain": (
+                    "Domain="
+                    + (
+                        val.split("Domain=")[1].split(";")[0]
+                        if "Domain=" in val
+                        else "absent"
+                    )
+                ),
             }
-            items.append(f"{name}; "
-                         f"{'HttpOnly' if flags['HttpOnly'] else 'HttpOnly=absent'}; "
-                         f"{flags['Path']}; {flags['SameSite']}; "
-                         f"{'Secure' if flags['Secure'] else 'Secure=absent'}; "
-                         f"{flags['Domain']}")
+            items.append(
+                f"{name}; "
+                f"{'HttpOnly' if flags['HttpOnly'] else 'HttpOnly=absent'}; "
+                f"{flags['Path']}; {flags['SameSite']}; "
+                f"{'Secure' if flags['Secure'] else 'Secure=absent'}; "
+                f"{flags['Domain']}"
+            )
     return items
 
 
@@ -43,9 +67,13 @@ class AuthDiagMiddleware(BaseHTTPMiddleware):
         # Echo minimal diag for easy inspection
         try:
             resp.headers["X-Req-Id"] = rid
-            resp.headers["X-AuthDiag-Req"] = f"cookies={cookie_names}; authz={authz_present}"
+            resp.headers["X-AuthDiag-Req"] = (
+                f"cookies={cookie_names}; authz={authz_present}"
+            )
             if set_cookie_summaries:
-                resp.headers["X-AuthDiag-SetCookie"] = " | ".join(set_cookie_summaries[:3])
+                resp.headers["X-AuthDiag-SetCookie"] = " | ".join(
+                    set_cookie_summaries[:3]
+                )
         except Exception:
             pass
 
@@ -71,5 +99,3 @@ class AuthDiagMiddleware(BaseHTTPMiddleware):
             pass
 
         return resp
-
-

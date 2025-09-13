@@ -4,6 +4,7 @@ Lightweight stubs that call into existing modules when available but provide
 stable fallback responses for tests and environments where integrations are
 not present. Keep imports lazy to avoid heavy dependencies at import time.
 """
+
 from __future__ import annotations
 
 import inspect
@@ -30,14 +31,24 @@ async def whoami_compat(request: Request):
 @router.get("/spotify/status", deprecated=True)
 async def spotify_status_compat():
     """Call into Spotify integration status if available, else normalized 200."""
-    def _attach_deprecation(resp: Response | JSONResponse | None, *, status: int | None = None, payload: dict | None = None) -> Response:
+
+    def _attach_deprecation(
+        resp: Response | JSONResponse | None,
+        *,
+        status: int | None = None,
+        payload: dict | None = None,
+    ) -> Response:
         if resp is not None:
             try:
                 resp.headers["Deprecation"] = "true"
             except Exception:
                 pass
             return resp
-        return JSONResponse(payload or {"status": "ok"}, status_code=status or 200, headers={"Deprecation": "true"})
+        return JSONResponse(
+            payload or {"status": "ok"},
+            status_code=status or 200,
+            headers={"Deprecation": "true"},
+        )
 
     try:
         from app.router.integrations import spotify_api
@@ -95,20 +106,59 @@ async def ask_compat(request: Request):
         except Exception:
             pass
         return result
-    return JSONResponse(result if isinstance(result, dict | list) else {"result": result}, headers={"Deprecation": "true"})
+    return JSONResponse(
+        result if isinstance(result, dict | list) else {"result": result},
+        headers={"Deprecation": "true"},
+    )
+
+
+@router.get("/ask/replay/{rid}", deprecated=True)
+async def ask_replay_compat(rid: str, request: Request):
+    """Legacy /ask/replay/{rid} endpoint - redirects to canonical /v1/ask/replay/{rid}.
+
+    Only enabled when LEGACY_CHAT=1 environment variable is set.
+    """
+    import os
+    from fastapi.responses import RedirectResponse
+
+    # Check if legacy chat endpoints are enabled
+    if not os.getenv("LEGACY_CHAT", "").strip() in {"1", "true", "yes", "on"}:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            {"error": "not_found", "message": "endpoint not available"},
+            status_code=404,
+        )
+
+    # Perform 307 redirect to canonical endpoint
+    resp = RedirectResponse(url=f"/v1/ask/replay/{rid}", status_code=307)
+    try:
+        resp.headers["Deprecation"] = "true"
+    except Exception:
+        pass
+    return resp
 
 
 @router.get("/google/status", deprecated=True)
 async def google_status_compat():
     """Call into Google integration status if available, else normalized 200."""
-    def _attach_deprecation(resp: Response | JSONResponse | None, *, status: int | None = None, payload: dict | None = None) -> Response:
+
+    def _attach_deprecation(
+        resp: Response | JSONResponse | None,
+        *,
+        status: int | None = None,
+        payload: dict | None = None,
+    ) -> Response:
         if resp is not None:
             try:
                 resp.headers["Deprecation"] = "true"
             except Exception:
                 pass
             return resp
-        return JSONResponse(payload or {"status": "ok"}, status_code=status or 200, headers={"Deprecation": "true"})
+        return JSONResponse(
+            payload or {"status": "ok"},
+            status_code=status or 200,
+            headers={"Deprecation": "true"},
+        )
 
     try:
         from app.router.integrations import google_api

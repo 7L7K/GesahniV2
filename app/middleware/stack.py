@@ -33,6 +33,7 @@ from app.middleware import (
     add_mw,
 )
 from app.middleware.audit_mw import AuditMiddleware
+
 # Deprecated custom CORS layers removed; use a single Starlette CORSMiddleware only when needed
 from app.middleware.custom import EnhancedErrorHandlingMiddleware
 from app.middleware.deprecation_mw import DeprecationHeaderMiddleware
@@ -128,7 +129,9 @@ def setup_middleware_stack(
     if cors_enabled:
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=list({o.strip().rstrip('/') for o in cors_origins or [] if o and o.strip()}),
+            allow_origins=list(
+                {o.strip().rstrip("/") for o in cors_origins or [] if o and o.strip()}
+            ),
             allow_credentials=True,
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],

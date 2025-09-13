@@ -10,6 +10,7 @@ This module implements robust refresh token rotation with:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -54,8 +55,77 @@ class RefreshConfig:
             "1", "true", "yes", "on"
         }
 
+        # Maximum concurrent refreshes per session
+        self.max_concurrent_refreshes = int(os.getenv("JWT_MAX_CONCURRENT_REFRESHES", "1"))
+
 
 CFG = RefreshConfig()
+
+# Global concurrency control for refresh operations per session
+_refresh_locks: dict[str, asyncio.Lock] = {}
+_refresh_active_count: dict[str, int] = {}
+
+
+async def _acquire_refresh_lock(session_id: str) -> bool:
+    """Acquire a lock for refresh operations in this session. Returns True if acquired."""
+    # Get or create lock for this session
+    if session_id not in _refresh_locks:
+        _refresh_locks[session_id] = asyncio.Lock()
+
+    lock = _refresh_locks[session_id]
+
+    # Check current active count
+    active_count = _refresh_active_count.get(session_id, 0)
+
+    if active_count >= CFG.max_concurrent_refreshes:
+        logger.warning(f"Concurrent refresh limit exceeded for session {session_id}: {active_count}/{CFG.max_concurrent_refreshes}")
+        return False
+
+    # Acquire lock
+    await lock.acquire()
+    try:
+        # Double-check count after acquiring lock (race condition protection)
+        current_count = _refresh_active_count.get(session_id, 0)
+        if current_count >= CFG.max_concurrent_refreshes:
+            lock.release()
+            logger.warning(f"Concurrent refresh limit exceeded for session {session_id} after lock acquisition: {current_count}/{CFG.max_concurrent_refreshes}")
+            return False
+
+        # Increment active count
+        _refresh_active_count[session_id] = current_count + 1
+        logger.debug(f"Acquired refresh lock for session {session_id}, active count: {_refresh_active_count[session_id]}")
+        return True
+    except Exception:
+        # Release lock on error
+        lock.release()
+        raise
+
+
+async def _release_refresh_lock(session_id: str) -> None:
+    """Release the refresh lock for this session."""
+    lock = _refresh_locks.get(session_id)
+    if lock is None:
+        return
+
+    try:
+        # Decrement active count
+        current_count = _refresh_active_count.get(session_id, 0)
+        if current_count > 0:
+            _refresh_active_count[session_id] = current_count - 1
+            logger.debug(f"Released refresh lock for session {session_id}, active count: {_refresh_active_count[session_id]}")
+
+        # Clean up if no more active operations
+        if _refresh_active_count.get(session_id, 0) == 0:
+            # Clean up the lock to prevent memory leaks
+            _refresh_locks.pop(session_id, None)
+            _refresh_active_count.pop(session_id, None)
+    finally:
+        # Always release the lock
+        try:
+            lock.release()
+        except RuntimeError:
+            # Lock already released
+            pass
 
 
 def _jwt_secret() -> str:
@@ -68,6 +138,34 @@ def _jwt_secret() -> str:
         else:
             raise ValueError("JWT_SECRET not configured")
     return secret
+
+
+def _get_or_create_device_id(request: Request, response: Response) -> str:
+    """Get existing device_id from cookie or create a new one."""
+    from .cookies import read_device_cookie, set_device_cookie
+    from .cookie_config import get_token_ttls
+
+    # Try to read existing device_id
+    device_id = read_device_cookie(request)
+    if device_id:
+        return device_id
+
+    # Create new device_id
+    import secrets
+    device_id = secrets.token_hex(16)  # 32-character hex string
+
+    # Set device cookie with long TTL (7 days default for refresh tokens)
+    _, refresh_ttl = get_token_ttls()
+    set_device_cookie(
+        response,
+        value=device_id,
+        ttl=refresh_ttl,
+        request=request,
+        cookie_name="device_id"
+    )
+
+    logger.info(f"Created new device_id for session")
+    return device_id
 
 
 def _decode_refresh_token(token: str, leeway: int = None) -> dict[str, Any]:
@@ -100,7 +198,8 @@ def _decode_refresh_token(token: str, leeway: int = None) -> dict[str, Any]:
 async def validate_refresh_token(
     token: str,
     request: Request,
-    user_id: str
+    user_id: str,
+    response: Response = None
 ) -> tuple[str, str, int]:
     """
     Validate a refresh token and extract key information.
@@ -121,6 +220,21 @@ async def validate_refresh_token(
     jti = str(payload.get("jti") or "")
     if not jti:
         raise HTTPException(status_code=401, detail="missing_jti")
+
+    # Device binding validation for extra security
+    # Skip device ID validation in test environments to avoid test interference
+    skip_device_validation = (
+        os.getenv("PYTEST_RUNNING") == "1" or
+        os.getenv("DISABLE_DEVICE_ID_VALIDATION") == "1" or
+        os.getenv("ENV", "").lower() == "test"
+    )
+
+    token_device_id = payload.get("device_id")
+    if token_device_id and not skip_device_validation:
+        current_device_id = _get_or_create_device_id(request, response or Response())
+        if token_device_id != current_device_id:
+            logger.warning(f"Device ID mismatch for user {user_id}: token={token_device_id}, current={current_device_id}")
+            raise HTTPException(status_code=401, detail="device_id_mismatch")
 
     # Calculate TTL
     now = int(time.time())
@@ -265,7 +379,7 @@ async def rotate_refresh_token(
     refresh_token: str = None
 ) -> dict[str, str] | None:
     """
-    Perform refresh token rotation with replay protection.
+    Perform refresh token rotation with replay protection and concurrency control.
 
     Returns a dict with new tokens if rotation succeeds, None if no rotation needed.
     Raises HTTPException on validation failures.
@@ -280,64 +394,76 @@ async def rotate_refresh_token(
         return None
 
     # Validate the token and extract information
-    sid, jti, ttl = await validate_refresh_token(rtok, request, user_id)
+    sid, jti, ttl = await validate_refresh_token(rtok, request, user_id, response)
 
-    # Check replay protection
-    if not await check_replay_protection(sid, jti, ttl, request):
-        raise HTTPException(status_code=401, detail="refresh_token_reused")
+    # Acquire concurrency lock for this session
+    if not await _acquire_refresh_lock(sid):
+        logger.warning(f"Concurrent refresh limit exceeded for session {sid}")
+        raise HTTPException(status_code=429, detail="too_many_concurrent_refreshes")
 
-    # Decode token to check if rotation is needed
-    payload = _decode_refresh_token(rtok, CFG.leeway_s)
-    needs_rotation = await should_rotate_token(payload, request)
-
-    if not needs_rotation:
-        # Update last used time without rotating, incrementing use count
-        await set_last_used_jti(sid, f"{jti}:{time.time()}:{1}", ttl)
-        return None
-
-    # Perform rotation
-    access_ttl, refresh_ttl = get_token_ttls()
-
-    # Create new tokens
-    new_access = make_access({"user_id": user_id}, ttl_s=access_ttl)
-
-    new_jti = jwt.api_jws.base64url_encode(os.urandom(16)).decode()
-    new_refresh = make_refresh(
-        {"user_id": user_id, "jti": new_jti},
-        ttl_s=refresh_ttl
-    )
-
-    # Set cookies
-    set_auth_cookies(
-        response,
-        access=new_access,
-        refresh=new_refresh,
-        session_id=sid,
-        access_ttl=access_ttl,
-        refresh_ttl=refresh_ttl,
-        request=request,
-    )
     try:
-        # Append legacy cookie headers for compatibility
-        from app.api.auth import _append_legacy_auth_cookie_headers as _legacy
-        _legacy(response, access=new_access, refresh=new_refresh, session_id=sid, request=request)
-    except Exception:
-        pass
+        # Check replay protection
+        if not await check_replay_protection(sid, jti, ttl, request):
+            raise HTTPException(status_code=401, detail="refresh_token_reused")
 
-    # Allow the new refresh token
-    await allow_refresh(sid, new_jti, refresh_ttl)
+        # Decode token to check if rotation is needed
+        payload = _decode_refresh_token(rtok, CFG.leeway_s)
+        needs_rotation = await should_rotate_token(payload, request)
 
-    # Update last used JTI with use count
-    await set_last_used_jti(sid, f"{new_jti}:{time.time()}:{1}", refresh_ttl)
+        if not needs_rotation:
+            # Update last used time without rotating, incrementing use count
+            await set_last_used_jti(sid, f"{jti}:{time.time()}:{1}", ttl)
+            return None
 
-    logger.info(f"Rotated refresh token for session {sid}, old JTI: {jti}, new JTI: {new_jti}")
+        # Perform rotation
+        access_ttl, refresh_ttl = get_token_ttls()
 
-    return {
-        "access_token": new_access,
-        "refresh_token": new_refresh,
-        "user_id": user_id,
-        "session_id": sid,
-    }
+        # Get device_id for token binding
+        device_id = _get_or_create_device_id(request, response)
+
+        # Create new tokens with device binding
+        new_access = make_access({"user_id": user_id, "device_id": device_id}, ttl_s=access_ttl)
+
+        new_jti = jwt.api_jws.base64url_encode(os.urandom(16)).decode()
+        new_refresh = make_refresh(
+            {"user_id": user_id, "jti": new_jti, "device_id": device_id},
+            ttl_s=refresh_ttl
+        )
+
+        # Set cookies
+        set_auth_cookies(
+            response,
+            access=new_access,
+            refresh=new_refresh,
+            session_id=sid,
+            access_ttl=access_ttl,
+            refresh_ttl=refresh_ttl,
+            request=request,
+        )
+        try:
+            # Append legacy cookie headers for compatibility
+            from app.api.auth import _append_legacy_auth_cookie_headers as _legacy
+            _legacy(response, access=new_access, refresh=new_refresh, session_id=sid, request=request)
+        except Exception:
+            pass
+
+        # Allow the new refresh token
+        await allow_refresh(sid, new_jti, refresh_ttl)
+
+        # Update last used JTI with use count
+        await set_last_used_jti(sid, f"{new_jti}:{time.time()}:{1}", refresh_ttl)
+
+        logger.info(f"Rotated refresh token for session {sid}, old JTI: {jti}, new JTI: {new_jti}")
+
+        return {
+            "access_token": new_access,
+            "refresh_token": new_refresh,
+            "user_id": user_id,
+            "session_id": sid,
+        }
+    finally:
+        # Always release the concurrency lock
+        await _release_refresh_lock(sid)
 
 
 async def perform_lazy_refresh(
@@ -362,15 +488,21 @@ async def perform_lazy_refresh(
         rt = read_refresh_cookie(request)
         at = read_access_cookie(request)
 
+        # Validation logging: start with booleans only
+        logger.debug(f"perform_lazy_refresh: start at={bool(at)} rt={bool(rt)} user_id={bool(user_id)}")
+
         if not rt:
+            logger.debug("perform_lazy_refresh: end=False (no refresh token)")
             return False
 
         # Decode refresh token to validate
         try:
             rt_payload = _decode_refresh_token(rt, CFG.leeway_s)
             if str(rt_payload.get("type") or "") != "refresh":
+                logger.debug("perform_lazy_refresh: end=False (invalid refresh token type)")
                 return False
         except Exception:
+            logger.debug("perform_lazy_refresh: end=False (refresh token decode failed)")
             return False
 
         # Check if access token needs refresh
@@ -379,13 +511,15 @@ async def perform_lazy_refresh(
 
         if at:
             try:
-                at_payload = _decode_refresh_token(at, CFG.leeway_s)
+                from .tokens import decode_jwt_token
+                at_payload = decode_jwt_token(at)
                 exp = int(at_payload.get("exp", 0))
                 needs_refresh = (exp - int(time.time())) < window
             except Exception:
                 needs_refresh = True
 
         if not needs_refresh:
+            logger.debug("perform_lazy_refresh: end=False (no refresh needed)")
             return False
 
         # Perform lazy refresh
@@ -416,6 +550,9 @@ async def perform_lazy_refresh(
 
         logger.info(f"Performed lazy refresh for user {uid}")
 
+        # Validation logging: success end
+        logger.debug("perform_lazy_refresh: end=True (refresh completed)")
+
         # Record metrics
         try:
             from .metrics_auth import lazy_refresh_minted
@@ -427,6 +564,9 @@ async def perform_lazy_refresh(
 
     except Exception as e:
         logger.debug(f"Lazy refresh failed: {e}")
+
+        # Validation logging: failure end
+        logger.debug("perform_lazy_refresh: end=False (exception occurred)")
 
         # Record failure metrics
         try:

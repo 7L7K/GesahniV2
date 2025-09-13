@@ -32,4 +32,3 @@ echo "[3/3] GET /v1/whoami"
 curl -sS -b "$JAR" "$BASE_URL/v1/whoami"
 echo
 echo "[ok] Done."
-

@@ -47,6 +47,7 @@ class AuthUser(Base):
         server_default=sa.text("uuid_generate_v4()"),
     )
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
+    username: Mapped[str | None] = mapped_column(String(100), unique=True)
     password_hash: Mapped[str | None] = mapped_column(Text)
     name: Mapped[str | None] = mapped_column(String(200))
     avatar_url: Mapped[str | None] = mapped_column(Text)
@@ -356,6 +357,33 @@ class TVConfig(Base):
 
 
 # =====================================================================
+# CHAT schema
+# =====================================================================
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    __table_args__ = {"schema": "chat"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
+    )
+    rid: Mapped[str] = mapped_column(String(32), nullable=False, index=True)  # Request ID
+    role: Mapped[str] = mapped_column(String(20), nullable=False)  # system|user|assistant
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+    )
+
+    # Indexes for efficient queries
+    __table_args__ = (
+        sa.Index("ix_chat_messages_user_rid", "user_id", "rid"),
+        sa.Index("ix_chat_messages_created_at", "created_at"),
+        {"schema": "chat"}
+    )
+
+
+# =====================================================================
 # MUSIC schema
 # =====================================================================
 
@@ -460,10 +488,31 @@ class MusicFeedback(Base):
 # TOKENS schema
 # =====================================================================
 
+# =====================================================================
+# USER schema (user-specific data)
+# =====================================================================
+
+class UserNote(Base):
+    __tablename__ = "notes"
+    __table_args__ = {"schema": "user_data"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+    )
+
+# =====================================================================
+# TOKENS schema
+# =====================================================================
+
 class ThirdPartyToken(Base):
     __tablename__ = "third_party_tokens"
     __table_args__ = (
-        PrimaryKeyConstraint("user_id", "provider", name="pk_third_party_tokens"),
+        PrimaryKeyConstraint("user_id", "provider", "provider_sub", name="pk_third_party_tokens"),
         {"schema": "tokens"},
     )
 
@@ -471,6 +520,7 @@ class ThirdPartyToken(Base):
         UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
     )
     provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    provider_sub: Mapped[str] = mapped_column(Text, nullable=False)
     access_token: Mapped[bytes] = mapped_column(sa.LargeBinary, nullable=False)
     refresh_token: Mapped[bytes | None] = mapped_column(sa.LargeBinary)
     scope: Mapped[str | None] = mapped_column(Text)

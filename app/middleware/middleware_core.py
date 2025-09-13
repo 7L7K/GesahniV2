@@ -481,21 +481,34 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                                 )
                                 cookie_flags = []
                                 for cookie in set_cookie_headers:
-                                    if (
-                                        "access_token" in cookie
-                                        or "refresh_token" in cookie
-                                    ):
-                                        flags = []
-                                        if "HttpOnly" in cookie:
-                                            flags.append("HttpOnly")
-                                        if "Secure" in cookie:
-                                            flags.append("Secure")
-                                        if "SameSite=" in cookie:
-                                            samesite = cookie.split("SameSite=")[
-                                                1
-                                            ].split(";")[0]
-                                            flags.append(f"SameSite={samesite}")
-                                        cookie_flags.extend(flags)
+                                    try:
+                                        from ..web.cookies import NAMES
+                                        if (
+                                            "access_token" in cookie or NAMES.access in cookie
+                                            or "refresh_token" in cookie or NAMES.refresh in cookie
+                                        ):
+                                            flags = []
+                                            if "HttpOnly" in cookie:
+                                                flags.append("HttpOnly")
+                                            if "Secure" in cookie:
+                                                flags.append("Secure")
+                                    except Exception:
+                                        if (
+                                            "access_token" in cookie
+                                            or "refresh_token" in cookie
+                                        ):
+                                            flags = []
+                                            if "HttpOnly" in cookie:
+                                                flags.append("HttpOnly")
+                                            if "Secure" in cookie:
+                                                flags.append("Secure")
+
+                                    if "SameSite=" in cookie:
+                                        samesite = cookie.split("SameSite=")[
+                                            1
+                                        ].split(";")[0]
+                                        flags.append(f"SameSite={samesite}")
+                                    cookie_flags.extend(flags)
                                 if cookie_flags:
                                     _span.set_attribute(
                                         "http.cookie_flags", " ".join(cookie_flags)
@@ -875,7 +888,11 @@ async def silent_refresh_middleware(request: Request, call_next):
             # Skip refresh if the response includes any Set-Cookie that deletes an auth cookie
             # (access_token, refresh_token, or __session)—i.e., a delete with Max-Age=0
             set_cookies = response.headers.getlist("set-cookie", [])
-            auth_cookies = ["access_token", "refresh_token", "__session"]
+            try:
+                from ..web.cookies import NAMES
+                auth_cookies = ["access_token", "refresh_token", "__session", NAMES.access, NAMES.refresh, NAMES.session]
+            except Exception:
+                auth_cookies = ["access_token", "refresh_token", "__session"]
             if any(
                 any(cookie in h and "Max-Age=0" in h for cookie in auth_cookies)
                 for h in set_cookies
@@ -894,7 +911,40 @@ async def silent_refresh_middleware(request: Request, call_next):
         from ..web.cookies import read_access_cookie, read_refresh_cookie
 
         token = read_access_cookie(request)
+        refresh_token = read_refresh_cookie(request)
         secret = os.getenv("JWT_SECRET")
+
+        # Validation logging: initial state
+        had_at = bool(token)
+        had_rt = bool(refresh_token)
+        logger.debug(f"SILENT_REFRESH: had_at={had_at} had_rt={had_rt}")
+
+        # If no access token but refresh token exists, perform cold-boot refresh
+        if not token and refresh_token and secret:
+            logger.debug("SILENT_REFRESH: Cold-boot scenario - no access token but refresh token present")
+            # Use perform_lazy_refresh for cold-boot scenario
+            try:
+                from ..auth_refresh import perform_lazy_refresh
+                from ..deps.user import get_current_user_id
+
+                # Get user_id from refresh token if possible, otherwise use anon
+                user_id = "anon"
+                try:
+                    from ..tokens import decode_jwt_token
+                    rt_payload = decode_jwt_token(refresh_token)
+                    if rt_payload and str(rt_payload.get("type") or "") == "refresh":
+                        user_id = str(rt_payload.get("sub") or rt_payload.get("user_id") or "anon")
+                except Exception:
+                    pass
+
+                if user_id != "anon":
+                    await perform_lazy_refresh(request, response, user_id)
+                    logger.debug("SILENT_REFRESH: Cold-boot refresh completed")
+                return response
+            except Exception as e:
+                logger.debug(f"SILENT_REFRESH: Cold-boot refresh failed: {e}")
+                return response
+
         if not token or not secret:
             return response
         # Decode without hard-failing on expiry/format
@@ -914,7 +964,9 @@ async def silent_refresh_middleware(request: Request, call_next):
             exp - now,
             threshold,
         )
-        if exp - now <= threshold:
+        should_refresh = exp - now <= threshold
+        logger.debug(f"SILENT_REFRESH: should_refresh={should_refresh} (exp={exp} now={now} threshold={threshold})")
+        if should_refresh:
             logger.debug("SILENT_REFRESH: Token needs refresh, proceeding...")
             # Small jitter to avoid stampede when many tabs refresh concurrently
             try:
@@ -981,11 +1033,11 @@ async def silent_refresh_middleware(request: Request, call_next):
                         # For refresh token extension, we need to set it individually
                         # since set_auth_cookies expects both access and refresh tokens
                         try:
-                            from ..web.cookies import set_named_cookie
+                            from ..web.cookies import set_named_cookie, NAMES
 
                             set_named_cookie(
                                 resp=response,
-                                name="refresh_token",
+                                name=NAMES.refresh,
                                 value=rtok,
                                 ttl=r_life,
                                 httponly=cookie_config["httponly"],
@@ -1007,6 +1059,16 @@ async def silent_refresh_middleware(request: Request, call_next):
                             )
             except Exception:
                 pass
+
+        # Validation logging: results
+        try:
+            set_cookie_count = len(response.headers.getlist("set-cookie", []))
+            new_at = bool(new_token) if 'new_token' in locals() else False
+            new_rt = bool(rtok) if 'rtok' in locals() else False
+            logger.debug(f"SILENT_REFRESH: new_at={new_at} new_rt={new_rt} set_cookie_count={set_cookie_count}")
+        except Exception:
+            pass  # Best-effort logging
+
     except Exception:
         # best-effort; never fail request due to refresh
         pass

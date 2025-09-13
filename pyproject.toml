@@ -15,3 +15,11 @@ select = ["E","F","I","UP","B","N"]
 # (e.g. shadowing `Request`, `Response`, `status`) - pyflakes emits F823
 extend-select = ["F823"]
 ignore = ["E501"]
+
+[tool.pytest.ini_options]
+# Register custom marks
+markers = [
+    "smoke: marks tests as smoke tests (run first, fast feedback)",
+    "integration: marks tests as integration tests",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]

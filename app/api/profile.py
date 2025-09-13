@@ -7,9 +7,7 @@ from app.deps.scopes import docs_security_with
 from app.deps.user import get_current_user_id
 from app.memory.profile_store import profile_store
 
-router = APIRouter(
-    tags=["Auth"]
-)
+router = APIRouter(tags=["Auth"])
 
 
 class UserProfile(BaseModel):
@@ -43,7 +41,9 @@ class UserProfile(BaseModel):
     )
 
 
-@router.get("/profile", dependencies=[Depends(docs_security_with(["user:profile:read"]))])
+@router.get(
+    "/profile", dependencies=[Depends(docs_security_with(["user:profile:read"]))]
+)
 async def get_profile(user_id: str = Depends(get_current_user_id)):
     prof = profile_store.get(user_id)
     return UserProfile(**prof)

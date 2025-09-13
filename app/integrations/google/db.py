@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, String, Text, UniqueConstraint, create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import Column, DateTime, String, Text, UniqueConstraint, text
+from sqlalchemy.orm import declarative_base
 
-from .config import GOOGLE_OAUTH_DB_URL
+from app.db.core import sync_engine
 
-ENGINE = create_engine(GOOGLE_OAUTH_DB_URL, future=True)
-SessionLocal = sessionmaker(bind=ENGINE, autoflush=False, autocommit=False, future=True)
+# Use PostgreSQL through app.db.core instead of direct SQLite engine
 Base = declarative_base()
 
 
@@ -36,34 +35,38 @@ class GoogleToken(Base):
 
 
 def init_db():
-    Base.metadata.create_all(ENGINE)
-    # Lightweight migration: add rotated_at if missing (older test DBs)
+    """Initialize PostgreSQL tables for Google OAuth tokens."""
+    # Create tables using PostgreSQL through app.db.core
+    Base.metadata.create_all(sync_engine)
+
+    # Lightweight migration: add columns if missing (PostgreSQL compatible)
     try:
-        with ENGINE.begin() as conn:
-            dialect = ENGINE.dialect.name
-            if dialect == "sqlite":
-                rows = conn.exec_driver_sql("PRAGMA table_info(google_tokens)").fetchall()
-                cols = {str(r[1]) for r in rows}
-                if "rotated_at" not in cols:
-                    conn.exec_driver_sql("ALTER TABLE google_tokens ADD COLUMN rotated_at DATETIME")
-                if "provider" not in cols:
-                    conn.exec_driver_sql("ALTER TABLE google_tokens ADD COLUMN provider VARCHAR DEFAULT 'google'")
-                if "provider_iss" not in cols:
-                    conn.exec_driver_sql("ALTER TABLE google_tokens ADD COLUMN provider_iss VARCHAR")
-                if "provider_sub" not in cols:
-                    conn.exec_driver_sql("ALTER TABLE google_tokens ADD COLUMN provider_sub VARCHAR")
-            else:
-                # Postgres / other: try ALTER TABLE ... ADD COLUMN IF NOT EXISTS
-                try:
-                    conn.exec_driver_sql("ALTER TABLE google_tokens ADD COLUMN IF NOT EXISTS rotated_at TIMESTAMP")
-                    conn.exec_driver_sql(
-                        "ALTER TABLE google_tokens ADD COLUMN IF NOT EXISTS provider VARCHAR DEFAULT 'google'"
-                    )
-                    conn.exec_driver_sql("ALTER TABLE google_tokens ADD COLUMN IF NOT EXISTS provider_iss VARCHAR")
-                    conn.exec_driver_sql("ALTER TABLE google_tokens ADD COLUMN IF NOT EXISTS provider_sub VARCHAR")
-                except Exception:
-                    # best-effort: ignore if individual ALTERs fail
-                    pass
+        with sync_engine.begin() as conn:
+            # Use PostgreSQL-specific ALTER TABLE syntax
+            try:
+                # Add rotated_at column if missing
+                conn.execute(text("""
+                    ALTER TABLE google_tokens
+                    ADD COLUMN IF NOT EXISTS rotated_at TIMESTAMP
+                """))
+                # Add provider column if missing
+                conn.execute(text("""
+                    ALTER TABLE google_tokens
+                    ADD COLUMN IF NOT EXISTS provider VARCHAR DEFAULT 'google'
+                """))
+                # Add provider_iss column if missing
+                conn.execute(text("""
+                    ALTER TABLE google_tokens
+                    ADD COLUMN IF NOT EXISTS provider_iss VARCHAR
+                """))
+                # Add provider_sub column if missing
+                conn.execute(text("""
+                    ALTER TABLE google_tokens
+                    ADD COLUMN IF NOT EXISTS provider_sub VARCHAR
+                """))
+            except Exception:
+                # best-effort: ignore if individual ALTERs fail (columns may already exist)
+                pass
     except Exception:
         # best-effort; if migration fails, tests may recreate DB via env override
         pass

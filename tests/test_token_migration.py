@@ -1,40 +1,14 @@
-import sqlite3
-
 import pytest
 
 from app.auth_store_tokens import TokenDAO
 from app.models.third_party_tokens import ThirdPartyToken
 
 
-def create_legacy_db(path: str):
-    """Create a legacy third_party_tokens table without the new encrypted columns."""
-    with sqlite3.connect(path) as conn:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS third_party_tokens (
-              id            TEXT PRIMARY KEY,
-              user_id       TEXT NOT NULL,
-              provider      TEXT NOT NULL,
-              access_token  TEXT NOT NULL,
-              refresh_token TEXT,
-              scope         TEXT,
-              expires_at    INTEGER NOT NULL,
-              created_at    INTEGER NOT NULL,
-              updated_at    INTEGER NOT NULL,
-              is_valid      INTEGER DEFAULT 1
-            )
-        """
-        )
-        conn.commit()
-
-
 @pytest.mark.asyncio
-async def test_migration_applies_and_upserts(tmp_path):
-    db_file = tmp_path / "legacy_tokens.db"
-    create_legacy_db(str(db_file))
+async def test_token_upsert_with_postgresql():
+    """Test token upsert operations using PostgreSQL."""
 
-    dao = TokenDAO(db_path=str(db_file))
+    dao = TokenDAO()
 
     token = ThirdPartyToken(
         identity_id="0cc892cd-1663-405f-a30f-136c720e0846",
@@ -48,21 +22,23 @@ async def test_migration_applies_and_upserts(tmp_path):
         updated_at=1,
     )
 
-    # Should return True, applying migration and inserting
+    # Should return True, inserting/updating the token
     ok = await dao.upsert_token(token)
     assert ok is True
 
-    # Verify the new column exists and row is present
-    with sqlite3.connect(str(db_file)) as conn:
-        cur = conn.cursor()
-        cur.execute("PRAGMA table_info(third_party_tokens)")
-        cols = {r[1] for r in cur.fetchall()}
-        assert "access_token_enc" in cols
+    # Verify the token can be retrieved
+    from app.db.core import get_async_db
+    from app.db.models import ThirdPartyToken as DBToken
 
-        cur.execute(
-            "SELECT user_id, provider, access_token FROM third_party_tokens WHERE user_id = ?",
-            ("testuser",),
+    async with get_async_db() as session:
+        from sqlalchemy import select
+        stmt = select(DBToken).where(
+            DBToken.user_id == "testuser",
+            DBToken.provider == "google"
         )
-        row = cur.fetchone()
-        assert row is not None
-        assert row[0] == "testuser"
+        result = await session.execute(stmt)
+        stored_token = result.scalar_one_or_none()
+
+        assert stored_token is not None
+        assert stored_token.user_id == "testuser"
+        assert stored_token.provider == "google"

@@ -417,14 +417,8 @@ def require_scope(required: str):
         payload = getattr(request.state, "jwt_payload", None)
         if not has_scope(payload, required):
             # Standardized error shape for UI consistency
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    "code": "forbidden",
-                    "message": "missing scope",
-                    "hint": required,
-                },
-            )
+            from app.error_envelope import raise_enveloped
+            raise_enveloped("missing_scope", f"Missing required scope: {required}", status=403)
 
     return _dep
 
@@ -442,14 +436,8 @@ def require_spotify_scope(required_scope: str = "user-read-private"):
 
         # Check if user has the required Spotify scope
         if not has_scope(payload, f"spotify:{required_scope}"):
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    "code": "spotify_scope_required",
-                    "message": f"Spotify scope '{required_scope}' required",
-                    "hint": f"spotify:{required_scope}",
-                },
-            )
+            from app.error_envelope import raise_enveloped
+            raise_enveloped("spotify_scope_required", f"Spotify scope '{required_scope}' required", status=403)
 
     return _dep
 
@@ -469,18 +457,15 @@ def csrf_validate(request: Request) -> None:
         tok, used_legacy, allowed = _csrf_extract(request)
         cookie = request.cookies.get("csrf_token")
         if used_legacy and not allowed:
-            from fastapi import HTTPException
-
-            raise HTTPException(status_code=400, detail="missing_csrf")
+            from app.error_envelope import raise_enveloped
+            raise_enveloped("csrf_required", "CSRF token required", status=403)
         if not tok or not cookie or tok != cookie:
-            from fastapi import HTTPException
-
-            raise HTTPException(status_code=400, detail="invalid_csrf")
+            from app.error_envelope import raise_enveloped
+            raise_enveloped("csrf_invalid", "Invalid CSRF token", status=403)
     except Exception:
         # Be explicit: fail-closed for enabled CSRF on mutation
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=400, detail="invalid_csrf")
+        from app.error_envelope import raise_enveloped
+        raise_enveloped("csrf_error", "CSRF validation failed", status=403)
 
 
 __all__ = [

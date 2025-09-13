@@ -815,9 +815,11 @@ async def transfer_playback_device(
 # This should be mounted at /v1 level (not under /music)
 redirect_router = APIRouter()
 
+
 @redirect_router.get("/legacy/state", include_in_schema=True, deprecated=True)
 async def legacy_music_state_redirect():
     """Redirect legacy /v1/legacy/state calls to new /v1/state endpoint."""
     return RedirectResponse(url="/v1/state", status_code=307)
+
 
 __all__ = ["router", "redirect_router", "_build_state_payload"]

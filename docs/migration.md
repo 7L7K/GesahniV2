@@ -32,4 +32,3 @@
 tools/cors_cookie_probe.sh http://localhost:8000 http://localhost:3000
 # Expect: Set-Cookie on login, whoami returns authenticated
 ```
-

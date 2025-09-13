@@ -340,6 +340,12 @@ class WsHub {
     onMessage: (e: MessageEvent) => void,
     retry = 0
   ) {
+    console.info(`WS ${name}: Starting connection attempt`, {
+      path,
+      retry,
+      reconnectAttempts: this.connections[name].reconnectAttempts
+    });
+
     // Check authentication before attempting connection
     const authOrchestrator = getAuthOrchestrator();
     const _state = authOrchestrator.getState();
@@ -347,15 +353,29 @@ class WsHub {
     const sessionReady = Boolean(_state.session_ready);
     const whoamiOk = Boolean(_state.whoamiOk);
 
+    console.debug(`WS ${name}: Auth check`, {
+      is_authenticated: isAuthed,
+      session_ready: sessionReady,
+      whoami_ok: whoamiOk,
+      user_id: _state.user_id,
+      source: _state.source
+    });
+
     if (!(isAuthed && sessionReady && whoamiOk)) {
-      console.info(`WS ${name}: Skipping connection - not authenticated`);
+      console.warn(`WS ${name}: Skipping connection - not authenticated`, {
+        is_authenticated: isAuthed,
+        session_ready: sessionReady,
+        whoami_ok: whoamiOk
+      });
       this.surfaceConnectionFailure(name, "Not authenticated");
       return;
     }
 
     // Check backend health to avoid connect attempts during outages
+    console.debug(`WS ${name}: Checking backend health`);
     const healthy = await this.isBackendHealthy();
     if (!healthy) {
+      console.warn(`WS ${name}: Backend not healthy, scheduling retry`);
       this.surfaceConnectionFailure(name, "Backend not healthy");
       const delay = this.jitteredDelayFor(retry++);
       this.connections[name].timer = setTimeout(() => this.connect(name, path, onOpenExtra, onMessage, retry), delay);
@@ -372,8 +392,15 @@ class WsHub {
     // Clean any previous socket
     this.safeClose(this.connections[name].socket);
 
+    // Generate WebSocket URL for logging
+    const wsUrlFinal = wsUrl(path);
+    console.info(`WS ${name}: Creating WebSocket connection`, {
+      url: wsUrlFinal,
+      protocols: ["json.realtime.v1"]
+    });
+
     try {
-      const ws = new WebSocket(wsUrl(path), ["json.realtime.v1"]);
+      const ws = new WebSocket(wsUrlFinal, ["json.realtime.v1"]);
       this.connections[name].socket = ws;
 
       // heartbeat: send ping every 25s
@@ -384,10 +411,21 @@ class WsHub {
       };
 
       ws.onopen = () => {
+        console.info(`WS ${name}: WebSocket connection opened successfully`, {
+          url: wsUrlFinal,
+          timestamp: new Date().toISOString()
+        });
+
         retry = 0; // reset backoff
         this.connections[name].lastPong = Date.now();
         this.connections[name].reconnectAttempts = 0; // Reset on successful connection
         this.connections[name].failureReason = null; // Clear failure reason
+
+        console.debug(`WS ${name}: Connection state reset`, {
+          lastPong: this.connections[name].lastPong,
+          reconnectAttempts: 0
+        });
+
         try { onOpenExtra.call(this, ws); } catch (error) {
           console.warn('WS Hub: onOpenExtra callback failed', error);
         }
@@ -397,6 +435,7 @@ class WsHub {
           clearInterval(this.connections[name].heartbeatTimer);
         }
         this.connections[name].heartbeatTimer = setInterval(heartbeat, 25_000);
+        console.debug(`WS ${name}: Heartbeat timer started (25s intervals)`);
       };
 
       ws.onmessage = (e) => {
@@ -411,6 +450,16 @@ class WsHub {
       };
 
       ws.onclose = (event) => {
+        console.warn(`WS ${name}: WebSocket closed`, {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+          readyState: ws.readyState,
+          url: wsUrlFinal,
+          reconnectAttempts: this.connections[name].reconnectAttempts,
+          timestamp: new Date().toISOString()
+        });
+
         // DO NOT call whoami on close - use global auth store instead
         if (this.connections[name].heartbeatTimer) {
           clearInterval(this.connections[name].heartbeatTimer);
@@ -422,27 +471,47 @@ class WsHub {
         const okAuthed = Boolean(s.is_authenticated);
         const okSession = Boolean(s.session_ready);
         const okWhoami = Boolean(s.whoamiOk);
+
+        console.debug(`WS ${name}: Reconnection check`, {
+          is_authenticated: okAuthed,
+          session_ready: okSession,
+          whoami_ok: okWhoami,
+          currentAttempts: this.connections[name].reconnectAttempts,
+          maxAttempts: this.connections[name].maxReconnectAttempts
+        });
+
         if ((okAuthed && okSession && okWhoami) && this.connections[name].reconnectAttempts < this.connections[name].maxReconnectAttempts) {
           this.connections[name].reconnectAttempts += 1;
           const delay = this.jitteredDelayFor(retry++);
+          console.info(`WS ${name}: Scheduling reconnection attempt`, {
+            attempt: this.connections[name].reconnectAttempts,
+            delayMs: delay,
+            totalAttempts: retry
+          });
           this.connections[name].timer = setTimeout(() => this.connect(name, path, onOpenExtra, onMessage, retry), delay);
         } else {
           // Max attempts reached or not authenticated - surface failure
-          if (!(okAuthed && okSession && okWhoami)) {
-            this.surfaceConnectionFailure(name, "Connection lost - not authenticated");
-          } else {
-            this.surfaceConnectionFailure(name, "Connection lost - max reconnection attempts reached");
-          }
+          const failureReason = !(okAuthed && okSession && okWhoami)
+            ? "Connection lost - not authenticated"
+            : "Connection lost - max reconnection attempts reached";
+          console.error(`WS ${name}: Connection failed permanently`, {
+            reason: failureReason,
+            attempts: this.connections[name].reconnectAttempts,
+            maxAttempts: this.connections[name].maxReconnectAttempts
+          });
+          this.surfaceConnectionFailure(name, failureReason);
         }
       };
 
       ws.onerror = (event) => {
         // Log error but don't surface it immediately - let onclose handle reconnection logic
-        console.warn(`WS ${name}: WebSocket connection error`, {
+        console.error(`WS ${name}: WebSocket connection error`, {
           name,
           readyState: ws.readyState,
           timestamp: new Date().toISOString(),
-          event: event
+          url: wsUrlFinal,
+          event: event,
+          retry: retry
         });
       };
 
@@ -460,8 +529,14 @@ class WsHub {
   // ---------------- message handlers ----------------
 
   private onMusicOpen(ws: WebSocket) {
-    // Send initial ping
-    try { ws.send('ping'); } catch (error) {
+    // Send initial ping in new format
+    try {
+      ws.send(JSON.stringify({
+        type: "ping",
+        proto_ver: 1,
+        ts: Date.now()
+      }));
+    } catch (error) {
       console.warn('WS Hub: Failed to send initial ping in onMusicOpen', error);
     }
   }
@@ -469,11 +544,67 @@ class WsHub {
   private onMusicMessage(e: MessageEvent) {
     const raw = String(e.data ?? "");
     if (!raw || raw === 'pong') return;
-    let msg: { topic?: string; data?: unknown };
+    let msg: { topic?: string; data?: unknown; type?: string; state?: unknown; proto_ver?: number };
     try { msg = JSON.parse(raw); } catch (error) {
       console.debug('WS Hub: Failed to parse music message JSON', error);
       return;
     }
+
+    // Handle new message format (type-based)
+    const msgType = String(msg?.type || "");
+    if (msgType) {
+      switch (msgType) {
+        case "hello":
+          // Handle hello message - connection established
+          try { window.dispatchEvent(new CustomEvent("music.hello", { detail: msg })); } catch (error) {
+            console.debug('WS Hub: Failed to dispatch music.hello event', error);
+          }
+          break;
+
+        case "state_full":
+        case "state_delta":
+          // Handle state updates - both full and delta states
+          (window as any).__musicState = msg.state || {};
+          try { window.dispatchEvent(new CustomEvent("music.state", { detail: msg.state || {} })); } catch (error) {
+            console.debug('WS Hub: Failed to dispatch music.state event', error);
+          }
+          break;
+
+        case "position_tick":
+          // Handle position updates during playback
+          try { window.dispatchEvent(new CustomEvent("music.position", { detail: msg })); } catch (error) {
+            console.debug('WS Hub: Failed to dispatch music.position event', error);
+          }
+          break;
+
+        case "ack":
+          // Handle command acknowledgments
+          try { window.dispatchEvent(new CustomEvent("music.ack", { detail: msg })); } catch (error) {
+            console.debug('WS Hub: Failed to dispatch music.ack event', error);
+          }
+          break;
+
+        case "error":
+          // Handle error messages
+          try { window.dispatchEvent(new CustomEvent("music.error", { detail: msg })); } catch (error) {
+            console.debug('WS Hub: Failed to dispatch music.error event', error);
+          }
+          break;
+
+        case "pong":
+          // Handle ping responses
+          try { window.dispatchEvent(new CustomEvent("music.pong", { detail: msg })); } catch (error) {
+            console.debug('WS Hub: Failed to dispatch music.pong event', error);
+          }
+          break;
+
+        default:
+          console.debug('WS Hub: Unhandled music message type:', msgType);
+      }
+      return;
+    }
+
+    // Handle legacy message format (topic-based) for backward compatibility
     const topic = String(msg?.topic || "");
     if (topic === "music.state") {
       (window as any).__musicState = msg.data || {};

@@ -56,7 +56,14 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
     private lastRefreshAttempt = 0;
     private refreshRetryCount = 0;
 
+    // Page-load level refresh guard: ensure exactly one refresh attempt per page load
+    private pageLoadRefreshAttempted = false;
+    private readonly PAGE_LOAD_REFRESH_KEY = 'auth:page_load_refresh_attempted';
+
     constructor() {
+        // Initialize page-load refresh guard
+        this.initializePageLoadRefreshGuard();
+
         // Subscribe to bootstrap manager for auth finish coordination
         this.bootstrapManager.subscribe((bootstrapState) => {
             // React to auth finish state changes
@@ -102,6 +109,66 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         // Force immediate auth check when tokens change
         this.refreshAuth();
     };
+
+    /**
+     * Initialize page-load refresh guard to prevent multiple refresh attempts per page load
+     */
+    private initializePageLoadRefreshGuard(): void {
+        // Check if sessionStorage is available (works in browser and test environments with mocks)
+        if (typeof sessionStorage !== 'undefined' && sessionStorage) {
+            try {
+                // Check if we've already attempted a refresh for this page load
+                this.pageLoadRefreshAttempted = Boolean(sessionStorage.getItem(this.PAGE_LOAD_REFRESH_KEY));
+
+                // Reset the flag when the page is about to unload (for navigation)
+                if (typeof window !== 'undefined') {
+                    window.addEventListener('beforeunload', () => {
+                        sessionStorage.removeItem(this.PAGE_LOAD_REFRESH_KEY);
+                    });
+
+                    // Reset on page visibility change (user switching tabs/back)
+                    if (typeof document !== 'undefined') {
+                        document.addEventListener('visibilitychange', () => {
+                            if (document.hidden) {
+                                // Clear the flag when user leaves the page
+                                sessionStorage.removeItem(this.PAGE_LOAD_REFRESH_KEY);
+                                this.pageLoadRefreshAttempted = false;
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                // sessionStorage not available, disable guard
+                console.warn('Page-load refresh guard disabled: sessionStorage not available');
+                this.pageLoadRefreshAttempted = false;
+            }
+        } else {
+            // No sessionStorage, disable guard but don't break functionality
+            this.pageLoadRefreshAttempted = false;
+        }
+    }
+
+    /**
+     * Check if we've already attempted a refresh for this page load
+     */
+    private hasAttemptedPageLoadRefresh(): boolean {
+        return this.pageLoadRefreshAttempted;
+    }
+
+    /**
+     * Mark that we've attempted a refresh for this page load
+     */
+    private markPageLoadRefreshAttempted(): void {
+        this.pageLoadRefreshAttempted = true;
+        if (typeof sessionStorage !== 'undefined' && sessionStorage) {
+            try {
+                sessionStorage.setItem(this.PAGE_LOAD_REFRESH_KEY, 'true');
+            } catch (error) {
+                // sessionStorage not available, just update in-memory flag
+                console.warn('Could not persist page-load refresh flag to sessionStorage');
+            }
+        }
+    }
 
     markExplicitStateChange(): void {
         console.info('AUTH Orchestrator: Marking next state change as explicit');
@@ -206,6 +273,14 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
             return;
         }
 
+        // PAGE-LOAD GUARD: Ensure exactly one refresh attempt per page load
+        if (this.hasAttemptedPageLoadRefresh()) {
+            console.info('AUTH Orchestrator: Skipping refresh - already attempted for this page load', {
+                timestamp: new Date().toISOString(),
+            });
+            return;
+        }
+
         // Short-circuit refresh when already authenticated to prevent oscillation
         if (this.state.is_authenticated && this.state.whoamiOk) {
             console.info('AUTH Orchestrator: Short-circuiting refresh - already authenticated', {
@@ -230,6 +305,9 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         }
         // In cookie mode, tokens are HttpOnly so we can't check localStorage
         // Always proceed to checkAuth() to verify current state via cookies
+
+        // MARK: We've now attempted a refresh for this page load
+        this.markPageLoadRefreshAttempted();
 
         // IMPORTANT: Reuse checkAuth so we honor throttling/backoff/cooldowns.
         // This prevents multiple components from causing rapid whoami loops
@@ -417,6 +495,14 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
     async handleRefreshWithRetry(): Promise<void> {
         const now = Date.now();
 
+        // PAGE-LOAD GUARD: Ensure exactly one refresh attempt per page load
+        if (this.hasAttemptedPageLoadRefresh()) {
+            console.info('AUTH Orchestrator: Skipping refresh - already attempted for this page load', {
+                timestamp: new Date().toISOString(),
+            });
+            return;
+        }
+
         // If refresh already in flight, wait for it
         if (this.refreshInFlight) {
             console.info('AUTH Orchestrator: Refresh already in flight, waiting...');
@@ -431,6 +517,8 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         }
 
         this.lastRefreshAttempt = now;
+        // MARK: We've now attempted a refresh for this page load
+        this.markPageLoadRefreshAttempted();
         this.refreshInFlight = this._performRefreshWithRetry();
 
         try {

@@ -6,8 +6,8 @@ import { musicCommand, type MusicState } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 export default function NowPlayingCard({ state }: { state: MusicState }) {
-    const { track, is_playing } = state;
-    const art = track?.art_url || "/placeholder.png";
+    const { track, is_playing, provider } = state;
+    const art = "/placeholder.png"; // No art_url in new format
     const onPlayPause = async () => {
         await musicCommand({ command: is_playing ? "pause" : "play" });
     };
@@ -23,20 +23,14 @@ export default function NowPlayingCard({ state }: { state: MusicState }) {
             <div className="flex gap-4 items-center">
                 <div className="w-24 h-24 relative overflow-hidden rounded-md">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={art || ""} alt={track?.name || "art"} className="w-full h-full object-cover" />
+                    <img src={art} alt={track?.title || "art"} className="w-full h-full object-cover" />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <div className="text-base font-semibold truncate">{track?.name || "Nothing playing"}</div>
-                    <div className="text-sm text-muted-foreground truncate">{track?.artists || "—"}</div>
+                    <div className="text-base font-semibold truncate">{track?.title || "Nothing playing"}</div>
+                    <div className="text-sm text-muted-foreground truncate">{track?.artist || "—"}</div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                        {state.provider === 'spotify' ? 'Spotify' : (state.provider === 'radio' ? 'Radio' : '—')}
+                        {provider === 'fake' ? 'Demo Player' : (provider || 'Unknown')}
                     </div>
-                    {!state.explicit_allowed && (
-                        <div className="mt-1 text-[11px] text-amber-600">Explicit content filtered</div>
-                    )}
-                    {state.quiet_hours && (
-                        <div className="mt-0.5 text-[11px] text-amber-600">Quiet hours cap</div>
-                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="ghost" onClick={onPrev} aria-label="Previous">⏮</Button>

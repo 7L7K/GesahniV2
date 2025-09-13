@@ -49,6 +49,7 @@ try:
             return _orig_Histogram(name, doc, *args, **kwargs)
         except ValueError:
             return _MetricStub(name)
+
 except Exception:
     # If anything goes wrong, keep the existing Counter/Histogram (likely stubs)
     pass
@@ -97,13 +98,13 @@ SPOTIFY_REFRESH_ERROR = Counter(
 TOKEN_STORE_OPERATIONS = Counter(
     "token_store_operations_total",
     "Token store operations",
-    ["operation", "provider", "result"]
+    ["operation", "provider", "result"],
 )
 
 TOKEN_REFRESH_OPERATIONS = Counter(
     "token_refresh_operations_total",
     "Token refresh operations",
-    ["provider", "result", "attempt"]
+    ["provider", "result", "attempt"],
 )
 
 try:
@@ -111,14 +112,14 @@ try:
     CHAOS_EVENTS_TOTAL = Counter(
         "chaos_events_total",
         "Chaos mode events injected",
-        ["event_type", "operation", "result"]
+        ["event_type", "operation", "result"],
     )
 
     CHAOS_LATENCY_SECONDS = Histogram(
         "chaos_latency_seconds",
         "Latency injected by chaos mode",
         ["event_type", "operation"],
-        buckets=[0.1, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0]
+        buckets=[0.1, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0],
     )
 except Exception:  # pragma: no cover - registry collisions
     CHAOS_EVENTS_TOTAL = _MetricStub("chaos_events_total")
@@ -212,9 +213,7 @@ AUTH_LAZY_REFRESH = Counter(
     "auth_lazy_refresh_total", "Lazy AT refresh events", ["source", "result"]
 )
 
-AUTH_RT_REJECT = Counter(
-    "auth_rt_reject_total", "Refresh token rejected", ["reason"]
-)
+AUTH_RT_REJECT = Counter("auth_rt_reject_total", "Refresh token rejected", ["reason"])
 
 AUTH_STORE_OUTAGE = Counter(
     "auth_store_outage_total", "Session store outage detections"
@@ -324,6 +323,7 @@ except Exception:  # pragma: no cover - optional dependency
             self.value += amount
 
     Counter = Histogram = _MetricStub
+
     class _GaugeStub:
         def __init__(self, name, *a, **k):
             self.name = name
@@ -368,7 +368,9 @@ LLM_FALLBACK_TOTAL = Counter("llm_fallback_total", "LLM fallback invocations")
 
 UNDO_INVOCATIONS_TOTAL = Counter("undo_invocations_total", "Undo actions invoked")
 
-ENTITY_DISAMBIGUATIONS_TOTAL = Counter("entity_disambiguations_total", "Entity disambiguation events")
+ENTITY_DISAMBIGUATIONS_TOTAL = Counter(
+    "entity_disambiguations_total", "Entity disambiguation events"
+)
 
 # Latency per route
 LATENCY = Histogram(
@@ -456,7 +458,9 @@ except Exception:  # pragma: no cover
 # Simple health gauges
 try:
     HEALTH_OK = Gauge("health_ok", "Overall backend health ok (1/0)")
-    HEALTH_DEPS_OK = Gauge("health_deps_ok", "Dependency health ok (1/0)", ["component"])
+    HEALTH_DEPS_OK = Gauge(
+        "health_deps_ok", "Dependency health ok (1/0)", ["component"]
+    )
 except Exception:  # pragma: no cover
 
     class _G:
@@ -528,9 +532,17 @@ except Exception:  # pragma: no cover
 
 # Spotify-specific counters for Phase 6
 try:
-    SPOTIFY_OAUTH_START = Counter("spotify_oauth_start_total", "Spotify OAuth starts", ["provider"])
-    SPOTIFY_OAUTH_CALLBACK = Counter("spotify_oauth_callback_total", "Spotify OAuth callback results", ["result", "reason"])
-    SPOTIFY_OAUTH_IDEMPOTENT = Counter("spotify_oauth_idempotent_total", "Spotify OAuth idempotent hits")
+    SPOTIFY_OAUTH_START = Counter(
+        "spotify_oauth_start_total", "Spotify OAuth starts", ["provider"]
+    )
+    SPOTIFY_OAUTH_CALLBACK = Counter(
+        "spotify_oauth_callback_total",
+        "Spotify OAuth callback results",
+        ["result", "reason"],
+    )
+    SPOTIFY_OAUTH_IDEMPOTENT = Counter(
+        "spotify_oauth_idempotent_total", "Spotify OAuth idempotent hits"
+    )
 except Exception:
     SPOTIFY_OAUTH_START = SPOTIFY_OAUTH_CALLBACK = SPOTIFY_OAUTH_IDEMPOTENT = Counter
 
@@ -1022,42 +1034,51 @@ try:
     ASK_STREAM_REQUESTS_TOTAL = Counter(
         "gesahni_ask_stream_requests_total",
         "Count of streaming vs non-streaming requests",
-        ["stream", "endpoint"]
+        ["stream", "endpoint"],
     )
 except Exception:  # pragma: no cover
+
     class _CStream:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     ASK_STREAM_REQUESTS_TOTAL = _CStream()  # type: ignore
 
 try:
     ASK_TOKENS_EST_TOTAL = Counter(
         "gesahni_ask_tokens_est_total",
         "Count of requests by token estimation ranges",
-        ["range", "endpoint"]
+        ["range", "endpoint"],
     )
 except Exception:  # pragma: no cover
+
     class _CTokens:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     ASK_TOKENS_EST_TOTAL = _CTokens()  # type: ignore
 
 try:
     ASK_ERROR_CODES_TOTAL = Counter(
         "gesahni_ask_error_codes_total",
         "Count of requests by error codes",
-        ["error_code", "error_type", "endpoint"]
+        ["error_code", "error_type", "endpoint"],
     )
 except Exception:  # pragma: no cover
+
     class _CError:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     ASK_ERROR_CODES_TOTAL = _CError()  # type: ignore
 
 # Auth redirect sanitization metrics
@@ -1068,21 +1089,26 @@ try:
         ["reason"],
     )
 except Exception:  # pragma: no cover
+
     class _CRedirect:
         def labels(self, *a, **k):
             return self
+
         def inc(self, *a, **k):
             return None
+
     AUTH_REDIRECT_SANITIZED_TOTAL = _CRedirect()  # type: ignore
 
 # Auth redirect cookie gauge
 try:
     AUTH_REDIRECT_COOKIE_IN_USE = Gauge(
         "auth_redirect_cookie_in_use",
-        "Whether gs_next cookie is present during finish endpoint (0/1)"
+        "Whether gs_next cookie is present during finish endpoint (0/1)",
     )
 except Exception:  # pragma: no cover
+
     class _GCookie:
         def set(self, *a, **k):
             return None
+
     AUTH_REDIRECT_COOKIE_IN_USE = _GCookie()  # type: ignore

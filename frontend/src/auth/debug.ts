@@ -3,4 +3,3 @@ export function logAuth(event: string, data: any = {}) {
   // eslint-disable-next-line no-console
   console.info("[AUTH]", event, { ...data, ts: new Date().toISOString() });
 }
-

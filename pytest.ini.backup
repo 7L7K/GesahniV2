@@ -1,0 +1,11 @@
+[pytest]
+addopts = -q --disable-warnings --tb=short --maxfail=0 -rA --timeout=20
+testpaths = tests
+asyncio_mode = auto
+filterwarnings =
+    ignore::DeprecationWarning
+markers =
+    asyncio: mark test to run with pytest-asyncio
+    smoke: Golden-flow smoke tests
+    contract: Contract tests for API validation
+    integration: Integration tests that require external services

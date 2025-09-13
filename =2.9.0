@@ -1,0 +1,5 @@
+Collecting psycopg2-binary
+  Using cached psycopg2_binary-2.9.10-cp312-cp312-macosx_12_0_x86_64.whl.metadata (4.9 kB)
+Using cached psycopg2_binary-2.9.10-cp312-cp312-macosx_12_0_x86_64.whl (3.0 MB)
+Installing collected packages: psycopg2-binary
+Successfully installed psycopg2-binary-2.9.10

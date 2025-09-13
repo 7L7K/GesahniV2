@@ -21,7 +21,6 @@ sys.modules.setdefault(
     types.SimpleNamespace(SentenceTransformer=object, util=None),
 )
 sys.modules.setdefault("chromadb", types.SimpleNamespace(PersistentClient=object))
-sys.modules.setdefault("aiosqlite", types.SimpleNamespace(connect=lambda *a, **k: None))
 
 
 # --- Mock Classes ---

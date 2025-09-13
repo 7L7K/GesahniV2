@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta
 
-from app import storage
+from sqlalchemy import text
+
+from app.db.core import sync_engine
 
 from .base import Skill
 
@@ -24,25 +26,23 @@ class DaySummarySkill(Skill):
         else:
             start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Query SQLite ledger for counts since start
+        # Query PostgreSQL ledger for counts since start using app.db.core
         try:
-            storage.init_storage()
             cutoff = start.isoformat()
             counts: dict[str, int] = {}
-            with storage._conn(storage.LEDGER_DB) as c:
-                cur = c.execute(
-                    "SELECT type, COUNT(*) as cnt FROM ledger WHERE ts >= ? GROUP BY type",
-                    (cutoff,),
+            with sync_engine.connect() as conn:
+                result = conn.execute(
+                    text("""
+                        SELECT operation as type, COUNT(*) as cnt
+                        FROM storage.ledger
+                        WHERE created_at >= :cutoff::timestamptz
+                        GROUP BY operation
+                    """),
+                    {"cutoff": cutoff}
                 )
-                rows = cur.fetchall()
-                for r in rows:
-                    # sqlite3.Row supports mapping access
-                    try:
-                        typ = r["type"]
-                        cnt = int(r["cnt"])
-                    except Exception:
-                        typ = r[0]
-                        cnt = int(r[1])
+                for row in result.mappings():
+                    typ = row["type"]
+                    cnt = int(row["cnt"])
                     counts[typ] = cnt
         except Exception:
             return "No events in the requested period."

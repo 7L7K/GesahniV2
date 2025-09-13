@@ -8,4 +8,3 @@ export function api(path: string, init: RequestInit = {}) {
     const url = /^https?:\/\//i.test(path) ? path : `${base}${path}`;
     return fetch(url, { credentials: 'include', ...init });
 }
-

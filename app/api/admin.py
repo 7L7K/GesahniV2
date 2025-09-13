@@ -262,43 +262,45 @@ async def admin_user_identities(user_id: str):
     Requires admin:read scope.
     """
     try:
-        import aiosqlite
+        from sqlalchemy import select
+        from app.db.core import get_async_db
+        from app.db.models import AuthIdentity
 
-        from ..auth_store import _db_path as AUTH_DB
-
-        async with aiosqlite.connect(str(AUTH_DB())) as db:
-            async with db.execute(
-                "SELECT id, provider, provider_iss, provider_sub, email_normalized, email_verified, created_at, updated_at FROM auth_identities WHERE user_id = ?",
-                (user_id,),
-            ) as cur:
-                rows = await cur.fetchall()
+        async with get_async_db() as session:
+            stmt = select(AuthIdentity).where(AuthIdentity.user_id == user_id)
+            result = await session.execute(stmt)
+            identities = result.scalars().all()
 
             out = []
-            for r in rows:
-                identity_id = r[0]
-                provider = r[1]
-                async with db.execute(
-                    "SELECT expires_at, updated_at, last_refresh_at FROM third_party_tokens WHERE identity_id = ? AND provider = ? ORDER BY updated_at DESC LIMIT 1",
-                    (identity_id, provider),
-                ) as cur2:
-                    tok = await cur2.fetchone()
+            for identity in identities:
+                # Get last token info for this identity
+                from app.db.models import ThirdPartyToken
+                stmt = select(ThirdPartyToken).where(
+                    ThirdPartyToken.identity_id == identity.id,
+                    ThirdPartyToken.provider == identity.provider
+                ).order_by(ThirdPartyToken.updated_at.desc()).limit(1)
+
+                result = await session.execute(stmt)
+                token = result.scalar_one_or_none()
+
                 last = None
-                if tok:
+                if token:
                     last = {
-                        "expires_at": tok[0],
-                        "updated_at": tok[1],
-                        "last_refresh_at": tok[2],
+                        "expires_at": token.expires_at,
+                        "updated_at": token.updated_at.timestamp() if isinstance(token.updated_at, datetime) else token.updated_at,
+                        "last_refresh_at": token.last_refresh_at,
                     }
+
                 out.append(
                     {
-                        "id": identity_id,
-                        "provider": provider,
-                        "provider_iss": r[2],
-                        "provider_sub": r[3],
-                        "email_normalized": r[4],
-                        "email_verified": bool(r[5]),
-                        "created_at": r[6],
-                        "updated_at": r[7],
+                        "id": identity.id,
+                        "provider": identity.provider,
+                        "provider_iss": identity.provider_iss,
+                        "provider_sub": identity.provider_sub,
+                        "email_normalized": identity.email_normalized,
+                        "email_verified": identity.email_verified,
+                        "created_at": identity.created_at.timestamp() if isinstance(identity.created_at, datetime) else identity.created_at,
+                        "updated_at": identity.updated_at.timestamp() if isinstance(identity.updated_at, datetime) else identity.updated_at,
                         "last_token": last,
                     }
                 )
@@ -321,34 +323,34 @@ async def admin_unlink_identity(
     If unlinking would remove the last usable login method for the user, require `force=true`.
     """
     try:
-        import aiosqlite
+        from sqlalchemy import select, func, delete
+        from app.db.core import get_async_db
+        from app.db.models import AuthIdentity, AuthUser
 
-        from ..auth_store import _db_path as AUTH_DB
-
-        async with aiosqlite.connect(str(AUTH_DB())) as db:
+        async with get_async_db() as session:
             # Verify identity belongs to user
-            async with db.execute(
-                "SELECT provider, provider_sub FROM auth_identities WHERE id = ? AND user_id = ?",
-                (identity_id, user_id),
-            ) as cur:
-                row = await cur.fetchone()
-            if not row:
+            stmt = select(AuthIdentity).where(
+                AuthIdentity.id == identity_id,
+                AuthIdentity.user_id == user_id
+            )
+            result = await session.execute(stmt)
+            identity = result.scalar_one_or_none()
+
+            if not identity:
                 raise HTTPException(status_code=404, detail="identity_not_found")
-            provider = row[0]
+
+            provider = identity.provider
 
             # Count remaining identities for this user
-            async with db.execute(
-                "SELECT COUNT(*) FROM auth_identities WHERE user_id = ?", (user_id,)
-            ) as cur2:
-                cnt_row = await cur2.fetchone()
-            remaining = int(cnt_row[0] or 0)
+            stmt = select(func.count()).select_from(AuthIdentity).where(AuthIdentity.user_id == user_id)
+            result = await session.execute(stmt)
+            remaining = result.scalar() or 0
 
             # Check if user has local password set
-            async with db.execute(
-                "SELECT password_hash FROM users WHERE id = ?", (user_id,)
-            ) as cur3:
-                pw_row = await cur3.fetchone()
-            has_password = bool(pw_row and pw_row[0])
+            stmt = select(AuthUser.password_hash).where(AuthUser.id == user_id)
+            result = await session.execute(stmt)
+            password_hash = result.scalar_one_or_none()
+            has_password = bool(password_hash)
 
             if remaining <= 1 and not has_password and not force:
                 raise HTTPException(
@@ -356,26 +358,26 @@ async def admin_unlink_identity(
                     detail="cannot_unlink_last_login_method_without_force",
                 )
 
-            # Proceed to delete identity and mark tokens invalid
-            await db.execute("DELETE FROM auth_identities WHERE id = ?", (identity_id,))
-            await db.commit()
+            # Proceed to delete identity
+            stmt = delete(AuthIdentity).where(AuthIdentity.id == identity_id)
+            await session.execute(stmt)
+            await session.commit()
 
-        # Mark tokens invalid for this identity in the tokens DB
+        # Mark tokens invalid for this identity
         try:
-            import sqlite3
+            from sqlalchemy import update
+            from datetime import datetime, timezone
+            from app.db.models import ThirdPartyToken
 
-            TOK_DB = os.getenv("THIRD_PARTY_TOKENS_DB", "third_party_tokens.db")
-            conn = sqlite3.connect(TOK_DB)
-            conn.execute("PRAGMA foreign_keys=ON")
-            try:
-                cur = conn.cursor()
-                cur.execute(
-                    "UPDATE third_party_tokens SET is_valid = 0, updated_at = ? WHERE identity_id = ?",
-                    (int(time.time()), identity_id),
+            async with get_async_db() as session:
+                stmt = update(ThirdPartyToken).where(
+                    ThirdPartyToken.identity_id == identity_id
+                ).values(
+                    is_valid=False,
+                    updated_at=datetime.now(timezone.utc)
                 )
-                conn.commit()
-            finally:
-                conn.close()
+                await session.execute(stmt)
+                await session.commit()
         except Exception:
             # best-effort: log and continue
             logger.exception(

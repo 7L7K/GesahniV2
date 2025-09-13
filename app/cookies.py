@@ -232,6 +232,20 @@ def clear_device_cookie(
     _clear_device_cookie(resp, name=cookie_name, http_only=False)
 
 
+def read_device_cookie(request: Request, cookie_name: str = "device_id") -> str | None:
+    """
+    Read device identification cookie using canonical web.cookies helpers.
+
+    Args:
+        request: FastAPI Request object
+        cookie_name: Name of the device cookie (default: "device_id")
+
+    Returns:
+        Device ID string or None if not present
+    """
+    return request.cookies.get(cookie_name)
+
+
 def clear_named_cookie(
     resp: Response,
     *,

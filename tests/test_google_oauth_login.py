@@ -41,19 +41,13 @@ def _app(monkeypatch):
     ]:
         sys.modules.pop(m, None)
 
-    # Temp dbs
-    users_fd, users_path = tempfile.mkstemp()
-    os.close(users_fd)
-    google_db_fd, google_db_path = tempfile.mkstemp()
-    os.close(google_db_fd)
-
-    monkeypatch.setenv("USERS_DB", users_path)
     monkeypatch.setenv("JWT_SECRET", "testsecret")
     monkeypatch.setenv("APP_URL", "http://app.example")
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "x")
     monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "y")
     monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://testserver/google/oauth/callback")
-    monkeypatch.setenv("GOOGLE_OAUTH_DB_URL", f"sqlite:///{google_db_path}")
+    # Use the main PostgreSQL test database instead of a separate SQLite DB
+    monkeypatch.setenv("GOOGLE_OAUTH_DB_URL", "postgresql://app:app_pw@localhost:5432/gesahni_test")
 
     # Import modules after env
     oauth = import_module("app.integrations.google.oauth")

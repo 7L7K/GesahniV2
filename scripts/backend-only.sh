@@ -10,7 +10,16 @@ echo ""
 # Load centralized localhost configuration
 if [ -f "env.localhost" ]; then
     echo "📝 Loading centralized localhost configuration..."
-    export $(grep -v '^#' env.localhost | xargs)
+    # Export variables line by line to handle values with spaces and special characters
+    while IFS='=' read -r key value; do
+        # Skip comments and empty lines
+        [[ $key =~ ^[[:space:]]*# ]] && continue
+        [[ -z $key ]] && continue
+        # Remove leading/trailing whitespace from key
+        key=$(echo "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        # Export the variable
+        export "$key=$value"
+    done < env.localhost
 else
     echo "⚠️  Warning: env.localhost not found, using default configuration"
 fi
@@ -41,8 +50,8 @@ if command -v docker >/dev/null 2>&1; then
         docker run -d --name "$NAME" \
           -p "${HOST_PORT}:${PORT}" \
           -v "${DATA_DIR}:/qdrant/storage" \
-          --health-cmd="curl -fsS http://localhost:${PORT}/readyz || exit 1" \
-          --health-interval=5s --health-retries=10 --health-timeout=2s \
+          --health-cmd="apt-get update && apt-get install -y curl && curl -fsS http://0.0.0.0:${PORT}/readyz || exit 1" \
+          --health-interval=10s --health-retries=10 --health-timeout=30s \
           "$IMAGE" >/dev/null
       fi
 

@@ -19,7 +19,11 @@ from app.metrics import (
     ASK_ERRORS_TOTAL,
     ASK_LATENCY_MS,
 )
+from app.schemas.chat import Message, AskRequest
 from app.otel_utils import get_trace_id_hex
+from app.db.core import get_db
+from app.db.chat_repo import get_messages_by_rid
+from app.deps.user import get_current_user_id
 
 # Import from leaf modules, not from app.router.__init__.py
 from .policy import OLLAMA_TIMEOUT_MS, OPENAI_TIMEOUT_MS
@@ -86,43 +90,7 @@ def _redact_sensitive_data(data: dict) -> dict:
     return redacted
 
 
-class Message(BaseModel):
-    role: str = Field(..., description="Message role: system|user|assistant")
-    content: str = Field(..., description="Message text content")
-
-    model_config = ConfigDict(title="Message")
-
-
-class AskRequest(BaseModel):
-    prompt: str | list[Message] = Field(
-        ...,
-        description="Prompt text or chat-style message array",
-        examples=["Hello, how are you?", [{"role": "user", "content": "Hello"}]],
-    )
-    model_override: str | None = Field(
-        None,
-        alias="model",
-        description="Force specific model (gpt-4o, llama3, etc.)",
-        examples=["gpt-4o", "llama3"],
-    )
-    stream: bool | None = Field(
-        False,
-        description="Force SSE when true; otherwise negotiated via Accept",
-    )
-
-    # Pydantic v2 config: allow both alias ("model") and field name ("model_override")
-    model_config = ConfigDict(
-        title="AskRequest",
-        validate_by_name=True,
-        validate_by_alias=True,
-        json_schema_extra={
-            "examples": [
-                {"prompt": "Hello, how are you?"},
-                {"prompt": [{"role": "user", "content": "Hello"}], "stream": True},
-                {"prompt": "Translate to French", "model": "llama3"},
-            ]
-        },
-    )
+# Schemas imported from shared module above
 
 
 def _require_auth_dep():
@@ -367,18 +335,43 @@ async def ask_endpoint(
 async def ask_replay(
     rid: str,
     request: Request,
+    user_id: str = Depends(get_current_user_id),
 ):
-    """Replay endpoint for debugging stored golden traces."""
-    # This is a placeholder implementation
-    # In a real implementation, you would:
-    # 1. Load the stored golden trace from a database/cache
-    # 2. Replay against current vendor configs
-    # 3. Return diff between then and now
+    """Replay endpoint for retrieving persisted chat messages by request ID."""
+    try:
+        # Get messages from database
+        async for session in get_db():
+            messages = await get_messages_by_rid(session, user_id, rid)
+            break
 
-    # For now, return a mock response
-    return {
-        "rid": rid,
-        "status": "not_implemented",
-        "message": "Replay functionality not yet implemented",
-        "note": "This would load stored golden trace and replay against current configs",
-    }
+        if not messages:
+            # No messages found for this RID
+            from app.error_envelope import raise_enveloped
+            raise_enveloped("not_found", "No chat messages found for this request ID", status=404)
+
+        # Convert to response format
+        message_list = [
+            {
+                "id": msg.id,
+                "role": msg.role,
+                "content": msg.content,
+                "created_at": msg.created_at.isoformat(),
+            }
+            for msg in messages
+        ]
+
+        return {
+            "rid": rid,
+            "user_id": user_id,
+            "message_count": len(message_list),
+            "messages": message_list,
+        }
+
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 404)
+        raise
+    except Exception as e:
+        logger.error("Failed to retrieve chat messages", extra={
+            "meta": {"rid": rid, "user_id": user_id, "error": str(e)}
+        })
+        raise_enveloped("internal", "Failed to retrieve chat messages", status=500)

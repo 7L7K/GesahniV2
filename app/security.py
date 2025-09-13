@@ -562,15 +562,8 @@ async def _daily_incr(r, key: str) -> tuple[int, int]:
         return _local_daily_incr(f"{key}:{date_str}")
 
 
-def _payload_scopes(payload: dict | None) -> set[str]:
-    if not isinstance(payload, dict):
-        return set()
-    scopes = payload.get("scope") or payload.get("scopes") or []
-    if isinstance(scopes, str):
-        return {s.strip() for s in scopes.split() if s.strip()}
-    if isinstance(scopes, list | tuple):
-        return {str(s).strip() for s in scopes if str(s).strip()}
-    return set()
+# Import from jwt_utils to avoid circular imports
+from .security.jwt_utils import _payload_scopes
 
 
 def _bypass_scopes_env() -> set[str]:
@@ -1444,11 +1437,8 @@ async def rate_limit(request: Request) -> None:
                 "RateLimit-Remaining": "0",
                 "RateLimit-Reset": str(retry_long),
             }
-            raise HTTPException(
-                status_code=429,
-                detail={"error": "rate_limited", "retry_after": retry_long},
-                headers=headers,
-            )
+            from app.error_envelope import raise_enveloped
+            raise_enveloped("rate_limited", "Rate limit exceeded", status=429, details={"retry_after": retry_long})
 
         # Check burst rate limit
         ok_burst = _bucket_rate_limit(key, http_burst, rate_limit_burst, burst_window)
@@ -1467,11 +1457,8 @@ async def rate_limit(request: Request) -> None:
                 "RateLimit-Remaining": "0",
                 "RateLimit-Reset": str(retry_burst),
             }
-            raise HTTPException(
-                status_code=429,
-                detail={"error": "rate_limited", "retry_after": retry_burst},
-                headers=headers,
-            )
+            from app.error_envelope import raise_enveloped
+            raise_enveloped("rate_limited", "Rate limit exceeded", status=429, details={"retry_after": retry_burst})
 
 
 async def verify_ws(websocket: WebSocket) -> None:
@@ -2140,7 +2127,8 @@ def scope_rate_limit(
             async with _lock:
                 ok_long = _bucket_rate_limit(key, scope_rate_limits, _long, _window)
             if not ok_long:
-                raise HTTPException(status_code=429, detail={"error": "rate_limited"})
+                from app.error_envelope import raise_enveloped
+                raise_enveloped("rate_limited", "Rate limit exceeded", status=429)
             return None
         # If the user does not have the scope, do not enforce any extra limits here
         return None

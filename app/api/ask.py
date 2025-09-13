@@ -20,6 +20,7 @@ from app.deps.user import get_current_user_id, require_user
 from app.errors import BackendUnavailableError
 from app.otel_utils import get_trace_id_hex, start_span
 from app.policy import moderation_precheck
+from app.schemas.chat import Message, AskRequest
 
 # OPENAI/OLLAMA timeouts are provided by the legacy router module in some
 # configurations. Import them lazily with safe fallbacks to avoid hard
@@ -92,70 +93,6 @@ def _redact_sensitive_data(data: dict) -> dict:
                 msg["content"] = "<redacted-content>"
 
     return redacted
-
-
-class Message(BaseModel):
-    role: str = Field(..., description="Message role: system|user|assistant")
-    content: str = Field(..., description="Message text content")
-
-    model_config = ConfigDict(title="Message")
-
-
-class AskRequest(BaseModel):
-    prompt: str | list[Message] = Field(
-        ..., description="Canonical prompt: text or messages[]"
-    )
-    model: str | None = Field(
-        None, description="Preferred model id (e.g., gpt-4o, llama3)"
-    )
-    stream: bool | None = Field(
-        False, description="Force SSE when true; otherwise negotiated via Accept"
-    )
-
-    # Allow legacy alias 'model_override' in docs compatibility
-    model_override: str | None = Field(None, exclude=True)
-
-    model_config = ConfigDict(
-        title="AskRequest",
-        json_schema_extra={
-            "examples": {
-                "text_prompt": {
-                    "summary": "Simple text prompt",
-                    "description": "Basic text input for simple queries",
-                    "value": {
-                        "prompt": "What is the capital of France?",
-                        "model": "gpt-4o",
-                        "stream": False
-                    }
-                },
-                "chat_messages": {
-                    "summary": "Chat format with messages",
-                    "description": "Structured chat format preserving role information",
-                    "value": {
-                        "prompt": [
-                            {"role": "system", "content": "You are a helpful geography tutor."},
-                            {"role": "user", "content": "What is the capital of France?"},
-                            {"role": "assistant", "content": "The capital of France is Paris."},
-                            {"role": "user", "content": "What about Italy?"}
-                        ],
-                        "model": "llama3",
-                        "stream": True
-                    }
-                },
-                "streaming_text": {
-                    "summary": "Streaming text response",
-                    "description": "Text prompt with streaming response",
-                    "value": {
-                        "prompt": "Write a short poem about mountains",
-                        "model": "gpt-4o",
-                        "stream": True
-                    }
-                }
-            }
-        },
-    )
-
-
 
 
 router = APIRouter(tags=["Care"])  # dependency added per-route to allow env gate
@@ -321,7 +258,8 @@ def _normalize_payload(
 ) -> tuple[str, str | None, bool, bool, dict, str]:
     """Normalize various payload shapes into a consistent format."""
     if not isinstance(raw, dict):
-        raise HTTPException(status_code=422, detail="invalid_request")
+        from app.error_envelope import raise_enveloped
+        raise_enveloped("invalid_request", "Invalid request format", status=422)
 
     # Detect payload shape
     shape = "text"  # default
@@ -391,7 +329,7 @@ def _normalize_payload(
         or not isinstance(prompt_text, str)
         or not prompt_text.strip()
     ):
-        raise HTTPException(status_code=422, detail="empty_prompt")
+        raise_enveloped("empty_prompt", "Prompt cannot be empty", status=422)
     # Forward select generation options when present
     gen_opts = {}
     for k in ("temperature", "top_p", "max_tokens"):
@@ -524,7 +462,7 @@ async def _ask(request: Request, body: dict | None):
     except Exception:
         ct = ""
     if "application/json" not in ct:
-        raise HTTPException(status_code=415, detail="unsupported_media_type")
+        raise_enveloped("unsupported_media_type", "Unsupported content type", status=415)
 
     # Use canonical user_id from resolved parameter
     _user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
@@ -597,7 +535,8 @@ async def _ask(request: Request, body: dict | None):
                     VALIDATION_4XX_TOTAL.labels("/v1/ask", "400").inc()
                 except Exception:
                     pass
-                raise HTTPException(status_code=400, detail="blocked_by_policy")
+                from app.error_envelope import raise_enveloped
+                raise_enveloped("content_policy", "Content blocked by policy", status=400)
             # Auth is enforced via route dependency to ensure verify_token runs before rate_limit
             # rate_limit applied via route dependency; keep explicit header snapshot behavior
             # Lazily import to respect tests that monkeypatch app.main.route_prompt
@@ -749,6 +688,50 @@ async def _ask(request: Request, body: dict | None):
                 # If the backend didn't stream any tokens, emit the final result once
                 if isinstance(result, str) and result:
                     await queue.put(result)
+
+            # Persist chat messages after successful response generation
+            try:
+                # Reconstruct messages for persistence
+                messages_to_save = []
+
+                # Add user message
+                if prompt_text:
+                    messages_to_save.append({
+                        "role": "user",
+                        "content": prompt_text
+                    })
+
+                # Add assistant response
+                if isinstance(result, str) and result:
+                    messages_to_save.append({
+                        "role": "assistant",
+                        "content": result
+                    })
+
+                # Save to database if we have messages
+                if messages_to_save:
+                    try:
+                        from app.db.core import get_async_db
+                        from app.db.chat_repo import save_messages
+
+                        # Get database session
+                        async with get_async_db() as session:
+                            await save_messages(session, user_id, request_id, messages_to_save)
+
+                        logger.debug("Chat messages persisted", extra={
+                            "meta": {"rid": request_id, "message_count": len(messages_to_save)}
+                        })
+                    except Exception as db_error:
+                        # Don't fail the request if persistence fails, just log
+                        logger.warning("Failed to persist chat messages", extra={
+                            "meta": {"rid": request_id, "error": str(db_error)}
+                        })
+
+            except Exception as persist_error:
+                # Defensive: don't let persistence errors break the request
+                logger.warning("Chat persistence error", extra={
+                    "meta": {"error": str(persist_error)}
+                })
             # If we are in local fallback, hint UI via cookie
             try:
                 from app.llama_integration import LLAMA_HEALTHY as _LL_OK
@@ -994,7 +977,7 @@ async def ask_dry_explain(
     except Exception:
         ct = ""
     if "application/json" not in ct:
-        raise HTTPException(status_code=415, detail="unsupported_media_type")
+        raise_enveloped("unsupported_media_type", "Unsupported content type", status=415)
 
     # Use canonical user_id from get_current_user_id dependency
     _user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
@@ -1064,7 +1047,7 @@ async def ask_dry_explain(
             chosen_model = mv
             picker_reason = "explicit_override"
         else:
-            raise HTTPException(status_code=400, detail=f"Unknown model '{mv}'")
+            raise_enveloped("unknown_model", f"Unknown model '{mv}'", status=400)
     else:
         engine, model_name, picker_reason, keyword_hit = pick_model(
             prompt_text, intent, tokens
@@ -1146,7 +1129,7 @@ async def ask_stream(
     except Exception:
         ct = ""
     if "application/json" not in ct:
-        raise HTTPException(status_code=415, detail="unsupported_media_type")
+        raise_enveloped("unsupported_media_type", "Unsupported content type", status=415)
 
     # Use canonical user_id from get_current_user_id dependency
     _user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
@@ -1355,27 +1338,3 @@ async def ask_stream(
     )
 
 
-@router.get(
-    "/ask/replay/{rid}",
-    dependencies=[Depends(_require_auth_dep)],
-    response_model=dict,
-    include_in_schema=False,
-)
-async def ask_replay(
-    rid: str,
-    request: Request,
-):
-    """Replay endpoint for debugging stored golden traces."""
-    # This is a placeholder implementation
-    # In a real implementation, you would:
-    # 1. Load the stored golden trace from a database/cache
-    # 2. Replay against current vendor configs
-    # 3. Return diff between then and now
-
-    # For now, return a mock response
-    return {
-        "rid": rid,
-        "status": "not_implemented",
-        "message": "Replay functionality not yet implemented",
-        "note": "This would load stored golden trace and replay against current configs",
-    }

@@ -2,85 +2,112 @@ from __future__ import annotations
 
 import re
 import sys
-from pathlib import Path
+from datetime import UTC, datetime
 
-import aiosqlite
+from sqlalchemy import select, delete, func, insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.paths import resolve_db_path
+from ..db.core import get_async_db
+from ..db.models import UserNote, AuthUser
 from .base import Skill
 from .ledger import record_action
 
 
-def _db_path() -> Path:
-    p = resolve_db_path("NOTES_DB", "notes.db")
-    p.parent.mkdir(parents=True, exist_ok=True)
-    return p
+# Default system user ID for notes (since current skill doesn't have user context)
+# This is a well-known UUID for the system user
+SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000001"
 
 
 class NotesDAO:
-    def __init__(self, path: Path):
-        self._path = path
-        self._conn: aiosqlite.Connection | None = None
+    """PostgreSQL-based DAO for user notes."""
 
-    async def _get_conn(self) -> aiosqlite.Connection:
-        if self._conn is None:
-            self._conn = await aiosqlite.connect(self._path)
-            await self._conn.execute("CREATE TABLE IF NOT EXISTS notes (text TEXT)")
-            await self._conn.commit()
-        return self._conn
+    async def _ensure_system_user(self) -> None:
+        """Ensure the system user exists in the database."""
+        async with get_async_db() as session:
+            # Check if system user exists
+            stmt = select(AuthUser.id).where(AuthUser.id == SYSTEM_USER_ID)
+            result = await session.execute(stmt)
+            if result.scalar_one_or_none() is None:
+                # Create system user
+                system_user = AuthUser(
+                    id=SYSTEM_USER_ID,
+                    email="system@gesahni.local",
+                    password_hash=None,  # No password for system user
+                    name="System User",
+                    created_at=datetime.now(UTC),
+                    verified_at=datetime.now(UTC)
+                )
+                session.add(system_user)
+                await session.commit()
 
     async def delete_id(self, idx: int) -> None:
-        conn = await self._get_conn()
-        await conn.execute("DELETE FROM notes WHERE rowid=?", (idx,))
-        await conn.commit()
+        async with get_async_db() as session:
+            stmt = delete(UserNote).where(
+                UserNote.user_id == SYSTEM_USER_ID,
+                UserNote.id == idx
+            )
+            await session.execute(stmt)
+            await session.commit()
 
     async def delete_text(self, text: str) -> None:
-        conn = await self._get_conn()
-        await conn.execute("DELETE FROM notes WHERE text LIKE ?", (f"%{text}%",))
-        await conn.commit()
+        async with get_async_db() as session:
+            stmt = delete(UserNote).where(
+                UserNote.user_id == SYSTEM_USER_ID,
+                UserNote.text.ilike(f"%{text}%")
+            )
+            await session.execute(stmt)
+            await session.commit()
 
     async def get(self, idx: int) -> str | None:
-        conn = await self._get_conn()
-        async with conn.execute("SELECT text FROM notes WHERE rowid=?", (idx,)) as cur:
-            row = await cur.fetchone()
-        return row[0] if row else None
+        async with get_async_db() as session:
+            stmt = select(UserNote.text).where(
+                UserNote.user_id == SYSTEM_USER_ID,
+                UserNote.id == idx
+            )
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            return row
 
     async def list(self) -> list[tuple[int, str]]:
-        conn = await self._get_conn()
-        async with conn.execute("SELECT rowid, text FROM notes") as cur:
-            rows = await cur.fetchall()
-        return [(r[0], r[1]) for r in rows]
+        async with get_async_db() as session:
+            stmt = select(UserNote.id, UserNote.text).where(
+                UserNote.user_id == SYSTEM_USER_ID
+            ).order_by(UserNote.created_at)
+            result = await session.execute(stmt)
+            rows = result.fetchall()
+            return [(r[0], r[1]) for r in rows]
 
     async def add(self, text: str) -> None:
-        conn = await self._get_conn()
-        await conn.execute("INSERT INTO notes (text) VALUES (?)", (text,))
-        await conn.commit()
+        await self._ensure_system_user()
+        async with get_async_db() as session:
+            note = UserNote(
+                user_id=SYSTEM_USER_ID,
+                text=text,
+                created_at=datetime.now(UTC)
+            )
+            session.add(note)
+            await session.commit()
 
     async def all_texts(self) -> list[str]:
-        conn = await self._get_conn()
-        async with conn.execute("SELECT text FROM notes") as cur:
-            rows = await cur.fetchall()
-        return [r[0] for r in rows]
+        async with get_async_db() as session:
+            stmt = select(UserNote.text).where(
+                UserNote.user_id == SYSTEM_USER_ID
+            ).order_by(UserNote.created_at)
+            result = await session.execute(stmt)
+            rows = result.fetchall()
+            return [r[0] for r in rows]
 
     async def close(self) -> None:
-        """Close persistent aiosqlite connection if open."""
-        conn = getattr(self, "_conn", None)
-        if conn is not None:
-            try:
-                await conn.close()
-            except Exception:
-                pass
-            self._conn = None
+        """No-op for PostgreSQL-based DAO."""
+        pass
 
 
-dao = NotesDAO(_db_path())
+dao = NotesDAO()
 
 
 async def close_notes_dao() -> None:
-    try:
-        await dao.close()
-    except Exception:
-        pass
+    """Close notes DAO - no-op for PostgreSQL."""
+    pass
 
 
 class NotesSkill(Skill):

@@ -2,58 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-_TEST_MODE = (
-    bool(os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING"))
-    or os.getenv("ENV", "").lower() == "test"
-    or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").lower() in {"1", "true", "yes", "on"}
-)
-
-def _db_path() -> str:
-    """Get the database path, using centralized path resolution."""
-    env_path = os.getenv("MUSIC_DB")
-    if env_path:
-        return env_path
-    elif _TEST_MODE:
-        return "sqlite:///:memory:"
-    else:
-        from ..db.paths import resolve_db_path
-        return str(resolve_db_path("MUSIC_DB", "music.db"))
-
-
-def _connect() -> sqlite3.Connection:
-    db_path = _db_path()
-    if db_path.startswith("sqlite://"):
-        path = db_path[len("sqlite://") :]
-        if path.startswith("/"):
-            path = path[1:]
-        return sqlite3.connect(path or ":memory:", check_same_thread=False)
-    return sqlite3.connect(db_path, check_same_thread=False)
-
-
-_conn = _connect()
-_conn.execute(
-    """
-    CREATE TABLE IF NOT EXISTS music_state (
-        user_id TEXT PRIMARY KEY,
-        state_json TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-    )
-    """
-)
-_conn.commit()
-
-# In test mode, ensure the table is empty at import so defaults apply predictably
-if _TEST_MODE:
-    try:
-        _conn.execute("DELETE FROM music_state")
-        _conn.commit()
-    except Exception:
-        pass
+# Lightweight in-memory state for music to avoid SQLite dependency in app/
+_STATE: dict[str, str] = {}
 
 
 @dataclass
@@ -98,16 +52,13 @@ def _now_iso() -> str:
 
 
 def load_state(user_id: str) -> MusicState:
-    cur = _conn.execute(
-        "SELECT state_json FROM music_state WHERE user_id=?", (user_id,)
-    )
-    row = cur.fetchone()
-    if not row:
+    js = _STATE.get(user_id)
+    if js is None:
         st = MusicState.default()
         save_state(user_id, st)
         return st
     try:
-        data = json.loads(row[0])
+        data = json.loads(js)
         vibe = data.get("vibe") or {}
         ms = MusicState(
             vibe=MusicVibe(
@@ -151,11 +102,7 @@ def save_state(user_id: str, state: MusicState) -> None:
         "skip_count": int(state.skip_count),
     }
     js = json.dumps(payload, ensure_ascii=False)
-    _conn.execute(
-        "INSERT INTO music_state(user_id, state_json, updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json, updated_at=excluded.updated_at",
-        (user_id, js, _now_iso()),
-    )
-    _conn.commit()
+    _STATE[user_id] = js
 
 
 __all__ = ["MusicState", "MusicVibe", "load_state", "save_state"]

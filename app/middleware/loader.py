@@ -17,6 +17,8 @@ from ..csrf import CSRFMiddleware
 
 # Import middleware classes directly to avoid circular imports
 from .audit_mw import AuditMiddleware
+from .auth_diag import AuthDiagMiddleware
+
 # Deprecated custom CORS layers removed in favor of a single CORSMiddleware
 from .custom import (
     EnhancedErrorHandlingMiddleware,
@@ -34,7 +36,6 @@ from .middleware_core import (
     RequestIDMiddleware,
     TraceRequestMiddleware,
 )
-from .auth_diag import AuthDiagMiddleware
 from .rate_limit import RateLimitMiddleware
 from .session_attach import SessionAttachMiddleware
 
@@ -101,8 +102,9 @@ def register_canonical_middlewares(
     in_ci = _is_truthy(os.getenv("CI")) or "PYTEST_CURRENT_TEST" in os.environ
     rate_limit_enabled = _is_truthy(os.getenv("RATE_LIMIT_ENABLED", "1")) and not in_ci
     legacy_error_mw = _is_truthy(os.getenv("LEGACY_ERROR_MW"))
-    legacy_headers_enabled = (_is_truthy(os.getenv("GSN_ENABLE_LEGACY_GOOGLE")) or
-                             (_is_truthy(os.getenv("LEGACY_MUSIC_HTTP")) and not in_ci))
+    legacy_headers_enabled = _is_truthy(os.getenv("GSN_ENABLE_LEGACY_GOOGLE")) or (
+        _is_truthy(os.getenv("LEGACY_MUSIC_HTTP")) and not in_ci
+    )
 
     logger.info(
         "Setting up canonical middleware stack with csrf_enabled=%s, cors_origins=%s",
@@ -119,7 +121,9 @@ def register_canonical_middlewares(
     cors_enabled = bool(cors_origins and [o for o in cors_origins if o])
     if cors_enabled:
         # Normalize and de-dupe origins
-        allow_origins = list({o.strip().rstrip('/') for o in cors_origins or [] if o and o.strip()})
+        allow_origins = list(
+            {o.strip().rstrip("/") for o in cors_origins or [] if o and o.strip()}
+        )
         app.add_middleware(
             CORSMiddleware,
             allow_origins=allow_origins,

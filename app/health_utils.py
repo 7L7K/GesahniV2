@@ -60,10 +60,17 @@ async def check_jwt_secret() -> HealthResult:
 
 
 async def check_db() -> HealthResult:
-    # Required readiness: ability to open the lightweight user/session store
+    # Required readiness: ability to open database connection
     try:
-        conn = await user_store._get_conn()  # type: ignore[attr-defined]
-        return "ok" if conn is not None else "error"
+        from .db.core import get_async_db
+        from sqlalchemy import text
+
+        # get_async_db is an async generator, so we need to iterate it
+        async for session in get_async_db():
+            # Simple test query to verify database connectivity
+            await session.execute(text("SELECT 1"))
+            break  # Only need one session for the test
+        return "ok"
     except Exception:
         return "error"
 

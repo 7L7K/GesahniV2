@@ -14,6 +14,7 @@ from typing import Any
 import jwt
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
 from ..auth_protection import public_route
 from ..deps.user import get_current_user_id, require_user, resolve_session_id
@@ -21,6 +22,8 @@ from ..security import jwt_decode
 
 require_user_clerk = None  # Clerk removed
 from fastapi.responses import JSONResponse
+
+from app.auth_debug import log_incoming_cookies, log_set_cookie
 
 from ..auth_monitoring import record_whoami_call, track_auth_event
 from ..auth_store import create_pat as _create_pat
@@ -31,7 +34,6 @@ from ..token_store import (
     allow_refresh,
 )
 from ..user_store import user_store
-from app.auth_debug import log_set_cookie, log_incoming_cookies
 
 
 # Debug dependency for auth endpoints
@@ -80,6 +82,11 @@ logger = logging.getLogger(__name__)
 # Auth metrics are now handled by Prometheus counters in app.metrics
 
 
+class RefreshOut(BaseModel):
+    rotated: bool
+    access_token: str | None = None
+
+
 def _decode_any(token: str) -> dict | None:
     try:
         return jwt_decode(token, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
@@ -104,7 +111,13 @@ def _append_legacy_auth_cookie_headers(
 
     Keeps unit-level web.set_auth_cookies canonical-only, while endpoints provide
     compatibility for tests/clients expecting legacy names.
+
+    Controlled by AUTH_LEGACY_COOKIE_NAMES environment variable.
     """
+    # Check if legacy cookie names are enabled
+    if os.getenv("AUTH_LEGACY_COOKIE_NAMES", "0").strip().lower() not in {"1", "true", "yes", "on"}:
+        return  # Skip writing legacy cookies
+
     try:
         from ..cookie_config import format_cookie_header, get_cookie_config
 
@@ -209,6 +222,71 @@ def _append_cookie_with_priority(
 # Clerk endpoints removed
 
 
+def should_rotate_access(user_id: str) -> bool:
+    """
+    Determine if access token should be rotated based on user ID and rotation policy.
+
+    This function implements the guard against accidental clearing by ensuring
+    rotation decisions are explicit and safe.
+
+    Args:
+        user_id: The user ID for whom rotation is being considered
+
+    Returns:
+        True if rotation should proceed, False otherwise
+    """
+    # Default policy: rotate for authenticated users unless explicitly disabled
+    # This can be extended with more sophisticated logic based on user attributes,
+    # session state, or other factors
+    return bool(user_id and user_id != "anon")
+
+
+def mint_access_token(user_id: str) -> str:
+    """
+    Mint a new access token with guard against empty tokens.
+
+    This function ensures that empty or invalid tokens are never created,
+    preventing accidental cookie clearing.
+
+    Args:
+        user_id: The user ID for whom to mint the token
+
+    Returns:
+        A valid JWT access token string
+
+    Raises:
+        HTTPException: If token creation would result in an empty or invalid token
+    """
+    if not user_id or user_id == "anon":
+        raise HTTPException(
+            status_code=500,
+            detail="cannot_mint_token_for_invalid_user"
+        )
+
+    try:
+        from ..tokens import make_access
+        from ..cookie_config import get_token_ttls
+
+        access_ttl, _ = get_token_ttls()
+        token = make_access({"user_id": user_id}, ttl_s=access_ttl)
+
+        # Guard against empty tokens
+        if not token or not isinstance(token, str) or len(token.strip()) == 0:
+            logger.error(f"Empty token generated for user {user_id}")
+            raise HTTPException(
+                status_code=500,
+                detail="token_generation_failed"
+            )
+
+        return token
+    except Exception as e:
+        logger.error(f"Token minting failed for user {user_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="token_generation_failed"
+        ) from e
+
+
 @router.get("/debug/cookies")
 def debug_cookies(request: Request) -> dict[str, dict[str, str]]:
     """Echo cookie presence for debugging (values not exposed).
@@ -237,7 +315,11 @@ def debug_auth_state(request: Request) -> dict[str, Any]:
     """
     try:
         # Import cookie readers
-        from ..cookies import read_access_cookie, read_refresh_cookie, read_session_cookie
+        from ..cookies import (
+            read_access_cookie,
+            read_refresh_cookie,
+            read_session_cookie,
+        )
 
         # Read tokens from cookies
         access = read_access_cookie(request)
@@ -276,7 +358,9 @@ def debug_auth_state(request: Request) -> dict[str, Any]:
     except Exception as e:
         return {
             "error": str(e),
-            "cookies_seen": list(request.cookies.keys()) if hasattr(request, 'cookies') else [],
+            "cookies_seen": (
+                list(request.cookies.keys()) if hasattr(request, "cookies") else []
+            ),
             "has_access": False,
             "has_refresh": False,
             "has_session": False,
@@ -830,7 +914,9 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
 
 
 @router.get("/whoami", include_in_schema=False)
-async def whoami(request: Request, response: Response, _: None = Depends(log_request_meta)) -> JSONResponse:
+async def whoami(
+    request: Request, response: Response, _: None = Depends(log_request_meta)
+) -> JSONResponse:
     """CANONICAL: Public whoami endpoint - the single source of truth for user identity.
 
     This is the canonical whoami endpoint that should be used by all clients.
@@ -888,6 +974,7 @@ async def whoami(request: Request, response: Response, _: None = Depends(log_req
             # When unauthenticated but a refresh cookie is present, mint a new access token
             if getattr(out, "status_code", None) == 401:
                 from ..cookies import read_access_cookie, read_refresh_cookie
+
                 access_cookie = read_access_cookie(request)
                 has_refresh = bool(read_refresh_cookie(request))
                 if not access_cookie and has_refresh:
@@ -1259,21 +1346,28 @@ async def register_v1(request: Request, response: Response):
     if not username or len(password.strip()) < 6:
         raise HTTPException(status_code=400, detail="invalid")
 
-    # Ensure table and insert user using the same store as /auth/register_pw
+    # Register user using PostgreSQL via auth_password module
     try:
-        import aiosqlite
-
-        from .auth_password import _db_path, _ensure, _pwd  # type: ignore
-
-        await _ensure()
+        from .auth_password import _pwd
         h = _pwd.hash(password)
-        async with aiosqlite.connect(_db_path()) as db:
-            await db.execute(
-                "INSERT INTO auth_users(username, password_hash) VALUES(?, ?)",
-                (username, h),
-            )
-            await db.commit()
-    except aiosqlite.IntegrityError:
+
+        from datetime import datetime, timezone
+        from app.db.models import AuthUser
+        from app.db.core import get_async_db
+        from sqlalchemy.exc import IntegrityError
+
+        user = AuthUser(
+            username=username,
+            email=f"{username}@local.auth",  # Generate a dummy email for username-based auth
+            password_hash=h,
+            name=username,  # Use username as display name
+            created_at=datetime.now(timezone.utc)
+        )
+
+        async with get_async_db() as session:
+            session.add(user)
+            await session.commit()
+    except IntegrityError:
         raise HTTPException(status_code=400, detail="username_taken")
     except HTTPException:
         raise
@@ -1286,7 +1380,11 @@ async def register_v1(request: Request, response: Response):
     from ..tokens import make_access, make_refresh
 
     access_ttl, refresh_ttl = get_token_ttls()
-    access_token = make_access({"user_id": username}, ttl_s=access_ttl)
+    # Get or create device_id for token binding
+    from ..auth_refresh import _get_or_create_device_id
+    device_id = _get_or_create_device_id(request, response)
+
+    access_token = make_access({"user_id": username, "device_id": device_id}, ttl_s=access_ttl)
 
     # Create refresh with JTI
     try:
@@ -1297,12 +1395,12 @@ async def register_v1(request: Request, response: Response):
         now = int(time.time())
         jti = _jwt.api_jws.base64url_encode(_os.urandom(16)).decode()
         refresh_token = make_refresh(
-            {"user_id": username, "jti": jti}, ttl_s=refresh_ttl
+            {"user_id": username, "jti": jti, "device_id": device_id}, ttl_s=refresh_ttl
         )
     except Exception:
         # Fallback minimal refresh
         jti = None
-        refresh_token = make_refresh({"user_id": username}, ttl_s=refresh_ttl)
+        refresh_token = make_refresh({"user_id": username, "device_id": device_id}, ttl_s=refresh_ttl)
 
     # Map session id and set cookies
     try:
@@ -1434,7 +1532,11 @@ async def login(
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_access
 
-    jwt_token = make_access({"user_id": username}, ttl_s=access_ttl)
+    # Get or create device_id for token binding
+    from ..auth_refresh import _get_or_create_device_id
+    device_id = _get_or_create_device_id(request, response)
+
+    jwt_token = make_access({"user_id": username, "device_id": device_id}, ttl_s=access_ttl)
 
     # Also issue a refresh token and mark it allowed for this session
     refresh_token = None
@@ -1466,7 +1568,7 @@ async def login(
         from ..tokens import make_refresh
 
         refresh_token = make_refresh(
-            {"user_id": username, "jti": jti}, ttl_s=refresh_life
+            {"user_id": username, "jti": jti, "device_id": device_id}, ttl_s=refresh_life
         )
 
         # Create opaque session ID instead of using JWT
@@ -1642,10 +1744,12 @@ async def logout(request: Request, response: Response):
 
     # Clear cookies using centralized function
     try:
-        from ..cookies import clear_auth_cookies
+        from ..cookies import clear_auth_cookies, clear_device_cookie
 
         clear_auth_cookies(response, request)
-        logger.info("logout.clear_cookies centralized cookies=3")
+        # Also clear device_id cookie to ensure complete logout
+        clear_device_cookie(response, request, cookie_name="device_id")
+        logger.info("logout.clear_cookies centralized cookies=4")  # auth + device
         # Also clear via web facade to emit per-cookie headers expected by some tests
         try:
             from ..web.cookies import clear_auth_cookies as _web_clear
@@ -1701,9 +1805,11 @@ async def logout_all(request: Request, response: Response):
         pass
     # Clear cookies
     try:
-        from ..cookies import clear_auth_cookies
+        from ..cookies import clear_auth_cookies, clear_device_cookie
 
         clear_auth_cookies(response, request)
+        # Also clear device_id cookie to ensure complete logout
+        clear_device_cookie(response, request, cookie_name="device_id")
     except Exception:
         pass
     response.status_code = 204
@@ -1712,11 +1818,13 @@ async def logout_all(request: Request, response: Response):
 
 @router.post(
     "/auth/refresh",
+    response_model=RefreshOut,
+    response_model_exclude_none=True,
     responses={
         200: {
             "content": {
                 "application/json": {
-                    "schema": {"example": {"status": "ok", "user_id": "dev"}}
+                    "schema": {"example": {"rotated": False}}
                 }
             }
         }
@@ -1896,20 +2004,27 @@ async def refresh(
             record_refresh_latency("rotation", dt)
 
             # Return tokens for header-mode clients - ALWAYS include both tokens
-            body: dict[str, Any] = {
-                "status": "ok",
-                "user_id": tokens.get("user_id", "anon"),
-            }
-            if isinstance(tokens, dict):
-                body["access_token"] = tokens.get("access_token", "")
-                body["refresh_token"] = tokens.get("refresh_token", "")
             # Debug: print Set-Cookie headers sent on rotation
             try:
                 if os.getenv("AUTH_DEBUG") == "1":
-                    log_set_cookie(response, route="/v1/auth/refresh", user_id=tokens.get("user_id"))
+                    log_set_cookie(
+                        response,
+                        route="/v1/auth/refresh",
+                        user_id=tokens.get("user_id"),
+                    )
             except Exception:
                 pass
-            return body
+            # Return RefreshOut with rotated=True and access_token if available
+            # Use guard to prevent empty tokens
+            at = tokens.get("access_token", "") if isinstance(tokens, dict) else ""
+            if at and should_rotate_access(tokens.get("user_id", "")):
+                # Guard against empty tokens
+                if not at or not isinstance(at, str) or len(at.strip()) == 0:
+                    logger.error("Empty access token detected in rotation, raising 500")
+                    raise HTTPException(status_code=500, detail="token_generation_failed")
+                return RefreshOut(rotated=True, access_token=at)
+            else:
+                return RefreshOut(rotated=True, access_token=None)
         else:
             # No rotation needed (token still valid) - but we still need to return current tokens
             refresh_rotation_success()
@@ -1924,44 +2039,86 @@ async def refresh(
             current_access_token = read_access_cookie(request) or ""
             current_refresh_token = read_refresh_cookie(request) or ""
 
-            # Also set cookies to ensure client sees Set-Cookie headers even without rotation
+            # Use guard to prevent empty tokens in response
+            if not should_rotate_access(current_user_id):
+                # No rotation needed, return without access token
+                return RefreshOut(rotated=False, access_token=None)
+
+            # Guard against empty tokens
+            if current_access_token and (not current_access_token or not isinstance(current_access_token, str) or len(current_access_token.strip()) == 0):
+                logger.error("Empty access token detected in no-rotation path, raising 500")
+                raise HTTPException(status_code=500, detail="token_validation_failed")
+
+            # Also set cookies when present to avoid emitting empty Set-Cookie values
             try:
                 from ..cookie_config import get_token_ttls as _ttls
-                from ..web.cookies import set_auth_cookies as _set_c
+                from ..web.cookies import set_auth_cookies as _set_c, set_named_cookie as _set_named, NAMES as _CN
 
                 access_ttl, refresh_ttl = _ttls()
                 sid = resolve_session_id(request=request, user_id=current_user_id)
-                _set_c(
-                    response,
-                    access=current_access_token,
-                    refresh=current_refresh_token,
-                    session_id=sid,
-                    access_ttl=access_ttl,
-                    refresh_ttl=refresh_ttl,
-                    request=request,
-                )
-                _append_legacy_auth_cookie_headers(
-                    response,
-                    access=current_access_token,
-                    refresh=current_refresh_token,
-                    session_id=sid,
-                    request=request,
-                )
+
+                if current_access_token and current_refresh_token:
+                    _set_c(
+                        response,
+                        access=current_access_token,
+                        refresh=current_refresh_token,
+                        session_id=sid,
+                        access_ttl=access_ttl,
+                        refresh_ttl=refresh_ttl,
+                        request=request,
+                    )
+                    _append_legacy_auth_cookie_headers(
+                        response,
+                        access=current_access_token,
+                        refresh=current_refresh_token,
+                        session_id=sid,
+                        request=request,
+                    )
+                elif current_access_token:
+                    _set_c(
+                        response,
+                        access=current_access_token,
+                        refresh=None,
+                        session_id=sid,
+                        access_ttl=access_ttl,
+                        refresh_ttl=0,
+                        request=request,
+                    )
+                    _append_legacy_auth_cookie_headers(
+                        response,
+                        access=current_access_token,
+                        refresh=None,
+                        session_id=sid,
+                        request=request,
+                    )
+                elif current_refresh_token:
+                    # Set only the refresh cookie without touching access/session
+                    _set_named(
+                        resp=response,
+                        name=_CN.refresh,
+                        value=current_refresh_token,
+                        ttl=refresh_ttl,
+                        httponly=True,
+                    )
+                    _append_legacy_auth_cookie_headers(
+                        response,
+                        access=None,
+                        refresh=current_refresh_token,
+                        session_id=None,
+                        request=request,
+                    )
             except Exception:
                 pass
             # Debug: print Set-Cookie headers sent when no rotation
             try:
                 if os.getenv("AUTH_DEBUG") == "1":
-                    log_set_cookie(response, route="/v1/auth/refresh", user_id=current_user_id)
+                    log_set_cookie(
+                        response, route="/v1/auth/refresh", user_id=current_user_id
+                    )
             except Exception:
                 pass
 
-            return {
-                "status": "ok",
-                "user_id": current_user_id,
-                "access_token": current_access_token,
-                "refresh_token": current_refresh_token,
-            }
+            return RefreshOut(rotated=False, access_token=current_access_token if current_access_token else None)
 
     except HTTPException:
         # Re-raise HTTP exceptions (like 401 for replay protection)

@@ -59,4 +59,9 @@ jobs:
     - name: Verify schema integrity
       run: |
         # Quick verification that tables exist
-        psql $DATABASE_URL -c "SELECT schemaname, tablename FROM pg_tables WHERE schemaname IN ('auth','users','care','music','tokens','audit') ORDER BY schemaname, tablename;" | head -20
+        psql $DATABASE_URL -c "SELECT schemaname, tablename FROM pg_tables WHERE schemaname IN ('auth','users','care','music','tokens','audit','storage','chat') ORDER BY schemaname, tablename;" | head -20
+
+    - name: Run Phase 5 smoke tests
+      run: |
+        echo "🚀 Running Phase 5 Database Behavior Smoke Tests..."
+        python scripts/smoke.py

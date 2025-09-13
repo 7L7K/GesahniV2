@@ -745,8 +745,9 @@ def resolve_auth_source_conflict(request: Request) -> tuple[str, bool]:
             has_access_cookie = bool(request.cookies.get(_COOKIE_NAMES.access))
             has_session_cookie = bool(request.cookies.get(_COOKIE_NAMES.session))
         else:
-            has_access_cookie = bool(request.cookies.get("access_token"))
-            has_session_cookie = bool(request.cookies.get("__session"))
+            # Fallback to canonical names if import fails
+            has_access_cookie = bool(request.cookies.get("GSNH_AT"))
+            has_session_cookie = bool(request.cookies.get("GSNH_SESS"))
     except Exception:
         pass
 

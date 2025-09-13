@@ -1481,7 +1481,10 @@ async def google_callback(request: Request) -> Response:
         # sets cookies and immediately redirects via JS. The HTML shim can be
         # more reliable for some browsers when Set-Cookie appears on redirect
         # responses.
-        use_html_shim = os.getenv("OAUTH_HTML_REDIRECT", "0").lower() in {
+        #
+        # Note: Default to HTML shim (1) to avoid proxy issues with Set-Cookie
+        # headers on redirect responses. Proxies may drop these headers.
+        use_html_shim = os.getenv("OAUTH_HTML_REDIRECT", "1").lower() in {
             "1",
             "true",
             "yes",

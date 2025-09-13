@@ -23,7 +23,7 @@ def _trace_details(request: Request, status: int) -> dict[str, Any]:
         "status_code": status,
         "trace_id": tid,
         "path": request.url.path,
-        "method": request.method,
+        "method": getattr(request, "method", "WS"),  # WebSocket requests don't have method attribute
     }
 
 async def handle_http_error(request: Request, exc: StarletteHTTPException):

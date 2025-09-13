@@ -50,9 +50,6 @@ def _setup_test_environment(monkeypatch):
         sys.modules, "chromadb", types.SimpleNamespace(PersistentClient=object)
     )
     monkeypatch.setitem(
-        sys.modules, "aiosqlite", types.SimpleNamespace(connect=lambda *a, **k: None)
-    )
-    monkeypatch.setitem(
         sys.modules, "pydantic", types.SimpleNamespace(BaseModel=object)
     )
     monkeypatch.setitem(

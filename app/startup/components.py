@@ -56,13 +56,22 @@ def _log_failure_dev(service: str, error: Exception):
 
 
 async def init_database():
-    """Verify database connectivity.
+    """Verify PostgreSQL connectivity.
 
     Note: database schema creation is performed by the lifespan bootstrap
-    earlier in the startup sequence (`init_db_once`). This function should be
-    lightweight and only assert that the DB backend is reachable.
+    earlier in the startup sequence (`init_db_once`). This function verifies
+    that the PostgreSQL database is reachable and responding.
     """
-    logger.info("Database connectivity verified - schemas already initialized")
+    try:
+        from app.db.core import health_check_async
+
+        if await health_check_async():
+            logger.info("✅ PostgreSQL connectivity verified")
+        else:
+            raise RuntimeError("PostgreSQL health check failed")
+    except Exception as e:
+        logger.error("❌ PostgreSQL connectivity check failed: %s", e)
+        raise
 
 
 async def init_database_migrations():

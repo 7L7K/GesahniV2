@@ -23,7 +23,12 @@ def get_cors_origins() -> list[str]:
         return []
 
     # In dev proxy mode, disable CORS for same-origin requests
-    if os.getenv("NEXT_PUBLIC_USE_DEV_PROXY", "").strip().lower() in {"1", "true", "yes", "on"}:
+    if os.getenv("NEXT_PUBLIC_USE_DEV_PROXY", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         return []
 
     cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
@@ -88,7 +93,12 @@ def get_cors_origins() -> list[str]:
             continue
 
     if found_localhost:
-        origins = ["http://localhost:3000", "http://localhost:8000", "http://127.0.0.1:3000", "http://127.0.0.1:8000"]
+        origins = [
+            "http://localhost:3000",
+            "http://localhost:8000",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8000",
+        ]
     else:
         # Deduplicate but preserve order-ish
         seen = set()
@@ -101,7 +111,9 @@ def get_cors_origins() -> list[str]:
         origins = out or ["http://localhost:3000"]
 
     if not origins:
-        logger.warning("No CORS origins configured. Defaulting to http://localhost:3000")
+        logger.warning(
+            "No CORS origins configured. Defaulting to http://localhost:3000"
+        )
         origins = ["http://localhost:3000"]
 
     return origins
@@ -137,17 +149,15 @@ def validate_cors_origins(origins: list[str]) -> bool:
     if not origins:
         return True
 
-    localhost_count = sum(
-        1 for o in origins if "localhost" in o or "127.0.0.1" in o
-    )
-    ip_count = sum(
-        1 for o in origins if "localhost" not in o and "127.0.0.1" not in o
-    )
+    localhost_count = sum(1 for o in origins if "localhost" in o or "127.0.0.1" in o)
+    ip_count = sum(1 for o in origins if "localhost" not in o and "127.0.0.1" not in o)
 
     same_family = localhost_count == 0 or ip_count == 0
 
     if not same_family:
-        logger.warning("Mixed address families detected in CORS origins (post-sanitize).")
+        logger.warning(
+            "Mixed address families detected in CORS origins (post-sanitize)."
+        )
         logger.warning(
             "This may cause WebSocket connection issues. Consider using consistent addressing."
         )

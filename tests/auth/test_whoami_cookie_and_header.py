@@ -1,4 +1,3 @@
-import pytest
 from app.tokens import create_access_token
 
 
@@ -63,7 +62,9 @@ def test_whoami_header_takes_precedence_over_cookie(client):
     # Header should take precedence - if it doesn't, that's a bug we want to catch
     if "user_id" in data:
         # Only check if we got a successful user identification
-        assert data["user_id"] == "header_user", f"Expected header_user but got {data['user_id']}"
+        assert (
+            data["user_id"] == "header_user"
+        ), f"Expected header_user but got {data['user_id']}"
 
 
 def test_whoami_unauthenticated_no_header_no_cookie(client):

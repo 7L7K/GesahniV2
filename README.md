@@ -218,8 +218,9 @@ python record_session.py --duration 5 --output ./sessions
 
 ## 🔐 Authentication
 
-User accounts are stored in a SQLite database (`users.db` by default, override
-with `USERS_DB`). Authenticate by POSTing to `/login` with a JSON body
+Backend is PostgreSQL-only. SQLite is unsupported.
+
+User accounts are stored in PostgreSQL. Authenticate by POSTing to `/login` with a JSON body
 containing `username` and `password`. A successful login returns both an access
 token and a refresh token. Access tokens embed the user ID in the `sub` claim
 and expire after `JWT_EXPIRE_MINUTES` (default 30 minutes); refresh tokens

@@ -35,8 +35,8 @@ ensure_qdrant() {
     docker run -d --name "$NAME" \
       -p "${HOST_PORT}:${PORT}" \
       -v "${DATA_DIR}:/qdrant/storage" \
-      --health-cmd="curl -fsS http://localhost:${PORT}/readyz || exit 1" \
-      --health-interval=5s --health-retries=10 --health-timeout=2s \
+      --health-cmd="apt-get update && apt-get install -y curl && curl -fsS http://0.0.0.0:${PORT}/readyz || exit 1" \
+      --health-interval=10s --health-retries=10 --health-timeout=30s \
       "$IMAGE" >/dev/null
   fi
 

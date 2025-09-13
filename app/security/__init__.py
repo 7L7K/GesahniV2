@@ -2,6 +2,7 @@
 
 from .jwt_config import JWTConfig, get_jwt_config
 from .webhooks import rotate_webhook_secret, sign_webhook, verify_webhook
+from .jwt_utils import _payload_scopes
 
 # Import jwt_decode from the main security module (app.security)
 try:
@@ -9,7 +10,6 @@ try:
         _apply_rate_limit,
         _get_request_payload,
         _http_requests,
-        _payload_scopes,
         decode_jwt,
         get_rate_limit_snapshot,
         http_burst,
@@ -49,7 +49,6 @@ except ImportError:
     verify_token_strict = None
     verify_ws = None
     rate_limit = None
-    _payload_scopes = None
     validate_websocket_origin = None
     _apply_rate_limit = None
     rate_limit_problem = None

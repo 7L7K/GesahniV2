@@ -990,6 +990,7 @@ def create_app() -> FastAPI:
     csrf_enabled = bool(int(os.getenv("CSRF_ENABLED", "1")))
     # Get CORS origins from centralized settings (handles dev proxy mode)
     from app.settings_cors import get_cors_origins
+
     cors_origins = get_cors_origins()
     register_canonical_middlewares(
         app, csrf_enabled=csrf_enabled, cors_origins=cors_origins
@@ -1104,7 +1105,11 @@ def create_app() -> FastAPI:
             checks.append({"name": name, "ok": bool(ok), "details": details})
 
         try:
-            cors_required = bool((os.getenv("CORS_ORIGINS") or os.getenv("CORS_ALLOW_ORIGINS") or "").strip())
+            cors_required = bool(
+                (
+                    os.getenv("CORS_ORIGINS") or os.getenv("CORS_ALLOW_ORIGINS") or ""
+                ).strip()
+            )
         except Exception:
             cors_required = False
         if cors_required:

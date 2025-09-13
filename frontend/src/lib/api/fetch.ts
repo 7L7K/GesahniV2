@@ -420,21 +420,11 @@ export async function apiFetch(
     const isAuthCheckEndpoint = path.includes('/whoami') || path.includes('/me') || path.includes('/profile');
 
     if (isAuthCheckEndpoint) {
-      console.warn('API_FETCH auth.401_auth_endpoint - delegating to auth orchestrator', { path, errorCode, errorMessage, timestamp: new Date().toISOString() });
+      console.warn('API_FETCH auth.401_auth_endpoint - NOT redirecting, letting UI handle auth state', { path, errorCode, errorMessage, timestamp: new Date().toISOString() });
 
-      // Use the auth orchestrator's 401 handler for comprehensive cleanup
-      const { getAuthOrchestrator } = await import('@/services/authOrchestrator');
-      const orchestrator = getAuthOrchestrator();
-
-      try {
-        await orchestrator.handle401Response();
-      } catch (error) {
-        console.error('API_FETCH: Error in orchestrator 401 handler:', error);
-        // Fallback to basic redirect if orchestrator fails
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
-        }
-      }
+      // DO NOT call handle401Response() here - that causes unwanted redirects during normal auth checks
+      // The auth orchestrator will handle 401s appropriately in its own flow
+      // Just log and let the caller handle the 401 response
 
       // Fall through to let caller handle the 401 response as well
     } else {

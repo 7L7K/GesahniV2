@@ -4,10 +4,16 @@ import asyncio
 import logging
 import os
 import random
-import sqlite3
 import time
+from datetime import datetime, timezone
+from typing import List, Tuple
+
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth_store import get_user_id_by_identity_id
+from ..db.core import async_engine, get_async_db
+from ..db.models import ThirdPartyToken
 from ..integrations.spotify.client import SpotifyAuthError
 from ..metrics import SPOTIFY_REFRESH, SPOTIFY_REFRESH_ERROR
 
@@ -16,134 +22,44 @@ logger = logging.getLogger(__name__)
 # Threshold in seconds before expiry to proactively refresh
 REFRESH_AHEAD_SECONDS = int(os.getenv("SPOTIFY_REFRESH_AHEAD_SECONDS", "300"))
 
-# Path to tokens DB: prefer env override, otherwise use TokenDAO module default
-from ..auth_store_tokens import TokenDAO
 
-
-def _resolve_db_path() -> str:
-    """Resolve the tokens DB path at runtime. Prefer explicit env var, otherwise
-    use the TokenDAO's configured db_path so tests that override module defaults
-    are respected.
-    """
-    # If explicit env override provided, honor it
-    env_path = os.getenv("THIRD_PARTY_TOKENS_DB")
-    if env_path:
-        return env_path
-    # Otherwise prefer module-level DEFAULT_DB_PATH if set (tests may override it)
-    try:
-        import app.auth_store_tokens as ast
-
-        if getattr(ast, "DEFAULT_DB_PATH", None):
-            return str(ast.DEFAULT_DB_PATH)
-    except Exception:
-        pass
-    # Fallback to creating a DAO and using its db_path or the default resolver
-    try:
-        dao = TokenDAO()
-        return dao.db_path
-    except Exception:
-        from .auth_store_tokens import _default_db_path
-
-        return _default_db_path()
-
-
-def _get_candidates(now: int) -> list[tuple[str, str, int]]:
+async def _get_candidates(now: int) -> List[Tuple[str, str, int]]:
     """Return list of (user_id, provider, expires_at) for tokens expiring within window."""
-    out = []
-    # Resolve DB path with priority: explicit env var > module DEFAULT_DB_PATH > TokenDAO default
-    db_path = None
-    env_path = os.getenv("THIRD_PARTY_TOKENS_DB")
-    if env_path:
-        db_path = env_path
-    else:
-        try:
-            import app.auth_store_tokens as ast
+    cutoff = datetime.fromtimestamp(now + REFRESH_AHEAD_SECONDS, tz=timezone.utc)
 
-            if getattr(ast, "DEFAULT_DB_PATH", None):
-                db_path = str(ast.DEFAULT_DB_PATH)
-        except Exception:
-            db_path = None
-    if not db_path:
-        try:
-            dao = TokenDAO()
-            db_path = dao.db_path
-        except Exception:
-            db_path = _resolve_db_path()
+    async with get_async_db() as session:
+        # Query tokens that need refreshing
+        stmt = select(
+            ThirdPartyToken.user_id,
+            ThirdPartyToken.provider,
+            ThirdPartyToken.expires_at
+        ).where(
+            ThirdPartyToken.provider == "spotify",
+            ThirdPartyToken.expires_at <= cutoff
+        ).order_by(ThirdPartyToken.expires_at.asc())
 
-    # Try multiple candidate DB paths to be resilient in test environments
-    candidate_paths = []
-    # explicit env
-    env_path = os.getenv("THIRD_PARTY_TOKENS_DB")
-    if env_path:
-        candidate_paths.append(env_path)
-    # module-level default if present
-    try:
-        import app.auth_store_tokens as ast
+        result = await session.execute(stmt)
+        rows = result.fetchall()
 
-        # module-level DEFAULT_DB_PATH
-        if getattr(ast, "DEFAULT_DB_PATH", None):
-            candidate_paths.append(str(ast.DEFAULT_DB_PATH))
-        # class-level TokenDAO.DEFAULT_DB_PATH (tests set this in some fixtures)
-        try:
-            td = getattr(ast, "TokenDAO", None)
-            if td is not None and getattr(td, "DEFAULT_DB_PATH", None):
-                candidate_paths.append(str(td.DEFAULT_DB_PATH))
-        except Exception:
-            pass
-    except Exception:
-        pass
-    # TokenDAO default
-    try:
-        candidate_paths.append(TokenDAO().db_path)
-    except Exception:
-        pass
-    # fallback to repo default file
-    candidate_paths.append("third_party_tokens.db")
-
-    cutoff = now + REFRESH_AHEAD_SECONDS
-    seen = set()
-    for p in candidate_paths:
-        try:
-            if not p or not os.path.exists(p):
+        # Convert to expected format and deduplicate by (user_id, provider)
+        seen = set()
+        out = []
+        for row in rows:
+            user_id, provider, expires_at = row
+            key = (user_id, provider)
+            if key in seen:
                 continue
-            conn = sqlite3.connect(p)
-            conn.execute("PRAGMA foreign_keys=ON")
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT identity_id, provider, expires_at
-                FROM third_party_tokens
-                WHERE is_valid = 1 AND expires_at <= ? AND identity_id IS NOT NULL
-                ORDER BY expires_at ASC
-                """,
-                (cutoff,),
-            )
-            rows = cur.fetchall()
-            for r in rows:
-                key = (r[0], r[1])
-                if key in seen:
-                    continue
-                seen.add(key)
-                out.append((r[0], r[1], int(r[2] or 0)))
-        except Exception:
-            # ignore DB-specific errors and try next path
-            pass
-        finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
-    return out
+            seen.add(key)
+            # Convert expires_at to timestamp
+            expires_ts = int(expires_at.timestamp()) if expires_at else 0
+            out.append((user_id, provider, expires_ts))
+
+        return out
 
 
-async def _refresh_for_user(identity_id: str, provider: str) -> None:
-    # Get user_id from identity_id
-    user_id = await get_user_id_by_identity_id(identity_id)
-    if not user_id:
-        logger.error("spotify_refresh: no user_id found for identity_id", extra={"identity_id": identity_id, "provider": provider})
-        return
-
-    logger.info("spotify_refresh: starting refresh", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider})
+async def _refresh_for_user(user_id: str, provider: str) -> None:
+    """Refresh tokens for a user. Note: this now takes user_id directly instead of identity_id."""
+    logger.info("spotify_refresh: starting refresh", extra={"user_id": user_id, "provider": provider})
 
     # Prefer centralized token refresh service which handles upsert/validation
     from ..auth_store_tokens import get_valid_token_with_auto_refresh
@@ -155,10 +71,10 @@ async def _refresh_for_user(identity_id: str, provider: str) -> None:
     while attempt < max_attempts:
         attempt += 1
         try:
-            logger.info("spotify_refresh: attempting token exchange via refresh service", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider, "attempt": attempt})
+            logger.info("spotify_refresh: attempting token exchange via refresh service", extra={"user_id": user_id, "provider": provider, "attempt": attempt})
             # Force a refresh via the centralized service which will upsert refreshed tokens
             new_tokens = await get_valid_token_with_auto_refresh(user_id, provider, force_refresh=True)
-            logger.info("spotify_refresh: refresh returned tokens", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider, "new_expires_at": getattr(new_tokens, 'expires_at', None)})
+            logger.info("spotify_refresh: refresh returned tokens", extra={"user_id": user_id, "provider": provider, "new_expires_at": getattr(new_tokens, 'expires_at', None)})
 
             # Mark metrics
             try:
@@ -166,79 +82,45 @@ async def _refresh_for_user(identity_id: str, provider: str) -> None:
             except Exception:
                 pass
 
-            # Update last_refresh_at and reset error count for latest token row by identity
-            now = int(time.time())
-            conn = sqlite3.connect(_resolve_db_path())
-            conn.execute("PRAGMA foreign_keys=ON")
-            try:
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT id FROM third_party_tokens WHERE identity_id = ? AND provider = ? AND is_valid = 1 ORDER BY created_at DESC LIMIT 1",
-                    (identity_id, provider),
-                )
-                row = cur.fetchone()
-                if row:
-                    token_id = row[0]
-                    # read current expires_at for debug
-                    try:
-                        cur.execute("SELECT expires_at FROM third_party_tokens WHERE id = ?", (token_id,))
-                        cur_row = cur.fetchone()
-                        curr_expires = int(cur_row[0]) if cur_row and cur_row[0] is not None else None
-                    except Exception:
-                        curr_expires = None
+            # Update updated_at timestamp for the token (the refresh service handles the actual token upsert)
+            now = datetime.now(timezone.utc)
+            async with get_async_db() as session:
+                # Find the most recent token for this user/provider combination
+                stmt = select(ThirdPartyToken).where(
+                    ThirdPartyToken.user_id == user_id,
+                    ThirdPartyToken.provider == provider
+                ).order_by(ThirdPartyToken.updated_at.desc()).limit(1)
 
-                    logger.info("spotify_refresh: updating token", extra={"token_id": token_id, "current_expires_at": curr_expires, "new_expires_at": getattr(new_tokens, 'expires_at', None)})
+                result = await session.execute(stmt)
+                token = result.scalar_one_or_none()
 
-                    cur.execute(
-                        "UPDATE third_party_tokens SET last_refresh_at = ?, refresh_error_count = 0 WHERE id = ?",
-                        (now, token_id),
-                    )
-                    # Also update expires_at if refresh returned new token expiry
-                    try:
-                        if new_tokens and getattr(new_tokens, 'expires_at', None):
-                            cur.execute("UPDATE third_party_tokens SET expires_at = ? WHERE id = ?", (int(new_tokens.expires_at), token_id))
-                    except Exception:
-                        pass
-                    conn.commit()
-                    logger.info("spotify_refresh: token updated successfully", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider, "token_id": token_id, "updated_expires_at": getattr(new_tokens, 'expires_at', 'updated')})
-            finally:
-                conn.close()
+                if token:
+                    # Update the updated_at timestamp
+                    token.updated_at = now
+                    await session.commit()
+                    logger.info("spotify_refresh: token updated successfully", extra={"user_id": user_id, "provider": provider, "updated_at": now})
+                else:
+                    logger.warning("spotify_refresh: no token found to update", extra={"user_id": user_id, "provider": provider})
 
-            logger.info("spotify_refresh: exchange ok", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider})
+            logger.info("spotify_refresh: exchange ok", extra={"user_id": user_id, "provider": provider})
             return
+
         except SpotifyAuthError as e:
-            logger.warning("spotify_refresh: exchange failed", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider, "error": str(e), "attempt": attempt})
-            # increment error counter on DB
-            conn = sqlite3.connect(_resolve_db_path())
-            conn.execute("PRAGMA foreign_keys=ON")
-            try:
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT id, refresh_error_count FROM third_party_tokens WHERE identity_id = ? AND provider = ? AND is_valid = 1 ORDER BY created_at DESC LIMIT 1",
-                    (identity_id, provider),
-                )
-                r = cur.fetchone()
-                if r:
-                    token_id = r[0]
-                    err_count = int(r[1] or 0) + 1
-                    cur.execute(
-                        "UPDATE third_party_tokens SET refresh_error_count = ? WHERE id = ?",
-                        (err_count, token_id),
-                    )
-                    conn.commit()
-            finally:
-                conn.close()
+            logger.warning("spotify_refresh: exchange failed", extra={"user_id": user_id, "provider": provider, "error": str(e), "attempt": attempt})
+
             try:
                 SPOTIFY_REFRESH_ERROR.inc()
             except Exception:
                 pass
+
             # Backoff with jitter
             delay = base_delay * (2 ** (attempt - 1))
             delay = delay + random.random()
             await asyncio.sleep(delay)
             continue
+
         except Exception as e:
-            logger.exception("spotify_refresh: unexpected error", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider, "attempt": attempt}, exc_info=e)
+            logger.exception("spotify_refresh: unexpected error", extra={"user_id": user_id, "provider": provider, "attempt": attempt}, exc_info=e)
             try:
                 SPOTIFY_REFRESH_ERROR.inc()
             except Exception:
@@ -247,12 +129,12 @@ async def _refresh_for_user(identity_id: str, provider: str) -> None:
             delay = delay + random.random()
             await asyncio.sleep(delay)
 
-    logger.error("spotify_refresh: failed after attempts", extra={"identity_id": identity_id, "user_id": user_id, "provider": provider})
+    logger.error("spotify_refresh: failed after attempts", extra={"user_id": user_id, "provider": provider})
 
 
 async def run_once() -> None:
     now = int(time.time())
-    candidates = _get_candidates(now)
+    candidates = await _get_candidates(now)
     if not candidates:
         logger.info("spotify_refresh: no candidates")
         return

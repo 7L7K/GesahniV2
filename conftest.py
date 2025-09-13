@@ -579,8 +579,12 @@ def _isolate_debug_and_flags(monkeypatch):
     monkeypatch.setenv("VECTOR_STORE", "memory")
 
     # Reset LLaMA/GPT health and circuit flags
-    import app.model_picker as model_picker
-    import app.router as router
+    try:
+        import app.model_picker as model_picker
+        import app.router as router
+    except Exception:
+        model_picker = type("_", (), {"LLAMA_HEALTHY": True})
+        router = type("_", (), {"llama_circuit_open": False, "LLAMA_HEALTHY": True})
 
     router.llama_circuit_open = False
     router.LLAMA_HEALTHY = True

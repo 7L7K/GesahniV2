@@ -143,32 +143,7 @@ def test_router_fallback_metrics_updated(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-    # Some heavy deps (aiosqlite) are stubbed earlier, but ensure aiosqlite exposes
-    # a Connection-like attribute expected by importers to avoid AttributeError
-    import sys
-    import types as _types
-
     from app import analytics
-    # Provide a minimal aiosqlite shim that implements the async context manager
-    class _DummyConn:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-        async def execute(self, *a, **k):
-            return None
-
-        async def commit(self):
-            return None
-
-    mod = _types.ModuleType("aiosqlite")
-    async def _connect(*a, **k):
-        return _DummyConn()
-    mod.connect = _connect
-    mod.Connection = _DummyConn
-    sys.modules["aiosqlite"] = mod
 
 
     # Ensure auth is relaxed for this test by using dryrun backend

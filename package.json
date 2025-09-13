@@ -1,7 +1,8 @@
 {
   "dependencies": {
     "node-fetch": "^3.3.2",
-    "puppeteer": "^24.17.0"
+    "puppeteer": "^24.17.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0"
